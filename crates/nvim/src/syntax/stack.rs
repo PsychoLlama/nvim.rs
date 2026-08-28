@@ -327,11 +327,10 @@ unsafe fn state_continues_from_previous_line() -> bool {
     let mut i = state_len() - 1;
     while i >= 0 {
         let cur_si = unsafe { state_at(i) };
-        if unsafe { (*cur_si).si_h_startpos.lnum } >= current_lnum.get()
-            || unsafe { (*cur_si).si_m_endpos.lnum } >= current_lnum.get()
-            || unsafe { (*cur_si).si_h_endpos.lnum } >= current_lnum.get()
-            || (unsafe { (*cur_si).si_end_idx } != 0
-                && unsafe { (*cur_si).si_eoe_pos.lnum } >= current_lnum.get())
+        if cur_si.si_h_startpos.lnum >= current_lnum.get()
+            || cur_si.si_m_endpos.lnum >= current_lnum.get()
+            || cur_si.si_h_endpos.lnum >= current_lnum.get()
+            || (cur_si.si_end_idx != 0 && cur_si.si_eoe_pos.lnum >= current_lnum.get())
         {
             return true;
         }
@@ -405,13 +404,13 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
     let bp = unsafe { entry_states(sp, size) };
     let mut i = 0;
     while i < size {
-        let si = unsafe { state_at(i) };
+        let mut si = unsafe { state_at(i) };
         let b = unsafe { bp.offset(i as isize) };
-        unsafe { (*b).bs_idx = (*si).si_idx };
-        unsafe { (*b).bs_flags = (*si).si_flags };
-        unsafe { (*b).bs_seqnr = (*si).si_seqnr };
-        unsafe { (*b).bs_cchar = (*si).si_cchar };
-        unsafe { (*b).bs_extmatch = ref_extmatch((*si).si_extmatch) };
+        unsafe { (*b).bs_idx = si.si_idx };
+        unsafe { (*b).bs_flags = si.si_flags };
+        unsafe { (*b).bs_seqnr = si.si_seqnr };
+        unsafe { (*b).bs_cchar = si.si_cchar };
+        unsafe { (*b).bs_extmatch = ref_extmatch(si.si_extmatch) };
         i += 1;
     }
     unsafe { (*sp).sst_next_flags = current_next_flags.get() };
@@ -440,20 +439,20 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
         let mut i = 0;
         while i < size {
             let b = unsafe { bp.offset(i as isize) };
-            let si = unsafe { state_at(i) };
-            unsafe { (*si).si_idx = (*b).bs_idx };
-            unsafe { (*si).si_flags = (*b).bs_flags };
-            unsafe { (*si).si_seqnr = (*b).bs_seqnr };
-            unsafe { (*si).si_cchar = (*b).bs_cchar };
-            unsafe { (*si).si_extmatch = ref_extmatch((*b).bs_extmatch) };
-            if keepend_level.get() < 0 && unsafe { (*si).si_flags }.has(SynFlags::KEEPEND) {
+            let mut si = unsafe { state_at(i) };
+            unsafe { si.si_idx = (*b).bs_idx };
+            unsafe { si.si_flags = (*b).bs_flags };
+            unsafe { si.si_seqnr = (*b).bs_seqnr };
+            unsafe { si.si_cchar = (*b).bs_cchar };
+            unsafe { si.si_extmatch = ref_extmatch((*b).bs_extmatch) };
+            if keepend_level.get() < 0 && si.si_flags.has(SynFlags::KEEPEND) {
                 keepend_level.set(i);
             }
-            unsafe { (*si).si_ends = 0 };
-            unsafe { (*si).si_m_lnum = 0 };
+            si.si_ends = 0;
+            si.si_m_lnum = 0;
             unsafe {
-                (*si).si_next_list = if (*si).si_idx >= 0 {
-                    (*syn_pattern((*si).si_idx)).sp_next_list
+                si.si_next_list = if si.si_idx >= 0 {
+                    (*syn_pattern(si.si_idx)).sp_next_list
                 } else {
                     ::core::ptr::null_mut()
                 }
@@ -486,18 +485,18 @@ pub(crate) unsafe fn syn_stack_equal(sp: *mut synstate_T) -> bool {
     while i > 0 {
         i -= 1;
         let b = unsafe { bp.offset(i as isize) };
-        let si = unsafe { state_at(i) };
+        let mut si = unsafe { state_at(i) };
         // A different pattern index means a different state.
-        if unsafe { (*b).bs_idx } != unsafe { (*si).si_idx } {
+        if unsafe { (*b).bs_idx } != si.si_idx {
             return false;
         }
-        if unsafe { (*b).bs_extmatch } == unsafe { (*si).si_extmatch } {
+        if unsafe { (*b).bs_extmatch } == si.si_extmatch {
             continue;
         }
         // Different extmatch pointers can still hold the same strings, so
         // compare what they reference. One of them being NULL is a
         // difference outright.
-        if !unsafe { extmatch_equal((*b).bs_extmatch, (*si).si_extmatch, (*si).si_idx) } {
+        if !unsafe { extmatch_equal((*b).bs_extmatch, si.si_extmatch, si.si_idx) } {
             return false;
         }
     }

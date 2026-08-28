@@ -192,9 +192,9 @@ unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
             current_lnum.set(found.m_endpos.lnum);
             current_col.set(found.m_endpos.col);
             if state_len() > 0 {
-                let cur_si = unsafe { state_top() };
-                unsafe { (*cur_si).si_h_startpos.lnum = found.lnum };
-                unsafe { (*cur_si).si_h_startpos.col = found.col };
+                let mut cur_si = unsafe { state_top() };
+                cur_si.si_h_startpos.lnum = found.lnum;
+                cur_si.si_h_startpos.col = found.col;
                 unsafe { update_si_end(cur_si, current_col.get(), true) };
                 unsafe { check_keepend() };
             }
@@ -236,19 +236,19 @@ unsafe fn scan_for_sync_point(
             if !had_sync_point || state_len() == 0 {
                 break;
             }
-            let cur_si = unsafe { state_top() };
-            if unsafe { (*cur_si).si_m_endpos.lnum } > start_lnum {
+            let mut cur_si = unsafe { state_top() };
+            if cur_si.si_m_endpos.lnum > start_lnum {
                 // Ignore a match that reaches past where we started.
                 current_lnum.set(end_lnum);
                 break;
             }
-            let (flags, match_idx) = if unsafe { (*cur_si).si_idx } < 0 {
+            let (flags, match_idx) = if cur_si.si_idx < 0 {
                 (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
             } else {
-                let spp = unsafe { syn_pattern((*cur_si).si_idx) };
+                let spp = unsafe { syn_pattern(cur_si.si_idx) };
                 (unsafe { (*spp).sp_flags }, unsafe { (*spp).sp_sync_idx })
             };
-            let m_endpos = unsafe { (*cur_si).si_m_endpos };
+            let m_endpos = cur_si.si_m_endpos;
             found = Some(SyncPoint {
                 flags,
                 match_idx,

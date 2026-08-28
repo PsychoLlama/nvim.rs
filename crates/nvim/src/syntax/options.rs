@@ -519,26 +519,28 @@ pub(crate) unsafe fn copy_id_list(list: *const int16_t) -> *mut int16_t {
 /// being checked. This runs once per candidate pattern per column: keep it
 /// fast.
 pub(crate) unsafe fn in_id_list(
-    cur_si: *mut stateitem_T,
+    cur_si: Option<Item>,
     list: *mut int16_t,
     ssp: *mut sp_syn,
     flags: SynFlags,
 ) -> bool {
     // If `ssp` has a `containedin` list and `cur_si` is in it, it is
     // admitted whatever `list` says.
-    if !cur_si.is_null()
+    if let Some(mut si) = cur_si
         && !unsafe { (*ssp).cont_in_list }.is_null()
-        && !unsafe { (*cur_si).si_flags }.has(SynFlags::MATCH)
+        && !si.si_flags.has(SynFlags::MATCH)
     {
         // Ignore transparent items without a contains argument, double
         // checking that we don't go back past the first one.
-        let mut si = cur_si;
-        while unsafe { (*si).si_flags }.has(SynFlags::TRANS_CONT) && si > unsafe { state_at(0) } {
-            si = unsafe { si.offset(-1) };
+        let outermost = unsafe { state_at(0) }.raw();
+        while si.si_flags.has(SynFlags::TRANS_CONT) && si.raw() > outermost {
+            // SAFETY: the walk stops at the outermost item, so the step
+            // back stays inside the state stack.
+            si = unsafe { Item::new(si.raw().offset(-1)) };
         }
         // si_idx is -1 for keywords, which never contain anything.
-        if unsafe { (*si).si_idx } >= 0 {
-            let spp = unsafe { syn_pattern((*si).si_idx) };
+        if si.si_idx >= 0 {
+            let spp = unsafe { syn_pattern(si.si_idx) };
             if unsafe {
                 id_list_has(
                     (*ssp).cont_in_list,

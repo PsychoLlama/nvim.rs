@@ -267,15 +267,15 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         // and mark it as continued.
         let mut i = 0;
         while i < state_len() {
-            let cur_si = unsafe { state_at(i) };
-            if unsafe { (*cur_si).si_idx } >= 0
-                && unsafe { (*syn_pattern((*cur_si).si_idx)).sp_type } as c_int == SPTYPE_MATCH
-                && unsafe { (*cur_si).si_m_endpos.lnum } < current_lnum.get()
+            let mut cur_si = unsafe { state_at(i) };
+            if cur_si.si_idx >= 0
+                && unsafe { (*syn_pattern(cur_si.si_idx)).sp_type } as c_int == SPTYPE_MATCH
+                && cur_si.si_m_endpos.lnum < current_lnum.get()
             {
-                unsafe { (*cur_si).si_flags |= SynFlags::MATCHCONT };
-                unsafe { (*cur_si).si_m_endpos = lpos_T { lnum: 0, col: 0 } };
-                unsafe { (*cur_si).si_h_endpos = (*cur_si).si_m_endpos };
-                unsafe { (*cur_si).si_ends = 1 };
+                cur_si.si_flags |= SynFlags::MATCHCONT;
+                cur_si.si_m_endpos = lpos_T { lnum: 0, col: 0 };
+                cur_si.si_h_endpos = cur_si.si_m_endpos;
+                cur_si.si_ends = 1;
             }
             i += 1;
         }
@@ -288,7 +288,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
     let mut i = state_len() - 1;
     if keepend_level.get() >= 0 {
         while i > keepend_level.get() {
-            if unsafe { (*state_at(i)).si_flags }.has(SynFlags::EXTEND) {
+            if unsafe { state_at(i).si_flags }.has(SynFlags::EXTEND) {
                 break;
             }
             i -= 1;
@@ -297,20 +297,20 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
 
     let mut seen_keepend = false;
     while i < state_len() {
-        let cur_si = unsafe { state_at(i) };
+        let mut cur_si = unsafe { state_at(i) };
         let innermost = i == state_len() - 1;
-        if unsafe { (*cur_si).si_flags }.has(SynFlags::KEEPEND)
+        if cur_si.si_flags.has(SynFlags::KEEPEND)
             || (seen_keepend && !startofline)
             || (innermost && startofline)
         {
             // Highlighting starts in column 0.
-            unsafe { (*cur_si).si_h_startpos.col = 0 };
-            unsafe { (*cur_si).si_h_startpos.lnum = current_lnum.get() };
+            cur_si.si_h_startpos.col = 0;
+            cur_si.si_h_startpos.lnum = current_lnum.get();
 
-            if !unsafe { (*cur_si).si_flags }.has(SynFlags::MATCHCONT) {
+            if !cur_si.si_flags.has(SynFlags::MATCHCONT) {
                 unsafe { update_si_end(cur_si, current_col.get(), !startofline) };
             }
-            if !startofline && unsafe { (*cur_si).si_flags }.has(SynFlags::KEEPEND) {
+            if !startofline && cur_si.si_flags.has(SynFlags::KEEPEND) {
                 seen_keepend = true;
             }
         }
@@ -394,8 +394,8 @@ pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
         if syncing && state_len() != 0 {
             // Check for a match with a sync item.
             let cur_si = unsafe { state_top() };
-            if unsafe { (*cur_si).si_idx } >= 0
-                && unsafe { (*syn_pattern((*cur_si).si_idx)).sp_flags }
+            if cur_si.si_idx >= 0
+                && unsafe { (*syn_pattern(cur_si.si_idx)).sp_flags }
                     .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
             {
                 return true;

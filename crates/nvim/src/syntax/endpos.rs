@@ -523,7 +523,7 @@ pub(crate) struct KeywordMatch {
 pub(crate) unsafe fn check_keyword_id(
     line: *mut c_char,
     startcol: c_int,
-    cur_si: *mut stateitem_T,
+    cur_si: Option<Item>,
 ) -> Option<KeywordMatch> {
     // Find the first character after the keyword; the first character was
     // already checked by the caller.
@@ -575,7 +575,7 @@ pub(crate) unsafe fn check_keyword_id(
 unsafe fn match_keyword(
     keyword: *mut c_char,
     ht: *mut hashtab_T,
-    cur_si: *mut stateitem_T,
+    cur_si: Option<Item>,
 ) -> *mut keyentry_T {
     let hi = unsafe { hash_find(ht, keyword) };
     if unsafe { (*hi).hi_key }.is_null()
@@ -596,23 +596,23 @@ unsafe fn match_keyword(
         let ok = if !current_next_list.get().is_null() {
             unsafe {
                 in_id_list(
-                    ::core::ptr::null_mut(),
+                    None,
                     current_next_list.get(),
                     &raw mut (*kp).k_syn,
                     SynFlags::NONE,
                 )
             }
-        } else if cur_si.is_null() {
-            !unsafe { (*kp).flags }.has(SynFlags::CONTAINED)
-        } else {
+        } else if let Some(cur_si) = cur_si {
             unsafe {
                 in_id_list(
-                    cur_si,
-                    (*cur_si).si_cont_list,
+                    Some(cur_si),
+                    cur_si.si_cont_list,
                     &raw mut (*kp).k_syn,
                     (*kp).flags,
                 )
             }
+        } else {
+            !unsafe { (*kp).flags }.has(SynFlags::CONTAINED)
         };
         if ok {
             return kp;

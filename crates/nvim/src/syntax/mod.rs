@@ -73,6 +73,7 @@ use crate::types::{
     lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
     synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
+use crate::winlayer::Live;
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen, strpbrk};
 
 mod flags;
@@ -311,6 +312,14 @@ pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> *mut syn_cluster_T 
 pub(crate) unsafe fn cur_cluster_count() -> ::core::ffi::c_int {
     unsafe { (*cur_syn_block()).b_syn_clusters.ga_len }
 }
+/// One item on the syntax state stack, whose holder has promised the stack
+/// has not been pushed to, popped from or cleared since it was taken.
+///
+/// The stack is a `Vec`, so a push can move every item in it: reach for one
+/// through [`items::state_at`] each time rather than holding one across a
+/// call that can parse.
+pub(crate) type Item = Live<stateitem_T>;
+
 /// `stateitem_T::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
 /// The `contains=` list of a transparent item that is not inside anything: it

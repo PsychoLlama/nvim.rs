@@ -213,14 +213,14 @@ pub(crate) unsafe fn syn_get_stack_item(i: c_int) -> c_int {
         current_col.set(MAXCOL as colnr_T);
         return -1;
     }
-    unsafe { (*state_at(i)).si_id }
+    unsafe { state_at(i).si_id }
 }
 
 /// How many `fold` items are open at the current position.
 unsafe fn syn_cur_foldlevel() -> c_int {
     let mut level = 0;
     for i in 0..state_len() {
-        if unsafe { (*state_at(i)).si_flags }.has(SynFlags::FOLD) {
+        if unsafe { state_at(i).si_flags }.has(SynFlags::FOLD) {
             level += 1;
         }
     }

@@ -147,7 +147,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     let mut cur_extmatch: *mut reg_extmatch_T = ::core::ptr::null_mut();
     let mut zero_width_next_list = false;
-    let mut cur_si: *mut stateitem_T;
+    let mut cur_si: Option<Item>;
 
     // Repeat matching keywords and patterns to find contained items at the
     // same column. Stops when there is no extra match here.
@@ -161,18 +161,17 @@ pub(crate) unsafe fn syn_current_attr(
         //    patterns. Always look for contained items when some item has
         //    a `containedin=` (which costs extra time).
         cur_si = if state_len() != 0 {
-            unsafe { state_top() }
+            Some(unsafe { state_top() })
         } else {
-            ::core::ptr::null_mut()
+            None
         };
         if unsafe { (*syn_block.get()).b_syn_containedin } != 0
-            || cur_si.is_null()
-            || !unsafe { (*cur_si).si_cont_list }.is_null()
+            || cur_si.is_none_or(|si| !si.si_cont_list.is_null())
         {
             // 2. A keyword, if we are on a keyword character after a
             //    non-keyword one. Never while syncing.
             if do_keywords && let Some(si) = unsafe { try_keyword(cur_si) } {
-                cur_si = si;
+                cur_si = Some(si);
                 found_keyword = true;
             }
 
@@ -209,7 +208,7 @@ pub(crate) unsafe fn syn_current_attr(
                         unsafe { ga_push_int(&mut zero_width, next_match_idx.get()) };
                         next_match_idx.set(-1);
                     } else {
-                        cur_si = unsafe { push_next_match() };
+                        cur_si = Some(unsafe { push_next_match() });
                     }
                     found_match = true;
                 }
@@ -251,14 +250,13 @@ pub(crate) unsafe fn syn_current_attr(
     let sip = unsafe { pick_current_attr(cur_si) };
     if !can_spell.is_null() {
         unsafe {
-            *can_spell = if cur_si.is_null() {
-                default_can_spell()
-            } else {
-                item_can_spell(sip)
+            *can_spell = match sip {
+                Some(sip) if cur_si.is_some() => item_can_spell(sip),
+                _ => default_can_spell(),
             }
         };
     }
-    if !cur_si.is_null() && !syncing && !keep_state {
+    if cur_si.is_some() && !syncing && !keep_state {
         // Check whether the current state -- and the states before it --
         // end at the next column. Not while syncing: we would miss a
         // single-character match. The current column is checked first: the
@@ -303,7 +301,7 @@ pub(crate) unsafe fn syn_current_attr(
 ///
 /// Answers the pushed item, or `None` when the column does not start a keyword
 /// or no keyword matches there.
-unsafe fn try_keyword(cur_si: *mut stateitem_T) -> Option<*mut stateitem_T> {
+unsafe fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     // Only on a keyword character that follows a non-keyword one.
     let line = unsafe { syn_getcurline() };
     let cur_pos = unsafe { line.offset(current_col.get() as isize) };
@@ -324,44 +322,40 @@ unsafe fn try_keyword(cur_si: *mut stateitem_T) -> Option<*mut stateitem_T> {
     let kw = unsafe { check_keyword_id(line, current_col.get(), cur_si) }?;
 
     push_current_state(KEYWORD_IDX);
-    let si = unsafe { state_top() };
-    unsafe { (*si).si_m_startcol = current_col.get() };
-    unsafe { (*si).si_h_startpos.lnum = current_lnum.get() };
-    unsafe { (*si).si_h_startpos.col = 0 }; // starts right away
-    unsafe { (*si).si_m_endpos.lnum = current_lnum.get() };
-    unsafe { (*si).si_m_endpos.col = kw.endcol };
-    unsafe { (*si).si_h_endpos.lnum = current_lnum.get() };
-    unsafe { (*si).si_h_endpos.col = kw.endcol };
-    unsafe { (*si).si_ends = 1 };
-    unsafe { (*si).si_end_idx = 0 };
-    unsafe { (*si).si_flags = kw.flags };
-    unsafe { (*si).si_seqnr = next_seqnr.get() };
+    let mut si = unsafe { state_top() };
+    si.si_m_startcol = current_col.get();
+    si.si_h_startpos.lnum = current_lnum.get();
+    si.si_h_startpos.col = 0; // starts right away
+    si.si_m_endpos.lnum = current_lnum.get();
+    si.si_m_endpos.col = kw.endcol;
+    si.si_h_endpos.lnum = current_lnum.get();
+    si.si_h_endpos.col = kw.endcol;
+    si.si_ends = 1;
+    si.si_end_idx = 0;
+    si.si_flags = kw.flags;
+    si.si_seqnr = next_seqnr.get();
     next_seqnr.set(next_seqnr.get() + 1);
-    unsafe { (*si).si_cchar = kw.cchar };
+    si.si_cchar = kw.cchar;
     if state_len() > 1 {
-        unsafe {
-            (*si).si_flags |= (*state_at(state_len() - 2))
-                .si_flags
-                .masked(SynFlags::CONCEAL)
-        };
+        unsafe { si.si_flags |= state_at(state_len() - 2).si_flags.masked(SynFlags::CONCEAL) };
     }
-    unsafe { (*si).si_id = kw.id };
-    unsafe { (*si).si_trans_id = kw.id };
+    si.si_id = kw.id;
+    si.si_trans_id = kw.id;
     if kw.flags.has(SynFlags::TRANSP) {
         // Transparent: take the attributes of the item around it.
         if state_len() < 2 {
-            unsafe { (*si).si_attr = 0 };
-            unsafe { (*si).si_trans_id = 0 };
+            si.si_attr = 0;
+            si.si_trans_id = 0;
         } else {
             let outer = unsafe { state_at(state_len() - 2) };
-            unsafe { (*si).si_attr = (*outer).si_attr };
-            unsafe { (*si).si_trans_id = (*outer).si_trans_id };
+            si.si_attr = outer.si_attr;
+            si.si_trans_id = outer.si_trans_id;
         }
     } else {
-        unsafe { (*si).si_attr = syn_id2attr(kw.id) };
+        unsafe { si.si_attr = syn_id2attr(kw.id) };
     }
-    unsafe { (*si).si_cont_list = ::core::ptr::null_mut() };
-    unsafe { (*si).si_next_list = kw.next_list };
+    si.si_cont_list = ::core::ptr::null_mut();
+    si.si_next_list = kw.next_list;
     unsafe { check_keepend() };
     Some(si)
 }
@@ -375,7 +369,7 @@ unsafe fn try_keyword(cur_si: *mut stateitem_T) -> Option<*mut stateitem_T> {
 unsafe fn scan_patterns(
     syncing: bool,
     displaying: bool,
-    cur_si: *mut stateitem_T,
+    cur_si: Option<Item>,
     zero_width: &garray_T,
     cur_extmatch: &mut *mut reg_extmatch_T,
     try_next_column: &GlobalCell<bool>,
@@ -521,7 +515,7 @@ unsafe fn scan_patterns(
 #[inline]
 unsafe fn pattern_admitted(
     spp: *mut synpat_T,
-    cur_si: *mut stateitem_T,
+    cur_si: Option<Item>,
     syncing: bool,
     displaying: bool,
 ) -> bool {
@@ -539,75 +533,74 @@ unsafe fn pattern_admitted(
         // A pending `nextgroup=` admits only what it names.
         unsafe {
             in_id_list(
-                ::core::ptr::null_mut(),
+                None,
                 current_next_list.get(),
                 &raw mut (*spp).sp_syn,
                 SynFlags::NONE,
             )
         }
-    } else if cur_si.is_null() {
-        // At the top level, anything that is not `contained`.
-        !unsafe { (*spp).sp_flags }.has(SynFlags::CONTAINED)
-    } else {
+    } else if let Some(cur_si) = cur_si {
         // Inside an item, only what its `contains=` names.
         unsafe {
             in_id_list(
-                cur_si,
-                (*cur_si).si_cont_list,
+                Some(cur_si),
+                cur_si.si_cont_list,
                 &raw mut (*spp).sp_syn,
                 (*spp).sp_flags,
             )
         }
+    } else {
+        // At the top level, anything that is not `contained`.
+        !unsafe { (*spp).sp_flags }.has(SynFlags::CONTAINED)
     }
 }
 
 /// Publish the attributes of the innermost item whose highlight range covers
 /// the current column into the `current_*` globals, and answer that item.
 ///
-/// Answers null when `cur_si` is null, i.e. nothing matched here at all.
-unsafe fn pick_current_attr(cur_si: *mut stateitem_T) -> *mut stateitem_T {
+/// Answers `None` when `cur_si` is `None`, i.e. nothing matched here at all.
+unsafe fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
     current_attr.set(0);
     current_id.set(0);
     current_trans_id.set(0);
     current_flags.set(SynFlags::NONE);
     current_seqnr.set(0);
-    if cur_si.is_null() {
-        return ::core::ptr::null_mut();
-    }
+    cur_si?;
     // Use the attributes of the innermost item if we are inside its
     // highlighting; if not, of the item around it, and so on.
-    let mut sip = ::core::ptr::null_mut();
+    let mut walked = None;
     let mut idx = state_len() - 1;
     while idx >= 0 {
-        sip = unsafe { state_at(idx) };
-        let started = current_lnum.get() > unsafe { (*sip).si_h_startpos.lnum }
-            || (current_lnum.get() == unsafe { (*sip).si_h_startpos.lnum }
-                && current_col.get() >= unsafe { (*sip).si_h_startpos.col });
-        let not_ended = unsafe { (*sip).si_h_endpos.lnum } == 0
-            || current_lnum.get() < unsafe { (*sip).si_h_endpos.lnum }
-            || (current_lnum.get() == unsafe { (*sip).si_h_endpos.lnum }
-                && current_col.get() < unsafe { (*sip).si_h_endpos.col });
+        let sip = unsafe { state_at(idx) };
+        walked = Some(sip);
+        let started = current_lnum.get() > sip.si_h_startpos.lnum
+            || (current_lnum.get() == sip.si_h_startpos.lnum
+                && current_col.get() >= sip.si_h_startpos.col);
+        let not_ended = sip.si_h_endpos.lnum == 0
+            || current_lnum.get() < sip.si_h_endpos.lnum
+            || (current_lnum.get() == sip.si_h_endpos.lnum
+                && current_col.get() < sip.si_h_endpos.col);
         if started && not_ended {
-            current_attr.set(unsafe { (*sip).si_attr });
-            current_id.set(unsafe { (*sip).si_id });
-            current_trans_id.set(unsafe { (*sip).si_trans_id });
-            current_flags.set(unsafe { (*sip).si_flags });
-            current_seqnr.set(unsafe { (*sip).si_seqnr });
-            current_sub_char.set(unsafe { (*sip).si_cchar });
+            current_attr.set(sip.si_attr);
+            current_id.set(sip.si_id);
+            current_trans_id.set(sip.si_trans_id);
+            current_flags.set(sip.si_flags);
+            current_seqnr.set(sip.si_seqnr);
+            current_sub_char.set(sip.si_cchar);
             break;
         }
         idx -= 1;
     }
     // When no item covered the column this is the outermost one the walk
     // touched -- upstream's `sip` after the loop, which the spell test
-    // below reads `si_cont_list` from. Kept exactly, including the null it
-    // holds when the stack is empty.
-    sip
+    // below reads `si_cont_list` from. Kept exactly, including the `None`
+    // it holds when the stack is empty.
+    walked
 }
 
 /// Whether spell checking should be done in the item the attribute walk left
 /// in `sip`.
-unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
+unsafe fn item_can_spell(sip: Item) -> bool {
     let block = syn_block.get();
     let mut sps = sp_syn {
         inc_tag: 0,
@@ -621,7 +614,7 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
             return unsafe { (*block).b_syn_spell } != SYNSPL_NOTOP;
         }
         sps.id = unsafe { (*block).b_nospell_cluster_id } as int16_t;
-        return !unsafe { in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE) };
+        return !unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) };
     }
     // The @Spell cluster is defined: spell check in items carrying it, but
     // not when @NoSpell is there too. At the top level only spell check
@@ -630,10 +623,10 @@ unsafe fn item_can_spell(sip: *mut stateitem_T) -> bool {
         return unsafe { (*block).b_syn_spell } == SYNSPL_TOP;
     }
     sps.id = unsafe { (*block).b_spell_cluster_id } as int16_t;
-    let mut can = unsafe { in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE) };
+    let mut can = unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) };
     if unsafe { (*block).b_nospell_cluster_id } != 0 {
         sps.id = unsafe { (*block).b_nospell_cluster_id } as int16_t;
-        if unsafe { in_id_list(sip, (*sip).si_cont_list, &raw mut sps, SynFlags::NONE) } {
+        if unsafe { in_id_list(Some(sip), sip.si_cont_list, &raw mut sps, SynFlags::NONE) } {
             can = false;
         }
     }
@@ -656,9 +649,9 @@ pub(crate) unsafe fn did_match_already(idx: c_int, gap: &garray_T) -> bool {
     while i > 0 {
         i -= 1;
         let si = unsafe { state_at(i) };
-        if unsafe { (*si).si_m_startcol } == current_col.get()
-            && unsafe { (*si).si_m_lnum } == current_lnum.get()
-            && unsafe { (*si).si_idx } == idx
+        if si.si_m_startcol == current_col.get()
+            && si.si_m_lnum == current_lnum.get()
+            && si.si_idx == idx
         {
             return true;
         }
