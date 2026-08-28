@@ -653,8 +653,30 @@ MUT_SELF_FN = re.compile(
 NON_MUT_SELF_FN = re.compile(
     r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*\(\s*(?:&\s*self|mut\s+self|self)\b"
 )
+# The block's value must be a *dereference* -- `*p` or `(*p)...` -- because
+# that is what makes it a copy. `unsafe { &mut *p }.f` and
+# `unsafe { Live::new(p) }.f` both start with something else and both write
+# where the author meant, so neither may match.
+DEREF_VALUE = r"unsafe\s*\{\s*\(?\s*\*[^{}]*?\}"
+# A field chain may sit between the block and what is done to the copy.
+FIELD_CHAIN = r"(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*"
 DEREF_METHOD = re.compile(
-    r"unsafe\s*\{\s*\(?\s*\*[^{}]*?\}\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\("
+    DEREF_VALUE + FIELD_CHAIN + r"\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\("
+)
+
+# `unsafe { *p }.a = 42` -- the first face of the family (p23-7 §3), and the
+# one that stayed uncovered longest: `check_deref_temporary_mutations` asks
+# only about *method* calls, and `check_place_writes` only about an accessor
+# `f().field = v`. A plain field assignment through the block's copy is
+# neither. Batch 4 shipped seven, six of them in `match/mod.rs`'s
+# `matchaddpos()` -- every position it stored stayed zeroed -- and one in
+# `syntax/stack.rs`, which left the last state-cache entry's `sst_next`
+# dangling.
+DEREF_FIELD_WRITE = re.compile(
+    DEREF_VALUE
+    + r"\s*\.\s*[A-Za-z_][A-Za-z0-9_]*"
+    + FIELD_CHAIN
+    + r"\s*(?:[-+*/%|&^]|<<|>>)?=(?!=)"
 )
 # Names whose `&mut self` form is the only one that matters, listed because
 # the exclusivity rule above would lose them: `Refcount::release` shares its
@@ -885,6 +907,30 @@ def check_temporary_addresses(tree):
             + "\n".join(found)
             + "\nThe region has to cover the call: "
             "`unsafe { (*p).arr.as_ptr() }`."
+        )
+
+
+def deref_field_writes(tree):
+    """`unsafe { *p }.a = 42` -- an assignment into the block's temporary."""
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in DEREF_FIELD_WRITE.finditer(masked):
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(f"  {file}:{line}: {match.group(0).strip()}")
+    return found
+
+
+def check_deref_field_writes(tree):
+    if found := deref_field_writes(tree):
+        sys.exit(
+            "ratchet: a field written through the value an `unsafe` block "
+            "produced lands in a *temporary* -- the block is a value "
+            "expression, so the dereference made a copy and the write is "
+            "discarded:\n"
+            + "\n".join(found)
+            + "\nThe region has to cover the assignment: "
+            "`unsafe { (*p).a = 42 }`, or wrap the pointer in a "
+            "`winlayer::Live<T>` once."
         )
 
 
@@ -1954,6 +2000,7 @@ def main():
     check_deref_temporary_mutations(tree)
     check_self_projections(tree)
     check_temporary_addresses(tree)
+    check_deref_field_writes(tree)
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
