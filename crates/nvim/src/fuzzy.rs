@@ -153,17 +153,15 @@ fn compute_bonus(last_c: c_int, c: c_int) -> Score {
     // classifies them.
     let alnum = u8::try_from(c).is_ok_and(|b| b.is_ascii_alphanumeric());
     // SAFETY: the other three read only the character-class tables.
-    unsafe {
-        if !(alnum || vim_iswordc(c)) {
-            return 0.0;
-        }
-        match u8::try_from(last_c) {
-            Ok(b'/') => SCORE_MATCH_SLASH,
-            Ok(b'-' | b'_' | b' ') => SCORE_MATCH_WORD,
-            Ok(b'.') => SCORE_MATCH_DOT,
-            _ if mb_isupper(c) && mb_islower(last_c) => SCORE_MATCH_CAPITAL,
-            _ => 0.0,
-        }
+    if !(alnum || unsafe { vim_iswordc(c) }) {
+        return 0.0;
+    }
+    match u8::try_from(last_c) {
+        Ok(b'/') => SCORE_MATCH_SLASH,
+        Ok(b'-' | b'_' | b' ') => SCORE_MATCH_WORD,
+        Ok(b'.') => SCORE_MATCH_DOT,
+        _ if mb_isupper(c) && mb_islower(last_c) => SCORE_MATCH_CAPITAL,
+        _ => 0.0,
     }
 }
 
@@ -413,16 +411,14 @@ pub(crate) unsafe fn fuzzy_match(
     matches: *mut u32,
     max_matches: c_int,
 ) -> bool {
-    unsafe {
-        let (score, filled) = fuzzy_match_words(
-            CStr::from_ptr(str),
-            CStr::from_ptr(pat_arg),
-            matchseq,
-            core::slice::from_raw_parts_mut(matches, max_matches as usize),
-        );
-        *out_score = score;
-        filled != 0
-    }
+    let (score, filled) = fuzzy_match_words(
+        unsafe { CStr::from_ptr(str) },
+        unsafe { CStr::from_ptr(pat_arg) },
+        matchseq,
+        unsafe { core::slice::from_raw_parts_mut(matches, max_matches as usize) },
+    );
+    unsafe { *out_score = score };
+    filled != 0
 }
 
 /// Fuzzy match `pat` in `str`, as one sequence. Answers 0 for a missing
@@ -451,32 +447,34 @@ pub(crate) unsafe fn fuzzy_match_str_with_pos(
     if str.is_null() || pat.is_null() {
         return core::ptr::null_mut();
     }
-    unsafe {
-        let (str, pat) = (CStr::from_ptr(str), CStr::from_ptr(pat));
-        let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-        let (score, filled) = fuzzy_match_words(str, pat, false, &mut matches);
-        if filled == 0 || score == FUZZY_SCORE_NONE {
-            return core::ptr::null_mut();
-        }
+    let (str, pat) = (unsafe { CStr::from_ptr(str) }, unsafe {
+        CStr::from_ptr(pat)
+    });
+    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+    let (score, filled) = fuzzy_match_words(str, pat, false, &mut matches);
+    if filled == 0 || score == FUZZY_SCORE_NONE {
+        return core::ptr::null_mut();
+    }
 
-        // One position per pattern character that took part in the match,
-        // i.e. everything but the whitespace between the words.
-        let placed: Vec<u32> = Chars::new(pat)
-            .filter(|&(_, c)| !ascii_iswhite(c))
-            .zip(matches)
-            .map(|(_, at)| at)
-            .collect();
-        let positions: *mut garray_T = xmalloc(size_of::<garray_T>()).cast();
-        ga_init(positions, size_of::<u32>() as c_int, 10);
-        ga_grow(positions, placed.len() as c_int);
+    // One position per pattern character that took part in the match,
+    // i.e. everything but the whitespace between the words.
+    let placed: Vec<u32> = Chars::new(pat)
+        .filter(|&(_, c)| !ascii_iswhite(c))
+        .zip(matches)
+        .map(|(_, at)| at)
+        .collect();
+    let positions: *mut garray_T = unsafe { xmalloc(size_of::<garray_T>()) }.cast();
+    unsafe { ga_init(positions, size_of::<u32>() as c_int, 10) };
+    unsafe { ga_grow(positions, placed.len() as c_int) };
+    unsafe {
         core::ptr::copy_nonoverlapping(
             placed.as_ptr(),
             (*positions).ga_data.cast::<u32>(),
             placed.len(),
-        );
-        (*positions).ga_len = placed.len() as c_int;
-        positions
-    }
+        )
+    };
+    unsafe { (*positions).ga_len = placed.len() as c_int };
+    positions
 }
 
 /// Split the line at `*ptr` into words and fuzzy match `pat` against each.
@@ -493,41 +491,39 @@ pub(crate) unsafe fn fuzzy_match_str_in_line(
     current_pos: *mut pos_T,
     score: *mut c_int,
 ) -> bool {
-    unsafe {
-        let line = *ptr;
-        if line.is_null() || pat.is_null() {
-            return false;
-        }
-        let line_end = find_line_end(line);
-        let mut str = line;
-        while str < line_end {
-            let start = find_word_start(str);
-            if *start == 0 {
-                break;
-            }
-            let end = find_word_end(start);
-            let save_end = *end;
-            *end = 0;
-            *score = fuzzy_match_str(start, pat);
-            *end = save_end;
-            if *score != FUZZY_SCORE_NONE {
-                *len = end.offset_from(start) as c_int;
-                *ptr = start;
-                if !current_pos.is_null() {
-                    (*current_pos).col += end.offset_from(line) as c_int;
-                }
-                return true;
-            }
-
-            // Carry on after the word just tried.
-            str = end;
-            while *str != 0 && !vim_iswordp(str) {
-                str = str.offset(utfc_ptr2len(str) as isize);
-            }
-        }
-        *ptr = line_end;
-        false
+    let line = unsafe { *ptr };
+    if line.is_null() || pat.is_null() {
+        return false;
     }
+    let line_end = unsafe { find_line_end(line) };
+    let mut str = line;
+    while str < line_end {
+        let start = unsafe { find_word_start(str) };
+        if unsafe { *start } == 0 {
+            break;
+        }
+        let end = unsafe { find_word_end(start) };
+        let save_end = unsafe { *end };
+        unsafe { *end = 0 };
+        unsafe { *score = fuzzy_match_str(start, pat) };
+        unsafe { *end = save_end };
+        if unsafe { *score } != FUZZY_SCORE_NONE {
+            unsafe { *len = end.offset_from(start) as c_int };
+            unsafe { *ptr = start };
+            if !current_pos.is_null() {
+                unsafe { (*current_pos).col += end.offset_from(line) as c_int };
+            }
+            return true;
+        }
+
+        // Carry on after the word just tried.
+        str = end;
+        while unsafe { *str } != 0 && !unsafe { vim_iswordp(str) } {
+            str = unsafe { str.offset(utfc_ptr2len(str) as isize) };
+        }
+    }
+    unsafe { *ptr = line_end };
+    false
 }
 
 /// Where a fuzzy match was found in a buffer line: its start inside the
@@ -554,85 +550,85 @@ pub(crate) unsafe fn search_for_fuzzy_match(
     dir: c_int,
     start_pos: *const pos_T,
 ) -> Option<LineMatch> {
-    unsafe {
-        let whole_line = ctrl_x_mode_whole_line();
-        let mut current_pos = *pos;
+    let whole_line = ctrl_x_mode_whole_line();
+    let mut current_pos = unsafe { *pos };
 
-        // Where the search has come full circle. Another buffer is walked
-        // from wherever it is to its end rather than back to the start.
-        let circly_end = if buf == curbuf.get() {
-            *start_pos
-        } else {
-            pos_T {
-                lnum: (*buf).b_ml.ml_line_count,
-                col: 0,
-                coladd: 0,
-            }
-        };
-        if whole_line && (*start_pos).lnum != (*pos).lnum {
-            current_pos.lnum += dir as linenr_T;
+    // Where the search has come full circle. Another buffer is walked
+    // from wherever it is to its end rather than back to the start.
+    let circly_end = if buf == curbuf.get() {
+        unsafe { *start_pos }
+    } else {
+        pos_T {
+            lnum: unsafe { (*buf).b_ml.ml_line_count },
+            col: 0,
+            coladd: 0,
         }
-        let mut looped_around = false;
-        loop {
-            if looped_around
-                && (if whole_line {
-                    current_pos.lnum == circly_end.lnum
+    };
+    if whole_line && unsafe { (*start_pos).lnum } != unsafe { (*pos).lnum } {
+        current_pos.lnum += dir as linenr_T;
+    }
+    let mut looped_around = false;
+    loop {
+        if looped_around
+            && (if whole_line {
+                current_pos.lnum == circly_end.lnum
+            } else {
+                equalpos(current_pos, circly_end)
+            })
+        {
+            return None;
+        }
+        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buf).b_ml.ml_line_count } {
+            let line = unsafe { ml_get_buf(buf, current_pos.lnum) };
+            let mut ptr = if whole_line {
+                line
+            } else {
+                unsafe { line.offset(current_pos.col as isize) }
+            };
+            if !ptr.is_null() && unsafe { *ptr } != 0 {
+                if whole_line {
+                    if unsafe { fuzzy_match_str(ptr, pattern) } != FUZZY_SCORE_NONE {
+                        unsafe { *pos = current_pos };
+                        return Some(LineMatch {
+                            ptr,
+                            len: unsafe { ml_get_buf_len(buf, current_pos.lnum) } as c_int,
+                            score: None,
+                        });
+                    }
                 } else {
-                    equalpos(current_pos, circly_end)
-                })
-            {
-                return None;
-            }
-            if current_pos.lnum >= 1 && current_pos.lnum <= (*buf).b_ml.ml_line_count {
-                let line = ml_get_buf(buf, current_pos.lnum);
-                let mut ptr = if whole_line {
-                    line
-                } else {
-                    line.offset(current_pos.col as isize)
-                };
-                if !ptr.is_null() && *ptr != 0 {
-                    if whole_line {
-                        if fuzzy_match_str(ptr, pattern) != FUZZY_SCORE_NONE {
-                            *pos = current_pos;
-                            return Some(LineMatch {
-                                ptr,
-                                len: ml_get_buf_len(buf, current_pos.lnum) as c_int,
-                                score: None,
-                            });
-                        }
-                    } else {
-                        let (mut len, mut score) = (0, 0);
-                        if fuzzy_match_str_in_line(
+                    let (mut len, mut score) = (0, 0);
+                    if unsafe {
+                        fuzzy_match_str_in_line(
                             &raw mut ptr,
                             pattern,
                             &raw mut len,
                             &raw mut current_pos,
                             &raw mut score,
-                        ) {
-                            *pos = current_pos;
-                            let score = Some(score);
-                            return Some(LineMatch { ptr, len, score });
-                        }
-                        if looped_around && current_pos.lnum == circly_end.lnum {
-                            return None;
-                        }
+                        )
+                    } {
+                        unsafe { *pos = current_pos };
+                        let score = Some(score);
+                        return Some(LineMatch { ptr, len, score });
+                    }
+                    if looped_around && current_pos.lnum == circly_end.lnum {
+                        return None;
                     }
                 }
             }
-
-            // On to the next line, or round to the far end of the buffer
-            // if `'wrapscan'` allows it.
-            let last = (*buf).b_ml.ml_line_count;
-            current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
-            if !(1..=last).contains(&current_pos.lnum) {
-                if p_ws.get() == 0 {
-                    return None;
-                }
-                current_pos.lnum = if dir == FORWARD { 1 } else { last };
-                looped_around = true;
-            }
-            current_pos.col = 0;
         }
+
+        // On to the next line, or round to the far end of the buffer
+        // if `'wrapscan'` allows it.
+        let last = unsafe { (*buf).b_ml.ml_line_count };
+        current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
+        if !(1..=last).contains(&current_pos.lnum) {
+            if p_ws.get() == 0 {
+                return None;
+            }
+            current_pos.lnum = if dir == FORWARD { 1 } else { last };
+            looped_around = true;
+        }
+        current_pos.col = 0;
     }
 }
 
@@ -648,29 +644,27 @@ pub(crate) unsafe fn fuzzymatches_to_strmatches(
     count: c_int,
     funcsort: bool,
 ) {
-    unsafe {
-        if count > 0 {
-            let count = count as usize;
-            let found = core::slice::from_raw_parts_mut(fuzmatch, count);
-            // Best score first, `idx` breaking ties — and with `funcsort`,
-            // `<SNR>` functions after everything else whatever they scored.
-            // Callers number `idx` as they fill the array, so no two entries
-            // compare equal and the sort needs no stability of its own.
-            let snr = |m: &fuzmatch_str_T| funcsort && *m.str == b'<' as c_char;
-            found.sort_by(|a, b| {
-                snr(a)
-                    .cmp(&snr(b))
-                    .then(b.score.cmp(&a.score))
-                    .then(a.idx.cmp(&b.idx))
-            });
-            let strings: *mut *mut c_char = xmalloc(count * size_of::<*mut c_char>()).cast();
-            for (i, m) in found.iter().enumerate() {
-                *strings.add(i) = m.str;
-            }
-            *matches = strings;
+    if count > 0 {
+        let count = count as usize;
+        let found = unsafe { core::slice::from_raw_parts_mut(fuzmatch, count) };
+        // Best score first, `idx` breaking ties — and with `funcsort`,
+        // `<SNR>` functions after everything else whatever they scored.
+        // Callers number `idx` as they fill the array, so no two entries
+        // compare equal and the sort needs no stability of its own.
+        let snr = |m: &fuzmatch_str_T| funcsort && unsafe { *m.str } == b'<' as c_char;
+        found.sort_by(|a, b| {
+            snr(a)
+                .cmp(&snr(b))
+                .then(b.score.cmp(&a.score))
+                .then(a.idx.cmp(&b.idx))
+        });
+        let strings: *mut *mut c_char = unsafe { xmalloc(count * size_of::<*mut c_char>()) }.cast();
+        for (i, m) in found.iter().enumerate() {
+            unsafe { *strings.add(i) = m.str };
         }
-        xfree(fuzmatch.cast());
+        unsafe { *matches = strings };
     }
+    unsafe { xfree(fuzmatch.cast()) };
 }
 
 /// Where the string to match comes from: the list items are strings, and a
@@ -716,37 +710,35 @@ unsafe fn item_string(
     rettv: *mut typval_T,
     numbuf: &mut NumBuf,
 ) -> *const c_char {
-    unsafe {
-        if (*tv).v_type == VAR_STRING {
-            return (*tv).vval.v_string;
-        }
-        if (*tv).v_type != VAR_DICT {
-            return core::ptr::null();
-        }
-        match request.source {
-            Source::Item => core::ptr::null(),
-            Source::Key(key) => numbuf.dict_string((*tv).vval.v_dict, key),
-            Source::Callback(cb) => {
-                // The callback is handed the dict, which it must not be able
-                // to free out from under this loop.
-                (*(*tv).vval.v_dict).dv_refcount.retain();
-                let mut argv = [
-                    typval_T {
-                        v_type: VAR_DICT,
-                        v_lock: VarLock::Unlocked,
-                        vval: typval_vval_union {
-                            v_dict: (*tv).vval.v_dict,
-                        },
+    if unsafe { (*tv).v_type } == VAR_STRING {
+        return unsafe { (*tv).vval.v_string };
+    }
+    if unsafe { (*tv).v_type } != VAR_DICT {
+        return core::ptr::null();
+    }
+    match request.source {
+        Source::Item => core::ptr::null(),
+        Source::Key(key) => unsafe { numbuf.dict_string((*tv).vval.v_dict, key) },
+        Source::Callback(cb) => {
+            // The callback is handed the dict, which it must not be able
+            // to free out from under this loop.
+            unsafe { (*(*tv).vval.v_dict).dv_refcount.retain() };
+            let mut argv = [
+                typval_T {
+                    v_type: VAR_DICT,
+                    v_lock: VarLock::Unlocked,
+                    vval: typval_vval_union {
+                        v_dict: unsafe { (*tv).vval.v_dict },
                     },
-                    TV_UNKNOWN,
-                ];
-                let called = callback_call(cb, 1, argv.as_mut_ptr(), rettv);
-                tv_dict_unref((*tv).vval.v_dict);
-                if called && (*rettv).v_type == VAR_STRING {
-                    (*rettv).vval.v_string
-                } else {
-                    core::ptr::null()
-                }
+                },
+                TV_UNKNOWN,
+            ];
+            let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), rettv) };
+            unsafe { tv_dict_unref((*tv).vval.v_dict) };
+            if called && unsafe { (*rettv).v_type } == VAR_STRING {
+                unsafe { (*rettv).vval.v_string }
+            } else {
+                core::ptr::null()
             }
         }
     }
@@ -754,13 +746,11 @@ unsafe fn item_string(
 
 /// The list held by item `idx` of `list`, which the caller has just built.
 unsafe fn nested_list(list: *mut list_T, idx: c_int) -> *mut list_T {
-    unsafe {
-        let li = tv_list_find(list, idx);
-        debug_assert!(!li.is_null(), "fuzzy: result list is short");
-        let nested = (*li).li_tv.vval.v_list;
-        debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
-        nested
-    }
+    let li = unsafe { tv_list_find(list, idx) };
+    debug_assert!(!li.is_null(), "fuzzy: result list is short");
+    let nested = unsafe { (*li).li_tv.vval.v_list };
+    debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
+    nested
 }
 
 /// Fuzzy match `request`'s pattern against the strings of `list`, appending
@@ -770,87 +760,86 @@ unsafe fn nested_list(list: *mut list_T, idx: c_int) -> *mut list_T {
 /// and the scores — which are filled in turn.
 unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: *mut list_T) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        let pattern = CStr::from_ptr(request.pattern);
-        let mut found: Vec<FuzzyItem> = Vec::new();
-        let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-        let mut li = (*list).lv_first;
-        while !li.is_null() {
-            if request.limit > 0 && found.len() >= request.limit as usize {
-                break;
-            }
-            let mut rettv = TV_UNKNOWN;
-            let itemstr = item_string(request, &raw const (*li).li_tv, &raw mut rettv, &mut numbuf);
-            if !itemstr.is_null() {
-                let itemstr = CStr::from_ptr(itemstr);
-                let (score, filled) =
-                    fuzzy_match_words(itemstr, pattern, request.matchseq, &mut matches);
-                if filled != 0 {
-                    // Upstream reads the string at the first *character*
-                    // position as if it were a byte offset. Preserved: it is
-                    // only a tie-break between two equally scored items.
-                    let at = matches[0] as usize;
-                    let exact = itemstr
-                        .to_bytes()
-                        .get(at..)
-                        .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
-                    let positions = request.retmatchpos.then(|| {
-                        let positions = tv_list_alloc(kListLenMayKnow as isize);
-                        // One position per pattern character that took part
-                        // in the match, i.e. all but the word separators.
-                        let placed = Chars::new(pattern)
-                            .filter(|&(_, c)| request.matchseq || !ascii_iswhite(c));
-                        for (at, _) in placed.enumerate().take(FUZZY_MATCH_MAX_LEN) {
-                            tv_list_append_number(positions, matches[at] as varnumber_T);
-                        }
-                        positions
-                    });
-                    found.push(FuzzyItem {
-                        idx: found.len(),
-                        item: li,
-                        score,
-                        exact,
-                        positions,
-                    });
-                }
-            }
-            tv_clear(&raw mut rettv);
-            li = (*li).li_next;
+    let pattern = unsafe { CStr::from_ptr(request.pattern) };
+    let mut found: Vec<FuzzyItem> = Vec::new();
+    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+    let mut li = unsafe { (*list).lv_first };
+    while !li.is_null() {
+        if request.limit > 0 && found.len() >= request.limit as usize {
+            break;
         }
-        if found.is_empty() {
-            return;
+        let mut rettv = TV_UNKNOWN;
+        let itemstr =
+            unsafe { item_string(request, &raw const (*li).li_tv, &raw mut rettv, &mut numbuf) };
+        if !itemstr.is_null() {
+            let itemstr = unsafe { CStr::from_ptr(itemstr) };
+            let (score, filled) =
+                fuzzy_match_words(itemstr, pattern, request.matchseq, &mut matches);
+            if filled != 0 {
+                // Upstream reads the string at the first *character*
+                // position as if it were a byte offset. Preserved: it is
+                // only a tie-break between two equally scored items.
+                let at = matches[0] as usize;
+                let exact = itemstr
+                    .to_bytes()
+                    .get(at..)
+                    .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
+                let positions = request.retmatchpos.then(|| {
+                    let positions = unsafe { tv_list_alloc(kListLenMayKnow as isize) };
+                    // One position per pattern character that took part
+                    // in the match, i.e. all but the word separators.
+                    let placed =
+                        Chars::new(pattern).filter(|&(_, c)| request.matchseq || !ascii_iswhite(c));
+                    for (at, _) in placed.enumerate().take(FUZZY_MATCH_MAX_LEN) {
+                        unsafe { tv_list_append_number(positions, matches[at] as varnumber_T) };
+                    }
+                    positions
+                });
+                found.push(FuzzyItem {
+                    idx: found.len(),
+                    item: li,
+                    score,
+                    exact,
+                    positions,
+                });
+            }
         }
+        unsafe { tv_clear(&raw mut rettv) };
+        li = unsafe { (*li).li_next };
+    }
+    if found.is_empty() {
+        return;
+    }
 
-        // Best score first; an exact match wins a tie, and the input order
-        // settles the rest. No two items share an `idx`, so this is a total
-        // order and the sort needs no stability of its own.
-        found.sort_by(|a, b| {
-            b.score
-                .cmp(&a.score)
-                .then(b.exact.cmp(&a.exact))
-                .then(a.idx.cmp(&b.idx))
-        });
+    // Best score first; an exact match wins a tie, and the input order
+    // settles the rest. No two items share an `idx`, so this is a total
+    // order and the sort needs no stability of its own.
+    found.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then(b.exact.cmp(&a.exact))
+            .then(a.idx.cmp(&b.idx))
+    });
 
-        // matchfuzzy() answers just the strings; matchfuzzypos() answers
-        // them in the first of its three lists.
-        let strings = if request.retmatchpos {
-            nested_list(fmatchlist, 0)
-        } else {
-            fmatchlist
-        };
+    // matchfuzzy() answers just the strings; matchfuzzypos() answers
+    // them in the first of its three lists.
+    let strings = if request.retmatchpos {
+        unsafe { nested_list(fmatchlist, 0) }
+    } else {
+        fmatchlist
+    };
+    for item in &found {
+        unsafe { tv_list_append_tv(strings, &raw mut (*item.item).li_tv) };
+    }
+    if request.retmatchpos {
+        let positions = unsafe { nested_list(fmatchlist, -2) };
+        for item in &mut found {
+            let list = item.positions.take().expect("fuzzy: positions were kept");
+            unsafe { tv_list_append_list(positions, list) };
+        }
+        let scores = unsafe { nested_list(fmatchlist, -1) };
         for item in &found {
-            tv_list_append_tv(strings, &raw mut (*item.item).li_tv);
-        }
-        if request.retmatchpos {
-            let positions = nested_list(fmatchlist, -2);
-            for item in &mut found {
-                let list = item.positions.take().expect("fuzzy: positions were kept");
-                tv_list_append_list(positions, list);
-            }
-            let scores = nested_list(fmatchlist, -1);
-            for item in &found {
-                tv_list_append_number(scores, item.score as varnumber_T);
-            }
+            unsafe { tv_list_append_number(scores, item.score as varnumber_T) };
         }
     }
 }
@@ -868,9 +857,9 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    unsafe {
-        let list = &*argvars;
-        if list.v_type != VAR_LIST || list.vval.v_list.is_null() {
+    let list = unsafe { &*argvars };
+    if list.v_type != VAR_LIST || unsafe { list.vval.v_list }.is_null() {
+        unsafe {
             semsg_c!(
                 message(&e_listarg),
                 if retmatchpos {
@@ -878,89 +867,92 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                 } else {
                     c"matchfuzzy()".as_ptr()
                 },
-            );
-            return;
-        }
-        let pat = &*argvars.add(1);
-        if pat.v_type != VAR_STRING || pat.vval.v_string.is_null() {
-            semsg_c!(message(&e_invarg2), numbuf.string(pat));
-            return;
-        }
-
-        // The optional third argument says where to find the string of a
-        // dict item, and how much of the list to bother with.
-        let mut cb = Callback {
-            data: Callback_data {
-                funcref: core::ptr::null_mut(),
-            },
-            type_0: kCallbackNone,
+            )
         };
-        let mut key = core::ptr::null();
-        let mut matchseq = false;
-        let mut limit = 0;
-        if (*argvars.add(2)).v_type != VAR_UNKNOWN {
-            if tv_check_for_nonnull_dict_arg(argvars, 2) == FAIL {
-                return;
-            }
-            let d: *mut dict_T = (*argvars.add(2)).vval.v_dict;
-            let di = tv_dict_find(d, c"key".as_ptr(), -1);
-            if !di.is_null() {
-                if (*di).di_tv.v_type != VAR_STRING
-                    || (*di).di_tv.vval.v_string.is_null()
-                    || *(*di).di_tv.vval.v_string == 0
-                {
+        return;
+    }
+    let pat = unsafe { &*argvars.add(1) };
+    if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
+        unsafe { semsg_c!(message(&e_invarg2), numbuf.string(pat)) };
+        return;
+    }
+
+    // The optional third argument says where to find the string of a
+    // dict item, and how much of the list to bother with.
+    let mut cb = Callback {
+        data: Callback_data {
+            funcref: core::ptr::null_mut(),
+        },
+        type_0: kCallbackNone,
+    };
+    let mut key = core::ptr::null();
+    let mut matchseq = false;
+    let mut limit = 0;
+    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
+        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) } == FAIL {
+            return;
+        }
+        let d: *mut dict_T = unsafe { (*argvars.add(2)).vval.v_dict };
+        let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
+        if !di.is_null() {
+            if unsafe { (*di).di_tv.v_type } != VAR_STRING
+                || unsafe { (*di).di_tv.vval.v_string }.is_null()
+                || unsafe { *(*di).di_tv.vval.v_string } == 0
+            {
+                unsafe {
                     semsg_c!(
                         message(&e_invargNval),
                         c"key".as_ptr(),
                         numbuf2.string(&raw const (*di).di_tv),
-                    );
-                    return;
-                }
-                key = numbuf3.string(&raw const (*di).di_tv);
-            } else if !tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) {
-                semsg_c!(message(&e_invargval), c"text_cb".as_ptr());
+                    )
+                };
                 return;
             }
-            let di = tv_dict_find(d, c"limit".as_ptr(), -1);
-            if !di.is_null() {
-                if (*di).di_tv.v_type != VAR_NUMBER {
-                    semsg_c!(message(&e_invargval), c"limit".as_ptr());
-                    return;
-                }
-                limit = tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) as c_int;
-            }
-            matchseq = tv_dict_has_key(d, c"matchseq".as_ptr());
+            key = unsafe { numbuf3.string(&raw const (*di).di_tv) };
+        } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
+            unsafe { semsg_c!(message(&e_invargval), c"text_cb".as_ptr()) };
+            return;
         }
-
-        // matchfuzzypos() answers three lists: the matching strings, their
-        // matching positions, and their scores.
-        let len = if retmatchpos {
-            3
-        } else {
-            kListLenUnknown as isize
-        };
-        let result = tv_list_alloc_ret(rettv, len);
-        if retmatchpos {
-            for _ in 0..3 {
-                tv_list_append_list(result, tv_list_alloc(kListLenUnknown as isize));
+        let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
+        if !di.is_null() {
+            if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
+                unsafe { semsg_c!(message(&e_invargval), c"limit".as_ptr()) };
+                return;
             }
+            limit = unsafe { tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) }
+                as c_int;
         }
-        let request = Request {
-            pattern: numbuf4.string(pat),
-            source: if !key.is_null() {
-                Source::Key(key)
-            } else if cb.type_0 != kCallbackNone {
-                Source::Callback(&raw mut cb)
-            } else {
-                Source::Item
-            },
-            matchseq,
-            retmatchpos,
-            limit,
-        };
-        fuzzy_match_in_list(list.vval.v_list, &request, result);
-        callback_free(&raw mut cb);
+        matchseq = unsafe { tv_dict_has_key(d, c"matchseq".as_ptr()) };
     }
+
+    // matchfuzzypos() answers three lists: the matching strings, their
+    // matching positions, and their scores.
+    let len = if retmatchpos {
+        3
+    } else {
+        kListLenUnknown as isize
+    };
+    let result = unsafe { tv_list_alloc_ret(rettv, len) };
+    if retmatchpos {
+        for _ in 0..3 {
+            unsafe { tv_list_append_list(result, tv_list_alloc(kListLenUnknown as isize)) };
+        }
+    }
+    let request = Request {
+        pattern: unsafe { numbuf4.string(pat) },
+        source: if !key.is_null() {
+            Source::Key(key)
+        } else if cb.type_0 != kCallbackNone {
+            Source::Callback(&raw mut cb)
+        } else {
+            Source::Item
+        },
+        matchseq,
+        retmatchpos,
+        limit,
+    };
+    unsafe { fuzzy_match_in_list(list.vval.v_list, &request, result) };
+    unsafe { callback_free(&raw mut cb) };
 }
 
 /// `matchfuzzy()`: the items of a list that fuzzy match a pattern.

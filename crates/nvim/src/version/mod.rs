@@ -180,17 +180,15 @@ pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 /// `eap` is a live `exarg_T`.
 pub(crate) unsafe fn ex_version(eap: *mut exarg_T) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
-    unsafe {
-        if *(*eap).arg != 0 {
-            return;
-        }
-        // Start the banner below the ":version" the user typed. The message
-        // UI lays its own messages out, so it needs no help.
-        if !ui_has(kUIMessages) {
-            msg_putchar(b'\n' as c_int);
-        }
-        list_version();
+    if unsafe { *(*eap).arg } != 0 {
+        return;
     }
+    // Start the banner below the ":version" the user typed. The message
+    // UI lays its own messages out, so it needs no help.
+    if !ui_has(kUIMessages) {
+        unsafe { msg_putchar(b'\n' as c_int) };
+    }
+    unsafe { list_version() };
 }
 
 /// Print `s`, moving to the next line first if it would otherwise wrap, and
@@ -200,25 +198,23 @@ pub(crate) unsafe fn ex_version(eap: *mut exarg_T) {
 /// The message machinery must be usable.
 unsafe fn version_msg_wrap(s: &CStr, wrap: bool) {
     // SAFETY: `s` is NUL-terminated by construction.
-    unsafe {
-        let len = vim_strsize(s.as_ptr()) + if wrap { 2 } else { 0 };
-        if !got_int.get()
-            && len < Columns.get()
-            && msg_col.get() + len >= Columns.get()
-            && !s.to_bytes().starts_with(b"\n")
-        {
-            msg_putchar(b'\n' as c_int);
-        }
-        if got_int.get() {
-            return;
-        }
-        if wrap {
-            msg_puts(c"[".as_ptr());
-        }
-        msg_puts(s.as_ptr());
-        if wrap {
-            msg_puts(c"]".as_ptr());
-        }
+    let len = unsafe { vim_strsize(s.as_ptr()) } + if wrap { 2 } else { 0 };
+    if !got_int.get()
+        && len < Columns.get()
+        && msg_col.get() + len >= Columns.get()
+        && !s.to_bytes().starts_with(b"\n")
+    {
+        unsafe { msg_putchar(b'\n' as c_int) };
+    }
+    if got_int.get() {
+        return;
+    }
+    if wrap {
+        unsafe { msg_puts(c"[".as_ptr()) };
+    }
+    unsafe { msg_puts(s.as_ptr()) };
+    if wrap {
+        unsafe { msg_puts(c"]".as_ptr()) };
     }
 }
 
@@ -239,64 +235,62 @@ unsafe fn version_msg(s: &CStr) {
 /// The message machinery must be usable.
 pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
     // SAFETY: every item is NUL-terminated by construction.
-    unsafe {
-        let count = items.len() as c_int;
-        // The widest item, plus the gap that separates two columns.
-        let width = 1 + items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| vim_strsize(item.as_ptr()) + if i as c_int == current { 2 } else { 0 })
-            .max()
-            .unwrap_or(0);
+    let count = items.len() as c_int;
+    // The widest item, plus the gap that separates two columns.
+    let width = 1 + items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| unsafe { vim_strsize(item.as_ptr()) } + if i as c_int == current { 2 } else { 0 })
+        .max()
+        .unwrap_or(0);
 
-        // Too narrow even for one column: one item per line, wrapped.
-        if Columns.get() < width {
-            for (i, item) in items.iter().enumerate() {
-                version_msg_wrap(item, i as c_int == current);
-                if msg_col.get() > 0 && (i as c_int) < count - 1 {
-                    msg_putchar(b'\n' as c_int);
-                }
+    // Too narrow even for one column: one item per line, wrapped.
+    if Columns.get() < width {
+        for (i, item) in items.iter().enumerate() {
+            unsafe { version_msg_wrap(item, i as c_int == current) };
+            if msg_col.get() > 0 && (i as c_int) < count - 1 {
+                unsafe { msg_putchar(b'\n' as c_int) };
             }
-            return;
         }
+        return;
+    }
 
-        let ncol = (Columns.get() + 1) / width;
-        let nrow = count / ncol + if count % ncol != 0 { 1 } else { 0 };
-        let mut cur_row = 1;
-        for i in 0..nrow * ncol {
-            if got_int.get() {
-                break;
-            }
-            // Filled top-to-bottom, so the item printed here is the one
-            // `nrow` rows down the previous column.
-            let idx = i / ncol + i % ncol * nrow;
-            let last_col = (i + 1) % ncol == 0;
-            let Some(item) = items.get(idx as usize) else {
-                // A hole in the last column: only the row break is owed.
-                if msg_col.get() > 0 {
-                    if cur_row < nrow {
-                        msg_putchar(b'\n' as c_int);
-                    }
-                    cur_row += 1;
-                }
-                continue;
-            };
-            if idx == current {
-                msg_putchar(b'[' as c_int);
-            }
-            msg_puts(item.as_ptr());
-            if idx == current {
-                msg_putchar(b']' as c_int);
-            }
-            if last_col {
-                if msg_col.get() > 0 && cur_row < nrow {
-                    msg_putchar(b'\n' as c_int);
+    let ncol = (Columns.get() + 1) / width;
+    let nrow = count / ncol + if count % ncol != 0 { 1 } else { 0 };
+    let mut cur_row = 1;
+    for i in 0..nrow * ncol {
+        if got_int.get() {
+            break;
+        }
+        // Filled top-to-bottom, so the item printed here is the one
+        // `nrow` rows down the previous column.
+        let idx = i / ncol + i % ncol * nrow;
+        let last_col = (i + 1) % ncol == 0;
+        let Some(item) = items.get(idx as usize) else {
+            // A hole in the last column: only the row break is owed.
+            if msg_col.get() > 0 {
+                if cur_row < nrow {
+                    unsafe { msg_putchar(b'\n' as c_int) };
                 }
                 cur_row += 1;
-            } else {
-                while msg_col.get() % width != 0 {
-                    msg_putchar(b' ' as c_int);
-                }
+            }
+            continue;
+        };
+        if idx == current {
+            unsafe { msg_putchar(b'[' as c_int) };
+        }
+        unsafe { msg_puts(item.as_ptr()) };
+        if idx == current {
+            unsafe { msg_putchar(b']' as c_int) };
+        }
+        if last_col {
+            if msg_col.get() > 0 && cur_row < nrow {
+                unsafe { msg_putchar(b'\n' as c_int) };
+            }
+            cur_row += 1;
+        } else {
+            while msg_col.get() % width != 0 {
+                unsafe { msg_putchar(b' ' as c_int) };
             }
         }
     }
@@ -311,12 +305,12 @@ pub(crate) unsafe fn list_lua_version() {
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
     // `String_0`; `nlua_exec` only reads it.
-    unsafe {
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
-        let ret = nlua_exec(
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: ptr::null_mut(),
+    };
+    let ret = unsafe {
+        nlua_exec(
             static_cstring(CODE),
             ptr::null(),
             Array {
@@ -327,13 +321,13 @@ pub(crate) unsafe fn list_lua_version() {
             kRetObject,
             ptr::null_mut::<Arena>(),
             &raw mut err,
-        );
-        debug_assert!(err.type_0 == kErrorTypeNone, "a literal chunk cannot fail");
-        // Not a debug assertion: the union field read below depends on it.
-        assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
-        msg_puts(ret.data.string.data());
-        api_free_object(ret);
-    }
+        )
+    };
+    debug_assert!(err.type_0 == kErrorTypeNone, "a literal chunk cannot fail");
+    // Not a debug assertion: the union field read below depends on it.
+    assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
+    unsafe { msg_puts(ret.data.string.data()) };
+    unsafe { api_free_object(ret) };
 }
 
 /// The `:version` screen. `nvim -v` prints the same thing, and `nvim -V1 -v`
@@ -343,57 +337,57 @@ pub(crate) unsafe fn list_lua_version() {
 /// The message machinery must be usable.
 pub(crate) unsafe fn list_version() {
     // SAFETY: the caller's obligation.
-    unsafe {
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_puts(LONG_VERSION.as_ptr());
-        msg_putchar(b'\n' as c_int);
-        // The Nvim release this port tracks -- the version every
-        // compatibility surface (`has('nvim-…')`, `v:version`, the API
-        // metadata) answers with.
-        let compat = CString::new(format!(
-            "NVIM v{NVIM_VERSION_MAJOR}.{NVIM_VERSION_MINOR}.{NVIM_VERSION_PATCH} compatible"
-        ))
-        .expect("version numbers hold no NUL");
-        msg_puts(compat.as_ptr());
-        msg_putchar(b'\n' as c_int);
-        list_lua_version();
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    unsafe { msg_puts(LONG_VERSION.as_ptr()) };
+    unsafe { msg_putchar(b'\n' as c_int) };
+    // The Nvim release this port tracks -- the version every
+    // compatibility surface (`has('nvim-…')`, `v:version`, the API
+    // metadata) answers with.
+    let compat = CString::new(format!(
+        "NVIM v{NVIM_VERSION_MAJOR}.{NVIM_VERSION_MINOR}.{NVIM_VERSION_PATCH} compatible"
+    ))
+    .expect("version numbers hold no NUL");
+    unsafe { msg_puts(compat.as_ptr()) };
+    unsafe { msg_putchar(b'\n' as c_int) };
+    unsafe { list_lua_version() };
 
-        if p_verbose.get() > 0 as OptInt {
-            msg_putchar(b'\n' as c_int);
-            msg_puts(BUILD_LINE.as_ptr());
-            msg_putchar(b'\n' as c_int);
-            msg_puts(c"Vim versions: ".as_ptr());
-            for (i, baseline) in VIM_BASELINES.iter().enumerate() {
-                if i != 0 {
-                    msg_puts(c", ".as_ptr());
-                }
-                msg_puts(baseline.name.as_ptr());
+    if p_verbose.get() > 0 as OptInt {
+        unsafe { msg_putchar(b'\n' as c_int) };
+        unsafe { msg_puts(BUILD_LINE.as_ptr()) };
+        unsafe { msg_putchar(b'\n' as c_int) };
+        unsafe { msg_puts(c"Vim versions: ".as_ptr()) };
+        for (i, baseline) in VIM_BASELINES.iter().enumerate() {
+            if i != 0 {
+                unsafe { msg_puts(c", ".as_ptr()) };
             }
-            version_msg(c"\n");
-            version_msg(translate(c"   system vimrc file: \""));
-            version_msg(SYS_VIMRC_FILE);
-            version_msg(c"\"\n");
-            for (label, dir) in [
-                (c"  fall-back for $VIM: \"", default_vim_dir.get()),
-                (c" f-b for $VIMRUNTIME: \"", default_vimruntime_dir.get()),
-            ] {
-                if *dir == 0 {
-                    continue;
-                }
-                version_msg(translate(label));
-                version_msg(CStr::from_ptr(dir));
-                version_msg(c"\"\n");
-            }
+            unsafe { msg_puts(baseline.name.as_ptr()) };
         }
+        unsafe { version_msg(c"\n") };
+        unsafe { version_msg(translate(c"   system vimrc file: \"")) };
+        unsafe { version_msg(SYS_VIMRC_FILE) };
+        unsafe { version_msg(c"\"\n") };
+        for (label, dir) in [
+            (c"  fall-back for $VIM: \"", default_vim_dir.get()),
+            (c" f-b for $VIMRUNTIME: \"", default_vimruntime_dir.get()),
+        ] {
+            if unsafe { *dir } == 0 {
+                continue;
+            }
+            unsafe { version_msg(translate(label)) };
+            unsafe { version_msg(CStr::from_ptr(dir)) };
+            unsafe { version_msg(c"\"\n") };
+        }
+    }
 
+    unsafe {
         version_msg(if p_verbose.get() > 0 as OptInt {
             c"\nRun :checkhealth for more info"
         } else if starting.get() != 0 {
             c"\nRun \"nvim -V1 -v\" for more info"
         } else {
             c"\nRun \":verbose version\" for more info"
-        });
-    }
+        })
+    };
 }
 
 /// Whether the intro screen is still what the window shows: an untouched
@@ -402,15 +396,15 @@ pub(crate) unsafe fn list_version() {
 /// # Safety
 /// The editor's globals must be live.
 pub(crate) unsafe fn may_show_intro() -> bool {
-    // SAFETY: the caller's obligation.
-    unsafe {
-        buf_is_empty(curbuf.get())
-            && (*curbuf.get()).b_fname.is_null()
-            && (*curbuf.get()).handle == 1
-            && (*curwin.get()).handle == LOWEST_WIN_ID as c_int
-            && one_window(curwin.get(), ptr::null_mut::<tabpage_T>())
-            && !ShmFlag::INTRO.is_in(CStr::from_ptr(p_shm.get()))
-    }
+    // SAFETY: the caller's obligation -- the globals are live, so each of
+    // these reads a live buffer or window.
+    let empty = unsafe { buf_is_empty(curbuf.get()) };
+    empty
+        && unsafe { (*curbuf.get()).b_fname }.is_null()
+        && unsafe { (*curbuf.get()).handle } == 1
+        && unsafe { (*curwin.get()).handle } == LOWEST_WIN_ID as c_int
+        && unsafe { one_window(curwin.get(), ptr::null_mut::<tabpage_T>()) }
+        && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
 }
 
 /// The intro screen, top to bottom. The first three lines are the logo, and
@@ -479,33 +473,31 @@ fn news_line() -> CString {
 /// The grid must be ready to draw on.
 pub(crate) unsafe fn intro_message(colon: bool) {
     // SAFETY: the caller's obligation.
-    unsafe {
-        // Centre the block vertically, ignoring the line the empty entry
-        // above the version costs.
-        let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
-        if p_ls.get() > 1 as OptInt {
-            blanklines -= Rows.get() - (*topframe.get()).fr_height;
-        }
-        let top = blanklines.max(0) / 2;
-        if !(top >= 2 && Columns.get() >= 50 || colon) {
-            return;
-        }
+    // Centre the block vertically, ignoring the line the empty entry
+    // above the version costs.
+    let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
+    if p_ls.get() > 1 as OptInt {
+        blanklines -= Rows.get() - unsafe { (*topframe.get()).fr_height };
+    }
+    let top = blanklines.max(0) / 2;
+    if !(top >= 2 && Columns.get() >= 50 || colon) {
+        return;
+    }
 
-        let news = news_line();
-        for (i, line) in INTRO_LINES.iter().enumerate() {
-            // gettext("") answers with the catalogue's own header, so blank
-            // lines stay untranslated.
-            let mesg = if *line == NEWS_TEMPLATE {
-                news.as_c_str()
-            } else if line.is_empty() {
-                c""
-            } else {
-                translate(line)
-            };
-            let row = top + i as c_int;
-            if !mesg.is_empty() && row < Rows.get() - 1 {
-                do_intro_line(row, mesg, colon, i < 3);
-            }
+    let news = news_line();
+    for (i, line) in INTRO_LINES.iter().enumerate() {
+        // gettext("") answers with the catalogue's own header, so blank
+        // lines stay untranslated.
+        let mesg = if *line == NEWS_TEMPLATE {
+            news.as_c_str()
+        } else if line.is_empty() {
+            c""
+        } else {
+            translate(line)
+        };
+        let row = top + i as c_int;
+        if !mesg.is_empty() && row < Rows.get() - 1 {
+            unsafe { do_intro_line(row, mesg, colon, i < 3) };
         }
     }
 }
@@ -520,8 +512,8 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     let text = mesg.to_bytes();
     // SAFETY: `mesg` is NUL-terminated and `text.len()` bytes long, so every
     // pointer below stays within it.
+    let mut col = ((Columns.get() - unsafe { vim_strsize(mesg.as_ptr()) }) / 2).max(0);
     unsafe {
-        let mut col = ((Columns.get() - vim_strsize(mesg.as_ptr())) / 2).max(0);
         grid_line_start(
             if !colon && ui_has(kUIMultigrid) {
                 first_window().map_or_else(default_gridview, |wp| wp.w_grid)
@@ -529,87 +521,90 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
                 default_gridview()
             },
             row,
-        );
-        let byte_at = |at: usize| mesg.as_ptr().add(at);
+        )
+    };
+    let byte_at = |at: usize| unsafe { mesg.as_ptr().add(at) };
 
-        let attr_of = |group: &CStr| syn_id2attr(syn_name2id(group.as_ptr()));
+    let attr_of = |group: &CStr| unsafe { syn_id2attr(syn_name2id(group.as_ptr())) };
 
-        if is_logo {
-            // The logo's leading strokes are the frame, everything from the
-            // first diagonal on is the letter.
-            let (frame_attr, letter_attr) = (attr_of(c"Special"), attr_of(c"String"));
-            let mut seen_diagonal = false;
-            let mut at = 0;
-            while at < text.len() {
-                let clen = utfc_ptr2len(byte_at(at));
-                let mut attr = 0;
-                if text[at] >= 0x80 {
-                    seen_diagonal |= clen == 3 && utf_ptr2char(byte_at(at)) == 0x2572;
-                    attr = if seen_diagonal {
-                        letter_attr
-                    } else {
-                        frame_attr
-                    };
-                }
-                col += grid_line_puts(col, byte_at(at), clen, attr);
-                at += clen as usize;
-            }
-            grid_line_flush();
-            return;
-        }
-
-        // Two lines are one colour throughout: the banner -- matched on the
-        // lowercase "nvim" of `nvim.rs …`, which no other intro line starts
-        // with ("Nvim is open source…" capitalizes it) -- and the horizontal
-        // rules, drawn one U+2500 at a time.
-        let is_sep = utfc_ptr2len(mesg.as_ptr()) == 3 && utf_ptr2char(mesg.as_ptr()) == 0x2500;
-        if text.starts_with(b"nvim") || is_sep {
-            let clen = if is_sep { 3 } else { 1 };
-            let attr = attr_of(if is_sep { c"NonText" } else { c"String" });
-            let mut at = 0;
-            while at < text.len() {
-                col += grid_line_puts(col, byte_at(at), clen, attr);
-                at += clen as usize;
-            }
-            grid_line_flush();
-            return;
-        }
-
-        // The rest is prose with `:command<Key>` mentions in it. Each pass
-        // takes the run up to the next `<`, or the whole `<…>` that follows
-        // a `>`, so the two get their own highlights.
+    if is_logo {
+        // The logo's leading strokes are the frame, everything from the
+        // first diagonal on is the letter.
+        let (frame_attr, letter_attr) = (attr_of(c"Special"), attr_of(c"String"));
+        let mut seen_diagonal = false;
         let mut at = 0;
         while at < text.len() {
-            let mut len = 0;
-            while at + len < text.len()
-                && (len == 0 || (text[at + len] != b'<' && text[at + len - 1] != b'>'))
-            {
-                len += utfc_ptr2len(byte_at(at + len)) as usize;
+            let clen = unsafe { utfc_ptr2len(byte_at(at)) };
+            let mut attr = 0;
+            if text[at] >= 0x80 {
+                seen_diagonal |= clen == 3 && unsafe { utf_ptr2char(byte_at(at)) } == 0x2572;
+                attr = if seen_diagonal {
+                    letter_attr
+                } else {
+                    frame_attr
+                };
             }
-            let special_attr = *hl_attr_active.get().add(HLF_8 as usize);
-            let colon_at = text[at..at + len].iter().position(|&byte| byte == b':');
-            match colon_at {
-                _ if text[at] == b'<' => {
-                    col += grid_line_puts(col, byte_at(at), len as c_int, special_attr);
-                }
-                // `:command` immediately before a `<Key>`: the colon reads as
-                // punctuation, the command as an identifier.
-                Some(colon_at) if text.get(at + len) == Some(&b'<') => {
-                    col += grid_line_puts(col, byte_at(at), colon_at as c_int, 0);
-                    col += grid_line_puts(col, byte_at(at + colon_at), 1, special_attr);
-                    col += grid_line_puts(
+            col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
+            at += clen as usize;
+        }
+        unsafe { grid_line_flush() };
+        return;
+    }
+
+    // Two lines are one colour throughout: the banner -- matched on the
+    // lowercase "nvim" of `nvim.rs …`, which no other intro line starts
+    // with ("Nvim is open source…" capitalizes it) -- and the horizontal
+    // rules, drawn one U+2500 at a time.
+    let is_sep = unsafe { utfc_ptr2len(mesg.as_ptr()) } == 3
+        && unsafe { utf_ptr2char(mesg.as_ptr()) } == 0x2500;
+    if text.starts_with(b"nvim") || is_sep {
+        let clen = if is_sep { 3 } else { 1 };
+        let attr = attr_of(if is_sep { c"NonText" } else { c"String" });
+        let mut at = 0;
+        while at < text.len() {
+            col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
+            at += clen as usize;
+        }
+        unsafe { grid_line_flush() };
+        return;
+    }
+
+    // The rest is prose with `:command<Key>` mentions in it. Each pass
+    // takes the run up to the next `<`, or the whole `<…>` that follows
+    // a `>`, so the two get their own highlights.
+    let mut at = 0;
+    while at < text.len() {
+        let mut len = 0;
+        while at + len < text.len()
+            && (len == 0 || (text[at + len] != b'<' && text[at + len - 1] != b'>'))
+        {
+            len += unsafe { utfc_ptr2len(byte_at(at + len)) } as usize;
+        }
+        let special_attr = unsafe { *hl_attr_active.get().add(HLF_8 as usize) };
+        let colon_at = text[at..at + len].iter().position(|&byte| byte == b':');
+        match colon_at {
+            _ if text[at] == b'<' => {
+                col += unsafe { grid_line_puts(col, byte_at(at), len as c_int, special_attr) };
+            }
+            // `:command` immediately before a `<Key>`: the colon reads as
+            // punctuation, the command as an identifier.
+            Some(colon_at) if text.get(at + len) == Some(&b'<') => {
+                col += unsafe { grid_line_puts(col, byte_at(at), colon_at as c_int, 0) };
+                col += unsafe { grid_line_puts(col, byte_at(at + colon_at), 1, special_attr) };
+                col += unsafe {
+                    grid_line_puts(
                         col,
                         byte_at(at + colon_at + 1),
                         (len - colon_at - 1) as c_int,
                         attr_of(c"Identifier"),
-                    );
-                }
-                _ => col += grid_line_puts(col, byte_at(at), len as c_int, 0),
+                    )
+                };
             }
-            at += len;
+            _ => col += unsafe { grid_line_puts(col, byte_at(at), len as c_int, 0) },
         }
-        grid_line_flush();
+        at += len;
     }
+    unsafe { grid_line_flush() };
 }
 
 /// `:intro` -- the intro screen on demand, until a key is pressed.
@@ -618,11 +613,9 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 /// The editor's globals must be live.
 pub(crate) unsafe fn ex_intro(_eap: *mut exarg_T) {
     // SAFETY: the caller's obligation.
-    unsafe {
-        screenclear();
-        intro_message(true);
-        plain_vgetc();
-    }
+    unsafe { screenclear() };
+    unsafe { intro_message(true) };
+    plain_vgetc();
 }
 
 #[cfg(test)]

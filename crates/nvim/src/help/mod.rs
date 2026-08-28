@@ -187,15 +187,13 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
     if n != FAIL && !lang.is_null() {
         while i < num_matches {
             // SAFETY: `matches` holds `num_matches` NUL-terminated strings.
-            unsafe {
-                let m = *matches.offset(i as isize);
-                let len = strlen(m) as c_int;
-                if len > 3
-                    && *m.offset((len - 3) as isize) == b'@' as c_char
-                    && strcasecmp(m.offset((len - 2) as isize), lang) == 0
-                {
-                    break;
-                }
+            let m = unsafe { *matches.offset(i as isize) };
+            let len = unsafe { strlen(m) } as c_int;
+            if len > 3
+                && unsafe { *m.offset((len - 3) as isize) } == b'@' as c_char
+                && unsafe { strcasecmp(m.offset((len - 2) as isize), lang) } == 0
+            {
+                break;
             }
             i += 1;
         }
@@ -203,17 +201,15 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
     if i >= num_matches || n == FAIL {
         // SAFETY: `lang` and `arg` are NUL-terminated; both carry bytes, so
         // they go through vim's own printf rather than `format_args!`.
-        unsafe {
-            if lang.is_null() {
-                semsg_c!(gettext(c"E149: No help for %s".as_ptr()), arg);
-            } else {
-                semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg);
-            }
-            if n != FAIL {
-                free_wild(num_matches, matches);
-            }
-            xfree(allocated_arg.cast::<c_void>());
+        if lang.is_null() {
+            unsafe { semsg_c!(gettext(c"E149: No help for %s".as_ptr()), arg) };
+        } else {
+            unsafe { semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg) };
         }
+        if n != FAIL {
+            unsafe { free_wild(num_matches, matches) };
+        }
+        unsafe { xfree(allocated_arg.cast::<c_void>()) };
         return;
     }
 
@@ -223,35 +219,33 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
     unsafe { free_wild(num_matches, matches) };
 
     // SAFETY: the window list is live on the main thread; `tag` is owned.
-    unsafe {
-        if let Some(opened) = enter_help_window() {
-            restart_edit.set(0);
-            // Restore KeyTyped: setting 'filetype=help' may have reset it,
-            // and `do_tag` needs it to open folds under the cursor.
-            KeyTyped.set(old_key_typed);
+    if let Some(opened) = unsafe { enter_help_window() } {
+        restart_edit.set(0);
+        // Restore KeyTyped: setting 'filetype=help' may have reset it,
+        // and `do_tag` needs it to open folds under the cursor.
+        KeyTyped.set(old_key_typed);
 
-            do_tag(tag, DT_HELP as c_int, 1, 0, true);
+        unsafe { do_tag(tag, DT_HELP as c_int, 1, 0, true) };
 
-            // Delete the empty buffer if we are not using it. Careful:
-            // autocommands may have jumped to another window, so check that
-            // the buffer is not in one.
-            if opened.empty_fnum != 0
-                && (*curbuf.get()).handle != opened.empty_fnum
-                && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
-            {
-                wipe_buffer(buf, true);
-            }
-            // Keep the previous alternate file.
-            if opened.alt_fnum != 0
-                && (*curwin.get()).w_alt_fnum == opened.empty_fnum
-                && keepalt_is_off()
-            {
-                (*curwin.get()).w_alt_fnum = opened.alt_fnum;
-            }
+        // Delete the empty buffer if we are not using it. Careful:
+        // autocommands may have jumped to another window, so check that
+        // the buffer is not in one.
+        if opened.empty_fnum != 0
+            && unsafe { (*curbuf.get()).handle } != opened.empty_fnum
+            && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
+        {
+            wipe_buffer(buf, true);
         }
-        xfree(tag.cast::<c_void>());
-        xfree(allocated_arg.cast::<c_void>());
+        // Keep the previous alternate file.
+        if opened.alt_fnum != 0
+            && unsafe { (*curwin.get()).w_alt_fnum } == opened.empty_fnum
+            && keepalt_is_off()
+        {
+            unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
+        }
     }
+    unsafe { xfree(tag.cast::<c_void>()) };
+    unsafe { xfree(allocated_arg.cast::<c_void>()) };
 }
 
 /// A `:help` command ends at the first LF, or at a `|` followed by some
@@ -261,22 +255,20 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
 /// `eap`'s `arg` is a writable NUL-terminated command line.
 unsafe fn split_off_next_cmd(eap: *mut exarg_T) {
     // SAFETY: caller contract.
-    unsafe {
-        let mut arg = (*eap).arg;
-        while *arg != NUL as c_char {
-            if *arg == b'\n' as c_char
-                || *arg == b'\r' as c_char
-                || (*arg == b'|' as c_char
-                    && *arg.offset(1) != NUL as c_char
-                    && *arg.offset(1) != b'|' as c_char)
-            {
-                *arg = NUL as c_char;
-                arg = arg.offset(1);
-                (*eap).nextcmd = arg;
-                return;
-            }
-            arg = arg.offset(1);
+    let mut arg = unsafe { (*eap).arg };
+    while unsafe { *arg } != NUL as c_char {
+        if unsafe { *arg } == b'\n' as c_char
+            || unsafe { *arg } == b'\r' as c_char
+            || (unsafe { *arg } == b'|' as c_char
+                && unsafe { *arg.offset(1) } != NUL as c_char
+                && unsafe { *arg.offset(1) } != b'|' as c_char)
+        {
+            unsafe { *arg = NUL as c_char };
+            arg = unsafe { arg.offset(1) };
+            unsafe { (*eap).nextcmd = arg };
+            return;
         }
+        arg = unsafe { arg.offset(1) };
     }
 }
 
@@ -288,12 +280,13 @@ unsafe fn split_off_next_cmd(eap: *mut exarg_T) {
 unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract. `p` starts one before the NUL, which is `arg`
     // itself for an empty string, so the loop never steps below `arg`.
-    unsafe {
-        let mut p = arg.add(strlen(arg)).offset(-1);
-        while p > arg && ascii_iswhite(*p as c_int) && *p.offset(-1) != b'\\' as c_char {
-            *p = NUL as c_char;
-            p = p.offset(-1);
-        }
+    let mut p = unsafe { arg.add(strlen(arg)).offset(-1) };
+    while p > arg
+        && ascii_iswhite(unsafe { *p } as c_int)
+        && unsafe { *p.offset(-1) } != b'\\' as c_char
+    {
+        unsafe { *p = NUL as c_char };
+        p = unsafe { p.offset(-1) };
     }
     arg
 }
@@ -318,19 +311,17 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     };
     // SAFETY: `res` is the chunk's answer and `err` our slot; both are
     // consumed here.
-    unsafe {
-        let tag = if err.type_0 == kErrorTypeNone
-            && res.type_0 == kObjectTypeString
-            && !res.data.string.is_empty()
-        {
-            xstrdup(res.data.string.data())
-        } else {
-            ptr::null_mut()
-        };
-        api_free_object(res);
-        api_clear_error(&raw mut err);
-        tag
-    }
+    let tag = if err.type_0 == kErrorTypeNone
+        && res.type_0 == kObjectTypeString
+        && !unsafe { res.data.string }.is_empty()
+    {
+        unsafe { xstrdup(res.data.string.data()) }
+    } else {
+        ptr::null_mut()
+    };
+    unsafe { api_free_object(res) };
+    unsafe { api_clear_error(&raw mut err) };
+    tag
 }
 
 /// The buffer numbers [`ex_help`] must undo if the jump lands elsewhere.
@@ -374,38 +365,38 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     }
 
     // SAFETY: the window list is a live intrusive list on the main thread.
+    // No help window yet: check that 'helpfile' can be read at all.
+    let helpfd = unsafe { os_fopen(p_hf.get(), c"rb".as_ptr()) };
+    if helpfd.is_null() {
+        unsafe { smsg_c!(0, c"Help file \"%s\" not found".as_ptr(), p_hf.get()) };
+        return None;
+    }
+    unsafe { fclose(helpfd) };
+
+    // Split off a help window; put it at the far top when no position
+    // was given and the current window is vertically split and narrow.
+    let mut split = WSP_HELP as c_int;
+    if cmdmod.with(|m| m.cmod_split) == 0
+        && unsafe { (*curwin.get()).w_width } != Columns.get()
+        && unsafe { (*curwin.get()).w_width } < 80
+    {
+        split |= if p_sb.get() != 0 {
+            WSP_BOT as c_int
+        } else {
+            WSP_TOP as c_int
+        };
+    }
+    if win_split(0, split) == FAIL {
+        return None;
+    }
+    if (unsafe { (*curwin.get()).w_height } as OptInt) < p_hh.get() {
+        win_setheight(p_hh.get() as c_int);
+    }
+
+    // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
+    // 'readonly'. The buffer is still open, so don't store info.
+    opened.alt_fnum = unsafe { (*curbuf.get()).handle };
     unsafe {
-        // No help window yet: check that 'helpfile' can be read at all.
-        let helpfd = os_fopen(p_hf.get(), c"rb".as_ptr());
-        if helpfd.is_null() {
-            smsg_c!(0, c"Help file \"%s\" not found".as_ptr(), p_hf.get());
-            return None;
-        }
-        fclose(helpfd);
-
-        // Split off a help window; put it at the far top when no position
-        // was given and the current window is vertically split and narrow.
-        let mut split = WSP_HELP as c_int;
-        if cmdmod.with(|m| m.cmod_split) == 0
-            && (*curwin.get()).w_width != Columns.get()
-            && (*curwin.get()).w_width < 80
-        {
-            split |= if p_sb.get() != 0 {
-                WSP_BOT as c_int
-            } else {
-                WSP_TOP as c_int
-            };
-        }
-        if win_split(0, split) == FAIL {
-            return None;
-        }
-        if ((*curwin.get()).w_height as OptInt) < p_hh.get() {
-            win_setheight(p_hh.get() as c_int);
-        }
-
-        // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
-        // 'readonly'. The buffer is still open, so don't store info.
-        opened.alt_fnum = (*curbuf.get()).handle;
         do_ecmd(
             0,
             ptr::null_mut(),
@@ -414,12 +405,12 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
             ECMD_LASTL as linenr_T,
             (ECMD_HIDE + ECMD_SET_HELP) as c_int,
             ptr::null_mut(),
-        );
-        if keepalt_is_off() {
-            (*curwin.get()).w_alt_fnum = opened.alt_fnum;
-        }
-        opened.empty_fnum = (*curbuf.get()).handle;
+        )
+    };
+    if keepalt_is_off() {
+        unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
     }
+    opened.empty_fnum = unsafe { (*curbuf.get()).handle };
     Some(opened)
 }
 
@@ -463,18 +454,16 @@ pub(crate) unsafe fn ex_viusage(_eap: *mut exarg_T) {
 /// `arg` is NUL-terminated, and writable if it can end in `@xx`.
 pub(crate) unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract.
-    unsafe {
-        let len = strlen(arg) as isize;
-        if len >= 3
-            && *arg.offset(len - 3) == b'@' as c_char
-            && ascii_isalpha(*arg.offset(len - 2) as c_int)
-            && ascii_isalpha(*arg.offset(len - 1) as c_int)
-        {
-            *arg.offset(len - 3) = NUL as c_char;
-            return arg.offset(len - 2);
-        }
-        ptr::null_mut()
+    let len = unsafe { strlen(arg) } as isize;
+    if len >= 3
+        && unsafe { *arg.offset(len - 3) } == b'@' as c_char
+        && ascii_isalpha(unsafe { *arg.offset(len - 2) } as c_int)
+        && ascii_isalpha(unsafe { *arg.offset(len - 1) } as c_int)
+    {
+        unsafe { *arg.offset(len - 3) = NUL as c_char };
+        return unsafe { arg.offset(len - 2) };
     }
+    ptr::null_mut()
 }
 
 /// How well `matched_string` matches, smaller being better. In order of
@@ -525,15 +514,13 @@ pub(crate) unsafe fn help_heuristic(
 /// followed by a second NUL-terminated string.
 unsafe extern "C" fn help_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: caller contract.
-    unsafe {
-        let t1 = *s1.cast::<*mut c_char>();
-        let t2 = *s2.cast::<*mut c_char>();
-        let cmp = strcmp(t1.add(strlen(t1)).offset(1), t2.add(strlen(t2)).offset(1));
-        if cmp != 0 {
-            return cmp;
-        }
-        strcmp(t1, t2)
+    let t1 = unsafe { *s1.cast::<*mut c_char>() };
+    let t2 = unsafe { *s2.cast::<*mut c_char>() };
+    let cmp = unsafe { strcmp(t1.add(strlen(t1)).offset(1), t2.add(strlen(t2)).offset(1)) };
+    if cmp != 0 {
+        return cmp;
     }
+    unsafe { strcmp(t1, t2) }
 }
 
 /// Find every help tag matching `arg`, best match first, and hand the list
@@ -572,20 +559,18 @@ pub(crate) unsafe fn find_help_tags(
     };
 
     // SAFETY: `err` is our slot and `res` the chunk's answer.
-    unsafe {
-        if err.type_0 != kErrorTypeNone {
-            emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true);
-            api_clear_error(&raw mut err);
-            return FAIL;
-        }
-        api_clear_error(&raw mut err);
-        debug_assert!(
-            res.type_0 == kObjectTypeString,
-            "res.type == kObjectTypeString"
-        );
-        xstrlcpy(iobuff, res.data.string.data(), IOSIZE as usize);
-        api_free_object(res);
+    if err.type_0 != kErrorTypeNone {
+        unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
+        unsafe { api_clear_error(&raw mut err) };
+        return FAIL;
     }
+    unsafe { api_clear_error(&raw mut err) };
+    debug_assert!(
+        res.type_0 == kObjectTypeString,
+        "res.type == kObjectTypeString"
+    );
+    unsafe { xstrlcpy(iobuff, res.data.string.data(), IOSIZE as usize) };
+    unsafe { api_free_object(res) };
 
     let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
     if keep_lang {
@@ -593,31 +578,33 @@ pub(crate) unsafe fn find_help_tags(
     }
     // SAFETY: the out-parameters are the caller's, and `pattern` holds the
     // NUL-terminated text written just above.
-    unsafe {
-        *matches = ptr::null_mut();
-        *num_matches = 0;
-        if find_tags(
+    unsafe { *matches = ptr::null_mut() };
+    unsafe { *num_matches = 0 };
+    if unsafe {
+        find_tags(
             iobuff,
             num_matches,
             matches,
             flags,
             MAXCOL as c_int,
             ptr::null_mut(),
-        ) == OK
-            && *num_matches > 0
-        {
-            // Sort on the heuristic number `find_tags` put after the tag.
+        )
+    } == OK
+        && unsafe { *num_matches } > 0
+    {
+        // Sort on the heuristic number `find_tags` put after the tag.
+        unsafe {
             qsort(
                 (*matches).cast::<c_void>(),
                 *num_matches as size_t,
                 size_of::<*mut c_char>(),
                 Some(help_compare),
-            );
-            // Drop everything past TAG_MANY to keep the listing short.
-            while *num_matches > TAG_MANY as c_int {
-                *num_matches -= 1;
-                xfree((*(*matches).offset(*num_matches as isize)).cast::<c_void>());
-            }
+            )
+        };
+        // Drop everything past TAG_MANY to keep the listing short.
+        while unsafe { *num_matches } > TAG_MANY as c_int {
+            unsafe { *num_matches -= 1 };
+            unsafe { xfree((*(*matches).offset(*num_matches as isize)).cast::<c_void>()) };
         }
     }
     OK
@@ -634,50 +621,48 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
     // always has at least two bytes, since it is a comma-separated list of
     // two-letter codes.
-    unsafe {
-        let hlg = p_hlg.get();
-        if *hlg != NUL as c_char && (*hlg != b'e' as c_char || *hlg.offset(1) != b'n' as c_char) {
-            suffix[0] = b'@' as c_char;
-            suffix[1] = *hlg;
-            suffix[2] = *hlg.offset(1);
-        }
+    let hlg = p_hlg.get();
+    if unsafe { *hlg } != NUL as c_char
+        && (unsafe { *hlg } != b'e' as c_char || unsafe { *hlg.offset(1) } != b'n' as c_char)
+    {
+        suffix[0] = b'@' as c_char;
+        suffix[1] = unsafe { *hlg };
+        suffix[2] = unsafe { *hlg.offset(1) };
     }
 
     // SAFETY: caller contract; every truncation writes inside a string.
-    unsafe {
-        for i in 0..num_file {
-            let tag = *file.offset(i as isize);
-            let len = strlen(tag) as c_int - 3;
-            if len <= 0 || strcmp(tag.offset(len as isize), c"@en".as_ptr()) != 0 {
-                continue;
-            }
-            // Sorting on priority means the same item in another language
-            // may be anywhere; search all of them for a match up to the
-            // "@en".
-            let mut j = 0;
-            while j < num_file {
-                let other = *file.offset(j as isize);
-                if j != i
-                    && strlen(other) as c_int == len + 3
-                    && strncmp(tag, other, len as size_t + 1) == 0
-                {
-                    break;
-                }
-                j += 1;
-            }
-            if j == num_file {
-                // The item exists only with "@en": drop the suffix.
-                *tag.offset(len as isize) = NUL as c_char;
-            }
+    for i in 0..num_file {
+        let tag = unsafe { *file.offset(i as isize) };
+        let len = unsafe { strlen(tag) } as c_int - 3;
+        if len <= 0 || unsafe { strcmp(tag.offset(len as isize), c"@en".as_ptr()) } != 0 {
+            continue;
         }
+        // Sorting on priority means the same item in another language
+        // may be anywhere; search all of them for a match up to the
+        // "@en".
+        let mut j = 0;
+        while j < num_file {
+            let other = unsafe { *file.offset(j as isize) };
+            if j != i
+                && unsafe { strlen(other) } as c_int == len + 3
+                && unsafe { strncmp(tag, other, len as size_t + 1) } == 0
+            {
+                break;
+            }
+            j += 1;
+        }
+        if j == num_file {
+            // The item exists only with "@en": drop the suffix.
+            unsafe { *tag.offset(len as isize) = NUL as c_char };
+        }
+    }
 
-        if suffix[0] != NUL as c_char {
-            for i in 0..num_file {
-                let tag = *file.offset(i as isize);
-                let len = strlen(tag) as c_int - 3;
-                if len > 0 && strcmp(tag.offset(len as isize), suffix.as_ptr()) == 0 {
-                    *tag.offset(len as isize) = NUL as c_char;
-                }
+    if suffix[0] != NUL as c_char {
+        for i in 0..num_file {
+            let tag = unsafe { *file.offset(i as isize) };
+            let len = unsafe { strlen(tag) } as c_int - 3;
+            if len > 0 && unsafe { strcmp(tag.offset(len as isize), suffix.as_ptr()) } == 0 {
+                unsafe { *tag.offset(len as isize) = NUL as c_char };
             }
         }
     }
@@ -693,45 +678,43 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
 /// Main thread; `curbuf` and `curwin` are live.
 pub(crate) unsafe fn prepare_help_buffer() {
     // SAFETY: `curbuf`/`curwin` are the editor's current buffer and window.
-    unsafe {
-        (*curbuf.get()).b_help = true;
-        set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
+    unsafe { (*curbuf.get()).b_help = true };
+    set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
 
-        // Accept every ASCII character as a keyword character except ' ',
-        // '*', '"' and '|', plus the latin1 word characters translated help
-        // files use. Only set it when needed: `buf_init_chartab` is work.
-        let isk = c"!-~,^*,^|,^\",192-255";
-        if strcmp((*curbuf.get()).b_p_isk, isk.as_ptr()) != 0 {
-            set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
-            check_buf_options(curbuf.get());
-            buf_init_chartab(curbuf.get(), false);
-        }
-
-        // Don't use the global foldmethod.
-        set_option_direct(
-            kOptFoldmethod,
-            cstr_optval(c"manual"),
-            OptionSetFlags::LOCAL,
-            0,
-        );
-
-        (*curbuf.get()).b_p_ts = 8;
-        (*curbuf.get()).b_p_ma = 0; // not modifiable
-        (*curbuf.get()).b_p_bin = 0; // reset 'bin' before reading the file
-        let wo = &raw mut (*curwin.get()).w_onebuf_opt;
-        (*wo).wo_list = 0;
-        (*wo).wo_nu = 0;
-        (*wo).wo_rnu = 0;
-        (*wo).wo_scb = 0; // no scroll binding
-        (*wo).wo_crb = 0; // no cursor binding
-        (*wo).wo_arab = 0;
-        (*wo).wo_rl = 0; // help windows are left-to-right
-        (*wo).wo_fen = 0; // no folding
-        (*wo).wo_diff = 0;
-        (*wo).wo_spell = 0;
-
-        set_buflisted(0);
+    // Accept every ASCII character as a keyword character except ' ',
+    // '*', '"' and '|', plus the latin1 word characters translated help
+    // files use. Only set it when needed: `buf_init_chartab` is work.
+    let isk = c"!-~,^*,^|,^\",192-255";
+    if unsafe { strcmp((*curbuf.get()).b_p_isk, isk.as_ptr()) } != 0 {
+        set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
+        unsafe { check_buf_options(curbuf.get()) };
+        unsafe { buf_init_chartab(curbuf.get(), false) };
     }
+
+    // Don't use the global foldmethod.
+    set_option_direct(
+        kOptFoldmethod,
+        cstr_optval(c"manual"),
+        OptionSetFlags::LOCAL,
+        0,
+    );
+
+    unsafe { (*curbuf.get()).b_p_ts = 8 };
+    unsafe { (*curbuf.get()).b_p_ma = 0 }; // not modifiable
+    unsafe { (*curbuf.get()).b_p_bin = 0 }; // reset 'bin' before reading the file
+    let wo = unsafe { &raw mut (*curwin.get()).w_onebuf_opt };
+    unsafe { (*wo).wo_list = 0 };
+    unsafe { (*wo).wo_nu = 0 };
+    unsafe { (*wo).wo_rnu = 0 };
+    unsafe { (*wo).wo_scb = 0 }; // no scroll binding
+    unsafe { (*wo).wo_crb = 0 }; // no cursor binding
+    unsafe { (*wo).wo_arab = 0 };
+    unsafe { (*wo).wo_rl = 0 }; // help windows are left-to-right
+    unsafe { (*wo).wo_fen = 0 }; // no folding
+    unsafe { (*wo).wo_diff = 0 };
+    unsafe { (*wo).wo_spell = 0 };
+
+    unsafe { set_buflisted(0) };
 }
 
 /// Populate `*local-additions*` in `help.txt`.
@@ -741,19 +724,19 @@ pub(crate) unsafe fn prepare_help_buffer() {
 pub(crate) unsafe fn get_local_additions() {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, no arguments, and our own error slot.
-    unsafe {
-        let res = nlua_exec(
+    let res = unsafe {
+        nlua_exec(
             static_cstring(c"return require'vim._core.help'.local_additions()"),
             ptr::null(),
             Array::EMPTY,
             kRetNilBool,
             ptr::null_mut(),
             &raw mut err,
-        );
-        if err.type_0 != kErrorTypeNone {
-            emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true);
-        }
-        api_free_object(res);
-        api_clear_error(&raw mut err);
+        )
+    };
+    if err.type_0 != kErrorTypeNone {
+        unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
     }
+    unsafe { api_free_object(res) };
+    unsafe { api_clear_error(&raw mut err) };
 }

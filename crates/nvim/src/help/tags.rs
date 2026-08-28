@@ -60,15 +60,15 @@ fn translated(msg: &CStr) -> *const c_char {
 pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
-    unsafe {
-        if strncmp((*eap).arg, c"++t".as_ptr(), 3) == 0
-            && ascii_iswhite(*(*eap).arg.offset(3) as c_int)
-        {
-            add_help_tags = true;
-            (*eap).arg = skipwhite((*eap).arg.offset(3));
-        }
+    if unsafe { strncmp((*eap).arg, c"++t".as_ptr(), 3) } == 0
+        && ascii_iswhite(unsafe { *(*eap).arg.offset(3) } as c_int)
+    {
+        add_help_tags = true;
+        unsafe { (*eap).arg = skipwhite((*eap).arg.offset(3)) };
+    }
 
-        if strcmp((*eap).arg, c"ALL".as_ptr()) == 0 {
+    if unsafe { strcmp((*eap).arg, c"ALL".as_ptr()) } == 0 {
+        unsafe {
             do_in_path(
                 p_rtp.get(),
                 c"".as_ptr(),
@@ -76,27 +76,29 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(helptags_cb),
                 (&raw mut add_help_tags).cast::<c_void>(),
-            );
-            return;
-        }
+            )
+        };
+        return;
+    }
 
-        let mut xpc: expand_T = core::mem::zeroed();
-        expand_init(&raw mut xpc);
-        xpc.xp_context = ExpandContext::Directories;
-        let dirname = expand_one(
+    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    unsafe { expand_init(&raw mut xpc) };
+    xpc.xp_context = ExpandContext::Directories;
+    let dirname = unsafe {
+        expand_one(
             &raw mut xpc,
             (*eap).arg,
             ptr::null_mut(),
             WildOpts::LIST_NOTFOUND | WildOpts::SILENT,
             WildMode::ExpandFree,
-        );
-        if dirname.is_null() || !os_isdir(dirname) {
-            semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg);
-        } else {
-            do_helptags(dirname, add_help_tags, false);
-        }
-        xfree(dirname.cast::<c_void>());
+        )
+    };
+    if dirname.is_null() || !unsafe { os_isdir(dirname) } {
+        unsafe { semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg) };
+    } else {
+        unsafe { do_helptags(dirname, add_help_tags, false) };
     }
+    unsafe { xfree(dirname.cast::<c_void>()) };
 }
 
 /// `do_in_path` callback for `:helptags ALL`: generate tags in each `doc`
@@ -112,12 +114,10 @@ unsafe fn helptags_cb(
     cookie: *mut c_void,
 ) -> bool {
     // SAFETY: caller contract.
-    unsafe {
-        for i in 0..num_fnames {
-            do_helptags(*fnames.offset(i as isize), *cookie.cast::<bool>(), true);
-            if !all {
-                return true;
-            }
+    for i in 0..num_fnames {
+        unsafe { do_helptags(*fnames.offset(i as isize), *cookie.cast::<bool>(), true) };
+        if !all {
+            return true;
         }
     }
     num_fnames > 0
@@ -153,13 +153,11 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
     // Which languages does the directory hold?
     let mut langs: Vec<[c_char; 2]> = Vec::new();
     // SAFETY: `files` holds NUL-terminated names.
-    unsafe {
-        for i in 0..files.count {
-            if let Some(lang) = help_file_lang(*files.names.offset(i as isize))
-                && !langs.contains(&lang)
-            {
-                langs.push(lang);
-            }
+    for i in 0..files.count {
+        if let Some(lang) = unsafe { help_file_lang(*files.names.offset(i as isize)) }
+            && !langs.contains(&lang)
+        {
+            langs.push(lang);
         }
     }
 
@@ -185,8 +183,8 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
                 fname.as_ptr().cast::<c_char>(),
                 add_help_tags,
                 ignore_writeerr,
-            );
-        }
+            )
+        };
     }
     drop(files);
 }
@@ -198,25 +196,27 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
 /// `name` is NUL-terminated.
 unsafe fn help_file_lang(name: *const c_char) -> Option<[c_char; 2]> {
     // SAFETY: caller contract; every read is within the name's length.
-    unsafe {
-        let len = strlen(name) as isize;
-        if len <= 4 {
-            return None;
-        }
-        let tail = name.offset(len - 4);
-        if strcasecmp(tail, c".txt".as_ptr()) == 0 {
-            return Some([b'e' as c_char, b'n' as c_char]);
-        }
-        let (a, b, x) = (*tail.offset(1), *tail.offset(2), *tail.offset(3));
-        if *tail == b'.' as c_char
-            && ascii_isalpha(a as c_int)
-            && ascii_isalpha(b as c_int)
-            && to_lower(x) == b'x' as c_char
-        {
-            return Some([to_lower(a), to_lower(b)]);
-        }
-        None
+    let len = unsafe { strlen(name) } as isize;
+    if len <= 4 {
+        return None;
     }
+    let tail = unsafe { name.offset(len - 4) };
+    if unsafe { strcasecmp(tail, c".txt".as_ptr()) } == 0 {
+        return Some([b'e' as c_char, b'n' as c_char]);
+    }
+    let (a, b, x) = (
+        unsafe { *tail.offset(1) },
+        unsafe { *tail.offset(2) },
+        unsafe { *tail.offset(3) },
+    );
+    if unsafe { *tail } == b'.' as c_char
+        && ascii_isalpha(a as c_int)
+        && ascii_isalpha(b as c_int)
+        && to_lower(x) == b'x' as c_char
+    {
+        return Some([to_lower(a), to_lower(b)]);
+    }
+    None
 }
 
 /// `TOLOWER_ASC`: lowercase an ASCII letter, leaving everything else alone.
@@ -337,44 +337,38 @@ unsafe fn helptags_one(
     // Every tag, as an owned "<tag>\t<file>" line.
     let mut tags: Vec<*mut c_char> = Vec::new();
     // SAFETY: `tagfname` is NUL-terminated and `dir` a directory name.
-    unsafe {
-        if add_help_tags
-            || path_full_compare(c"$VIMRUNTIME/doc".as_ptr().cast_mut(), dir, false, true)
-                == kEqualFiles
-        {
-            let len = 18 + strlen(tagfname);
-            let entry = xmalloc(len).cast::<c_char>();
-            snprintf(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname);
-            tags.push(entry);
-        }
+    if add_help_tags
+        || unsafe { path_full_compare(c"$VIMRUNTIME/doc".as_ptr().cast_mut(), dir, false, true) }
+            == kEqualFiles
+    {
+        let len = 18 + unsafe { strlen(tagfname) };
+        let entry = unsafe { xmalloc(len) }.cast::<c_char>();
+        unsafe { snprintf(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname) };
+        tags.push(entry);
     }
 
     // SAFETY: `files` holds NUL-terminated names all starting with `dir`.
-    unsafe {
-        for fi in 0..files.count {
-            if got_int.get() {
-                break;
-            }
-            let path = *files.names.offset(fi as isize);
-            let fd = os_fopen(path, c"r".as_ptr());
-            if fd.is_null() {
-                semsg_c!(translated(c"E153: Unable to open %s for reading"), path);
-                continue;
-            }
-            scan_help_file(fd, path.add(dirlen).offset(1), &mut tags);
-            fclose(fd);
+    for fi in 0..files.count {
+        if got_int.get() {
+            break;
         }
+        let path = unsafe { *files.names.offset(fi as isize) };
+        let fd = unsafe { os_fopen(path, c"r".as_ptr()) };
+        if fd.is_null() {
+            unsafe { semsg_c!(translated(c"E153: Unable to open %s for reading"), path) };
+            continue;
+        }
+        unsafe { scan_help_file(fd, path.add(dirlen).offset(1), &mut tags) };
+        unsafe { fclose(fd) };
     }
     drop(files);
 
     if !got_int.get() && !tags.is_empty() {
         // SAFETY: every entry is an owned NUL-terminated line, and
         // `fd_tags` is open for writing.
-        unsafe {
-            sort_strings(tags.as_mut_ptr(), tags.len() as c_int);
-            report_duplicates(&tags, dir);
-            write_tags(fd_tags, &tags);
-        }
+        unsafe { sort_strings(tags.as_mut_ptr(), tags.len() as c_int) };
+        unsafe { report_duplicates(&tags, dir) };
+        unsafe { write_tags(fd_tags, &tags) };
     }
 
     for entry in tags {
@@ -402,72 +396,74 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
     let mut in_example = false;
     // SAFETY: `vim_fgets` NUL-terminates `line` within `IOSIZE` bytes, and
     // every pointer below stays between its start and that NUL.
-    unsafe {
-        while !vim_fgets(iobuff, IOSIZE, fd) && !got_int.get() {
-            if in_example {
-                // Skip the example; a non-white in the first column ends it.
-                if !vim_strchr(c" \t\n\r".as_ptr(), *iobuff as uint8_t as c_int).is_null() {
-                    continue;
-                }
-                in_example = false;
+    while !unsafe { vim_fgets(iobuff, IOSIZE, fd) } && !got_int.get() {
+        if in_example {
+            // Skip the example; a non-white in the first column ends it.
+            if !unsafe { vim_strchr(c" \t\n\r".as_ptr(), *iobuff as uint8_t as c_int) }.is_null() {
+                continue;
             }
-
-            let mut p1 = vim_strchr(iobuff, b'*' as c_int);
-            while !p1.is_null() {
-                let mut p2 = strchr(p1.offset(1), b'*' as c_int);
-                // Skip "*" and "**".
-                if !p2.is_null() && p2 > p1.offset(1) {
-                    let mut s = p1.offset(1);
-                    while s < p2
-                        && *s != b' ' as c_char
-                        && *s != b'\t' as c_char
-                        && *s != b'|' as c_char
-                    {
-                        s = s.offset(1);
-                    }
-                    // Only accept a *tag* made of valid characters, with
-                    // white space before it and a white character or the end
-                    // of the line after it. The order matters: `p1[-1]` is
-                    // only in bounds once `p1 != iobuff` has been ruled out.
-                    if s == p2
-                        && (p1 == iobuff
-                            || *p1.offset(-1) == b' ' as c_char
-                            || *p1.offset(-1) == b'\t' as c_char)
-                        && (!vim_strchr(c" \t\n\r".as_ptr(), *s.offset(1) as uint8_t as c_int)
-                            .is_null()
-                            || *s.offset(1) == NUL as c_char)
-                    {
-                        *p2 = NUL as c_char;
-                        p1 = p1.offset(1);
-                        let len = p2.offset_from(p1) as size_t + strlen(fname) + 2;
-                        let entry = xmalloc(len).cast::<c_char>();
-                        tags.push(entry);
-                        snprintf(entry, len, c"%s\t%s".as_ptr(), p1, fname);
-                        // Find the next '*'.
-                        p2 = vim_strchr(p2.offset(1), b'*' as c_int);
-                    }
-                }
-                p1 = p2;
-            }
-
-            // A line ending in ">" — optionally with a `:lang` tail — opens
-            // an example.
-            let mut off = strlen(iobuff);
-            if off >= 2 && *iobuff.add(off - 1) == b'\n' as c_char {
-                off -= 2;
-                while off > 0
-                    && (is_lower(*iobuff.add(off)) || ascii_isdigit(*iobuff.add(off) as c_int))
-                {
-                    off -= 1;
-                }
-                if *iobuff.add(off) == b'>' as c_char
-                    && (off == 0 || *iobuff.add(off - 1) == b' ' as c_char)
-                {
-                    in_example = true;
-                }
-            }
-            line_breakcheck();
+            in_example = false;
         }
+
+        let mut p1 = unsafe { vim_strchr(iobuff, b'*' as c_int) };
+        while !p1.is_null() {
+            let mut p2 = unsafe { strchr(p1.offset(1), b'*' as c_int) };
+            // Skip "*" and "**".
+            if !p2.is_null() && p2 > unsafe { p1.offset(1) } {
+                let mut s = unsafe { p1.offset(1) };
+                while s < p2
+                    && unsafe { *s } != b' ' as c_char
+                    && unsafe { *s } != b'\t' as c_char
+                    && unsafe { *s } != b'|' as c_char
+                {
+                    s = unsafe { s.offset(1) };
+                }
+                // Only accept a *tag* made of valid characters, with
+                // white space before it and a white character or the end
+                // of the line after it. The order matters: `p1[-1]` is
+                // only in bounds once `p1 != iobuff` has been ruled out.
+                if s == p2
+                    && (p1 == iobuff
+                        || unsafe { *p1.offset(-1) } == b' ' as c_char
+                        || unsafe { *p1.offset(-1) } == b'\t' as c_char)
+                    && (!unsafe {
+                        vim_strchr(c" \t\n\r".as_ptr(), *s.offset(1) as uint8_t as c_int)
+                    }
+                    .is_null()
+                        || unsafe { *s.offset(1) } == NUL as c_char)
+                {
+                    unsafe { *p2 = NUL as c_char };
+                    p1 = unsafe { p1.offset(1) };
+                    let len =
+                        unsafe { p2.offset_from(p1) } as size_t + unsafe { strlen(fname) } + 2;
+                    let entry = unsafe { xmalloc(len) }.cast::<c_char>();
+                    tags.push(entry);
+                    unsafe { snprintf(entry, len, c"%s\t%s".as_ptr(), p1, fname) };
+                    // Find the next '*'.
+                    p2 = unsafe { vim_strchr(p2.offset(1), b'*' as c_int) };
+                }
+            }
+            p1 = p2;
+        }
+
+        // A line ending in ">" — optionally with a `:lang` tail — opens
+        // an example.
+        let mut off = unsafe { strlen(iobuff) };
+        if off >= 2 && unsafe { *iobuff.add(off - 1) } == b'\n' as c_char {
+            off -= 2;
+            while off > 0
+                && (is_lower(unsafe { *iobuff.add(off) })
+                    || ascii_isdigit(unsafe { *iobuff.add(off) } as c_int))
+            {
+                off -= 1;
+            }
+            if unsafe { *iobuff.add(off) } == b'>' as c_char
+                && (off == 0 || unsafe { *iobuff.add(off - 1) } == b' ' as c_char)
+            {
+                in_example = true;
+            }
+        }
+        line_breakcheck();
     }
 }
 
@@ -488,16 +484,16 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
     let namebuff = path.as_mut_ptr();
     // SAFETY: caller contract. The tab is restored before returning, so the
     // entry is still a whole line for the writer below.
-    unsafe {
-        for pair in tags.windows(2) {
-            let (mut p1, mut p2) = (pair[0], pair[1]);
-            while *p1 == *p2 {
-                if *p2 != b'\t' as c_char {
-                    p1 = p1.offset(1);
-                    p2 = p2.offset(1);
-                    continue;
-                }
-                *p2 = NUL as c_char;
+    for pair in tags.windows(2) {
+        let (mut p1, mut p2) = (pair[0], pair[1]);
+        while unsafe { *p1 } == unsafe { *p2 } {
+            if unsafe { *p2 } != b'\t' as c_char {
+                p1 = unsafe { p1.offset(1) };
+                p2 = unsafe { p2.offset(1) };
+                continue;
+            }
+            unsafe { *p2 = NUL as c_char };
+            unsafe {
                 vim_snprintf(
                     namebuff,
                     MAXPATHL as size_t,
@@ -505,11 +501,11 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
                     pair[1],
                     dir,
                     p2.offset(1),
-                );
-                emsg(namebuff);
-                *p2 = b'\t' as c_char;
-                break;
-            }
+                )
+            };
+            unsafe { emsg(namebuff) };
+            unsafe { *p2 = b'\t' as c_char };
+            break;
         }
     }
 }
@@ -523,22 +519,20 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
 /// `"<tag>\t<file>"` line.
 unsafe fn write_tags(fd: *mut FILE, tags: &[*mut c_char]) {
     // SAFETY: caller contract.
-    unsafe {
-        for &entry in tags {
-            if strncmp(entry, c"help-tags\t".as_ptr(), 10) == 0 {
-                fputs(entry, fd);
-                continue;
-            }
-            fprintf(fd, c"%s\t/*".as_ptr(), entry);
-            let mut p = entry;
-            while *p != b'\t' as c_char {
-                if *p == b'\\' as c_char || *p == b'/' as c_char {
-                    putc(b'\\' as c_int, fd);
-                }
-                putc(*p as c_int, fd);
-                p = p.offset(1);
-            }
-            fprintf(fd, c"*\n".as_ptr());
+    for &entry in tags {
+        if unsafe { strncmp(entry, c"help-tags\t".as_ptr(), 10) } == 0 {
+            unsafe { fputs(entry, fd) };
+            continue;
         }
+        unsafe { fprintf(fd, c"%s\t/*".as_ptr(), entry) };
+        let mut p = entry;
+        while unsafe { *p } != b'\t' as c_char {
+            if unsafe { *p } == b'\\' as c_char || unsafe { *p } == b'/' as c_char {
+                unsafe { putc(b'\\' as c_int, fd) };
+            }
+            unsafe { putc(*p as c_int, fd) };
+            p = unsafe { p.offset(1) };
+        }
+        unsafe { fprintf(fd, c"*\n".as_ptr()) };
     }
 }
