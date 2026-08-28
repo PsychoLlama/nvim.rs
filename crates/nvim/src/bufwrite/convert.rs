@@ -86,22 +86,20 @@ fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
 ///
 /// Returns its length, zero when the encoding has no BOM.
 pub(crate) unsafe fn make_bom(buf: &mut [c_char], name: *mut c_char) -> usize {
-    unsafe {
-        let flags = get_fio_flags(name);
-        // Can't put a BOM in a non-Unicode file.
-        if flags == FIO_LATIN1 || flags == 0 {
-            return 0;
-        }
-        if flags == FIO_UTF8 {
-            buf[..3].copy_from_slice(&[0xefu8 as c_char, 0xbbu8 as c_char, 0xbfu8 as c_char]);
-            return 3;
-        }
-        let (bytes, len, _) = ucs2bytes(0xfeff, flags);
-        for (at, byte) in bytes[..len].iter().enumerate() {
-            buf[at] = *byte as c_char;
-        }
-        len
+    let flags = unsafe { get_fio_flags(name) };
+    // Can't put a BOM in a non-Unicode file.
+    if flags == FIO_LATIN1 || flags == 0 {
+        return 0;
     }
+    if flags == FIO_UTF8 {
+        buf[..3].copy_from_slice(&[0xefu8 as c_char, 0xbbu8 as c_char, 0xbfu8 as c_char]);
+        return 3;
+    }
+    let (bytes, len, _) = ucs2bytes(0xfeff, flags);
+    for (at, byte) in bytes[..len].iter().enumerate() {
+        buf[at] = *byte as c_char;
+    }
+    len
 }
 
 /// The staging buffer between the buffer's lines and the file's bytes.
@@ -139,11 +137,9 @@ pub(crate) struct ByteWriter<'a> {
 
 impl Drop for ByteWriter<'_> {
     fn drop(&mut self) {
-        unsafe {
-            xfree(self.conv_buf.cast());
-            if self.iconv != no_iconv() {
-                iconv_close(self.iconv);
-            }
+        unsafe { xfree(self.conv_buf.cast()) };
+        if self.iconv != no_iconv() {
+            unsafe { iconv_close(self.iconv) };
         }
     }
 }
@@ -179,11 +175,9 @@ impl<'a> ByteWriter<'a> {
     ///
     /// False when there was not enough memory, which aborts the write.
     pub(crate) unsafe fn reserve_conv_buf(&mut self, mult: usize) -> bool {
-        unsafe {
-            self.conv_buflen = self.buf.len() * mult;
-            self.conv_buf = verbose_try_malloc(self.conv_buflen).cast();
-            !self.conv_buf.is_null()
-        }
+        self.conv_buflen = self.buf.len() * mult;
+        self.conv_buf = unsafe { verbose_try_malloc(self.conv_buflen) }.cast();
+        !self.conv_buf.is_null()
     }
 
     /// Is iconv doing the conversion?
@@ -199,14 +193,12 @@ impl<'a> ByteWriter<'a> {
 
     /// Set up iconv to convert to `fenc`. False when iconv cannot do it.
     pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
-        unsafe {
-            self.iconv = my_iconv_open(fenc, c"utf-8".as_ptr().cast_mut());
-            if self.iconv == no_iconv() {
-                return false;
-            }
-            self.first = true;
-            true
+        self.iconv = unsafe { my_iconv_open(fenc, c"utf-8".as_ptr().cast_mut()) };
+        if self.iconv == no_iconv() {
+            return false;
         }
+        self.first = true;
+        true
     }
 
     /// Drop anything staged, without writing it.
@@ -227,37 +219,37 @@ impl<'a> ByteWriter<'a> {
     /// Bytes of an incomplete character at the end are moved to the front of
     /// the buffer and stay staged. False on a conversion or write error.
     pub(crate) unsafe fn flush(&mut self) -> bool {
-        unsafe {
-            let staged = self.len;
-            // Skip conversion when writing the BOM.
-            let converted = if self.flags & FIO_NOCONVERT != 0 {
-                Some((self.buf.as_ptr(), staged, staged))
-            } else {
-                self.convert()
-            };
-            let Some((out, outlen, consumed)) = converted else {
-                return false;
-            };
+        let staged = self.len;
+        // Skip conversion when writing the BOM.
+        let converted = if self.flags & FIO_NOCONVERT != 0 {
+            Some((self.buf.as_ptr(), staged, staged))
+        } else {
+            unsafe { self.convert() }
+        };
+        let Some((out, outlen, consumed)) = converted else {
+            return false;
+        };
 
-            let remaining = staged - consumed;
-            self.len = remaining;
+        let remaining = staged - consumed;
+        self.len = remaining;
 
-            // Skip writing while only checking the conversion.
-            if self.fd >= 0
-                && (write_eintr(self.fd, out.cast_mut().cast(), outlen as size_t) as c_int)
-                    < outlen as c_int
-            {
-                return false;
-            }
-            if remaining > 0 {
+        // Skip writing while only checking the conversion.
+        if self.fd >= 0
+            && (unsafe { write_eintr(self.fd, out.cast_mut().cast(), outlen as size_t) } as c_int)
+                < outlen as c_int
+        {
+            return false;
+        }
+        if remaining > 0 {
+            unsafe {
                 core::ptr::copy(
                     self.buf.as_ptr().add(consumed),
                     self.buf.as_mut_ptr(),
                     remaining,
-                );
-            }
-            true
+                )
+            };
         }
+        true
     }
 
     /// Convert the staged bytes.
@@ -265,67 +257,66 @@ impl<'a> ByteWriter<'a> {
     /// Returns where the converted bytes are, how many there are, and how
     /// many staged bytes went into them.
     unsafe fn convert(&mut self) -> Option<(*const c_char, usize, usize)> {
-        unsafe {
-            let flags = self.flags;
-            let staged = self.len;
-            let mut out = self.buf.as_ptr();
-            let mut outlen = staged;
-            let mut consumed = staged;
+        let flags = self.flags;
+        let staged = self.len;
+        let mut out = self.buf.as_ptr();
+        let mut outlen = staged;
+        let mut consumed = staged;
 
-            if flags & (FIO_UCS4 | FIO_UTF16 | FIO_UCS2 | FIO_LATIN1) != 0 {
-                // Convert the UTF-8 in the buffer to UCS-2, UCS-4, UTF-16 or
-                // Latin1. Latin1 can only get shorter, so it translates in
-                // place; the rest go to the conversion buffer.
-                let latin1 = flags & FIO_LATIN1 != 0;
-                let dest: *mut u8 = if latin1 {
-                    self.buf.as_mut_ptr().cast()
+        if flags & (FIO_UCS4 | FIO_UTF16 | FIO_UCS2 | FIO_LATIN1) != 0 {
+            // Convert the UTF-8 in the buffer to UCS-2, UCS-4, UTF-16 or
+            // Latin1. Latin1 can only get shorter, so it translates in
+            // place; the rest go to the conversion buffer.
+            let latin1 = flags & FIO_LATIN1 != 0;
+            let dest: *mut u8 = if latin1 {
+                self.buf.as_mut_ptr().cast()
+            } else {
+                self.conv_buf.cast()
+            };
+            let mut at = 0;
+            let mut wlen = 0;
+            while wlen < staged {
+                let n = unsafe {
+                    utf_ptr2len_len(self.buf.as_ptr().add(wlen), (staged - wlen) as c_int)
+                } as usize;
+                if n > staged - wlen {
+                    // An incomplete byte sequence at the end. It cannot
+                    // be converted without the rest of it, so keep the
+                    // bytes for the next call.
+                    break;
+                }
+                let c = if n > 1 {
+                    unsafe { utf_ptr2char(self.buf.as_ptr().add(wlen)) as c_uint }
                 } else {
-                    self.conv_buf.cast()
+                    self.buf[wlen] as u8 as c_uint
                 };
-                let mut at = 0;
-                let mut wlen = 0;
-                while wlen < staged {
-                    let n = utf_ptr2len_len(self.buf.as_ptr().add(wlen), (staged - wlen) as c_int)
-                        as usize;
-                    if n > staged - wlen {
-                        // An incomplete byte sequence at the end. It cannot
-                        // be converted without the rest of it, so keep the
-                        // bytes for the next call.
-                        break;
-                    }
-                    let c = if n > 1 {
-                        utf_ptr2char(self.buf.as_ptr().add(wlen)) as c_uint
-                    } else {
-                        self.buf[wlen] as u8 as c_uint
-                    };
-                    let (bytes, need, bad) = ucs2bytes(c, flags);
-                    // Check that there is enough space.
-                    if !latin1 && at + need > self.conv_buflen {
-                        return None;
-                    }
-                    core::ptr::copy_nonoverlapping(bytes.as_ptr(), dest.add(at), need);
-                    at += need;
-                    if bad && !self.conv_error {
-                        self.conv_error = true;
-                        self.conv_error_lnum = self.start_lnum;
-                    }
-                    if c == NL as c_uint {
-                        self.start_lnum += 1;
-                    }
-                    wlen += n;
+                let (bytes, need, bad) = ucs2bytes(c, flags);
+                // Check that there is enough space.
+                if !latin1 && at + need > self.conv_buflen {
+                    return None;
                 }
-                consumed = wlen;
-                outlen = at;
-                if !latin1 {
-                    out = self.conv_buf;
+                unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), dest.add(at), need) };
+                at += need;
+                if bad && !self.conv_error {
+                    self.conv_error = true;
+                    self.conv_error_lnum = self.start_lnum;
                 }
+                if c == NL as c_uint {
+                    self.start_lnum += 1;
+                }
+                wlen += n;
             }
-
-            if self.iconv != no_iconv() {
-                return self.convert_with_iconv(out, outlen);
+            consumed = wlen;
+            outlen = at;
+            if !latin1 {
+                out = self.conv_buf;
             }
-            Some((out, outlen, consumed))
         }
+
+        if self.iconv != no_iconv() {
+            return unsafe { self.convert_with_iconv(out, outlen) };
+        }
+        Some((out, outlen, consumed))
     }
 
     /// Hand `inlen` bytes at `input` to iconv.
@@ -334,48 +325,50 @@ impl<'a> ByteWriter<'a> {
         input: *const c_char,
         inlen: usize,
     ) -> Option<(*const c_char, usize, usize)> {
-        unsafe {
-            let mut from = input;
-            let mut fromlen = inlen as size_t;
-            let mut tolen = self.conv_buflen as size_t;
-            let mut to = self.conv_buf;
+        let mut from = input;
+        let mut fromlen = inlen as size_t;
+        let mut tolen = self.conv_buflen as size_t;
+        let mut to = self.conv_buf;
 
-            if self.first {
-                let save_len = tolen;
-                // Output the initial shift state sequence.
+        if self.first {
+            let save_len = tolen;
+            // Output the initial shift state sequence.
+            unsafe {
                 iconv(
                     self.iconv,
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
                     &raw mut to,
                     &raw mut tolen,
-                );
-                // There is a bug in iconv() on Linux (which appears to be
-                // wide-spread) which sets "to" to NULL and messes up "tolen".
-                if to.is_null() {
-                    to = self.conv_buf;
-                    tolen = save_len;
-                }
-                self.first = false;
+                )
+            };
+            // There is a bug in iconv() on Linux (which appears to be
+            // wide-spread) which sets "to" to NULL and messes up "tolen".
+            if to.is_null() {
+                to = self.conv_buf;
+                tolen = save_len;
             }
+            self.first = false;
+        }
 
-            if iconv(
+        if unsafe {
+            iconv(
                 self.iconv,
                 (&raw mut from).cast::<*mut c_char>(),
                 &raw mut fromlen,
                 &raw mut to,
                 &raw mut tolen,
-            ) == -1i32 as size_t
-                && *__errno_location() != ICONV_EINVAL
-            {
-                self.conv_error = true;
-                return None;
-            }
-            Some((
-                self.conv_buf,
-                to.offset_from(self.conv_buf) as usize,
-                inlen - fromlen as usize,
-            ))
+            )
+        } == -1i32 as size_t
+            && unsafe { *__errno_location() } != ICONV_EINVAL
+        {
+            self.conv_error = true;
+            return None;
         }
+        Some((
+            self.conv_buf,
+            unsafe { to.offset_from(self.conv_buf) } as usize,
+            inlen - fromlen as usize,
+        ))
     }
 }

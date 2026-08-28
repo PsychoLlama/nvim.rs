@@ -99,42 +99,44 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     mode: WriteMode,
     orig: OpMarks,
 ) -> PreWrite {
-    unsafe {
-        let old_line_count = (*buf).b_ml.ml_line_count;
-        let msg_save = msg_scroll.get();
-        let empty_memline = (*buf).b_ml.ml_mfp.is_null();
-        let sfname = names.sfname;
+    let old_line_count = unsafe { (*buf).b_ml.ml_line_count };
+    let msg_save = msg_scroll.get();
+    let empty_memline = unsafe { (*buf).b_ml.ml_mfp }.is_null();
+    let sfname = names.sfname;
 
-        // Which of the three names are the buffer's own, and so have to be
-        // re-read if the autocommands rename it.
-        let buf_ffname = names.ffname == (*buf).b_ffname;
-        let buf_sfname = sfname == (*buf).b_sfname;
-        let buf_fname_f = names.fname == (*buf).b_ffname;
-        let buf_fname_s = names.fname == (*buf).b_sfname;
+    // Which of the three names are the buffer's own, and so have to be
+    // re-read if the autocommands rename it.
+    let buf_ffname = names.ffname == unsafe { (*buf).b_ffname };
+    let buf_sfname = sfname == unsafe { (*buf).b_sfname };
+    let buf_fname_f = names.fname == unsafe { (*buf).b_ffname };
+    let buf_fname_s = names.fname == unsafe { (*buf).b_sfname };
 
-        // Set curwin/curbuf to buf and save a few things.
-        let mut aco = aco_save_T::default();
-        aucmd_prepbuf(&raw mut aco, buf);
-        let bufref = BufRef::of_opt(Buf::from_raw(buf));
+    // Set curwin/curbuf to buf and save a few things.
+    let mut aco = aco_save_T::default();
+    unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
-        // Did a "Cmd" autocommand write the file itself?
-        let mut did_cmd = false;
-        let mut nofile_err = false;
-        if mode.req.append {
-            did_cmd = apply_autocmds_exarg(
+    // Did a "Cmd" autocommand write the file itself?
+    let mut did_cmd = false;
+    let mut nofile_err = false;
+    if mode.req.append {
+        did_cmd = unsafe {
+            apply_autocmds_exarg(
                 EVENT_FILEAPPENDCMD,
                 sfname,
                 sfname,
                 false,
                 curbuf.get(),
                 eap,
-            );
-            if !did_cmd {
-                nofile_err = apply_pre(EVENT_FILEAPPENDPRE, sfname, eap, mode.overwriting);
-            }
-        } else if mode.req.filtering {
-            // No <afile>: the filter's output file is not what the event is
-            // about.
+            )
+        };
+        if !did_cmd {
+            nofile_err = unsafe { apply_pre(EVENT_FILEAPPENDPRE, sfname, eap, mode.overwriting) };
+        }
+    } else if mode.req.filtering {
+        // No <afile>: the filter's output file is not what the event is
+        // about.
+        unsafe {
             apply_autocmds_exarg(
                 EVENT_FILTERWRITEPRE,
                 core::ptr::null_mut(),
@@ -142,138 +144,146 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 false,
                 curbuf.get(),
                 eap,
-            );
-        } else if mode.req.reset_changed && mode.whole {
-            let was_changed = curbuf_is_changed();
-            did_cmd =
-                apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf.get(), eap);
-            if did_cmd {
-                if was_changed && !curbuf_is_changed() {
-                    // BufWriteCmd wrote everything correctly and reset
-                    // 'modified': correct the undo information so that an
-                    // undo now sets it again.
-                    u_unchanged(Buf::current());
-                    u_update_save_nr(Buf::current());
-                }
-            } else {
-                nofile_err = apply_pre(EVENT_BUFWRITEPRE, sfname, eap, mode.overwriting);
-            }
-        } else {
-            did_cmd =
-                apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, false, curbuf.get(), eap);
-            if !did_cmd {
-                nofile_err = apply_pre(EVENT_FILEWRITEPRE, sfname, eap, mode.overwriting);
-            }
-        }
-
-        // Restore curwin/curbuf and a few other things.
-        aucmd_restbuf(&raw mut aco);
-
-        // The buffer is gone if the autocommands deleted or unloaded it.
-        let buf = if bufref.valid() {
-            buf
-        } else {
-            core::ptr::null_mut()
+            )
         };
-
-        // In three situations the file is not written here: the buffer is
-        // gone, script processing was aborted, or one of the "Cmd"
-        // autocommands already did it.
-        if buf.is_null()
-            || ((*buf).b_ml.ml_mfp.is_null() && !empty_memline)
-            || did_cmd
-            || nofile_err
-            || aborting()
-        {
-            if !buf.is_null() && cmdmod_has(CmdModFlags::LOCKMARKS) {
-                (*buf).b_op_start = orig.start;
-                (*buf).b_op_end = orig.end;
+    } else if mode.req.reset_changed && mode.whole {
+        let was_changed = curbuf_is_changed();
+        did_cmd = unsafe {
+            apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf.get(), eap)
+        };
+        if did_cmd {
+            if was_changed && !curbuf_is_changed() {
+                // BufWriteCmd wrote everything correctly and reset
+                // 'modified': correct the undo information so that an
+                // undo now sets it again.
+                u_unchanged(unsafe { Buf::current() });
+                u_update_save_nr(unsafe { Buf::current() });
             }
-            no_wait_return.set(no_wait_return.get() - 1);
-            msg_scroll.set(msg_save);
-            if nofile_err {
+        } else {
+            nofile_err = unsafe { apply_pre(EVENT_BUFWRITEPRE, sfname, eap, mode.overwriting) };
+        }
+    } else {
+        did_cmd = unsafe {
+            apply_autocmds_exarg(EVENT_FILEWRITECMD, sfname, sfname, false, curbuf.get(), eap)
+        };
+        if !did_cmd {
+            nofile_err = unsafe { apply_pre(EVENT_FILEWRITEPRE, sfname, eap, mode.overwriting) };
+        }
+    }
+
+    // Restore curwin/curbuf and a few other things.
+    unsafe { aucmd_restbuf(&raw mut aco) };
+
+    // The buffer is gone if the autocommands deleted or unloaded it.
+    let buf = if bufref.valid() {
+        buf
+    } else {
+        core::ptr::null_mut()
+    };
+
+    // In three situations the file is not written here: the buffer is
+    // gone, script processing was aborted, or one of the "Cmd"
+    // autocommands already did it.
+    if buf.is_null()
+        || (unsafe { (*buf).b_ml.ml_mfp }.is_null() && !empty_memline)
+        || did_cmd
+        || nofile_err
+        || aborting()
+    {
+        if !buf.is_null() && cmdmod_has(CmdModFlags::LOCKMARKS) {
+            unsafe { (*buf).b_op_start = orig.start };
+            unsafe { (*buf).b_op_end = orig.end };
+        }
+        no_wait_return.set(no_wait_return.get() - 1);
+        msg_scroll.set(msg_save);
+        if nofile_err {
+            unsafe {
                 semsg_c!(
                     gettext(c"E676: No matching autocommands for buftype=%s buffer".as_ptr()),
                     (*curbuf.get()).b_p_bt,
-                );
-            }
-            if nofile_err || aborting() {
-                // An aborting error, interrupt or exception in the
-                // autocommands.
-                return PreWrite::Finished(FAIL);
-            }
-            if did_cmd {
-                if buf.is_null() {
-                    // The buffer was deleted. Assume it was written; there is
-                    // no retrying anyway.
-                    return PreWrite::Finished(OK);
-                }
-                if mode.overwriting {
-                    // Assume the buffer was written; update the timestamp.
-                    ml_timestamp(buf);
-                    if mode.req.append {
-                        (*buf).b_flags.clear(BufFlags::NEW);
-                    } else {
-                        (*buf).b_flags.clear(BufFlags::WRITE_MASK);
-                    }
-                }
-                if mode.req.reset_changed
-                    && (*buf).b_changed != 0
-                    && !mode.req.append
-                    && (mode.overwriting || cpo_has(CpoFlag::PLUS))
-                {
-                    // Buffer still changed: the autocommands didn't work
-                    // properly.
-                    return PreWrite::Finished(FAIL);
-                }
-                return PreWrite::Finished(OK);
-            }
-            if !aborting() {
-                emsg(gettext(
-                    c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr(),
-                ));
-            }
+                )
+            };
+        }
+        if nofile_err || aborting() {
+            // An aborting error, interrupt or exception in the
+            // autocommands.
             return PreWrite::Finished(FAIL);
         }
-
-        // The autocommands may have changed the number of lines in the file.
-        // When writing the whole file, adjust the end. When writing part of
-        // it, assume they only changed the number of lines to be written
-        // (tricky!).
-        if (*buf).b_ml.ml_line_count != old_line_count {
-            if mode.whole {
-                *end = (*buf).b_ml.ml_line_count;
-            } else if (*buf).b_ml.ml_line_count > old_line_count {
-                *end += (*buf).b_ml.ml_line_count - old_line_count;
-            } else {
-                *end -= old_line_count - (*buf).b_ml.ml_line_count;
-                if *end < start {
-                    no_wait_return.set(no_wait_return.get() - 1);
-                    msg_scroll.set(msg_save);
-                    emsg(gettext(
-                        c"E204: Autocommand changed number of lines in unexpected way".as_ptr(),
-                    ));
-                    return PreWrite::Finished(FAIL);
+        if did_cmd {
+            if buf.is_null() {
+                // The buffer was deleted. Assume it was written; there is
+                // no retrying anyway.
+                return PreWrite::Finished(OK);
+            }
+            if mode.overwriting {
+                // Assume the buffer was written; update the timestamp.
+                unsafe { ml_timestamp(buf) };
+                if mode.req.append {
+                    unsafe { (*buf).b_flags.clear(BufFlags::NEW) };
+                } else {
+                    unsafe { (*buf).b_flags.clear(BufFlags::WRITE_MASK) };
                 }
             }
+            if mode.req.reset_changed
+                && unsafe { (*buf).b_changed } != 0
+                && !mode.req.append
+                && (mode.overwriting || cpo_has(CpoFlag::PLUS))
+            {
+                // Buffer still changed: the autocommands didn't work
+                // properly.
+                return PreWrite::Finished(FAIL);
+            }
+            return PreWrite::Finished(OK);
         }
-
-        // The autocommands may have renamed the buffer; the names that came
-        // from it have to be re-read.
-        if buf_ffname {
-            names.ffname = (*buf).b_ffname;
+        if !aborting() {
+            unsafe {
+                emsg(gettext(
+                    c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr(),
+                ))
+            };
         }
-        if buf_sfname {
-            names.sfname = (*buf).b_sfname;
-        }
-        if buf_fname_f {
-            names.fname = (*buf).b_ffname;
-        }
-        if buf_fname_s {
-            names.fname = (*buf).b_sfname;
-        }
-        PreWrite::Proceed
+        return PreWrite::Finished(FAIL);
     }
+
+    // The autocommands may have changed the number of lines in the file.
+    // When writing the whole file, adjust the end. When writing part of
+    // it, assume they only changed the number of lines to be written
+    // (tricky!).
+    if unsafe { (*buf).b_ml.ml_line_count } != old_line_count {
+        if mode.whole {
+            *end = unsafe { (*buf).b_ml.ml_line_count };
+        } else if unsafe { (*buf).b_ml.ml_line_count } > old_line_count {
+            *end += unsafe { (*buf).b_ml.ml_line_count } - old_line_count;
+        } else {
+            *end -= old_line_count - unsafe { (*buf).b_ml.ml_line_count };
+            if *end < start {
+                no_wait_return.set(no_wait_return.get() - 1);
+                msg_scroll.set(msg_save);
+                unsafe {
+                    emsg(gettext(
+                        c"E204: Autocommand changed number of lines in unexpected way".as_ptr(),
+                    ))
+                };
+                return PreWrite::Finished(FAIL);
+            }
+        }
+    }
+
+    // The autocommands may have renamed the buffer; the names that came
+    // from it have to be re-read.
+    if buf_ffname {
+        names.ffname = unsafe { (*buf).b_ffname };
+    }
+    if buf_sfname {
+        names.sfname = unsafe { (*buf).b_sfname };
+    }
+    if buf_fname_f {
+        names.fname = unsafe { (*buf).b_ffname };
+    }
+    if buf_fname_s {
+        names.fname = unsafe { (*buf).b_sfname };
+    }
+    PreWrite::Proceed
 }
 
 /// Apply the post-write autocommands.
@@ -285,31 +295,29 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     eap: *mut exarg_T,
     mode: WriteMode,
 ) {
-    unsafe {
-        // In case it was set by the previous read.
-        (*curbuf.get()).b_no_eol_lnum = 0;
+    // In case it was set by the previous read.
+    unsafe { (*curbuf.get()).b_no_eol_lnum = 0 };
 
-        let mut aco = aco_save_T::default();
-        aucmd_prepbuf(&raw mut aco, buf);
+    let mut aco = aco_save_T::default();
+    unsafe { aucmd_prepbuf(&raw mut aco, buf) };
 
-        let event = if mode.req.append {
-            EVENT_FILEAPPENDPOST
-        } else if mode.req.filtering {
-            EVENT_FILTERWRITEPOST
-        } else if mode.req.reset_changed && mode.whole {
-            EVENT_BUFWRITEPOST
-        } else {
-            EVENT_FILEWRITEPOST
-        };
-        // As for FilterWritePre, the filter's file is not the <afile>.
-        let afile = if mode.req.filtering {
-            core::ptr::null_mut()
-        } else {
-            fname
-        };
-        apply_autocmds_exarg(event, afile, fname, false, curbuf.get(), eap);
+    let event = if mode.req.append {
+        EVENT_FILEAPPENDPOST
+    } else if mode.req.filtering {
+        EVENT_FILTERWRITEPOST
+    } else if mode.req.reset_changed && mode.whole {
+        EVENT_BUFWRITEPOST
+    } else {
+        EVENT_FILEWRITEPOST
+    };
+    // As for FilterWritePre, the filter's file is not the <afile>.
+    let afile = if mode.req.filtering {
+        core::ptr::null_mut()
+    } else {
+        fname
+    };
+    unsafe { apply_autocmds_exarg(event, afile, fname, false, curbuf.get(), eap) };
 
-        // Restore curwin/curbuf and a few other things.
-        aucmd_restbuf(&raw mut aco);
-    }
+    // Restore curwin/curbuf and a few other things.
+    unsafe { aucmd_restbuf(&raw mut aco) };
 }
