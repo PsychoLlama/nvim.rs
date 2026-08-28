@@ -24,25 +24,24 @@ use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint
 /// # Safety
 /// `msg` must point at its own bytes.
 pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
-    // SAFETY: `msg` is the caller's, per this function's contract, and it is
+    // `msg` is the caller's, per this function's contract, and it is
     // NUL-terminated wherever it is not empty -- the RPC decoder terminates
     // every string it builds.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            ::core::ptr::null::<::core::ffi::c_char>(),
-            c"nvim_error_event".as_ptr(),
-            44 as ::core::ffi::c_int,
-            true,
-            c"async error on channel %ld: %s".as_ptr(),
-            channel_id,
-            if msg.is_empty() {
-                c"".as_ptr()
-            } else {
-                msg.data() as *const ::core::ffi::c_char
-            },
-        );
-    }
+    let text = if msg.is_empty() {
+        c"".as_ptr()
+    } else {
+        msg.data().cast_const()
+    };
+    logmsg_c!(
+        LOGLVL_ERR,
+        ::core::ptr::null::<::core::ffi::c_char>(),
+        c"nvim_error_event".as_ptr(),
+        44 as ::core::ffi::c_int,
+        true,
+        c"async error on channel %ld: %s".as_ptr(),
+        channel_id,
+        text,
+    );
 }
 
 /// Take delivery of a terminal event the UI forwarded. Only `termresponse` is
@@ -63,26 +62,18 @@ pub unsafe fn nvim_ui_term_event(
         return Ok(());
     }
     if value.type_0 != kObjectTypeString {
+        let name = c"termresponse".as_ptr();
+        let (want, got) = (api_typename(kObjectTypeString), api_typename(value.type_0));
         // SAFETY: `err` is this frame's own; the type names are static.
-        unsafe {
-            api_err_exp(
-                &raw mut err,
-                c"termresponse".as_ptr(),
-                api_typename(kObjectTypeString),
-                api_typename(value.type_0),
-            );
-        }
+        unsafe { api_err_exp(&raw mut err, name, want, got) };
         return Err(err);
     }
     // SAFETY: the tag says the payload is the string, and it is the caller's.
     let termresponse: String_0 = unsafe { value.data.string };
+    let (text, len) = (termresponse.data(), termresponse.len().cast_signed());
     // SAFETY: `termresponse` is that string, live for `len` bytes.
     unsafe {
-        set_vim_var_string(
-            Vv::Termresponse,
-            termresponse.data(),
-            termresponse.len().cast_signed(),
-        );
+        set_vim_var_string(Vv::Termresponse, text, len);
         do_termresponse_autocmd(termresponse);
     }
     ().reported(err)

@@ -70,8 +70,8 @@ pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
                 kErrorTypeException,
                 c"%s".as_ptr(),
                 (&raw const e_cmdwin).cast::<::core::ffi::c_char>(),
-            );
-        }
+            )
+        };
         return ().reported(err);
     }
     // SAFETY: both handles named a live object, and `err` is this frame's own.
@@ -88,14 +88,16 @@ pub unsafe fn nvim_win_get_cursor(win: Window, arena: *mut Arena) -> Result<Arra
     let Some(w) = window_by_handle(win, &mut err) else {
         return Array::EMPTY.reported(err);
     };
-    // SAFETY: `arena` is the caller's, and `rv` is the two-slot block it just
-    // handed back.
-    let rv = unsafe {
-        let mut rv = arena_array(arena, 2 as size_t);
-        array_add(&mut rv, Object::integer(Integer::from(w.w_cursor.lnum)));
-        array_add(&mut rv, Object::integer(Integer::from(w.w_cursor.col)));
-        rv
-    };
+    let mut rv = arena_array(arena, 2 as size_t);
+    let (lnum, col) = (
+        Integer::from(w.w_cursor.lnum),
+        Integer::from(w.w_cursor.col),
+    );
+    // SAFETY: `rv` is the two-slot block the arena just handed back.
+    unsafe {
+        array_add(&mut rv, Object::integer(lnum));
+        array_add(&mut rv, Object::integer(col));
+    }
     rv.reported(err)
 }
 
@@ -118,15 +120,9 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
             .map(|(row, col)| (row.data.integer as int64_t, col.data.integer as int64_t))
     };
     let Some((row, col)) = rowcol else {
+        let (name, want) = (c"pos".as_ptr(), c"[row, col] array".as_ptr());
         // SAFETY: `err` is this frame's own; the arguments are static strings.
-        unsafe {
-            api_err_exp(
-                &raw mut err,
-                c"pos".as_ptr(),
-                c"[row, col] array".as_ptr(),
-                ptr::null(),
-            );
-        }
+        unsafe { api_err_exp(&raw mut err, name, want, ptr::null()) };
         return ().reported(err);
     };
     if row <= 0 || row > int64_t::from(w.buffer().line_count()) {
@@ -140,20 +136,14 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
     w.w_cursor.coladd = 0;
     // SAFETY: `w` is live, and `switchwin` is this frame's own -- nothing the
     // callees run can reach it.
-    unsafe {
-        check_cursor_col(w);
-        w.w_set_curswant = true;
-        let mut switchwin = switchwin_T::default();
-        switch_win(
-            &raw mut switchwin,
-            w.raw(),
-            ptr::null_mut::<tabpage_T>(),
-            true,
-        );
-        update_topline(Win::current());
-        validate_cursor(Win::current());
-        restore_win(&raw mut switchwin, true);
-    }
+    check_cursor_col(w);
+    w.w_set_curswant = true;
+    let mut switchwin = switchwin_T::default();
+    let any_tab = ptr::null_mut::<tabpage_T>();
+    unsafe { switch_win(&raw mut switchwin, w.raw(), any_tab, true) };
+    update_topline(unsafe { Win::current() });
+    validate_cursor(unsafe { Win::current() });
+    unsafe { restore_win(&raw mut switchwin, true) };
     w.redraw_later(UPD_VALID);
     w.w_redr_status = true;
     ().reported(err)
@@ -262,13 +252,13 @@ pub unsafe fn nvim_win_get_position(win: Window, arena: *mut Arena) -> Result<Ar
     let Some(w) = window_by_handle(win, &mut err) else {
         return Array::EMPTY.reported(err);
     };
+    let mut rv = arena_array(arena, 2 as size_t);
+    let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
     // SAFETY: as `nvim_win_get_cursor`.
-    let rv = unsafe {
-        let mut rv = arena_array(arena, 2 as size_t);
-        array_add(&mut rv, Object::integer(Integer::from(w.w_winrow)));
-        array_add(&mut rv, Object::integer(Integer::from(w.w_wincol)));
-        rv
-    };
+    unsafe {
+        array_add(&mut rv, Object::integer(row));
+        array_add(&mut rv, Object::integer(col));
+    }
     rv.reported(err)
 }
 
@@ -316,16 +306,20 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
         return ().reported(err);
     };
     let tabpage = win_find_tabpage(w.raw());
-    // SAFETY: closing runs autocommands, which `api_try` catches.
-    api_try(&mut err, |_| unsafe {
-        if is_aucmd_win(w.raw()) {
-            emsg(gettext(
-                (&raw const e_autocmd_close).cast::<::core::ffi::c_char>(),
-            ));
-        } else if tabpage == curtab.get() {
-            win_close(w.raw(), false, false);
+    let refused = (&raw const e_autocmd_close).cast::<::core::ffi::c_char>();
+    let is_aucmd = is_aucmd_win(w.raw());
+    let same_tab = tabpage == curtab.get();
+    api_try(&mut err, |_| {
+        if is_aucmd {
+            // SAFETY: `e_autocmd_close` is a static message.
+            unsafe { emsg(gettext(refused)) };
+        } else if same_tab {
+            // SAFETY: `w` is live; closing runs autocommands, which `api_try`
+            // catches.
+            unsafe { win_close(w.raw(), false, false) };
         } else {
-            win_close_othertab(w.raw(), 0, tabpage, false);
+            // SAFETY: as above, in the tab page `w` is in rather than this one.
+            unsafe { win_close_othertab(w.raw(), 0, tabpage, false) };
         }
     });
     ().reported(err)
@@ -362,17 +356,20 @@ pub fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
         return NIL.reported(err);
     };
     let tabpage = win_find_tabpage(w.raw());
-    // SAFETY: `switch_args` is this frame's own and nothing the call runs can
-    // reach it; the call itself runs Lua, which `api_try` catches.
-    let res = api_try(&mut err, |err| unsafe {
+    let res = api_try(&mut err, |err| {
         let mut switch_args = win_execute_T::default();
         let mut res = NIL;
-        if win_execute_before(&raw mut switch_args, w.raw(), tabpage) {
+        // SAFETY: `switch_args` is this frame's own and nothing the call runs
+        // can reach it.
+        let switched = unsafe { win_execute_before(&raw mut switch_args, w.raw(), tabpage) };
+        if switched {
             let no_arena = ptr::null_mut::<Arena>();
             let name = ptr::null::<::core::ffi::c_char>();
-            res = nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref, no_arena, err);
+            // SAFETY: the call runs Lua, which `api_try` catches.
+            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref, no_arena, err) };
         }
-        win_execute_after(&raw mut switch_args);
+        // SAFETY: the matching restore of the switch above.
+        unsafe { win_execute_after(&raw mut switch_args) };
         res
     });
     res.reported(err)
@@ -385,16 +382,9 @@ pub fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
         return ().reported(err);
     };
     if ns_id < -1 {
+        let (name, empty) = (c"namespace".as_ptr(), c"".as_ptr());
         // SAFETY: `err` is this frame's own; the arguments are static strings.
-        unsafe {
-            api_err_invalid(
-                &raw mut err,
-                c"namespace".as_ptr(),
-                c"".as_ptr(),
-                0 as int64_t,
-                true,
-            );
-        }
+        unsafe { api_err_invalid(&raw mut err, name, empty, 0, true) };
         return ().reported(err);
     }
     w.w_ns_hl = number_as_int(ns_id);
@@ -441,15 +431,13 @@ pub unsafe fn nvim_win_text_height(
     let mut end_lnum: linenr_T = line_count;
     let mut oob: bool = false;
     // SAFETY: as above; `buf` is live and `oob` is this frame's own.
-    unsafe {
-        if set(OPTIDX_START_ROW) {
-            let row = (*opts).start_row as int64_t;
-            start_lnum = number_as_int(normalize_index(buf, row, false, &raw mut oob));
-        }
-        if set(OPTIDX_END_ROW) {
-            let row = (*opts).end_row as int64_t;
-            end_lnum = number_as_int(normalize_index(buf, row, false, &raw mut oob));
-        }
+    if set(OPTIDX_START_ROW) {
+        let row = unsafe { (*opts).start_row } as int64_t;
+        start_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
+    }
+    if set(OPTIDX_END_ROW) {
+        let row = unsafe { (*opts).end_row } as int64_t;
+        end_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
     }
     if oob {
         return Err(validation(err, c"Line index out of bounds"));
@@ -498,18 +486,11 @@ pub unsafe fn nvim_win_text_height(
     }
 
     let mut fill: int64_t = 0;
-    // SAFETY: `w` is live and the three counters are this frame's own.
-    let mut all: int64_t = unsafe {
-        win_text_height(
-            w,
-            start_lnum,
-            start_vcol,
-            &raw mut end_lnum,
-            &raw mut end_vcol,
-            &raw mut fill,
-            max,
-        )
-    };
+    let last = (&raw mut end_lnum, &raw mut end_vcol, &raw mut fill);
+    // SAFETY: `w` is live and the three counters `last` names are this
+    // frame's own.
+    let mut all: int64_t =
+        unsafe { win_text_height(w, start_lnum, start_vcol, last.0, last.1, last.2, max) };
     if !set(OPTIDX_END_ROW) {
         // With no 'end_row' the answer covers the whole buffer, so the virtual
         // lines below its last line count too.
@@ -520,45 +501,27 @@ pub unsafe fn nvim_win_text_height(
         all += end_fill;
     }
     // SAFETY: `rv` is the four-slot arena block allocated above.
-    unsafe {
-        dict_put(&mut rv, c"all", Object::integer(all));
-        dict_put(&mut rv, c"fill", Object::integer(fill));
-        dict_put(
-            &mut rv,
-            c"end_row",
-            Object::integer(Integer::from(end_lnum - 1)),
-        );
-        dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol));
-    }
+    unsafe { dict_put(&mut rv, c"all", Object::integer(all)) };
+    unsafe { dict_put(&mut rv, c"fill", Object::integer(fill)) };
+    let end_row = Object::integer(Integer::from(end_lnum - 1));
+    unsafe { dict_put(&mut rv, c"end_row", end_row) };
+    unsafe { dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol)) };
     rv.reported(err)
 }
 
 /// `err` reporting that `what` was out of range -- the message
 /// `api_err_invalid` builds for a value it will not print.
 fn out_of_range(mut err: Error, what: &'static ::core::ffi::CStr) -> Error {
+    let (name, why) = (what.as_ptr(), c"out of range".as_ptr());
     // SAFETY: `err` is the caller's, moved in; both strings are static.
-    unsafe {
-        api_err_invalid(
-            &raw mut err,
-            what.as_ptr(),
-            c"out of range".as_ptr(),
-            0 as int64_t,
-            false,
-        );
-    }
+    unsafe { api_err_invalid(&raw mut err, name, why, 0, false) };
     err
 }
 
 /// `err` reporting `msg` verbatim as a validation failure.
 fn validation(mut err: Error, msg: &'static ::core::ffi::CStr) -> Error {
+    let (fmt, msg) = (c"%s".as_ptr(), msg.as_ptr());
     // SAFETY: `err` is the caller's, moved in, and `msg` is static.
-    unsafe {
-        api_set_error(
-            &raw mut err,
-            kErrorTypeValidation,
-            c"%s".as_ptr(),
-            msg.as_ptr(),
-        );
-    }
+    unsafe { api_set_error(&raw mut err, kErrorTypeValidation, fmt, msg) };
     err
 }

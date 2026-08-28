@@ -26,6 +26,7 @@ use crate::window::{
 };
 use crate::winlayer::{TabPage, Win, windows_in_tab};
 use ::libc::abort;
+use core::ffi::CStr;
 use core::ptr;
 
 /// The windows of `tp`, oldest first.
@@ -43,11 +44,9 @@ pub unsafe fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena) -> Res
     let n = windows_in_tab(tab).count() as size_t;
     // SAFETY: `arena` is the caller's, and `rv` is the block it just handed
     // back, sized for exactly the windows appended below.
-    unsafe {
-        rv = arena_array(arena, n);
-        for wp in windows_in_tab(tab) {
-            array_add(&mut rv, Object::window(wp.handle));
-        }
+    rv = arena_array(arena, n);
+    for wp in windows_in_tab(tab) {
+        unsafe { array_add(&mut rv, Object::window(wp.handle)) };
     }
     Ok(rv)
 }
@@ -87,17 +86,8 @@ pub unsafe fn nvim_tabpage_set_var(
     // SAFETY: as `nvim_tabpage_get_var`; `value` is the caller's and the
     // store takes it over.
     let no_arena = ptr::null_mut::<Arena>();
-    unsafe {
-        dict_set_var(
-            tab.tp_vars,
-            name,
-            value,
-            false,
-            false,
-            no_arena,
-            &raw mut err,
-        )
-    };
+    let (vars, slot) = (tab.tp_vars, &raw mut err);
+    unsafe { dict_set_var(vars, name, value, false, false, no_arena, slot) };
     ().reported(err)
 }
 
@@ -112,7 +102,8 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(
     };
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let no_arena = ptr::null_mut::<Arena>();
-    unsafe { dict_set_var(tab.tp_vars, name, NIL, true, false, no_arena, &raw mut err) };
+    let (vars, slot) = (tab.tp_vars, &raw mut err);
+    unsafe { dict_set_var(vars, name, NIL, true, false, no_arena, slot) };
     ().reported(err)
 }
 
@@ -149,15 +140,10 @@ pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> 
     };
     // SAFETY: both handles named a live object, which is all these ask.
     if !unsafe { tabpage_win_valid(tp.raw(), wp.raw()) } {
+        let fmt = c"Window does not belong to tabpage %d".as_ptr();
+        let (slot, handle) = (&raw mut err, tp.handle);
         // SAFETY: `err` is this frame's own and the format takes one `int`.
-        unsafe {
-            api_set_error(
-                &raw mut err,
-                kErrorTypeException,
-                c"Window does not belong to tabpage %d".as_ptr(),
-                tp.handle,
-            );
-        }
+        unsafe { api_set_error(slot, kErrorTypeException, fmt, handle) };
         return Err(err);
     }
     if tp.is_current() {
@@ -209,16 +195,11 @@ pub unsafe fn nvim_open_tabpage(
         return (0 as Tabpage).reported(err);
     };
     if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
+        let msg = (&raw const e_cmdwin).cast::<::core::ffi::c_char>();
+        let (slot, fmt) = (&raw mut err, c"%s".as_ptr());
         // SAFETY: `err` is this frame's own and `e_cmdwin` is a static
         // message.
-        unsafe {
-            api_set_error(
-                &raw mut err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                (&raw const e_cmdwin).cast::<::core::ffi::c_char>(),
-            );
-        }
+        unsafe { api_set_error(slot, kErrorTypeException, fmt, msg) };
         return Err(err);
     }
     // SAFETY: `config` is the caller's, per this function's contract.
@@ -232,24 +213,14 @@ pub unsafe fn nvim_open_tabpage(
 
     let mut wp: *mut win_T = ptr::null_mut();
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
-    let tp: *mut tabpage_T = api_try(&mut err, |_| unsafe {
-        win_new_tabpage(
-            after + 1,
-            ptr::null_mut::<::core::ffi::c_char>(),
-            enter,
-            &raw mut wp,
-        )
+    let tp: *mut tabpage_T = api_try(&mut err, |_| {
+        let filename = ptr::null_mut::<::core::ffi::c_char>();
+        // SAFETY: `wp` is this frame's own out-parameter.
+        unsafe { win_new_tabpage(after + 1, filename, enter, &raw mut wp) }
     });
     if tp.is_null() {
         if err.type_0 == kErrorTypeNone {
-            // SAFETY: `err` is this frame's own and the format takes nothing.
-            unsafe {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeException,
-                    c"Failed to create new tabpage".as_ptr(),
-                );
-            }
+            set_msg(&mut err, c"Failed to create new tabpage");
         }
         return Err(err);
     }
@@ -268,16 +239,14 @@ pub unsafe fn nvim_open_tabpage(
         // user is in; a tab page opened without entering it must not.
         let au_no_enter_leave = curwin.get() != w.raw();
         // SAFETY: the two counters are the editor's own `int` globals.
-        unsafe {
-            if au_no_enter_leave {
-                autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-                autocmd_no_leave.set(autocmd_no_leave.get() + 1);
-            }
-            win_set_buf(w.raw(), b.raw(), &raw mut err);
-            if au_no_enter_leave {
-                autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-                autocmd_no_leave.set(autocmd_no_leave.get() - 1);
-            }
+        if au_no_enter_leave {
+            autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+            autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+        }
+        unsafe { win_set_buf(w.raw(), b.raw(), &raw mut err) };
+        if au_no_enter_leave {
+            autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+            autocmd_no_leave.set(autocmd_no_leave.get() - 1);
         }
         if !valid_tabpage(tp.raw()) {
             return Err(tabpage_closed(err));
@@ -290,14 +259,17 @@ pub unsafe fn nvim_open_tabpage(
 /// `nvim_open_tabpage` reports at both points a `BufEnter` autocommand could
 /// have closed what it just opened.
 fn tabpage_closed(mut err: Error) -> Error {
-    // SAFETY: `err` is the caller's, moved in, and the format takes nothing.
-    unsafe {
-        api_clear_error(&raw mut err);
-        api_set_error(
-            &raw mut err,
-            kErrorTypeException,
-            c"Tabpage was closed immediately".as_ptr(),
-        );
-    }
+    // SAFETY: `err` is the caller's, moved in.
+    unsafe { api_clear_error(&raw mut err) };
+    set_msg(&mut err, c"Tabpage was closed immediately");
     err
+}
+
+/// `api_set_error` with a message that takes no arguments. The message goes
+/// through a `%s` rather than being the format itself, which is the same text
+/// for every literal here and cannot become anything else.
+fn set_msg(err: &mut Error, msg: &CStr) {
+    // SAFETY: `err` is the caller's own slot, and the format takes the one C
+    // string it is given.
+    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg.as_ptr()) };
 }

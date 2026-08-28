@@ -37,8 +37,8 @@ use crate::option::{
 };
 use crate::types::{
     Arena, Dict, Error, FAIL, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData,
-    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, int64_t, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, linenr_T, uint64_t,
+    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, linenr_T, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -107,15 +107,9 @@ unsafe fn option_target(
             b"local" => OptionSetFlags::LOCAL,
             b"global" => OptionSetFlags::GLOBAL,
             _ => {
+                let (key, want) = (c"scope".as_ptr(), c"'local' or 'global'".as_ptr());
                 // SAFETY: `err` is the caller's; the strings are static.
-                unsafe {
-                    api_err_exp(
-                        err,
-                        c"scope".as_ptr(),
-                        c"'local' or 'global'".as_ptr(),
-                        ptr::null(),
-                    );
-                }
+                unsafe { api_err_exp(err, key, want, ptr::null()) };
                 return None;
             }
         };
@@ -160,15 +154,9 @@ unsafe fn option_target(
     // SAFETY: `name` is the caller's C string.
     let opt_idx = find_option(unsafe { CStr::from_ptr(name) });
     if opt_idx == kOptInvalid {
+        let fmt = c"Unknown option '%s'".as_ptr();
         // SAFETY: `err` is the caller's and the format takes `name`.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Unknown option '%s'".as_ptr(),
-                name,
-            )
-        };
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt, name) };
     } else if (scope == kOptScopeBuf || scope == kOptScopeWin) && !option_has_scope(opt_idx, scope)
     {
         let tgt = if scope == kOptScopeBuf {
@@ -188,18 +176,10 @@ unsafe fn option_target(
         } else {
             c""
         };
+        let fmt = c"'%s' cannot be passed for %s%soption '%s'".as_ptr();
+        let (tgt, global, req) = (tgt.as_ptr(), global.as_ptr(), req.as_ptr());
         // SAFETY: `err` is the caller's; three static strings and `name`.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"'%s' cannot be passed for %s%soption '%s'".as_ptr(),
-                tgt.as_ptr(),
-                global.as_ptr(),
-                req.as_ptr(),
-                name,
-            );
-        }
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt, tgt, global, req, name) };
     }
     // SAFETY: `err` is the caller's.
     if unsafe { (*err).type_0 } != kErrorTypeNone {
@@ -257,10 +237,8 @@ unsafe fn do_ft_buf(
     }
     // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(ftbuf) });
-    unsafe {
-        aucmd_prepbuf(aco, ftbuf);
-        *aco_used = true;
-    }
+    unsafe { aucmd_prepbuf(aco, ftbuf) };
+    unsafe { *aco_used = true };
     // 'bufhidden' and 'buftype' keep the scratch buffer out of everything the
     // user can see; both are set without autocommands, as `:setlocal` would.
     set_option_direct(
@@ -276,15 +254,13 @@ unsafe fn do_ft_buf(
         SID_NONE,
     );
     // SAFETY: `ftbuf` is the live scratch buffer; `ml_open` gave it a memfile.
-    unsafe {
-        debug_assert!(
-            (*(*ftbuf).b_ml.ml_mfp).mf_fd < 0,
-            "ftbuf->b_ml.ml_mfp->mf_fd < 0"
-        );
-        (*ftbuf).b_p_swf = 0;
-        (*ftbuf).b_p_ml = 0;
-        (*ftbuf).b_p_ft = xstrdup(filetype);
-    }
+    debug_assert!(
+        unsafe { (*(*ftbuf).b_ml.ml_mfp).mf_fd } < 0,
+        "ftbuf->b_ml.ml_mfp->mf_fd < 0"
+    );
+    unsafe { (*ftbuf).b_p_swf = 0 };
+    unsafe { (*ftbuf).b_p_ml = 0 };
+    unsafe { (*ftbuf).b_p_ft = xstrdup(filetype) };
     // SAFETY: the autocommand tables are the editor's own.
     if !has_event(EVENT_FILETYPE) {
         return ftbuf;
@@ -327,18 +303,19 @@ fn static_option(text: &'static CStr) -> OptVal {
 unsafe fn wipe_ft_buf(buf: *mut buf_T) {
     // SAFETY: `buf` is the caller's live buffer; the `bufref` re-checks it
     // after each step that can delete it.
-    unsafe {
-        block_autocmds();
-        let bufref = BufRef::of_opt(Buf::from_raw(buf));
-        close_windows(buf, false);
-        if bufref.valid() && buf != curbuf.get() && (*buf).b_nwindows == 0 {
-            wipe_buffer(Buf::new(buf), false);
-        }
-        if bufref.valid() {
-            (*buf).b_flags.clear(BufFlags::DUMMY);
-        }
-        unblock_autocmds();
+    unsafe { block_autocmds() };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+    unsafe { close_windows(buf, false) };
+    if bufref.valid() && buf != curbuf.get() && unsafe { (*buf).b_nwindows } == 0 {
+        wipe_buffer(unsafe { Buf::new(buf) }, false);
     }
+    if bufref.valid() {
+        // SAFETY: `buf` is still live -- `bufref` says so. The region has to
+        // cover the `clear`: a `flags!` set is `Copy`, so a region ending at
+        // the dereference would hand `&mut self` a copy and drop the change.
+        unsafe { (*buf).b_flags.clear(BufFlags::DUMMY) };
+    }
+    unsafe { unblock_autocmds() };
 }
 
 /// The value of option `name`, at whatever scope `opts` names.
@@ -359,16 +336,10 @@ pub unsafe fn nvim_get_option_value(
 
     let mut aco: aco_save_T = aco_save_T::default();
     let mut aco_used: bool = false;
+    let (paco, pused, slot) = (&raw mut aco, &raw mut aco_used, &raw mut err);
     // SAFETY: `aco` and `aco_used` are this frame's own; `target.filetype`
     // borrows `opts`, which outlives the call.
-    let ftbuf = unsafe {
-        do_ft_buf(
-            target.filetype,
-            &raw mut aco,
-            &raw mut aco_used,
-            &raw mut err,
-        )
-    };
+    let ftbuf = unsafe { do_ft_buf(target.filetype, paco, pused, slot) };
     // SAFETY: `aco` is this frame's own and `ftbuf` is the scratch buffer.
     let mut leave_ft_buf = |ftbuf: *mut buf_T| unsafe {
         if aco_used {
@@ -391,17 +362,10 @@ pub unsafe fn nvim_get_option_value(
         debug_assert!(target.from.is_null(), "!from");
         ftbuf.cast::<c_void>()
     };
+    let (idx, flags, scope) = (target.opt_idx, target.opt_flags, target.scope);
     // SAFETY: `from` is null or the live object `scope` names, and `err` is
     // this frame's own.
-    let value = unsafe {
-        get_option_value_for(
-            target.opt_idx,
-            target.opt_flags,
-            target.scope,
-            from,
-            &raw mut err,
-        )
-    };
+    let value = unsafe { get_option_value_for(idx, flags, scope, from, &raw mut err) };
     if !ftbuf.is_null() {
         leave_ft_buf(ftbuf);
     }
@@ -409,16 +373,9 @@ pub unsafe fn nvim_get_option_value(
         if value.type_0 != kOptValTypeNil {
             return optval_as_object(value).reported(err);
         }
+        let (key, got) = (c"option".as_ptr(), name.data());
         // SAFETY: `err` is this frame's own and `name` is the caller's.
-        unsafe {
-            api_err_invalid(
-                &raw mut err,
-                c"option".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            )
-        };
+        unsafe { api_err_invalid(&raw mut err, key, got, 0, true) };
     }
     optval_free(value);
     NIL.reported(err)
@@ -450,34 +407,20 @@ pub unsafe fn nvim_set_option_value(
         opt_flags = OptionSetFlags::LOCAL;
     }
     let Some(optval) = object_as_optval(value) else {
+        let got = api_typename(value.type_0);
+        let (key, want) = (c"value".as_ptr(), c"valid option type".as_ptr());
         // SAFETY: `err` is this frame's own; the strings are static.
-        unsafe {
-            let got = api_typename(value.type_0);
-            api_err_exp(
-                &raw mut err,
-                c"value".as_ptr(),
-                c"valid option type".as_ptr(),
-                got,
-            );
-        }
+        unsafe { api_err_exp(&raw mut err, key, want, got) };
         return ().reported(err);
     };
     // Whoever made this API call owns the write, so that `:verbose set` names
     // them rather than whatever ran last.
     let _sctx = api_set_sctx(channel_id);
+    let (key, idx) = (name.data(), target.opt_idx);
+    let (scope, from, slot) = (target.scope, target.from, &raw mut err);
     // SAFETY: `name` is the caller's, `target.from` is null or the live
     // object `scope` names, and `err` is this frame's own.
-    unsafe {
-        set_option_value_for(
-            name.data(),
-            target.opt_idx,
-            optval,
-            opt_flags,
-            target.scope,
-            target.from,
-            &raw mut err,
-        );
-    }
+    unsafe { set_option_value_for(key, idx, optval, opt_flags, scope, from, slot) };
     ().reported(err)
 }
 
