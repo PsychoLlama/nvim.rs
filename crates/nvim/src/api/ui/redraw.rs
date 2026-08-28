@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::Ui;
 use super::events::{count, linegrid, send};
 use super::packer::push_call;
 use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
@@ -72,15 +73,9 @@ pub unsafe fn remote_ui_hl_attr_define(
 
     // `info` says which highlight groups produced the attributes, which is
     // only meaningful to a UI that asked to track highlight state.
-    let info = if unsafe { (*ui).ui_ext[kUIHlState as usize] } {
-        info
-    } else {
-        Array {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        }
-    };
+    // SAFETY: `ui` is live, per this function's contract.
+    let hl_state = unsafe { Ui::new(ui) }.ui_ext[kUIHlState as usize];
+    let info = if hl_state { info } else { Array::EMPTY };
     send!(
         ui,
         c"hl_attr_define",
@@ -111,82 +106,107 @@ pub unsafe fn remote_ui_event(ui: *mut RemoteUI, name: &'static CStr, args: Arra
 ///
 /// As [`remote_ui_event`], plus `arena` must be usable.
 unsafe fn translate(ui: *mut RemoteUI, name: &'static CStr, args: Array, arena: *mut Arena) {
-    unsafe {
-        if !linegrid(ui) {
-            // The cmdline events carry `[[attr, text], ...]` chunks, and a
-            // UI on the legacy protocol cannot look an attr id up.
-            match name.to_bytes() {
-                b"cmdline_show" | b"cmdline_block_append" => {
+    // SAFETY: the caller's promise -- `ui` is live.
+    let mut live = unsafe { Ui::new(ui) };
+    // SAFETY: as above.
+    if !unsafe { linegrid(ui) } {
+        // The cmdline events carry `[[attr, text], ...]` chunks, and a
+        // UI on the legacy protocol cannot look an attr id up.
+        match name.to_bytes() {
+            b"cmdline_show" | b"cmdline_block_append" => {
+                // SAFETY: `args`, `arena` and `ui` are the caller's.
+                unsafe {
                     let new_args = translate_firstarg(ui, args, arena);
                     push_call(ui, name, new_args);
-                    return;
                 }
-                b"cmdline_block_show" => {
-                    let block = (*args.items).data.array;
-                    let mut new_block = arena_array(arena, block.size);
-                    for i in 0..block.size {
-                        let line = (*block.items.add(i)).data.array;
-                        push(
-                            &mut new_block,
-                            Object::array(translate_contents(ui, line, arena)),
-                        );
-                    }
-                    let mut new_args = ArrayBuf::<1>::new();
-                    new_args.push(Object::array(new_block));
-                    push_call(ui, name, new_args.array());
-                    return;
-                }
-                _ => {}
+                return;
             }
+            b"cmdline_block_show" => {
+                // SAFETY: the editor built `args` for this event, so its
+                // one element is the block of lines.
+                let block = unsafe { (*args.items).data.array };
+                let mut new_block = arena_array(arena, block.size);
+                for i in 0..block.size {
+                    // SAFETY: `i` is below `size`, and each element is one
+                    // line's chunk list.
+                    let line = unsafe { (*block.items.add(i)).data.array };
+                    // SAFETY: `new_block` was sized for every line.
+                    unsafe {
+                        let translated = translate_contents(ui, line, arena);
+                        push(&mut new_block, Object::array(translated));
+                    }
+                }
+                let mut new_args = ArrayBuf::<1>::new();
+                new_args.push(Object::array(new_block));
+                // SAFETY: `new_args` borrows this frame's buffer.
+                unsafe { push_call(ui, name, new_args.array()) };
+                return;
+            }
+            _ => {}
         }
+    }
 
-        // `ext_wildmenu` is the pre-`ext_popupmenu` spelling: same event,
-        // fewer arguments, different name. A UI that asked for both gets
-        // the popupmenu events, and only completion in the cmdline (which
-        // the popupmenu reports as row -1) falls back to the wildmenu.
-        if (*ui).ui_ext[kUIWildmenu as usize] {
-            match name.to_bytes() {
-                b"popupmenu_show" => {
-                    (*ui).wildmenu_active = (*args.items.add(4)).data.integer == -1
-                        || !(*ui).ui_ext[kUIPopupmenu as usize];
-                    if (*ui).wildmenu_active {
-                        // The wildmenu shows only the completion word, so
-                        // each item's remaining fields are dropped.
-                        let items = (*args.items).data.array;
-                        let mut new_items = arena_array(arena, items.size);
-                        for i in 0..items.size {
+    // `ext_wildmenu` is the pre-`ext_popupmenu` spelling: same event,
+    // fewer arguments, different name. A UI that asked for both gets
+    // the popupmenu events, and only completion in the cmdline (which
+    // the popupmenu reports as row -1) falls back to the wildmenu.
+    if live.ui_ext[kUIWildmenu as usize] {
+        match name.to_bytes() {
+            b"popupmenu_show" => {
+                // SAFETY: the editor built `args` for this event, whose
+                // fifth element is the anchor row.
+                let row = unsafe { (*args.items.add(4)).data.integer };
+                live.wildmenu_active = row == -1 || !live.ui_ext[kUIPopupmenu as usize];
+                if live.wildmenu_active {
+                    // The wildmenu shows only the completion word, so
+                    // each item's remaining fields are dropped.
+                    // SAFETY: the first element is the item list.
+                    let items = unsafe { (*args.items).data.array };
+                    let mut new_items = arena_array(arena, items.size);
+                    for i in 0..items.size {
+                        // SAFETY: `i` is below `size`, each element is one
+                        // item's field list, and `new_items` was sized for
+                        // every item.
+                        unsafe {
                             let item = (*items.items.add(i)).data.array;
                             push(&mut new_items, *item.items);
                         }
-                        let mut new_args = ArrayBuf::<1>::new();
-                        new_args.push(Object::array(new_items));
-                        push_call(ui, c"wildmenu_show", new_args.array());
-
-                        // A popupmenu carries the selected index with the
-                        // items; the wildmenu has a separate event for it.
-                        let selected = *args.items.add(1);
-                        if selected.data.integer != -1 {
-                            let mut new_args = ArrayBuf::<1>::new();
-                            new_args.push(selected);
-                            push_call(ui, c"wildmenu_select", new_args.array());
-                        }
-                        return;
                     }
-                }
-                b"popupmenu_select" if (*ui).wildmenu_active => {
-                    push_call(ui, c"wildmenu_select", args);
-                    return;
-                }
-                b"popupmenu_hide" if (*ui).wildmenu_active => {
-                    push_call(ui, c"wildmenu_hide", args);
-                    return;
-                }
-                _ => {}
-            }
-        }
+                    let mut new_args = ArrayBuf::<1>::new();
+                    new_args.push(Object::array(new_items));
+                    // SAFETY: `new_args` borrows this frame's buffer.
+                    unsafe { push_call(ui, c"wildmenu_show", new_args.array()) };
 
-        push_call(ui, name, args);
+                    // A popupmenu carries the selected index with the
+                    // items; the wildmenu has a separate event for it.
+                    // SAFETY: the second element is that index.
+                    let selected = unsafe { *args.items.add(1) };
+                    // SAFETY: the tag says the payload is the integer.
+                    if unsafe { selected.data.integer } != -1 {
+                        let mut new_args = ArrayBuf::<1>::new();
+                        new_args.push(selected);
+                        // SAFETY: as above.
+                        unsafe { push_call(ui, c"wildmenu_select", new_args.array()) };
+                    }
+                    return;
+                }
+            }
+            b"popupmenu_select" if live.wildmenu_active => {
+                // SAFETY: `args` is the caller's, unchanged.
+                unsafe { push_call(ui, c"wildmenu_select", args) };
+                return;
+            }
+            b"popupmenu_hide" if live.wildmenu_active => {
+                // SAFETY: as above.
+                unsafe { push_call(ui, c"wildmenu_hide", args) };
+                return;
+            }
+            _ => {}
+        }
     }
+
+    // SAFETY: `args` is the caller's, forwarded unchanged.
+    unsafe { push_call(ui, name, args) };
 }
 
 /// Appends `value` to an arena-allocated array, which is sized up front and
@@ -196,6 +216,7 @@ unsafe fn translate(ui: *mut RemoteUI, name: &'static CStr, args: Array, arena: 
 ///
 /// `array` must have room for one more element.
 unsafe fn push(array: &mut Array, value: Object) {
+    // SAFETY: the caller's promise -- the slot is inside `items`.
     unsafe { *array.items.add(array.size) = value };
     array.size += 1;
 }
@@ -207,18 +228,18 @@ unsafe fn push(array: &mut Array, value: Object) {
 /// `ui` must be live, `args` must have a leading array element, and `arena`
 /// must be usable.
 unsafe fn translate_firstarg(ui: *mut RemoteUI, args: Array, arena: *mut Arena) -> Array {
+    let mut new_args = arena_array(arena, args.size);
+    // SAFETY: the caller's promise -- the first element is a chunk list --
+    // and `new_args` was sized for every argument.
     unsafe {
-        let mut new_args = arena_array(arena, args.size);
         let contents = (*args.items).data.array;
-        push(
-            &mut new_args,
-            Object::array(translate_contents(ui, contents, arena)),
-        );
+        let translated = translate_contents(ui, contents, arena);
+        push(&mut new_args, Object::array(translated));
         for i in 1..args.size {
             push(&mut new_args, *args.items.add(i));
         }
-        new_args
     }
+    new_args
 }
 
 /// Expands the highlight ids in a chunk list into attribute dicts.
@@ -228,27 +249,34 @@ unsafe fn translate_firstarg(ui: *mut RemoteUI, args: Array, arena: *mut Arena) 
 /// `ui` must be live, `contents` must be a list of `[attr, text]` pairs,
 /// and `arena` must be usable.
 unsafe fn translate_contents(ui: *mut RemoteUI, contents: Array, arena: *mut Arena) -> Array {
-    unsafe {
-        let mut new_contents = arena_array(arena, contents.size);
-        for i in 0..contents.size {
+    // SAFETY: the caller's promise -- `ui` is live.
+    let live = unsafe { Ui::new(ui) };
+    let rgb = live.rgb;
+    let mut new_contents = arena_array(arena, contents.size);
+    for i in 0..contents.size {
+        // SAFETY: `i` is below `size`, and each element is an `[attr, text]`
+        // pair, per the caller's promise.
+        let (item, attr) = unsafe {
             let item = (*contents.items.add(i)).data.array;
-            let mut new_item = arena_array(arena, 2);
-            let attr = (*item.items).data.integer as core::ffi::c_int;
-            let attrs = if attr != 0 {
-                let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE);
-                hlattrs2dict(&mut dict, None, syn_attr2entry(attr), (*ui).rgb, false);
-                dict
-            } else {
-                Dict {
-                    size: 0,
-                    capacity: 0,
-                    items: core::ptr::null_mut(),
-                }
-            };
+            (item, (*item.items).data.integer as core::ffi::c_int)
+        };
+        let mut new_item = arena_array(arena, 2);
+        let attrs = if attr != 0 {
+            let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE);
+            // SAFETY: `dict` was sized for what `hlattrs2dict` fills, and
+            // `attr` is a resolved attribute id.
+            unsafe { hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false) };
+            dict
+        } else {
+            Dict::EMPTY
+        };
+        // SAFETY: `new_item` was sized for these two and `new_contents` for
+        // every chunk; the pair's second element is its text.
+        unsafe {
             push(&mut new_item, Object::dict(attrs));
             push(&mut new_item, *item.items.add(1));
             push(&mut new_contents, Object::array(new_item));
         }
-        new_contents
     }
+    new_contents
 }
