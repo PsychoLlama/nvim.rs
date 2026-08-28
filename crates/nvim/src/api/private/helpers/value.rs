@@ -26,7 +26,7 @@ use crate::types::{
     Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, object, object_data, size_t,
+    kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, size_t,
 };
 use ::libc::{abort, memcpy};
 use core::ffi::{CStr, c_char, c_int};
@@ -125,25 +125,27 @@ pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 
 /// Move a builder's items into an arena-allocated array of exactly the right
 /// size, freeing the builder's own buffer if it had grown onto the heap.
 pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array {
-    // SAFETY: `arr` is the caller's builder, live for the call.
-    unsafe {
-        let mut items = InitVec::new(
+    // SAFETY: `arr` is the caller's builder, live for the call, and the four
+    // fields are its own.
+    let mut items = unsafe {
+        InitVec::new(
             &mut (*arr).size,
             &mut (*arr).capacity,
             &mut (*arr).items,
             &mut (*arr).init_array,
-        );
-        let mut ret = arena_array(arena, items.len());
-        ret.size = items.len();
-        memcpy(
-            ret.items.cast(),
-            items.as_slice().as_ptr().cast(),
-            size_of::<Object>() * ret.size,
-        );
-        let heap = items.take_heap();
-        xfree(heap);
-        ret
-    }
+        )
+    };
+    let mut ret = arena_array(arena, items.len());
+    ret.size = items.len();
+    let (dest, src) = (ret.items, items.as_slice().as_ptr());
+    // SAFETY: `ret` was sized for exactly this many objects.
+    unsafe { memcpy(dest.cast(), src.cast(), size_of::<Object>() * ret.size) };
+    // The vector is the builder's inline array or one heap block; only the
+    // second has anything to free.
+    let heap = items.take_heap();
+    // SAFETY: `heap` is null or that block, which nothing names now.
+    unsafe { xfree(heap) };
+    ret
 }
 
 // -- Freeing ---------------------------------------------------------------
@@ -156,69 +158,64 @@ pub(crate) unsafe fn api_free_string(value: String_0) {
 /// Free `value` and everything below it. Only for objects that were built on
 /// the heap; an arena-allocated object is freed with its arena.
 pub unsafe fn api_free_object(value: Object) {
-    // SAFETY: `value` owns whatever it points at.
-    unsafe {
-        match value.type_0 {
-            kObjectTypeString => api_free_string(value.data.string),
-            kObjectTypeArray => api_free_array(value.data.array),
-            kObjectTypeDict => api_free_dict(value.data.dict),
-            kObjectTypeLuaRef => api_free_luaref(value.data.luaref),
-            _ => {}
-        }
+    // SAFETY (every arm): the tag says which arm of the union is live, and
+    // `value` owns whatever it points at.
+    match value.type_0 {
+        kObjectTypeString => unsafe { api_free_string(value.data.string) },
+        kObjectTypeArray => unsafe { api_free_array(value.data.array) },
+        kObjectTypeDict => unsafe { api_free_dict(value.data.dict) },
+        kObjectTypeLuaRef => unsafe { api_free_luaref(value.data.luaref) },
+        _ => {}
     }
 }
 
 pub(crate) unsafe fn api_free_array(value: Array) {
-    // SAFETY: as `api_free_object`.
-    unsafe {
-        for i in 0..value.size {
-            api_free_object(*value.items.add(i));
-        }
-        xfree(value.items.cast());
+    for i in 0..value.size {
+        // SAFETY: as `api_free_object`; `i` is below `size`.
+        unsafe { api_free_object(*value.items.add(i)) };
     }
+    // SAFETY: `items` is the array's own allocation.
+    unsafe { xfree(value.items.cast()) };
 }
 
 pub(crate) unsafe fn api_free_dict(value: Dict) {
-    // SAFETY: as `api_free_object`.
-    unsafe {
-        for i in 0..value.size {
-            api_free_string((*value.items.add(i)).key);
-            api_free_object((*value.items.add(i)).value);
+    for i in 0..value.size {
+        // SAFETY: as `api_free_object`; `i` is below `size`.
+        unsafe {
+            let pair = *value.items.add(i);
+            api_free_string(pair.key);
+            api_free_object(pair.value);
         }
-        xfree(value.items.cast());
     }
+    // SAFETY: `items` is the dictionary's own allocation.
+    unsafe { xfree(value.items.cast()) };
 }
 
 /// Release the Lua references `value` holds, without freeing `value` itself.
 /// For arena-allocated objects, whose memory the arena reclaims but whose
 /// references the Lua registry does not.
 pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
-    // SAFETY: `value` owns the references it names.
-    unsafe {
-        match value.type_0 {
-            kObjectTypeLuaRef => api_free_luaref(value.data.luaref),
-            kObjectTypeArray => api_luarefs_free_array(value.data.array),
-            kObjectTypeDict => api_luarefs_free_dict(value.data.dict),
-            _ => {}
-        }
+    // SAFETY (every arm): the tag says which arm of the union is live, and
+    // `value` owns the references it names.
+    match value.type_0 {
+        kObjectTypeLuaRef => unsafe { api_free_luaref(value.data.luaref) },
+        kObjectTypeArray => unsafe { api_luarefs_free_array(value.data.array) },
+        kObjectTypeDict => unsafe { api_luarefs_free_dict(value.data.dict) },
+        _ => {}
     }
 }
 
 pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
-    // SAFETY: as `api_luarefs_free_object`.
-    unsafe {
-        for i in 0..value.size {
-            api_luarefs_free_object(*value.items.add(i));
-        }
+    for i in 0..value.size {
+        // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
+        unsafe { api_luarefs_free_object(*value.items.add(i)) };
     }
 }
 
 pub(crate) unsafe fn api_luarefs_free_dict(value: Dict) {
-    // SAFETY: as `api_luarefs_free_object`.
-    unsafe {
-        for i in 0..value.size {
-            api_luarefs_free_object((*value.items.add(i)).value);
-        }
+    for i in 0..value.size {
+        // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
+        unsafe { api_luarefs_free_object((*value.items.add(i)).value) };
     }
 }
 
@@ -227,78 +224,56 @@ pub(crate) unsafe fn api_luarefs_free_dict(value: Dict) {
 /// A copy of `str` in `arena`. Unlike [`arena_string`] a null string stays
 /// null rather than becoming the empty one.
 pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
-    // SAFETY: `str` is null or has `size` readable bytes.
-    unsafe {
-        if str.data().is_null() {
-            return String_0::NULL;
-        }
-        String_0::from_raw_parts(arena_memdupz(arena, str.data(), str.len()), str.len())
+    if str.data().is_null() {
+        return String_0::NULL;
     }
+    // SAFETY: `str` has `size` readable bytes and `arena` is the caller's.
+    let copy = unsafe { arena_memdupz(arena, str.data(), str.len()) };
+    String_0::from_raw_parts(copy, str.len())
 }
 
 pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
-    // SAFETY: `array` is live for the call.
-    unsafe {
-        // Sized for exactly this many items, so it cannot need to grow.
-        let mut rv = arena_array(arena, array.size);
-        for i in 0..array.size {
-            *rv.items.add(i) = copy_object(*array.items.add(i), arena);
-        }
-        rv.size = array.size;
-        rv
+    // Sized for exactly this many items, so it cannot need to grow.
+    let mut rv = arena_array(arena, array.size);
+    for i in 0..array.size {
+        // SAFETY: `array` is live for the call and `rv` is the same size, so
+        // `i` is inside both.
+        unsafe { *rv.items.add(i) = copy_object(*array.items.add(i), arena) };
     }
+    rv.size = array.size;
+    rv
 }
 
 pub(crate) unsafe fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict {
-    // SAFETY: `dict` is live for the call.
-    unsafe {
-        let mut rv = arena_dict(arena, dict.size);
-        for i in 0..dict.size {
+    let mut rv = arena_dict(arena, dict.size);
+    for i in 0..dict.size {
+        // SAFETY: `dict` is live for the call and `rv` is the same size, so
+        // `i` is inside both. The key's length is re-derived rather than
+        // copied, so a key holding a NUL comes back truncated -- upstream's
+        // shape.
+        unsafe {
             let item = *dict.items.add(i);
             *rv.items.add(i) = key_value_pair {
-                // The key's length is re-derived rather than copied, so a
-                // key holding a NUL comes back truncated. Upstream's shape.
                 key: cstr_as_string(copy_string(item.key, arena).data()),
                 value: copy_object(item.value, arena),
             };
         }
-        rv.size = dict.size;
-        rv
     }
+    rv.size = dict.size;
+    rv
 }
 
 /// A deep copy of `obj` in `arena`. Handles and scalars copy as they stand;
 /// a Lua reference gets a second registry reference of its own.
 pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
-    // SAFETY: `obj` is live for the call.
-    unsafe {
-        match obj.type_0 {
-            kObjectTypeString => object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: copy_string(obj.data.string, arena),
-                },
-            },
-            kObjectTypeArray => object {
-                type_0: kObjectTypeArray,
-                data: object_data {
-                    array: copy_array(obj.data.array, arena),
-                },
-            },
-            kObjectTypeDict => object {
-                type_0: kObjectTypeDict,
-                data: object_data {
-                    dict: copy_dict(obj.data.dict, arena),
-                },
-            },
-            kObjectTypeLuaRef => object {
-                type_0: kObjectTypeLuaRef,
-                data: object_data {
-                    luaref: api_new_luaref(obj.data.luaref),
-                },
-            },
-            _ => obj,
-        }
+    // SAFETY (every arm): the tag says which arm of the union is live, and
+    // `obj` is live for the call.
+    match obj.type_0 {
+        kObjectTypeString => Object::string(unsafe { copy_string(obj.data.string, arena) }),
+        kObjectTypeArray => Object::array(unsafe { copy_array(obj.data.array, arena) }),
+        kObjectTypeDict => Object::dict(unsafe { copy_dict(obj.data.dict, arena) }),
+        kObjectTypeLuaRef => Object::luaref(unsafe { api_new_luaref(obj.data.luaref) }),
+        _ => obj,
     }
 }
 
@@ -312,27 +287,26 @@ static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<co
 /// from the blob on first use and then shared.
 pub(crate) unsafe fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(NIL);
-    // SAFETY: the blob is a compile-time constant and a valid msgpack map.
-    unsafe {
-        if METADATA.with(|m| m.type_0) == kObjectTypeNil {
-            let mut arena = ARENA_EMPTY;
-            let mut err = Error {
-                type_0: kErrorTypeNone,
-                msg: ptr::null_mut(),
-            };
-            METADATA.set(unpack(
-                PACKED_API_METADATA.as_ptr() as *mut c_char,
-                PACKED_API_METADATA.len(),
-                &raw mut arena,
-                &raw mut err,
-            ));
-            if err.type_0 != kErrorTypeNone || METADATA.with(|m| m.type_0) != kObjectTypeDict {
-                abort();
-            }
-            METADATA_ARENA.set(arena_finish(&raw mut arena));
+    if METADATA.with(|m| m.type_0) == kObjectTypeNil {
+        let mut arena = ARENA_EMPTY;
+        let mut err = Error {
+            type_0: kErrorTypeNone,
+            msg: ptr::null_mut(),
+        };
+        let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
+        let (len, ar, e) = (PACKED_API_METADATA.len(), &raw mut arena, &raw mut err);
+        // SAFETY: the blob is a compile-time constant of `len` bytes and a
+        // valid msgpack map; `arena` and `err` are this frame's.
+        METADATA.set(unsafe { unpack(blob, len, ar, e) });
+        if err.type_0 != kErrorTypeNone || METADATA.with(|m| m.type_0) != kObjectTypeDict {
+            // SAFETY: `abort` takes nothing.
+            unsafe { abort() };
         }
-        METADATA.get()
+        // SAFETY: `arena` is this frame's, and the tree it holds is kept
+        // alive by the static below for the life of the process.
+        METADATA_ARENA.set(unsafe { arena_finish(&raw mut arena) });
     }
+    METADATA.get()
 }
 
 /// [`api_metadata`] still packed, for a caller that is going to forward it
@@ -431,105 +405,99 @@ pub(crate) unsafe fn api_object_to_bool(
     nil_value: bool,
     err: *mut Error,
 ) -> bool {
-    // SAFETY: `obj` is live and `what`/`err` are the caller's.
-    unsafe {
-        match obj.type_0 {
-            kObjectTypeBoolean => obj.data.boolean,
-            kObjectTypeInteger => obj.data.integer != 0,
-            kObjectTypeNil => nil_value,
-            _ => {
-                api_err_exp(err, what, c"boolean".as_ptr(), ptr::null());
-                false
-            }
-        }
+    if let Some(on) = obj.as_boolean() {
+        return on;
     }
+    if let Some(number) = obj.as_integer() {
+        return number != 0;
+    }
+    if obj.type_0 == kObjectTypeNil {
+        return nil_value;
+    }
+    // SAFETY: the caller's promise about `what` and `err`.
+    unsafe { api_err_exp(err, what, c"boolean".as_ptr(), ptr::null()) };
+    false
 }
 
 /// `obj` as a highlight group id, defining the group if it was named and does
 /// not exist yet. Zero for the empty name and for an id out of range.
 pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut Error) -> c_int {
-    // SAFETY: `obj` is live and `what`/`err` are the caller's.
-    unsafe {
-        match obj.type_0 {
-            kObjectTypeString => {
-                let str = obj.data.string;
-                if !str.is_empty() {
-                    syn_check_group(str.data(), str.len())
-                } else {
-                    0
-                }
-            }
-            kObjectTypeInteger => {
-                let id = obj.data.integer as c_int;
-                if (1..=highlight_num_groups()).contains(&id) {
-                    id
-                } else {
-                    0
-                }
-            }
-            _ => {
-                api_err_invalid(err, c"hl_group".as_ptr(), what, 0, true);
-                0
-            }
+    if let Some(str) = obj.as_string() {
+        if str.is_empty() {
+            return 0;
         }
+        // SAFETY: `str` names its own bytes, per this function's contract.
+        return unsafe { syn_check_group(str.data(), str.len()) };
     }
+    if let Some(number) = obj.as_integer() {
+        let known = highlight_num_groups();
+        let id = number as c_int;
+        return if (1..=known).contains(&id) { id } else { 0 };
+    }
+    // SAFETY: the caller's promise about `what` and `err`.
+    unsafe { api_err_invalid(err, c"hl_group".as_ptr(), what, 0, true) };
+    0
 }
 
 /// `kv_push` for a plain kvec, which starts empty and doubles from 8.
 unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
-    // SAFETY: `items` is null with a zero capacity, or an allocation of
-    // `capacity` chunks.
-    unsafe {
-        if msg.size == msg.capacity {
-            msg.capacity = if msg.capacity != 0 {
-                msg.capacity * 2
-            } else {
-                8
-            };
-            let bytes = size_of::<HlMessageChunk>() * msg.capacity;
-            msg.items = xrealloc(msg.items.cast(), bytes).cast();
-        }
-        *msg.items.add(msg.size) = chunk;
-        msg.size += 1;
+    if msg.size == msg.capacity {
+        msg.capacity = if msg.capacity != 0 {
+            msg.capacity * 2
+        } else {
+            8
+        };
+        let bytes = size_of::<HlMessageChunk>() * msg.capacity;
+        // SAFETY: `items` is null with a zero capacity, or the allocation
+        // this function made last time.
+        msg.items = unsafe { xrealloc(msg.items.cast(), bytes) }.cast();
     }
+    // SAFETY: the grow above left room for one more chunk.
+    unsafe { *msg.items.add(msg.size) = chunk };
+    msg.size += 1;
 }
 
 /// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into a
 /// highlighted message. Empty, with `err` set, on the first bad chunk.
 pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) -> HlMessage {
-    // SAFETY: `chunks` is live for the call and `err` is the caller's.
-    unsafe {
-        let mut hl_msg = EMPTY_HL_MESSAGE;
-        for i in 0..chunks.size {
-            let item = *chunks.items.add(i);
-            if item.type_0 != kObjectTypeArray {
-                api_err_exp(
-                    err,
-                    c"chunk".as_ptr(),
-                    api_typename(kObjectTypeArray),
-                    api_typename(item.type_0),
-                );
-                hl_msg_free(hl_msg);
-                return EMPTY_HL_MESSAGE;
-            }
-            let chunk = item.data.array;
-            if !((1..=2).contains(&chunk.size) && (*chunk.items).type_0 == kObjectTypeString) {
-                let msg = c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr();
-                api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg);
-                hl_msg_free(hl_msg);
-                return EMPTY_HL_MESSAGE;
-            }
-            // Heap-allocated: the message outlives the caller's arena.
-            let text = copy_string((*chunk.items).data.string, ptr::null_mut());
-            let hl_id = if chunk.size == 2 {
-                object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr(), err)
-            } else if is_err {
-                HLF_E
-            } else {
-                0
-            };
-            push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id });
-        }
-        hl_msg
+    let mut hl_msg = EMPTY_HL_MESSAGE;
+    for i in 0..chunks.size {
+        // SAFETY: `i` is below `size`, so the item is inside `items`.
+        let item = unsafe { *chunks.items.add(i) };
+        let Some(chunk) = item.as_array() else {
+            let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
+            // SAFETY: `err` is the caller's slot and the names are static.
+            unsafe { api_err_exp(err, c"chunk".as_ptr(), want, got) };
+            // SAFETY: `hl_msg` is this frame's, and owns its chunks.
+            unsafe { hl_msg_free(hl_msg) };
+            return EMPTY_HL_MESSAGE;
+        };
+        // SAFETY: a non-empty array has a first item.
+        let head = (1..=2)
+            .contains(&chunk.size)
+            .then(|| unsafe { *chunk.items });
+        let Some(text) = head.and_then(Object::as_string) else {
+            let msg = c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr();
+            // SAFETY: `err` is the caller's slot; the format takes the one
+            // C string it is given.
+            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            // SAFETY: as above.
+            unsafe { hl_msg_free(hl_msg) };
+            return EMPTY_HL_MESSAGE;
+        };
+        // Heap-allocated: the message outlives the caller's arena.
+        // SAFETY: `text` names its own bytes.
+        let text = unsafe { copy_string(text, ptr::null_mut()) };
+        let hl_id = if chunk.size == 2 {
+            // SAFETY: the array has two items, and `err` is the caller's.
+            unsafe { object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr(), err) }
+        } else if is_err {
+            HLF_E
+        } else {
+            0
+        };
+        // SAFETY: `hl_msg` is this frame's growable vector.
+        unsafe { push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id }) };
     }
+    hl_msg
 }

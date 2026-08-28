@@ -112,65 +112,45 @@ pub(crate) fn handle_get_window(handle: handle_T) -> *mut win_T {
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
 /// set — when it names nothing.
 pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T {
-    // SAFETY: `err` is the caller's out-parameter.
-    unsafe {
-        if buffer == 0 {
-            return curbuf.get();
-        }
-        let rv = handle_get_buffer(buffer);
-        if rv.is_null() {
-            api_err_invalid(
-                err,
-                c"buffer id".as_ptr(),
-                ptr::null(),
-                buffer as int64_t,
-                false,
-            );
-        }
-        rv
+    if buffer == 0 {
+        return curbuf.get();
     }
+    let rv = handle_get_buffer(buffer);
+    if rv.is_null() {
+        let id = buffer as int64_t;
+        // SAFETY: `err` is the caller's out-parameter; a null value string
+        // asks for the numeric spelling.
+        unsafe { api_err_invalid(err, c"buffer id".as_ptr(), ptr::null(), id, false) };
+    }
+    rv
 }
 
 /// [`find_buffer_by_handle`] for a window.
 pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T {
-    // SAFETY: `err` is the caller's out-parameter.
-    unsafe {
-        if window == 0 {
-            return curwin.get();
-        }
-        let rv = handle_get_window(window);
-        if rv.is_null() {
-            api_err_invalid(
-                err,
-                c"window id".as_ptr(),
-                ptr::null(),
-                window as int64_t,
-                false,
-            );
-        }
-        rv
+    if window == 0 {
+        return curwin.get();
     }
+    let rv = handle_get_window(window);
+    if rv.is_null() {
+        let id = window as int64_t;
+        // SAFETY: as [`find_buffer_by_handle`].
+        unsafe { api_err_invalid(err, c"window id".as_ptr(), ptr::null(), id, false) };
+    }
+    rv
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
 pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T {
-    // SAFETY: `err` is the caller's out-parameter.
-    unsafe {
-        if tabpage == 0 {
-            return curtab.get();
-        }
-        let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
-        if rv.is_null() {
-            api_err_invalid(
-                err,
-                c"tabpage id".as_ptr(),
-                ptr::null(),
-                tabpage as int64_t,
-                false,
-            );
-        }
-        rv
+    if tabpage == 0 {
+        return curtab.get();
     }
+    let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
+    if rv.is_null() {
+        let id = tabpage as int64_t;
+        // SAFETY: as [`find_buffer_by_handle`].
+        unsafe { api_err_invalid(err, c"tabpage id".as_ptr(), ptr::null(), id, false) };
+    }
+    rv
 }
 
 // -- Handles, as the entry points take them --------------------------------
@@ -210,89 +190,100 @@ pub(crate) fn tabpage_by_handle(handle: Tabpage, err: &mut Error) -> Option<TabP
 /// Start catching what Vimscript throws, saving the state to put back into
 /// `tstate`. Pairs with [`try_leave`].
 pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
+    let saved = TryState {
+        current_exception: current_exception.get(),
+        private_msg_list: ptr::null_mut(),
+        msg_list: msg_list.get() as *const *const msglist_T,
+        got_int: got_int.get() as c_int,
+        did_throw: did_throw.get(),
+        need_rethrow: need_rethrow.get() as c_int,
+        did_emsg: did_emsg.get(),
+    };
     // SAFETY: `tstate` is the caller's, and lives until `try_leave`.
-    unsafe {
-        *tstate = TryState {
-            current_exception: current_exception.get(),
-            private_msg_list: ptr::null_mut(),
-            msg_list: msg_list.get() as *const *const msglist_T,
-            got_int: got_int.get() as c_int,
-            did_throw: did_throw.get(),
-            need_rethrow: need_rethrow.get() as c_int,
-            did_emsg: did_emsg.get(),
-        };
-        // Errors go to the caller's own list from here on, so that an
-        // `:echoerr` inside the call does not reach an enclosing `:try`.
-        msg_list.set(&raw mut (*tstate).private_msg_list);
-        current_exception.set(ptr::null_mut());
-        got_int.set(false);
-        did_throw.set(false);
-        need_rethrow.set(false);
-        did_emsg.set(0);
-        trylevel.set(trylevel.get() + 1);
-    }
+    unsafe { *tstate = saved };
+    // Errors go to the caller's own list from here on, so that an
+    // `:echoerr` inside the call does not reach an enclosing `:try`.
+    // SAFETY: as above -- the field's address is the caller's slot plus a
+    // constant, live for as long as the state is.
+    msg_list.set(unsafe { &raw mut (*tstate).private_msg_list });
+    current_exception.set(ptr::null_mut());
+    got_int.set(false);
+    did_throw.set(false);
+    need_rethrow.set(false);
+    did_emsg.set(0);
+    trylevel.set(trylevel.get() + 1);
 }
 
 /// Stop catching, report whatever was caught through `err`, and restore what
 /// [`try_enter`] saved into `tstate`.
 pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
-    // SAFETY: `tstate` is what the matching `try_enter` filled in.
-    unsafe {
-        debug_assert!(trylevel.get() > 0);
-        trylevel.set(trylevel.get() - 1);
-        did_emsg.set(0);
-        force_abort.set(false);
+    debug_assert!(trylevel.get() > 0);
+    trylevel.set(trylevel.get() - 1);
+    did_emsg.set(0);
+    force_abort.set(false);
 
-        if got_int.get() {
-            // An interrupt outranks anything that was thrown along the way.
-            if did_throw.get() {
-                discard_current_exception();
-            }
-            api_set_error(err, kErrorTypeException, c"Keyboard interrupt".as_ptr());
-            got_int.set(false);
-        } else if !msg_list.get().is_null() && !(*msg_list.get()).is_null() {
-            let mut should_free = false;
-            let msg = get_exception_string(
-                *msg_list.get() as *mut c_void,
-                ET_ERROR,
-                ptr::null_mut(),
-                &raw mut should_free,
-            );
-            api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg);
-            free_global_msglist();
-            if should_free {
-                xfree(msg.cast());
-            }
-        } else if did_throw.get() || need_rethrow.get() {
-            let ex = current_exception.get();
-            if *(*ex).throw_name != NUL as c_char {
-                if (*ex).throw_lnum != 0 {
-                    let fmt = c"%s, line %d: %s".as_ptr();
-                    api_set_error(
-                        err,
-                        kErrorTypeException,
-                        fmt,
-                        (*ex).throw_name,
-                        (*ex).throw_lnum,
-                        (*ex).value,
-                    );
-                } else {
-                    let fmt = c"%s: %s".as_ptr();
-                    api_set_error(err, kErrorTypeException, fmt, (*ex).throw_name, (*ex).value);
-                }
-            } else {
-                api_set_error(err, kErrorTypeException, c"%s".as_ptr(), (*ex).value);
-            }
-            discard_current_exception();
+    let list = msg_list.get();
+    // SAFETY: `msg_list` names a live slot or is null.
+    let pending = !list.is_null() && !unsafe { *list }.is_null();
+
+    if got_int.get() {
+        // An interrupt outranks anything that was thrown along the way.
+        if did_throw.get() {
+            // SAFETY: `did_throw` says there is a current exception.
+            unsafe { discard_current_exception() };
         }
-
-        msg_list.set((*tstate).msg_list as *mut *mut msglist_T);
-        current_exception.set((*tstate).current_exception);
-        got_int.set((*tstate).got_int != 0);
-        did_throw.set((*tstate).did_throw);
-        need_rethrow.set((*tstate).need_rethrow != 0);
-        did_emsg.set((*tstate).did_emsg);
+        let msg = c"Keyboard interrupt".as_ptr();
+        // SAFETY: `err` is the caller's slot.
+        unsafe { api_set_error(err, kErrorTypeException, msg) };
+        got_int.set(false);
+    } else if pending {
+        let mut should_free = false;
+        // SAFETY: the slot holds a live message list, and `should_free` is
+        // this frame's.
+        let msg = unsafe {
+            let head = (*list).cast::<c_void>();
+            get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
+        };
+        // SAFETY: `err` is the caller's slot; the format takes the one C
+        // string it is given.
+        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+        // SAFETY: the list has been rendered into `err`.
+        unsafe { free_global_msglist() };
+        if should_free {
+            // SAFETY: `msg` is the allocation `get_exception_string` made.
+            unsafe { xfree(msg.cast()) };
+        }
+    } else if did_throw.get() || need_rethrow.get() {
+        let ex = current_exception.get();
+        // SAFETY: either flag says `ex` is the live exception being unwound.
+        let (name, lnum, value) = unsafe { ((*ex).throw_name, (*ex).throw_lnum, (*ex).value) };
+        // SAFETY: `throw_name` is NUL-terminated, empty for a throw with no
+        // script to name.
+        let named = unsafe { *name } != NUL as c_char;
+        if !named {
+            // SAFETY: `err` is the caller's slot; one C string.
+            unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), value) };
+        } else if lnum != 0 {
+            let fmt = c"%s, line %d: %s".as_ptr();
+            // SAFETY: as above, with two C strings and a line number.
+            unsafe { api_set_error(err, kErrorTypeException, fmt, name, lnum, value) };
+        } else {
+            let fmt = c"%s: %s".as_ptr();
+            // SAFETY: as above, with two C strings.
+            unsafe { api_set_error(err, kErrorTypeException, fmt, name, value) };
+        }
+        // SAFETY: the exception has been rendered into `err`.
+        unsafe { discard_current_exception() };
     }
+
+    // SAFETY: `tstate` is what the matching `try_enter` filled in.
+    let saved = unsafe { *tstate };
+    msg_list.set(saved.msg_list as *mut *mut msglist_T);
+    current_exception.set(saved.current_exception);
+    got_int.set(saved.got_int != 0);
+    did_throw.set(saved.did_throw);
+    need_rethrow.set(saved.need_rethrow != 0);
+    did_emsg.set(saved.did_emsg);
 }
 
 /// Run `body` with whatever it throws caught, and report that through `err`:
@@ -347,14 +338,14 @@ pub(crate) unsafe extern "C" fn api_set_error(
 /// Free `err`'s message and mark it as carrying no error.
 pub(crate) unsafe fn api_clear_error(value: *mut Error) {
     // SAFETY: `value` is the caller's error slot.
-    unsafe {
-        if (*value).type_0 == kErrorTypeNone {
-            return;
-        }
-        xfree((*value).msg.cast());
-        (*value).msg = ptr::null_mut();
-        (*value).type_0 = kErrorTypeNone;
+    let slot = unsafe { &mut *value };
+    if slot.type_0 == kErrorTypeNone {
+        return;
     }
+    // SAFETY: a set error owns its message.
+    unsafe { xfree(slot.msg.cast()) };
+    slot.msg = ptr::null_mut();
+    slot.type_0 = kErrorTypeNone;
 }
 
 /// A fresh, unset error, to lend to a helper that still reports through an
@@ -409,48 +400,52 @@ pub(crate) unsafe fn set_mark(
     col: Integer,
     err: *mut Error,
 ) -> bool {
-    // SAFETY: `name` names one character, and `buf`/`err` are the caller's.
-    unsafe {
-        let buf = if buf.is_null() { curbuf.get() } else { buf };
-        let mut col = col;
-        let mut deleting = false;
-        if line == 0 {
-            col = 0;
-            deleting = true;
-        } else {
-            if col > MAXCOL as Integer {
-                api_err_invalid(err, c"column".as_ptr(), c"out of range".as_ptr(), 0, false);
-                return false;
-            }
-            if line < 1 || line > (*buf).b_ml.ml_line_count as Integer {
-                api_err_invalid(err, c"line".as_ptr(), c"out of range".as_ptr(), 0, false);
-                return false;
-            }
+    let buf = if buf.is_null() { curbuf.get() } else { buf };
+    let mut col = col;
+    let mut deleting = false;
+    let out_of_range = c"out of range".as_ptr();
+    if line == 0 {
+        col = 0;
+        deleting = true;
+    } else {
+        if col > MAXCOL as Integer {
+            // SAFETY: `err` is the caller's slot and both strings are static.
+            unsafe { api_err_invalid(err, c"column".as_ptr(), out_of_range, 0, false) };
+            return false;
         }
-        debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
-
-        let mut pos = pos_T {
-            lnum: line as linenr_T,
-            col: col as colnr_T,
-            coladd: 0,
-        };
-        let mark = *name.data() as c_int;
-        let res = setmark_pos(
-            mark,
-            &raw mut pos,
-            (*buf).handle,
-            ptr::null_mut::<fmarkv_T>(),
-        ) != 0;
-        if !res {
-            let fmt = if deleting {
-                c"Failed to delete named mark: %c".as_ptr()
-            } else {
-                c"Failed to set named mark: %c".as_ptr()
-            };
-            api_set_error(err, kErrorTypeException, fmt, mark);
+        // SAFETY: `buf` is the caller's buffer, or the current one.
+        let line_count = unsafe { (*buf).b_ml.ml_line_count } as Integer;
+        if line < 1 || line > line_count {
+            // SAFETY: as above.
+            unsafe { api_err_invalid(err, c"line".as_ptr(), out_of_range, 0, false) };
+            return false;
         }
-        res
     }
+    debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
+
+    let mut pos = pos_T {
+        lnum: line as linenr_T,
+        col: col as colnr_T,
+        coladd: 0,
+    };
+    // SAFETY: `name` names one character, per this function's contract.
+    let mark = unsafe { *name.data() } as c_int;
+    // SAFETY: `buf` is live.
+    let handle = unsafe { (*buf).handle };
+    let (at, no_view) = (&raw mut pos, ptr::null_mut::<fmarkv_T>());
+    // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
+    let res = unsafe { setmark_pos(mark, at, handle, no_view) } != 0;
+    if !res {
+        let fmt = if deleting {
+            c"Failed to delete named mark: %c".as_ptr()
+        } else {
+            c"Failed to set named mark: %c".as_ptr()
+        };
+        // SAFETY: `err` is the caller's slot; the format takes the one
+        // character it is given.
+        unsafe { api_set_error(err, kErrorTypeException, fmt, mark) };
+    }
+    res
 }
 
 /// The highlight group a status line, window bar or status column defaults
