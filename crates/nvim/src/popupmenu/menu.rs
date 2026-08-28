@@ -231,14 +231,12 @@ pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
 
     // SAFETY: `array` outlives `pum_array`, which the `pum_undisplay` at the
     // end clears; the placement calls read the editor's own state.
-    unsafe {
-        pum_array.set(array.as_mut_ptr());
-        pum_compute_size();
-        pum_scrollbar.set(0);
-        pum_height.set(pum_size.get());
-        pum_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
-        pum_position_at_mouse(PUM_POPUP_MIN_WIDTH);
-    }
+    pum_array.set(array.as_mut_ptr());
+    unsafe { pum_compute_size() };
+    pum_scrollbar.set(0);
+    pum_height.set(pum_size.get());
+    pum_rl.set(unsafe { Win::current() }.w_onebuf_opt.wo_rl != 0);
+    unsafe { pum_position_at_mouse(PUM_POPUP_MIN_WIDTH) };
 
     pum_selected.set(-1);
     pum_first.set(0);

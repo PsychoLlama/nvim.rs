@@ -63,65 +63,66 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T, c_int) {
     // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
     // `replacement` before it is freed.
-    unsafe {
-        let buf = (*win).w_buffer;
-        (*buf).b_p_ma = 1;
+    let buf = unsafe { (*win).w_buffer };
+    unsafe { (*buf).b_p_ma = 1 };
 
-        let mut lines: Vec<Object> = Vec::new();
-        let mut max_width = 0;
-        let mut curr = info;
-        while !curr.is_null() {
-            let next = strchr(curr, '\n' as c_int);
-            if !next.is_null() {
-                // Terminate the line for `cstr_to_string` and the width
-                // measurement, then put the newline back.
-                *next = 0;
-            }
-            // An empty line is only dropped when it is the last one.
-            if *curr == 0 && next.is_null() {
-                break;
-            }
-
-            // 'wrap' off while measuring: 'showbreak'/'linebreak' would
-            // inflate the answer in a narrow window.
-            let save_wrap = (*win).w_onebuf_opt.wo_wrap;
-            (*win).w_onebuf_opt.wo_wrap = 0;
-            max_width = max_width.max(win_linetabsize(Win::new(win), 0, curr, MAXCOL as c_int));
-            (*win).w_onebuf_opt.wo_wrap = save_wrap;
-
-            lines.push(Object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: cstr_to_string(curr),
-                },
-            });
-
-            if !next.is_null() {
-                *next = b'\n' as c_char;
-            }
-            curr = if next.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                next.offset(1)
-            };
+    let mut lines: Vec<Object> = Vec::new();
+    let mut max_width = 0;
+    let mut curr = info;
+    while !curr.is_null() {
+        let next = unsafe { strchr(curr, '\n' as c_int) };
+        if !next.is_null() {
+            // Terminate the line for `cstr_to_string` and the width
+            // measurement, then put the newline back.
+            unsafe { *next = 0 };
+        }
+        // An empty line is only dropped when it is the last one.
+        if unsafe { *curr } == 0 && next.is_null() {
+            break;
         }
 
-        // Hand the lines over as an api `Array`, which `api_free_array` frees
-        // with `xfree` — so the buffer has to come from `xmalloc`, not `Vec`.
-        let mut replacement = ARRAY_DICT_INIT;
-        if !lines.is_empty() {
-            replacement.items =
-                xmalloc(size_of::<Object>().wrapping_mul(lines.len())).cast::<Object>();
-            ::core::ptr::copy_nonoverlapping(lines.as_ptr(), replacement.items, lines.len());
-            replacement.size = lines.len() as size_t;
-            replacement.capacity = replacement.size;
-        }
-        let lnum = lines.len() as linenr_T;
+        // 'wrap' off while measuring: 'showbreak'/'linebreak' would
+        // inflate the answer in a narrow window.
+        let save_wrap = unsafe { (*win).w_onebuf_opt.wo_wrap };
+        unsafe { (*win).w_onebuf_opt.wo_wrap = 0 };
+        max_width =
+            max_width.max(unsafe { win_linetabsize(Win::new(win), 0, curr, MAXCOL as c_int) });
+        unsafe { (*win).w_onebuf_opt.wo_wrap = save_wrap };
 
-        let mut arena = ARENA_EMPTY;
-        // Setting the lines is the editor's own doing, not a plugin's.
-        let unlocked = Allow::text_changes();
-        let set = nvim_buf_set_lines(
+        lines.push(Object {
+            type_0: kObjectTypeString,
+            data: object_data {
+                string: unsafe { cstr_to_string(curr) },
+            },
+        });
+
+        if !next.is_null() {
+            unsafe { *next = b'\n' as c_char };
+        }
+        curr = if next.is_null() {
+            ::core::ptr::null_mut()
+        } else {
+            unsafe { next.offset(1) }
+        };
+    }
+
+    // Hand the lines over as an api `Array`, which `api_free_array` frees
+    // with `xfree` — so the buffer has to come from `xmalloc`, not `Vec`.
+    let mut replacement = ARRAY_DICT_INIT;
+    if !lines.is_empty() {
+        replacement.items =
+            unsafe { xmalloc(size_of::<Object>().wrapping_mul(lines.len())) }.cast::<Object>();
+        unsafe { ::core::ptr::copy_nonoverlapping(lines.as_ptr(), replacement.items, lines.len()) };
+        replacement.size = lines.len() as size_t;
+        replacement.capacity = replacement.size;
+    }
+    let lnum = lines.len() as linenr_T;
+
+    let mut arena = ARENA_EMPTY;
+    // Setting the lines is the editor's own doing, not a plugin's.
+    let unlocked = Allow::text_changes();
+    let set = unsafe {
+        nvim_buf_set_lines(
             0,
             (*buf).handle as Buffer,
             0,
@@ -129,18 +130,18 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
             false,
             replacement,
             &raw mut arena,
-        );
-        drop(unlocked);
-        if let Err(mut err) = set {
-            emsg(err.msg);
-            api_clear_error(&raw mut err);
-        }
-        arena_mem_free(arena_finish(&raw mut arena));
-        api_free_array(replacement);
-        (*buf).b_p_ma = 0;
-
-        (lnum, max_width)
+        )
+    };
+    drop(unlocked);
+    if let Err(mut err) = set {
+        unsafe { emsg(err.msg) };
+        unsafe { api_clear_error(&raw mut err) };
     }
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    unsafe { api_free_array(replacement) };
+    unsafe { (*buf).b_p_ma = 0 };
+
+    (lnum, max_width)
 }
 
 /// Place the floating info window beside the menu.
@@ -153,47 +154,49 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
 /// `wp` must be a live float and the menu's placement settled.
 unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
     // SAFETY: `wp` is live and `win_config_float` takes the config by value.
-    unsafe {
-        let border_width = pum_border_width();
-        let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
-        // TODO(glepnir): support config align border by using completepopup
-        // align menu
-        let right_extra = Columns.get() - col;
-        let left_extra = pum_col.get() - 2;
+    let border_width = unsafe { pum_border_width() };
+    let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
+    // TODO(glepnir): support config align border by using completepopup
+    // align menu
+    let right_extra = Columns.get() - col;
+    let left_extra = pum_col.get() - 2;
 
-        // TODO(glepnir): Replace the hardcoded value (10) with values from the
-        // 'completepopup' width/height options.
-        let max_extra = right_extra.max(left_extra);
-        if max_extra < 10 {
-            (*wp).w_config.hide = true;
-            return false;
-        }
+    // TODO(glepnir): Replace the hardcoded value (10) with values from the
+    // 'completepopup' width/height options.
+    let max_extra = right_extra.max(left_extra);
+    if max_extra < 10 {
+        unsafe { (*wp).w_config.hide = true };
+        return false;
+    }
 
-        if right_extra > width {
-            (*wp).w_config.width = width;
-            (*wp).w_config.col = f64::from(col - 1);
-        } else if left_extra > width {
-            (*wp).w_config.width = width;
-            (*wp).w_config.col = f64::from(pum_col.get() - width - 1);
-        } else {
-            // Neither side fits the text; take the bigger one.
-            (*wp).w_config.width = max_extra;
+    if right_extra > width {
+        unsafe { (*wp).w_config.width = width };
+        unsafe { (*wp).w_config.col = f64::from(col - 1) };
+    } else if left_extra > width {
+        unsafe { (*wp).w_config.width = width };
+        unsafe { (*wp).w_config.col = f64::from(pum_col.get() - width - 1) };
+    } else {
+        // Neither side fits the text; take the bigger one.
+        unsafe { (*wp).w_config.width = max_extra };
+        unsafe {
             (*wp).w_config.col = f64::from(if right_extra > left_extra {
                 col - 1
             } else {
                 pum_col.get() - max_extra - 1
-            });
-        }
-
-        (*wp).w_config.anchor = 0; // NW: align its top with the menu's top
-        let count = (*(*wp).w_buffer).b_ml.ml_line_count;
-        (*wp).w_view_width = (*wp).w_config.width;
-        (*wp).w_config.height = plines_m_win(Win::new(wp), (*wp).w_topline, count, Rows.get());
-        (*wp).w_config.row = f64::from(pum_row.get());
-        (*wp).w_config.hide = false;
-        win_config_float(Win::new(wp), (*wp).w_config.clone());
-        true
+            })
+        };
     }
+
+    unsafe { (*wp).w_config.anchor = 0 }; // NW: align its top with the menu's top
+    let count = unsafe { (*(*wp).w_buffer).b_ml.ml_line_count };
+    unsafe { (*wp).w_view_width = (*wp).w_config.width };
+    unsafe {
+        (*wp).w_config.height = plines_m_win(Win::new(wp), (*wp).w_topline, count, Rows.get())
+    };
+    unsafe { (*wp).w_config.row = f64::from(pum_row.get()) };
+    unsafe { (*wp).w_config.hide = false };
+    win_config_float(unsafe { Win::new(wp) }, unsafe { (*wp).w_config.clone() });
+    true
 }
 
 /// Set the info text of the current item, for `nvim__complete_set`.
@@ -205,37 +208,35 @@ unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
 /// `info` must be a writable NUL-terminated string owned by the caller.
 pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
     // SAFETY: the preview helpers answer live windows or null.
-    unsafe {
-        if !pum_is_visible.get() || !compl_match_curr_select(selected) {
-            return ::core::ptr::null_mut();
-        }
-        block_autocmds();
-        RedrawingDisabled.set(RedrawingDisabled.get() + 1);
-        no_u_sync.set(no_u_sync.get() + 1);
-
-        let mut wp = if let Some(wp) = win_float_find_preview() {
-            wp
-        } else if let Some(mut fresh) = win_float_create_preview(false, true) {
-            fresh.w_topline = 1;
-            fresh.w_onebuf_opt.wo_wfb = 1;
-            fresh
-        } else {
-            // NOTE: leaves autocmds blocked and the two counters raised, as
-            // upstream does.
-            return ::core::ptr::null_mut();
-        };
-
-        let (_lnum, max_info_width) = pum_preview_set_text(wp.raw(), info);
-        no_u_sync.set(no_u_sync.get() - 1);
-        RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-        redraw_later(wp.raw(), UPD_NOT_VALID);
-
-        // `unblock_autocmds` has to run whichever way the placement went, so
-        // the answer is settled before it rather than after.
-        let placed = pum_adjust_info_position(wp.raw(), max_info_width).then(|| wp.raw());
-        unblock_autocmds();
-        placed.unwrap_or(::core::ptr::null_mut())
+    if !pum_is_visible.get() || !unsafe { compl_match_curr_select(selected) } {
+        return ::core::ptr::null_mut();
     }
+    unsafe { block_autocmds() };
+    RedrawingDisabled.set(RedrawingDisabled.get() + 1);
+    no_u_sync.set(no_u_sync.get() + 1);
+
+    let mut wp = if let Some(wp) = win_float_find_preview() {
+        wp
+    } else if let Some(mut fresh) = win_float_create_preview(false, true) {
+        fresh.w_topline = 1;
+        fresh.w_onebuf_opt.wo_wfb = 1;
+        fresh
+    } else {
+        // NOTE: leaves autocmds blocked and the two counters raised, as
+        // upstream does.
+        return ::core::ptr::null_mut();
+    };
+
+    let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp.raw(), info) };
+    no_u_sync.set(no_u_sync.get() - 1);
+    RedrawingDisabled.set(RedrawingDisabled.get() - 1);
+    unsafe { redraw_later(wp.raw(), UPD_NOT_VALID) };
+
+    // `unblock_autocmds` has to run whichever way the placement went, so
+    // the answer is settled before it rather than after.
+    let placed = unsafe { pum_adjust_info_position(wp.raw(), max_info_width) }.then(|| wp.raw());
+    unsafe { unblock_autocmds() };
+    placed.unwrap_or(::core::ptr::null_mut())
 }
 
 /// Scroll the menu so that `pum_selected` is visible, with context around it.
@@ -305,51 +306,53 @@ unsafe fn pum_show_info(
 ) -> bool {
     // SAFETY: every window pointer below is re-checked with `win_valid`
     // after anything that can run autocommands.
-    unsafe {
-        let mut resized = false;
-        let curwin_save = curwin.get();
-        let curtab_save = curtab.get();
+    let mut resized = false;
+    let curwin_save = curwin.get();
+    let curtab_save = curtab.get();
 
-        if use_float {
-            block_autocmds();
+    if use_float {
+        unsafe { block_autocmds() };
+    }
+
+    // A preview split is 3 lines by default, less if 'previewheight' is.
+    g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
+    if p_pvh.get() > 0 && p_pvh.get() < OptInt::from(g_do_tagpreview.get()) {
+        g_do_tagpreview.set(p_pvh.get() as c_int);
+    }
+    let redraw_off = Suppress::redraw();
+    // An autocommand that syncs undo here does weird things to the tree.
+    no_u_sync.set(no_u_sync.get() + 1);
+
+    if !use_float {
+        resized = unsafe { prepare_tagpreview(false) };
+    } else {
+        if let Some(wp) = win_float_find_preview() {
+            unsafe { win_enter(wp.raw(), false) };
+        } else if win_float_create_preview(true, true).is_some() {
+            resized = true;
         }
+    }
 
-        // A preview split is 3 lines by default, less if 'previewheight' is.
-        g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
-        if p_pvh.get() > 0 && p_pvh.get() < OptInt::from(g_do_tagpreview.get()) {
-            g_do_tagpreview.set(p_pvh.get() as c_int);
-        }
-        let redraw_off = Suppress::redraw();
-        // An autocommand that syncs undo here does weird things to the tree.
-        no_u_sync.set(no_u_sync.get() + 1);
+    no_u_sync.set(no_u_sync.get() - 1);
+    drop(redraw_off);
+    g_do_tagpreview.set(0);
 
-        if !use_float {
-            resized = prepare_tagpreview(false);
+    if unsafe { (*curwin.get()).w_onebuf_opt.wo_pvw } != 0
+        || unsafe { (*curwin.get()).w_float_is_info }
+    {
+        let mut res = OK;
+        if !resized
+            && unsafe { (*curbuf.get()).b_nwindows } == 1
+            && unsafe { (*curbuf.get()).b_fname }.is_null()
+            && buf_is_nofile(current_buf())
+            && unsafe { *(*curbuf.get()).b_p_bh } == b'w' as c_char
+        {
+            // Already a "wipeout" buffer: just empty it.
+            buf_clear();
         } else {
-            if let Some(wp) = win_float_find_preview() {
-                win_enter(wp.raw(), false);
-            } else if win_float_create_preview(true, true).is_some() {
-                resized = true;
-            }
-        }
-
-        no_u_sync.set(no_u_sync.get() - 1);
-        drop(redraw_off);
-        g_do_tagpreview.set(0);
-
-        if (*curwin.get()).w_onebuf_opt.wo_pvw != 0 || (*curwin.get()).w_float_is_info {
-            let mut res = OK;
-            if !resized
-                && (*curbuf.get()).b_nwindows == 1
-                && (*curbuf.get()).b_fname.is_null()
-                && buf_is_nofile(current_buf())
-                && *(*curbuf.get()).b_p_bh == b'w' as c_char
-            {
-                // Already a "wipeout" buffer: just empty it.
-                buf_clear();
-            } else {
-                no_u_sync.set(no_u_sync.get() + 1);
-                res = do_ecmd(
+            no_u_sync.set(no_u_sync.get() + 1);
+            res = unsafe {
+                do_ecmd(
                     0,
                     ::core::ptr::null_mut(),
                     ::core::ptr::null_mut(),
@@ -357,35 +360,36 @@ unsafe fn pum_show_info(
                     ECMD_ONE as linenr_T,
                     0,
                     ::core::ptr::null_mut(),
-                );
-                no_u_sync.set(no_u_sync.get() - 1);
-
-                if res == OK {
-                    // A new, empty, throwaway buffer.
-                    for (option, value) in [
-                        (kOptSwapfile, boolean_optval(Some(false))),
-                        (kOptBuflisted, boolean_optval(Some(false))),
-                        (kOptBuftype, static_optval(c"nofile")),
-                        (kOptBufhidden, static_optval(c"wipe")),
-                        (kOptDiff, boolean_optval(Some(false))),
-                    ] {
-                        set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
-                    }
-                }
-            }
+                )
+            };
+            no_u_sync.set(no_u_sync.get() - 1);
 
             if res == OK {
-                resized =
-                    pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save);
-                resized = pum_restore_window(curwin_save, curtab_save, resized);
+                // A new, empty, throwaway buffer.
+                for (option, value) in [
+                    (kOptSwapfile, boolean_optval(Some(false))),
+                    (kOptBuflisted, boolean_optval(Some(false))),
+                    (kOptBuftype, static_optval(c"nofile")),
+                    (kOptBufhidden, static_optval(c"wipe")),
+                    (kOptDiff, boolean_optval(Some(false))),
+                ] {
+                    set_option_value_give_err(option, value, OptionSetFlags::LOCAL);
+                }
             }
         }
 
-        if use_float {
-            unblock_autocmds();
+        if res == OK {
+            resized = unsafe {
+                pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save)
+            };
+            resized = unsafe { pum_restore_window(curwin_save, curtab_save, resized) };
         }
-        resized
     }
+
+    if use_float {
+        unsafe { unblock_autocmds() };
+    }
+    resized
 }
 
 /// Put the info text in the window `pum_show_info` just entered and size it.
@@ -402,36 +406,34 @@ unsafe fn pum_fill_info(
 ) -> bool {
     // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
-    unsafe {
-        let (lnum, max_info_width) = pum_preview_set_text(curwin.get(), info);
+    let (lnum, max_info_width) = unsafe { pum_preview_set_text(curwin.get(), info) };
 
-        // Grow a preview split to fit the text, up to 'previewheight'.
-        if repeat == 0 && !use_float {
-            let lnum = lnum.min(p_pvh.get() as linenr_T);
-            if linenr_T::from((*curwin.get()).w_height) < lnum {
-                win_setheight(lnum as c_int);
-                resized = true;
-            }
+    // Grow a preview split to fit the text, up to 'previewheight'.
+    if repeat == 0 && !use_float {
+        let lnum = lnum.min(p_pvh.get() as linenr_T);
+        if linenr_T::from(unsafe { (*curwin.get()).w_height }) < lnum {
+            win_setheight(lnum as c_int);
+            resized = true;
         }
-
-        (*curbuf.get()).b_changed = 0;
-        (*curbuf.get()).b_p_ma = 0;
-        if pum_selected.get() != prev_selected {
-            (*curwin.get()).w_topline = 1;
-        } else if (*curwin.get()).w_topline > (*curbuf.get()).b_ml.ml_line_count {
-            (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count;
-        }
-        (*curwin.get()).w_cursor.lnum = 1;
-        (*curwin.get()).w_cursor.col = 0;
-
-        if use_float
-            && !pum_adjust_info_position(curwin.get(), max_info_width)
-            && win_valid(curwin_save)
-        {
-            win_enter(curwin_save, false);
-        }
-        resized
     }
+
+    unsafe { (*curbuf.get()).b_changed = 0 };
+    unsafe { (*curbuf.get()).b_p_ma = 0 };
+    if pum_selected.get() != prev_selected {
+        unsafe { (*curwin.get()).w_topline = 1 };
+    } else if unsafe { (*curwin.get()).w_topline } > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+        unsafe { (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count };
+    }
+    unsafe { (*curwin.get()).w_cursor.lnum = 1 };
+    unsafe { (*curwin.get()).w_cursor.col = 0 };
+
+    if use_float
+        && !unsafe { pum_adjust_info_position(curwin.get(), max_info_width) }
+        && win_valid(curwin_save)
+    {
+        unsafe { win_enter(curwin_save, false) };
+    }
+    resized
 }
 
 /// Go back to the window the completion started in, redrawing on the way.
@@ -447,54 +449,52 @@ unsafe fn pum_restore_window(
     resized: bool,
 ) -> bool {
     // SAFETY: both pointers are validated before they are entered.
-    unsafe {
-        let left_window = curwin.get() != curwin_save && win_valid(curwin_save);
-        let left_tab = curtab.get() != curtab_save && valid_tabpage(curtab_save);
-        if !left_window && !left_tab {
-            return resized;
-        }
-        if left_tab {
-            goto_tabpage_tp(curtab_save, false, false);
-        }
-
-        // On the first completion, with the preview window not resized, skip
-        // its status line redraw.
-        if ins_compl_active() && !resized {
-            (*curwin.get()).w_redr_status = false;
-        }
-
-        validate_cursor(Win::current());
-        redraw_later(curwin.get(), UPD_SOME_VALID);
-
-        // A resized preview window needs the buffer view updated, which only
-        // happens in the window itself.
-        if resized && win_valid(curwin_save) {
-            no_u_sync.set(no_u_sync.get() + 1);
-            win_enter(curwin_save, true);
-            no_u_sync.set(no_u_sync.get() - 1);
-            update_topline(Win::current());
-        }
-
-        // Draw the screen before the menu goes back on top of it, with the
-        // status lines enabled again.
-        // TODO(bfredl): can simplify, get rid of the flag munging? or at
-        // least eliminate the extra redraw before win_enter()?
-        pum_is_visible.set(false);
-        update_screen();
-        pum_is_visible.set(true);
-
-        if !resized && win_valid(curwin_save) {
-            no_u_sync.set(no_u_sync.get() + 1);
-            win_enter(curwin_save, true);
-            no_u_sync.set(no_u_sync.get() - 1);
-        }
-
-        // Autocommands may have changed it again.
-        pum_is_visible.set(false);
-        update_screen();
-        pum_is_visible.set(true);
-        resized
+    let left_window = curwin.get() != curwin_save && win_valid(curwin_save);
+    let left_tab = curtab.get() != curtab_save && valid_tabpage(curtab_save);
+    if !left_window && !left_tab {
+        return resized;
     }
+    if left_tab {
+        unsafe { goto_tabpage_tp(curtab_save, false, false) };
+    }
+
+    // On the first completion, with the preview window not resized, skip
+    // its status line redraw.
+    if ins_compl_active() && !resized {
+        unsafe { (*curwin.get()).w_redr_status = false };
+    }
+
+    validate_cursor(unsafe { Win::current() });
+    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+
+    // A resized preview window needs the buffer view updated, which only
+    // happens in the window itself.
+    if resized && win_valid(curwin_save) {
+        no_u_sync.set(no_u_sync.get() + 1);
+        unsafe { win_enter(curwin_save, true) };
+        no_u_sync.set(no_u_sync.get() - 1);
+        update_topline(unsafe { Win::current() });
+    }
+
+    // Draw the screen before the menu goes back on top of it, with the
+    // status lines enabled again.
+    // TODO(bfredl): can simplify, get rid of the flag munging? or at
+    // least eliminate the extra redraw before win_enter()?
+    pum_is_visible.set(false);
+    unsafe { update_screen() };
+    pum_is_visible.set(true);
+
+    if !resized && win_valid(curwin_save) {
+        no_u_sync.set(no_u_sync.get() + 1);
+        unsafe { win_enter(curwin_save, true) };
+        no_u_sync.set(no_u_sync.get() - 1);
+    }
+
+    // Autocommands may have changed it again.
+    pum_is_visible.set(false);
+    unsafe { update_screen() };
+    pum_is_visible.set(true);
+    resized
 }
 
 /// Select item `n`, scrolling the menu and updating the info window.
@@ -511,32 +511,30 @@ unsafe fn pum_restore_window(
 pub(crate) unsafe fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     // SAFETY: the array outlives the menu; every window pointer is
     // re-validated after anything that can run autocommands.
-    unsafe {
-        let prev_selected = pum_selected.replace(n);
-        let cot_flags = get_cot_flags();
-        let use_float = cot_flags & kOptCotFlagPopup != 0;
-        let info = pum_selected_info();
+    let prev_selected = pum_selected.replace(n);
+    let cot_flags = unsafe { get_cot_flags() };
+    let use_float = cot_flags & kOptCotFlagPopup != 0;
+    let info = unsafe { pum_selected_info() };
 
-        // Back to no selection, or to one with nothing to show: hide the
-        // float rather than closing it, so the next item can reuse it.
-        if use_float
-            && info.is_none()
-            && let Some(mut wp) = win_float_find_preview()
-        {
-            wp.w_config.hide = true;
-            win_config_float(wp, wp.w_config.clone());
-        }
+    // Back to no selection, or to one with nothing to show: hide the
+    // float rather than closing it, so the next item can reuse it.
+    if use_float
+        && info.is_none()
+        && let Some(mut wp) = win_float_find_preview()
+    {
+        wp.w_config.hide = true;
+        win_config_float(wp, wp.w_config.clone());
+    }
 
-        if pum_selected.get() < 0 || pum_selected.get() >= pum_size.get() {
-            return false;
-        }
-        pum_scroll_to_selected();
+    if pum_selected.get() < 0 || pum_selected.get() >= pum_size.get() {
+        return false;
+    }
+    pum_scroll_to_selected();
 
-        match info {
-            Some(info) if wants_info_window(cot_flags, repeat) => {
-                pum_show_info(info, repeat, use_float, prev_selected)
-            }
-            _ => false,
-        }
+    match info {
+        Some(info) if wants_info_window(cot_flags, repeat) => unsafe {
+            pum_show_info(info, repeat, use_float, prev_selected)
+        },
+        _ => false,
     }
 }

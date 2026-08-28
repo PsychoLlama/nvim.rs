@@ -198,16 +198,14 @@ unsafe fn pum_items() -> &'static [pumitem_T] {
 unsafe fn pum_border_width() -> c_int {
     // SAFETY: `p_pumborder` and the option's value table are editor-owned
     // NUL-terminated strings.
-    unsafe {
-        let border = p_pumborder.get();
-        if *border == 0 || strequal(border, BORDER_NONE.as_ptr()) {
-            return 0;
-        }
-        if strequal(border, BORDER_SHADOW.as_ptr()) {
-            1
-        } else {
-            2
-        }
+    let border = p_pumborder.get();
+    if unsafe { *border } == 0 || unsafe { strequal(border, BORDER_NONE.as_ptr()) } {
+        return 0;
+    }
+    if unsafe { strequal(border, BORDER_SHADOW.as_ptr()) } {
+        1
+    } else {
+        2
     }
 }
 
@@ -234,92 +232,90 @@ struct PumAnchor {
 /// `curwin` must be live and the cursor column validated.
 unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
-    unsafe {
-        let win = curwin.get();
-        let cmdline = State.get() & MODE_CMDLINE != 0;
-        let target_win = if cmdline { cmdline_win.get() } else { win };
-        let mut above_row = 0;
-        let mut below_row = if cmdline {
+    let win = curwin.get();
+    let cmdline = State.get() & MODE_CMDLINE != 0;
+    let target_win = if cmdline { cmdline_win.get() } else { win };
+    let mut above_row = 0;
+    let mut below_row = if cmdline {
+        cmdline_row.get()
+    } else {
+        cmdline_row
+            .get()
+            .max(unsafe { (*win).w_winrow } + unsafe { (*win).w_view_height })
+    };
+
+    pum_win_row_offset.set(0);
+    pum_win_col_offset.set(0);
+
+    let (mut win_row, mut cursor_col);
+    if cmdline {
+        // wildoptions=pum
+        let cw = cmdline_win.get();
+        win_row = if !cw.is_null() {
+            unsafe { (*cw).w_wrow }
+        } else if ui_has(kUICmdline) {
+            0
+        } else {
             cmdline_row.get()
-        } else {
-            cmdline_row
-                .get()
-                .max((*win).w_winrow + (*win).w_view_height)
         };
-
-        pum_win_row_offset.set(0);
-        pum_win_col_offset.set(0);
-
-        let (mut win_row, mut cursor_col);
-        if cmdline {
-            // wildoptions=pum
-            let cw = cmdline_win.get();
-            win_row = if !cw.is_null() {
-                (*cw).w_wrow
-            } else if ui_has(kUICmdline) {
-                0
-            } else {
-                cmdline_row.get()
-            };
-            cursor_col = if cw.is_null() {
-                0
-            } else {
-                (*cw).w_config._cmdline_offset
-            } + cmd_startcol;
-            cursor_col %= if cw.is_null() {
-                Columns.get()
-            } else {
-                (*cw).w_view_width
-            };
-            pum_anchor_grid.set(if ui_has(kUICmdline) {
-                -1
-            } else {
-                DEFAULT_GRID_HANDLE
-            });
+        cursor_col = if cw.is_null() {
+            0
         } else {
-            // The start of the completed word.
-            win_row = (*win).w_wrow;
-            cursor_col = if pum_rl.get() {
-                (*win).w_view_width - (*win).w_wcol - 1
+            unsafe { (*cw).w_config._cmdline_offset }
+        } + cmd_startcol;
+        cursor_col %= if cw.is_null() {
+            Columns.get()
+        } else {
+            unsafe { (*cw).w_view_width }
+        };
+        pum_anchor_grid.set(if ui_has(kUICmdline) {
+            -1
+        } else {
+            DEFAULT_GRID_HANDLE
+        });
+    } else {
+        // The start of the completed word.
+        win_row = unsafe { (*win).w_wrow };
+        cursor_col = if pum_rl.get() {
+            unsafe { (*win).w_view_width - (*win).w_wcol - 1 }
+        } else {
+            unsafe { (*win).w_wcol }
+        };
+    }
+
+    if !target_win.is_null() {
+        pum_anchor_grid.set(unsafe { (*(*target_win).w_grid.target).handle } as c_int);
+        win_row += unsafe { (*target_win).w_grid.row_offset };
+        cursor_col += unsafe { (*target_win).w_grid.col_offset };
+        if unsafe { (*target_win).w_grid.target } != default_grid_ref().raw() {
+            win_row += unsafe { (*target_win).w_winrow };
+            cursor_col += unsafe { (*target_win).w_wincol };
+            if ui_has(kUIMultigrid) {
+                pum_win_row_offset.set(unsafe { (*target_win).w_winrow });
+                pum_win_col_offset.set(unsafe { (*target_win).w_wincol });
             } else {
-                (*win).w_wcol
-            };
-        }
-
-        if !target_win.is_null() {
-            pum_anchor_grid.set((*(*target_win).w_grid.target).handle as c_int);
-            win_row += (*target_win).w_grid.row_offset;
-            cursor_col += (*target_win).w_grid.col_offset;
-            if (*target_win).w_grid.target != default_grid_ref().raw() {
-                win_row += (*target_win).w_winrow;
-                cursor_col += (*target_win).w_wincol;
-                if ui_has(kUIMultigrid) {
-                    pum_win_row_offset.set((*target_win).w_winrow);
-                    pum_win_col_offset.set((*target_win).w_wincol);
-                } else {
-                    // ext_popupmenu always anchors to the default grid when
-                    // multigrid is off.
-                    pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
-                }
+                // ext_popupmenu always anchors to the default grid when
+                // multigrid is off.
+                pum_anchor_grid.set(DEFAULT_GRID_HANDLE);
             }
         }
+    }
 
-        // A preview window takes its space away from the menu.
-        if let Some(pvwin) = windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
-            if pvwin.w_winrow < (*win).w_winrow {
-                above_row = pvwin.w_winrow + pvwin.w_height;
-            } else if pvwin.w_winrow > (*win).w_winrow + (*win).w_height {
-                below_row = pvwin.w_winrow;
-            }
+    // A preview window takes its space away from the menu.
+    if let Some(pvwin) = windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
+        if pvwin.w_winrow < unsafe { (*win).w_winrow } {
+            above_row = pvwin.w_winrow + pvwin.w_height;
+        } else if pvwin.w_winrow > unsafe { (*win).w_winrow } + unsafe { (*win).w_height } {
+            below_row = pvwin.w_winrow;
         }
+    }
 
-        PumAnchor {
-            target_win,
-            win_row,
-            cursor_col,
-            above_row,
-            below_row,
-        }
+    PumAnchor {
+        target_win,
+        win_row,
+        cursor_col,
+        above_row,
+        below_row,
     }
 }
 
@@ -335,36 +331,38 @@ unsafe fn pum_publish_external(
 ) {
     // SAFETY: the arena owns the arrays until `arena_mem_free`, and
     // `cstr_as_string` borrows the item strings for the duration of the call.
-    unsafe {
-        let mut arena = ARENA_EMPTY;
-        let mut arr = arena_array(&raw mut arena, size as size_t);
-        for i in 0..size as isize {
-            let src = &*array.offset(i);
-            let mut item = arena_array(&raw mut arena, 4);
-            for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
+    let mut arena = ARENA_EMPTY;
+    let mut arr = arena_array(&raw mut arena, size as size_t);
+    for i in 0..size as isize {
+        let src = unsafe { &*array.offset(i) };
+        let mut item = arena_array(&raw mut arena, 4);
+        for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
+            unsafe {
                 *item.items.add(item.size) = Object {
                     type_0: kObjectTypeString,
                     data: object_data {
                         string: cstr_as_string(text),
                     },
-                };
-                item.size += 1;
-            }
+                }
+            };
+            item.size += 1;
+        }
+        unsafe {
             *arr.items.add(arr.size) = Object {
                 type_0: kObjectTypeArray,
                 data: object_data { array: item },
-            };
-            arr.size += 1;
-        }
-        ui_call_popupmenu_show(
-            arr,
-            selected as Integer,
-            (anchor.win_row - pum_win_row_offset.get()) as Integer,
-            (anchor.cursor_col - pum_win_col_offset.get()) as Integer,
-            pum_anchor_grid.get() as Integer,
-        );
-        arena_mem_free(arena_finish(&raw mut arena));
+            }
+        };
+        arr.size += 1;
     }
+    ui_call_popupmenu_show(
+        arr,
+        selected as Integer,
+        (anchor.win_row - pum_win_row_offset.get()) as Integer,
+        (anchor.cursor_col - pum_win_col_offset.get()) as Integer,
+        pum_anchor_grid.get() as Integer,
+    );
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// Show the popup menu with `array[size]`.
@@ -386,37 +384,37 @@ pub unsafe fn pum_display(
     cmd_startcol: c_int,
 ) {
     // SAFETY: `array` is the caller's and outlives the menu.
-    unsafe {
-        if !pum_is_visible.get() {
-            // The draw mode may only change while the menu is down, which
-            // keeps everything below from having to handle both.
-            pum_external.set(
-                ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)),
-            );
-        }
-        pum_rl.set(State.get() & MODE_CMDLINE == 0 && (*curwin.get()).w_onebuf_opt.wo_rl != 0);
-        let border_width = pum_border_width();
+    if !pum_is_visible.get() {
+        // The draw mode may only change while the menu is down, which
+        // keeps everything below from having to handle both.
+        pum_external
+            .set(ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)));
+    }
+    pum_rl
+        .set(State.get() & MODE_CMDLINE == 0 && unsafe { (*curwin.get()).w_onebuf_opt.wo_rl } != 0);
+    let border_width = unsafe { pum_border_width() };
 
-        // Placing the menu can resize a window, which invalidates the
-        // placement. Redo it at most twice: with little room the size keeps
-        // changing.
-        for redo_count in 0..=2 {
-            // Mark the menu visible up front, so that `'cursorcolumn'` does
-            // not set `must_redraw` under us.
-            pum_is_visible.set(true);
-            pum_is_drawn.set(true);
-            validate_cursor_col(Win::current());
+    // Placing the menu can resize a window, which invalidates the
+    // placement. Redo it at most twice: with little room the size keeps
+    // changing.
+    for redo_count in 0..=2 {
+        // Mark the menu visible up front, so that `'cursorcolumn'` does
+        // not set `must_redraw` under us.
+        pum_is_visible.set(true);
+        pum_is_drawn.set(true);
+        validate_cursor_col(unsafe { Win::current() });
 
-            let anchor = pum_compute_anchor(cmd_startcol);
+        let anchor = unsafe { pum_compute_anchor(cmd_startcol) };
 
-            if pum_external.get() {
-                if !array_changed {
-                    ui_call_popupmenu_select(selected as Integer);
-                    return;
-                }
-                pum_publish_external(array, size, selected, &anchor);
+        if pum_external.get() {
+            if !array_changed {
+                ui_call_popupmenu_select(selected as Integer);
+                return;
             }
+            unsafe { pum_publish_external(array, size, selected, &anchor) };
+        }
 
+        unsafe {
             pum_compute_vertical_placement(
                 size,
                 anchor.target_win,
@@ -424,38 +422,40 @@ pub unsafe fn pum_display(
                 anchor.above_row,
                 anchor.below_row,
                 border_width,
-            );
+            )
+        };
 
-            // Do not display when there is only room for one line.
-            if border_width == 0 && (pum_height.get() < 1 || (pum_height.get() == 1 && size > 1)) {
-                return;
-            }
-
-            pum_array.set(array);
-            // Set before returning, so `pum_set_event_info` sees the size.
-            pum_size.set(size);
-            if pum_external.get() {
-                return;
-            }
-
-            pum_compute_size();
-            // More items than room means a scrollbar.
-            pum_scrollbar.set(c_int::from(pum_height.get() < size));
-            pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width);
-
-            if !pum_set_selected(selected, redo_count) {
-                break;
-            }
+        // Do not display when there is only room for one line.
+        if border_width == 0 && (pum_height.get() < 1 || (pum_height.get() == 1 && size > 1)) {
+            return;
         }
 
-        let mut grid = pum_grid_ref();
-        grid.zindex = if State.get() & MODE_CMDLINE != 0 {
-            kZIndexCmdlinePopupMenu as c_int
-        } else {
-            kZIndexPopupMenu as c_int
+        pum_array.set(array);
+        // Set before returning, so `pum_set_event_info` sees the size.
+        pum_size.set(size);
+        if pum_external.get() {
+            return;
+        }
+
+        unsafe { pum_compute_size() };
+        // More items than room means a scrollbar.
+        pum_scrollbar.set(c_int::from(pum_height.get() < size));
+        unsafe {
+            pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width)
         };
-        pum_redraw();
+
+        if !unsafe { pum_set_selected(selected, redo_count) } {
+            break;
+        }
     }
+
+    let mut grid = pum_grid_ref();
+    grid.zindex = if State.get() & MODE_CMDLINE != 0 {
+        kZIndexCmdlinePopupMenu as c_int
+    } else {
+        kZIndexPopupMenu as c_int
+    };
+    unsafe { pum_redraw() };
 }
 
 /// The popup menu's own grid, as a handle.
@@ -496,27 +496,25 @@ pub unsafe fn pum_undisplay(immediate: bool) {
 pub unsafe fn pum_check_clear() {
     let mut grid = pum_grid_ref();
     // SAFETY: `pum_grid` is the editor's own grid.
-    unsafe {
-        if pum_is_visible.get() || !pum_is_drawn.get() {
-            return;
+    if pum_is_visible.get() || !pum_is_drawn.get() {
+        return;
+    }
+    if pum_external.get() {
+        ui_call_popupmenu_hide();
+    } else {
+        unsafe { ui_comp_remove_grid(grid.raw()) };
+        if ui_has(kUIMultigrid) {
+            ui_call_win_close(grid.handle as Integer);
+            ui_call_grid_destroy(grid.handle as Integer);
         }
-        if pum_external.get() {
-            ui_call_popupmenu_hide();
-        } else {
-            ui_comp_remove_grid(grid.raw());
-            if ui_has(kUIMultigrid) {
-                ui_call_win_close(grid.handle as Integer);
-                ui_call_grid_destroy(grid.handle as Integer);
-            }
-            // TODO(bfredl): consider keeping float grids allocated.
-            grid.free();
-        }
-        pum_is_drawn.set(false);
-        pum_external.set(false);
+        // TODO(bfredl): consider keeping float grids allocated.
+        grid.free();
+    }
+    pum_is_drawn.set(false);
+    pum_external.set(false);
 
-        if let Some(wp) = win_float_find_preview() {
-            win_close(wp.raw(), false, false);
-        }
+    if let Some(wp) = win_float_find_preview() {
+        unsafe { win_close(wp.raw(), false, false) };
     }
 }
 
@@ -586,21 +584,21 @@ pub fn pum_get_height() -> c_int {
 /// `dict` must be a live dictionary.
 pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
     // SAFETY: `dict` is live and the keys are static strings.
+    if !pum_visible() {
+        return;
+    }
+    let (mut w, mut h, mut r, mut c) = (0.0, 0.0, 0.0, 0.0);
+    if !unsafe { ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) } {
+        w = f64::from(pum_width.get());
+        h = f64::from(pum_height.get());
+        r = f64::from(pum_row.get());
+        c = f64::from(pum_col.get());
+    }
+    for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
+        unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T) };
+    }
+    unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T) };
     unsafe {
-        if !pum_visible() {
-            return;
-        }
-        let (mut w, mut h, mut r, mut c) = (0.0, 0.0, 0.0, 0.0);
-        if !ui_pum_get_pos(&raw mut w, &raw mut h, &raw mut r, &raw mut c) {
-            w = f64::from(pum_width.get());
-            h = f64::from(pum_height.get());
-            r = f64::from(pum_row.get());
-            c = f64::from(pum_col.get());
-        }
-        for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
-            tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T);
-        }
-        tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T);
         tv_dict_add_bool(
             dict,
             c"scrollbar".as_ptr(),
@@ -610,8 +608,8 @@ pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
             } else {
                 kBoolVarFalse
             },
-        );
-    }
+        )
+    };
 }
 
 /// Tell a multigrid UI where the menu's grid sits.
