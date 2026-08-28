@@ -5,8 +5,7 @@ use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
 use crate::api::private::helpers::{
     api_clear_error, api_free_object, api_set_error, api_set_sctx, api_typename, arena_array,
-    copy_object, copy_string, cstr_as_string, dict_set_var, find_buffer_by_handle,
-    find_tab_by_handle, find_window_by_handle,
+    copy_object, copy_string, cstr_as_string, dict_set_var,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::api::vimscript::exec_impl;
@@ -29,11 +28,10 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::{
     Arena, Array, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline, DecorInlineData,
     DecorPriority, DecorVirtText, DecorVirtText_data, Dict, Error, Integer, KeyDict_empty,
-    KeyDict_exec_opts, KeyValuePair, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
-    OptScope, OptVal, OptValType, String_0, StringBuilder, Tabpage, VirtText, VirtTextChunk,
-    Window, buf_T, colnr_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeString, lua_State, object, object_data, schar_T, size_t, tabpage_T, uint8_t,
-    uint16_t, uint32_t, uint64_t, win_T,
+    KeyDict_exec_opts, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal,
+    OptValType, String_0, StringBuilder, Tabpage, VirtText, Window, buf_T, colnr_T, int64_t,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeString, lua_State, schar_T,
+    size_t, uint8_t, uint16_t, uint32_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

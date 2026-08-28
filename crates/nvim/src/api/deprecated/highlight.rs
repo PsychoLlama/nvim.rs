@@ -15,25 +15,19 @@ pub unsafe fn nvim_get_hl_by_id(
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut dic: Dict = Dict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        if !(syn_get_final_id(hl_id as ::core::ffi::c_int) != 0 as ::core::ffi::c_int) {
-            api_err_invalid(
-                err,
-                c"highlight id".as_ptr(),
-                ::core::ptr::null::<::core::ffi::c_char>(),
-                hl_id as int64_t,
-                false,
-            );
-            return dic.reported(error);
-        }
-        let mut attrcode: ::core::ffi::c_int = syn_id2attr(hl_id as ::core::ffi::c_int);
-        hl_get_attr_by_id(attrcode as Integer, rgb, arena, err).reported(error)
+    // SAFETY: these take a highlight-group id rather than a pointer.
+    let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
+    if !known {
+        let null = ::core::ptr::null::<::core::ffi::c_char>();
+        // SAFETY: `err` is this frame's slot; a null value string asks for
+        // the numeric spelling.
+        unsafe { api_err_invalid(err, c"highlight id".as_ptr(), null, hl_id, false) };
+        return Dict::EMPTY.reported(error);
     }
+    // SAFETY: as above.
+    let attrcode = unsafe { syn_id2attr(hl_id as ::core::ffi::c_int) };
+    // SAFETY: `arena` is the caller's and `err` this frame's slot.
+    unsafe { hl_get_attr_by_id(attrcode as Integer, rgb, arena, err) }.reported(error)
 }
 
 pub unsafe fn nvim_get_hl_by_name(
@@ -43,23 +37,13 @@ pub unsafe fn nvim_get_hl_by_name(
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
     let err = &raw mut error;
-    unsafe {
-        let mut result: Dict = Dict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
-        let mut id: ::core::ffi::c_int = syn_name2id(name.data());
-        if !(id != 0 as ::core::ffi::c_int) {
-            api_err_invalid(
-                err,
-                c"highlight name".as_ptr(),
-                name.data(),
-                0 as int64_t,
-                true,
-            );
-            return result.reported(error);
-        }
-        nvim_get_hl_by_id(id as Integer, rgb, arena)
+    // SAFETY: `name` is the caller's NUL-terminated group name.
+    let id = unsafe { syn_name2id(name.data()) };
+    if id == 0 {
+        // SAFETY: `err` is this frame's slot and `name` a C string.
+        unsafe { api_err_invalid(err, c"highlight name".as_ptr(), name.data(), 0, true) };
+        return Dict::EMPTY.reported(error);
     }
+    // SAFETY: `arena` is the caller's.
+    unsafe { nvim_get_hl_by_id(id as Integer, rgb, arena) }
 }

@@ -14,7 +14,8 @@ pub unsafe fn buffer_insert(
     lines: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    unsafe { nvim_buf_set_lines(0 as uint64_t, buffer, lnum, lnum, true, lines, arena) }
+    // SAFETY: `lines` and `arena` are the caller's, live for the call.
+    unsafe { nvim_buf_set_lines(0, buffer, lnum, lnum, true, lines, arena) }
 }
 
 pub unsafe fn buffer_get_line(
@@ -22,26 +23,18 @@ pub unsafe fn buffer_get_line(
     index: Integer,
     arena: *mut Arena,
 ) -> Result<String_0, Error> {
-    unsafe {
-        let mut rv: String_0 =
-            String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
-        let index = convert_index(index as int64_t) as Integer;
-        let slice: Array = nvim_buf_get_lines(
-            0 as uint64_t,
-            buffer,
-            index,
-            index + 1 as Integer,
-            true,
-            arena,
-            ::core::ptr::null_mut::<lua_State>(),
-        )?;
-        if slice.size != 0 {
-            rv = (*slice.items.offset(0 as ::core::ffi::c_int as isize))
-                .data
-                .string;
-        }
-        Ok(rv)
+    let index = convert_index(index as int64_t) as Integer;
+    let no_lua = ::core::ptr::null_mut::<lua_State>();
+    // SAFETY: `arena` is the caller's; a null `lua_State` asks for the API
+    // representation rather than a Lua one.
+    let slice: Array =
+        unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, arena, no_lua) }?;
+    if slice.size == 0 {
+        return Ok(String_0::NULL);
     }
+    // SAFETY: the array has an item, which the call above filled in.
+    let first = unsafe { *slice.items };
+    Ok(first.as_string().unwrap_or(String_0::NULL))
 }
 
 pub unsafe fn buffer_set_line(
@@ -50,27 +43,16 @@ pub unsafe fn buffer_set_line(
     line: String_0,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    unsafe {
-        let mut l: Object = object {
-            type_0: kObjectTypeString,
-            data: object_data { string: line },
-        };
-        let array: Array = Array {
-            size: 1 as size_t,
-            capacity: 0,
-            items: &raw mut l,
-        };
-        let index = convert_index(index as int64_t) as Integer;
-        nvim_buf_set_lines(
-            0 as uint64_t,
-            buffer,
-            index,
-            index + 1 as Integer,
-            true,
-            array,
-            arena,
-        )
-    }
+    let mut l = Object::string(line);
+    let array: Array = Array {
+        size: 1 as size_t,
+        capacity: 0,
+        items: &raw mut l,
+    };
+    let index = convert_index(index as int64_t) as Integer;
+    // SAFETY: `array` borrows this frame's object for the length of the
+    // call, and `arena` is the caller's.
+    unsafe { nvim_buf_set_lines(0, buffer, index, index + 1, true, array, arena) }
 }
 
 pub unsafe fn buffer_del_line(
@@ -78,23 +60,9 @@ pub unsafe fn buffer_del_line(
     index: Integer,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    unsafe {
-        let array: Array = Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
-        let index = convert_index(index as int64_t) as Integer;
-        nvim_buf_set_lines(
-            0 as uint64_t,
-            buffer,
-            index,
-            index + 1 as Integer,
-            true,
-            array,
-            arena,
-        )
-    }
+    let index = convert_index(index as int64_t) as Integer;
+    // SAFETY: an empty replacement borrows nothing; `arena` is the caller's.
+    unsafe { nvim_buf_set_lines(0, buffer, index, index + 1, true, Array::EMPTY, arena) }
 }
 
 pub unsafe fn buffer_get_line_slice(
@@ -105,20 +73,11 @@ pub unsafe fn buffer_get_line_slice(
     include_end: Boolean,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    unsafe {
-        let start = (convert_index(start as int64_t)
-            + !include_start as ::core::ffi::c_int as int64_t) as Integer;
-        let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
-        nvim_buf_get_lines(
-            0 as uint64_t,
-            buffer,
-            start,
-            end,
-            false,
-            arena,
-            ::core::ptr::null_mut::<lua_State>(),
-        )
-    }
+    let start = (convert_index(start as int64_t) + !include_start as int64_t) as Integer;
+    let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+    let no_lua = ::core::ptr::null_mut::<lua_State>();
+    // SAFETY: as `buffer_get_line`.
+    unsafe { nvim_buf_get_lines(0, buffer, start, end, false, arena, no_lua) }
 }
 
 pub unsafe fn buffer_set_line_slice(
@@ -130,18 +89,16 @@ pub unsafe fn buffer_set_line_slice(
     replacement: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    unsafe {
-        let start = (convert_index(start as int64_t)
-            + !include_start as ::core::ffi::c_int as int64_t) as Integer;
-        let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
-        nvim_buf_set_lines(0 as uint64_t, buffer, start, end, false, replacement, arena)
-    }
+    let start = (convert_index(start as int64_t) + !include_start as int64_t) as Integer;
+    let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+    // SAFETY: `replacement` and `arena` are the caller's.
+    unsafe { nvim_buf_set_lines(0, buffer, start, end, false, replacement, arena) }
 }
 
-fn convert_index(mut index: int64_t) -> int64_t {
-    if index < 0 as int64_t {
-        index - 1 as int64_t
-    } else {
-        index
-    }
+/// The 0.1 API's one-based, inclusive line number as the modern zero-based,
+/// end-exclusive one. A negative index counts back from the end, and loses a
+/// line in the translation because the two spellings disagree about where
+/// the end is.
+fn convert_index(index: int64_t) -> int64_t {
+    if index < 0 { index - 1 } else { index }
 }
