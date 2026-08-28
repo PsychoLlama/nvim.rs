@@ -107,21 +107,19 @@ pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
 ///
 /// The editor's globals must be live.
 pub unsafe fn bomb_size() -> c_int {
-    unsafe {
-        let buf = curbuf.get();
-        if (*buf).b_p_bomb == 0 || (*buf).b_p_bin != 0 {
-            return 0;
-        }
-        let fenc = CStr::from_ptr((*buf).b_p_fenc).to_bytes();
-        if fenc.is_empty() || fenc == b"utf-8" {
-            3
-        } else if fenc.starts_with(b"ucs-2") || fenc.starts_with(b"utf-16") {
-            2
-        } else if fenc.starts_with(b"ucs-4") {
-            4
-        } else {
-            0
-        }
+    let buf = curbuf.get();
+    if unsafe { (*buf).b_p_bomb } == 0 || unsafe { (*buf).b_p_bin } != 0 {
+        return 0;
+    }
+    let fenc = unsafe { CStr::from_ptr((*buf).b_p_fenc) }.to_bytes();
+    if fenc.is_empty() || fenc == b"utf-8" {
+        3
+    } else if fenc.starts_with(b"ucs-2") || fenc.starts_with(b"utf-16") {
+        2
+    } else if fenc.starts_with(b"ucs-4") {
+        4
+    } else {
+        0
     }
 }
 
@@ -131,20 +129,18 @@ pub unsafe fn bomb_size() -> c_int {
 ///
 /// `s` must be a writable NUL-terminated string.
 pub unsafe fn remove_bom(s: *mut c_char) {
-    unsafe {
-        let mut p = s;
-        loop {
-            p = strchr(p, 0xef);
-            if p.is_null() {
-                return;
-            }
-            if *p.offset(1) as u8 == 0xbb && *p.offset(2) as u8 == 0xbf {
-                // Move the rest of the string down over the mark, NUL included.
-                let rest = p.offset(3);
-                memmove(p as *mut c_void, rest as *const c_void, strlen(rest) + 1);
-            } else {
-                p = p.offset(1);
-            }
+    let mut p = s;
+    loop {
+        p = unsafe { strchr(p, 0xef) };
+        if p.is_null() {
+            return;
+        }
+        if unsafe { *p.offset(1) } as u8 == 0xbb && unsafe { *p.offset(2) } as u8 == 0xbf {
+            // Move the rest of the string down over the mark, NUL included.
+            let rest = unsafe { p.offset(3) };
+            unsafe { memmove(p as *mut c_void, rest as *const c_void, strlen(rest) + 1) };
+        } else {
+            p = unsafe { p.offset(1) };
         }
     }
 }
@@ -228,28 +224,26 @@ fn to_owned_cstring(bytes: &[u8]) -> *mut c_char {
 /// `enc` must be a NUL-terminated string. The result is `xmalloc`'d and the
 /// caller owns it.
 pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
-    unsafe {
-        let enc = CStr::from_ptr(enc).to_bytes();
-        if enc == b"default" {
-            return xstrdup(fenc_default.get());
-        }
-
-        let normalised = normalise_spelling(enc);
-        let skip = skip_len(&normalised);
-        let body = normalise_punctuation(&normalised[skip..]);
-
-        if find_canonical(&body).is_some() {
-            // Canonical without the prefix: the prefix said nothing new.
-            return to_owned_cstring(&body);
-        }
-        if let Some(i) = find_alias(&body) {
-            return to_owned_cstring(ENCODINGS[i].name.to_bytes());
-        }
-        // Unrecognised: keep the prefix, since it is all anyone knows about it.
-        let mut whole = normalised[..skip].to_vec();
-        whole.extend_from_slice(&body);
-        to_owned_cstring(&whole)
+    let enc = unsafe { CStr::from_ptr(enc) }.to_bytes();
+    if enc == b"default" {
+        return unsafe { xstrdup(fenc_default.get()) };
     }
+
+    let normalised = normalise_spelling(enc);
+    let skip = skip_len(&normalised);
+    let body = normalise_punctuation(&normalised[skip..]);
+
+    if find_canonical(&body).is_some() {
+        // Canonical without the prefix: the prefix said nothing new.
+        return to_owned_cstring(&body);
+    }
+    if let Some(i) = find_alias(&body) {
+        return to_owned_cstring(ENCODINGS[i].name.to_bytes());
+    }
+    // Unrecognised: keep the prefix, since it is all anyone knows about it.
+    let mut whole = normalised[..skip].to_vec();
+    whole.extend_from_slice(&body);
+    to_owned_cstring(&whole)
 }
 
 /// The encoding the C library says the user's locale uses, canonicalised.
@@ -265,64 +259,62 @@ pub unsafe fn enc_canonize(enc: *mut c_char) -> *mut c_char {
 /// The editor's globals must be live. The result is `xmalloc`'d.
 pub unsafe fn enc_locale() -> *mut c_char {
     let mut env = env_buf();
-    unsafe {
-        let mut s = nl_langinfo(CODESET);
-        if s.is_null() || *s == 0 {
-            s = setlocale(LC_CTYPE, core::ptr::null());
-            if s.is_null() || *s == 0 {
-                // Upstream's chain, reproduced as written: each step
-                // *replaces* `s` rather than keeping what it just found, so
-                // a set `LC_ALL` means `LANG` is what ends up being read.
-                s = os_getenv_into(c"LC_ALL".as_ptr(), &mut env);
+    let mut s = unsafe { nl_langinfo(CODESET) };
+    if s.is_null() || unsafe { *s } == 0 {
+        s = unsafe { setlocale(LC_CTYPE, core::ptr::null()) };
+        if s.is_null() || unsafe { *s } == 0 {
+            // Upstream's chain, reproduced as written: each step
+            // *replaces* `s` rather than keeping what it just found, so
+            // a set `LC_ALL` means `LANG` is what ends up being read.
+            s = unsafe { os_getenv_into(c"LC_ALL".as_ptr(), &mut env) };
+            if !s.is_null() {
+                s = unsafe { os_getenv_into(c"LC_CTYPE".as_ptr(), &mut env) };
                 if !s.is_null() {
-                    s = os_getenv_into(c"LC_CTYPE".as_ptr(), &mut env);
-                    if !s.is_null() {
-                        s = os_getenv_into(c"LANG".as_ptr(), &mut env);
-                    }
+                    s = unsafe { os_getenv_into(c"LANG".as_ptr(), &mut env) };
                 }
             }
         }
-        if s.is_null() {
-            return core::ptr::null_mut();
-        }
-
-        let mut buf = [0 as c_char; 50];
-        let dot = vim_strchr(s, '.' as c_int);
-        let mut copy_from = s;
-        if !dot.is_null() {
-            if is_territory_euc(s, dot) {
-                // "XY.EUC" is "euc-xy".
-                buf[..4].copy_from_slice(&[
-                    b'e' as c_char,
-                    b'u' as c_char,
-                    b'c' as c_char,
-                    b'-' as c_char,
-                ]);
-                buf[4] = alnum_lowered(*dot.offset(-2));
-                buf[5] = alnum_lowered(*dot.offset(-1));
-                buf[6] = 0;
-                return enc_canonize(buf.as_mut_ptr());
-            }
-            copy_from = dot.offset(1);
-        }
-
-        // Copy the codeset, lowercased, `_`/`-` unified, stopping at the
-        // first character that cannot be part of a name.
-        let mut i = 0;
-        while i < buf.len() - 1 && *copy_from.add(i) != 0 {
-            let b = *copy_from.add(i) as u8;
-            buf[i] = if b == b'_' || b == b'-' {
-                b'-' as c_char
-            } else if b.is_ascii_alphanumeric() {
-                b.to_ascii_lowercase() as c_char
-            } else {
-                break;
-            };
-            i += 1;
-        }
-        buf[i] = 0;
-        enc_canonize(buf.as_mut_ptr())
     }
+    if s.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let mut buf = [0 as c_char; 50];
+    let dot = unsafe { vim_strchr(s, '.' as c_int) };
+    let mut copy_from = s;
+    if !dot.is_null() {
+        if unsafe { is_territory_euc(s, dot) } {
+            // "XY.EUC" is "euc-xy".
+            buf[..4].copy_from_slice(&[
+                b'e' as c_char,
+                b'u' as c_char,
+                b'c' as c_char,
+                b'-' as c_char,
+            ]);
+            buf[4] = alnum_lowered(unsafe { *dot.offset(-2) });
+            buf[5] = alnum_lowered(unsafe { *dot.offset(-1) });
+            buf[6] = 0;
+            return unsafe { enc_canonize(buf.as_mut_ptr()) };
+        }
+        copy_from = unsafe { dot.offset(1) };
+    }
+
+    // Copy the codeset, lowercased, `_`/`-` unified, stopping at the
+    // first character that cannot be part of a name.
+    let mut i = 0;
+    while i < buf.len() - 1 && unsafe { *copy_from.add(i) } != 0 {
+        let b = unsafe { *copy_from.add(i) } as u8;
+        buf[i] = if b == b'_' || b == b'-' {
+            b'-' as c_char
+        } else if b.is_ascii_alphanumeric() {
+            b.to_ascii_lowercase() as c_char
+        } else {
+            break;
+        };
+        i += 1;
+    }
+    buf[i] = 0;
+    unsafe { enc_canonize(buf.as_mut_ptr()) }
 }
 
 /// Is this locale name one of the `ja_JP.EUC` family, which names its
@@ -332,17 +324,15 @@ pub unsafe fn enc_locale() -> *mut c_char {
 ///
 /// `dot` must point at a `.` inside the NUL-terminated string `s`.
 unsafe fn is_territory_euc(s: *const c_char, dot: *const c_char) -> bool {
-    unsafe {
-        dot > s.offset(2)
-            && strncasecmp(dot.offset(1) as *mut c_char, c"EUC".as_ptr() as *mut c_char, 3) == 0
-            // Nothing may follow the "EUC" but a separator: "EUC-JP" is
-            // already a codeset name and goes down the ordinary path.
-            && *(*__ctype_b_loc()).offset(*dot.offset(4) as u8 as c_int as isize) as c_int
-                & _ISalnum as c_int
-                == 0
-            && *dot.offset(4) as c_int != '-' as c_int
-            && *dot.offset(-3) as c_int == '_' as c_int
-    }
+    dot > unsafe { s.offset(2) }
+        && unsafe { strncasecmp(dot.offset(1) as *mut c_char, c"EUC".as_ptr() as *mut c_char, 3) } == 0
+        // Nothing may follow the "EUC" but a separator: "EUC-JP" is
+        // already a codeset name and goes down the ordinary path.
+        && unsafe { *(*__ctype_b_loc()).offset(*dot.offset(4) as u8 as c_int as isize) } as c_int
+            & _ISalnum as c_int
+            == 0
+        && unsafe { *dot.offset(4) } as c_int != '-' as c_int
+        && unsafe { *dot.offset(-3) } as c_int == '_' as c_int
 }
 
 /// One territory character, lowercased — or NUL if it is not one, which makes

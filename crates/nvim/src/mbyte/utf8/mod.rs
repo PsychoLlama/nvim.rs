@@ -96,20 +96,18 @@ pub(crate) fn utf_is_trail_byte(byte: u8) -> bool {
 /// string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2char_info_impl(p: *const uint8_t, len: uintptr_t) -> int32_t {
-    unsafe {
-        // The second byte is always read, even for `len` 0 and 1; the
-        // correction makes the answer negative either way.
-        let read = if len < 3 { 2 } else { len };
-        let mut code_point = *p as u32;
-        for i in 1..read {
-            let cur = *p.add(i);
-            if !utf_is_trail_byte(cur) {
-                return -1;
-            }
-            code_point = (code_point << 6).wrapping_add(cur as u32);
+    // The second byte is always read, even for `len` 0 and 1; the
+    // correction makes the answer negative either way.
+    let read = if len < 3 { 2 } else { len };
+    let mut code_point = unsafe { *p } as u32;
+    for i in 1..read {
+        let cur = unsafe { *p.add(i) };
+        if !utf_is_trail_byte(cur) {
+            return -1;
         }
-        code_point.wrapping_add(CORRECTIONS[len]) as int32_t
+        code_point = (code_point << 6).wrapping_add(cur as u32);
     }
+    code_point.wrapping_add(CORRECTIONS[len]) as int32_t
 }
 
 /// The codepoint at `p`, or the first byte's own value if there is no
@@ -122,27 +120,25 @@ pub unsafe extern "C" fn utf_ptr2char_info_impl(p: *const uint8_t, len: uintptr_
 /// truncated sequence stops at it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2char(p_in: *const c_char) -> c_int {
-    unsafe {
-        let p = p_in as *const u8;
-        let first = *p as u32;
-        if first < 0x80 {
-            return first as c_int;
-        }
-        let len = utf8len_tab[first as usize] as usize;
-        if len < 2 {
-            // A continuation byte or 0xFE/0xFF: not a lead byte at all.
-            return first as c_int;
-        }
-        let mut code_point = first & LEAD_PAYLOAD[len];
-        for i in 1..len {
-            let cur = *p.add(i);
-            if !utf_is_trail_byte(cur) {
-                return first as c_int;
-            }
-            code_point = (code_point << 6) | (cur as u32 & 0x3f);
-        }
-        code_point as c_int
+    let p = p_in as *const u8;
+    let first = unsafe { *p } as u32;
+    if first < 0x80 {
+        return first as c_int;
     }
+    let len = utf8len_tab[first as usize] as usize;
+    if len < 2 {
+        // A continuation byte or 0xFE/0xFF: not a lead byte at all.
+        return first as c_int;
+    }
+    let mut code_point = first & LEAD_PAYLOAD[len];
+    for i in 1..len {
+        let cur = unsafe { *p.add(i) };
+        if !utf_is_trail_byte(cur) {
+            return first as c_int;
+        }
+        code_point = (code_point << 6) | (cur as u32 & 0x3f);
+    }
+    code_point as c_int
 }
 
 /// Read one character out of `*s`, advancing it and shrinking `*n`.
@@ -157,27 +153,25 @@ pub unsafe extern "C" fn utf_ptr2char(p_in: *const c_char) -> c_int {
 ///
 /// `*s` must point at `*n` readable bytes.
 pub(crate) unsafe fn utf_safe_read_char_adv(s: *mut *const c_char, n: *mut size_t) -> c_int {
-    unsafe {
-        if *n == 0 {
-            return 0;
-        }
-        let first = **s as u8;
-        let k = utf8len_tab_zero[first as usize];
-        if k == 1 {
-            *n -= 1;
-            *s = (*s).offset(1);
-            return first as c_int;
-        }
-        if k as size_t <= *n {
-            let c = utf_ptr2char(*s);
-            if c != first as c_int || (c == 0xc3 && *(*s).offset(1) as u8 == 0x83) {
-                *s = (*s).offset(k as isize);
-                *n -= k as size_t;
-                return c;
-            }
-        }
-        -1
+    if unsafe { *n } == 0 {
+        return 0;
     }
+    let first = unsafe { **s } as u8;
+    let k = utf8len_tab_zero[first as usize];
+    if k == 1 {
+        unsafe { *n -= 1 };
+        unsafe { *s = (*s).offset(1) };
+        return first as c_int;
+    }
+    if k as size_t <= unsafe { *n } {
+        let c = unsafe { utf_ptr2char(*s) };
+        if c != first as c_int || (c == 0xc3 && unsafe { *(*s).offset(1) } as u8 == 0x83) {
+            unsafe { *s = (*s).offset(k as isize) };
+            unsafe { *n -= k as size_t };
+            return c;
+        }
+    }
+    -1
 }
 
 /// The codepoint at `*pp`, advancing `*pp` past it **and its composing
@@ -187,11 +181,9 @@ pub(crate) unsafe fn utf_safe_read_char_adv(s: *mut *const c_char, n: *mut size_
 ///
 /// `*pp` must point at a NUL-terminated string.
 pub unsafe fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int {
-    unsafe {
-        let c = utf_ptr2char(*pp);
-        *pp = (*pp).offset(utfc_ptr2len(*pp) as isize);
-        c
-    }
+    let c = unsafe { utf_ptr2char(*pp) };
+    unsafe { *pp = (*pp).offset(utfc_ptr2len(*pp) as isize) };
+    c
 }
 
 /// The codepoint at `*pp`, advancing `*pp` past the base character only —
@@ -201,11 +193,9 @@ pub unsafe fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int {
 ///
 /// `*pp` must point at a NUL-terminated string.
 pub unsafe fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
-    unsafe {
-        let c = utf_ptr2char(*pp);
-        *pp = (*pp).offset(utf_ptr2len(*pp) as isize);
-        c
-    }
+    let c = unsafe { utf_ptr2char(*pp) };
+    unsafe { *pp = (*pp).offset(utf_ptr2len(*pp) as isize) };
+    c
 }
 
 /// Can `c` combine onto a character before it, whatever that character is?
@@ -228,13 +218,11 @@ pub unsafe fn utf_composinglike(
     p2: *const c_char,
     state: *mut GraphemeState,
 ) -> bool {
-    unsafe {
-        // ASCII never combines, and this is the hot answer.
-        if (*p2 as u8) < 128 {
-            return false;
-        }
-        utf_iscomposing(utf_ptr2char(p1), utf_ptr2char(p2), state)
+    // ASCII never combines, and this is the hot answer.
+    if (unsafe { *p2 } as u8) < 128 {
+        return false;
     }
+    unsafe { utf_iscomposing(utf_ptr2char(p1), utf_ptr2char(p2), state) }
 }
 
 /// Is `c2` part of the same grapheme cluster as `c1`?
@@ -272,17 +260,15 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 ///
 /// `p` must point at a NUL-terminated string and `firstc` must be writable.
 pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
-    unsafe {
-        let c = utf_ptr2char(p);
-        *firstc = c;
-        let first_compose = utf_iscomposing_first(c);
-        let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
-        let len = utfc_ptr2len_len(p, maxlen) as size_t;
-        if len == 1 && *p as u8 >= 0x80 {
-            return 0;
-        }
-        schar_from_buf_first(p, len, first_compose)
+    let c = unsafe { utf_ptr2char(p) };
+    unsafe { *firstc = c };
+    let first_compose = utf_iscomposing_first(c);
+    let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
+    let len = unsafe { utfc_ptr2len_len(p, maxlen) } as size_t;
+    if len == 1 && unsafe { *p } as u8 >= 0x80 {
+        return 0;
     }
+    unsafe { schar_from_buf_first(p, len, first_compose) }
 }
 
 /// [`utfc_ptr2schar`] for a cluster whose length is already known.
@@ -291,20 +277,18 @@ pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
 ///
 /// `p` must point at `len` readable bytes and `firstc` must be writable.
 pub unsafe fn utfc_ptrlen2schar(p: *const c_char, mut len: c_int, firstc: *mut c_int) -> schar_T {
-    unsafe {
-        if len == 0 || (len == 1 && *p as u8 >= 0x80) {
-            *firstc = *p as u8 as c_int;
-            return 0;
-        }
-        let c = utf_ptr2char(p);
-        *firstc = c;
-        let first_compose = utf_iscomposing_first(c);
-        let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
-        if len > maxlen {
-            len = utfc_ptr2len_len(p, maxlen);
-        }
-        schar_from_buf_first(p, len as size_t, first_compose)
+    if len == 0 || (len == 1 && unsafe { *p } as u8 >= 0x80) {
+        unsafe { *firstc = *p as u8 as c_int };
+        return 0;
     }
+    let c = unsafe { utf_ptr2char(p) };
+    unsafe { *firstc = c };
+    let first_compose = utf_iscomposing_first(c);
+    let maxlen = MAX_SCHAR_SIZE - 1 - first_compose as c_int;
+    if len > maxlen {
+        len = unsafe { utfc_ptr2len_len(p, maxlen) };
+    }
+    unsafe { schar_from_buf_first(p, len as size_t, first_compose) }
 }
 
 /// Pack `len` bytes into a `schar_T`, prefixing a space when the cluster
@@ -319,15 +303,13 @@ pub unsafe fn utfc_ptrlen2schar(p: *const c_char, mut len: c_int, firstc: *mut c
 /// `buf` must point at `len` readable bytes, and `len` must leave room for
 /// the space when `first_compose` is set.
 unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: bool) -> schar_T {
-    unsafe {
-        if !first_compose {
-            return schar_from_buf(buf, len);
-        }
-        let mut cbuf = [0 as c_char; MAX_SCHAR_SIZE as usize];
-        cbuf[0] = b' ' as c_char;
-        core::ptr::copy_nonoverlapping(buf, cbuf.as_mut_ptr().offset(1), len);
-        schar_from_buf(cbuf.as_ptr(), len + 1)
+    if !first_compose {
+        return unsafe { schar_from_buf(buf, len) };
     }
+    let mut cbuf = [0 as c_char; MAX_SCHAR_SIZE as usize];
+    cbuf[0] = b' ' as c_char;
+    unsafe { core::ptr::copy_nonoverlapping(buf, cbuf.as_mut_ptr().offset(1), len) };
+    unsafe { schar_from_buf(cbuf.as_ptr(), len + 1) }
 }
 
 /// How many bytes the character at `p` occupies, or 0 at a NUL.
@@ -340,19 +322,17 @@ unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: b
 /// `p` must point at a NUL-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn utf_ptr2len(p_in: *const c_char) -> c_int {
-    unsafe {
-        let p = p_in as *const u8;
-        if *p == 0 {
-            return 0;
-        }
-        let len = utf8len_tab[*p as usize] as c_int;
-        for i in 1..len {
-            if !utf_is_trail_byte(*p.offset(i as isize)) {
-                return 1;
-            }
-        }
-        len
+    let p = p_in as *const u8;
+    if unsafe { *p } == 0 {
+        return 0;
     }
+    let len = utf8len_tab[unsafe { *p } as usize] as c_int;
+    for i in 1..len {
+        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) }) {
+            return 1;
+        }
+    }
+    len
 }
 
 /// How many bytes the sequence introduced by byte `b` occupies.
@@ -369,18 +349,16 @@ pub fn utf_byte2len(b: c_int) -> c_int {
 ///
 /// `p` must point at at least one readable byte, and at `min(size, len)`.
 pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    unsafe {
-        let len = utf8len_tab[*p as u8 as usize] as c_int;
-        if len == 1 {
+    let len = utf8len_tab[unsafe { *p } as u8 as usize] as c_int;
+    if len == 1 {
+        return 1;
+    }
+    for i in 1..len.min(size) {
+        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) } as u8) {
             return 1;
         }
-        for i in 1..len.min(size) {
-            if !utf_is_trail_byte(*p.offset(i as isize) as u8) {
-                return 1;
-            }
-        }
-        len
     }
+    len
 }
 
 /// How many bytes the whole grapheme cluster at `p` occupies — the base
@@ -390,31 +368,29 @@ pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn utfc_ptr2len(p: *const c_char) -> c_int {
-    unsafe {
-        let first = *p as u8;
-        if first == 0 {
-            return 0;
+    let first = unsafe { *p } as u8;
+    if first == 0 {
+        return 0;
+    }
+    // Two ASCII bytes: nothing can be combining, answer without decoding.
+    if first < 0x80 && (unsafe { *p.offset(1) } as u8) < 0x80 {
+        return 1;
+    }
+    let mut len = unsafe { utf_ptr2len(p) };
+    if len == 1 && first >= 0x80 {
+        return 1;
+    }
+    let mut prevlen = 0;
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    loop {
+        let next = unsafe { p.offset(len as isize) };
+        if (unsafe { *next } as u8) < 0x80
+            || !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) }
+        {
+            return len;
         }
-        // Two ASCII bytes: nothing can be combining, answer without decoding.
-        if first < 0x80 && (*p.offset(1) as u8) < 0x80 {
-            return 1;
-        }
-        let mut len = utf_ptr2len(p);
-        if len == 1 && first >= 0x80 {
-            return 1;
-        }
-        let mut prevlen = 0;
-        let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-        loop {
-            let next = p.offset(len as isize);
-            if (*next as u8) < 0x80
-                || !utf_composinglike(p.offset(prevlen as isize), next, &raw mut state)
-            {
-                return len;
-            }
-            prevlen = len;
-            len += utf_ptr2len(next);
-        }
+        prevlen = len;
+        len += unsafe { utf_ptr2len(next) };
     }
 }
 
@@ -427,37 +403,35 @@ pub unsafe fn utfc_ptr2len(p: *const c_char) -> c_int {
 ///
 /// `p` must point at `size` readable bytes.
 pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    unsafe {
-        if size < 1 || *p == 0 {
-            return 0;
-        }
-        let first = *p as u8;
-        if first < 0x80 && (size == 1 || (*p.offset(1) as u8) < 0x80) {
-            return 1;
-        }
-        let mut len = utf_ptr2len_len(p, size);
-        if (len == 1 && first >= 0x80) || len > size {
-            return 1;
-        }
-        let mut prevlen = 0;
-        let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-        while len < size {
-            let next = p.offset(len as isize);
-            if (*next as u8) < 0x80 {
-                break;
-            }
-            let next_len = utf_ptr2len_len(next, size - len);
-            if next_len > size - len {
-                break; // truncated by `size`, not part of this cluster
-            }
-            if !utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) {
-                break;
-            }
-            prevlen = len;
-            len += next_len;
-        }
-        len
+    if size < 1 || unsafe { *p } == 0 {
+        return 0;
     }
+    let first = unsafe { *p } as u8;
+    if first < 0x80 && (size == 1 || (unsafe { *p.offset(1) } as u8) < 0x80) {
+        return 1;
+    }
+    let mut len = unsafe { utf_ptr2len_len(p, size) };
+    if (len == 1 && first >= 0x80) || len > size {
+        return 1;
+    }
+    let mut prevlen = 0;
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    while len < size {
+        let next = unsafe { p.offset(len as isize) };
+        if (unsafe { *next } as u8) < 0x80 {
+            break;
+        }
+        let next_len = unsafe { utf_ptr2len_len(next, size - len) };
+        if next_len > size - len {
+            break; // truncated by `size`, not part of this cluster
+        }
+        if !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) } {
+            break;
+        }
+        prevlen = len;
+        len += next_len;
+    }
+    len
 }
 
 /// How many bytes `c` encodes to.
@@ -483,21 +457,19 @@ pub fn utf_char2len(c: c_int) -> c_int {
 ///
 /// `buf` must have room for [`utf_char2len`] bytes — up to `MB_MAXCHAR`.
 pub unsafe fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
-    unsafe {
-        let len = utf_char2len(c) as usize;
-        if len == 1 {
-            *buf = c as c_char;
-            return 1;
-        }
-        let u = c as u32;
-        // The lead byte carries the top bits under its `1..10` prefix; every
-        // continuation byte carries six more under `10`.
-        *buf = (LEAD_PREFIX[len] | (u >> (6 * (len - 1)))) as c_char;
-        for i in 1..len {
-            *buf.add(i) = (0x80 | ((u >> (6 * (len - 1 - i))) & 0x3f)) as c_char;
-        }
-        len as c_int
+    let len = utf_char2len(c) as usize;
+    if len == 1 {
+        unsafe { *buf = c as c_char };
+        return 1;
     }
+    let u = c as u32;
+    // The lead byte carries the top bits under its `1..10` prefix; every
+    // continuation byte carries six more under `10`.
+    unsafe { *buf = (LEAD_PREFIX[len] | (u >> (6 * (len - 1)))) as c_char };
+    for i in 1..len {
+        unsafe { *buf.add(i) = (0x80 | ((u >> (6 * (len - 1 - i))) & 0x3f)) as c_char };
+    }
+    len as c_int
 }
 
 /// The codepoint at `p` and the number of bytes it occupies. An invalid
@@ -511,21 +483,19 @@ pub unsafe fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
 /// `p` must point into a NUL-terminated string.
 #[inline(always)]
 pub unsafe fn utf_ptr2char_info(p_in: *const c_char) -> CharInfo {
-    unsafe {
-        let p = p_in as *const uint8_t;
-        let first = *p;
-        if first < 0x80 {
-            return CharInfo {
-                value: first as int32_t,
-                len: 1,
-            };
-        }
-        let len = utf8len_tab[first as usize] as c_int;
-        let code_point = utf_ptr2char_info_impl(p, len as uintptr_t);
-        CharInfo {
-            value: code_point,
-            len: if code_point < 0 { 1 } else { len },
-        }
+    let p = p_in as *const uint8_t;
+    let first = unsafe { *p };
+    if first < 0x80 {
+        return CharInfo {
+            value: first as int32_t,
+            len: 1,
+        };
+    }
+    let len = utf8len_tab[first as usize] as c_int;
+    let code_point = unsafe { utf_ptr2char_info_impl(p, len as uintptr_t) };
+    CharInfo {
+        value: code_point,
+        len: if code_point < 0 { 1 } else { len },
     }
 }
 
@@ -593,17 +563,15 @@ mod tests {
             // SAFETY: `buf` has room for the longest sequence plus the NUL
             // this writes after it, so every read below is in bounds and
             // terminated.
-            unsafe {
-                let len = utf_char2bytes(c, buf.as_mut_ptr());
-                assert_eq!(len, utf_char2len(c), "{c:#x} length");
-                buf[len as usize] = 0;
-                assert_eq!(utf_ptr2char(buf.as_ptr()), c, "{c:#x}");
-                // A NUL is the one character whose length `utf_ptr2len`
-                // reports as 0 rather than 1 — it is the end of the string,
-                // not a character in it.
-                let want = if c == 0 { 0 } else { len };
-                assert_eq!(utf_ptr2len(buf.as_ptr()), want, "{c:#x} ptr2len");
-            }
+            let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
+            assert_eq!(len, utf_char2len(c), "{c:#x} length");
+            buf[len as usize] = 0;
+            assert_eq!(unsafe { utf_ptr2char(buf.as_ptr()) }, c, "{c:#x}");
+            // A NUL is the one character whose length `utf_ptr2len`
+            // reports as 0 rather than 1 — it is the end of the string,
+            // not a character in it.
+            let want = if c == 0 { 0 } else { len };
+            assert_eq!(unsafe { utf_ptr2len(buf.as_ptr()) }, want, "{c:#x} ptr2len");
         };
         for c in 0..0x2000 {
             check(c);
@@ -631,13 +599,11 @@ mod tests {
             let p = bytes.as_ptr() as *const c_char;
             // SAFETY: every literal above is at least two bytes long and the
             // decoders read no further than the lead byte promises.
-            unsafe {
-                assert_eq!(utf_ptr2char(p), bytes[0] as c_int, "{bytes:?}");
-                let info = utf_ptr2char_info(p);
-                if bytes[0] >= 0x80 {
-                    assert!(info.value < 0, "{bytes:?}");
-                    assert_eq!(info.len, 1, "{bytes:?}");
-                }
+            assert_eq!(unsafe { utf_ptr2char(p) }, bytes[0] as c_int, "{bytes:?}");
+            let info = unsafe { utf_ptr2char_info(p) };
+            if bytes[0] >= 0x80 {
+                assert!(info.value < 0, "{bytes:?}");
+                assert_eq!(info.len, 1, "{bytes:?}");
             }
         }
     }
