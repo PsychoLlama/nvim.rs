@@ -174,21 +174,18 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             let v = &raw mut $vec;
             // SAFETY: `v` addresses a kvec field of the live `CpInfo`, whose
             // `items` is its own allocation of `capacity` elements.
-            unsafe {
-                if (*v).size == (*v).capacity {
-                    (*v).capacity = if (*v).capacity != 0 {
-                        (*v).capacity << 1
-                    } else {
-                        8
-                    };
+            if unsafe { (*v).size } == unsafe { (*v).capacity } {
+                let grown = unsafe { (*v).capacity };
+                unsafe { (*v).capacity = if grown != 0 { grown << 1 } else { 8 } };
+                unsafe {
                     (*v).items = xrealloc(
                         (*v).items as *mut ::core::ffi::c_void,
                         ::core::mem::size_of_val(&value) * (*v).capacity,
-                    ) as *mut _;
-                }
-                *(*v).items.add((*v).size) = value;
-                (*v).size += 1;
+                    ) as *mut _
+                };
             }
+            unsafe { *(*v).items.add((*v).size) = value };
+            unsafe { (*v).size += 1 };
         }};
     }
 
@@ -253,10 +250,8 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
     // C's set_destroy. Its trailing `= SET_INIT` is a dead store on a
     // local that is never read again, and is left out.
     // SAFETY: both are `saved_bufs`' own allocations.
-    unsafe {
-        xfree(saved_bufs.keys as *mut ::core::ffi::c_void);
-        xfree(saved_bufs.h.hash as *mut ::core::ffi::c_void);
-    }
+    unsafe { xfree(saved_bufs.keys as *mut ::core::ffi::c_void) };
+    unsafe { xfree(saved_bufs.h.hash as *mut ::core::ffi::c_void) };
 
     cpinfo.save_hls = p_hls.get() != 0;
     cpinfo.save_cmdmod = cmdmod.with(Clone::clone);
@@ -371,10 +366,8 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
     unsafe { ga_clear(&raw mut cpinfo.save_view) };
 
     // SAFETY: both `items` are this `CpInfo`'s own allocations.
-    unsafe {
-        xfree(cpinfo.win_info.items as *mut ::core::ffi::c_void);
-        xfree(cpinfo.buf_info.items as *mut ::core::ffi::c_void);
-    }
+    unsafe { xfree(cpinfo.win_info.items as *mut ::core::ffi::c_void) };
+    unsafe { xfree(cpinfo.buf_info.items as *mut ::core::ffi::c_void) };
     cpinfo.win_info = CP_INFO_INIT.win_info;
     cpinfo.buf_info = CP_INFO_INIT.buf_info;
 }

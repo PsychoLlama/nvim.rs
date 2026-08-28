@@ -813,10 +813,8 @@ fn set_cmd_byte(cc: Cc, i: ::core::ffi::c_int, b: ::core::ffi::c_char) {
 /// that follows every cursor move the preview makes.
 fn curwin_cursor_moved() {
     // SAFETY: `curwin` is a live window.
-    unsafe {
-        changed_cline_bef_curs(Win::current());
-        update_topline(Win::current());
-    }
+    changed_cline_bef_curs(unsafe { Win::current() });
+    update_topline(unsafe { Win::current() });
 }
 
 /// C's `validate_cursor(curwin)`.

@@ -12,97 +12,100 @@ use super::*;
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
 pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
-    unsafe {
-        let mut arena: Arena = ARENA_EMPTY;
+    let mut arena: Arena = ARENA_EMPTY;
 
-        // C's `ADD_C`: an arena array is allocated at its final size, so the
-        // push is a store and a bump with no capacity test.
-        let push = |arr: &mut Array, value: Object| {
-            *arr.items.add(arr.size) = value;
-            arr.size += 1;
-        };
+    // C's `ADD_C`: an arena array is allocated at its final size, so the
+    // push is a store and a bump with no capacity test.
+    let push = |arr: &mut Array, value: Object| {
+        unsafe { *arr.items.add(arr.size) = value };
+        arr.size += 1;
+    };
 
-        let mut content: Array;
-        if cmdline_star.get() != 0 {
-            // Obscured (`inputsecret()`): one '*' per *character*.
-            content = arena_array(&raw mut arena, 1);
-            let mut len: size_t = 0;
-            let mut p = Cc::current().text();
-            while *p != 0 {
-                len += 1;
-                p = p.offset(utfc_ptr2len(p) as isize);
-            }
-            let buf = arena_alloc(&raw mut arena, len, false) as *mut ::core::ffi::c_char;
+    let mut content: Array;
+    if cmdline_star.get() != 0 {
+        // Obscured (`inputsecret()`): one '*' per *character*.
+        content = arena_array(&raw mut arena, 1);
+        let mut len: size_t = 0;
+        let mut p = Cc::current().text();
+        while unsafe { *p } != 0 {
+            len += 1;
+            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        }
+        let buf = unsafe { arena_alloc(&raw mut arena, len, false) } as *mut ::core::ffi::c_char;
+        unsafe {
             memset(
                 buf as *mut ::core::ffi::c_void,
                 '*' as ::core::ffi::c_int,
                 len,
-            );
+            )
+        };
 
+        let mut item = arena_array(&raw mut arena, 3);
+        push(&mut item, Object::integer(0));
+        push(
+            &mut item,
+            Object::string(String_0::from_raw_parts(buf, len)),
+        );
+        push(&mut item, Object::integer(0));
+        push(&mut content, Object::array(item));
+    } else if !line.last_colors.chunks().is_empty() {
+        content = arena_array(&raw mut arena, line.last_colors.chunks().len());
+        let mut i: size_t = 0;
+        while i < line.last_colors.chunks().len() {
+            let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
             let mut item = arena_array(&raw mut arena, 3);
-            push(&mut item, Object::integer(0));
             push(
                 &mut item,
-                Object::string(String_0::from_raw_parts(buf, len)),
+                Object::integer(if chunk.hl_id == 0 {
+                    0
+                } else {
+                    unsafe { syn_id2attr(chunk.hl_id) as Integer }
+                }),
             );
-            push(&mut item, Object::integer(0));
-            push(&mut content, Object::array(item));
-        } else if !line.last_colors.chunks().is_empty() {
-            content = arena_array(&raw mut arena, line.last_colors.chunks().len());
-            let mut i: size_t = 0;
-            while i < line.last_colors.chunks().len() {
-                let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
-                let mut item = arena_array(&raw mut arena, 3);
-                push(
-                    &mut item,
-                    Object::integer(if chunk.hl_id == 0 {
-                        0
-                    } else {
-                        syn_id2attr(chunk.hl_id) as Integer
-                    }),
-                );
 
-                debug_assert!(chunk.end >= chunk.start);
-                push(
-                    &mut item,
-                    Object::string(String_0::from_raw_parts(
-                        line.at(chunk.start),
-                        (chunk.end - chunk.start) as size_t,
-                    )),
-                );
-                push(&mut item, Object::integer(chunk.hl_id as Integer));
-                push(&mut content, Object::array(item));
-                i += 1;
-            }
-        } else {
-            let mut item = arena_array(&raw mut arena, 3);
-            push(&mut item, Object::integer(0));
-            push(&mut item, Object::string(cstr_as_string(line.text())));
-            push(&mut item, Object::integer(0));
-            content = arena_array(&raw mut arena, 1);
+            debug_assert!(chunk.end >= chunk.start);
+            push(
+                &mut item,
+                Object::string(String_0::from_raw_parts(
+                    line.at(chunk.start),
+                    (chunk.end - chunk.start) as size_t,
+                )),
+            );
+            push(&mut item, Object::integer(chunk.hl_id as Integer));
             push(&mut content, Object::array(item));
+            i += 1;
         }
-
-        let mut charbuf: [::core::ffi::c_char; 2] = [line.cmdfirstc as ::core::ffi::c_char, 0];
-        ui_call_cmdline_show(
-            content,
-            line.cmdpos as Integer,
-            cstr_as_string(charbuf.as_mut_ptr()),
-            cstr_as_string(line.cmdprompt),
-            line.cmdindent as Integer,
-            line.level as Integer,
-            line.hl_id as Integer,
+    } else {
+        let mut item = arena_array(&raw mut arena, 3);
+        push(&mut item, Object::integer(0));
+        push(
+            &mut item,
+            Object::string(unsafe { cstr_as_string(line.text()) }),
         );
-        if line.special_char != 0 {
-            charbuf[0] = line.special_char;
-            ui_call_cmdline_special_char(
-                cstr_as_string(charbuf.as_mut_ptr()),
-                line.special_shift as Boolean,
-                line.level as Integer,
-            );
-        }
-        arena_mem_free(arena_finish(&raw mut arena));
+        push(&mut item, Object::integer(0));
+        content = arena_array(&raw mut arena, 1);
+        push(&mut content, Object::array(item));
     }
+
+    let mut charbuf: [::core::ffi::c_char; 2] = [line.cmdfirstc as ::core::ffi::c_char, 0];
+    ui_call_cmdline_show(
+        content,
+        line.cmdpos as Integer,
+        unsafe { cstr_as_string(charbuf.as_mut_ptr()) },
+        unsafe { cstr_as_string(line.cmdprompt) },
+        line.cmdindent as Integer,
+        line.level as Integer,
+        line.hl_id as Integer,
+    );
+    if line.special_char != 0 {
+        charbuf[0] = line.special_char;
+        ui_call_cmdline_special_char(
+            unsafe { cstr_as_string(charbuf.as_mut_ptr()) },
+            line.special_shift as Boolean,
+            line.level as Integer,
+        );
+    }
+    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// The `ext_cmdline` block: the lines a `:if` or `:function` body
@@ -147,55 +150,59 @@ impl Drop for CmdlineBlock {
 /// Append one line to the `ext_cmdline` block — the body a `:if` or
 /// `:function` accumulates while it is being typed.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
+    let buf = unsafe { xmallocz(indent + strlen(line)) } as *mut ::core::ffi::c_char;
     unsafe {
-        let buf = xmallocz(indent + strlen(line)) as *mut ::core::ffi::c_char;
         memset(
             buf as *mut ::core::ffi::c_void,
             ' ' as ::core::ffi::c_int,
             indent,
-        );
+        )
+    };
+    unsafe {
         memcpy(
             buf.add(indent) as *mut ::core::ffi::c_void,
             line as *const ::core::ffi::c_void,
             strlen(line),
-        );
+        )
+    };
 
-        // C's `ADD`: `kv_push` onto a heap array, doubling from 8.
-        let push = |arr: &mut Array, value: Object| {
-            if arr.size == arr.capacity {
-                arr.capacity = if arr.capacity != 0 {
-                    arr.capacity << 1
-                } else {
-                    8
-                };
-                arr.items = xrealloc(
+    // C's `ADD`: `kv_push` onto a heap array, doubling from 8.
+    let push = |arr: &mut Array, value: Object| {
+        if arr.size == arr.capacity {
+            arr.capacity = if arr.capacity != 0 {
+                arr.capacity << 1
+            } else {
+                8
+            };
+            arr.items = unsafe {
+                xrealloc(
                     arr.items as *mut ::core::ffi::c_void,
                     ::core::mem::size_of::<Object>() * arr.capacity,
-                ) as *mut Object;
-            }
-            *arr.items.add(arr.size) = value;
-            arr.size += 1;
-        };
-
-        let mut item: Array = ARRAY_DICT_INIT;
-        push(&mut item, Object::integer(0));
-        push(&mut item, Object::string(cstr_as_string(buf)));
-        push(&mut item, Object::integer(0));
-
-        let mut content: Array = ARRAY_DICT_INIT;
-        push(&mut content, Object::array(item));
-
-        // A leaf closure over the array itself: nothing it runs can re-enter
-        // the block, so the exclusive borrow cannot overlap another.
-        let first = cmdline_block.with_mut(|block| {
-            push(&mut block.0, Object::array(content));
-            block.0.size == 1
-        });
-        if first {
-            ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
-        } else {
-            ui_call_cmdline_block_append(content);
+                )
+            } as *mut Object;
         }
+        unsafe { *arr.items.add(arr.size) = value };
+        arr.size += 1;
+    };
+
+    let mut item: Array = ARRAY_DICT_INIT;
+    push(&mut item, Object::integer(0));
+    push(&mut item, Object::string(unsafe { cstr_as_string(buf) }));
+    push(&mut item, Object::integer(0));
+
+    let mut content: Array = ARRAY_DICT_INIT;
+    push(&mut content, Object::array(item));
+
+    // A leaf closure over the array itself: nothing it runs can re-enter
+    // the block, so the exclusive borrow cannot overlap another.
+    let first = cmdline_block.with_mut(|block| {
+        push(&mut block.0, Object::array(content));
+        block.0.size == 1
+    });
+    if first {
+        ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));
+    } else {
+        ui_call_cmdline_block_append(content);
     }
 }
 

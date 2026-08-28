@@ -223,10 +223,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
                 c"a<C-X><C-V>".as_ptr().cast_mut(),
             );
             // SAFETY: four static NUL-terminated strings.
-            unsafe {
-                add_map(tab, ins, MODE_INSERT, true);
-                add_map(tab, nrm, MODE_NORMAL, true);
-            }
+            unsafe { add_map(tab, ins, MODE_INSERT, true) };
+            unsafe { add_map(tab, nrm, MODE_NORMAL, true) };
         }
         set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OptionSetFlags::LOCAL);
     }

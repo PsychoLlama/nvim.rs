@@ -61,15 +61,13 @@ pub(crate) fn get_cmdline_type() -> ::core::ffi::c_int {
 /// The current command line, allocated; NULL when there is none or the line
 /// is obscured (`inputsecret()`).
 pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
-    unsafe {
-        if cmdline_star.get() > 0 {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        let Some(p) = get_ccline_ptr() else {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        };
-        xstrnsave(p.text(), p.len() as size_t)
+    if cmdline_star.get() > 0 {
+        return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
+    let Some(p) = get_ccline_ptr() else {
+        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+    };
+    unsafe { xstrnsave(p.text(), p.len() as size_t) }
 }
 
 /// The completion state of the current command line, computed on demand:
@@ -84,37 +82,33 @@ pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
 /// `None` means there is nothing to report: no command line, an obscured one
 /// (`inputsecret()`), or `ExpandContext::Unsuccessful`.
 unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ExpandContext)> {
-    unsafe {
-        if cmdline_star.get() > 0 {
-            return None;
-        }
-        let xpc = get_ccline_ptr().map_or(::core::ptr::null_mut(), |p| p.xpc);
-        if xpc.is_null() {
-            return None;
-        }
-        let mut xp_context = (*xpc).xp_context;
-        if xp_context == ExpandContext::Nothing {
-            set_expand_context(xpc);
-            xp_context = (*xpc).xp_context;
-            (*xpc).xp_context = ExpandContext::Nothing;
-        }
-        if xp_context == ExpandContext::Unsuccessful {
-            return None;
-        }
-        Some((xpc, xp_context))
+    if cmdline_star.get() > 0 {
+        return None;
     }
+    let xpc = get_ccline_ptr().map_or(::core::ptr::null_mut(), |p| p.xpc);
+    if xpc.is_null() {
+        return None;
+    }
+    let mut xp_context = unsafe { (*xpc).xp_context };
+    if xp_context == ExpandContext::Nothing {
+        unsafe { set_expand_context(xpc) };
+        xp_context = unsafe { (*xpc).xp_context };
+        unsafe { (*xpc).xp_context = ExpandContext::Nothing };
+    }
+    if xp_context == ExpandContext::Unsuccessful {
+        return None;
+    }
+    Some((xpc, xp_context))
 }
 
 /// `getcmdcomplpat()` function: the pattern completion would expand.
 pub unsafe fn f_getcmdcomplpat(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        if let Some((xpc, _)) = cmdline_completion_state() {
-            let compl_pat = (*xpc).xp_pattern;
-            if !compl_pat.is_null() {
-                (*rettv).vval.v_string = xstrdup(compl_pat);
-            }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
+    if let Some((xpc, _)) = unsafe { cmdline_completion_state() } {
+        let compl_pat = unsafe { (*xpc).xp_pattern };
+        if !compl_pat.is_null() {
+            unsafe { (*rettv).vval.v_string = xstrdup(compl_pat) };
         }
     }
 }
@@ -125,38 +119,36 @@ pub unsafe fn f_getcmdcompltype(
     rettv: *mut typval_T,
     _fptr: EvalFuncData,
 ) {
+    unsafe { (*rettv).v_type = VAR_STRING };
     unsafe {
-        (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = match cmdline_completion_state() {
             Some((xpc, xp_context)) => cmdcomplete_type_to_str(xp_context, (*xpc).xp_arg),
             None => ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        };
-    }
+        }
+    };
 }
 
 /// `getcmdline()` function.
 pub unsafe fn f_getcmdline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = get_cmdline_str();
-    }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*rettv).vval.v_string = get_cmdline_str() };
 }
 
 /// `getcmdpos()` function.
 pub unsafe fn f_getcmdpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as varnumber_T);
-    }
+        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as varnumber_T)
+    };
 }
 
 /// `getcmdprompt()` function.
 pub unsafe fn f_getcmdprompt(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+    unsafe { (*rettv).v_type = VAR_STRING };
     unsafe {
-        (*rettv).v_type = VAR_STRING;
         (*rettv).vval.v_string = get_ccline_ptr()
             .filter(|p| !p.cmdprompt.is_null())
-            .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt));
-    }
+            .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt))
+    };
 }
 
 /// `getcmdscreenpos()` function.
@@ -166,18 +158,16 @@ pub unsafe fn f_getcmdscreenpos(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as varnumber_T);
-    }
+        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as varnumber_T)
+    };
 }
 
 /// `getcmdtype()` function.
 pub unsafe fn f_getcmdtype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        (*rettv).v_type = VAR_STRING;
-        // One character plus the terminator `xmallocz` appends.
-        (*rettv).vval.v_string = xmallocz(1) as *mut ::core::ffi::c_char;
-        *(*rettv).vval.v_string.offset(0) = get_cmdline_type() as ::core::ffi::c_char;
-    }
+    unsafe { (*rettv).v_type = VAR_STRING };
+    // One character plus the terminator `xmallocz` appends.
+    unsafe { (*rettv).vval.v_string = xmallocz(1) as *mut ::core::ffi::c_char };
+    unsafe { *(*rettv).vval.v_string.offset(0) = get_cmdline_type() as ::core::ffi::c_char };
 }
 
 /// Replace the command line with `str` and put the cursor at `pos`.
@@ -188,32 +178,30 @@ pub(crate) unsafe fn set_cmdline_str(
     str: *const ::core::ffi::c_char,
     pos: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let Some(mut p) = get_ccline_ptr() else {
-            return 1;
-        };
+    let Some(mut p) = get_ccline_ptr() else {
+        return 1;
+    };
 
-        // `p` is not always `ccline`: inside `<C-r>=` it is the command line
-        // one level out. C resized `ccline` here whichever line it then wrote
-        // to, and overran the other one -- see the upstream note on
-        // `set_cmdline_str`.
-        p.set_cstr(str);
+    // `p` is not always `ccline`: inside `<C-r>=` it is the command line
+    // one level out. C resized `ccline` here whichever line it then wrote
+    // to, and overran the other one -- see the upstream note on
+    // `set_cmdline_str`.
+    unsafe { p.set_cstr(str) };
 
-        p.cmdpos = if pos < 0 || pos > p.len() {
-            p.len()
-        } else {
-            pos
-        };
-        new_cmdpos.set(p.cmdpos);
-        p.cmdbuff_replaced = true;
+    p.cmdpos = if pos < 0 || pos > p.len() {
+        p.len()
+    } else {
+        pos
+    };
+    new_cmdpos.set(p.cmdpos);
+    p.cmdbuff_replaced = true;
 
-        redrawcmd();
+    unsafe { redrawcmd() };
 
-        // Trigger CmdlineChanged autocommands.
-        do_autocmd_cmdlinechanged(get_cmdline_type());
+    // Trigger CmdlineChanged autocommands.
+    unsafe { do_autocmd_cmdlinechanged(get_cmdline_type()) };
 
-        0
-    }
+    0
 }
 
 /// Remember `pos` as the byte position to put the cursor at, zero-based.
@@ -232,39 +220,38 @@ pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 /// `setcmdline()` function.
 pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe {
-        if tv_check_for_string_arg(argvars, 0) == FAIL
-            || tv_check_for_opt_number_arg(argvars, 1) == FAIL
-        {
+    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
+        || unsafe { tv_check_for_opt_number_arg(argvars, 1) } == FAIL
+    {
+        return;
+    }
+
+    let mut pos = -1;
+    if unsafe { (*argvars.offset(1)).v_type } != VAR_UNKNOWN {
+        let mut error = false;
+        pos = unsafe { tv_get_number_chk(argvars.offset(1), &raw mut error) } as ::core::ffi::c_int
+            - 1;
+        if error {
             return;
         }
-
-        let mut pos = -1;
-        if (*argvars.offset(1)).v_type != VAR_UNKNOWN {
-            let mut error = false;
-            pos = tv_get_number_chk(argvars.offset(1), &raw mut error) as ::core::ffi::c_int - 1;
-            if error {
-                return;
-            }
-            if pos < 0 {
-                emsg(gettext(e_positive.as_ptr()));
-                return;
-            }
+        if pos < 0 {
+            unsafe { emsg(gettext(e_positive.as_ptr())) };
+            return;
         }
-
-        // tv_get_string() so that a NULL string reads as an empty one.
-        (*rettv).vval.v_number =
-            set_cmdline_str(numbuf.string(argvars.offset(0)), pos) as varnumber_T;
     }
+
+    // tv_get_string() so that a NULL string reads as an empty one.
+    unsafe {
+        (*rettv).vval.v_number =
+            set_cmdline_str(numbuf.string(argvars.offset(0)), pos) as varnumber_T
+    };
 }
 
 /// `setcmdpos()` function.
 pub unsafe fn f_setcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        let pos = tv_get_number(argvars.offset(0)) as ::core::ffi::c_int - 1;
-        if pos >= 0 {
-            (*rettv).vval.v_number = set_cmdline_pos(pos) as varnumber_T;
-        }
+    let pos = unsafe { tv_get_number(argvars.offset(0)) } as ::core::ffi::c_int - 1;
+    if pos >= 0 {
+        unsafe { (*rettv).vval.v_number = set_cmdline_pos(pos) as varnumber_T };
     }
 }
 
@@ -276,34 +263,34 @@ pub fn get_cmdline_firstc() -> ::core::ffi::c_int {
 /// `wildtrigger()` function: ask the key loop to complete, as if `'wildchar'`
 /// had been typed.
 pub unsafe fn f_wildtrigger(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        if State.get() & MODE_CMDLINE == 0
-            || char_avail()
-            || wild_menu_showing.get() != 0
-            || cmdline_pum_active()
-        {
-            return;
-        }
+    if State.get() & MODE_CMDLINE == 0
+        || char_avail()
+        || wild_menu_showing.get() != 0
+        || cmdline_pum_active()
+    {
+        return;
+    }
 
-        let cmd_type = get_cmdline_type();
-        if cmd_type == ':' as ::core::ffi::c_int
-            || cmd_type == '/' as ::core::ffi::c_int
-            || cmd_type == '?' as ::core::ffi::c_int
-        {
-            // K_WILD as a single special key, pushed into the typeahead.
-            let mut key_string: [uint8_t; 4] = [
-                K_SPECIAL as uint8_t,
-                KS_EXTRA as uint8_t,
-                KE_WILD as uint8_t,
-                NUL as uint8_t,
-            ];
+    let cmd_type = get_cmdline_type();
+    if cmd_type == ':' as ::core::ffi::c_int
+        || cmd_type == '/' as ::core::ffi::c_int
+        || cmd_type == '?' as ::core::ffi::c_int
+    {
+        // K_WILD as a single special key, pushed into the typeahead.
+        let mut key_string: [uint8_t; 4] = [
+            K_SPECIAL as uint8_t,
+            KS_EXTRA as uint8_t,
+            KE_WILD as uint8_t,
+            NUL as uint8_t,
+        ];
+        unsafe {
             ins_typebuf(
                 key_string.as_mut_ptr() as *mut ::core::ffi::c_char,
                 REMAP_NONE,
                 0,
                 true,
                 false,
-            );
-        }
+            )
+        };
     }
 }

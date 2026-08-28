@@ -14,153 +14,158 @@ use crate::types::{ExpandContext, FAIL, NUL, OK};
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
 pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_match: bool) {
-    unsafe {
-        loop {
-            if !next_match {
-                // One step backwards.
-                if (*s).hiscnt == get_hislen() {
-                    // first time
-                    (*s).hiscnt = get_hisidx((*s).histype);
-                } else if (*s).hiscnt == 0 && get_hisidx((*s).histype) != get_hislen() - 1 {
-                    (*s).hiscnt = get_hislen() - 1;
-                } else if (*s).hiscnt != get_hisidx((*s).histype) + 1 {
-                    (*s).hiscnt -= 1;
-                } else {
-                    // at the top of the list
-                    (*s).hiscnt = (*s).save_hiscnt;
-                    break;
-                }
-            } else if (*s).hiscnt == get_hisidx((*s).histype) {
-                // On the last entry: clear the line.
-                (*s).hiscnt = get_hislen();
-                break;
-            } else if (*s).hiscnt == get_hislen() {
-                // Not on a history line, nothing to do.
-                break;
-            } else if (*s).hiscnt == get_hislen() - 1 {
-                (*s).hiscnt = 0; // wrap around
-            } else {
-                (*s).hiscnt += 1;
-            }
-
-            let Some(entry) = hist_entry_ref((*s).histype, (*s).hiscnt) else {
-                (*s).hiscnt = (*s).save_hiscnt;
-                break;
-            };
-            if ((*s).c != K_UP && (*s).c != K_DOWN)
-                || (*s).hiscnt == (*s).save_hiscnt
-                || strncmp(entry.text, (*s).lookfor, (*s).lookforlen as size_t) == 0
+    loop {
+        if !next_match {
+            // One step backwards.
+            if unsafe { (*s).hiscnt } == get_hislen() {
+                // first time
+                unsafe { (*s).hiscnt = get_hisidx((*s).histype) };
+            } else if unsafe { (*s).hiscnt } == 0
+                && get_hisidx(unsafe { (*s).histype }) != get_hislen() - 1
             {
+                unsafe { (*s).hiscnt = get_hislen() - 1 };
+            } else if unsafe { (*s).hiscnt } != get_hisidx(unsafe { (*s).histype }) + 1 {
+                unsafe { (*s).hiscnt -= 1 };
+            } else {
+                // at the top of the list
+                unsafe { (*s).hiscnt = (*s).save_hiscnt };
                 break;
             }
+        } else if unsafe { (*s).hiscnt } == get_hisidx(unsafe { (*s).histype }) {
+            // On the last entry: clear the line.
+            unsafe { (*s).hiscnt = get_hislen() };
+            break;
+        } else if unsafe { (*s).hiscnt } == get_hislen() {
+            // Not on a history line, nothing to do.
+            break;
+        } else if unsafe { (*s).hiscnt } == get_hislen() - 1 {
+            unsafe { (*s).hiscnt = 0 }; // wrap around
+        } else {
+            unsafe { (*s).hiscnt += 1 };
+        }
+
+        let Some(entry) = hist_entry_ref(unsafe { (*s).histype }, unsafe { (*s).hiscnt }) else {
+            unsafe { (*s).hiscnt = (*s).save_hiscnt };
+            break;
+        };
+        if (unsafe { (*s).c } != K_UP && unsafe { (*s).c } != K_DOWN)
+            || unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt }
+            || unsafe { strncmp(entry.text, (*s).lookfor, (*s).lookforlen as size_t) } == 0
+        {
+            break;
         }
     }
 }
 
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
 pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> KeyOutcome {
-    unsafe {
-        let mut cc = Cc::current();
-        if (*s).histype == HIST_INVALID || get_hislen() == 0 || (*s).firstc == NUL {
-            return KeyOutcome::NotChanged; // no history
-        }
-
-        (*s).save_hiscnt = (*s).hiscnt;
-
-        // Save the current command string, so that it can be restored later.
-        if (*s).lookfor.is_null() {
-            (*s).lookfor = xstrnsave(cc.text(), cc.len() as size_t);
-            *(*s).lookfor.offset(cc.cmdpos as isize) = NUL as ::core::ffi::c_char;
-            (*s).lookforlen = cc.cmdpos;
-        }
-
-        let next_match = (*s).c == K_DOWN
-            || (*s).c == K_S_DOWN
-            || (*s).c == Ctrl_N
-            || (*s).c == K_PAGEDOWN
-            || (*s).c == K_KPAGEDOWN;
-        command_line_next_histidx(s, next_match);
-
-        if (*s).hiscnt == (*s).save_hiscnt {
-            beep_flush();
-            return KeyOutcome::NotChanged;
-        }
-
-        // Jumped to another entry.
-        let p: *mut ::core::ffi::c_char;
-        let plen: ::core::ffi::c_int;
-        let mut hist_sep = NUL;
-
-        dealloc_cmdbuff();
-        (*s).xpc.xp_context = ExpandContext::Nothing;
-        if (*s).hiscnt == get_hislen() {
-            p = (*s).lookfor; // back to the old one
-            plen = (*s).lookforlen;
-        } else {
-            let entry =
-                hist_entry_ref((*s).histype, (*s).hiscnt).expect("browsed slot is occupied");
-            p = entry.text as *mut ::core::ffi::c_char;
-            plen = entry.len as ::core::ffi::c_int;
-            hist_sep = entry.sep as ::core::ffi::c_int;
-        }
-
-        let old_firstc = hist_sep;
-        if (*s).histype == HIST_SEARCH && p != (*s).lookfor && old_firstc != (*s).firstc {
-            // Correct for the separator character used when the history entry
-            // was added versus the one used now. First pass counts the
-            // length, second pass copies the characters, and the buffer is
-            // allocated in between.
-            // A closure rather than a `let`, because upstream only reads
-            // `p[j - 1]` when the character before it matched -- keeping the
-            // read lazy keeps the evaluation order.
-            let unescaped = |j: isize| {
-                j == 0 || *p.offset(j - 1) as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
-            };
-            let mut len = 0;
-            for pass in 0..2 {
-                len = 0;
-                let mut j = 0isize;
-                while *p.offset(j) as ::core::ffi::c_int != NUL {
-                    if *p.offset(j) as ::core::ffi::c_int == old_firstc && unescaped(j) {
-                        // Replace the old separator with the new one, unless
-                        // it is escaped.
-                        if pass > 0 {
-                            *cc.at(len) = (*s).firstc as ::core::ffi::c_char;
-                        }
-                    } else {
-                        // Escape the new separator, unless it is already
-                        // escaped.
-                        if *p.offset(j) as ::core::ffi::c_int == (*s).firstc && unescaped(j) {
-                            if pass > 0 {
-                                *cc.at(len) = '\\' as ::core::ffi::c_char;
-                            }
-                            len += 1;
-                        }
-                        if pass > 0 {
-                            *cc.at(len) = *p.offset(j);
-                        }
-                    }
-                    len += 1;
-                    j += 1;
-                }
-
-                if pass == 0 {
-                    cc.open(len);
-                }
-            }
-            *cc.at(len) = NUL as ::core::ffi::c_char;
-            cc.set_len(len);
-            cc.cmdpos = len;
-        } else {
-            cc.open(plen);
-            strcpy(cc.text(), p);
-            cc.set_len(plen);
-            cc.cmdpos = plen;
-        }
-
-        redrawcmd();
-        KeyOutcome::Changed
+    let mut cc = Cc::current();
+    if unsafe { (*s).histype } == HIST_INVALID || get_hislen() == 0 || unsafe { (*s).firstc } == NUL
+    {
+        return KeyOutcome::NotChanged; // no history
     }
+
+    unsafe { (*s).save_hiscnt = (*s).hiscnt };
+
+    // Save the current command string, so that it can be restored later.
+    if unsafe { (*s).lookfor }.is_null() {
+        unsafe { (*s).lookfor = xstrnsave(cc.text(), cc.len() as size_t) };
+        unsafe { *(*s).lookfor.offset(cc.cmdpos as isize) = NUL as ::core::ffi::c_char };
+        unsafe { (*s).lookforlen = cc.cmdpos };
+    }
+
+    let next_match = unsafe { (*s).c } == K_DOWN
+        || unsafe { (*s).c } == K_S_DOWN
+        || unsafe { (*s).c } == Ctrl_N
+        || unsafe { (*s).c } == K_PAGEDOWN
+        || unsafe { (*s).c } == K_KPAGEDOWN;
+    unsafe { command_line_next_histidx(s, next_match) };
+
+    if unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt } {
+        beep_flush();
+        return KeyOutcome::NotChanged;
+    }
+
+    // Jumped to another entry.
+    let p: *mut ::core::ffi::c_char;
+    let plen: ::core::ffi::c_int;
+    let mut hist_sep = NUL;
+
+    dealloc_cmdbuff();
+    unsafe { (*s).xpc.xp_context = ExpandContext::Nothing };
+    if unsafe { (*s).hiscnt } == get_hislen() {
+        p = unsafe { (*s).lookfor }; // back to the old one
+        plen = unsafe { (*s).lookforlen };
+    } else {
+        let entry = hist_entry_ref(unsafe { (*s).histype }, unsafe { (*s).hiscnt })
+            .expect("browsed slot is occupied");
+        p = entry.text as *mut ::core::ffi::c_char;
+        plen = entry.len as ::core::ffi::c_int;
+        hist_sep = entry.sep as ::core::ffi::c_int;
+    }
+
+    let old_firstc = hist_sep;
+    if unsafe { (*s).histype } == HIST_SEARCH
+        && p != unsafe { (*s).lookfor }
+        && old_firstc != unsafe { (*s).firstc }
+    {
+        // Correct for the separator character used when the history entry
+        // was added versus the one used now. First pass counts the
+        // length, second pass copies the characters, and the buffer is
+        // allocated in between.
+        // A closure rather than a `let`, because upstream only reads
+        // `p[j - 1]` when the character before it matched -- keeping the
+        // read lazy keeps the evaluation order.
+        let unescaped = |j: isize| {
+            j == 0
+                || unsafe { *p.offset(j - 1) } as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
+        };
+        let mut len = 0;
+        for pass in 0..2 {
+            len = 0;
+            let mut j = 0isize;
+            while unsafe { *p.offset(j) } as ::core::ffi::c_int != NUL {
+                if unsafe { *p.offset(j) } as ::core::ffi::c_int == old_firstc && unescaped(j) {
+                    // Replace the old separator with the new one, unless
+                    // it is escaped.
+                    if pass > 0 {
+                        unsafe { *cc.at(len) = (*s).firstc as ::core::ffi::c_char };
+                    }
+                } else {
+                    // Escape the new separator, unless it is already
+                    // escaped.
+                    if unsafe { *p.offset(j) } as ::core::ffi::c_int == unsafe { (*s).firstc }
+                        && unescaped(j)
+                    {
+                        if pass > 0 {
+                            unsafe { *cc.at(len) = '\\' as ::core::ffi::c_char };
+                        }
+                        len += 1;
+                    }
+                    if pass > 0 {
+                        unsafe { *cc.at(len) = *p.offset(j) };
+                    }
+                }
+                len += 1;
+                j += 1;
+            }
+
+            if pass == 0 {
+                cc.open(len);
+            }
+        }
+        unsafe { *cc.at(len) = NUL as ::core::ffi::c_char };
+        cc.set_len(len);
+        cc.cmdpos = len;
+    } else {
+        cc.open(plen);
+        unsafe { strcpy(cc.text(), p) };
+        cc.set_len(plen);
+        cc.cmdpos = plen;
+    }
+
+    unsafe { redrawcmd() };
+    KeyOutcome::Changed
 }
 
 /// Parse a `[N][,[M]]` range argument, as `:history` and `:clist` take.
@@ -173,15 +178,15 @@ pub unsafe fn get_list_range(
     num1: *mut ::core::ffi::c_int,
     num2: *mut ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    unsafe {
-        let mut len: ::core::ffi::c_int = 0;
-        let mut num: varnumber_T = 0;
-        let mut first = false;
+    let mut len: ::core::ffi::c_int = 0;
+    let mut num: varnumber_T = 0;
+    let mut first = false;
 
-        *str = skipwhite(*str);
-        if **str as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-            || ascii_isdigit(**str as ::core::ffi::c_int)
-        {
+    unsafe { *str = skipwhite(*str) };
+    if unsafe { **str } as ::core::ffi::c_int == '-' as ::core::ffi::c_int
+        || ascii_isdigit(unsafe { **str } as ::core::ffi::c_int)
+    {
+        unsafe {
             vim_str2nr(
                 *str,
                 ::core::ptr::null_mut::<::core::ffi::c_int>(),
@@ -192,43 +197,45 @@ pub unsafe fn get_list_range(
                 0,
                 false,
                 ::core::ptr::null_mut::<bool>(),
-            );
-            *str = (*str).offset(len as isize);
+            )
+        };
+        unsafe { *str = (*str).offset(len as isize) };
+        if num > INT_MAX as varnumber_T {
+            return FAIL;
+        }
+        unsafe { *num1 = num as ::core::ffi::c_int };
+        first = true;
+    }
+
+    unsafe { *str = skipwhite(*str) };
+    if unsafe { **str } as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+        // parse "to" part of range
+        unsafe { *str = skipwhite((*str).offset(1)) };
+        unsafe {
+            vim_str2nr(
+                *str,
+                ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                &raw mut len,
+                0,
+                &raw mut num,
+                ::core::ptr::null_mut::<uvarnumber_T>(),
+                0,
+                false,
+                ::core::ptr::null_mut::<bool>(),
+            )
+        };
+        if len > 0 {
+            unsafe { *str = skipwhite((*str).offset(len as isize)) };
             if num > INT_MAX as varnumber_T {
                 return FAIL;
             }
-            *num1 = num as ::core::ffi::c_int;
-            first = true;
+            unsafe { *num2 = num as ::core::ffi::c_int };
+        } else if !first {
+            return FAIL;
         }
-
-        *str = skipwhite(*str);
-        if **str as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
-            // parse "to" part of range
-            *str = skipwhite((*str).offset(1));
-            vim_str2nr(
-                *str,
-                ::core::ptr::null_mut::<::core::ffi::c_int>(),
-                &raw mut len,
-                0,
-                &raw mut num,
-                ::core::ptr::null_mut::<uvarnumber_T>(),
-                0,
-                false,
-                ::core::ptr::null_mut::<bool>(),
-            );
-            if len > 0 {
-                *str = skipwhite((*str).offset(len as isize));
-                if num > INT_MAX as varnumber_T {
-                    return FAIL;
-                }
-                *num2 = num as ::core::ffi::c_int;
-            } else if !first {
-                return FAIL;
-            }
-        } else if first {
-            // only one number given
-            *num2 = *num1;
-        }
-        OK
+    } else if first {
+        // only one number given
+        unsafe { *num2 = *num1 };
     }
+    OK
 }

@@ -446,14 +446,12 @@ unsafe fn set_put_ptr_t(
     mut key: ptr_t,
     mut key_alloc: *mut *mut ptr_t,
 ) -> bool {
-    unsafe {
-        let mut status: MHPutStatus = kMHExisting;
-        let mut k: uint32_t = mh_put_ptr_t(set, key, &raw mut status);
-        if !key_alloc.is_null() {
-            *key_alloc = (*set).keys.offset(k as isize);
-        }
-        status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
+    let mut status: MHPutStatus = kMHExisting;
+    let mut k: uint32_t = unsafe { mh_put_ptr_t(set, key, &raw mut status) };
+    if !key_alloc.is_null() {
+        unsafe { *key_alloc = (*set).keys.offset(k as isize) };
     }
+    status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
 }
 pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
