@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{size_of, size_of_val};
 use core::ptr;
@@ -32,7 +33,7 @@ use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, SESSION_FILE,
-    SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, curbuf, current_sctx, embedded_mode, err_arg_missing,
+    SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode, err_arg_missing,
     err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args, exmode_active,
     headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptValTypeNumber,
     kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T, nlua_disable_preload, p_lpl,
@@ -54,6 +55,7 @@ use crate::types::{
     FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
     aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
 };
+use crate::winlayer::Live;
 use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
 
 /// A bare `-V` is "a little bit verbose".
@@ -139,9 +141,15 @@ pub(crate) unsafe fn edit_stdin(parmp: *mut mparm_T) -> bool {
     explicit || implicit
 }
 
+/// The parameter block the scan fills in.
+///
+/// One `Live` for the whole scan: the block is the caller's, it outlives
+/// `command_line_scan`, and nothing here can free it.
+type Mp = Live<mparm_T>;
+
 /// The walking cursor over argv.
 struct Scan {
-    parmp: *mut mparm_T,
+    parm: Mp,
     /// Words left, counting the one `argv` points at.
     argc: c_int,
     argv: *mut *mut c_char,
@@ -152,32 +160,52 @@ struct Scan {
 }
 
 impl Scan {
+    /// Start a scan of `argc` words at `argv`, filling in `parmp`.
+    ///
+    /// # Safety
+    ///
+    /// `parmp` must point at an `mparm_T` that outlives the scan, and `argv`
+    /// at `argc` NUL-terminated words. That promise is what makes every
+    /// method below ordinary safe code: the struct is private to this file
+    /// and `argv_idx` only ever moves within the word `argv` points at, so
+    /// each dereference is checked by construction rather than at its use.
+    unsafe fn new(parmp: *mut mparm_T, argc: c_int, argv: *mut *mut c_char) -> Self {
+        Self {
+            // SAFETY: the caller promised `parmp` outlives the scan.
+            parm: unsafe { Mp::new(parmp) },
+            argc,
+            argv,
+            argv_idx: 1,
+            had_minmin: false,
+        }
+    }
+
     /// The word being read.
-    unsafe fn arg(&self) -> *mut c_char {
+    fn arg(&self) -> *mut c_char {
         // SAFETY: `argv[0]` is in range while `argc > 0`.
         unsafe { *self.argv }
     }
 
     /// The unread tail of the word being read.
-    unsafe fn tail(&self) -> *mut c_char {
+    fn tail(&self) -> *mut c_char {
         // SAFETY: `argv_idx` indexes within `argv[0]`.
         unsafe { self.arg().offset(self.argv_idx as isize) }
     }
 
     /// Whether the word being read has anything left in it.
-    unsafe fn has_tail(&self) -> bool {
+    fn has_tail(&self) -> bool {
         // SAFETY: as `tail`.
         unsafe { *self.tail() as c_int != NUL }
     }
 
     /// Does the unread tail *start* with `word`, case-insensitively?
-    unsafe fn tail_starts_with(&self, word: &CStr) -> bool {
+    fn tail_starts_with(&self, word: &CStr) -> bool {
         // SAFETY: as `tail`; `word` is NUL-terminated.
         unsafe { strncasecmp(self.tail(), word.as_ptr(), word.count_bytes() as size_t) == 0 }
     }
 
     /// Is the unread tail exactly `word`, case-insensitively?
-    unsafe fn tail_is(&self, word: &CStr) -> bool {
+    fn tail_is(&self, word: &CStr) -> bool {
         // SAFETY: as `tail`; `word` is NUL-terminated.
         unsafe { strcasecmp(self.tail(), word.as_ptr()) == 0 }
     }
@@ -186,110 +214,102 @@ impl Scan {
     ///
     /// `owned` marks a command this process allocated, so `exe_commands`
     /// frees it again.
-    unsafe fn push_command(&mut self, cmd: *mut c_char, owned: bool) {
-        // SAFETY: `parmp` is live; the arrays are `MAX_ARG_CMDS` long.
-        if unsafe { (*self.parmp).n_commands } >= MAX_ARG_CMDS {
+    fn push_command(&mut self, cmd: *mut c_char, owned: bool) {
+        // The arrays are `MAX_ARG_CMDS` long, which is what the test guards.
+        if self.parm.n_commands >= MAX_ARG_CMDS {
             unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
         }
-        let at = unsafe { (*self.parmp).n_commands } as usize;
-        unsafe { (*self.parmp).cmds_tofree[at] = owned as c_char };
-        unsafe { (*self.parmp).commands[at] = cmd };
-        unsafe { (*self.parmp).n_commands += 1 };
+        let at = self.parm.n_commands as usize;
+        self.parm.cmds_tofree[at] = owned as c_char;
+        self.parm.commands[at] = cmd;
+        self.parm.n_commands += 1;
     }
 
     /// Queue a `--cmd` command for before any config is read.
-    unsafe fn push_pre_command(&mut self, cmd: *mut c_char) {
-        // SAFETY: as `push_command`.
-        if unsafe { (*self.parmp).n_pre_commands } >= MAX_ARG_CMDS {
+    fn push_pre_command(&mut self, cmd: *mut c_char) {
+        // As `push_command`.
+        if self.parm.n_pre_commands >= MAX_ARG_CMDS {
             unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
         }
-        let at = unsafe { (*self.parmp).n_pre_commands } as usize;
-        unsafe { (*self.parmp).pre_commands[at] = cmd };
-        unsafe { (*self.parmp).n_pre_commands += 1 };
+        let at = self.parm.n_pre_commands as usize;
+        self.parm.pre_commands[at] = cmd;
+        self.parm.n_pre_commands += 1;
     }
 
     /// Claim the one "what is this process editing" slot for `-t` or `-q`.
-    unsafe fn claim_edit_type(&mut self, kind: c_int) {
-        // SAFETY: `parmp` is live; `mainerr` does not return.
-        if unsafe { (*self.parmp).edit_type } != EDIT_NONE as c_int {
+    fn claim_edit_type(&mut self, kind: c_int) {
+        // `mainerr` does not return.
+        if self.parm.edit_type != EDIT_NONE as c_int {
             unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
         }
-        unsafe { (*self.parmp).edit_type = kind };
+        self.parm.edit_type = kind;
     }
 
     /// `-s`, `-w` and `-W` share one complaint: a script file is already
     /// open.
-    unsafe fn script_file_twice(&self) -> ! {
+    fn script_file_twice(&self) -> ! {
         let mut complaint = [0 as c_char; IOSIZE as usize];
         // SAFETY: `argv[-1]` is the option and `argv[0]` its argument, both
         // in range by the time this is reachable.
-        unsafe {
-            vim_snprintf(
-                complaint.as_mut_ptr(),
-                IOSIZE as size_t,
-                gettext(c"Attempt to open script file again: \"%s %s\"\n".as_ptr()),
-                *self.argv.offset(-1),
-                *self.argv,
-            )
-        };
+        let into = complaint.as_mut_ptr();
+        let fmt = unsafe { gettext(c"Attempt to open script file again: \"%s %s\"\n".as_ptr()) };
+        let option = unsafe { *self.argv.offset(-1) };
+        let word = unsafe { *self.argv };
+        unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, option, word) };
         unsafe { fprintf(stderr, c"%s".as_ptr(), complaint.as_ptr()) };
         unsafe { os_exit(2) }
     }
 
     /// A `--long` option. Answers whether it wants the next word.
-    unsafe fn long_option(&mut self) -> bool {
-        // SAFETY: reads the tail of `argv[0]` and writes globals.
-        if unsafe { self.tail_is(c"help") } {
+    fn long_option(&mut self) -> bool {
+        if self.tail_is(c"help") {
             unsafe { usage() };
             unsafe { os_exit(0) };
-        } else if unsafe { self.tail_is(c"version") } {
+        } else if self.tail_is(c"version") {
             unsafe { version() };
             unsafe { os_exit(0) };
-        } else if unsafe { self.tail_is(c"api-info") } {
+        } else if self.tail_is(c"api-info") {
             let data = api_metadata_raw();
             let written = unsafe { os_write(STDOUT_FILENO, data.data(), data.len(), false) };
             if written < 0 as ptrdiff_t {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E5420: Failed to write to file: %s".as_ptr()),
-                        uv_strerror(written as c_int),
-                    )
-                };
+                let fmt = unsafe { gettext(c"E5420: Failed to write to file: %s".as_ptr()) };
+                let why = unsafe { uv_strerror(written as c_int) };
+                unsafe { semsg_c!(fmt, why) };
             }
             unsafe { os_exit(0) };
-        } else if unsafe { self.tail_is(c"headless") } {
+        } else if self.tail_is(c"headless") {
             headless_mode.set(true);
-        } else if unsafe { self.tail_is(c"embed") } {
+        } else if self.tail_is(c"embed") {
             embedded_mode.set(true);
-        } else if unsafe { self.tail_starts_with(c"listen") } {
+        } else if self.tail_starts_with(c"listen") {
             self.argv_idx += 6;
             return true;
-        } else if unsafe { self.tail_starts_with(c"literal") } {
+        } else if self.tail_starts_with(c"literal") {
             // Nothing to do: file arguments are always literal (#7679).
-        } else if unsafe { self.tail_starts_with(c"remote") } {
+        } else if self.tail_starts_with(c"remote") {
             // Where in the *original* argv this was: everything from
             // here on is forwarded to the server verbatim.
-            unsafe { (*self.parmp).remote = (*self.parmp).argc - self.argc };
-        } else if unsafe { self.tail_starts_with(c"server") } {
+            self.parm.remote = self.parm.argc - self.argc;
+        } else if self.tail_starts_with(c"server") {
             self.argv_idx += 6;
             return true;
-        } else if unsafe { self.tail_starts_with(c"noplugin") } {
+        } else if self.tail_starts_with(c"noplugin") {
             p_lpl.set(0);
-        } else if unsafe { self.tail_starts_with(c"cmd") } {
+        } else if self.tail_starts_with(c"cmd") {
             self.argv_idx += 3;
             return true;
-        } else if unsafe { self.tail_starts_with(c"startuptime") } {
+        } else if self.tail_starts_with(c"startuptime") {
             // The file is already open -- `init_startuptime` found this
             // argument before the scan began. Only swallow the value.
             self.argv_idx += 11;
             return true;
-        } else if unsafe { self.tail_starts_with(c"clean") } {
-            unsafe { (*self.parmp).use_vimrc = c"NONE".as_ptr() as *mut c_char };
-            unsafe { (*self.parmp).clean = true };
+        } else if self.tail_starts_with(c"clean") {
+            self.parm.use_vimrc = c"NONE".as_ptr() as *mut c_char;
+            self.parm.clean = true;
             set_opt(kOptShadafile, unsafe { string_opt(c"NONE".as_ptr()) });
-        } else if unsafe { self.tail_starts_with(c"luamod-dev") } {
+        } else if self.tail_starts_with(c"luamod-dev") {
             nlua_disable_preload.set(true);
-        } else if unsafe { self.has_tail() } {
+        } else if self.has_tail() {
             unsafe { mainerr(err_opt_unknown.get(), self.arg(), ptr::null()) };
         } else {
             // A bare `--`: only file names from here on.
@@ -299,27 +319,25 @@ impl Scan {
     }
 
     /// A `-x` option. Answers whether it wants the next word.
-    unsafe fn short_option(&mut self, c: u8) -> bool {
-        // SAFETY: reads and writes the parameter block, the current buffer
-        // and the options.
+    fn short_option(&mut self, c: u8) -> bool {
         match c {
             b'\0' => {
                 // A bare `-`: read the buffer from standard input, unless
                 // Ex mode already claimed it, where it means "silent".
                 if exmode_active.get() {
                     silent_mode.set(true);
-                    unsafe { (*self.parmp).no_swap_file = 1 };
+                    self.parm.no_swap_file = 1;
                 } else {
-                    if unsafe { (*self.parmp).edit_type } > EDIT_STDIN as c_int {
+                    if self.parm.edit_type > EDIT_STDIN as c_int {
                         unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
                     }
-                    unsafe { (*self.parmp).had_stdin_file = true };
-                    unsafe { (*self.parmp).edit_type = EDIT_STDIN as c_int };
+                    self.parm.had_stdin_file = true;
+                    self.parm.edit_type = EDIT_STDIN as c_int;
                 }
                 self.argv_idx = -1;
             }
             b'-' => {
-                let want = unsafe { self.long_option() };
+                let want = self.long_option();
                 if !want {
                     self.argv_idx = -1;
                 }
@@ -329,19 +347,15 @@ impl Scan {
             b'b' => {
                 // Before the file names are expanded: on Windows this is
                 // what decides whether a shortcut is edited or followed.
-                set_options_bin(
-                    unsafe { (*curbuf.get()).b_p_bin } != 0,
-                    true,
-                    OptionSetFlags::NONE,
-                );
-                unsafe { (*curbuf.get()).b_p_bin = 1 };
+                set_options_bin(cur_buf().b_p_bin != 0, true, OptionSetFlags::NONE);
+                cur_buf().b_p_bin = 1;
             }
-            b'D' => unsafe { (*self.parmp).use_debug_break_level = DEBUG_BREAK_ALL },
-            b'd' => unsafe { (*self.parmp).diff_mode = 1 },
+            b'D' => self.parm.use_debug_break_level = DEBUG_BREAK_ALL,
+            b'd' => self.parm.diff_mode = 1,
             b'e' => exmode_active.set(true),
             b'E' => {
                 exmode_active.set(true);
-                unsafe { (*self.parmp).input_istext = true };
+                self.parm.input_istext = true;
             }
             // `-f` meant "GUI: run in the foreground"; there is no GUI.
             b'f' => {}
@@ -363,26 +377,22 @@ impl Scan {
             }
             // `-N` (nocompatible) and `-X` (no X server) are always so.
             b'N' | b'X' => {}
-            b'n' => unsafe { (*self.parmp).no_swap_file = 1 },
+            b'n' => self.parm.no_swap_file = 1,
             b'p' | b'o' | b'O' => {
                 // A count of 0 means one window per file.
-                unsafe {
-                    (*self.parmp).window_count =
-                        get_number_arg(self.arg(), &raw mut self.argv_idx, 0)
-                };
-                unsafe {
-                    (*self.parmp).window_layout = match c {
-                        b'p' => WIN_TABS as c_int,
-                        b'o' => WIN_HOR as c_int,
-                        _ => WIN_VER as c_int,
-                    }
+                let word = self.arg();
+                self.parm.window_count = unsafe { get_number_arg(word, &raw mut self.argv_idx, 0) };
+                self.parm.window_layout = match c {
+                    b'p' => WIN_TABS as c_int,
+                    b'o' => WIN_HOR as c_int,
+                    _ => WIN_VER as c_int,
                 };
             }
             b'q' => {
-                unsafe { self.claim_edit_type(EDIT_QF as c_int) };
-                if unsafe { self.has_tail() } {
+                self.claim_edit_type(EDIT_QF as c_int);
+                if self.has_tail() {
                     // `-q{errorfile}`
-                    unsafe { (*self.parmp).use_ef = self.tail() };
+                    self.parm.use_ef = self.tail();
                     self.argv_idx = -1;
                 } else if self.argc > 1 {
                     // `-q {errorfile}`. A trailing `-q` with nothing
@@ -392,7 +402,7 @@ impl Scan {
             }
             b'R' => {
                 readonlymode.set(true);
-                unsafe { (*curbuf.get()).b_p_ro = 1 };
+                cur_buf().b_p_ro = 1;
                 p_uc.set(READONLY_UPDATECOUNT);
             }
             // `-L` is the historical spelling of `-r`.
@@ -401,7 +411,7 @@ impl Scan {
                 if exmode_active.get() {
                     // `-es`: silent (batch) Ex mode.
                     silent_mode.set(true);
-                    unsafe { (*self.parmp).no_swap_file = 1 };
+                    self.parm.no_swap_file = 1;
                     unsafe { suppress_shada() };
                 } else {
                     // `-s {scriptin}`
@@ -409,10 +419,10 @@ impl Scan {
                 }
             }
             b't' => {
-                unsafe { self.claim_edit_type(EDIT_TAG as c_int) };
-                if unsafe { self.has_tail() } {
+                self.claim_edit_type(EDIT_TAG as c_int);
+                if self.has_tail() {
                     // `-t{tag}`
-                    unsafe { (*self.parmp).tagname = self.tail() };
+                    self.parm.tagname = self.tail();
                     self.argv_idx = -1;
                 } else {
                     // `-t {tag}`
@@ -424,10 +434,10 @@ impl Scan {
                 unsafe { os_exit(0) };
             }
             b'V' => {
-                p_verbose.set(unsafe {
-                    get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_VERBOSE)
-                } as OptInt);
-                if unsafe { self.has_tail() } {
+                let word = self.arg();
+                let n = unsafe { get_number_arg(word, &raw mut self.argv_idx, DEFAULT_VERBOSE) };
+                p_verbose.set(n as OptInt);
+                if self.has_tail() {
                     // `-V{N}{file}`: whatever follows the digits is
                     // 'verbosefile', and it uses up the whole word.
                     set_opt(kOptVerbosefile, unsafe { string_opt(self.tail()) });
@@ -438,19 +448,18 @@ impl Scan {
                 // `-w{number}` is a 'window' height; `-w {scriptout}` is
                 // a file to record the keystrokes into.
                 if ascii_isdigit(unsafe { *self.tail() } as c_int) {
-                    let n = unsafe {
-                        get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW)
-                    };
+                    let word = self.arg();
+                    let n = unsafe { get_number_arg(word, &raw mut self.argv_idx, DEFAULT_WINDOW) };
                     set_opt(kOptWindow, number_opt(n as OptInt));
                 } else {
                     return true;
                 }
             }
             b'c' => {
-                if unsafe { self.has_tail() } {
+                if self.has_tail() {
                     // `-c{command}`
-                    let cmd = unsafe { self.tail() };
-                    unsafe { self.push_command(cmd, false) };
+                    let cmd = self.tail();
+                    self.push_command(cmd, false);
                     self.argv_idx = -1;
                 } else {
                     // `-c {command}`
@@ -465,11 +474,11 @@ impl Scan {
     }
 
     /// Collect the word an option asked for, and act on it.
-    unsafe fn option_argument(&mut self, c: u8) {
-        // SAFETY: steps `argv` forward by one, having checked there is one
-        // -- except for `-S`, whose argument is optional.
+    fn option_argument(&mut self, c: u8) {
+        // Steps `argv` forward by one, having checked there is one -- except
+        // for `-S`, whose argument is optional.
         // Nothing may follow an option that takes a separate word.
-        if unsafe { self.has_tail() } {
+        if self.has_tail() {
             unsafe { mainerr(err_opt_garbage.get(), self.arg(), ptr::null()) };
         }
 
@@ -482,7 +491,7 @@ impl Scan {
 
         match c {
             b'c' | b'S' => {
-                if unsafe { (*self.parmp).n_commands } >= MAX_ARG_CMDS {
+                if self.parm.n_commands >= MAX_ARG_CMDS {
                     unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
                 }
                 if c == b'S' {
@@ -496,16 +505,16 @@ impl Scan {
                         self.argv = unsafe { self.argv.offset(-1) };
                         SESSION_FILE.as_ptr() as *mut c_char
                     } else {
-                        unsafe { self.arg() }
+                        self.arg()
                     };
                     // "so " + the name + the NUL, with room to spare.
                     let size = unsafe { strlen(file) } + 9;
                     let cmd = unsafe { xmalloc(size) } as *mut c_char;
                     unsafe { snprintf(cmd, size, c"so %s".as_ptr(), file) };
-                    unsafe { self.push_command(cmd, true) };
+                    self.push_command(cmd, true);
                 } else {
-                    let cmd = unsafe { self.arg() };
-                    unsafe { self.push_command(cmd, false) };
+                    let cmd = self.arg();
+                    self.push_command(cmd, false);
                 }
             }
             b'-' => {
@@ -513,16 +522,16 @@ impl Scan {
                 // from the word before it.
                 let opt = unsafe { *self.argv.offset(-1) };
                 if unsafe { strequal(opt, c"--cmd".as_ptr()) } {
-                    let cmd = unsafe { self.arg() };
-                    unsafe { self.push_pre_command(cmd) };
+                    let cmd = self.arg();
+                    self.push_pre_command(cmd);
                 } else if unsafe { strequal(opt, c"--listen".as_ptr()) } {
-                    unsafe { (*self.parmp).listen_addr = self.arg() };
+                    self.parm.listen_addr = self.arg();
                 } else if unsafe { strequal(opt, c"--server".as_ptr()) } {
-                    unsafe { (*self.parmp).server_addr = self.arg() };
+                    self.parm.server_addr = self.arg();
                 }
                 // `--startuptime <file>` was handled before the scan.
             }
-            b'q' => unsafe { (*self.parmp).use_ef = self.arg() },
+            b'q' => self.parm.use_ef = self.arg(),
             b'i' => set_opt(kOptShadafile, unsafe { string_opt(self.arg()) }),
             b'l' => {
                 // `-l {script}`: a batch Lua run. Everything after the
@@ -530,80 +539,74 @@ impl Scan {
                 headless_mode.set(true);
                 silent_mode.set(true);
                 p_verbose.set(1 as OptInt);
-                unsafe { (*self.parmp).no_swap_file = 1 };
-                if unsafe { (*self.parmp).use_vimrc }.is_null() {
-                    unsafe { (*self.parmp).use_vimrc = c"NONE".as_ptr() as *mut c_char };
+                self.parm.no_swap_file = 1;
+                if self.parm.use_vimrc.is_null() {
+                    self.parm.use_vimrc = c"NONE".as_ptr() as *mut c_char;
                 }
                 unsafe { suppress_shada() };
-                unsafe { (*self.parmp).luaf = self.arg() };
+                self.parm.luaf = self.arg();
                 self.argc -= 1;
                 if self.argc >= 0 {
-                    unsafe { (*self.parmp).lua_arg0 = (*self.parmp).argc - self.argc };
+                    self.parm.lua_arg0 = self.parm.argc - self.argc;
                     // Stop the scan: the rest is the script's own argv.
                     self.argc = 0;
                 }
             }
             b's' => {
-                if !unsafe { (*self.parmp).scriptin }.is_null() {
-                    unsafe { self.script_file_twice() };
+                if !self.parm.scriptin.is_null() {
+                    self.script_file_twice();
                 }
-                unsafe { (*self.parmp).scriptin = self.arg() };
+                self.parm.scriptin = self.arg();
             }
-            b't' => unsafe { (*self.parmp).tagname = self.arg() },
-            b'u' => unsafe { (*self.parmp).use_vimrc = self.arg() },
+            b't' => self.parm.tagname = self.arg(),
+            b'u' => self.parm.use_vimrc = self.arg(),
             // `-U {gvimrc}`: there is no GUI.
             b'U' => {}
             b'w' | b'W' => {
                 // `-w {nr}` is still a 'window' height.
                 if c == b'w' && ascii_isdigit(unsafe { *self.arg() } as c_int) {
                     self.argv_idx = 0;
-                    let n = unsafe {
-                        get_number_arg(self.arg(), &raw mut self.argv_idx, DEFAULT_WINDOW)
-                    };
+                    let word = self.arg();
+                    let n = unsafe { get_number_arg(word, &raw mut self.argv_idx, DEFAULT_WINDOW) };
                     set_opt(kOptWindow, number_opt(n as OptInt));
                     self.argv_idx = -1;
                     return;
                 }
-                if !unsafe { (*self.parmp).scriptout }.is_null() {
-                    unsafe { self.script_file_twice() };
+                if !self.parm.scriptout.is_null() {
+                    self.script_file_twice();
                 }
-                unsafe { (*self.parmp).scriptout = self.arg() };
+                self.parm.scriptout = self.arg();
                 // `-w` appends, `-W` overwrites.
-                unsafe { (*self.parmp).scriptout_append = c == b'w' };
+                self.parm.scriptout_append = c == b'w';
             }
             _ => {}
         }
     }
 
     /// A word that is not an option: a file to edit.
-    unsafe fn file_argument(&mut self) {
-        // SAFETY: `argv[0]` is a NUL-terminated file name; the global
-        // argument list takes ownership of the copy made here.
+    fn file_argument(&mut self) {
+        // `argv[0]` is a NUL-terminated file name; the global argument list
+        // takes ownership of the copy made here.
         self.argv_idx = -1;
 
         // Only one kind of editing at a time.
-        if unsafe { (*self.parmp).edit_type } > EDIT_STDIN as c_int {
+        if self.parm.edit_type > EDIT_STDIN as c_int {
             unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
         }
-        unsafe { (*self.parmp).edit_type = EDIT_FILE as c_int };
+        self.parm.edit_type = EDIT_FILE as c_int;
 
         let alist = global_arglist();
         unsafe { ga_grow(&raw mut (*alist).al_ga, 1) };
         let mut path = unsafe { xstrdup(self.arg()) };
 
         // `nvim -d dir file` diffs `dir/file` against `file`.
-        if unsafe { (*self.parmp).diff_mode } != 0
+        if self.parm.diff_mode != 0
             && unsafe { os_isdir(path) }
             && unsafe { (*alist).al_ga.ga_len } > 0
             && !unsafe { os_isdir(alist_name((*alist).al_ga.ga_data as *mut aentry_T)) }
         {
-            let joined = unsafe {
-                concat_fnames(
-                    path,
-                    path_tail(alist_name((*alist).al_ga.ga_data as *mut aentry_T)),
-                    true,
-                )
-            };
+            let first = unsafe { alist_name((*alist).al_ga.ga_data as *mut aentry_T) };
+            let joined = unsafe { concat_fnames(path, path_tail(first), true) };
             unsafe { xfree(path as *mut c_void) };
             path = joined;
         }
@@ -611,7 +614,7 @@ impl Scan {
         // 1: number the buffer after the name is expanded. 2: number it
         // now and make it current -- which is wrong when standard input
         // is going to want the current buffer for itself.
-        let alist_fnum_flag = if unsafe { edit_stdin(self.parmp) } {
+        let alist_fnum_flag = if unsafe { edit_stdin(self.parm.raw()) } {
             1
         } else {
             2
@@ -625,14 +628,10 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block and holds the
     // process's own argv, which outlives everything here -- which is why the
     // strings stored into `parmp` are borrowed rather than copied.
-    let mut scan = Scan {
-        parmp,
-        // Skip argv[0].
-        argc: unsafe { (*parmp).argc } - 1,
-        argv: unsafe { (*parmp).argv.offset(1) },
-        argv_idx: 1,
-        had_minmin: false,
-    };
+    // Skip argv[0].
+    let argc = unsafe { (*parmp).argc } - 1;
+    let argv = unsafe { (*parmp).argv.offset(1) };
+    let mut scan = unsafe { Scan::new(parmp, argc, argv) };
 
     while scan.argc > 0 {
         let first = unsafe { *scan.arg() } as u8;
@@ -645,19 +644,19 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
             } else {
                 unsafe { scan.arg().offset(1) }
             };
-            unsafe { scan.push_command(cmd, false) };
+            scan.push_command(cmd, false);
         } else if first == b'-' && !scan.had_minmin {
             let c = unsafe { *scan.tail() } as u8;
             scan.argv_idx += 1;
-            if unsafe { scan.short_option(c) } {
-                unsafe { scan.option_argument(c) };
+            if scan.short_option(c) {
+                scan.option_argument(c);
             }
         } else {
-            unsafe { scan.file_argument() };
+            scan.file_argument();
         }
 
         // Move on when the word is used up, or when an option said so.
-        if scan.argv_idx <= 0 || !unsafe { scan.has_tail() } {
+        if scan.argv_idx <= 0 || !scan.has_tail() {
             scan.argc -= 1;
             scan.argv = unsafe { scan.argv.offset(1) };
             scan.argv_idx = 1;
@@ -665,13 +664,8 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
     }
 
     if embedded_mode.get() && (silent_mode.get() || !unsafe { (*parmp).luaf }.is_null()) {
-        unsafe {
-            mainerr(
-                gettext(c"--embed conflicts with -es/-Es/-l".as_ptr()),
-                ptr::null(),
-                ptr::null(),
-            )
-        };
+        let msg = unsafe { gettext(c"--embed conflicts with -es/-Es/-l".as_ptr()) };
+        unsafe { mainerr(msg, ptr::null(), ptr::null()) };
     }
 
     // The first `+cmd`/`-c` becomes `v:swapcommand`, so the ATTENTION
@@ -716,23 +710,15 @@ pub(crate) unsafe fn init_startuptime(paramp: *mut mparm_T) {
         |i| unsafe { strcasecmp(*(*paramp).argv.offset(i as isize), c"--embed".as_ptr()) } == 0,
     );
     for i in 1..last {
-        if unsafe {
-            strcasecmp(
-                *(*paramp).argv.offset(i as isize),
-                c"--startuptime".as_ptr(),
-            )
-        } == 0
-        {
-            unsafe {
-                time_init(
-                    *(*paramp).argv.offset((i + 1) as isize),
-                    if names_embed {
-                        c"Embedded".as_ptr()
-                    } else {
-                        c"Primary (or UI client)".as_ptr()
-                    },
-                )
+        let word = unsafe { *(*paramp).argv.offset(i as isize) };
+        if unsafe { strcasecmp(word, c"--startuptime".as_ptr()) } == 0 {
+            let label = if names_embed {
+                c"Embedded".as_ptr()
+            } else {
+                c"Primary (or UI client)".as_ptr()
             };
+            let file = unsafe { *(*paramp).argv.offset((i + 1) as isize) };
+            unsafe { time_init(file, label) };
             unsafe { time_start(c"--- NVIM STARTING ---".as_ptr()) };
             break;
         }
@@ -768,13 +754,12 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
 pub(crate) unsafe fn set_window_layout(paramp: *mut mparm_T) {
     // SAFETY: `paramp` is the caller's live parameter block.
     if unsafe { (*paramp).diff_mode } != 0 && unsafe { (*paramp).window_layout } == 0 {
-        unsafe {
-            (*paramp).window_layout = if diffopt_horizontal() {
-                WIN_HOR as c_int
-            } else {
-                WIN_VER as c_int
-            }
+        let layout = if diffopt_horizontal() {
+            WIN_HOR as c_int
+        } else {
+            WIN_VER as c_int
         };
+        unsafe { (*paramp).window_layout = layout };
     }
 }
 
@@ -810,4 +795,10 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> c_int {
     drop(sctx);
     unsafe { xfree(initstr as *mut c_void) };
     OK
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }

@@ -87,17 +87,8 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
         stream_set_blocking(STDIN_FILENO, true);
     }
 
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"os_exit".as_ptr(),
-            737,
-            true,
-            c"Nvim exit: %d".as_ptr(),
-            r,
-        )
-    };
+    let (site, fmt) = (c"os_exit".as_ptr(), c"Nvim exit: %d".as_ptr());
+    unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), site, 737, true, fmt, r) };
 
     unsafe { exit(r) };
 }

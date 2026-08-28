@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -148,13 +149,12 @@ pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
     unsafe { eval_init() };
     unsafe { set_vim_var_nr(Vv::Starttime, os_realtime()) };
 
-    unsafe {
-        init_path(if !argv0.get().is_null() {
-            argv0.get() as *const c_char
-        } else {
-            c"nvim".as_ptr()
-        })
+    let exename = if !argv0.get().is_null() {
+        argv0.get() as *const c_char
+    } else {
+        c"nvim".as_ptr()
     };
+    unsafe { init_path(exename) };
     unsafe { runtime_init() };
     highlight_init();
     unsafe { time_msg_at(c"early init") };
@@ -188,12 +188,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // never returns while anything still holds a pointer into it.
     argv0.set(unsafe { *argv });
     if !appname_is_valid() {
-        unsafe {
-            fprintf(
-                stderr,
-                c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr(),
-            )
-        };
+        let msg = c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr();
+        unsafe { fprintf(stderr, msg) };
         unsafe { exit(1) };
     }
 
@@ -267,16 +263,9 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         has_term && !headless_mode.get() && !embedded_mode.get() && !silent_mode.get();
 
     if params.remote != 0 {
-        unsafe {
-            remote_request(
-                &raw mut params,
-                params.remote,
-                params.server_addr,
-                argc,
-                argv,
-                use_builtin_ui,
-            )
-        };
+        let (at, addr) = (params.remote, params.server_addr);
+        let parmp = &raw mut params;
+        unsafe { remote_request(parmp, at, addr, argc, argv, use_builtin_ui) };
     }
 
     // A `--remote-ui` handled above already has a channel; otherwise the
@@ -284,13 +273,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let remote_ui = ui_client_channel_id.get() != 0;
     if use_builtin_ui && !remote_ui {
         ui_client_forward_stdin.set(!stdin_isatty.get());
-        let chan = unsafe {
-            ui_client_start_server(
-                get_vim_var_str(Vv::Progpath),
-                params.argc as usize,
-                params.argv,
-            )
-        };
+        let progpath = unsafe { get_vim_var_str(Vv::Progpath) };
+        let chan = unsafe { ui_client_start_server(progpath, params.argc as usize, params.argv) };
         if chan == 0 {
             unsafe { fprintf(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
             unsafe { os_exit(1) };
@@ -374,23 +358,15 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         unsafe { os_exit(2) };
     }
     if !params.scriptout.is_null() {
-        scriptout.set(unsafe {
-            os_fopen(
-                params.scriptout,
-                if params.scriptout_append {
-                    APPENDBIN.as_ptr()
-                } else {
-                    WRITEBIN.as_ptr()
-                },
-            )
-        });
+        let mode = if params.scriptout_append {
+            APPENDBIN.as_ptr()
+        } else {
+            WRITEBIN.as_ptr()
+        };
+        scriptout.set(unsafe { os_fopen(params.scriptout, mode) });
         if scriptout.get().is_null() {
-            unsafe {
-                fprintf(
-                    stderr,
-                    gettext(c"Cannot open for script output: \"".as_ptr()),
-                )
-            };
+            let fmt = unsafe { gettext(c"Cannot open for script output: \"".as_ptr()) };
+            unsafe { fprintf(stderr, fmt) };
             unsafe { fprintf(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
             unsafe { os_exit(2) };
         }
@@ -422,15 +398,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if recoverymode.get() && fname.is_null() {
         // `-r` with no file: list the swap files and leave.
-        unsafe {
-            recover_names(
-                ptr::null_mut(),
-                true,
-                ptr::null_mut::<list_T>(),
-                0,
-                ptr::null_mut(),
-            )
-        };
+        let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<list_T>());
+        unsafe { recover_names(no_name, true, no_list, 0, ptr::null_mut()) };
         unsafe { os_exit(0) };
     }
 
@@ -476,17 +445,10 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
 
     if exmode_active.get() {
-        unsafe { (*curwin.get()).w_cursor.lnum = (*curbuf.get()).b_ml.ml_line_count };
+        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     }
-    unsafe {
-        apply_autocmds(
-            EVENT_BUFENTER,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            curbuf.get(),
-        )
-    };
+    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
+    unsafe { apply_autocmds(EVENT_BUFENTER, no_fname, no_fname_io, false, curbuf.get()) };
     unsafe { time_msg_at(c"BufEnter autocommands") };
     setpcmark();
 
@@ -518,15 +480,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     do_autochdir();
 
     unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as varnumber_T) };
-    unsafe {
-        apply_autocmds(
-            EVENT_VIMENTER,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            curbuf.get(),
-        )
-    };
+    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
+    unsafe { apply_autocmds(EVENT_VIMENTER, no_fname, no_fname_io, false, curbuf.get()) };
     unsafe { time_msg_at(c"VimEnter autocommands") };
     if use_remote_ui {
         unsafe { do_autocmd_uienter_all() };
@@ -535,9 +490,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     unsafe { set_reg_var(get_default_register_name()) };
 
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_diff } != 0
-        && unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0
-    {
+    if cur_win().w_onebuf_opt.wo_diff != 0 && cur_win().w_onebuf_opt.wo_scb != 0 {
         update_topline(unsafe { Win::current() });
         unsafe { check_scrollbind(0 as linenr_T, 0) };
         unsafe { time_msg_at(c"diff scrollbinding") };
@@ -557,16 +510,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if !params.luaf.is_null() {
         // `-l`: run the script and leave, with its status.
         msg_scroll.set(1);
-        unsafe {
-            logmsg_c!(
-                LOGLVL_DBG,
-                ptr::null(),
-                c"main".as_ptr(),
-                678,
-                true,
-                c"executing Lua -l script".as_ptr(),
-            )
-        };
+        let (site, what) = (c"main".as_ptr(), c"executing Lua -l script".as_ptr());
+        unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), site, 678, true, what) };
         let lua_ok = unsafe { nlua_exec_file(params.luaf) };
         unsafe { time_msg_at(c"executing Lua -l script") };
         if msg_didout.get() {
@@ -577,16 +522,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     unsafe { time_msg_at(c"before starting main loop") };
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"main".as_ptr(),
-            689,
-            true,
-            c"starting main loop".as_ptr(),
-        )
-    };
+    let (site, what) = (c"main".as_ptr(), c"starting main loop".as_ptr());
+    unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), site, 689, true, what) };
 
     // Never returns.
     normal_enter(false, false);
@@ -620,4 +557,16 @@ pub fn main() {
 /// startup makes it until exit.
 fn first_win() -> Win {
     first_window().expect("the editor always has a window")
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

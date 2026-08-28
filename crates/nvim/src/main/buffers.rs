@@ -57,7 +57,7 @@ use crate::window::{
 use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
-use crate::winlayer::{Buf, TabPage, Win, first_window};
+use crate::winlayer::{Buf, Live, TabPage, Win, first_window};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with
 /// status 1.
@@ -107,16 +107,17 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: `paramp` is the caller's live parameter block, and `title`
     // outlives the `qf_init` that reads it.
-    if unsafe { (*paramp).edit_type } != EDIT_QF as c_int {
+    let parm = unsafe { Mp::new(paramp) };
+    if parm.edit_type != EDIT_QF as c_int {
         return;
     }
-    if !unsafe { (*paramp).use_ef }.is_null() {
+    if !parm.use_ef.is_null() {
         set_option_direct(
             kOptErrorfile,
             OptVal {
                 type_0: kOptValTypeString,
                 data: OptValData {
-                    string: unsafe { cstr_as_string((*paramp).use_ef) },
+                    string: unsafe { cstr_as_string(parm.use_ef) },
                 },
             },
             OptionSetFlags::NONE,
@@ -124,25 +125,11 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
         );
     }
     // The title of the list is the command that would have made it.
-    unsafe {
-        vim_snprintf(
-            title.as_mut_ptr(),
-            IOSIZE as size_t,
-            c"cfile %s".as_ptr(),
-            p_ef.get(),
-        )
-    };
-    if unsafe {
-        qf_init(
-            None,
-            p_ef.get(),
-            p_efm.get(),
-            1,
-            title.as_mut_ptr(),
-            p_menc.get(),
-        )
-    } < 0
-    {
+    let into = title.as_mut_ptr();
+    let fmt = c"cfile %s".as_ptr();
+    unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, p_ef.get()) };
+    let (ef, efm, enc) = (p_ef.get(), p_efm.get(), p_menc.get());
+    if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
         unsafe { msg_putchar('\n' as c_int) };
         unsafe { os_exit(3) };
     }
@@ -157,14 +144,8 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
         return;
     }
     swap_exists_did_quit.set(false);
-    unsafe {
-        vim_snprintf(
-            cmd.as_mut_ptr(),
-            IOSIZE as size_t,
-            c"ta %s".as_ptr(),
-            tagname,
-        )
-    };
+    let into = cmd.as_mut_ptr();
+    unsafe { vim_snprintf(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
     unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
     unsafe { time_msg_at(c"jumping to tag") };
     if swap_exists_did_quit.get() {
@@ -185,51 +166,34 @@ pub(crate) unsafe fn read_stdin() {
     no_wait_return.set(1);
     let save_msg_didany = msg_didany.get();
 
-    if !unsafe { (*curbuf.get()).b_ffname }.is_null() {
+    if !cur_buf().b_ffname.is_null() {
         let stdin_buf =
             unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
         if stdin_buf.is_null() {
             unsafe { semsg_c!(c"Failed to create buffer for stdin".as_ptr()) };
             return;
         }
-        let initial_buf_handle: handle_T = unsafe { (*curbuf.get()).handle };
+        let initial_buf_handle: handle_T = cur_buf().handle;
         unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
-        unsafe {
-            readfile(
-                ptr::null_mut(),
-                ptr::null_mut(),
-                0,
-                0,
-                MAXLNUM as c_int as linenr_T,
-                ptr::null_mut::<exarg_T>(),
-                READ_NEW as c_int + READ_STDIN as c_int,
-                true,
-            )
-        };
+        let last = MAXLNUM as c_int as linenr_T;
+        let null_ea = ptr::null_mut::<exarg_T>();
+        let flags = READ_NEW as c_int + READ_STDIN as c_int;
+        let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
+        unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
         let stdin_buf_handle: handle_T = unsafe { (*stdin_buf).handle };
         let stdin_buf_empty = unsafe { buf_is_empty(curbuf.get()) };
 
         // Done as commands rather than calls so the autocommands and the
         // window bookkeeping happen as they would for the user.
         let mut cmd: [c_char; 100] = [0; 100];
-        unsafe {
-            vim_snprintf(
-                cmd.as_mut_ptr(),
-                size_of::<[c_char; 100]>(),
-                c"silent! buffer %d".as_ptr(),
-                initial_buf_handle,
-            )
-        };
+        let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
+        let fmt = c"silent! buffer %d".as_ptr();
+        unsafe { vim_snprintf(into, size, fmt, initial_buf_handle) };
         unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         if stdin_buf_empty {
-            unsafe {
-                vim_snprintf(
-                    cmd.as_mut_ptr(),
-                    size_of::<[c_char; 100]>(),
-                    c"silent! bwipeout! %d".as_ptr(),
-                    stdin_buf_handle,
-                )
-            };
+            let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
+            let fmt = c"silent! bwipeout! %d".as_ptr();
+            unsafe { vim_snprintf(into, size, fmt, stdin_buf_handle) };
             unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         }
     } else {
@@ -252,47 +216,47 @@ pub(crate) unsafe fn read_stdin() {
 /// keep it going forever.
 const MAX_WINDOW_PASSES: c_int = 1000;
 
+/// The parameter block `main` filled in, which outlives every call here.
+type Mp = Live<mparm_T>;
+
 /// Make the windows and tab pages the command line asked for, and give every
 /// one of them a buffer.
 pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block; the window and
     // buffer lists are global and may be rearranged by the autocommands the
     // buffer loading fires.
-    if unsafe { (*parmp).window_count } == -1 {
+    let mut parm = unsafe { Mp::new(parmp) };
+    if parm.window_count == -1 {
         // Not set: one window.
-        unsafe { (*parmp).window_count = 1 };
+        parm.window_count = 1;
     }
-    if unsafe { (*parmp).window_count } == 0 {
+    if parm.window_count == 0 {
         // `-o`/`-O`/`-p` with no count: one per file.
-        unsafe { (*parmp).window_count = (*global_arglist()).al_ga.ga_len };
+        unsafe { parm.window_count = (*global_arglist()).al_ga.ga_len };
     }
-    if unsafe { (*parmp).window_count } > 1 {
+    if parm.window_count > 1 {
         // Leave the layout alone if a vimrc command already split it.
-        if unsafe { (*parmp).window_layout } == 0 {
-            unsafe { (*parmp).window_layout = WIN_HOR as c_int };
+        if parm.window_layout == 0 {
+            parm.window_layout = WIN_HOR as c_int;
         }
-        if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
-            unsafe { (*parmp).window_count = make_tabpages((*parmp).window_count) };
+        if parm.window_layout == WIN_TABS as c_int {
+            unsafe { parm.window_count = make_tabpages(parm.window_count) };
             unsafe { time_msg_at(c"making tab pages") };
         } else if first_win().next().is_none_or(|next| next.w_floating) {
-            unsafe {
-                (*parmp).window_count = make_windows(
-                    (*parmp).window_count,
-                    (*parmp).window_layout == WIN_VER as c_int,
-                )
-            };
+            let (count, vertical) = (parm.window_count, parm.window_layout == WIN_VER as c_int);
+            parm.window_count = unsafe { make_windows(count, vertical) };
             unsafe { time_msg_at(c"making windows") };
         } else {
-            unsafe { (*parmp).window_count = win_count() };
+            parm.window_count = win_count();
         }
     } else {
-        unsafe { (*parmp).window_count = 1 };
+        parm.window_count = 1;
     }
 
     if recoverymode.get() {
         msg_scroll.set(1);
         unsafe { ml_recover(true) };
-        if unsafe { (*curbuf.get()).b_ml.ml_mfp }.is_null() {
+        if cur_buf().b_ml.ml_mfp.is_null() {
             // Recovery failed; there is nothing to edit.
             unsafe { getout(1) };
         }
@@ -311,12 +275,12 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
     while passes < MAX_WINDOW_PASSES {
         passes += 1;
         if dorewind {
-            if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+            if parm.window_layout == WIN_TABS as c_int {
                 goto_tabpage(1);
             } else {
                 curwin.set(first_win().raw());
             }
-        } else if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+        } else if parm.window_layout == WIN_TABS as c_int {
             if unsafe { TabPage::current() }.next().is_none() {
                 break;
             }
@@ -328,11 +292,11 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
             curwin.set(next.raw());
         }
         dorewind = false;
-        curbuf.set(unsafe { (*curwin.get()).w_buffer });
+        curbuf.set(cur_win().w_buffer);
 
-        if unsafe { (*curbuf.get()).b_ml.ml_mfp }.is_null() {
+        if cur_buf().b_ml.ml_mfp.is_null() {
             if p_fdls.get() >= 0 as OptInt {
-                unsafe { (*curwin.get()).w_onebuf_opt.wo_fdl = p_fdls.get() };
+                cur_win().w_onebuf_opt.wo_fdl = p_fdls.get();
             }
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
@@ -347,7 +311,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                 // what comes next: clear the name and mark the argument
                 // index so it is deleted later.
                 unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
-                unsafe { (*curwin.get()).w_arg_idx = -1 };
+                cur_win().w_arg_idx = -1;
                 swap_exists_action.set(SEA_NONE);
             } else {
                 handle_swap_exists(None);
@@ -364,12 +328,12 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
         }
     }
 
-    if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+    if parm.window_layout == WIN_TABS as c_int {
         goto_tabpage(1);
     } else {
         curwin.set(first_win().raw());
     }
-    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    curbuf.set(cur_win().w_buffer);
     autocmd_no_enter.set(autocmd_no_enter.get() - 1);
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 }
@@ -379,12 +343,13 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
 pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block; the window list
     // is global and `do_ecmd` may close windows through autocommands.
+    let parm = unsafe { Mp::new(parmp) };
     autocmd_no_enter.set(autocmd_no_enter.get() + 1);
     autocmd_no_leave.set(autocmd_no_leave.get() + 1);
 
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
-    if unsafe { (*curwin.get()).w_arg_idx } == -1 {
+    if cur_win().w_arg_idx == -1 {
         unsafe { win_close(curwin.get(), true, false) };
         advance = false;
     }
@@ -394,8 +359,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     let mut p_shm_save: *mut c_char = ptr::null_mut();
 
     let mut arg_idx: c_int = 1;
-    for i in 1..unsafe { (*parmp).window_count } {
-        if unsafe { (*curwin.get()).w_arg_idx } == -1 {
+    for i in 1..parm.window_count {
+        if cur_win().w_arg_idx == -1 {
             arg_idx += 1;
             unsafe { win_close(curwin.get(), true, false) };
             advance = false;
@@ -403,7 +368,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
         }
 
         if advance {
-            if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+            if parm.window_layout == WIN_TABS as c_int {
                 if unsafe { TabPage::current() }.next().is_none() {
                     break;
                 }
@@ -411,14 +376,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
                 if i == 1 {
                     p_shm_save = unsafe { xstrdup(p_shm.get()) };
                     let mut shm: [c_char; 100] = [0; 100];
-                    unsafe {
-                        snprintf(
-                            shm.as_mut_ptr(),
-                            size_of::<[c_char; 100]>(),
-                            c"F%s".as_ptr(),
-                            p_shm.get(),
-                        )
-                    };
+                    let (into, size) = (shm.as_mut_ptr(), size_of::<[c_char; 100]>());
+                    unsafe { snprintf(into, size, c"F%s".as_ptr(), p_shm.get()) };
                     unsafe { set_shortmess(shm.as_mut_ptr()) };
                 }
             } else {
@@ -432,27 +391,19 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if curbuf.get() == first_win().w_buffer || unsafe { (*curbuf.get()).b_ffname }.is_null() {
-            unsafe { (*curwin.get()).w_arg_idx = arg_idx };
+        if curbuf.get() == first_win().w_buffer || cur_buf().b_ffname.is_null() {
+            cur_win().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();
-            unsafe {
-                do_ecmd(
-                    0,
-                    if arg_idx < (*alist).al_ga.ga_len {
-                        alist_name(
-                            ((*alist).al_ga.ga_data as *mut aentry_T).offset(arg_idx as isize),
-                        )
-                    } else {
-                        ptr::null_mut()
-                    },
-                    ptr::null_mut(),
-                    ptr::null_mut::<exarg_T>(),
-                    ECMD_LASTL as c_int as linenr_T,
-                    ECMD_HIDE as c_int,
-                    curwin.get(),
-                )
+            let name = if arg_idx < unsafe { (*alist).al_ga.ga_len } {
+                let entries = unsafe { (*alist).al_ga.ga_data } as *mut aentry_T;
+                unsafe { alist_name(entries.offset(arg_idx as isize)) }
+            } else {
+                ptr::null_mut()
             };
+            let (last, hide) = (ECMD_LASTL as c_int as linenr_T, ECMD_HIDE as c_int);
+            let null_ea = ptr::null_mut::<exarg_T>();
+            unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || unsafe { only_one_window() } {
                     quit_on_swap_exists(true);
@@ -478,7 +429,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
         unsafe { xfree(p_shm_save as *mut c_void) };
     }
 
-    if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+    if parm.window_layout == WIN_TABS as c_int {
         goto_tabpage(1);
     }
     autocmd_no_enter.set(autocmd_no_enter.get() - 1);
@@ -496,9 +447,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
     unsafe { time_msg_at(c"editing files in windows") };
-    if unsafe { (*parmp).window_count } > 1
-        && unsafe { (*parmp).window_layout } != WIN_TABS as c_int
-    {
+    if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
         unsafe { win_equal(curwin.get(), false, 'b' as c_int) };
     }
 }
@@ -531,4 +480,16 @@ pub(crate) unsafe fn check_swap_exists_action() {
 /// startup makes it until exit.
 fn first_win() -> Win {
     first_window().expect("the editor always has a window")
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }

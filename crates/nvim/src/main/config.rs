@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
+use crate::winlayer::{Live, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -18,9 +19,9 @@ use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, PATHSEP, SID_CARG, SID_CMDARG,
-    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, curwin, e_cannot_read_from_str_2,
-    e_conflicting_configs, exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T, msg_scroll, p_exrc,
-    silent_mode, time_msg_at,
+    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, e_cannot_read_from_str_2, e_conflicting_configs,
+    exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T, msg_scroll, p_exrc, silent_mode,
+    time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::os::cshim::{gettext, stderr};
@@ -32,6 +33,9 @@ use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::types::{FAIL, OK, lua_State, qf_info_T, scid_T, size_t};
 use ::libc::{fprintf, memcpy};
+
+/// The parameter block `main` filled in, which outlives every call here.
+type Mp = Live<mparm_T>;
 
 /// Run the `--cmd` commands, which come before any config.
 pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
@@ -45,7 +49,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
 
     // Line 0 says "no line yet", so that a `--cmd` that moves the cursor
     // is not immediately overridden by the first file's position.
-    unsafe { (*curwin.get()).w_cursor.lnum = 0 };
+    cur_win().w_cursor.lnum = 0;
     estack_push(
         ETYPE_ARGS,
         unsafe { gettext(c"pre-vimrc command line".as_ptr()) },
@@ -65,31 +69,33 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
 /// first file.
 pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block.
+    let parm = unsafe { Mp::new(parmp) };
     msg_scroll.set(1);
-    if unsafe { (*parmp).tagname }.is_null() && unsafe { (*curwin.get()).w_cursor.lnum } <= 1 {
+    if parm.tagname.is_null() && cur_win().w_cursor.lnum <= 1 {
         // As in `exe_pre_commands`: let the commands decide the line.
-        unsafe { (*curwin.get()).w_cursor.lnum = 0 };
+        cur_win().w_cursor.lnum = 0;
     }
 
     // NB: not translated, unlike the pre-vimrc one above.
     estack_push(ETYPE_ARGS, c"command line".as_ptr() as *mut c_char, 0);
     current_sctx.set(current_sctx.get().with_sid(SID_CARG as scid_T).with_seq(0));
-    for i in 0..unsafe { (*parmp).n_commands } {
-        unsafe { do_cmdline_cmd((*parmp).commands[i as usize]) };
-        if unsafe { (*parmp).cmds_tofree[i as usize] } != 0 {
-            unsafe { xfree((*parmp).commands[i as usize] as *mut c_void) };
+    for i in 0..parm.n_commands {
+        let cmd = parm.commands[i as usize];
+        unsafe { do_cmdline_cmd(cmd) };
+        if parm.cmds_tofree[i as usize] != 0 {
+            unsafe { xfree(cmd as *mut c_void) };
         }
     }
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
 
-    if unsafe { (*curwin.get()).w_cursor.lnum } == 0 {
-        unsafe { (*curwin.get()).w_cursor.lnum = 1 };
+    if cur_win().w_cursor.lnum == 0 {
+        cur_win().w_cursor.lnum = 1;
     }
     if !exmode_active.get() {
         msg_scroll.set(0);
     }
-    if unsafe { (*parmp).edit_type } == EDIT_QF as c_int {
+    if parm.edit_type == EDIT_QF as c_int {
         // `-q`: the commands may have changed the quickfix list.
         unsafe { qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0) };
     }
@@ -125,21 +131,11 @@ unsafe fn config_subpath(
         unsafe { *path.add(at) = PATHSEP as c_char };
         at += 1;
     }
-    unsafe {
-        memcpy(
-            path.add(at) as *mut c_void,
-            appname as *const c_void,
-            appname_len,
-        )
-    };
+    let into = unsafe { path.add(at) } as *mut c_void;
+    unsafe { memcpy(into, appname as *const c_void, appname_len) };
     at += appname_len;
-    unsafe {
-        memcpy(
-            path.add(at) as *mut c_void,
-            tail.as_ptr() as *const c_void,
-            tail.len(),
-        )
-    };
+    let into = unsafe { path.add(at) } as *mut c_void;
+    unsafe { memcpy(into, tail.as_ptr() as *const c_void, tail.len()) };
     path
 }
 
@@ -158,15 +154,8 @@ unsafe fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bo
     loop {
         let mut dir: *const c_char = ptr::null();
         let mut dir_len: size_t = 0;
-        iter = unsafe {
-            vim_env_iter(
-                ':' as c_char,
-                config_dirs,
-                iter,
-                &raw mut dir,
-                &raw mut dir_len,
-            )
-        };
+        let (at, len) = (&raw mut dir, &raw mut dir_len);
+        iter = unsafe { vim_env_iter(':' as c_char, config_dirs, iter, at, len) };
         if dir.is_null() || dir_len == 0 {
             break;
         }
@@ -200,14 +189,8 @@ pub(crate) unsafe fn do_system_initialization() {
     if sourced {
         return;
     }
-    unsafe {
-        do_source(
-            SYS_VIMRC_FILE.as_ptr() as *mut c_char,
-            false,
-            DOSO_NONE as c_int,
-            ptr::null_mut(),
-        )
-    };
+    let sys_vimrc = SYS_VIMRC_FILE.as_ptr() as *mut c_char;
+    unsafe { do_source(sys_vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) };
 }
 
 /// Try `init.lua` and then `init.vim` in one directory.
@@ -234,9 +217,9 @@ unsafe fn source_init_pair(
     if unsafe { do_source(init_vim, true, DOSO_VIMRC as c_int, ptr::null_mut()) } != FAIL {
         let mut do_exrc = p_exrc.get() != 0;
         if do_exrc && check_exrc_is_same {
-            do_exrc = unsafe {
-                path_full_compare(VIMRC_FILE.as_ptr() as *mut c_char, init_vim, false, true)
-            } != kEqualFiles;
+            let vimrc = VIMRC_FILE.as_ptr() as *mut c_char;
+            let same = unsafe { path_full_compare(vimrc, init_vim, false, true) };
+            do_exrc = same != kEqualFiles;
         }
         return Some(do_exrc);
     }
@@ -305,13 +288,8 @@ pub(crate) unsafe fn do_exrc_initialization() {
     unsafe { lua_getfield(lstate, LUA_GLOBALSINDEX, c"require".as_ptr()) };
     unsafe { lua_pushstring(lstate, c"vim._core.exrc".as_ptr()) };
     if unsafe { nlua_pcall(lstate, 1, 0) } != 0 {
-        unsafe {
-            fprintf(
-                stderr,
-                c"%s\n".as_ptr(),
-                lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()),
-            )
-        };
+        let msg = unsafe { lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()) };
+        unsafe { fprintf(stderr, c"%s\n".as_ptr(), msg) };
     }
 }
 
@@ -325,22 +303,12 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
     if !unsafe { (*parmp).use_vimrc }.is_null() {
         let named_none = unsafe { strequal((*parmp).use_vimrc, c"NONE".as_ptr()) }
             || unsafe { strequal((*parmp).use_vimrc, c"NORC".as_ptr()) };
+        let vimrc = unsafe { (*parmp).use_vimrc };
         if !named_none
-            && unsafe {
-                do_source(
-                    (*parmp).use_vimrc,
-                    false,
-                    DOSO_NONE as c_int,
-                    ptr::null_mut(),
-                )
-            } != OK
+            && unsafe { do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) } != OK
         {
-            unsafe {
-                semsg_c!(
-                    gettext(e_cannot_read_from_str_2.as_ptr()),
-                    (*parmp).use_vimrc,
-                )
-            };
+            let fmt = unsafe { gettext(e_cannot_read_from_str_2.as_ptr()) };
+            unsafe { semsg_c!(fmt, vimrc) };
         }
     } else if !silent_mode.get() {
         unsafe { do_system_initialization() };
@@ -350,4 +318,10 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
     }
 
     unsafe { time_msg_at(c"sourcing vimrc file(s)") };
+}
+
+/// The window the editor is working in.
+fn cur_win() -> Win {
+    // SAFETY: `curwin` is set from startup to exit.
+    unsafe { Win::current() }
 }
