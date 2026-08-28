@@ -147,8 +147,13 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
     if argc != argc_of(tv2) {
         return false;
     }
-    // Reachable only with a non-zero count, which means both sides are
-    // partials with an argument vector.
+    if argc == 0 {
+        // Neither side has an argument vector to compare -- and a plain
+        // Funcref's union holds its *name*, so `v_partial` must not be read
+        // at all here. Upstream reaches the reads only from inside the loop
+        // body, which a zero count never enters.
+        return true;
+    }
     // SAFETY: the count is non-zero, so both unions hold a partial with an
     // argument vector of `argc` values.
     let (p1, p2) = unsafe { ((*tv1).vval.v_partial, (*tv2).vval.v_partial) };
