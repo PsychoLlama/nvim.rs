@@ -278,10 +278,8 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
 
     // A cursor style may use this group; if so its attribute has changed.
     // SAFETY: main-thread UI call.
-    unsafe {
-        if cursor_mode_uses_syn_id(id) {
-            ui_mode_info_set();
-        }
+    if unsafe { cursor_mode_uses_syn_id(id) } {
+        ui_mode_info_set();
     }
 }
 
@@ -373,11 +371,9 @@ fn lookup(name: &[u8]) -> c_int {
 /// See [`syn_name2id`].
 pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
-    unsafe {
-        match syn_name2id(name) {
-            0 => 0,
-            id => syn_id2attr(id),
-        }
+    match unsafe { syn_name2id(name) } {
+        0 => 0,
+        id => unsafe { syn_id2attr(id) },
     }
 }
 
@@ -433,21 +429,21 @@ fn syn_add_group(name: &[u8]) -> c_int {
     for &byte in name {
         let c = c_int::from(byte);
         // SAFETY: main-thread message calls.
-        unsafe {
-            if !vim_isprintc(c) {
+        if !unsafe { vim_isprintc(c) } {
+            unsafe {
                 emsg(gettext(
                     c"E669: Unprintable character in group name".as_ptr(),
-                ));
-                return 0;
-            }
-            if !byte.is_ascii_alphabetic()
-                && !ascii_isdigit(c)
-                && !matches!(byte, b'_' | b'.' | b'@' | b'-')
-            {
-                msg_source(HLF_W);
-                emsg(gettext(e_highlight_group_name_invalid_char.as_ptr()));
-                return 0;
-            }
+                ))
+            };
+            return 0;
+        }
+        if !byte.is_ascii_alphabetic()
+            && !ascii_isdigit(c)
+            && !matches!(byte, b'_' | b'.' | b'@' | b'-')
+        {
+            unsafe { msg_source(HLF_W) };
+            unsafe { emsg(gettext(e_highlight_group_name_invalid_char.as_ptr())) };
+            return 0;
         }
     }
 
@@ -583,12 +579,10 @@ pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> 
 /// See [`syn_id2attr`].
 pub(crate) unsafe fn syn_get_final_id(hl_id: c_int) -> c_int {
     // SAFETY: the editor's own state.
-    unsafe {
-        let mut ns_id = (*curwin.get()).w_ns_hl_active;
-        let mut hl_id = hl_id;
-        syn_ns_get_final_id(&mut ns_id, &mut hl_id);
-        hl_id
-    }
+    let mut ns_id = unsafe { (*curwin.get()).w_ns_hl_active };
+    let mut hl_id = hl_id;
+    unsafe { syn_ns_get_final_id(&mut ns_id, &mut hl_id) };
+    hl_id
 }
 
 /// Replaces the entries from `keep` on with `count` all-zero scratch ones.

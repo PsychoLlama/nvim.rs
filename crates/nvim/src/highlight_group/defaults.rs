@@ -520,38 +520,36 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
     static HAD_BOTH: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: the editor's own state; every callee is a main-thread call.
-    unsafe {
-        let name = get_var_value(c"g:colors_name".as_ptr(), &mut numbuf);
-        if !name.is_null() {
-            // `load_colors` can free the variable, and with it `name`.
-            let copy = xstrdup(name);
-            let okay = load_colors(copy) == OK;
-            xfree(copy.cast());
-            if okay {
-                return;
-            }
-        }
-
-        if both {
-            HAD_BOTH.set(true);
-            for line in &HIGHLIGHT_INIT_BOTH {
-                do_highlight(line.as_ptr(), reset, true);
-            }
-        } else if !HAD_BOTH.get() {
+    let name = unsafe { get_var_value(c"g:colors_name".as_ptr(), &mut numbuf) };
+    if !name.is_null() {
+        // `load_colors` can free the variable, and with it `name`.
+        let copy = unsafe { xstrdup(name) };
+        let okay = unsafe { load_colors(copy) } == OK;
+        unsafe { xfree(copy.cast()) };
+        if okay {
             return;
         }
-
-        let table = if *p_bg.get() == b'l' as c_char {
-            &HIGHLIGHT_INIT_LIGHT
-        } else {
-            &HIGHLIGHT_INIT_DARK
-        };
-        for line in table {
-            do_highlight(line.as_ptr(), reset, true);
-        }
-
-        syn_init_cmdline_highlight(false, false);
     }
+
+    if both {
+        HAD_BOTH.set(true);
+        for line in &HIGHLIGHT_INIT_BOTH {
+            unsafe { do_highlight(line.as_ptr(), reset, true) };
+        }
+    } else if !HAD_BOTH.get() {
+        return;
+    }
+
+    let table = if unsafe { *p_bg.get() } == b'l' as c_char {
+        &HIGHLIGHT_INIT_LIGHT
+    } else {
+        &HIGHLIGHT_INIT_DARK
+    };
+    for line in table {
+        unsafe { do_highlight(line.as_ptr(), reset, true) };
+    }
+
+    unsafe { syn_init_cmdline_highlight(false, false) };
 }
 
 /// Sources the colour scheme `name`, answering `OK` or `FAIL`.
@@ -566,37 +564,46 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> c_int {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: `name` is the caller's NUL-terminated scheme name.
-    unsafe {
-        if RECURSIVE.get() {
-            return OK;
-        }
-        RECURSIVE.set(true);
+    if RECURSIVE.get() {
+        return OK;
+    }
+    RECURSIVE.set(true);
 
+    unsafe {
         apply_autocmds(
             EVENT_COLORSCHEMEPRE,
             name,
             (*curbuf.get()).b_fname,
             false,
             curbuf.get(),
-        );
-        let mut pattern = [b"colors/", CStr::from_ptr(name).to_bytes(), b".*\0"].concat();
-        let retval = source_runtime_vim_lua(
+        )
+    };
+    let mut pattern = [
+        b"colors/",
+        unsafe { CStr::from_ptr(name) }.to_bytes(),
+        b".*\0",
+    ]
+    .concat();
+    let retval = unsafe {
+        source_runtime_vim_lua(
             pattern.as_mut_ptr().cast(),
             RuntimeOpts::START | RuntimeOpts::OPT,
-        );
-        if retval == OK {
+        )
+    };
+    if retval == OK {
+        unsafe {
             apply_autocmds(
                 EVENT_COLORSCHEME,
                 name,
                 (*curbuf.get()).b_fname,
                 false,
                 curbuf.get(),
-            );
-        }
-
-        RECURSIVE.set(false);
-        retval
+            )
+        };
     }
+
+    RECURSIVE.set(false);
+    retval
 }
 
 /// Forgets the `Normal` colours, so that the next `:highlight` starts from

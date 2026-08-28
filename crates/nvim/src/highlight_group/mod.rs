@@ -115,55 +115,52 @@ unsafe fn combine_stl_hlt(
     hlf: c_int,
 ) -> c_int {
     // SAFETY (whole body): the editor's own tables, on the main thread.
-    unsafe {
-        let scratch = hlcnt + i + 1;
-        let mut combined = if id_alt == 0 {
-            // No `StatusLineNC` of its own: start from the resolved attribute.
-            // Upstream puts the resolved attribute *id* into the two
-            // attribute-*bit* fields here (`sg_cterm`/`sg_gui`), which is not
-            // a set of attribute bits at all. The arm is unreachable --
-            // `id_alt` is `HLF_SNC`'s final id, and a builtin group always
-            // has one -- so this is carried as written rather than fixed.
-            let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[hlf as usize]));
-            HlGroup {
-                cterm: attr,
-                gui: attr,
-                ..HlGroup::ZEROED
-            }
-        } else {
-            group(id_alt)
-        };
-        let user = group(id);
-        let stl = group(id_s);
+    let scratch = hlcnt + i + 1;
+    let mut combined = if id_alt == 0 {
+        // No `StatusLineNC` of its own: start from the resolved attribute.
+        // Upstream puts the resolved attribute *id* into the two
+        // attribute-*bit* fields here (`sg_cterm`/`sg_gui`), which is not
+        // a set of attribute bits at all. The arm is unreachable --
+        // `id_alt` is `HLF_SNC`'s final id, and a builtin group always
+        // has one -- so this is carried as written rather than fixed.
+        let attr = HlAttrFlags::from_bits(highlight_attr.with(|attrs| attrs[hlf as usize]));
+        HlGroup {
+            cterm: attr,
+            gui: attr,
+            ..HlGroup::ZEROED
+        }
+    } else {
+        group(id_alt)
+    };
+    let user = group(id);
+    let stl = group(id_s);
 
-        combined.link = 0;
-        // "the difference between User{i} and StatusLine, applied to
-        // StatusLineNC" -- an exclusive-or over the whole word, which is not
-        // a set operation, so it goes through the bits.
-        combined.cterm =
-            HlAttrFlags::from_bits(combined.cterm.bits() ^ user.cterm.bits() ^ stl.cterm.bits());
-        if user.cterm_fg != stl.cterm_fg {
-            combined.cterm_fg = user.cterm_fg;
-        }
-        if user.cterm_bg != stl.cterm_bg {
-            combined.cterm_bg = user.cterm_bg;
-        }
-        combined.gui =
-            HlAttrFlags::from_bits(combined.gui.bits() ^ user.gui.bits() ^ stl.gui.bits());
-        if user.rgb_fg != stl.rgb_fg {
-            combined.rgb_fg = user.rgb_fg;
-        }
-        if user.rgb_bg != stl.rgb_bg {
-            combined.rgb_bg = user.rgb_bg;
-        }
-        if user.rgb_sp != stl.rgb_sp {
-            combined.rgb_sp = user.rgb_sp;
-        }
-
-        with_group(scratch, |entry| *entry = combined);
-        set_hl_attr(scratch);
-        syn_id2attr(scratch)
+    combined.link = 0;
+    // "the difference between User{i} and StatusLine, applied to
+    // StatusLineNC" -- an exclusive-or over the whole word, which is not
+    // a set operation, so it goes through the bits.
+    combined.cterm =
+        HlAttrFlags::from_bits(combined.cterm.bits() ^ user.cterm.bits() ^ stl.cterm.bits());
+    if user.cterm_fg != stl.cterm_fg {
+        combined.cterm_fg = user.cterm_fg;
     }
+    if user.cterm_bg != stl.cterm_bg {
+        combined.cterm_bg = user.cterm_bg;
+    }
+    combined.gui = HlAttrFlags::from_bits(combined.gui.bits() ^ user.gui.bits() ^ stl.gui.bits());
+    if user.rgb_fg != stl.rgb_fg {
+        combined.rgb_fg = user.rgb_fg;
+    }
+    if user.rgb_bg != stl.rgb_bg {
+        combined.rgb_bg = user.rgb_bg;
+    }
+    if user.rgb_sp != stl.rgb_sp {
+        combined.rgb_sp = user.rgb_sp;
+    }
+
+    with_group(scratch, |entry| *entry = combined);
+    unsafe { set_hl_attr(scratch) };
+    unsafe { syn_id2attr(scratch) }
 }
 
 /// Resolves every builtin group into `highlight_attr[]`, and sets up
@@ -178,66 +175,63 @@ pub(crate) unsafe fn highlight_changed() {
     let mut msg_grid = msg_grid_ref();
     // SAFETY (whole body): the editor's own tables and UI, on the main
     // thread; `hlf_names` is static and NUL-terminated.
-    unsafe {
-        need_highlight_changed.set(false);
+    need_highlight_changed.set(false);
 
-        // Sentinel: used when no highlight is active.
-        highlight_attr.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
+    // Sentinel: used when no highlight is active.
+    highlight_attr.with_mut(|attrs| attrs[HLF_NONE as usize] = 0);
 
-        let mut id_s = -1;
-        let mut id_snc = 0;
-        for hlf in 1..HLF_COUNT {
-            let name = hlf_names[hlf as usize];
-            let id = syn_check_group(name, CStr::from_ptr(name).count_bytes() as size_t);
-            assert!(id != 0, "builtin highlight group {hlf} could not be added");
+    let mut id_s = -1;
+    let mut id_snc = 0;
+    for hlf in 1..HLF_COUNT {
+        let name = hlf_names[hlf as usize];
+        let id = unsafe { syn_check_group(name, CStr::from_ptr(name).count_bytes() as size_t) };
+        assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
-            let mut ns_id = -1;
-            let mut final_id = id;
-            syn_ns_get_final_id(&mut ns_id, &mut final_id);
-            if hlf == HLF_SNC {
-                id_snc = final_id;
-            } else if hlf == HLF_S {
-                id_s = final_id;
-            }
-
-            let attr = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
-            highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
-            if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
-                continue;
-            }
-            if hlf == HLF_MSG {
-                clear_cmdline.set(true);
-                msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
-            }
-            ui_call_hl_group_set(cstr_as_string(name), Integer::from(attr));
-            highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
+        let mut ns_id = -1;
+        let mut final_id = id;
+        unsafe { syn_ns_get_final_id(&mut ns_id, &mut final_id) };
+        if hlf == HLF_SNC {
+            id_snc = final_id;
+        } else if hlf == HLF_S {
+            id_s = final_id;
         }
 
-        // Ten scratch entries, live at once in case the attribute table
-        // overflows while they are being built: nine for User1-User9 combined
-        // with StatusLineNC, one for the StatusLine default.
-        let hlcnt = highlight_num_groups();
-        open_scratch(hlcnt, 10);
-        if id_s == -1 {
-            // Make id_s always valid, using the last (all-zero) scratch entry.
-            id_s = hlcnt + 10;
+        let attr = unsafe { hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE) };
+        highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
+        if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
+            continue;
         }
-        for i in 0..9 {
-            let userhl = format!("User{}\0", i + 1);
-            let id = syn_name2id(userhl.as_ptr().cast());
-            let (user, stlnc) = if id == 0 {
-                (0, 0)
-            } else {
-                (
-                    syn_id2attr(id),
-                    combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC),
-                )
-            };
-            highlight_user.with_mut(|table| table[i as usize] = user);
-            highlight_stlnc.with_mut(|table| table[i as usize] = stlnc);
+        if hlf == HLF_MSG {
+            clear_cmdline.set(true);
+            msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
-        close_scratch(hlcnt);
-
-        decor_provider_invalidate_hl();
+        ui_call_hl_group_set(unsafe { cstr_as_string(name) }, Integer::from(attr));
+        highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
     }
+
+    // Ten scratch entries, live at once in case the attribute table
+    // overflows while they are being built: nine for User1-User9 combined
+    // with StatusLineNC, one for the StatusLine default.
+    let hlcnt = highlight_num_groups();
+    open_scratch(hlcnt, 10);
+    if id_s == -1 {
+        // Make id_s always valid, using the last (all-zero) scratch entry.
+        id_s = hlcnt + 10;
+    }
+    for i in 0..9 {
+        let userhl = format!("User{}\0", i + 1);
+        let id = unsafe { syn_name2id(userhl.as_ptr().cast()) };
+        let (user, stlnc) = if id == 0 {
+            (0, 0)
+        } else {
+            (unsafe { syn_id2attr(id) }, unsafe {
+                combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC)
+            })
+        };
+        highlight_user.with_mut(|table| table[i as usize] = user);
+        highlight_stlnc.with_mut(|table| table[i as usize] = stlnc);
+    }
+    close_scratch(hlcnt);
+
+    unsafe { decor_provider_invalidate_hl() };
 }

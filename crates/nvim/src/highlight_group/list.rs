@@ -140,16 +140,14 @@ unsafe fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool
     };
 
     // SAFETY: main-thread message calls with NUL-terminated strings.
-    unsafe {
-        let width = vim_strsize(text.as_ptr()) + name.count_bytes() as c_int + 1;
-        syn_list_header(didh, width, id, false);
-        if !got_int.get() {
-            if !name.is_empty() {
-                msg_puts_hl(name.as_ptr(), HLF_D, false);
-                msg_puts_hl(c"=".as_ptr(), HLF_D, false);
-            }
-            msg_outtrans(text.as_ptr(), 0, false);
+    let width = unsafe { vim_strsize(text.as_ptr()) } + name.count_bytes() as c_int + 1;
+    unsafe { syn_list_header(didh, width, id, false) };
+    if !got_int.get() {
+        if !name.is_empty() {
+            unsafe { msg_puts_hl(name.as_ptr(), HLF_D, false) };
+            unsafe { msg_puts_hl(c"=".as_ptr(), HLF_D, false) };
         }
+        unsafe { msg_outtrans(text.as_ptr(), 0, false) };
     }
     true
 }
@@ -188,26 +186,24 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
     ];
 
     // SAFETY: main-thread message calls.
-    unsafe {
-        let mut didh = false;
-        for (value, name) in pairs {
-            didh = list_arg(id, didh, value, name);
-        }
+    let mut didh = false;
+    for (value, name) in pairs {
+        didh = unsafe { list_arg(id, didh, value, name) };
+    }
 
-        if entry.link != 0 && !got_int.get() {
-            syn_list_header(didh, 0, id, true);
-            didh = true;
-            msg_puts_hl(c"links to".as_ptr(), HLF_D, false);
-            msg_putchar(' ' as c_int);
-            msg_outtrans(group(entry.link).name.as_ptr(), 0, false);
-        }
+    if entry.link != 0 && !got_int.get() {
+        unsafe { syn_list_header(didh, 0, id, true) };
+        didh = true;
+        unsafe { msg_puts_hl(c"links to".as_ptr(), HLF_D, false) };
+        unsafe { msg_putchar(' ' as c_int) };
+        unsafe { msg_outtrans(group(entry.link).name.as_ptr(), 0, false) };
+    }
 
-        if !didh {
-            list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"");
-        }
-        if p_verbose.get() > 0 {
-            last_set_msg(entry.script_ctx);
-        }
+    if !didh {
+        unsafe { list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"") };
+    }
+    if p_verbose.get() > 0 {
+        unsafe { last_set_msg(entry.script_ctx) };
     }
 }
 
@@ -231,45 +227,43 @@ pub(crate) unsafe fn syn_list_header(
     let mut adjust = true;
 
     // SAFETY: main-thread message calls.
-    unsafe {
-        if !did_header {
-            if !ui_has(kUIMessages) || msg_col.get() > 0 {
-                msg_putchar('\n' as c_int);
-            }
-            if got_int.get() {
-                return true;
-            }
-            name_col = msg_outtrans(group(id).name.as_ptr(), 0, false);
-            msg_col.set(name_col);
-            endcol = 15;
-        } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
-            msg_putchar(' ' as c_int);
-            adjust = false;
-        } else if msg_col.get() + outlen + 1 >= Columns.get() || force_newline {
-            msg_putchar('\n' as c_int);
-            if got_int.get() {
-                return true;
-            }
-        } else if msg_col.get() >= endcol {
-            // Wrapping around is like starting a new line.
-            newline = false;
+    if !did_header {
+        if !ui_has(kUIMessages) || msg_col.get() > 0 {
+            unsafe { msg_putchar('\n' as c_int) };
         }
+        if got_int.get() {
+            return true;
+        }
+        name_col = unsafe { msg_outtrans(group(id).name.as_ptr(), 0, false) };
+        msg_col.set(name_col);
+        endcol = 15;
+    } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
+        unsafe { msg_putchar(' ' as c_int) };
+        adjust = false;
+    } else if msg_col.get() + outlen + 1 >= Columns.get() || force_newline {
+        unsafe { msg_putchar('\n' as c_int) };
+        if got_int.get() {
+            return true;
+        }
+    } else if msg_col.get() >= endcol {
+        // Wrapping around is like starting a new line.
+        newline = false;
+    }
 
-        if adjust {
-            if msg_col.get() >= endcol {
-                // Output at least one space.
-                endcol = msg_col.get() + 1;
-            }
-            msg_advance(endcol);
+    if adjust {
+        if msg_col.get() >= endcol {
+            // Output at least one space.
+            endcol = msg_col.get() + 1;
         }
+        unsafe { msg_advance(endcol) };
+    }
 
-        if !did_header {
-            if endcol == Columns.get() - 1 && endcol <= name_col {
-                msg_putchar(' ' as c_int);
-            }
-            msg_puts_hl(c"xxx".as_ptr(), id, false);
-            msg_putchar(' ' as c_int);
+    if !did_header {
+        if endcol == Columns.get() - 1 && endcol <= name_col {
+            unsafe { msg_putchar(' ' as c_int) };
         }
+        unsafe { msg_puts_hl(c"xxx".as_ptr(), id, false) };
+        unsafe { msg_putchar(' ' as c_int) };
     }
 
     newline
@@ -281,13 +275,11 @@ pub(crate) unsafe fn syn_list_header(
 /// Writes to the message area and flushes the UI; main thread only.
 unsafe fn highlight_list() {
     // SAFETY: main-thread message calls.
-    unsafe {
-        for i in (0..10).rev() {
-            highlight_list_two(i, HLF_D);
-        }
-        for _ in 0..40 {
-            highlight_list_two(99, 0);
-        }
+    for i in (0..10).rev() {
+        unsafe { highlight_list_two(i, HLF_D) };
+    }
+    for _ in 0..40 {
+        unsafe { highlight_list_two(99, 0) };
     }
 }
 
@@ -299,14 +291,12 @@ unsafe fn highlight_list() {
 unsafe fn highlight_list_two(cnt: c_int, id: c_int) {
     const FRAMES: &CStr = c"N \x08I \x08!  \x08";
     // SAFETY: main-thread message calls; the index is 0 or 9, both inside.
-    unsafe {
-        let at = (cnt / 11) as usize;
-        msg_puts_hl(FRAMES.as_ptr().add(at), id, false);
-        msg_clr_eos();
-        ui_flush();
-        // TODO(justinmk): is this delay needed? ":hi" seems to work without it.
-        os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);
-    }
+    let at = (cnt / 11) as usize;
+    unsafe { msg_puts_hl(FRAMES.as_ptr().add(at), id, false) };
+    unsafe { msg_clr_eos() };
+    unsafe { ui_flush() };
+    // TODO(justinmk): is this delay needed? ":hi" seems to work without it.
+    os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);
 }
 
 /// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
@@ -323,56 +313,54 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// pointed into; main thread only.
 pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char) {
     // SAFETY: the caller's expansion state and command line.
-    unsafe {
-        // Default: expand group names.
-        (*xp).xp_context = ExpandContext::Highlight;
-        (*xp).xp_pattern = arg.cast_mut();
-        include_link.set(2);
-        include_default.set(1);
+    // Default: expand group names.
+    unsafe { (*xp).xp_context = ExpandContext::Highlight };
+    unsafe { (*xp).xp_pattern = arg.cast_mut() };
+    include_link.set(2);
+    include_default.set(1);
 
-        if *arg == 0 {
-            return;
-        }
+    if unsafe { *arg } == 0 {
+        return;
+    }
 
-        // (Part of) a subcommand already typed.
-        let mut arg = arg;
-        let mut p = skiptowhite(arg);
-        if *p == 0 {
-            return;
-        }
+    // (Part of) a subcommand already typed.
+    let mut arg = arg;
+    let mut p = unsafe { skiptowhite(arg) };
+    if unsafe { *p } == 0 {
+        return;
+    }
 
-        // Past "default" or the group name.
-        include_default.set(0);
-        let word = |arg: *const c_char, p: *const c_char| {
-            core::slice::from_raw_parts(arg.cast::<u8>(), p.offset_from(arg) as usize)
-        };
-        if is_prefix(word(arg, p), b"default") {
-            arg = skipwhite(p);
-            (*xp).xp_pattern = arg.cast_mut();
-            p = skiptowhite(arg);
-        }
-        if *p == 0 {
-            return;
-        }
+    // Past "default" or the group name.
+    include_default.set(0);
+    let word = |arg: *const c_char, p: *const c_char| unsafe {
+        core::slice::from_raw_parts(arg.cast::<u8>(), p.offset_from(arg) as usize)
+    };
+    if is_prefix(word(arg, p), b"default") {
+        arg = unsafe { skipwhite(p) };
+        unsafe { (*xp).xp_pattern = arg.cast_mut() };
+        p = unsafe { skiptowhite(arg) };
+    }
+    if unsafe { *p } == 0 {
+        return;
+    }
 
-        // Past the group name.
-        include_link.set(0);
-        if *arg.add(1) == b'i' as c_char && *arg == b'N' as c_char {
-            highlight_list();
+    // Past the group name.
+    include_link.set(0);
+    if unsafe { *arg.add(1) } == b'i' as c_char && unsafe { *arg } == b'N' as c_char {
+        unsafe { highlight_list() };
+    }
+    if is_prefix(word(arg, p), b"link") || is_prefix(word(arg, p), b"clear") {
+        unsafe { (*xp).xp_pattern = skipwhite(p) };
+        p = unsafe { skiptowhite((*xp).xp_pattern) };
+        if unsafe { *p } != 0 {
+            // Past the first group name.
+            unsafe { (*xp).xp_pattern = skipwhite(p) };
+            p = unsafe { skiptowhite((*xp).xp_pattern) };
         }
-        if is_prefix(word(arg, p), b"link") || is_prefix(word(arg, p), b"clear") {
-            (*xp).xp_pattern = skipwhite(p);
-            p = skiptowhite((*xp).xp_pattern);
-            if *p != 0 {
-                // Past the first group name.
-                (*xp).xp_pattern = skipwhite(p);
-                p = skiptowhite((*xp).xp_pattern);
-            }
-        }
-        if *p != 0 {
-            // Past the group name(s).
-            (*xp).xp_context = ExpandContext::Nothing;
-        }
+    }
+    if unsafe { *p } != 0 {
+        // Past the group name(s).
+        unsafe { (*xp).xp_context = ExpandContext::Nothing };
     }
 }
 

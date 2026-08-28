@@ -54,141 +54,139 @@ pub(crate) unsafe fn set_hl_group(
     }
 
     // SAFETY: the editor's own tables and UI, on the main thread.
-    unsafe {
-        let old_link = group(id).link;
-        with_group(id, |entry| {
-            entry.cleared = false;
-            if link_id > 0 {
-                entry.link = link_id;
-                entry.script_ctx = current_sctx.get();
-                entry.script_ctx.sc_lnum += sourcing_lnum();
-                nlua_set_sctx(&raw mut entry.script_ctx);
-                entry.set |= SG_LINK as c_int;
-                if is_default {
-                    entry.deflink = link_id;
-                    entry.deflink_sctx = current_sctx.get();
-                    entry.deflink_sctx.sc_lnum += sourcing_lnum();
-                    nlua_set_sctx(&raw mut entry.deflink_sctx);
-                }
-            } else {
-                entry.link = 0;
-            }
-
-            entry.gui = attrs.rgb_ae_attr.without(HlAttrFlags::DEFAULT);
-            entry.rgb_fg = attrs.rgb_fg_color;
-            entry.rgb_bg = attrs.rgb_bg_color;
-            entry.rgb_sp = attrs.rgb_sp_color;
-        });
-
-        let update = has_key(dict, KEYSET_OPTIDX_highlight__update) && dict.update;
-        let entry = group(id);
-        // The colour *spellings*: what `:highlight` will print back. A name
-        // becomes its table index, a number `kColorIdxHex`, and an absent key
-        // either clears the index or — with `update` — inherits the linked
-        // group's, so that an inherited colour still shows a name.
-        let linked = (old_link > 0).then(|| group(old_link));
-        let spellings = [
-            (
-                entry.rgb_fg,
-                pick(dict, KEYSET_OPTIDX_highlight__fg, dict.fg, dict.foreground),
-                linked.map(|g| g.rgb_fg_idx),
-            ),
-            (
-                entry.rgb_bg,
-                pick(dict, KEYSET_OPTIDX_highlight__bg, dict.bg, dict.background),
-                linked.map(|g| g.rgb_bg_idx),
-            ),
-            (
-                entry.rgb_sp,
-                pick(dict, KEYSET_OPTIDX_highlight__sp, dict.sp, dict.special),
-                linked.map(|g| g.rgb_sp_idx),
-            ),
-        ];
-        let mut idxs = [KEEP; 3];
-        for (slot, &(value, name, linked_idx)) in idxs.iter_mut().zip(&spellings) {
-            *slot = if name.type_0 != kObjectTypeNil {
-                if value < 0 {
-                    kColorIdxNone
-                } else if name.type_0 == kObjectTypeString && !name.data.string.is_empty() {
-                    // SAFETY: an API string is NUL-terminated.
-                    name_to_color(::core::ffi::CStr::from_ptr(name.data.string.data())).1
-                } else {
-                    kColorIdxHex
-                }
-            } else if !update {
-                kColorIdxNone
-            } else if let Some(linked_idx) = linked_idx
-                && value >= 0
-            {
-                if linked_idx != kColorIdxNone {
-                    linked_idx
-                } else {
-                    kColorIdxHex
-                }
-            } else {
-                // `update` with nothing to inherit: leave what is there.
-                KEEP
-            };
-        }
-
-        with_group(id, |entry| {
-            for (slot, &new) in [
-                &mut entry.rgb_fg_idx,
-                &mut entry.rgb_bg_idx,
-                &mut entry.rgb_sp_idx,
-            ]
-            .into_iter()
-            .zip(&idxs)
-            {
-                if new != KEEP {
-                    *slot = new;
-                }
-            }
-
-            entry.cterm = attrs.cterm_ae_attr.without(HlAttrFlags::DEFAULT);
-            entry.cterm_bg = c_int::from(attrs.cterm_bg_color);
-            entry.cterm_fg = c_int::from(attrs.cterm_fg_color);
-            entry.cterm_bold = entry.cterm.has(HlAttrFlags::BOLD);
-
-            if attrs.hl_blend != -1 {
-                entry.blend = attrs.hl_blend;
-            } else if !update {
-                entry.blend = -1;
-            }
-
+    let old_link = group(id).link;
+    with_group(id, |entry| {
+        entry.cleared = false;
+        if link_id > 0 {
+            entry.link = link_id;
             entry.script_ctx = current_sctx.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
-            nlua_set_sctx(&raw mut entry.script_ctx);
-        });
-
-        let attr = hl_get_syn_attr(0, id, attrs);
-        with_group(id, |entry| entry.attr = attr);
-
-        // 'Normal' is special.
-        let entry = group(id);
-        if entry.name_u == c"NORMAL" {
-            cterm_normal_fg_color.set(entry.cterm_fg);
-            cterm_normal_bg_color.set(entry.cterm_bg);
-            let changed = normal_bg.get() != entry.rgb_bg
-                || normal_fg.get() != entry.rgb_fg
-                || normal_sp.get() != entry.rgb_sp;
-            normal_fg.set(entry.rgb_fg);
-            normal_bg.set(entry.rgb_bg);
-            normal_sp.set(entry.rgb_sp);
-            if changed {
-                highlight_attr_set_all();
+            unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+            entry.set |= SG_LINK as c_int;
+            if is_default {
+                entry.deflink = link_id;
+                entry.deflink_sctx = current_sctx.get();
+                entry.deflink_sctx.sc_lnum += sourcing_lnum();
+                unsafe { nlua_set_sctx(&raw mut entry.deflink_sctx) };
             }
-            ui_default_colors_set();
-        } else if cursor_mode_uses_syn_id(id) {
-            // A cursor style uses this group; its attribute has changed.
-            ui_mode_info_set();
+        } else {
+            entry.link = 0;
         }
 
-        if !updating_screen.get() {
-            redraw_all_later(UPD_NOT_VALID);
-        }
-        need_highlight_changed.set(true);
+        entry.gui = attrs.rgb_ae_attr.without(HlAttrFlags::DEFAULT);
+        entry.rgb_fg = attrs.rgb_fg_color;
+        entry.rgb_bg = attrs.rgb_bg_color;
+        entry.rgb_sp = attrs.rgb_sp_color;
+    });
+
+    let update = has_key(dict, KEYSET_OPTIDX_highlight__update) && dict.update;
+    let entry = group(id);
+    // The colour *spellings*: what `:highlight` will print back. A name
+    // becomes its table index, a number `kColorIdxHex`, and an absent key
+    // either clears the index or — with `update` — inherits the linked
+    // group's, so that an inherited colour still shows a name.
+    let linked = (old_link > 0).then(|| group(old_link));
+    let spellings = [
+        (
+            entry.rgb_fg,
+            pick(dict, KEYSET_OPTIDX_highlight__fg, dict.fg, dict.foreground),
+            linked.map(|g| g.rgb_fg_idx),
+        ),
+        (
+            entry.rgb_bg,
+            pick(dict, KEYSET_OPTIDX_highlight__bg, dict.bg, dict.background),
+            linked.map(|g| g.rgb_bg_idx),
+        ),
+        (
+            entry.rgb_sp,
+            pick(dict, KEYSET_OPTIDX_highlight__sp, dict.sp, dict.special),
+            linked.map(|g| g.rgb_sp_idx),
+        ),
+    ];
+    let mut idxs = [KEEP; 3];
+    for (slot, &(value, name, linked_idx)) in idxs.iter_mut().zip(&spellings) {
+        *slot = if name.type_0 != kObjectTypeNil {
+            if value < 0 {
+                kColorIdxNone
+            } else if name.type_0 == kObjectTypeString && !unsafe { name.data.string }.is_empty() {
+                // SAFETY: an API string is NUL-terminated.
+                name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data.string.data()) }).1
+            } else {
+                kColorIdxHex
+            }
+        } else if !update {
+            kColorIdxNone
+        } else if let Some(linked_idx) = linked_idx
+            && value >= 0
+        {
+            if linked_idx != kColorIdxNone {
+                linked_idx
+            } else {
+                kColorIdxHex
+            }
+        } else {
+            // `update` with nothing to inherit: leave what is there.
+            KEEP
+        };
     }
+
+    with_group(id, |entry| {
+        for (slot, &new) in [
+            &mut entry.rgb_fg_idx,
+            &mut entry.rgb_bg_idx,
+            &mut entry.rgb_sp_idx,
+        ]
+        .into_iter()
+        .zip(&idxs)
+        {
+            if new != KEEP {
+                *slot = new;
+            }
+        }
+
+        entry.cterm = attrs.cterm_ae_attr.without(HlAttrFlags::DEFAULT);
+        entry.cterm_bg = c_int::from(attrs.cterm_bg_color);
+        entry.cterm_fg = c_int::from(attrs.cterm_fg_color);
+        entry.cterm_bold = entry.cterm.has(HlAttrFlags::BOLD);
+
+        if attrs.hl_blend != -1 {
+            entry.blend = attrs.hl_blend;
+        } else if !update {
+            entry.blend = -1;
+        }
+
+        entry.script_ctx = current_sctx.get();
+        entry.script_ctx.sc_lnum += sourcing_lnum();
+        unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
+    });
+
+    let attr = unsafe { hl_get_syn_attr(0, id, attrs) };
+    with_group(id, |entry| entry.attr = attr);
+
+    // 'Normal' is special.
+    let entry = group(id);
+    if entry.name_u == c"NORMAL" {
+        cterm_normal_fg_color.set(entry.cterm_fg);
+        cterm_normal_bg_color.set(entry.cterm_bg);
+        let changed = normal_bg.get() != entry.rgb_bg
+            || normal_fg.get() != entry.rgb_fg
+            || normal_sp.get() != entry.rgb_sp;
+        normal_fg.set(entry.rgb_fg);
+        normal_bg.set(entry.rgb_bg);
+        normal_sp.set(entry.rgb_sp);
+        if changed {
+            unsafe { highlight_attr_set_all() };
+        }
+        unsafe { ui_default_colors_set() };
+    } else if unsafe { cursor_mode_uses_syn_id(id) } {
+        // A cursor style uses this group; its attribute has changed.
+        ui_mode_info_set();
+    }
+
+    if !updating_screen.get() {
+        unsafe { redraw_all_later(UPD_NOT_VALID) };
+    }
+    need_highlight_changed.set(true);
 }
 
 /// Not a colour index: "leave the one that is there alone".

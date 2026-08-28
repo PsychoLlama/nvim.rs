@@ -75,25 +75,25 @@ unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena
     };
 
     // SAFETY: the arena hands out `HLATTRS_DICT_SIZE + 1` writable entries.
-    unsafe {
-        *hl = arena_dict(arena, HLATTRS_DICT_SIZE + 1);
-        if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
-            put(hl, c"default", Object::boolean(true));
-        }
-        if link > 0 {
-            assert!(link <= highlight_num_groups(), "link out of bounds");
+    *hl = arena_dict(arena, HLATTRS_DICT_SIZE + 1);
+    if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
+        unsafe { put(hl, c"default", Object::boolean(true)) };
+    }
+    if link > 0 {
+        assert!(link <= highlight_num_groups(), "link out of bounds");
+        unsafe {
             put(
                 hl,
                 c"link",
                 Object::string(cstr_as_string(group(link).name.as_ptr())),
-            );
-        }
-        let mut cterm = arena_dict(arena, HLATTRS_DICT_SIZE);
-        hlattrs2dict(hl, None, attr, true, true);
-        hlattrs2dict(hl, Some(&mut cterm), attr, false, true);
-        if cterm.size != 0 {
-            put(hl, c"cterm", Object::dict(cterm));
-        }
+            )
+        };
+    }
+    let mut cterm = arena_dict(arena, HLATTRS_DICT_SIZE);
+    unsafe { hlattrs2dict(hl, None, attr, true, true) };
+    unsafe { hlattrs2dict(hl, Some(&mut cterm), attr, false, true) };
+    if cterm.size != 0 {
+        unsafe { put(hl, c"cterm", Object::dict(cterm)) };
     }
     true
 }
@@ -113,65 +113,78 @@ pub(crate) unsafe fn ns_get_hl_defs(
     err: *mut Error,
 ) -> Dict {
     // SAFETY: the caller's keydict, arena and error slot.
-    unsafe {
-        let link = !has_key(opts, KEYSET_OPTIDX_get_highlight__link) || (*opts).link;
+    let link =
+        !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__link) } || unsafe { (*opts).link };
 
-        let mut id = -1;
-        if has_key(opts, KEYSET_OPTIDX_get_highlight__name) {
-            let create = !has_key(opts, KEYSET_OPTIDX_get_highlight__create) || (*opts).create;
-            let (name, len) = ((*opts).name.data(), (*opts).name.len());
-            id = if create {
-                syn_check_group(name, len)
-            } else {
-                syn_name2id_len(name, len)
-            };
-            if id == 0 && !create {
-                return NO_DICT;
-            }
-        } else if has_key(opts, KEYSET_OPTIDX_get_highlight__id) {
-            id = (*opts).id as c_int;
+    let mut id = -1;
+    if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__name) } {
+        let create = !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__create) }
+            || unsafe { (*opts).create };
+        let (name, len) = (
+            unsafe { (*opts).name }.data(),
+            unsafe { (*opts).name }.len(),
+        );
+        id = if create {
+            unsafe { syn_check_group(name, len) }
+        } else {
+            unsafe { syn_name2id_len(name, len) }
+        };
+        if id == 0 && !create {
+            return NO_DICT;
         }
+    } else if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__id) } {
+        id = unsafe { (*opts).id } as c_int;
+    }
 
-        if id != -1 {
-            if id < 1 || id > highlight_num_groups() {
+    if id != -1 {
+        if id < 1 || id > highlight_num_groups() {
+            unsafe {
                 api_set_error(
                     err,
                     kErrorTypeValidation,
                     c"%s".as_ptr(),
                     c"Highlight id out of bounds".as_ptr(),
-                );
-                return NO_DICT;
-            }
-            let mut attrs = NO_DICT;
+                )
+            };
+            return NO_DICT;
+        }
+        let mut attrs = NO_DICT;
+        unsafe {
             hlgroup2dict(
                 &mut attrs,
                 ns_id,
                 if link { id } else { syn_get_final_id(id) },
                 arena,
-            );
-            return attrs;
-        }
+            )
+        };
+        return attrs;
+    }
 
-        if (*err).type_0 != kErrorTypeNone {
-            return NO_DICT;
-        }
+    if unsafe { (*err).type_0 } != kErrorTypeNone {
+        return NO_DICT;
+    }
 
-        let mut rv = arena_dict(arena, highlight_num_groups() as size_t);
-        for id in 1..=highlight_num_groups() {
-            let mut attrs = NO_DICT;
-            if !hlgroup2dict(&mut attrs, ns_id, id, arena) {
-                continue;
-            }
-            let named = if link { id } else { syn_get_final_id(id) };
-            assert!(rv.size < rv.capacity, "highlight dict overflow");
+    let mut rv = arena_dict(arena, highlight_num_groups() as size_t);
+    for id in 1..=highlight_num_groups() {
+        let mut attrs = NO_DICT;
+        if !unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) } {
+            continue;
+        }
+        let named = if link {
+            id
+        } else {
+            unsafe { syn_get_final_id(id) }
+        };
+        assert!(rv.size < rv.capacity, "highlight dict overflow");
+        unsafe {
             *rv.items.add(rv.size) = KeyValuePair {
                 key: cstr_as_string(group(named).name.as_ptr()),
                 value: Object::dict(attrs),
-            };
-            rv.size += 1;
-        }
-        rv
+            }
+        };
+        rv.size += 1;
     }
+    rv
 }
 
 /// `synIDattr({id}, {flag})` for a boolean attribute: `"1"` if the group has
