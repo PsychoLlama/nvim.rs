@@ -225,40 +225,38 @@ unsafe fn destination(
     }
     // SAFETY: the caller's parent node; each arm's union read is guarded by
     // the token type it belongs to.
-    unsafe {
-        match (*parent).tok.type_0 {
-            TOKEN_ARRAY => {
-                let obj: *mut Object = (*parent).data[0].p.cast::<Object>();
-                Destination {
-                    result: (*obj).data.array.items.add((*parent).pos),
-                    key_location: core::ptr::null_mut(),
-                }
+    match unsafe { (*parent).tok.type_0 } {
+        TOKEN_ARRAY => {
+            let obj: *mut Object = unsafe { (*parent).data[0].p }.cast::<Object>();
+            Destination {
+                result: unsafe { (*obj).data.array.items.add((*parent).pos) },
+                key_location: core::ptr::null_mut(),
             }
-            TOKEN_MAP => {
-                let obj: *mut Object = (*parent).data[0].p.cast::<Object>();
-                let kv: *mut KeyValuePair = (*obj).data.dict.items.add((*parent).pos);
-                let key_location = if (*parent).key_visited == 0 {
-                    (*kv).key = String_0::NULL;
-                    &raw mut (*kv).key
-                } else {
-                    core::ptr::null_mut()
-                };
-                Destination {
-                    result: &raw mut (*kv).value,
-                    key_location,
-                }
-            }
-            // A string, blob or extension's only children are its chunks,
-            // which write through the back-pointer instead of into a slot.
-            TOKEN_STR | TOKEN_BIN | TOKEN_EXT => {
-                debug_assert!(tok.type_0 == TOKEN_CHUNK);
-                Destination {
-                    result: core::ptr::null_mut(),
-                    key_location: core::ptr::null_mut(),
-                }
-            }
-            _ => abort(),
         }
+        TOKEN_MAP => {
+            let obj: *mut Object = unsafe { (*parent).data[0].p }.cast::<Object>();
+            let kv: *mut KeyValuePair = unsafe { (*obj).data.dict.items.add((*parent).pos) };
+            let key_location = if unsafe { (*parent).key_visited } == 0 {
+                unsafe { (*kv).key = String_0::NULL };
+                unsafe { &raw mut (*kv).key }
+            } else {
+                core::ptr::null_mut()
+            };
+            Destination {
+                result: unsafe { &raw mut (*kv).value },
+                key_location,
+            }
+        }
+        // A string, blob or extension's only children are its chunks,
+        // which write through the back-pointer instead of into a slot.
+        TOKEN_STR | TOKEN_BIN | TOKEN_EXT => {
+            debug_assert!(tok.type_0 == TOKEN_CHUNK);
+            Destination {
+                result: core::ptr::null_mut(),
+                key_location: core::ptr::null_mut(),
+            }
+        }
+        _ => unsafe { abort() },
     }
 }
 
@@ -308,20 +306,20 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             let len = tok.length as size_t;
             // SAFETY: the arena hands back `len + 1` writable bytes, and the
             // node's back-pointer is where its chunks will write.
-            unsafe {
-                let mem = arena_alloc(&raw mut (*p).arena, len + 1, false).cast::<c_char>();
-                *mem.add(len) = 0;
-                let str = String_0::from_raw_parts(mem, len);
-                if key_location.is_null() {
+            let mem = unsafe { arena_alloc(&raw mut (*p).arena, len + 1, false) }.cast::<c_char>();
+            unsafe { *mem.add(len) = 0 };
+            let str = String_0::from_raw_parts(mem, len);
+            if key_location.is_null() {
+                unsafe {
                     *result = Object {
                         type_0: kObjectTypeString,
                         data: object_data { string: str },
-                    };
-                } else {
-                    *key_location = str;
-                }
-                (*node).data[0].p = str.data().cast::<c_void>();
+                    }
+                };
+            } else {
+                unsafe { *key_location = str };
             }
+            unsafe { (*node).data[0].p = str.data().cast::<c_void>() };
         }
         TOKEN_EXT => {
             // SAFETY: the node is live; its chunks assemble the payload and
@@ -339,26 +337,25 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
         TOKEN_ARRAY => {
             let capacity = tok.length as size_t;
             // SAFETY: the arena hands back `capacity` zeroed `Object` slots.
-            unsafe {
-                let items = arena_alloc(&raw mut (*p).arena, size_of::<Object>() * capacity, true)
+            let items =
+                unsafe { arena_alloc(&raw mut (*p).arena, size_of::<Object>() * capacity, true) }
                     .cast::<Object>();
-                *result = array_object(items, capacity);
-                (*node).data[0].p = result.cast::<c_void>();
-            }
+            unsafe { *result = array_object(items, capacity) };
+            unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
         TOKEN_MAP => {
             let capacity = tok.length as size_t;
             // SAFETY: the arena hands back `capacity` zeroed entries.
-            unsafe {
-                let items = arena_alloc(
+            let items = unsafe {
+                arena_alloc(
                     &raw mut (*p).arena,
                     size_of::<KeyValuePair>() * capacity,
                     true,
                 )
-                .cast::<KeyValuePair>();
-                *result = dict_object(items, capacity);
-                (*node).data[0].p = result.cast::<c_void>();
             }
+            .cast::<KeyValuePair>();
+            unsafe { *result = dict_object(items, capacity) };
+            unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
         _ => {}
     }
@@ -380,27 +377,28 @@ unsafe fn copy_chunk(
     ext_payload_max: size_t,
 ) {
     // SAFETY: the caller's node and chunk.
+    let len = tok.length as size_t;
+    let chunk = unsafe { tok.data.chunk_ptr };
+    let pos = unsafe { (*parent).pos };
+    if unsafe { (*parent).tok.type_0 } == TOKEN_STR || unsafe { (*parent).tok.type_0 } == TOKEN_BIN
+    {
+        let data: *mut c_char = unsafe { (*parent).data[0].p }.cast::<c_char>();
+        unsafe { data.add(pos).copy_from_nonoverlapping(chunk, len) };
+        return;
+    }
+    let res: *mut Object = unsafe { (*parent).data[0].p }.cast::<Object>();
+    if pos + len > ext_payload_max {
+        unsafe { *res = nil_object() };
+        return;
+    }
     unsafe {
-        let len = tok.length as size_t;
-        let chunk = tok.data.chunk_ptr;
-        let pos = (*parent).pos;
-        if (*parent).tok.type_0 == TOKEN_STR || (*parent).tok.type_0 == TOKEN_BIN {
-            let data: *mut c_char = (*parent).data[0].p.cast::<c_char>();
-            data.add(pos).copy_from_nonoverlapping(chunk, len);
-            return;
-        }
-        let res: *mut Object = (*parent).data[0].p.cast::<Object>();
-        if pos + len > ext_payload_max {
-            *res = nil_object();
-            return;
-        }
         (&raw mut (*p).ext_buf)
             .cast::<c_char>()
             .add(pos)
-            .copy_from_nonoverlapping(chunk, len);
-        if pos + len >= (*parent).tok.length as size_t {
-            *res = ext_object(p, (*parent).tok.data.ext_type, (*parent).tok.length);
-        }
+            .copy_from_nonoverlapping(chunk, len)
+    };
+    if pos + len >= unsafe { (*parent).tok.length } as size_t {
+        unsafe { *res = ext_object(p, (*parent).tok.data.ext_type, (*parent).tok.length) };
     }
 }
 
@@ -449,17 +447,17 @@ unsafe fn ext_object(p: *mut Unpacker, ext_type: c_int, length: mpack_uint32_t) 
 /// `p` points at writable `Unpacker`-sized storage.
 pub unsafe fn unpacker_init(p: *mut Unpacker) {
     // SAFETY: the caller's storage.
+    unsafe { mpack_parser_init(&raw mut (*p).parser, 0) };
+    unsafe { (*p).parser.data.p = p.cast::<c_void>() };
+    unsafe { mpack_tokbuf_init(&raw mut (*p).reader) };
     unsafe {
-        mpack_parser_init(&raw mut (*p).parser, 0);
-        (*p).parser.data.p = p.cast::<c_void>();
-        mpack_tokbuf_init(&raw mut (*p).reader);
         (*p).unpack_error = Error {
             type_0: kErrorTypeNone,
             msg: core::ptr::null_mut(),
-        };
-        (*p).arena = ARENA_EMPTY;
-        (*p).has_grid_line_event = false;
-    }
+        }
+    };
+    unsafe { (*p).arena = ARENA_EMPTY };
+    unsafe { (*p).has_grid_line_event = false };
 }
 
 /// # Safety
@@ -585,8 +583,8 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
                 &raw mut u.unpack_error,
                 kErrorTypeValidation,
                 c"failed to decode msgpack".as_ptr(),
-            );
-        }
+            )
+        };
         u.state = protocol::INVALID;
     }
     false
@@ -605,10 +603,8 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
     // `data` pointer, so this body keeps raw-pointer discipline throughout
     // rather than holding a reference across `mpack_parse`.
     // SAFETY: the caller's unpacker.
-    unsafe {
-        debug_assert!((*p).state >= 0);
-        (*p).has_grid_line_event = false;
-    }
+    debug_assert!(unsafe { (*p).state } >= 0);
+    unsafe { (*p).has_grid_line_event = false };
 
     // SAFETY: as above.
     if unsafe { (*p).state } == protocol::HEADER {
@@ -618,25 +614,24 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
         }
         // SAFETY: as above. `handle_ui_client_redraw` is the handler the
         // dispatch table hands back for the `redraw` method.
-        unsafe {
-            let is_redraw = (*p).handler.fn_0.is_some_and(|f| {
-                core::ptr::fn_addr_eq(
-                    f,
-                    handle_ui_client_redraw
-                        as unsafe fn(u64, Array, *mut Arena, *mut Error) -> Object,
-                )
-            });
-            if (*p).type_0 == kMessageTypeNotification && is_redraw {
-                (*p).type_0 = kMessageTypeRedrawEvent;
-                (*p).state = protocol::REDRAW_EVENTS;
-            } else {
+        let is_redraw = unsafe { (*p).handler.fn_0 }.is_some_and(|f| {
+            core::ptr::fn_addr_eq(
+                f,
+                handle_ui_client_redraw as unsafe fn(u64, Array, *mut Arena, *mut Error) -> Object,
+            )
+        });
+        if unsafe { (*p).type_0 } == kMessageTypeNotification && is_redraw {
+            unsafe { (*p).type_0 = kMessageTypeRedrawEvent };
+            unsafe { (*p).state = protocol::REDRAW_EVENTS };
+        } else {
+            unsafe {
                 (*p).state = if (*p).type_0 == kMessageTypeResponse {
                     protocol::RESPONSE_ERROR
                 } else {
                     protocol::BODY
-                };
-                (*p).arena = ARENA_EMPTY;
-            }
+                }
+            };
+            unsafe { (*p).arena = ARENA_EMPTY };
         }
     }
 
@@ -653,15 +648,13 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
             return false;
         }
         // SAFETY: as above.
-        unsafe {
-            if (*p).state == protocol::GRID_LINE_WRAP {
-                (*p).has_grid_line_event = true;
-                body_is_unpacked = true;
-            } else {
-                debug_assert!((*p).state == protocol::REDRAW_ARGS);
-                (*p).arena = ARENA_EMPTY;
-                (*p).state = protocol::REDRAW_ARGS_DONE;
-            }
+        if unsafe { (*p).state } == protocol::GRID_LINE_WRAP {
+            unsafe { (*p).has_grid_line_event = true };
+            body_is_unpacked = true;
+        } else {
+            debug_assert!(unsafe { (*p).state } == protocol::REDRAW_ARGS);
+            unsafe { (*p).arena = ARENA_EMPTY };
+            unsafe { (*p).state = protocol::REDRAW_ARGS_DONE };
         }
     }
 
@@ -689,33 +682,33 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
                         &raw mut (*p).unpack_error,
                         kErrorTypeValidation,
                         c"failed to parse msgpack".as_ptr(),
-                    );
-                    (*p).state = protocol::INVALID;
-                }
+                    )
+                };
+                unsafe { (*p).state = protocol::INVALID };
                 return false;
             }
         }
         body_is_unpacked = false;
 
         // SAFETY: the caller's unpacker.
-        unsafe {
-            match (*p).state {
-                protocol::RESPONSE_ERROR => {
-                    (*p).error = (*p).result;
-                    (*p).state = protocol::BODY;
-                }
-                protocol::BODY => {
-                    (*p).state = protocol::HEADER;
-                    return true;
-                }
-                protocol::REDRAW_ARGS_DONE | protocol::GRID_LINE_WRAP => {
-                    (*p).ncalls -= 1;
-                    (*p).state =
-                        protocol::stage_after_redraw_call((*p).state, (*p).ncalls, (*p).nevents);
-                    return true;
-                }
-                _ => abort(),
+        match unsafe { (*p).state } {
+            protocol::RESPONSE_ERROR => {
+                unsafe { (*p).error = (*p).result };
+                unsafe { (*p).state = protocol::BODY };
             }
+            protocol::BODY => {
+                unsafe { (*p).state = protocol::HEADER };
+                return true;
+            }
+            protocol::REDRAW_ARGS_DONE | protocol::GRID_LINE_WRAP => {
+                unsafe { (*p).ncalls -= 1 };
+                unsafe {
+                    (*p).state =
+                        protocol::stage_after_redraw_call((*p).state, (*p).ncalls, (*p).nevents)
+                };
+                return true;
+            }
+            _ => unsafe { abort() },
         }
     }
 }

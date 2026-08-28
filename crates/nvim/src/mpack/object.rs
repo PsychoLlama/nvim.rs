@@ -69,13 +69,11 @@ pub fn frame(parser: *mut mpack_parser_t, i: mpack_uint32_t) -> *mut mpack_node_
 /// # Safety
 /// `node` must be a live frame of a parser stack.
 pub unsafe fn parent_of(node: *mut mpack_node_t) -> *mut mpack_node_t {
-    unsafe {
-        let below = node.sub(1);
-        if (*below).pos == NO_PARENT {
-            core::ptr::null_mut()
-        } else {
-            below
-        }
+    let below = unsafe { node.sub(1) };
+    if unsafe { (*below).pos } == NO_PARENT {
+        core::ptr::null_mut()
+    } else {
+        below
     }
 }
 
@@ -91,20 +89,18 @@ pub unsafe fn mpack_parser_init(parser: *mut mpack_parser_t, capacity: mpack_uin
     } else {
         MPACK_MAX_OBJECT_DEPTH as mpack_uint32_t
     };
-    unsafe {
-        super::mpack_core::mpack_tokbuf_init(&raw mut (*parser).tokbuf);
-        (*parser).data.p = core::ptr::null_mut();
-        (*parser).capacity = capacity;
-        (*parser).size = 0;
-        (*parser).exiting = 0;
-        (*parser).status = 0;
-        for i in 0..=capacity {
-            frame(parser, i).write(core::mem::zeroed());
-        }
-        // Frame 0 is never pushed; its `pos` is the sentinel that stops
-        // `parent_of` at the root.
-        (*frame(parser, 0)).pos = NO_PARENT;
+    unsafe { super::mpack_core::mpack_tokbuf_init(&raw mut (*parser).tokbuf) };
+    unsafe { (*parser).data.p = core::ptr::null_mut() };
+    unsafe { (*parser).capacity = capacity };
+    unsafe { (*parser).size = 0 };
+    unsafe { (*parser).exiting = 0 };
+    unsafe { (*parser).status = 0 };
+    for i in 0..=capacity {
+        unsafe { frame(parser, i).write(core::mem::zeroed()) };
     }
+    // Frame 0 is never pushed; its `pos` is the sentinel that stops
+    // `parent_of` at the root.
+    unsafe { (*frame(parser, 0)).pos = NO_PARENT };
 }
 
 /// One step of the walk, shared by both directions.
@@ -122,43 +118,41 @@ unsafe fn walk(
     exit_cb: mpack_walk_cb,
     enter: impl FnOnce(*mut mpack_node_t),
 ) -> c_int {
-    unsafe {
-        if (*parser).status == MPACK_EXCEPTION {
-            return MPACK_EXCEPTION;
-        }
-        if (*parser).exiting != 0 {
-            (*parser).exiting = 0;
-            while let Some(node) = pop(parser) {
-                exit_cb.expect("non-null exit callback")(parser, node);
-                if (*parser).status == MPACK_EXCEPTION {
-                    return MPACK_EXCEPTION;
-                }
-                if (*parser).size == 0 {
-                    return MPACK_OK as c_int;
-                }
-            }
-            return MPACK_EOF as c_int;
-        }
-        if (*parser).size == (*parser).capacity {
-            return MPACK_NOMEM;
-        }
-
-        // Open a frame for the new object. Its `data` is the callback's to
-        // use; `pos` and `key_visited` count the children seen so far.
-        (*parser).size += 1;
-        let top = frame(parser, (*parser).size);
-        (*top).data[0].p = core::ptr::null_mut();
-        (*top).data[1].p = core::ptr::null_mut();
-        (*top).pos = 0;
-        (*top).key_visited = 0;
-
-        enter(top);
-        if (*parser).status == MPACK_EXCEPTION {
-            return MPACK_EXCEPTION;
-        }
-        (*parser).exiting = 1;
-        MPACK_EOF as c_int
+    if unsafe { (*parser).status } == MPACK_EXCEPTION {
+        return MPACK_EXCEPTION;
     }
+    if unsafe { (*parser).exiting } != 0 {
+        unsafe { (*parser).exiting = 0 };
+        while let Some(node) = unsafe { pop(parser) } {
+            unsafe { exit_cb.expect("non-null exit callback")(parser, node) };
+            if unsafe { (*parser).status } == MPACK_EXCEPTION {
+                return MPACK_EXCEPTION;
+            }
+            if unsafe { (*parser).size } == 0 {
+                return MPACK_OK as c_int;
+            }
+        }
+        return MPACK_EOF as c_int;
+    }
+    if unsafe { (*parser).size } == unsafe { (*parser).capacity } {
+        return MPACK_NOMEM;
+    }
+
+    // Open a frame for the new object. Its `data` is the callback's to
+    // use; `pos` and `key_visited` count the children seen so far.
+    unsafe { (*parser).size += 1 };
+    let top = frame(parser, unsafe { (*parser).size });
+    unsafe { (*top).data[0].p = core::ptr::null_mut() };
+    unsafe { (*top).data[1].p = core::ptr::null_mut() };
+    unsafe { (*top).pos = 0 };
+    unsafe { (*top).key_visited = 0 };
+
+    enter(top);
+    if unsafe { (*parser).status } == MPACK_EXCEPTION {
+        return MPACK_EXCEPTION;
+    }
+    unsafe { (*parser).exiting = 1 };
+    MPACK_EOF as c_int
 }
 
 /// Feed one token to a decoding walk.
@@ -213,37 +207,35 @@ pub unsafe fn mpack_parse(
     exit_cb: mpack_walk_cb,
 ) -> c_int {
     let mut status = MPACK_EOF as c_int;
-    unsafe {
-        if (*parser).status == MPACK_EXCEPTION {
-            return MPACK_EXCEPTION;
-        }
-        while *buflen != 0 && status != MPACK_OK as c_int {
-            let mut tok = empty_token();
-            let (buf_save, buflen_save) = (*buf, *buflen);
+    if unsafe { (*parser).status } == MPACK_EXCEPTION {
+        return MPACK_EXCEPTION;
+    }
+    while unsafe { *buflen } != 0 && status != MPACK_OK as c_int {
+        let mut tok = empty_token();
+        let (buf_save, buflen_save) = (unsafe { *buf }, unsafe { *buflen });
 
-            status = mpack_read(&raw mut (*parser).tokbuf, buf, buflen, &raw mut tok);
-            if status == MPACK_EOF as c_int {
+        status = unsafe { mpack_read(&raw mut (*parser).tokbuf, buf, buflen, &raw mut tok) };
+        if status == MPACK_EOF as c_int {
+            continue;
+        }
+        if status != MPACK_ERROR as c_int {
+            // Drive the walk until it stops wanting to pop.
+            loop {
+                status = unsafe { mpack_parse_tok(parser, tok, enter_cb, exit_cb) };
+                if unsafe { (*parser).status } == MPACK_EXCEPTION {
+                    return MPACK_EXCEPTION;
+                }
+                if unsafe { (*parser).exiting } == 0 {
+                    break;
+                }
+            }
+            if status != MPACK_NOMEM {
                 continue;
             }
-            if status != MPACK_ERROR as c_int {
-                // Drive the walk until it stops wanting to pop.
-                loop {
-                    status = mpack_parse_tok(parser, tok, enter_cb, exit_cb);
-                    if (*parser).status == MPACK_EXCEPTION {
-                        return MPACK_EXCEPTION;
-                    }
-                    if (*parser).exiting == 0 {
-                        break;
-                    }
-                }
-                if status != MPACK_NOMEM {
-                    continue;
-                }
-            }
-            *buf = buf_save;
-            *buflen = buflen_save;
-            break;
         }
+        unsafe { *buf = buf_save };
+        unsafe { *buflen = buflen_save };
+        break;
     }
     status
 }
@@ -260,30 +252,30 @@ pub unsafe fn mpack_unparse(
     exit_cb: mpack_walk_cb,
 ) -> c_int {
     let mut status = MPACK_EOF as c_int;
-    unsafe {
-        if (*parser).status == MPACK_EXCEPTION {
+    if unsafe { (*parser).status } == MPACK_EXCEPTION {
+        return MPACK_EXCEPTION;
+    }
+    while unsafe { *buflen } != 0 && status != MPACK_OK as c_int {
+        let mut tok = empty_token();
+        let tb = unsafe { &raw mut (*parser).tokbuf };
+        // A half-written token is resumed from the tokbuf, not re-asked
+        // for: the walk has already moved past it.
+        if unsafe { (*tb).plen } == 0 {
+            unsafe {
+                (*parser).status = mpack_unparse_tok(parser, &raw mut tok, enter_cb, exit_cb)
+            };
+        }
+        if unsafe { (*parser).status } == MPACK_EXCEPTION {
             return MPACK_EXCEPTION;
         }
-        while *buflen != 0 && status != MPACK_OK as c_int {
-            let mut tok = empty_token();
-            let tb = &raw mut (*parser).tokbuf;
-            // A half-written token is resumed from the tokbuf, not re-asked
-            // for: the walk has already moved past it.
-            if (*tb).plen == 0 {
-                (*parser).status = mpack_unparse_tok(parser, &raw mut tok, enter_cb, exit_cb);
-            }
-            if (*parser).status == MPACK_EXCEPTION {
-                return MPACK_EXCEPTION;
-            }
-            status = (*parser).status;
-            if status == MPACK_NOMEM {
-                break;
-            }
-            if (*parser).exiting != 0 {
-                let write_status = mpack_write(tb, buf, buflen, &raw mut tok);
-                if write_status != MPACK_OK as c_int {
-                    status = write_status;
-                }
+        status = unsafe { (*parser).status };
+        if status == MPACK_NOMEM {
+            break;
+        }
+        if unsafe { (*parser).exiting } != 0 {
+            let write_status = unsafe { mpack_write(tb, buf, buflen, &raw mut tok) };
+            if write_status != MPACK_OK as c_int {
+                status = write_status;
             }
         }
     }
@@ -295,18 +287,16 @@ pub unsafe fn mpack_unparse(
 /// # Safety
 /// Both parsers must be initialised and `d` must be at least as deep as `s`.
 pub unsafe fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t) {
-    unsafe {
-        debug_assert!((*s).capacity <= (*d).capacity);
-        // Every field but `capacity`, which describes the destination's own
-        // allocation. The C memcpy's the struct header for this.
-        (*d).data = (*s).data;
-        (*d).size = (*s).size;
-        (*d).status = (*s).status;
-        (*d).exiting = (*s).exiting;
-        (*d).tokbuf = (*s).tokbuf;
-        for i in 0..=(*s).capacity {
-            frame(d, i).write(frame(s, i).read());
-        }
+    debug_assert!(unsafe { (*s).capacity } <= unsafe { (*d).capacity });
+    // Every field but `capacity`, which describes the destination's own
+    // allocation. The C memcpy's the struct header for this.
+    unsafe { (*d).data = (*s).data };
+    unsafe { (*d).size = (*s).size };
+    unsafe { (*d).status = (*s).status };
+    unsafe { (*d).exiting = (*s).exiting };
+    unsafe { (*d).tokbuf = (*s).tokbuf };
+    for i in 0..=unsafe { (*s).capacity } {
+        unsafe { frame(d, i).write(frame(s, i).read()) };
     }
 }
 
@@ -318,37 +308,35 @@ pub unsafe fn mpack_parser_copy(d: *mut mpack_parser_t, s: *mut mpack_parser_t) 
 /// # Safety
 /// The stack must not be empty.
 unsafe fn pop(p: *mut mpack_parser_t) -> Option<*mut mpack_node_t> {
-    unsafe {
-        debug_assert!((*p).size != 0);
-        let size = (*p).size;
-        let top = frame(p, size);
-        let tok = (*top).tok;
-        // Containers and blobs count their children in `pos`.
-        if tok.type_0 > MPACK_TOKEN_CHUNK && (*top).pos < tok.length as size_t {
-            return None;
-        }
-
-        // Frame 1's neighbour below is the sentinel, so a root object has no
-        // parent to report to.
-        if size > 1 {
-            let parent = frame(p, size - 1);
-            if tok.type_0 == MPACK_TOKEN_CHUNK {
-                // A blob's children are bytes, not items.
-                (*parent).pos += tok.length as size_t;
-            } else if (*parent).tok.type_0 == MPACK_TOKEN_MAP {
-                // A map may hold up to 2^32 - 1 pairs, which will not fit a
-                // 32-bit count of *visited children*; the key/value phase
-                // rides alongside `pos` in its own flag instead.
-                if (*parent).key_visited != 0 {
-                    (*parent).pos += 1;
-                }
-                (*parent).key_visited = c_int::from((*parent).key_visited == 0);
-            } else {
-                (*parent).pos += 1;
-            }
-        }
-
-        (*p).size -= 1;
-        Some(top)
+    debug_assert!(unsafe { (*p).size } != 0);
+    let size = unsafe { (*p).size };
+    let top = frame(p, size);
+    let tok = unsafe { (*top).tok };
+    // Containers and blobs count their children in `pos`.
+    if tok.type_0 > MPACK_TOKEN_CHUNK && unsafe { (*top).pos } < tok.length as size_t {
+        return None;
     }
+
+    // Frame 1's neighbour below is the sentinel, so a root object has no
+    // parent to report to.
+    if size > 1 {
+        let parent = frame(p, size - 1);
+        if tok.type_0 == MPACK_TOKEN_CHUNK {
+            // A blob's children are bytes, not items.
+            unsafe { (*parent).pos += tok.length as size_t };
+        } else if unsafe { (*parent).tok.type_0 } == MPACK_TOKEN_MAP {
+            // A map may hold up to 2^32 - 1 pairs, which will not fit a
+            // 32-bit count of *visited children*; the key/value phase
+            // rides alongside `pos` in its own flag instead.
+            if unsafe { (*parent).key_visited } != 0 {
+                unsafe { (*parent).pos += 1 };
+            }
+            unsafe { (*parent).key_visited = c_int::from((*parent).key_visited == 0) };
+        } else {
+            unsafe { (*parent).pos += 1 };
+        }
+    }
+
+    unsafe { (*p).size -= 1 };
+    Some(top)
 }

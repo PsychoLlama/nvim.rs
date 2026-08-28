@@ -41,10 +41,8 @@ pub const MPACK_ITEM_SIZE: c_int = 9;
 /// The cursor must have [`MPACK_ITEM_SIZE`] bytes of room, which is what
 /// [`mpack_check_buffer`] leaves behind.
 fn emit(cursor: &mut *mut c_char, bytes: &[u8]) {
-    unsafe {
-        cursor.copy_from_nonoverlapping(bytes.as_ptr().cast::<c_char>(), bytes.len());
-        *cursor = cursor.add(bytes.len());
-    }
+    unsafe { cursor.copy_from_nonoverlapping(bytes.as_ptr().cast::<c_char>(), bytes.len()) };
+    *cursor = unsafe { cursor.add(bytes.len()) };
 }
 
 /// Hands the buffer back to its owner to make room, then resumes at whatever
@@ -178,10 +176,8 @@ pub unsafe fn mpack_raw(data: *const c_char, len: size_t, packer: &mut PackerBuf
         let to_copy = (len - pos).min(mpack_remaining(packer));
         // SAFETY: `to_copy` is bounded by both what the caller still owes and
         // what the buffer window holds.
-        unsafe {
-            packer.ptr.copy_from_nonoverlapping(data.add(pos), to_copy);
-            packer.ptr = packer.ptr.add(to_copy);
-        }
+        unsafe { packer.ptr.copy_from_nonoverlapping(data.add(pos), to_copy) };
+        packer.ptr = unsafe { packer.ptr.add(to_copy) };
         pos += to_copy;
         if pos < len {
             flush(packer);
@@ -276,10 +272,8 @@ pub unsafe fn mpack_object_inner(
                     // SAFETY: as above. A released luaref packs as nil, and
                     // the slot is overwritten so a second pass cannot free it
                     // twice.
-                    unsafe {
-                        api_free_luaref((*current).data.luaref);
-                        (*current).data.luaref = LUA_NOREF as LuaRef;
-                    }
+                    unsafe { api_free_luaref((*current).data.luaref) };
+                    unsafe { (*current).data.luaref = LUA_NOREF as LuaRef };
                 }
                 kObjectTypeNil => {}
                 kObjectTypeBoolean => {
@@ -357,24 +351,22 @@ pub unsafe fn mpack_object_inner(
 
         // SAFETY: `container` is a live array or dict, and `container_idx` is
         // below its size — the two assignments below restore that.
-        unsafe {
-            if (*container).type_0 == kObjectTypeArray {
-                let arr: Array = (*container).data.array;
-                current = arr.items.add(container_idx);
-                container_idx += 1;
-                if container_idx >= arr.size {
-                    container = core::ptr::null_mut();
-                }
-            } else {
-                let dict: Dict = (*container).data.dict;
-                let entry: *mut KeyValuePair = dict.items.add(container_idx);
-                container_idx += 1;
-                mpack_check_buffer(packer);
-                mpack_str((*entry).key, packer);
-                current = &raw mut (*entry).value;
-                if container_idx >= dict.size {
-                    container = core::ptr::null_mut();
-                }
+        if unsafe { (*container).type_0 } == kObjectTypeArray {
+            let arr: Array = unsafe { (*container).data.array };
+            current = unsafe { arr.items.add(container_idx) };
+            container_idx += 1;
+            if container_idx >= arr.size {
+                container = core::ptr::null_mut();
+            }
+        } else {
+            let dict: Dict = unsafe { (*container).data.dict };
+            let entry: *mut KeyValuePair = unsafe { dict.items.add(container_idx) };
+            container_idx += 1;
+            mpack_check_buffer(packer);
+            unsafe { mpack_str((*entry).key, packer) };
+            current = unsafe { &raw mut (*entry).value };
+            if container_idx >= dict.size {
+                container = core::ptr::null_mut();
             }
         }
     }
@@ -400,15 +392,14 @@ pub fn packer_string_buffer() -> PackerBuffer {
 /// allocation this reallocates.
 unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
     // SAFETY: the caller's buffer, and an allocation only this hook resizes.
-    unsafe {
-        let buffer = &mut *buffer;
-        let capacity = buffer.endptr.addr() - buffer.startptr.addr();
-        let len = buffer.ptr.addr() - buffer.startptr.addr();
-        let new_capacity = 2 * capacity;
-        buffer.startptr = xrealloc(buffer.startptr.cast::<c_void>(), new_capacity).cast::<c_char>();
-        buffer.ptr = buffer.startptr.add(len);
-        buffer.endptr = buffer.startptr.add(new_capacity);
-    }
+    let buffer = unsafe { &mut *buffer };
+    let capacity = buffer.endptr.addr() - buffer.startptr.addr();
+    let len = buffer.ptr.addr() - buffer.startptr.addr();
+    let new_capacity = 2 * capacity;
+    buffer.startptr =
+        unsafe { xrealloc(buffer.startptr.cast::<c_void>(), new_capacity) }.cast::<c_char>();
+    buffer.ptr = unsafe { buffer.startptr.add(len) };
+    buffer.endptr = unsafe { buffer.startptr.add(new_capacity) };
 }
 
 /// Takes ownership of everything written to a [`packer_string_buffer`].

@@ -270,8 +270,8 @@ pub unsafe fn mpack_tokbuf_init(tokbuf: *mut mpack_tokbuf_t) {
             ppos: 0,
             plen: 0,
             passthrough: 0,
-        });
-    }
+        })
+    };
 }
 
 /// Read one token out of `*buf`, advancing it past what was consumed.
@@ -295,10 +295,8 @@ pub unsafe fn mpack_read(
     debug_assert!(!start.is_null());
 
     let (step, consumed) = read_step(tokbuf, input);
-    unsafe {
-        *buf = start.add(consumed);
-        *buflen -= consumed;
-    }
+    unsafe { *buf = start.add(consumed) };
+    unsafe { *buflen -= consumed };
     match step {
         Step::Token(parsed) => {
             unsafe { *tok = from_tok(&parsed) };
@@ -310,8 +308,8 @@ pub unsafe fn mpack_read(
                     type_0: MPACK_TOKEN_CHUNK,
                     length: len,
                     data: mpack_token_s_data { chunk_ptr: start },
-                };
-            }
+                }
+            };
             MPACK_OK as c_int
         }
         Step::Eof => MPACK_EOF as c_int,
@@ -353,10 +351,8 @@ pub unsafe fn mpack_write(
         write_step(tokbuf, &to_tok(&c_tok), out)
     };
 
-    unsafe {
-        *buf = start.add(written);
-        *buflen -= written;
-    }
+    unsafe { *buf = start.add(written) };
+    unsafe { *buflen -= written };
     status as c_int
 }
 
@@ -409,30 +405,24 @@ pub unsafe fn mpack_rtoken(
     let input = unsafe { core::slice::from_raw_parts(start.cast::<u8>(), *buflen) };
     match token::decode_token(input) {
         Read::Done { tok: parsed, used } => {
-            unsafe {
-                *tok = from_tok(&parsed);
-                *buf = start.add(used);
-                *buflen -= used;
-            }
+            unsafe { *tok = from_tok(&parsed) };
+            unsafe { *buf = start.add(used) };
+            unsafe { *buflen -= used };
             MPACK_OK as c_int
         }
         Read::Partial { need } => {
             // The C leaves the type code consumed and reports the shortfall
             // through `tok->length`; `mpack_read` is the only caller that
             // reads it back.
-            unsafe {
-                (*tok).length = need;
-                *buf = start.add(1);
-                *buflen -= 1;
-            }
+            unsafe { (*tok).length = need };
+            unsafe { *buf = start.add(1) };
+            unsafe { *buflen -= 1 };
             MPACK_EOF as c_int
         }
         Read::Empty => MPACK_EOF as c_int,
         Read::Invalid => {
-            unsafe {
-                *buf = start.add(1);
-                *buflen -= 1;
-            }
+            unsafe { *buf = start.add(1) };
+            unsafe { *buflen -= 1 };
             MPACK_ERROR as c_int
         }
     }

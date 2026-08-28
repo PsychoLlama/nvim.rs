@@ -222,9 +222,9 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     let id = chan.id;
     // SAFETY: the channel is live and now an RPC endpoint, so it has both
     // streams; `receive_msgpack` is handed the same pointer back.
+    let out = unsafe { channel_outstream(channel) };
+    let in_0 = unsafe { channel_instream(channel) };
     unsafe {
-        let out = channel_outstream(channel);
-        let in_0 = channel_instream(channel);
         logmsg!(
             LOGLVL_DBG,
             c"rpc_start",
@@ -233,9 +233,9 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
             id,
             in_0.cast::<c_void>(),
             out.cast::<c_void>(),
-        );
-        rstream_start(out, Some(receive_msgpack), channel.cast::<c_void>());
-    }
+        )
+    };
+    unsafe { rstream_start(out, Some(receive_msgpack), channel.cast::<c_void>()) };
 }
 
 /// Marks the channel closed and schedules the teardown.
@@ -258,8 +258,8 @@ pub unsafe fn rpc_close(channel: *mut Channel) {
         multiqueue_put_event(
             (*main_loop.ptr()).fast_events,
             one_arg_event(Some(rpc_close_event), channel.cast::<c_void>()),
-        );
-    }
+        )
+    };
 }
 
 /// Drops the channel's own reference, then decides whether the editor should
@@ -271,10 +271,8 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     // SAFETY: `rpc_close` built this argument vector with one live channel.
     let chan = unsafe { Chan::new((*argv).cast::<Channel>()) };
     // SAFETY: as above.
-    unsafe {
-        channel_decref(chan.as_ptr());
-        remote_ui_disconnect(chan.id, ptr::null_mut(), false);
-    }
+    unsafe { channel_decref(chan.as_ptr()) };
+    unsafe { remote_ui_disconnect(chan.id, ptr::null_mut(), false) };
 
     if ui_client_channel_id.get() != 0 && chan.id == ui_client_channel_id.get() {
         // A `--remote-ui` client whose server went away: try to reconnect
@@ -304,10 +302,8 @@ pub unsafe fn rpc_free(channel: *mut Channel) {
     // SAFETY: the caller's channel, whose unpacker and info dict this owns.
     let mut chan = unsafe { Chan::new(channel) };
     // SAFETY: as above.
-    unsafe {
-        unpacker_teardown(chan.rpc.unpacker);
-        xfree(chan.rpc.unpacker.cast::<c_void>());
-    }
+    unsafe { unpacker_teardown(chan.rpc.unpacker) };
+    unsafe { xfree(chan.rpc.unpacker.cast::<c_void>()) };
     chan.rpc.call_stack = CallStack::new();
     // SAFETY: the dict was built by `rpc_set_client_info` and is owned here.
     unsafe { api_free_dict(chan.rpc.info) };
@@ -338,24 +334,23 @@ unsafe fn find_rpc_channel(id: uint64_t) -> Option<Chan> {
 /// `chan` has been through [`rpc_start`] and `msg` is a NUL-terminated string.
 unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
     // SAFETY: the channel's own unpacker, and the caller's message.
-    unsafe {
-        let arena = &raw mut chan.unpacker().arena;
-        for frame in chan.rpc.call_stack.frames() {
-            if !(*frame).returned {
-                (*frame).returned = true;
-                (*frame).errored = true;
-                (*frame).result = Object {
-                    type_0: kObjectTypeString,
-                    data: crate::types::object_data {
-                        string: arena_string(arena, cstr_as_string(msg)),
-                    },
-                };
-                (*frame).result_mem = arena_finish(arena);
-            }
+    let arena = &raw mut unsafe { chan.unpacker() }.arena;
+    for frame in chan.rpc.call_stack.frames() {
+        if !unsafe { (*frame).returned } {
+            unsafe { (*frame).returned = true };
+            unsafe { (*frame).errored = true };
+            let string = unsafe { arena_string(arena, cstr_as_string(msg)) };
+            let result = Object {
+                type_0: kObjectTypeString,
+                data: crate::types::object_data { string },
+            };
+            unsafe { (*frame).result = result };
+            let mem = unsafe { arena_finish(arena) };
+            unsafe { (*frame).result_mem = mem };
         }
-        channel_close(chan.id, kChannelPartRpc, ptr::null_mut());
-        logmsg!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg);
     }
+    unsafe { channel_close(chan.id, kChannelPartRpc, ptr::null_mut()) };
+    unsafe { logmsg!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg) };
 }
 
 // ---------------------------------------------------------------------------
@@ -381,12 +376,12 @@ pub unsafe fn rpc_send_event(id: uint64_t, name: *const c_char, args: Array) -> 
         }
     };
     // SAFETY: the caller's name, and a channel this just resolved.
-    unsafe {
-        trace::log_call(trace::SEND, channel.map_or(0, |chan| chan.id), None, name);
-        match channel {
-            Some(chan) => serialize_request(slice::from_mut(&mut chan.as_ptr()), 0, name, args),
-            None => broadcast_event(name, args),
-        }
+    unsafe { trace::log_call(trace::SEND, channel.map_or(0, |chan| chan.id), None, name) };
+    match channel {
+        Some(chan) => unsafe {
+            serialize_request(slice::from_mut(&mut chan.as_ptr()), 0, name, args)
+        },
+        None => unsafe { broadcast_event(name, args) },
     }
     true
 }
@@ -432,9 +427,9 @@ pub unsafe fn rpc_send_call(
             request_id,
             method_name,
             args,
-        );
-        trace::log_call(trace::SEND, chan.id, Some(request_id), method_name);
-    }
+        )
+    };
+    unsafe { trace::log_call(trace::SEND, chan.id, Some(request_id), method_name) };
 
     let mut frame = ChannelCallFrame {
         request_id,
@@ -461,24 +456,20 @@ pub unsafe fn rpc_send_call(
                 kErrorTypeException,
                 c"Invalid channel: %lu".as_ptr(),
                 id,
-            );
-            channel_decref(chan.as_ptr());
-        }
+            )
+        };
+        unsafe { channel_decref(chan.as_ptr()) };
         return NIL;
     }
     if frame.errored {
         // SAFETY: the result the decoder placed in the frame, and its arena.
-        unsafe {
-            report_call_error(err, &frame.result);
-            arena_mem_free(frame.result_mem);
-        }
+        unsafe { report_call_error(err, &frame.result) };
+        unsafe { arena_mem_free(frame.result_mem) };
         frame.result_mem = ptr::null_mut();
     }
     // SAFETY: the reference taken above, and the caller's out-parameter.
-    unsafe {
-        channel_decref(chan.as_ptr());
-        *result_mem = frame.result_mem;
-    }
+    unsafe { channel_decref(chan.as_ptr()) };
+    unsafe { *result_mem = frame.result_mem };
     if frame.errored { NIL } else { frame.result }
 }
 
@@ -493,39 +484,41 @@ pub unsafe fn rpc_send_call(
 unsafe fn report_call_error(err: *mut Error, result: &Object) {
     // SAFETY: the caller's error slot and decoded result. Every union read
     // below is guarded by the `type_0` it belongs to.
-    unsafe {
-        if result.type_0 == kObjectTypeString {
+    if result.type_0 == kObjectTypeString {
+        unsafe {
             api_set_error(
                 err,
                 kErrorTypeException,
                 c"%s".as_ptr(),
                 result.data.string.data(),
-            );
-            return;
-        }
-        if result.type_0 == kObjectTypeArray {
-            let array = result.data.array;
-            if array.size == 2 {
-                let kind = &*array.items;
-                let message = &*array.items.add(1);
-                if kind.type_0 == kObjectTypeInteger
-                    && (kind.data.integer == Integer::from(kErrorTypeException)
-                        || kind.data.integer == Integer::from(kErrorTypeValidation))
-                    && message.type_0 == kObjectTypeString
-                {
-                    let kind = crate::narrow::number_as_int(kind.data.integer);
-                    api_set_error(err, kind, c"%s".as_ptr(), message.data.string.data());
-                    return;
-                }
+            )
+        };
+        return;
+    }
+    if result.type_0 == kObjectTypeArray {
+        let array = unsafe { result.data.array };
+        if array.size == 2 {
+            let kind = unsafe { &*array.items };
+            let message = unsafe { &*array.items.add(1) };
+            if kind.type_0 == kObjectTypeInteger
+                && (unsafe { kind.data.integer } == Integer::from(kErrorTypeException)
+                    || unsafe { kind.data.integer } == Integer::from(kErrorTypeValidation))
+                && message.type_0 == kObjectTypeString
+            {
+                let kind = crate::narrow::number_as_int(unsafe { kind.data.integer });
+                unsafe { api_set_error(err, kind, c"%s".as_ptr(), message.data.string.data()) };
+                return;
             }
         }
+    }
+    unsafe {
         api_set_error(
             err,
             kErrorTypeException,
             c"%s".as_ptr(),
             c"unknown error".as_ptr(),
-        );
-    }
+        )
+    };
 }
 
 /// Hands an already-encoded message to a channel. Takes ownership of `buffer`.
@@ -588,16 +581,14 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
     if chan.streamtype == kChannelStreamInternal {
         // SAFETY: the reference is dropped by `internal_read_event`, which
         // also releases the buffer.
-        unsafe {
-            channel_incref(chan.as_ptr());
-            let mut argv = [chan.as_ptr().cast::<c_void>(), buffer.cast::<c_void>()];
-            if chan.events.is_null() {
-                internal_read_event(argv.as_mut_ptr());
-            } else {
-                let mut event = one_arg_event(Some(internal_read_event), argv[0]);
-                event.argv[1] = argv[1];
-                multiqueue_put_event(chan.events, event);
-            }
+        unsafe { channel_incref(chan.as_ptr()) };
+        let mut argv = [chan.as_ptr().cast::<c_void>(), buffer.cast::<c_void>()];
+        if chan.events.is_null() {
+            unsafe { internal_read_event(argv.as_mut_ptr()) };
+        } else {
+            let mut event = one_arg_event(Some(internal_read_event), argv[0]);
+            event.argv[1] = argv[1];
+            unsafe { multiqueue_put_event(chan.events, event) };
         }
     } else {
         // SAFETY: an RPC channel that is not internal has an in-stream.
@@ -615,8 +606,8 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
                 c"ch %lu: stream write failed: %s. RPC canceled; closing channel".as_ptr(),
                 chan.id,
                 uv_strerror(err),
-            );
-        }
+            )
+        };
         let level = if err == UV_EPIPE {
             LOGLVL_INF
         } else {
@@ -660,14 +651,12 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
                 chan,
                 c"internal channel: internal error".as_ptr().cast_mut(),
                 LOGLVL_ERR,
-            );
-        }
+            )
+        };
     }
     // SAFETY: the reference and the buffer `channel_write` handed over.
-    unsafe {
-        channel_decref(chan.as_ptr());
-        wstream_release_wbuffer(buffer);
-    }
+    unsafe { channel_decref(chan.as_ptr()) };
+    unsafe { wstream_release_wbuffer(buffer) };
 }
 
 // ---------------------------------------------------------------------------
@@ -704,18 +693,18 @@ pub unsafe fn rpc_set_client_info(id: uint64_t, info: Dict) {
 pub unsafe fn get_client_info(chan: *mut Channel, key: *const c_char) -> *const c_char {
     // SAFETY: the caller's channel and key, and an info dict whose entries are
     // live for as long as it is.
-    unsafe {
-        if !(*chan).is_rpc {
-            return ptr::null();
-        }
-        let info = (*chan).rpc.info;
-        let key = CStr::from_ptr(key);
-        for i in 0..info.size {
-            let item = &*info.items.add(i);
-            if item.value.type_0 == kObjectTypeString && CStr::from_ptr(item.key.data()) == key {
-                return item.value.data.string.data();
-            }
-        }
-        ptr::null()
+    if !unsafe { (*chan).is_rpc } {
+        return ptr::null();
     }
+    let info = unsafe { (*chan).rpc.info };
+    let key = unsafe { CStr::from_ptr(key) };
+    for i in 0..info.size {
+        let item = unsafe { &*info.items.add(i) };
+        if item.value.type_0 == kObjectTypeString
+            && unsafe { CStr::from_ptr(item.key.data()) } == key
+        {
+            return unsafe { item.value.data.string }.data();
+        }
+    }
+    ptr::null()
 }

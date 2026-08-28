@@ -68,20 +68,18 @@ pub unsafe fn log_call(
     // SAFETY: the caller's `name`, and format verbs that match the arguments
     // beside them. `logmsg_begin` refuses the line if no log file is open, so
     // nothing here is evaluated against a closed handle.
-    unsafe {
-        match req_id {
-            Some(id) => {
-                let k = column::REQUEST.as_ptr();
-                let fmt = column::FMT_ID_NAME.as_ptr();
-                logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, id, name)
-            }
-            None => {
-                let k = column::NOTIFY.as_ptr();
-                let fmt = column::FMT_NAME.as_ptr();
-                logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, name)
-            }
-        };
-    }
+    match req_id {
+        Some(id) => {
+            let k = column::REQUEST.as_ptr();
+            let fmt = column::FMT_ID_NAME.as_ptr();
+            unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, id, name) }
+        }
+        None => {
+            let k = column::NOTIFY.as_ptr();
+            let fmt = column::FMT_NAME.as_ptr();
+            unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, name) }
+        }
+    };
 }
 
 /// Traces a response. `errored` picks the `[error]` column over `[response]`.
@@ -96,7 +94,5 @@ pub fn log_response(dir: &CStr, channel_id: uint64_t, errored: bool, req_id: uin
     let fmt = column::FMT_ID.as_ptr();
     // SAFETY: every argument is a `&CStr`'s pointer or an integer, and the
     // verbs match them; there is no caller-supplied pointer to get wrong.
-    unsafe {
-        logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, req_id);
-    }
+    unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, req_id) };
 }

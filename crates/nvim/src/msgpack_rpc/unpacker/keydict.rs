@@ -40,25 +40,23 @@ use super::{
 /// `data`/`size` are a writable cursor over a live buffer.
 pub unsafe fn unpack_string(data: *mut *const c_char, size: *mut size_t) -> String_0 {
     // SAFETY: the caller's cursor and the buffer it describes.
-    unsafe {
-        let mut data2: *const c_char = *data;
-        let mut size2: size_t = *size;
-        let mut tok: mpack_token_t = core::mem::zeroed();
-        if mpack_rtoken(&raw mut data2, &raw mut size2, &raw mut tok) != 0
-            || tok.type_0 != TOKEN_STR && tok.type_0 != TOKEN_BIN
-        {
-            return String_0::NULL;
-        }
-        // Checked against the *original* size, so a token header that
-        // consumed several bytes leaves that much slack. Upstream's bound;
-        // the caller only ever reads within the buffer it owns.
-        if *size < tok.length as size_t {
-            return String_0::NULL;
-        }
-        *data = data2.add(tok.length as usize);
-        *size = size2 - tok.length as size_t;
-        String_0::from_raw_parts(data2.cast_mut(), tok.length as size_t)
+    let mut data2: *const c_char = unsafe { *data };
+    let mut size2: size_t = unsafe { *size };
+    let mut tok: mpack_token_t = unsafe { core::mem::zeroed() };
+    if unsafe { mpack_rtoken(&raw mut data2, &raw mut size2, &raw mut tok) } != 0
+        || tok.type_0 != TOKEN_STR && tok.type_0 != TOKEN_BIN
+    {
+        return String_0::NULL;
     }
+    // Checked against the *original* size, so a token header that
+    // consumed several bytes leaves that much slack. Upstream's bound;
+    // the caller only ever reads within the buffer it owns.
+    if unsafe { *size } < tok.length as size_t {
+        return String_0::NULL;
+    }
+    unsafe { *data = data2.add(tok.length as usize) };
+    unsafe { *size = size2 - tok.length as size_t };
+    String_0::from_raw_parts(data2.cast_mut(), tok.length as size_t)
 }
 
 /// The length of the array that starts here, or -1 if this is not one.
@@ -114,9 +112,9 @@ pub unsafe fn unpack_integer(
 /// [`unpack_string`]'s contract.
 pub unsafe fn unpack_skip(data: *mut *const c_char, size: *mut size_t) -> c_int {
     // SAFETY: the caller's cursor, and a parser that builds nothing.
+    let mut parser: mpack_parser_t = unsafe { core::mem::zeroed() };
+    unsafe { mpack_parser_init(&raw mut parser, 0) };
     unsafe {
-        let mut parser: mpack_parser_t = core::mem::zeroed();
-        mpack_parser_init(&raw mut parser, 0);
         mpack_parse(
             &raw mut parser,
             data,
@@ -142,35 +140,37 @@ pub unsafe fn push_additional_data(
 ) {
     // SAFETY: the caller's builder and bytes; `reserve` makes the room each
     // copy needs.
-    unsafe {
-        if (*ad).size == 0 {
-            let header = AdditionalData {
-                nitems: 0,
-                nbytes: 0,
-                data: [],
-            };
-            reserve(ad, size_of::<AdditionalData>());
+    if unsafe { (*ad).size } == 0 {
+        let header = AdditionalData {
+            nitems: 0,
+            nbytes: 0,
+            data: [],
+        };
+        unsafe { reserve(ad, size_of::<AdditionalData>()) };
+        unsafe {
             (*ad).items.add((*ad).size).copy_from_nonoverlapping(
                 (&raw const header).cast::<c_char>(),
                 size_of::<AdditionalData>(),
-            );
-            (*ad).size += size_of::<AdditionalData>();
-        }
+            )
+        };
+        unsafe { (*ad).size += size_of::<AdditionalData>() };
+    }
 
-        let header: *mut AdditionalData = (*ad).items.cast::<AdditionalData>();
-        (*header).nitems += 1;
-        // One unrecognised item cannot be 4 GiB long: saturating is the safe
-        // reading of upstream's bare `(uint32_t)`, and unreachable either way.
-        (*header).nbytes += uint32_t::try_from(size).unwrap_or(uint32_t::MAX);
+    let header: *mut AdditionalData = unsafe { (*ad).items }.cast::<AdditionalData>();
+    unsafe { (*header).nitems += 1 };
+    // One unrecognised item cannot be 4 GiB long: saturating is the safe
+    // reading of upstream's bare `(uint32_t)`, and unreachable either way.
+    unsafe { (*header).nbytes += uint32_t::try_from(size).unwrap_or(uint32_t::MAX) };
 
-        if size > 0 {
-            reserve(ad, size);
+    if size > 0 {
+        unsafe { reserve(ad, size) };
+        unsafe {
             (*ad)
                 .items
                 .add((*ad).size)
-                .copy_from_nonoverlapping(data, size);
-            (*ad).size += size;
-        }
+                .copy_from_nonoverlapping(data, size)
+        };
+        unsafe { (*ad).size += size };
     }
 }
 
@@ -181,14 +181,14 @@ pub unsafe fn push_additional_data(
 /// allocation of `capacity` bytes.
 unsafe fn reserve(ad: *mut AdditionalDataBuilder, extra: size_t) {
     // SAFETY: the caller's builder.
-    unsafe {
-        if (*ad).capacity >= (*ad).size + extra {
-            return;
-        }
-        (*ad).capacity = protocol::capacity_for((*ad).size + extra);
-        (*ad).items = xrealloc((*ad).items.cast::<c_void>(), (*ad).capacity).cast::<c_char>();
-        assert!(!(*ad).items.is_null());
+    if unsafe { (*ad).capacity } >= unsafe { (*ad).size } + extra {
+        return;
     }
+    unsafe { (*ad).capacity = protocol::capacity_for((*ad).size + extra) };
+    unsafe {
+        (*ad).items = xrealloc((*ad).items.cast::<c_void>(), (*ad).capacity).cast::<c_char>()
+    };
+    assert!(!unsafe { (*ad).items }.is_null());
 }
 
 /// Decodes a msgpack map straight into a generated keyset struct.
@@ -223,43 +223,41 @@ pub unsafe fn unpack_keydict(
     for _ in 0..tok.length {
         // SAFETY: the caller's cursor, keyset and error slot; `key` borrows
         // the buffer the cursor walks.
-        unsafe {
-            let item_start: *const c_char = *data;
-            let key = unpack_string(data, size);
-            if key.data().is_null() {
-                *error = fail(c"has key value which is not a string", key);
-                return false;
-            }
-            if key.is_empty() {
-                *error = fail(c"has empty key", key);
-                return false;
-            }
+        let item_start: *const c_char = unsafe { *data };
+        let key = unsafe { unpack_string(data, size) };
+        if key.data().is_null() {
+            unsafe { *error = fail(c"has key value which is not a string", key) };
+            return false;
+        }
+        if key.is_empty() {
+            unsafe { *error = fail(c"has empty key", key) };
+            return false;
+        }
 
-            let field: *const KeySetLink =
-                hashy.expect("keyset has no hash function")(key.data(), key.len());
-            if field.is_null() {
-                if unpack_skip(data, size) != 0 {
-                    return false;
-                }
-                if !ad.is_null() {
-                    push_additional_data(ad, item_start, (*data).addr() - item_start.addr());
-                }
-                continue;
-            }
-
-            debug_assert!((*field).opt_index >= 0);
-            let flag = 1u64 << (*field).opt_index;
-            if (*ks).is_set_ & flag != 0 {
-                *error = xstrdup(c"duplicate key".as_ptr());
+        let field: *const KeySetLink =
+            unsafe { hashy.expect("keyset has no hash function")(key.data(), key.len()) };
+        if field.is_null() {
+            if unsafe { unpack_skip(data, size) } != 0 {
                 return false;
             }
-            (*ks).is_set_ |= flag;
-
-            let mem = retval.cast::<c_char>().add((*field).ptr_off);
-            if let Err(message) = unpack_field(mem, (*field).type_0, data, size) {
-                *error = fail(message, key);
-                return false;
+            if !ad.is_null() {
+                unsafe { push_additional_data(ad, item_start, (*data).addr() - item_start.addr()) };
             }
+            continue;
+        }
+
+        debug_assert!(unsafe { (*field).opt_index } >= 0);
+        let flag = 1u64 << unsafe { (*field).opt_index };
+        if unsafe { (*ks).is_set_ } & flag != 0 {
+            unsafe { *error = xstrdup(c"duplicate key".as_ptr()) };
+            return false;
+        }
+        unsafe { (*ks).is_set_ |= flag };
+
+        let mem = unsafe { retval.cast::<c_char>().add((*field).ptr_off) };
+        if let Err(message) = unsafe { unpack_field(mem, (*field).type_0, data, size) } {
+            unsafe { *error = fail(message, key) };
+            return false;
         }
     }
     true
@@ -281,44 +279,39 @@ unsafe fn unpack_field(
 ) -> Result<(), &'static core::ffi::CStr> {
     // SAFETY: the caller's slot and cursor; each arm writes the kind
     // `type_0` names.
-    unsafe {
-        match type_0 {
-            field_type::BOOLEAN => {
-                // Read straight off the wire: both boolean encodings differ
-                // only in their low bit.
-                if *size == 0 || c_int::from(**data) & 0xfe != 0xc2 {
-                    return Err(c"has %.*s key value which is not a boolean");
-                }
-                *mem.cast::<Boolean>() = c_int::from(**data) & 0x1 != 0;
-                *data = (*data).add(1);
-                *size -= 1;
+    match type_0 {
+        field_type::BOOLEAN => {
+            // Read straight off the wire: both boolean encodings differ
+            // only in their low bit.
+            if unsafe { *size } == 0 || c_int::from(unsafe { **data }) & 0xfe != 0xc2 {
+                return Err(c"has %.*s key value which is not a boolean");
             }
-            field_type::INTEGER => {
-                if !unpack_integer(data, size, mem.cast::<Integer>()) {
-                    return Err(c"has %.*s key value which is not an integer");
-                }
-            }
-            field_type::STRING => {
-                let val = unpack_string(data, size);
-                if val.data().is_null() {
-                    return Err(c"has %.*s key value which is not a binary");
-                }
-                *mem.cast::<String_0>() = val;
-            }
-            field_type::STRING_ARRAY => {
-                let len = unpack_array(data, size);
-                if len < 0 {
-                    return Err(c"has %.*s key with non-array value");
-                }
-                return unpack_string_array(
-                    mem.cast::<StringArray>(),
-                    len.cast_unsigned(),
-                    data,
-                    size,
-                );
-            }
-            _ => abort(),
+            unsafe { *mem.cast::<Boolean>() = c_int::from(**data) & 0x1 != 0 };
+            unsafe { *data = (*data).add(1) };
+            unsafe { *size -= 1 };
         }
+        field_type::INTEGER => {
+            if !unsafe { unpack_integer(data, size, mem.cast::<Integer>()) } {
+                return Err(c"has %.*s key value which is not an integer");
+            }
+        }
+        field_type::STRING => {
+            let val = unsafe { unpack_string(data, size) };
+            if val.data().is_null() {
+                return Err(c"has %.*s key value which is not a binary");
+            }
+            unsafe { *mem.cast::<String_0>() = val };
+        }
+        field_type::STRING_ARRAY => {
+            let len = unsafe { unpack_array(data, size) };
+            if len < 0 {
+                return Err(c"has %.*s key with non-array value");
+            }
+            return unsafe {
+                unpack_string_array(mem.cast::<StringArray>(), len.cast_unsigned(), data, size)
+            };
+        }
+        _ => unsafe { abort() },
     }
     Ok(())
 }
@@ -335,31 +328,33 @@ unsafe fn unpack_string_array(
 ) -> Result<(), &'static core::ffi::CStr> {
     // SAFETY: the caller's vector and cursor; every growth reallocates to the
     // capacity it then writes within.
-    unsafe {
-        if (*a).capacity < (*a).size + len {
-            (*a).capacity = protocol::capacity_for((*a).size + len);
+    if unsafe { (*a).capacity } < unsafe { (*a).size } + len {
+        unsafe { (*a).capacity = protocol::capacity_for((*a).size + len) };
+        unsafe {
             (*a).items = xrealloc(
                 (*a).items.cast::<c_void>(),
                 size_of::<String_0>() * (*a).capacity,
             )
-            .cast::<String_0>();
+            .cast::<String_0>()
+        };
+    }
+    for _ in 0..len {
+        let item = unsafe { unpack_string(data, size) };
+        if item.data().is_null() {
+            return Err(c"has %.*s array with non-binary value");
         }
-        for _ in 0..len {
-            let item = unpack_string(data, size);
-            if item.data().is_null() {
-                return Err(c"has %.*s array with non-binary value");
-            }
-            if (*a).size == (*a).capacity {
-                (*a).capacity = protocol::grown_capacity((*a).capacity);
+        if unsafe { (*a).size } == unsafe { (*a).capacity } {
+            unsafe { (*a).capacity = protocol::grown_capacity((*a).capacity) };
+            unsafe {
                 (*a).items = xrealloc(
                     (*a).items.cast::<c_void>(),
                     size_of::<String_0>() * (*a).capacity,
                 )
-                .cast::<String_0>();
-            }
-            *(*a).items.add((*a).size) = item;
-            (*a).size += 1;
+                .cast::<String_0>()
+            };
         }
+        unsafe { *(*a).items.add((*a).size) = item };
+        unsafe { (*a).size += 1 };
     }
     Ok(())
 }
@@ -384,6 +379,6 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
             crate::narrow::len_as_int(key.len()),
             key.data(),
         )
-        .data()
     }
+    .data()
 }
