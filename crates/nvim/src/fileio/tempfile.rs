@@ -42,7 +42,7 @@ static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(ptr::null_mut::<DI
 /// `fileio.c`, so that moving this code does not move the log output.
 macro_rules! log_at {
     ($level:expr, $func:literal, $line:literal, $fmt:literal $(, $arg:expr)* $(,)?) => {
-        logmsg_c!(
+        unsafe { logmsg_c!(
             $level,
             core::ptr::null(),
             concat!($func, "\0").as_ptr().cast::<c_char>(),
@@ -50,7 +50,7 @@ macro_rules! log_at {
             true,
             concat!($fmt, "\0").as_ptr().cast::<c_char>(),
             $($arg,)*
-        )
+        ) }
     };
 }
 
@@ -111,122 +111,118 @@ impl Template {
 ///
 /// Only done once; the same directory is used for all temp files.
 unsafe fn vim_mktempdir() {
-    unsafe {
-        let mut user = [0u8; 40];
-        os_get_username(user.as_mut_ptr().cast(), user.len());
-        // Usernames may contain slashes! #19240
-        let data = user.as_mut_ptr().cast::<c_void>();
-        memchrsub(data, b'/' as c_char, b'_' as c_char, user.len());
-        memchrsub(data, b'\\' as c_char, b'_' as c_char, user.len());
-        let user = cstr::in_bytes(&user).to_bytes();
+    let mut user = [0u8; 40];
+    unsafe { os_get_username(user.as_mut_ptr().cast(), user.len()) };
+    // Usernames may contain slashes! #19240
+    let data = user.as_mut_ptr().cast::<c_void>();
+    unsafe { memchrsub(data, b'/' as c_char, b'_' as c_char, user.len()) };
+    unsafe { memchrsub(data, b'\\' as c_char, b'_' as c_char, user.len()) };
+    let user = cstr::in_bytes(&user).to_bytes();
 
-        // Make sure the umask doesn't remove the executable bit. "repl" has
-        // been reported to use "0177".
-        let umask_save = umask(0o077);
-        for root in TEMP_DIR_NAMES {
-            let mut tmp = Template::new();
-            // Leave room for "/tmp/nvim.<user>/XXXXXX/999999999".
-            let at = tmp.as_mut_ptr();
-            tmp.set_len(expand_env(
-                root.as_ptr().cast_mut(),
-                at,
-                TEMP_FILE_PATH_MAXLEN - 64,
-            ));
+    // Make sure the umask doesn't remove the executable bit. "repl" has
+    // been reported to use "0177".
+    let umask_save = unsafe { umask(0o077) };
+    for root in TEMP_DIR_NAMES {
+        let mut tmp = Template::new();
+        // Leave room for "/tmp/nvim.<user>/XXXXXX/999999999".
+        let at = tmp.as_mut_ptr();
+        tmp.set_len(unsafe {
+            expand_env(root.as_ptr().cast_mut(), at, TEMP_FILE_PATH_MAXLEN - 64)
+        });
 
-            if !os_isdir(tmp.as_ptr()) {
-                if root == c"$TMPDIR" {
-                    if !os_env_exists(c"TMPDIR".as_ptr(), true) {
-                        log_at!(LOGLVL_DBG, "vim_mktempdir", 3323, "$TMPDIR is unset");
-                    } else {
-                        log_at!(
-                            LOGLVL_WRN,
-                            "vim_mktempdir",
-                            3325,
-                            "$TMPDIR tempdir not a directory (or does not exist): \"%s\"",
-                            tmp.as_ptr(),
-                        );
-                    }
+        if !unsafe { os_isdir(tmp.as_ptr()) } {
+            if root == c"$TMPDIR" {
+                if !unsafe { os_env_exists(c"TMPDIR".as_ptr(), true) } {
+                    log_at!(LOGLVL_DBG, "vim_mktempdir", 3323, "$TMPDIR is unset");
+                } else {
+                    log_at!(
+                        LOGLVL_WRN,
+                        "vim_mktempdir",
+                        3325,
+                        "$TMPDIR tempdir not a directory (or does not exist): \"%s\"",
+                        tmp.as_ptr(),
+                    );
                 }
-                continue;
             }
+            continue;
+        }
 
-            // "/tmp/" exists, now try to create "/tmp/nvim.<user>/".
+        // "/tmp/" exists, now try to create "/tmp/nvim.<user>/".
+        if !tmp.ends_with_sep() {
+            tmp.push(b"/");
+        }
+        tmp.push(b"nvim.");
+        tmp.push(user);
+        unsafe { os_mkdir(tmp.as_ptr(), 0o700) }; // Always create, to avoid a race.
+        let owned = unsafe { os_file_owned(tmp.as_ptr()) };
+        let isdir = unsafe { os_isdir(tmp.as_ptr()) };
+        // XDG_RUNTIME_DIR must be owned by the user, mode 0700.
+        let perm = unsafe { os_getperm(tmp.as_ptr()) } as c_int;
+        if isdir && owned && perm & 0o777 == 0o700 {
             if !tmp.ends_with_sep() {
                 tmp.push(b"/");
             }
-            tmp.push(b"nvim.");
-            tmp.push(user);
-            os_mkdir(tmp.as_ptr(), 0o700); // Always create, to avoid a race.
-            let owned = os_file_owned(tmp.as_ptr());
-            let isdir = os_isdir(tmp.as_ptr());
-            // XDG_RUNTIME_DIR must be owned by the user, mode 0700.
-            let perm = os_getperm(tmp.as_ptr()) as c_int;
-            if isdir && owned && perm & 0o777 == 0o700 {
-                if !tmp.ends_with_sep() {
-                    tmp.push(b"/");
-                }
-            } else {
-                if !owned {
-                    log_at!(
-                        LOGLVL_ERR,
-                        "vim_mktempdir",
-                        3355,
-                        "tempdir root not owned by current user (%s): %s",
-                        user.as_ptr(),
-                        tmp.as_ptr(),
-                    );
-                } else if !isdir {
-                    log_at!(
-                        LOGLVL_ERR,
-                        "vim_mktempdir",
-                        3357,
-                        "tempdir root not a directory: %s",
-                        tmp.as_ptr(),
-                    );
-                }
-                if perm & 0o777 != 0o700 {
-                    log_at!(
-                        LOGLVL_ERR,
-                        "vim_mktempdir",
-                        3361,
-                        "tempdir root has invalid permissions (%o): %s",
-                        perm,
-                        tmp.as_ptr(),
-                    );
-                }
-                // If our "root" tempdir is invalid or fails, proceed without
-                // "<user>/". Else user1 could break user2 by creating
-                // "/tmp/nvim.user2/".
-                tmp.shorten(user.len());
-            }
-
-            // Now try to create "/tmp/nvim.<user>/XXXXXX". "XXXXXX" is the
-            // mkdtemp template, replaced with random alphanumeric characters.
-            tmp.push(b"XXXXXX");
-            let mut path = Template::new();
-            let r = os_mkdtemp(tmp.as_ptr(), path.as_mut_ptr());
-            if r != 0 {
+        } else {
+            if !owned {
                 log_at!(
-                    LOGLVL_WRN,
+                    LOGLVL_ERR,
                     "vim_mktempdir",
-                    3377,
-                    "tempdir create failed: %s: %s",
-                    uv_strerror(r),
+                    3355,
+                    "tempdir root not owned by current user (%s): %s",
+                    user.as_ptr(),
                     tmp.as_ptr(),
                 );
-                continue;
+            } else if !isdir {
+                log_at!(
+                    LOGLVL_ERR,
+                    "vim_mktempdir",
+                    3357,
+                    "tempdir root not a directory: %s",
+                    tmp.as_ptr(),
+                );
             }
-
-            if vim_settempdir(path.as_ptr()) {
-                // Successfully created and set the temporary directory, so
-                // stop trying.
-                break;
+            if perm & 0o777 != 0o700 {
+                log_at!(
+                    LOGLVL_ERR,
+                    "vim_mktempdir",
+                    3361,
+                    "tempdir root has invalid permissions (%o): %s",
+                    perm,
+                    tmp.as_ptr(),
+                );
             }
-            // Couldn't set the temp dir to `path`, so remove what we made.
-            os_rmdir(path.as_ptr());
+            // If our "root" tempdir is invalid or fails, proceed without
+            // "<user>/". Else user1 could break user2 by creating
+            // "/tmp/nvim.user2/".
+            tmp.shorten(user.len());
         }
-        umask(umask_save);
+
+        // Now try to create "/tmp/nvim.<user>/XXXXXX". "XXXXXX" is the
+        // mkdtemp template, replaced with random alphanumeric characters.
+        tmp.push(b"XXXXXX");
+        let mut path = Template::new();
+        let r = unsafe { os_mkdtemp(tmp.as_ptr(), path.as_mut_ptr()) };
+        if r != 0 {
+            log_at!(
+                LOGLVL_WRN,
+                "vim_mktempdir",
+                3377,
+                "tempdir create failed: %s: %s",
+                uv_strerror(r),
+                tmp.as_ptr(),
+            );
+            continue;
+        }
+
+        if unsafe { vim_settempdir(path.as_ptr()) } {
+            // Successfully created and set the temporary directory, so
+            // stop trying.
+            break;
+        }
+        // Couldn't set the temp dir to `path`, so remove what we made.
+        unsafe { os_rmdir(path.as_ptr()) };
     }
+    unsafe { umask(umask_save) };
 }
 
 /// Core part of the `readdir()` function: list `path` into `gap`.
@@ -241,47 +237,45 @@ pub unsafe fn readdir_core(
     context: *mut c_void,
     checkitem: CheckItem,
 ) -> c_int {
-    unsafe {
-        ga_init(gap, size_of::<*mut c_char>() as c_int, 20);
+    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
 
-        let mut dir = Directory::default();
-        if !os_scandir(&raw mut dir, path) {
-            smsg_c!(0, gettext(&raw const e_notopen as *const c_char), path);
-            return FAIL;
+    let mut dir = Directory::default();
+    if !unsafe { os_scandir(&raw mut dir, path) } {
+        unsafe { smsg_c!(0, gettext(&raw const e_notopen as *const c_char), path) };
+        return FAIL;
+    }
+
+    loop {
+        let p = unsafe { os_scandir_next(&raw mut dir) };
+        if p.is_null() {
+            break;
         }
 
-        loop {
-            let p = os_scandir_next(&raw mut dir);
-            if p.is_null() {
+        let name = unsafe { CStr::from_ptr(p) }.to_bytes();
+        let mut ignore = name == b"." || name == b"..";
+        if !ignore && let Some(check) = checkitem {
+            let r = unsafe { check(context, p) };
+            if r < 0 {
                 break;
             }
-
-            let name = CStr::from_ptr(p).to_bytes();
-            let mut ignore = name == b"." || name == b"..";
-            if !ignore && let Some(check) = checkitem {
-                let r = check(context, p);
-                if r < 0 {
-                    break;
-                }
-                ignore = r == 0;
-            }
-
-            if !ignore {
-                ga_grow(gap, 1);
-                let at = (*gap).ga_len;
-                (*gap).ga_len += 1;
-                *((*gap).ga_data as *mut *mut c_char).add(at as usize) = xstrdup(p);
-            }
+            ignore = r == 0;
         }
 
-        os_closedir(&raw mut dir);
-
-        if (*gap).ga_len > 0 {
-            sort_strings((*gap).ga_data as *mut *mut c_char, (*gap).ga_len);
+        if !ignore {
+            unsafe { ga_grow(gap, 1) };
+            let at = unsafe { (*gap).ga_len };
+            unsafe { (*gap).ga_len += 1 };
+            unsafe { *((*gap).ga_data as *mut *mut c_char).add(at as usize) = xstrdup(p) };
         }
-
-        OK
     }
+
+    unsafe { os_closedir(&raw mut dir) };
+
+    if unsafe { (*gap).ga_len } > 0 {
+        unsafe { sort_strings((*gap).ga_data as *mut *mut c_char, (*gap).ga_len) };
+    }
+
+    OK
 }
 
 /// Delete `name` and everything in it, recursively.
@@ -298,81 +292,77 @@ pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
 /// with its caller. This carries its own buffer instead, which also lifts
 /// the `MAXPATHL` limit on how deep a tree can be deleted.
 unsafe fn delete_tree(name: &[u8]) -> c_int {
-    unsafe {
-        let path = CString::new(name).unwrap_or_default();
-        if !os_isrealdir(path.as_ptr()) {
-            // Delete symlink only.
-            return if os_remove(path.as_ptr()) == 0 { 0 } else { -1 };
-        }
+    let path = CString::new(name).unwrap_or_default();
+    if !unsafe { os_isrealdir(path.as_ptr()) } {
+        // Delete symlink only.
+        return if unsafe { os_remove(path.as_ptr()) } == 0 {
+            0
+        } else {
+            -1
+        };
+    }
 
-        let mut ga = garray_T::default();
-        if readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) != OK {
-            return -1;
-        }
+    let mut ga = garray_T::default();
+    if unsafe { readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) } != OK {
+        return -1;
+    }
 
-        let mut result = 0;
-        let mut child = name.to_vec();
-        child.push(b'/');
-        let stem = child.len();
-        for at in 0..ga.ga_len as usize {
-            child.truncate(stem);
-            let entry = *(ga.ga_data as *mut *mut c_char).add(at);
-            child.extend_from_slice(CStr::from_ptr(entry).to_bytes());
-            if delete_tree(&child) != 0 {
-                // Remember the failure but continue deleting any further
-                // entries.
-                result = -1;
-            }
-        }
-        ga_clear_strings(&raw mut ga);
-        if os_rmdir(path.as_ptr()) != 0 {
+    let mut result = 0;
+    let mut child = name.to_vec();
+    child.push(b'/');
+    let stem = child.len();
+    for at in 0..ga.ga_len as usize {
+        child.truncate(stem);
+        let entry = unsafe { *(ga.ga_data as *mut *mut c_char).add(at) };
+        child.extend_from_slice(unsafe { CStr::from_ptr(entry) }.to_bytes());
+        if unsafe { delete_tree(&child) } != 0 {
+            // Remember the failure but continue deleting any further
+            // entries.
             result = -1;
         }
-        result
     }
+    unsafe { ga_clear_strings(&raw mut ga) };
+    if unsafe { os_rmdir(path.as_ptr()) } != 0 {
+        result = -1;
+    }
+    result
 }
 
 /// Open the temporary directory and take a file lock, so that it is not
 /// auto-cleaned while we are using it.
 unsafe fn vim_opentempdir() {
-    unsafe {
-        if !VIM_TEMPDIR_DP.get().is_null() {
-            return;
-        }
-        let dp = VIM_TEMPDIR.with(|dir| match dir {
-            Some(dir) => opendir(dir.as_ptr()),
-            None => ptr::null_mut(),
-        });
-        if dp.is_null() {
-            return;
-        }
-        VIM_TEMPDIR_DP.set(dp);
-        flock(dirfd(dp), LOCK_SH);
+    if !VIM_TEMPDIR_DP.get().is_null() {
+        return;
     }
+    let dp = VIM_TEMPDIR.with(|dir| match dir {
+        Some(dir) => unsafe { opendir(dir.as_ptr()) },
+        None => ptr::null_mut(),
+    });
+    if dp.is_null() {
+        return;
+    }
+    VIM_TEMPDIR_DP.set(dp);
+    unsafe { flock(dirfd(dp), LOCK_SH) };
 }
 
 /// Close the temporary directory, which releases the file lock.
 unsafe fn vim_closetempdir() {
-    unsafe {
-        let dp = VIM_TEMPDIR_DP.get();
-        if !dp.is_null() {
-            closedir(dp);
-            VIM_TEMPDIR_DP.set(ptr::null_mut());
-        }
+    let dp = VIM_TEMPDIR_DP.get();
+    if !dp.is_null() {
+        unsafe { closedir(dp) };
+        VIM_TEMPDIR_DP.set(ptr::null_mut());
     }
 }
 
 /// Delete the temp directory and all files it contains.
 pub unsafe fn vim_deltempdir() {
-    unsafe {
-        let Some(dir) = VIM_TEMPDIR.with_mut(|dir| dir.take()) else {
-            return;
-        };
-        vim_closetempdir();
-        // Remove the trailing path separator, which is always there.
-        let dir = dir.to_bytes();
-        delete_tree(dir.strip_suffix(b"/").unwrap_or(dir));
-    }
+    let Some(dir) = VIM_TEMPDIR.with_mut(|dir| dir.take()) else {
+        return;
+    };
+    unsafe { vim_closetempdir() };
+    // Remove the trailing path separator, which is always there.
+    let dir = dir.to_bytes();
+    unsafe { delete_tree(dir.strip_suffix(b"/").unwrap_or(dir)) };
 }
 
 /// Gets the path to Nvim's own temp dir, ending with a slash.
@@ -380,35 +370,38 @@ pub unsafe fn vim_deltempdir() {
 /// Creates the directory on the first call.
 pub unsafe fn vim_gettempdir() -> *mut c_char {
     static NOTFOUND: GlobalCell<c_int> = GlobalCell::new(0);
-    unsafe {
-        let usable = VIM_TEMPDIR.with(|dir| dir.as_ref().is_some_and(|dir| os_isdir(dir.as_ptr())));
-        if !usable {
-            if let Some(gone) = VIM_TEMPDIR.with_mut(|dir| dir.take()) {
-                let notfound = NOTFOUND.get() + 1;
-                NOTFOUND.set(notfound);
-                if notfound == 1 {
-                    log_at!(
-                        LOGLVL_ERR,
-                        "vim_gettempdir",
-                        3534,
-                        "tempdir disappeared (antivirus or broken cleanup job?): %s",
-                        gone.as_ptr(),
-                    );
-                }
-                if notfound > 1 {
+    let usable = VIM_TEMPDIR.with(|dir| {
+        dir.as_ref()
+            .is_some_and(|dir| unsafe { os_isdir(dir.as_ptr()) })
+    });
+    if !usable {
+        if let Some(gone) = VIM_TEMPDIR.with_mut(|dir| dir.take()) {
+            let notfound = NOTFOUND.get() + 1;
+            NOTFOUND.set(notfound);
+            if notfound == 1 {
+                log_at!(
+                    LOGLVL_ERR,
+                    "vim_gettempdir",
+                    3534,
+                    "tempdir disappeared (antivirus or broken cleanup job?): %s",
+                    gone.as_ptr(),
+                );
+            }
+            if notfound > 1 {
+                unsafe {
                     msg_schedule_semsg_c!(
                         c"E5431: tempdir disappeared (%d times)".as_ptr(),
                         notfound
-                    );
-                }
+                    )
+                };
             }
-            vim_mktempdir();
         }
-        VIM_TEMPDIR.with(|dir| match dir {
-            Some(dir) => dir.as_ptr().cast_mut(),
-            None => ptr::null_mut(),
-        })
+        unsafe { vim_mktempdir() };
     }
+    VIM_TEMPDIR.with(|dir| match dir {
+        Some(dir) => dir.as_ptr().cast_mut(),
+        None => ptr::null_mut(),
+    })
 }
 
 /// Sets Nvim's own temporary directory name to `tempdir`, which must already
@@ -417,24 +410,22 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
 ///
 /// @return  false if we run out of memory.
 unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
-    unsafe {
-        // Not `xmalloc`: running out of memory here is survivable, we just
-        // fall through to the next candidate directory.
-        let buf = verbose_try_malloc(MAXPATHL as usize + 2).cast::<c_char>();
-        if buf.is_null() {
-            return false;
-        }
-        vim_full_name(tempdir, buf, MAXPATHL as size_t, false);
-        let mut full = CStr::from_ptr(buf).to_bytes().to_vec();
-        xfree(buf.cast());
-
-        if !full.ends_with(b"/") {
-            full.push(b'/');
-        }
-        VIM_TEMPDIR.set(CString::new(full).ok());
-        vim_opentempdir();
-        true
+    // Not `xmalloc`: running out of memory here is survivable, we just
+    // fall through to the next candidate directory.
+    let buf = unsafe { verbose_try_malloc(MAXPATHL as usize + 2) }.cast::<c_char>();
+    if buf.is_null() {
+        return false;
     }
+    unsafe { vim_full_name(tempdir, buf, MAXPATHL as size_t, false) };
+    let mut full = unsafe { CStr::from_ptr(buf) }.to_bytes().to_vec();
+    unsafe { xfree(buf.cast()) };
+
+    if !full.ends_with(b"/") {
+        full.push(b'/');
+    }
+    VIM_TEMPDIR.set(CString::new(full).ok());
+    unsafe { vim_opentempdir() };
+    true
 }
 
 /// Return a unique name that can be used for a temp file.
@@ -446,18 +437,16 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
 pub unsafe fn vim_tempname() -> *mut c_char {
     /// Temp filename counter.
     static TEMP_COUNT: GlobalCell<u64> = GlobalCell::new(0);
-    unsafe {
-        let tempdir = vim_gettempdir();
-        if tempdir.is_null() {
-            return ptr::null_mut();
-        }
-        let count = TEMP_COUNT.get();
-        TEMP_COUNT.set(count.wrapping_add(1));
-        // Upstream formats this into a `char[TEMP_FILE_PATH_MAXLEN]` and then
-        // copies out the length `snprintf` *would* have needed, which reads
-        // off the end of the buffer once the temp dir gets long enough.
-        let mut name = CStr::from_ptr(tempdir).to_bytes().to_vec();
-        name.extend_from_slice(count.to_string().as_bytes());
-        xmemdupz(name.as_ptr().cast(), name.len()).cast()
+    let tempdir = unsafe { vim_gettempdir() };
+    if tempdir.is_null() {
+        return ptr::null_mut();
     }
+    let count = TEMP_COUNT.get();
+    TEMP_COUNT.set(count.wrapping_add(1));
+    // Upstream formats this into a `char[TEMP_FILE_PATH_MAXLEN]` and then
+    // copies out the length `snprintf` *would* have needed, which reads
+    // off the end of the buffer once the temp dir gets long enough.
+    let mut name = unsafe { CStr::from_ptr(tempdir) }.to_bytes().to_vec();
+    name.extend_from_slice(count.to_string().as_bytes());
+    unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast()
 }

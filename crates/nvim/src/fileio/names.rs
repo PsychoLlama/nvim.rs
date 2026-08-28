@@ -90,77 +90,75 @@ pub unsafe fn shorten_fnames(force: c_int) {
 ///                     becomes a `v`. NULL only when `fname` was empty and
 ///                     the current directory could not be read.
 pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char {
-    unsafe {
-        let ext = CStr::from_ptr(ext).to_bytes();
-        let mut prepend_dot = prepend_dot;
-        // Room for `os_dirname`'s MAXPATHL plus the separator below.
-        let mut cwd = [0 as c_char; MAXPATHL as usize + 2];
+    let ext = unsafe { CStr::from_ptr(ext) }.to_bytes();
+    let mut prepend_dot = prepend_dot;
+    // Room for `os_dirname`'s MAXPATHL plus the separator below.
+    let mut cwd = [0 as c_char; MAXPATHL as usize + 2];
 
-        let name: &[u8] = if fname.is_null() || *fname == 0 {
-            // With no file name we need the name of the current directory —
-            // in full, in case `:cd` is used.
-            if os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) == FAIL
-                || CStr::from_ptr(cwd.as_ptr()).is_empty()
-            {
-                return ptr::null_mut();
-            }
-            add_pathsep(cwd.as_mut_ptr());
-            prepend_dot = false; // nothing to prepend a dot to
-            CStr::from_ptr(cwd.as_ptr()).to_bytes()
-        } else {
-            CStr::from_ptr(fname).to_bytes()
-        };
-
-        // Everything after the last path separator is the basename, and it
-        // may keep at most BASENAMELEN characters. Upstream's backwards walk
-        // stops before the first byte, so a name that *is* a separator there
-        // ("/foo") keeps it as part of the basename.
-        let start = name[1..]
-            .iter()
-            .rposition(|&b| b == b'/')
-            .map_or(0, |at| at + 2);
-        let ptrlen = (name.len() - start).min(BASENAMELEN as usize);
-
-        let mut out = Vec::with_capacity(start + ptrlen + ext.len() + 2);
-        out.extend_from_slice(&name[..start + ptrlen]);
-        // The extension starts here, and this is where the search for a
-        // character to replace below starts from.
-        let ext_at = out.len();
-        out.extend_from_slice(ext);
-
-        if prepend_dot {
-            let e = tail_index(&out);
-            if out.get(e) != Some(&b'.') {
-                out.insert(e, b'.');
-            }
+    let name: &[u8] = if fname.is_null() || unsafe { *fname } == 0 {
+        // With no file name we need the name of the current directory —
+        // in full, in case `:cd` is used.
+        if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) } == FAIL
+            || unsafe { CStr::from_ptr(cwd.as_ptr()) }.is_empty()
+        {
+            return ptr::null_mut();
         }
+        unsafe { add_pathsep(cwd.as_mut_ptr()) };
+        prepend_dot = false; // nothing to prepend a dot to
+        unsafe { CStr::from_ptr(cwd.as_ptr()) }.to_bytes()
+    } else {
+        unsafe { CStr::from_ptr(fname) }.to_bytes()
+    };
 
-        // Check that, after appending the extension, the file name really is
-        // different.
-        if !fname.is_null() && CStr::from_ptr(fname).to_bytes() == out {
-            // Look backwards through the basename for a character that can be
-            // replaced by '_'.
-            let mut at = ext_at;
-            let mut replaced = false;
-            while at > start {
-                at -= 1;
-                if out[at] != b'_' {
-                    out[at] = b'_';
-                    replaced = true;
-                    break;
-                }
-            }
-            if !replaced {
-                // fname was "________.<ext>", how tricky!
-                match out.get_mut(start) {
-                    Some(slot) => *slot = b'v',
-                    None => out.push(b'v'),
-                }
-            }
+    // Everything after the last path separator is the basename, and it
+    // may keep at most BASENAMELEN characters. Upstream's backwards walk
+    // stops before the first byte, so a name that *is* a separator there
+    // ("/foo") keeps it as part of the basename.
+    let start = name[1..]
+        .iter()
+        .rposition(|&b| b == b'/')
+        .map_or(0, |at| at + 2);
+    let ptrlen = (name.len() - start).min(BASENAMELEN as usize);
+
+    let mut out = Vec::with_capacity(start + ptrlen + ext.len() + 2);
+    out.extend_from_slice(&name[..start + ptrlen]);
+    // The extension starts here, and this is where the search for a
+    // character to replace below starts from.
+    let ext_at = out.len();
+    out.extend_from_slice(ext);
+
+    if prepend_dot {
+        let e = tail_index(&out);
+        if out.get(e) != Some(&b'.') {
+            out.insert(e, b'.');
         }
-
-        xmemdupz(out.as_ptr().cast(), out.len()).cast()
     }
+
+    // Check that, after appending the extension, the file name really is
+    // different.
+    if !fname.is_null() && unsafe { CStr::from_ptr(fname) }.to_bytes() == out {
+        // Look backwards through the basename for a character that can be
+        // replaced by '_'.
+        let mut at = ext_at;
+        let mut replaced = false;
+        while at > start {
+            at -= 1;
+            if out[at] != b'_' {
+                out[at] = b'_';
+                replaced = true;
+                break;
+            }
+        }
+        if !replaced {
+            // fname was "________.<ext>", how tricky!
+            match out.get_mut(start) {
+                Some(slot) => *slot = b'v',
+                None => out.push(b'v'),
+            }
+        }
+    }
+
+    unsafe { xmemdupz(out.as_ptr().cast(), out.len()) }.cast()
 }
 
 /// Rename `from` to `to` via a third name in the same directory.
@@ -168,45 +166,42 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
 /// Needed when the two names refer to the same file but are spelled
 /// differently, which a plain rename would treat as a no-op.
 unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
-    unsafe {
-        let from_len = CStr::from_ptr(from).to_bytes().len();
-        if from_len >= MAXPATHL as usize - 5 {
-            return -1;
-        }
-
-        let mut tempname = [0 as c_char; MAXPATHL as usize + 1];
-        ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1);
-        // Everything up to the tail stays put; only the last component is
-        // replaced with a number.
-        let tail = tail_index(CStr::from_ptr(tempname.as_ptr()).to_bytes());
-
-        for n in 123..99999 {
-            let digits = n.to_string();
-            let end = tail + digits.len();
-            tempname[tail..end].copy_from_slice(core::slice::from_raw_parts(
-                digits.as_ptr().cast::<c_char>(),
-                digits.len(),
-            ));
-            tempname[end] = 0;
-
-            if os_path_exists(tempname.as_ptr()) {
-                continue;
-            }
-            if os_rename(from, tempname.as_ptr()) != OK {
-                // If it fails for one temp name it will most likely fail for
-                // any temp name, so give up.
-                return -1;
-            }
-            if os_rename(tempname.as_ptr(), to) == OK {
-                return 0;
-            }
-            // Strange, the second step failed. Try moving the file back and
-            // report the failure.
-            os_rename(tempname.as_ptr(), from);
-            return -1;
-        }
-        -1
+    let from_len = unsafe { CStr::from_ptr(from) }.to_bytes().len();
+    if from_len >= MAXPATHL as usize - 5 {
+        return -1;
     }
+
+    let mut tempname = [0 as c_char; MAXPATHL as usize + 1];
+    unsafe { ptr::copy_nonoverlapping(from, tempname.as_mut_ptr(), from_len + 1) };
+    // Everything up to the tail stays put; only the last component is
+    // replaced with a number.
+    let tail = tail_index(unsafe { CStr::from_ptr(tempname.as_ptr()) }.to_bytes());
+
+    for n in 123..99999 {
+        let digits = n.to_string();
+        let end = tail + digits.len();
+        tempname[tail..end].copy_from_slice(unsafe {
+            core::slice::from_raw_parts(digits.as_ptr().cast::<c_char>(), digits.len())
+        });
+        tempname[end] = 0;
+
+        if unsafe { os_path_exists(tempname.as_ptr()) } {
+            continue;
+        }
+        if unsafe { os_rename(from, tempname.as_ptr()) } != OK {
+            // If it fails for one temp name it will most likely fail for
+            // any temp name, so give up.
+            return -1;
+        }
+        if unsafe { os_rename(tempname.as_ptr(), to) } == OK {
+            return 0;
+        }
+        // Strange, the second step failed. Try moving the file back and
+        // report the failure.
+        unsafe { os_rename(tempname.as_ptr(), from) };
+        return -1;
+    }
+    -1
 }
 
 /// Rename `from` to `to`, copying the file across if a rename cannot do it.
@@ -215,59 +210,57 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
 ///
 /// @return  -1 for failure, 0 for success
 pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
-    unsafe {
-        let mut use_tmp_file = false;
+    let mut use_tmp_file = false;
 
-        // When the names are identical there is nothing to do. When they refer
-        // to the same file but the spelling differs we have to go through a
-        // temp file.
-        if path_fnamecmp(from, to) == 0 {
-            if p_fic.get() != 0 && strcmp(path_tail(from), path_tail(to)) != 0 {
-                use_tmp_file = true;
-            } else {
-                return 0;
-            }
-        }
-
-        // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
-        let mut from_info = FileInfo::default();
-        if !os_fileinfo(from, &raw mut from_info) {
-            return -1;
-        }
-
-        // It's possible for the source and destination to be the same file.
-        // This happens when "from" and "to" differ in case and are on a FAT32
-        // filesystem. In that case go through a temp file name.
-        let mut to_info = FileInfo::default();
-        if os_fileinfo(to, &raw mut to_info)
-            && os_fileinfo_id_equal(&raw mut from_info, &raw mut to_info)
-        {
+    // When the names are identical there is nothing to do. When they refer
+    // to the same file but the spelling differs we have to go through a
+    // temp file.
+    if unsafe { path_fnamecmp(from, to) } == 0 {
+        if p_fic.get() != 0 && unsafe { strcmp(path_tail(from), path_tail(to)) } != 0 {
             use_tmp_file = true;
-        }
-
-        if use_tmp_file {
-            return rename_with_tmp(from, to);
-        }
-
-        // Delete the "to" file. This is required on some systems to make the
-        // rename work, and on others it makes sure we don't end up with two
-        // files when the rename fails.
-        os_remove(to);
-
-        // First try a normal rename, and return if it works.
-        if os_rename(from, to) == OK {
+        } else {
             return 0;
         }
-
-        // The rename failed, try copying the file.
-        if vim_copyfile(from, to) != OK {
-            return -1;
-        }
-        if os_fileinfo(from, &raw mut from_info) {
-            os_remove(from);
-        }
-        0
     }
+
+    // Fail if the "from" file doesn't exist. Avoids that "to" is deleted.
+    let mut from_info = FileInfo::default();
+    if !unsafe { os_fileinfo(from, &raw mut from_info) } {
+        return -1;
+    }
+
+    // It's possible for the source and destination to be the same file.
+    // This happens when "from" and "to" differ in case and are on a FAT32
+    // filesystem. In that case go through a temp file name.
+    let mut to_info = FileInfo::default();
+    if unsafe { os_fileinfo(to, &raw mut to_info) }
+        && unsafe { os_fileinfo_id_equal(&raw mut from_info, &raw mut to_info) }
+    {
+        use_tmp_file = true;
+    }
+
+    if use_tmp_file {
+        return unsafe { rename_with_tmp(from, to) };
+    }
+
+    // Delete the "to" file. This is required on some systems to make the
+    // rename work, and on others it makes sure we don't end up with two
+    // files when the rename fails.
+    unsafe { os_remove(to) };
+
+    // First try a normal rename, and return if it works.
+    if unsafe { os_rename(from, to) } == OK {
+        return 0;
+    }
+
+    // The rename failed, try copying the file.
+    if unsafe { vim_copyfile(from, to) } != OK {
+        return -1;
+    }
+    if unsafe { os_fileinfo(from, &raw mut from_info) } {
+        unsafe { os_remove(from) };
+    }
+    0
 }
 
 /// Copy `from` to `to`, with the same permissions and ACL.
@@ -276,34 +269,32 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
 ///
 /// @return  FAIL for failure, OK for success
 pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
-    unsafe {
-        let mut from_info = FileInfo::default();
-        if os_fileinfo_link(from, &raw mut from_info)
-            && from_info.stat.st_mode & __S_IFMT as u64 == S_IFLNK
-        {
-            let mut linkbuf = [0 as c_char; MAXPATHL as usize + 1];
-            let len = readlink(from, linkbuf.as_mut_ptr(), MAXPATHL as size_t);
-            if len <= 0 {
-                return FAIL;
-            }
-            linkbuf[len as usize] = 0;
-            return if symlink(linkbuf.as_ptr(), to) == 0 {
-                OK
-            } else {
-                FAIL
-            };
-        }
-
-        // For systems that support ACL: get the ACL from the original file.
-        let acl = os_get_acl(from);
-        if os_copy(from, to, UV_FS_COPYFILE_EXCL) != 0 {
-            os_free_acl(acl);
+    let mut from_info = FileInfo::default();
+    if unsafe { os_fileinfo_link(from, &raw mut from_info) }
+        && from_info.stat.st_mode & __S_IFMT as u64 == S_IFLNK
+    {
+        let mut linkbuf = [0 as c_char; MAXPATHL as usize + 1];
+        let len = unsafe { readlink(from, linkbuf.as_mut_ptr(), MAXPATHL as size_t) };
+        if len <= 0 {
             return FAIL;
         }
-        os_set_acl(to, acl);
-        os_free_acl(acl);
-        OK
+        linkbuf[len as usize] = 0;
+        return if unsafe { symlink(linkbuf.as_ptr(), to) } == 0 {
+            OK
+        } else {
+            FAIL
+        };
     }
+
+    // For systems that support ACL: get the ACL from the original file.
+    let acl = os_get_acl(from);
+    if unsafe { os_copy(from, to, UV_FS_COPYFILE_EXCL) } != 0 {
+        os_free_acl(acl);
+        return FAIL;
+    }
+    os_set_acl(to, acl);
+    os_free_acl(acl);
+    OK
 }
 
 /// Try matching a file name with `pattern`, or with the pre-compiled `prog`
@@ -325,36 +316,36 @@ pub unsafe fn match_file_pat(
     tail: *mut c_char,
     allow_dirs: c_int,
 ) -> bool {
-    unsafe {
-        let mut regmatch = regmatch_T {
-            rm_ic: p_fic.get() != 0, // ignore case if 'fileignorecase' is set
-            regprog: if prog.is_null() {
-                vim_regcomp(pattern, RE_MAGIC)
-            } else {
-                *prog
-            },
-            ..Default::default()
+    let mut regmatch = regmatch_T {
+        rm_ic: p_fic.get() != 0, // ignore case if 'fileignorecase' is set
+        regprog: if prog.is_null() {
+            unsafe { vim_regcomp(pattern, RE_MAGIC) }
+        } else {
+            unsafe { *prog }
+        },
+        ..Default::default()
+    };
+
+    // Try for a match with the pattern with:
+    // 1. the full file name, when the pattern has a '/'.
+    // 2. the short file name, when the pattern has a '/'.
+    // 3. the tail of the file name, when the pattern has no '/'.
+    let result = !regmatch.regprog.is_null()
+        && if allow_dirs != 0 {
+            // Short-circuits: the second `vim_regexec` must not run when the
+            // full name already matched, as it overwrites `regmatch`.
+            let full = unsafe { vim_regexec(&raw mut regmatch, fname, 0) };
+            full || (!sfname.is_null() && unsafe { vim_regexec(&raw mut regmatch, sfname, 0) })
+        } else {
+            unsafe { vim_regexec(&raw mut regmatch, tail, 0) }
         };
 
-        // Try for a match with the pattern with:
-        // 1. the full file name, when the pattern has a '/'.
-        // 2. the short file name, when the pattern has a '/'.
-        // 3. the tail of the file name, when the pattern has no '/'.
-        let result = !regmatch.regprog.is_null()
-            && if allow_dirs != 0 {
-                vim_regexec(&raw mut regmatch, fname, 0)
-                    || (!sfname.is_null() && vim_regexec(&raw mut regmatch, sfname, 0))
-            } else {
-                vim_regexec(&raw mut regmatch, tail, 0)
-            };
-
-        if prog.is_null() {
-            vim_regfree(regmatch.regprog);
-        } else {
-            *prog = regmatch.regprog;
-        }
-        result
+    if prog.is_null() {
+        unsafe { vim_regfree(regmatch.regprog) };
+    } else {
+        unsafe { *prog = regmatch.regprog };
     }
+    result
 }
 
 /// Check whether a file matches any pattern in `list`.
@@ -363,42 +354,46 @@ pub unsafe fn match_file_pat(
 /// @param sfname  short file name
 /// @param ffname  full file name
 pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *mut c_char) -> bool {
-    unsafe {
-        let tail = path_tail(sfname);
-        let mut p = list;
-        while *p != 0 {
-            let mut buf = [0 as c_char; MAXPATHL as usize];
+    let tail = unsafe { path_tail(sfname) };
+    let mut p = list;
+    while unsafe { *p } != 0 {
+        let mut buf = [0 as c_char; MAXPATHL as usize];
+        unsafe {
             copy_option_part(
                 &raw mut p,
                 buf.as_mut_ptr(),
                 buf.len(),
                 c",".as_ptr().cast_mut(),
-            );
-            let mut allow_dirs: c_char = 0;
-            let regpat = file_pat_to_reg_pat(
+            )
+        };
+        let mut allow_dirs: c_char = 0;
+        let regpat = unsafe {
+            file_pat_to_reg_pat(
                 buf.as_ptr(),
                 ptr::null(),
                 &raw mut allow_dirs,
                 false as c_int,
-            );
-            if regpat.is_null() {
-                break;
-            }
-            let matched = match_file_pat(
+            )
+        };
+        if regpat.is_null() {
+            break;
+        }
+        let matched = unsafe {
+            match_file_pat(
                 regpat,
                 ptr::null_mut(),
                 ffname,
                 sfname,
                 tail,
                 allow_dirs as c_int,
-            );
-            xfree(regpat.cast());
-            if matched {
-                return true;
-            }
+            )
+        };
+        unsafe { xfree(regpat.cast()) };
+        if matched {
+            return true;
         }
-        false
     }
+    false
 }
 
 /// Convert `pat`, which has shell-style wildcards in it, into a regular
@@ -423,133 +418,133 @@ pub unsafe fn file_pat_to_reg_pat(
     allow_dirs: *mut c_char,
     _no_bslash: c_int,
 ) -> *mut c_char {
-    unsafe {
-        if !allow_dirs.is_null() {
-            *allow_dirs = 0;
+    if !allow_dirs.is_null() {
+        unsafe { *allow_dirs = 0 };
+    }
+    let note_dir = |c: u8| {
+        if c == b'/' && !allow_dirs.is_null() {
+            unsafe { *allow_dirs = 1 };
         }
-        let note_dir = |c: u8| {
-            if c == b'/' && !allow_dirs.is_null() {
-                *allow_dirs = 1;
-            }
-        };
+    };
 
-        let end = if pat_end.is_null() {
-            CStr::from_ptr(pat).to_bytes().len()
-        } else {
-            pat_end.offset_from(pat) as usize
-        };
-        if end == 0 {
-            return xstrdup(c"^$".as_ptr());
+    let end = if pat_end.is_null() {
+        unsafe { CStr::from_ptr(pat) }.to_bytes().len()
+    } else {
+        unsafe { pat_end.offset_from(pat) as usize }
+    };
+    if end == 0 {
+        return unsafe { xstrdup(c"^$".as_ptr()) };
+    }
+    let at = |i: usize| unsafe { *pat.add(i) } as u8;
+
+    let mut reg = Vec::<u8>::with_capacity(end * 2 + 3);
+
+    // A pattern that starts with stars matches anywhere, so it needs
+    // neither the leading '^' nor all of the stars.
+    let mut start = 0;
+    if at(0) == b'*' {
+        while at(start) == b'*' && start < end - 1 {
+            start += 1;
         }
-        let at = |i: usize| *pat.add(i) as u8;
+    } else {
+        reg.push(b'^');
+    }
 
-        let mut reg = Vec::<u8>::with_capacity(end * 2 + 3);
-
-        // A pattern that starts with stars matches anywhere, so it needs
-        // neither the leading '^' nor all of the stars.
-        let mut start = 0;
-        if at(0) == b'*' {
-            while at(start) == b'*' && start < end - 1 {
-                start += 1;
-            }
-        } else {
-            reg.push(b'^');
+    // Likewise, trailing stars make the '$' pointless.
+    let mut last = end - 1;
+    let mut add_dollar = true;
+    if last >= start && at(last) == b'*' {
+        while last > start && at(last) == b'*' {
+            last -= 1;
         }
+        add_dollar = false;
+    }
 
-        // Likewise, trailing stars make the '$' pointless.
-        let mut last = end - 1;
-        let mut add_dollar = true;
-        if last >= start && at(last) == b'*' {
-            while last > start && at(last) == b'*' {
-                last -= 1;
-            }
-            add_dollar = false;
-        }
-
-        let mut nested = 0;
-        let mut p = start;
-        while p <= last && at(p) != 0 && nested >= 0 {
-            match at(p) {
-                b'*' => {
-                    reg.extend_from_slice(b".*");
-                    while at(p + 1) == b'*' {
-                        // "**" matches like "*".
-                        p += 1;
-                    }
+    let mut nested = 0;
+    let mut p = start;
+    while p <= last && at(p) != 0 && nested >= 0 {
+        match at(p) {
+            b'*' => {
+                reg.extend_from_slice(b".*");
+                while at(p + 1) == b'*' {
+                    // "**" matches like "*".
+                    p += 1;
                 }
-                c @ (b'.' | b'~') => {
+            }
+            c @ (b'.' | b'~') => {
+                reg.push(b'\\');
+                reg.push(c);
+            }
+            b'?' => reg.push(b'.'),
+            b'\\' => {
+                if at(p + 1) == 0 {
+                    break;
+                }
+                p += 1;
+                // Undo the escaping ExpandEscape() added:
+                //   foo\?bar -> foo?bar
+                //   foo\%bar -> foo%bar
+                //   foo\,bar -> foo,bar
+                //   foo\ bar -> foo bar
+                // Don't unescape '\', '*' and the others that are also
+                // special in a regexp. An escaped '{' must be unescaped
+                // since we use magic, not verymagic: "\\\{n,m\}" is how
+                // you get "\{n,m}".
+                let c = at(p);
+                if c == b'?' {
+                    reg.push(b'?');
+                } else if c == b','
+                    || c == b'%'
+                    || c == b'#'
+                    || ascii_isspace(c as c_int)
+                    || c == b'{'
+                    || c == b'}'
+                {
+                    reg.push(c);
+                } else if c == b'\\' && at(p + 1) == b'\\' && at(p + 2) == b'{' {
+                    reg.extend_from_slice(b"\\{");
+                    p += 2;
+                } else {
+                    note_dir(c);
                     reg.push(b'\\');
                     reg.push(c);
                 }
-                b'?' => reg.push(b'.'),
-                b'\\' => {
-                    if at(p + 1) == 0 {
-                        break;
-                    }
-                    p += 1;
-                    // Undo the escaping ExpandEscape() added:
-                    //   foo\?bar -> foo?bar
-                    //   foo\%bar -> foo%bar
-                    //   foo\,bar -> foo,bar
-                    //   foo\ bar -> foo bar
-                    // Don't unescape '\', '*' and the others that are also
-                    // special in a regexp. An escaped '{' must be unescaped
-                    // since we use magic, not verymagic: "\\\{n,m\}" is how
-                    // you get "\{n,m}".
-                    let c = at(p);
-                    if c == b'?' {
-                        reg.push(b'?');
-                    } else if c == b','
-                        || c == b'%'
-                        || c == b'#'
-                        || ascii_isspace(c as c_int)
-                        || c == b'{'
-                        || c == b'}'
-                    {
-                        reg.push(c);
-                    } else if c == b'\\' && at(p + 1) == b'\\' && at(p + 2) == b'{' {
-                        reg.extend_from_slice(b"\\{");
-                        p += 2;
-                    } else {
-                        note_dir(c);
-                        reg.push(b'\\');
-                        reg.push(c);
-                    }
-                }
-                b'{' => {
-                    reg.extend_from_slice(b"\\(");
-                    nested += 1;
-                }
-                b'}' => {
-                    reg.extend_from_slice(b"\\)");
-                    nested -= 1;
-                }
-                b',' => {
-                    if nested != 0 {
-                        reg.extend_from_slice(b"\\|");
-                    } else {
-                        reg.push(b',');
-                    }
-                }
-                c => {
-                    note_dir(c);
-                    reg.push(c);
+            }
+            b'{' => {
+                reg.extend_from_slice(b"\\(");
+                nested += 1;
+            }
+            b'}' => {
+                reg.extend_from_slice(b"\\)");
+                nested -= 1;
+            }
+            b',' => {
+                if nested != 0 {
+                    reg.extend_from_slice(b"\\|");
+                } else {
+                    reg.push(b',');
                 }
             }
-            p += 1;
+            c => {
+                note_dir(c);
+                reg.push(c);
+            }
         }
-        if add_dollar {
-            reg.push(b'$');
-        }
+        p += 1;
+    }
+    if add_dollar {
+        reg.push(b'$');
+    }
 
-        if nested != 0 {
+    if nested != 0 {
+        unsafe {
             emsg(gettext(if nested < 0 {
                 c"E219: Missing {.".as_ptr()
             } else {
                 c"E220: Missing }.".as_ptr()
-            }));
-            return ptr::null_mut();
-        }
-        xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()).cast()
+            }))
+        };
+        return ptr::null_mut();
     }
+    unsafe { xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()) }.cast()
 }

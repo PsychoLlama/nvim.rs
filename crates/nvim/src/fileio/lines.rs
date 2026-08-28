@@ -67,122 +67,42 @@ pub(crate) unsafe fn split_lines(
 }
 
 unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
-    unsafe {
-        // The loops below run once for every character read, so keep them
-        // fast.
-        let mut appended = |line_start: *mut c_char, len: colnr_T| -> bool {
-            if ml_append(st.lnum, line_start, len, st.newfile) == FAIL {
-                return false;
-            }
-            if st.read_undo_file {
-                st.sha.update(core::slice::from_raw_parts(
-                    line_start.cast::<u8>(),
-                    len as usize,
-                ));
-            }
-            st.lnum += 1;
-            true
-        };
+    // The loops below run once for every character read, so keep them
+    // fast.
+    let mut appended = |line_start: *mut c_char, len: colnr_T| -> bool {
+        if unsafe { ml_append(st.lnum, line_start, len, st.newfile) } == FAIL {
+            return false;
+        }
+        if st.read_undo_file {
+            st.sha.update(unsafe {
+                core::slice::from_raw_parts(line_start.cast::<u8>(), len as usize)
+            });
+        }
+        st.lnum += 1;
+        true
+    };
 
-        if st.fileformat == EOL_MAC {
-            w.ptr = w.ptr.offset(-1);
-            loop {
-                w.ptr = w.ptr.add(1);
-                w.size -= 1;
-                if w.size < 0 {
-                    break;
-                }
-                // Catch the most common case first.
-                let c = *w.ptr;
-                if c != 0 && c != CAR as c_char && c != NL as c_char {
-                    continue;
-                }
-                if c == 0 {
-                    *w.ptr = NL as c_char; // NULs are replaced by newlines!
-                } else if c == NL as c_char {
-                    *w.ptr = CAR as c_char; // NLs are replaced by CRs!
-                } else {
-                    if st.skip_count == 0 {
-                        *w.ptr = 0; // end of line
-                        let len = (w.ptr.offset_from(w.line_start) + 1) as colnr_T;
-                        if !appended(w.line_start, len) {
-                            return Split::Stop;
-                        }
-                        st.read_count -= 1;
-                        if st.read_count == 0 {
-                            w.line_start = w.ptr; // nothing left to write
-                            return Split::Stop;
-                        }
-                    } else {
-                        st.skip_count -= 1;
-                    }
-                    w.line_start = w.ptr.add(1);
-                }
+    if st.fileformat == EOL_MAC {
+        w.ptr = unsafe { w.ptr.offset(-1) };
+        loop {
+            w.ptr = unsafe { w.ptr.add(1) };
+            w.size -= 1;
+            if w.size < 0 {
+                break;
             }
-        } else {
-            let end = w.ptr.offset(w.size);
-            while w.ptr < end {
-                // memchr is SIMD-optimised, unlike scanning each
-                // byte here.
-                let nl =
-                    memchr(w.ptr.cast(), NL, end.offset_from(w.ptr) as size_t).cast::<c_char>();
-                if nl.is_null() {
-                    // No more newlines. Replace any NUL bytes in
-                    // what is left with NL.
-                    loop {
-                        let nul = memchr(w.ptr.cast(), 0, end.offset_from(w.ptr) as size_t)
-                            .cast::<c_char>();
-                        if nul.is_null() {
-                            break;
-                        }
-                        *nul = NL as c_char;
-                        w.ptr = nul.add(1);
-                    }
-                    w.ptr = end;
-                    break;
-                }
-
-                // Replace NUL bytes with NL before the newline.
-                let mut scan = w.ptr;
-                loop {
-                    let nul =
-                        memchr(scan.cast(), 0, nl.offset_from(scan) as size_t).cast::<c_char>();
-                    if nul.is_null() {
-                        break;
-                    }
-                    *nul = NL as c_char;
-                    scan = nul.add(1);
-                }
-
-                // Process the newline.
-                w.ptr = nl;
+            // Catch the most common case first.
+            let c = unsafe { *w.ptr };
+            if c != 0 && c != CAR as c_char && c != NL as c_char {
+                continue;
+            }
+            if c == 0 {
+                unsafe { *w.ptr = NL as c_char }; // NULs are replaced by newlines!
+            } else if c == NL as c_char {
+                unsafe { *w.ptr = CAR as c_char }; // NLs are replaced by CRs!
+            } else {
                 if st.skip_count == 0 {
-                    *w.ptr = 0; // end of line
-                    let mut len = (w.ptr.offset_from(w.line_start) + 1) as colnr_T;
-                    if st.fileformat == EOL_DOS {
-                        if w.ptr > w.line_start && *w.ptr.offset(-1) == CAR as c_char {
-                            // Remove the CR before the NL.
-                            *w.ptr.offset(-1) = 0;
-                            len -= 1;
-                        } else if st.ff_error != EOL_DOS {
-                            // Reading in Dos format but no CR-LF
-                            // found. When 'fileformats' includes
-                            // "unix", delete all the lines read so
-                            // far and start all over again;
-                            // otherwise give an error later.
-                            if st.try_unix
-                                && !st.stdin
-                                && (st.from_buffer || lseek(st.fd, 0, SEEK_SET) == 0)
-                            {
-                                st.fileformat = EOL_UNIX;
-                                if st.set_options {
-                                    set_fileformat(EOL_UNIX, OptionSetFlags::LOCAL);
-                                }
-                                return Split::RetryUnix;
-                            }
-                            st.ff_error = EOL_DOS;
-                        }
-                    }
+                    unsafe { *w.ptr = 0 }; // end of line
+                    let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
                     if !appended(w.line_start, len) {
                         return Split::Stop;
                     }
@@ -194,11 +114,88 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
                 } else {
                     st.skip_count -= 1;
                 }
-                w.line_start = w.ptr.add(1);
-                w.ptr = w.ptr.add(1);
+                w.line_start = unsafe { w.ptr.add(1) };
             }
-            w.size = -1;
         }
-        Split::Done
+    } else {
+        let end = unsafe { w.ptr.offset(w.size) };
+        while w.ptr < end {
+            // memchr is SIMD-optimised, unlike scanning each
+            // byte here.
+            let nl = unsafe { memchr(w.ptr.cast(), NL, end.offset_from(w.ptr) as size_t) }
+                .cast::<c_char>();
+            if nl.is_null() {
+                // No more newlines. Replace any NUL bytes in
+                // what is left with NL.
+                loop {
+                    let nul = unsafe { memchr(w.ptr.cast(), 0, end.offset_from(w.ptr) as size_t) }
+                        .cast::<c_char>();
+                    if nul.is_null() {
+                        break;
+                    }
+                    unsafe { *nul = NL as c_char };
+                    w.ptr = unsafe { nul.add(1) };
+                }
+                w.ptr = end;
+                break;
+            }
+
+            // Replace NUL bytes with NL before the newline.
+            let mut scan = w.ptr;
+            loop {
+                let nul = unsafe { memchr(scan.cast(), 0, nl.offset_from(scan) as size_t) }
+                    .cast::<c_char>();
+                if nul.is_null() {
+                    break;
+                }
+                unsafe { *nul = NL as c_char };
+                scan = unsafe { nul.add(1) };
+            }
+
+            // Process the newline.
+            w.ptr = nl;
+            if st.skip_count == 0 {
+                unsafe { *w.ptr = 0 }; // end of line
+                let mut len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
+                if st.fileformat == EOL_DOS {
+                    if w.ptr > w.line_start && unsafe { *w.ptr.offset(-1) } == CAR as c_char {
+                        // Remove the CR before the NL.
+                        unsafe { *w.ptr.offset(-1) = 0 };
+                        len -= 1;
+                    } else if st.ff_error != EOL_DOS {
+                        // Reading in Dos format but no CR-LF
+                        // found. When 'fileformats' includes
+                        // "unix", delete all the lines read so
+                        // far and start all over again;
+                        // otherwise give an error later.
+                        if st.try_unix
+                            && !st.stdin
+                            && (st.from_buffer || unsafe { lseek(st.fd, 0, SEEK_SET) } == 0)
+                        {
+                            st.fileformat = EOL_UNIX;
+                            if st.set_options {
+                                set_fileformat(EOL_UNIX, OptionSetFlags::LOCAL);
+                            }
+                            return Split::RetryUnix;
+                        }
+                        st.ff_error = EOL_DOS;
+                    }
+                }
+                if !appended(w.line_start, len) {
+                    return Split::Stop;
+                }
+                st.read_count -= 1;
+                if st.read_count == 0 {
+                    w.line_start = w.ptr; // nothing left to write
+                    return Split::Stop;
+                }
+            } else {
+                st.skip_count -= 1;
+            }
+            w.line_start = unsafe { w.ptr.add(1) };
+            w.ptr = unsafe { w.ptr.add(1) };
+        }
+        w.size = -1;
     }
+    Split::Done
 }

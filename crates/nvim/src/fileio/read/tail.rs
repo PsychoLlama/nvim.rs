@@ -59,10 +59,8 @@ pub(crate) unsafe fn report_and_place(
         from + 1
     };
     // SAFETY: the current window is live, in both calls.
-    unsafe {
-        check_cursor_lnum(Win::current());
-        beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // first non-blank
-    }
+    check_cursor_lnum(unsafe { Win::current() });
+    beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // first non-blank
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks to the newly read lines.
