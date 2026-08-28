@@ -20,20 +20,21 @@ use core::ptr;
 /// # Safety
 /// `status` must be a null pointer or a valid C string.
 unsafe fn status_hl_id(status: *const c_char) -> c_int {
-    let group: &CStr = unsafe {
-        if status.is_null() {
-            return 0;
-        } else if strequal(status, c"success".as_ptr()) {
-            c"OkMsg"
-        } else if strequal(status, c"failed".as_ptr()) {
-            c"ErrorMsg"
-        } else if strequal(status, c"running".as_ptr()) {
-            c"MoreMsg"
-        } else if strequal(status, c"cancel".as_ptr()) {
-            c"WarningMsg"
-        } else {
-            return 0;
-        }
+    if status.is_null() {
+        return 0;
+    }
+    // SAFETY: a valid C string, per this function's contract.
+    let is = |name: &CStr| unsafe { strequal(status, name.as_ptr()) };
+    let group: &CStr = if is(c"success") {
+        c"OkMsg"
+    } else if is(c"failed") {
+        c"ErrorMsg"
+    } else if is(c"running") {
+        c"MoreMsg"
+    } else if is(c"cancel") {
+        c"WarningMsg"
+    } else {
+        return 0;
     };
     unsafe { syn_check_group(group.as_ptr(), group.count_bytes()) }
 }
@@ -54,45 +55,30 @@ pub(crate) unsafe fn format_progress_message(
     let mut updated = EMPTY_HL_MESSAGE;
 
     if !unsafe { (*msg_data).title }.is_empty() {
-        unsafe {
-            hl_msg_push(
-                &mut updated,
-                HlMessageChunk {
-                    text: copy_string((*msg_data).title, ptr::null_mut()),
-                    hl_id: status_hl_id((*msg_data).status.data()),
-                },
-            )
+        let title = HlMessageChunk {
+            text: unsafe { copy_string((*msg_data).title, ptr::null_mut()) },
+            hl_id: unsafe { status_hl_id((*msg_data).status.data()) },
         };
-        unsafe {
-            hl_msg_push(
-                &mut updated,
-                HlMessageChunk {
-                    text: cstr_to_string(c": ".as_ptr()),
-                    hl_id: 0,
-                },
-            )
+        unsafe { hl_msg_push(&mut updated, title) };
+        let separator = HlMessageChunk {
+            text: unsafe { cstr_to_string(c": ".as_ptr()) },
+            hl_id: 0,
         };
+        unsafe { hl_msg_push(&mut updated, separator) };
     }
 
     if unsafe { (*msg_data).percent } > 0 {
         let mut percent_buf = [0 as c_char; 10];
-        unsafe {
-            vim_snprintf(
-                percent_buf.as_mut_ptr(),
-                percent_buf.len(),
-                c"%3ld%% ".as_ptr(),
-                (*msg_data).percent as c_long,
-            )
+        let out = percent_buf.as_mut_ptr();
+        let cap = percent_buf.len();
+        let percent = unsafe { (*msg_data).percent } as c_long;
+        unsafe { vim_snprintf(out, cap, c"%3ld%% ".as_ptr(), percent) };
+        let warning = c"WarningMsg";
+        let chunk = HlMessageChunk {
+            text: unsafe { cstr_to_string(percent_buf.as_ptr()) },
+            hl_id: unsafe { syn_check_group(warning.as_ptr(), warning.count_bytes()) },
         };
-        unsafe {
-            hl_msg_push(
-                &mut updated,
-                HlMessageChunk {
-                    text: cstr_to_string(percent_buf.as_ptr()),
-                    hl_id: syn_check_group(c"WarningMsg".as_ptr(), c"WarningMsg".count_bytes()),
-                },
-            )
-        };
+        unsafe { hl_msg_push(&mut updated, chunk) };
     }
 
     if updated.size == 0 {
@@ -100,15 +86,11 @@ pub(crate) unsafe fn format_progress_message(
     }
     for i in 0..hl_msg.size {
         let chunk = unsafe { (*hl_msg.items.add(i)).clone() };
-        unsafe {
-            hl_msg_push(
-                &mut updated,
-                HlMessageChunk {
-                    text: copy_string(chunk.text, ptr::null_mut()),
-                    hl_id: chunk.hl_id,
-                },
-            )
+        let copy = HlMessageChunk {
+            text: unsafe { copy_string(chunk.text, ptr::null_mut()) },
+            hl_id: chunk.hl_id,
         };
+        unsafe { hl_msg_push(&mut updated, copy) };
     }
     updated
 }

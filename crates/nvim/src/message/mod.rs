@@ -211,11 +211,27 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
 /// The active attribute for highlight group `hlf`, i.e. C's `HL_ATTR`.
 ///
-/// # Safety
-/// `hlf` must be one of the `HLF_*` indices, and the highlight table must
-/// have been built (it is, from the first redraw onwards).
-unsafe fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
+/// The same function as [`crate::statusline::hl_attr`], which is where the
+/// rest of the tree reads the table.
+fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    // SAFETY: the attribute table is built before the first redraw and is
+    // indexed by every `HLF_*`; every call site here passes one.
     unsafe { *hl_attr_active.get().add(hlf as usize) }
+}
+
+/// `grid_clear` over a rectangle of the message grid, in the message
+/// highlight -- C's repeated
+/// `grid_clear(&msg_grid_adj, ..., HL_ATTR(HLF_MSG))`.
+///
+/// One call rather than six arguments spelled at each site: rustfmt breaks
+/// the six-argument form over nine lines, and every one of them would
+/// otherwise sit inside the `unsafe` region.
+fn clear_msg_area(top: c_int, bot: c_int, left: c_int, right: c_int) {
+    let grid = msg_grid_view();
+    let attr = hl_attr(HLF_MSG as c_int);
+    // SAFETY: `msg_grid_view` hands back the adjusted message grid, which is
+    // what every one of these calls cleared.
+    unsafe { grid_clear(grid, top, bot, left, right, attr) };
 }
 
 /// The innermost entry of the `:source`/function call stack, which is what

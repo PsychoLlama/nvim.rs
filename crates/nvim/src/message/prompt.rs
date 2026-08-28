@@ -465,29 +465,11 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                 if toscroll == -1 && !to_redraw {
                     // Display a line at the top, scrolling the rest down.
                     grid_ins_lines(msg_grid_ref(), 0, 1, Rows.get(), 0, Columns.get());
-                    unsafe {
-                        grid_clear(
-                            msg_grid_view(),
-                            0,
-                            1,
-                            0,
-                            Columns.get(),
-                            hl_attr(HLF_MSG as c_int),
-                        )
-                    };
+                    clear_msg_area(0, 1, 0, Columns.get());
                     unsafe { disp_sb_line(0, mp) };
                 } else {
                     // Redisplay the whole screen.
-                    unsafe {
-                        grid_clear(
-                            msg_grid_view(),
-                            0,
-                            Rows.get(),
-                            0,
-                            Columns.get(),
-                            hl_attr(HLF_MSG as c_int),
-                        )
-                    };
+                    clear_msg_area(0, Rows.get(), 0, Columns.get());
                     let mut i = 0;
                     while !mp.is_null() && i < Rows.get() - 1 {
                         mp = unsafe { disp_sb_line(i, mp) };
@@ -513,16 +495,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                 }
                 unsafe { msg_scroll_up(true, false) };
                 unsafe { inc_msg_scrolled() };
-                unsafe {
-                    grid_clear(
-                        msg_grid_view(),
-                        Rows.get() - 2,
-                        Rows.get() - 1,
-                        0,
-                        Columns.get(),
-                        hl_attr(HLF_MSG as c_int),
-                    )
-                };
+                clear_msg_area(Rows.get() - 2, Rows.get() - 1, 0, Columns.get());
                 mp_last = unsafe { disp_sb_line(Rows.get() - 2, mp_last) };
                 toscroll -= 1;
             }
@@ -533,30 +506,12 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
             lines_left.set(toscroll);
             break;
         }
-        unsafe {
-            grid_clear(
-                msg_grid_view(),
-                Rows.get() - 1,
-                Rows.get(),
-                0,
-                Columns.get(),
-                hl_attr(HLF_MSG as c_int),
-            )
-        };
+        clear_msg_area(Rows.get() - 1, Rows.get(), 0, Columns.get());
         unsafe { msg_moremsg(false) };
     }
 
     // Clear the --More-- message.
-    unsafe {
-        grid_clear(
-            msg_grid_view(),
-            Rows.get() - 1,
-            Rows.get(),
-            0,
-            Columns.get(),
-            hl_attr(HLF_MSG as c_int),
-        )
-    };
+    clear_msg_area(Rows.get() - 1, Rows.get(), 0, Columns.get());
     redraw_cmdline.set(true);
     clear_cmdline.set(false);
     mode_displayed.set(false);
@@ -632,22 +587,14 @@ pub unsafe fn msg_delay(ms: uint64_t, ignoreinput: bool) {
     }
     // Under the test harness a real delay would just be slow.
     let ms = if nvim_testing.get() { 100 } else { ms };
-    unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            ptr::null(),
-            c"msg_delay".as_ptr(),
-            4047,
-            true,
-            c"%lu ms%s".as_ptr(),
-            ms,
-            if nvim_testing.get() {
-                c" (skipped by NVIM_TEST)".as_ptr()
-            } else {
-                c"".as_ptr()
-            },
-        )
+    let at = c"msg_delay".as_ptr();
+    let fmt = c"%lu ms%s".as_ptr();
+    let note = if nvim_testing.get() {
+        c" (skipped by NVIM_TEST)".as_ptr()
+    } else {
+        c"".as_ptr()
     };
+    unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 4047, true, fmt, ms, note) };
     unsafe { ui_flush() };
     os_delay(ms, ignoreinput);
 }

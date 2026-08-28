@@ -162,20 +162,11 @@ unsafe extern "C" fn sort_compare(
 }
 
 pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
-    unsafe {
-        qsort(
-            files as *mut ::core::ffi::c_void,
-            count as size_t,
-            ::core::mem::size_of::<*mut c_char>(),
-            Some(
-                sort_compare
-                    as unsafe extern "C" fn(
-                        *const ::core::ffi::c_void,
-                        *const ::core::ffi::c_void,
-                    ) -> c_int,
-            ),
-        )
-    };
+    type Compare = unsafe extern "C" fn(*const c_void, *const c_void) -> c_int;
+    let base = files as *mut c_void;
+    let count = count as size_t;
+    let width = ::core::mem::size_of::<*mut c_char>();
+    unsafe { qsort(base, count, width, Some(sort_compare as Compare)) };
 }
 
 pub unsafe fn has_non_ascii(s: *const c_char) -> bool {

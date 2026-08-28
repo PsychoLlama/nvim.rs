@@ -151,16 +151,7 @@ pub unsafe fn msg_grid_validate() {
         let diff = msg_grid_pos.get() - max_rows;
         unsafe { msg_grid_set_pos(max_rows, false) };
         if diff > 0 {
-            unsafe {
-                grid_clear(
-                    msg_grid_view(),
-                    Rows.get() - diff,
-                    Rows.get(),
-                    0,
-                    Columns.get(),
-                    hl_attr(HLF_MSG as c_int),
-                )
-            };
+            clear_msg_area(Rows.get() - diff, Rows.get(), 0, Columns.get());
         }
     }
 
@@ -236,16 +227,7 @@ pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
         grid.scroll_dirty_cols();
     }
     // Ensure the message area is cleared to the default background.
-    unsafe {
-        grid_clear(
-            msg_grid_view(),
-            Rows.get() - 1,
-            Rows.get(),
-            0,
-            Columns.get(),
-            hl_attr(HLF_MSG as c_int),
-        )
-    };
+    clear_msg_area(Rows.get() - 1, Rows.get(), 0, Columns.get());
 }
 
 /// Send everything a throttled run of messages accumulated, as one scroll
@@ -291,7 +273,7 @@ pub unsafe fn msg_scroll_flush() {
             let row = i - msg_grid_pos.get();
             debug_assert!(row >= 0);
             let (dirty, cols) = (grid.take_dirty_col(row), grid.cols);
-            let attr = unsafe { hl_attr(HLF_MSG as c_int) };
+            let attr = hl_attr(HLF_MSG as c_int);
             unsafe { ui_line(grid, row, false, 0, dirty, cols, attr, false) };
             i += 1;
         }
@@ -422,26 +404,8 @@ pub unsafe fn msg_clr_eos_force() {
         }
     }
 
-    unsafe {
-        grid_clear(
-            msg_grid_view(),
-            msg_row.get(),
-            msg_row.get() + 1,
-            msg_startcol,
-            msg_endcol,
-            hl_attr(HLF_MSG as c_int),
-        )
-    };
-    unsafe {
-        grid_clear(
-            msg_grid_view(),
-            msg_row.get() + 1,
-            Rows.get(),
-            0,
-            Columns.get(),
-            hl_attr(HLF_MSG as c_int),
-        )
-    };
+    clear_msg_area(msg_row.get(), msg_row.get() + 1, msg_startcol, msg_endcol);
+    clear_msg_area(msg_row.get() + 1, Rows.get(), 0, Columns.get());
 
     redraw_cmdline.set(true);
     if msg_row.get() < Rows.get() - 1 || msg_col.get() == 0 {

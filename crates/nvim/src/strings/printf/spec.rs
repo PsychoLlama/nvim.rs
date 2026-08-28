@@ -196,25 +196,17 @@ unsafe fn adjust_types(
                 spec
             };
             if unsafe { *other as u8 } != b'*' && !matches!(unsafe { *other as u8 }, b'd' | b'i') {
-                unsafe {
-                    semsg_c!(
-                        gettext(E_FIELD_WIDTH_REUSED.as_ptr()),
-                        arg,
-                        format_typename(seen),
-                        format_typename(spec),
-                    )
-                };
+                let msg = unsafe { gettext(E_FIELD_WIDTH_REUSED.as_ptr()) };
+                let was = unsafe { format_typename(seen) };
+                let now = unsafe { format_typename(spec) };
+                unsafe { semsg_c!(msg, arg, was, now) };
                 return Err(BadFormat);
             }
         } else if unsafe { format_typeof(spec) } != unsafe { format_typeof(seen) } {
-            unsafe {
-                semsg_c!(
-                    gettext(E_POS_TYPE_INCONSISTENT.as_ptr()),
-                    arg,
-                    format_typename(spec),
-                    format_typename(seen),
-                )
-            };
+            let msg = unsafe { gettext(E_POS_TYPE_INCONSISTENT.as_ptr()) };
+            let now = unsafe { format_typename(spec) };
+            let was = unsafe { format_typename(seen) };
+            unsafe { semsg_c!(msg, arg, now, was) };
             return Err(BadFormat);
         }
     }
@@ -229,13 +221,9 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
     while ascii_isdigit(unsafe { *p as c_int }) {
         p = unsafe { p.add(1) };
     }
-    unsafe {
-        semsg_c!(
-            gettext(e_val_too_large_len.as_ptr()),
-            p.offset_from(pstart) as c_int,
-            pstart,
-        )
-    };
+    let msg = unsafe { gettext(e_val_too_large_len.as_ptr()) };
+    let digits = unsafe { p.offset_from(pstart) } as c_int;
+    unsafe { semsg_c!(msg, digits, pstart) };
 }
 
 /// Read the decimal number at `*p`, advancing it past the digits.

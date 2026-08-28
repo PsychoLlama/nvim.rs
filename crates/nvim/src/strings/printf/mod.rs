@@ -235,14 +235,9 @@ pub unsafe extern "C" fn kv_do_printf(
             };
         }
         debug_assert!(!unsafe { (*str).items }.is_null());
-        printed = unsafe {
-            vsnprintf(
-                (*str).items.add((*str).size),
-                (*str).capacity - (*str).size,
-                fmt,
-                args.clone(),
-            )
-        };
+        let tail = unsafe { (*str).items.add((*str).size) };
+        let room = unsafe { (*str).capacity - (*str).size };
+        printed = unsafe { vsnprintf(tail, room, fmt, args.clone()) };
         if printed < 0 {
             return -1;
         }

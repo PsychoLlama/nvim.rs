@@ -88,17 +88,25 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     };
 
     let mut n: varnumber_T = 0;
+    // Only the number and the base matter here: every other output --
+    // the prefix length, the digit count, the unsigned value and the
+    // overflow flag -- is one `vim_str2nr` may skip.
+    let out = &raw mut n;
+    let no_prefix = ptr::null_mut();
+    let no_len = ptr::null_mut();
+    let no_unsigned = ptr::null_mut();
+    let no_overflow = ptr::null_mut();
     unsafe {
         vim_str2nr(
             p,
-            ptr::null_mut(),
-            ptr::null_mut(),
+            no_prefix,
+            no_len,
             what,
-            &raw mut n,
-            ptr::null_mut(),
+            out,
+            no_unsigned,
             0,
             false,
-            ptr::null_mut(),
+            no_overflow,
         )
     };
     unsafe { (*rettv).vval.v_number = if isneg { -n } else { n } };

@@ -141,16 +141,16 @@ impl<'f> Args<'f> {
 
     /// Move the `va_list` onto argument `arg_idx`.
     unsafe fn position(&mut self) {
-        unsafe {
-            skip_to_arg(
-                self.ap_types,
-                self.ap_start.clone(),
-                &raw mut self.ap,
-                &raw mut self.arg_idx,
-                &raw mut self.arg_cur,
-                self.fmt,
-            )
-        };
+        // Bound in the order the call would have evaluated them: the clone
+        // reads `ap_start` before the three field addresses are taken, and
+        // those three address disjoint fields.
+        let types = self.ap_types;
+        let start = self.ap_start.clone();
+        let ap = &raw mut self.ap;
+        let idx = &raw mut self.arg_idx;
+        let cur = &raw mut self.arg_cur;
+        let fmt = self.fmt;
+        unsafe { skip_to_arg(types, start, ap, idx, cur, fmt) };
     }
 
     /// `numbuf` is scratch a Number argument is rendered into; it must
@@ -559,24 +559,14 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
     if !(c.precision == 0 && arg_sign == 0) {
         match c.fmt_spec {
             b'p' => {
-                str_arg_l += unsafe {
-                    snprintf(
-                        tmp.as_mut_ptr().add(str_arg_l),
-                        TMP - str_arg_l,
-                        c"%p".as_ptr(),
-                        ptr_arg,
-                    ) as size_t
-                };
+                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
+                let room = TMP - str_arg_l;
+                str_arg_l += unsafe { snprintf(out, room, c"%p".as_ptr(), ptr_arg) as size_t };
             }
             b'd' => {
-                str_arg_l += unsafe {
-                    snprintf(
-                        tmp.as_mut_ptr().add(str_arg_l),
-                        TMP - str_arg_l,
-                        c"%ld".as_ptr(),
-                        arg,
-                    ) as size_t
-                };
+                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
+                let room = TMP - str_arg_l;
+                str_arg_l += unsafe { snprintf(out, room, c"%ld".as_ptr(), arg) as size_t };
             }
             b'b' | b'B' => {
                 // Binary has no libc conversion: skip the leading
@@ -596,14 +586,10 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
                 // last byte and any of u/o/x/X can be dropped in.
                 let mut f = *b"%lu\0";
                 f[2] = c.fmt_spec;
-                str_arg_l += unsafe {
-                    snprintf(
-                        tmp.as_mut_ptr().add(str_arg_l),
-                        TMP - str_arg_l,
-                        f.as_ptr().cast::<c_char>(),
-                        uarg,
-                    ) as size_t
-                };
+                let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
+                let room = TMP - str_arg_l;
+                str_arg_l +=
+                    unsafe { snprintf(out, room, f.as_ptr().cast::<c_char>(), uarg) as size_t };
             }
         }
         debug_assert!(str_arg_l < TMP);
@@ -678,19 +664,10 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
     // A fixed-notation value this large would not fit the scratch
     // buffer, so it prints as infinity too.
     if f.is_infinite() || (matches!(c.fmt_spec, b'f' | b'F') && abs_f > 1.0e307) {
-        unsafe {
-            xstrlcpy(
-                tmp.as_mut_ptr(),
-                infinity_str(
-                    f > 0.0,
-                    c.fmt_spec as c_char,
-                    c.force_sign,
-                    c.space_for_positive,
-                )
-                .as_ptr(),
-                TMP,
-            )
-        };
+        let sign = c.fmt_spec as c_char;
+        let text = infinity_str(f > 0.0, sign, c.force_sign, c.space_for_positive);
+        let out = tmp.as_mut_ptr();
+        unsafe { xstrlcpy(out, text.as_ptr(), TMP) };
         c.zero_padding = false;
         return Body::Tmp(unsafe { strlen(tmp.as_ptr()) });
     }
@@ -722,14 +699,10 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
             max_prec -= abs_f.log10() as size_t;
         }
         c.precision = c.precision.min(max_prec);
-        l += unsafe {
-            snprintf(
-                format.as_mut_ptr().add(l),
-                format.len() - l,
-                c".%d".as_ptr(),
-                c.precision as c_int,
-            ) as size_t
-        };
+        let out = unsafe { format.as_mut_ptr().add(l) };
+        let room = format.len() - l;
+        let prec = c.precision as c_int;
+        l += unsafe { snprintf(out, room, c".%d".as_ptr(), prec) as size_t };
     }
     debug_assert!(l + 1 < format.len());
     // libc has no `%F`; it prints the same digits as `%f`.

@@ -190,18 +190,16 @@ unsafe fn console_dialog_alloc(
     }
 
     confirm_msg.set(unsafe { xmalloc(msg_len as size_t) }.cast());
-    unsafe {
-        snprintf(
-            confirm_msg.get(),
-            msg_len as size_t,
-            if ui_has(kUIMessages) {
-                c"%s".as_ptr()
-            } else {
-                c"\n%s\n".as_ptr()
-            },
-            message,
-        )
+    // With `ext_messages` the UI puts the message where it likes, so the
+    // blank lines that separate it from the buttons are left out.
+    let fmt = if ui_has(kUIMessages) {
+        c"%s".as_ptr()
+    } else {
+        c"\n%s\n".as_ptr()
     };
+    let out = confirm_msg.get();
+    let cap = msg_len as size_t;
+    unsafe { snprintf(out, cap, fmt, message) };
 
     unsafe { xfree(confirm_buttons.get().cast()) };
     confirm_buttons.set(unsafe { xmalloc(button_len as size_t) }.cast());
@@ -338,18 +336,9 @@ pub unsafe fn vim_dialog_yesno(
     } else {
         title
     };
-    if unsafe {
-        do_dialog(
-            type_0,
-            title,
-            message,
-            gettext(c"&Yes\n&No".as_ptr()),
-            dflt,
-            ptr::null(),
-            0,
-        )
-    } == 1
-    {
+    let buttons = unsafe { gettext(c"&Yes\n&No".as_ptr()) };
+    let nul = ptr::null();
+    if unsafe { do_dialog(type_0, title, message, buttons, dflt, nul, 0) } == 1 {
         return VIM_YES as c_int;
     }
     VIM_NO as c_int
@@ -370,17 +359,9 @@ pub unsafe fn vim_dialog_yesnocancel(
     } else {
         title
     };
-    match unsafe {
-        do_dialog(
-            type_0,
-            title,
-            message,
-            gettext(c"&Yes\n&No\n&Cancel".as_ptr()),
-            dflt,
-            ptr::null(),
-            0,
-        )
-    } {
+    let buttons = unsafe { gettext(c"&Yes\n&No\n&Cancel".as_ptr()) };
+    let nul = ptr::null();
+    match unsafe { do_dialog(type_0, title, message, buttons, dflt, nul, 0) } {
         1 => VIM_YES as c_int,
         2 => VIM_NO as c_int,
         _ => VIM_CANCEL as c_int,
@@ -403,17 +384,9 @@ pub unsafe fn vim_dialog_yesnoallcancel(
     } else {
         title.cast_const()
     };
-    match unsafe {
-        do_dialog(
-            type_0,
-            title,
-            message,
-            gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel".as_ptr()),
-            dflt,
-            ptr::null(),
-            0,
-        )
-    } {
+    let buttons = unsafe { gettext(c"&Yes\n&No\nSave &All\n&Discard All\n&Cancel".as_ptr()) };
+    let nul = ptr::null();
+    match unsafe { do_dialog(type_0, title, message, buttons, dflt, nul, 0) } {
         1 => VIM_YES as c_int,
         2 => VIM_NO as c_int,
         3 => VIM_ALL as c_int,

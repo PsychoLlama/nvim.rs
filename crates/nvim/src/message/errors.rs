@@ -229,62 +229,28 @@ pub unsafe fn emsg_multiline(
                 write_line(unsafe { get_emsg_lnum() });
                 unsafe { redir_write(s, strlen(s) as ptrdiff_t) };
             }
+            let at = c"emsg_multiline".as_ptr();
             if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-                unsafe {
-                    logmsg_c!(
-                        LOGLVL_DBG,
-                        ptr::null(),
-                        c"emsg_multiline".as_ptr(),
-                        845,
-                        true,
-                        c"(:silent) %s (%s (line %d))".as_ptr(),
-                        s,
-                        sourcing_top().es_name,
-                        sourcing_top().es_lnum,
-                    )
-                };
+                let fmt = c"(:silent) %s (%s (line %d))".as_ptr();
+                let name = sourcing_top().es_name;
+                let lnum = sourcing_top().es_lnum;
+                unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 845, true, fmt, s, name, lnum) };
             } else {
-                unsafe {
-                    logmsg_c!(
-                        LOGLVL_DBG,
-                        ptr::null(),
-                        c"emsg_multiline".as_ptr(),
-                        847,
-                        true,
-                        c"(:silent) %s".as_ptr(),
-                        s,
-                    )
-                };
+                let fmt = c"(:silent) %s".as_ptr();
+                unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 847, true, fmt, s) };
             }
             return true;
         }
 
+        let at = c"emsg_multiline".as_ptr();
         if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_INF,
-                    ptr::null(),
-                    c"emsg_multiline".as_ptr(),
-                    855,
-                    true,
-                    c"%s (%s (line %d))".as_ptr(),
-                    s,
-                    sourcing_top().es_name,
-                    sourcing_top().es_lnum,
-                )
-            };
+            let fmt = c"%s (%s (line %d))".as_ptr();
+            let name = sourcing_top().es_name;
+            let lnum = sourcing_top().es_lnum;
+            unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), at, 855, true, fmt, s, name, lnum) };
         } else {
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_INF,
-                    ptr::null(),
-                    c"emsg_multiline".as_ptr(),
-                    857,
-                    true,
-                    c"%s".as_ptr(),
-                    s,
-                )
-            };
+            let fmt = c"%s".as_ptr();
+            unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), at, 857, true, fmt, s) };
         }
 
         ex_exitval.set(1);
