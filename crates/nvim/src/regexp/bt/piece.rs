@@ -425,56 +425,54 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
     // SAFETY: `expr` is a NUL-terminated pattern. `r` is this function's own
     // allocation, sized by the pass that runs before anything is written into
     // it, and is either handed to the caller or freed here.
-    unsafe {
-        if expr.is_null() {
-            iemsg(gettext(&raw const e_null as *const c_char));
-            rc_did_emsg.set(true);
-            return core::ptr::null_mut();
-        }
-
-        // The compiler consults the match context for what `\k` and friends
-        // mean in the buffer being compiled against.
-        // SAFETY: compiling, so no match is reading the context; `vim_regcomp`
-        // pointed `reg_buf` at a buffer before calling in.
-        let rex = Rex::acquire();
-
-        let mut flags = 0;
-        regcomp_start(expr, re_flags);
-        regcode.set(JUST_CALC_SIZE);
-        regc(REGMAGIC);
-        if reg(rex, REG_NOPAREN, &mut flags).is_null() {
-            return core::ptr::null_mut();
-        }
-
-        let prog = BtProg::alloc(regsize.get() as usize);
-
-        regcomp_start(expr, re_flags);
-        regcode.set(prog.text());
-        regc(REGMAGIC);
-        if reg(rex, REG_NOPAREN, &mut flags).is_null() || reg_toolong.get() != 0 {
-            prog.discard();
-            if reg_toolong.get() != 0 {
-                semsg!("E339: Pattern too long");
-                rc_did_emsg.set(true);
-            }
-            return core::ptr::null_mut();
-        }
-
-        prog.set_regstart(NUL);
-        prog.set_anchored(false);
-        prog.set_regmust(core::ptr::null_mut(), 0);
-        prog.set_regflags(regflags.get());
-        if flags & HASNL != 0 {
-            prog.add_regflags(RF_HASNL as u32);
-        }
-        if flags & HASLOOKBH != 0 {
-            prog.add_regflags(RF_LOOKBH as u32);
-        }
-        prog.set_reghasz(re_has_z.get() as uint8_t);
-        find_shortcuts(prog, flags);
-        prog.set_engine((&raw const bt_regengine).cast_mut());
-        prog.into_regprog()
+    if expr.is_null() {
+        unsafe { iemsg(gettext(&raw const e_null as *const c_char)) };
+        rc_did_emsg.set(true);
+        return core::ptr::null_mut();
     }
+
+    // The compiler consults the match context for what `\k` and friends
+    // mean in the buffer being compiled against.
+    // SAFETY: compiling, so no match is reading the context; `vim_regcomp`
+    // pointed `reg_buf` at a buffer before calling in.
+    let rex = unsafe { Rex::acquire() };
+
+    let mut flags = 0;
+    regcomp_start(expr, re_flags);
+    regcode.set(JUST_CALC_SIZE);
+    regc(REGMAGIC);
+    if reg(rex, REG_NOPAREN, &mut flags).is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let prog = BtProg::alloc(regsize.get() as usize);
+
+    regcomp_start(expr, re_flags);
+    regcode.set(prog.text());
+    regc(REGMAGIC);
+    if reg(rex, REG_NOPAREN, &mut flags).is_null() || reg_toolong.get() != 0 {
+        prog.discard();
+        if reg_toolong.get() != 0 {
+            semsg!("E339: Pattern too long");
+            rc_did_emsg.set(true);
+        }
+        return core::ptr::null_mut();
+    }
+
+    prog.set_regstart(NUL);
+    prog.set_anchored(false);
+    prog.set_regmust(core::ptr::null_mut(), 0);
+    prog.set_regflags(regflags.get());
+    if flags & HASNL != 0 {
+        prog.add_regflags(RF_HASNL as u32);
+    }
+    if flags & HASLOOKBH != 0 {
+        prog.add_regflags(RF_LOOKBH as u32);
+    }
+    prog.set_reghasz(re_has_z.get() as uint8_t);
+    find_shortcuts(prog, flags);
+    prog.set_engine((&raw const bt_regengine).cast_mut());
+    prog.into_regprog()
 }
 
 /// Fill in the `regstart`/`reganch`/`regmust` hints the executor uses to
@@ -486,53 +484,55 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
 /// `prog` must be a program this module has just finished writing.
 fn find_shortcuts(prog: BtProg, flags: c_int) {
     // SAFETY: walking the program just written, whose nodes are well formed.
-    unsafe {
-        let mut scan = prog.first_node();
-        if *regnext(scan) as c_int != END {
-            return;
-        }
-        scan = scan.add(3);
+    let mut scan = prog.first_node();
+    if unsafe { *regnext(scan) } as c_int != END {
+        return;
+    }
+    scan = unsafe { scan.add(3) };
 
-        // A pattern anchored at the start only has to be tried there.
-        if *scan as c_int == BOL || *scan as c_int == RE_BOF {
-            prog.set_anchored(true);
+    // A pattern anchored at the start only has to be tried there.
+    if unsafe { *scan } as c_int == BOL || unsafe { *scan } as c_int == RE_BOF {
+        prog.set_anchored(true);
+        scan = regnext(scan);
+    }
+
+    // A known first character lets the executor use a memchr-style skip.
+    if unsafe { *scan } as c_int == EXACTLY {
+        prog.set_regstart(unsafe { utf_ptr2char(scan.add(3).cast()) });
+    } else if [BOW, EOW, NOTHING, MOPEN, NOPEN, MCLOSE, NCLOSE]
+        .contains(&(unsafe { *scan } as c_int))
+    {
+        // Those all match empty, so look one node further.
+        let next = regnext(scan);
+        if unsafe { *next } as c_int == EXACTLY {
+            prog.set_regstart(unsafe { utf_ptr2char(next.add(3).cast()) });
+        }
+    }
+
+    // A required substring: the longest EXACTLY anywhere in the single
+    // branch has to appear somewhere in the line for the line to match.
+    // Only sound when the pattern can start anywhere in it, and never
+    // across a line break.
+    if (flags & SPSTART != 0
+        || unsafe { *scan } as c_int == BOW
+        || unsafe { *scan } as c_int == EOW)
+        && flags & HASNL == 0
+    {
+        let mut longest: *mut uint8_t = core::ptr::null_mut();
+        let mut len = 0;
+        while !scan.is_null() {
+            if unsafe { *scan } as c_int == EXACTLY {
+                let scanlen = unsafe { strlen(scan.add(3).cast()) } as c_int;
+                // `>=` rather than `>`: upstream prefers the *last* of
+                // equally long candidates.
+                if scanlen >= len {
+                    longest = unsafe { scan.add(3) };
+                    len = scanlen;
+                }
+            }
             scan = regnext(scan);
         }
-
-        // A known first character lets the executor use a memchr-style skip.
-        if *scan as c_int == EXACTLY {
-            prog.set_regstart(utf_ptr2char(scan.add(3).cast()));
-        } else if [BOW, EOW, NOTHING, MOPEN, NOPEN, MCLOSE, NCLOSE].contains(&(*scan as c_int)) {
-            // Those all match empty, so look one node further.
-            let next = regnext(scan);
-            if *next as c_int == EXACTLY {
-                prog.set_regstart(utf_ptr2char(next.add(3).cast()));
-            }
-        }
-
-        // A required substring: the longest EXACTLY anywhere in the single
-        // branch has to appear somewhere in the line for the line to match.
-        // Only sound when the pattern can start anywhere in it, and never
-        // across a line break.
-        if (flags & SPSTART != 0 || *scan as c_int == BOW || *scan as c_int == EOW)
-            && flags & HASNL == 0
-        {
-            let mut longest: *mut uint8_t = core::ptr::null_mut();
-            let mut len = 0;
-            while !scan.is_null() {
-                if *scan as c_int == EXACTLY {
-                    let scanlen = strlen(scan.add(3).cast()) as c_int;
-                    // `>=` rather than `>`: upstream prefers the *last* of
-                    // equally long candidates.
-                    if scanlen >= len {
-                        longest = scan.add(3);
-                        len = scanlen;
-                    }
-                }
-                scan = regnext(scan);
-            }
-            prog.set_regmust(longest, len);
-        }
+        prog.set_regmust(longest, len);
     }
 }
 
@@ -550,24 +550,22 @@ pub fn vim_regcomp_had_eol() -> c_int {
 pub(crate) fn coll_get_char() -> c_int {
     // SAFETY: `regparse` points into the NUL-terminated pattern, and the
     // readers below only ever advance it.
-    unsafe {
-        let start = regparse.get();
-        regparse.set(start.add(1));
-        let mut nr = match *start as u8 {
-            b'd' => getdecchrs(),
-            b'o' => getoctchrs(),
-            b'x' => gethexchrs(2),
-            b'u' => gethexchrs(4),
-            b'U' => gethexchrs(8),
-            _ => -1,
-        };
-        if nr < 0 {
-            // Not an escape after all: the backslash stands for itself.
-            regparse.set(start);
-            nr = b'\\' as int64_t;
-        }
-        nr.min(INT_MAX as int64_t) as c_int
+    let start = regparse.get();
+    regparse.set(unsafe { start.add(1) });
+    let mut nr = match unsafe { *start } as u8 {
+        b'd' => getdecchrs(),
+        b'o' => getoctchrs(),
+        b'x' => gethexchrs(2),
+        b'u' => gethexchrs(4),
+        b'U' => gethexchrs(8),
+        _ => -1,
+    };
+    if nr < 0 {
+        // Not an escape after all: the backslash stands for itself.
+        regparse.set(start);
+        nr = b'\\' as int64_t;
     }
+    nr.min(INT_MAX as int64_t) as c_int
 }
 
 /// # Safety

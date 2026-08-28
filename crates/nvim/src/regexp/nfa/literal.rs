@@ -123,25 +123,23 @@ pub(crate) fn back_reference(rex: Rex, c: c_int) -> Parsed {
 pub(crate) fn previous_substitute() -> Parsed {
     // SAFETY: `reg_prev_sub` is either null or a NUL-terminated copy of the
     // replacement, owned by the substitute code.
-    unsafe {
-        let sub = reg_prev_sub.get();
-        if sub.is_null() {
-            emsg(gettext(&raw const e_nopresub as *const c_char));
-            return Err(Rejected);
-        }
-        let mut p = sub;
-        while *p as c_int != NUL {
-            postfix::emit(utf_ptr2char(p));
-            // The join goes after the second and every later character, so
-            // the run reads as `a b CONCAT c CONCAT …`.
-            if p != sub {
-                postfix::emit(NFA_CONCAT);
-            }
-            p = p.add(utf_ptr2len(p) as usize);
-        }
-        postfix::emit(NFA_NOPEN);
-        Ok(())
+    let sub = reg_prev_sub.get();
+    if sub.is_null() {
+        unsafe { emsg(gettext(&raw const e_nopresub as *const c_char)) };
+        return Err(Rejected);
     }
+    let mut p = sub;
+    while unsafe { *p } as c_int != NUL {
+        postfix::emit(unsafe { utf_ptr2char(p) });
+        // The join goes after the second and every later character, so
+        // the run reads as `a b CONCAT c CONCAT …`.
+        if p != sub {
+            postfix::emit(NFA_CONCAT);
+        }
+        p = unsafe { p.add(utf_ptr2len(p) as usize) };
+    }
+    postfix::emit(NFA_NOPEN);
+    Ok(())
 }
 
 /// An ordinary character. `atom_start` is where it begins in the pattern,

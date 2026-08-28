@@ -134,15 +134,15 @@ fn emit_combining_marks() {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
     // SAFETY: `regparse` points into the NUL-terminated pattern, and
     // `utf_composinglike` stops the walk at its end.
-    unsafe {
-        loop {
-            let len = utf_ptr2len(regparse.get());
-            if !utf_composinglike(regparse.get(), regparse.get().add(len as usize), &mut state) {
-                break;
-            }
-            regmbc(utf_ptr2char(regparse.get()));
-            skipchr();
+    loop {
+        let len = unsafe { utf_ptr2len(regparse.get()) };
+        if !unsafe {
+            utf_composinglike(regparse.get(), regparse.get().add(len as usize), &mut state)
+        } {
+            break;
         }
+        regmbc(unsafe { utf_ptr2char(regparse.get()) });
+        skipchr();
     }
 }
 
@@ -151,26 +151,24 @@ fn emit_combining_marks() {
 pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
     // SAFETY: `reg_prev_sub` is either null or a NUL-terminated copy of the
     // replacement, owned by the substitute code.
-    unsafe {
-        let sub = reg_prev_sub.get().cast::<uint8_t>();
-        if sub.is_null() {
-            emsg(gettext(&raw const e_nopresub as *const c_char));
-            rc_did_emsg.set(true);
-            return core::ptr::null_mut();
-        }
-        let ret = regnode(EXACTLY);
-        let mut end = sub;
-        while *end as c_int != NUL {
-            regc(*end as c_int);
-            end = end.add(1);
-        }
-        regc(NUL);
-        if *sub as c_int != NUL {
-            *flagp |= HASWIDTH;
-            if end.offset_from(sub) == 1 {
-                *flagp |= SIMPLE;
-            }
-        }
-        ret
+    let sub = reg_prev_sub.get().cast::<uint8_t>();
+    if sub.is_null() {
+        unsafe { emsg(gettext(&raw const e_nopresub as *const c_char)) };
+        rc_did_emsg.set(true);
+        return core::ptr::null_mut();
     }
+    let ret = regnode(EXACTLY);
+    let mut end = sub;
+    while unsafe { *end } as c_int != NUL {
+        regc(unsafe { *end } as c_int);
+        end = unsafe { end.add(1) };
+    }
+    regc(NUL);
+    if unsafe { *sub } as c_int != NUL {
+        *flagp |= HASWIDTH;
+        if unsafe { end.offset_from(sub) } == 1 {
+            *flagp |= SIMPLE;
+        }
+    }
+    ret
 }

@@ -314,17 +314,15 @@ pub(crate) unsafe fn step(
 /// `NFA_SKIP` waits out the remainder.
 fn spanning(out: *mut nfa_state_T, bytelen: c_int, clen: c_int) -> Step {
     // SAFETY: `out` is a live state of the running program.
-    unsafe {
-        if bytelen == 0 {
-            Step::Here((*out).out)
-        } else if bytelen <= clen {
-            Step::next((*out).out, clen)
-        } else {
-            Step::Next {
-                state: out,
-                off: bytelen,
-                count: bytelen - clen,
-            }
+    if bytelen == 0 {
+        Step::Here(unsafe { (*out).out })
+    } else if bytelen <= clen {
+        Step::next(unsafe { (*out).out }, clen)
+    } else {
+        Step::Next {
+            state: out,
+            off: bytelen,
+            count: bytelen - clen,
         }
     }
 }
@@ -347,16 +345,16 @@ unsafe fn at_sub_match_end(rex: Rex) -> bool {
 ///
 /// The match context must be live.
 unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
-    unsafe {
-        if curc == NUL {
-            return false;
-        }
-        let this_class = mb_get_class_tab(
+    if curc == NUL {
+        return false;
+    }
+    let this_class = unsafe {
+        mb_get_class_tab(
             rex.input_str(),
             &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
-        );
-        this_class > 1 && reg_prev_class(rex) != this_class
-    }
+        )
+    };
+    this_class > 1 && reg_prev_class(rex) != this_class
 }
 
 /// `\>`: a keyword character behind the position and something else at it.
@@ -365,17 +363,17 @@ unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
 ///
 /// The match context must be live.
 unsafe fn at_word_end(rex: Rex) -> bool {
-    unsafe {
-        if rex.at_bol() {
-            return false;
-        }
-        let this_class = mb_get_class_tab(
+    if rex.at_bol() {
+        return false;
+    }
+    let this_class = unsafe {
+        mb_get_class_tab(
             rex.input_str(),
             &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
-        );
-        let prev_class = reg_prev_class(rex);
-        this_class != prev_class && prev_class != 0 && prev_class != 1
-    }
+        )
+    };
+    let prev_class = reg_prev_class(rex);
+    this_class != prev_class && prev_class != 0 && prev_class != 1
 }
 
 /// Walk a collection's members, looking for one that accepts `curc`.
@@ -384,50 +382,49 @@ unsafe fn at_word_end(rex: Rex) -> bool {
 ///
 /// `start` must be an `NFA_START_COLL`/`NFA_START_NEG_COLL` state.
 unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, clen: c_int) -> bool {
-    unsafe {
-        // A negated collection accepts exactly what its members reject.
-        let member_wins = (*start).c == NFA_START_COLL;
-        let mut state = (*start).out;
-        loop {
-            let c = op(state);
-            if c == NFA_COMPOSING {
-                // A member that is a whole grapheme.
-                return matches_composing(rex, (*(*start).out).out, curc, clen) == member_wins;
-            }
-            if c == NFA_END_COLL {
-                // Nothing accepted it.
-                return !member_wins;
-            }
-            if c == NFA_RANGE_MIN {
-                let mut lo = (*state).val;
-                state = out_of(state);
-                let hi = (*state).val;
-                if (lo..=hi).contains(&curc) {
-                    return member_wins;
-                }
-                if rex.reg_ic() {
-                    // Folding is not monotonic, so the range has to be
-                    // walked rather than folded at its ends.
-                    let folded = utf_fold(curc);
-                    while lo <= hi {
-                        if utf_fold(lo) == folded {
-                            return member_wins;
-                        }
-                        lo += 1;
-                    }
-                }
-            } else {
-                let accepted = if c < 0 {
-                    check_char_class(rex, c, curc) != FAIL
-                } else {
-                    c == curc || (rex.reg_ic() && utf_fold(curc) == utf_fold(c))
-                };
-                if accepted {
-                    return member_wins;
-                }
-            }
-            state = out_of(state);
+    // A negated collection accepts exactly what its members reject.
+    let member_wins = unsafe { (*start).c } == NFA_START_COLL;
+    let mut state = unsafe { (*start).out };
+    loop {
+        let c = op(state);
+        if c == NFA_COMPOSING {
+            // A member that is a whole grapheme.
+            return unsafe { matches_composing(rex, (*(*start).out).out, curc, clen) }
+                == member_wins;
         }
+        if c == NFA_END_COLL {
+            // Nothing accepted it.
+            return !member_wins;
+        }
+        if c == NFA_RANGE_MIN {
+            let mut lo = unsafe { (*state).val };
+            state = out_of(state);
+            let hi = unsafe { (*state).val };
+            if (lo..=hi).contains(&curc) {
+                return member_wins;
+            }
+            if rex.reg_ic() {
+                // Folding is not monotonic, so the range has to be
+                // walked rather than folded at its ends.
+                let folded = utf_fold(curc);
+                while lo <= hi {
+                    if utf_fold(lo) == folded {
+                        return member_wins;
+                    }
+                    lo += 1;
+                }
+            }
+        } else {
+            let accepted = if c < 0 {
+                check_char_class(rex, c, curc) != FAIL
+            } else {
+                c == curc || (rex.reg_ic() && utf_fold(curc) == utf_fold(c))
+            };
+            if accepted {
+                return member_wins;
+            }
+        }
+        state = out_of(state);
     }
 }
 
@@ -445,74 +442,74 @@ unsafe fn start_lookaround(
     listidx: &mut c_int,
     run: &mut Run,
 ) -> Step {
-    unsafe {
-        let state = thislist.thread(idx).state;
-        // Postponing is only worth it when the compiler said so, and a
-        // thread that already carries one runs it now.
-        let run_now = thislist.thread(idx).pim.result != PimResult::Unused
-            || matches!(
-                op(state),
-                NFA_START_INVISIBLE_FIRST
-                    | NFA_START_INVISIBLE_NEG_FIRST
-                    | NFA_START_INVISIBLE_BEFORE_FIRST
-                    | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
-            );
-        if !run_now {
-            // Hand the lookaround to whatever comes after it.
-            let mut pim: nfa_pim_T = core::mem::zeroed();
-            pim.state = state;
-            pim.result = PimResult::Todo;
-            pim.subs.norm.in_use = 0;
-            pim.subs.synt.in_use = 0;
-            pim.end = rex.here();
-            // `addstate_here` rewrites this list, so it may not be handed a
-            // capture set that lives in it.
-            let has_z = has_zsubexpr(rex);
-            let t = thislist.thread(idx);
-            copy_sub(&mut run.here.norm, &t.subs.norm);
-            if has_z {
-                copy_sub(&mut run.here.synt, &t.subs.synt);
-            }
-            if !addstate_here(
-                thislist,
-                out_of(out1_of(state)),
-                run.here,
-                Some(&pim),
-                listidx,
-            ) {
-                return Step::TooExpensive;
-            }
-            return Step::Dead;
-        }
-
-        // `m` is scratch shared with the sub-match; group 0 is the outer
-        // match's and must survive.
-        let in_use = (*run.m).norm.in_use;
-        copy_both_off(rex, &mut *run.m, &thislist.thread(idx).subs);
-        let result = recursive_regmatch(
-            rex,
-            state,
-            core::ptr::null_mut(),
-            run.prog,
-            run.submatch,
-            run.m,
-            run.listids,
+    let state = thislist.thread(idx).state;
+    // Postponing is only worth it when the compiler said so, and a
+    // thread that already carries one runs it now.
+    let run_now = thislist.thread(idx).pim.result != PimResult::Unused
+        || matches!(
+            op(state),
+            NFA_START_INVISIBLE_FIRST
+                | NFA_START_INVISIBLE_NEG_FIRST
+                | NFA_START_INVISIBLE_BEFORE_FIRST
+                | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
         );
-        if result == NFA_TOO_EXPENSIVE {
-            nfa_match.set(result);
+    if !run_now {
+        // Hand the lookaround to whatever comes after it.
+        let mut pim: nfa_pim_T = unsafe { core::mem::zeroed() };
+        pim.state = state;
+        pim.result = PimResult::Todo;
+        pim.subs.norm.in_use = 0;
+        pim.subs.synt.in_use = 0;
+        pim.end = rex.here();
+        // `addstate_here` rewrites this list, so it may not be handed a
+        // capture set that lives in it.
+        let has_z = has_zsubexpr(rex);
+        let t = thislist.thread(idx);
+        copy_sub(&mut run.here.norm, &t.subs.norm);
+        if has_z {
+            copy_sub(&mut run.here.synt, &t.subs.synt);
+        }
+        if !addstate_here(
+            thislist,
+            out_of(out1_of(state)),
+            run.here,
+            Some(&pim),
+            listidx,
+        ) {
             return Step::TooExpensive;
         }
-        let step = if lookaround_held(state, result) {
-            copy_both_off(rex, &mut thislist.thread_mut(idx).subs, &*run.m);
-            // `\ze` inside the lookaround may have moved the match's end.
-            copy_ze_off(rex, &mut thislist.thread_mut(idx).subs.norm, &(*run.m).norm);
-            Step::Here(out_of(out1_of(state)))
-        } else {
-            Step::Dead
-        };
-        (*run.m).norm.in_use = in_use;
-        step
+        return Step::Dead;
     }
+
+    // `m` is scratch shared with the sub-match; group 0 is the outer
+    // match's and must survive.
+    let in_use = unsafe { (*run.m).norm.in_use };
+    copy_both_off(rex, unsafe { &mut *run.m }, &thislist.thread(idx).subs);
+    let result = recursive_regmatch(
+        rex,
+        state,
+        core::ptr::null_mut(),
+        run.prog,
+        run.submatch,
+        run.m,
+        run.listids,
+    );
+    if result == NFA_TOO_EXPENSIVE {
+        nfa_match.set(result);
+        return Step::TooExpensive;
+    }
+    let step = if lookaround_held(state, result) {
+        copy_both_off(rex, &mut thislist.thread_mut(idx).subs, unsafe { &*run.m });
+        // `\ze` inside the lookaround may have moved the match's end.
+        copy_ze_off(rex, &mut thislist.thread_mut(idx).subs.norm, unsafe {
+            &(*run.m).norm
+        });
+        Step::Here(out_of(out1_of(state)))
+    } else {
+        Step::Dead
+    };
+    unsafe { (*run.m).norm.in_use = in_use };
+    step
 }
 
 /// `\@>`: like a lookahead, except that what it matched is consumed.
@@ -528,39 +525,37 @@ unsafe fn start_pattern(
     run: &mut Run,
     clen: c_int,
 ) -> Step {
-    unsafe {
-        let state = thislist.thread(idx).state;
-        let after = out_of(out1_of(state));
-        // If the state this would land on is already queued with the same
-        // captures, running the sub-match again would prove nothing.
-        let subs = &thislist.thread(idx).subs;
-        let already = nextlist.holds(after, subs)
-            || nextlist.holds((*after).out, subs)
-            || thislist.holds((*after).out, subs);
-        if already {
-            return Step::Dead;
-        }
-
-        copy_both_off(rex, &mut *run.m, &thislist.thread(idx).subs);
-        let result = recursive_regmatch(
-            rex,
-            state,
-            core::ptr::null_mut(),
-            run.prog,
-            run.submatch,
-            run.m,
-            run.listids,
-        );
-        if result == NFA_TOO_EXPENSIVE {
-            nfa_match.set(result);
-            return Step::TooExpensive;
-        }
-        if result == 0 {
-            return Step::Dead;
-        }
-        copy_both_off(rex, &mut thislist.thread_mut(idx).subs, &*run.m);
-        // How far the sub-match reached, which is what the thread consumes.
-        let bytelen = rex.bytes_ahead((*run.m).norm.list[0].end);
-        spanning(after, bytelen, clen)
+    let state = thislist.thread(idx).state;
+    let after = out_of(out1_of(state));
+    // If the state this would land on is already queued with the same
+    // captures, running the sub-match again would prove nothing.
+    let subs = &thislist.thread(idx).subs;
+    let already = nextlist.holds(after, subs)
+        || nextlist.holds(unsafe { (*after).out }, subs)
+        || thislist.holds(unsafe { (*after).out }, subs);
+    if already {
+        return Step::Dead;
     }
+
+    copy_both_off(rex, unsafe { &mut *run.m }, &thislist.thread(idx).subs);
+    let result = recursive_regmatch(
+        rex,
+        state,
+        core::ptr::null_mut(),
+        run.prog,
+        run.submatch,
+        run.m,
+        run.listids,
+    );
+    if result == NFA_TOO_EXPENSIVE {
+        nfa_match.set(result);
+        return Step::TooExpensive;
+    }
+    if result == 0 {
+        return Step::Dead;
+    }
+    copy_both_off(rex, &mut thislist.thread_mut(idx).subs, unsafe { &*run.m });
+    // How far the sub-match reached, which is what the thread consumes.
+    let bytelen = rex.bytes_ahead(unsafe { (*run.m).norm.list[0].end });
+    spanning(after, bytelen, clen)
 }

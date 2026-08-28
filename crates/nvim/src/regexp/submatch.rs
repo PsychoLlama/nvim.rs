@@ -114,43 +114,39 @@ pub(crate) unsafe fn fill_submatch_list(
     // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
     // holds the `staticList10_T` the caller keeps alive across the call;
     // `rsm` describes a live string match.
-    unsafe {
-        let listarg = argv.offset(argskip as isize);
-        if (*fp).uf_varargs == 0 && (*fp).uf_args.ga_len <= argskip {
-            return argskip;
-        }
-
-        // Relies on `sl_list` being the first member of `staticList10_T`.
-        tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T);
-
-        // A `staticList10_T` always has exactly ten items, one per capture.
-        // SAFETY: the caller promises a live string match.
-        let match_ = Rsm::acquire().match_();
-        let mut li = tv_list_first((*listarg).vval.v_list);
-        for i in 0..10 {
-            let start = (*match_).startp[i];
-            let text = if start.is_null() || (*match_).endp[i].is_null() {
-                core::ptr::null_mut()
-            } else {
-                xstrnsave(start, (*match_).endp[i].offset_from(start) as usize)
-            };
-            (*li).li_tv.v_type = VAR_STRING;
-            (*li).li_tv.vval.v_string = text;
-            li = (*li).li_next;
-        }
-        argskip + 1
+    let listarg = unsafe { argv.offset(argskip as isize) };
+    if unsafe { (*fp).uf_varargs } == 0 && unsafe { (*fp).uf_args.ga_len } <= argskip {
+        return argskip;
     }
+
+    // Relies on `sl_list` being the first member of `staticList10_T`.
+    unsafe { tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T) };
+
+    // A `staticList10_T` always has exactly ten items, one per capture.
+    // SAFETY: the caller promises a live string match.
+    let match_ = unsafe { Rsm::acquire() }.match_();
+    let mut li = unsafe { tv_list_first((*listarg).vval.v_list) };
+    for i in 0..10 {
+        let start = unsafe { (*match_).startp[i] };
+        let text = if start.is_null() || unsafe { (*match_).endp[i].is_null() } {
+            core::ptr::null_mut()
+        } else {
+            unsafe { xstrnsave(start, (*match_).endp[i].offset_from(start) as usize) }
+        };
+        unsafe { (*li).li_tv.v_type = VAR_STRING };
+        unsafe { (*li).li_tv.vval.v_string = text };
+        li = unsafe { (*li).li_next };
+    }
+    argskip + 1
 }
 
 /// Free the strings [`fill_submatch_list`] allocated into `sl`.
 pub(crate) unsafe fn clear_submatch_list(sl: *mut staticList10_T) {
     // SAFETY: `sl` is the caller's list, whose items own their strings.
-    unsafe {
-        let mut li = (*sl).sl_list.lv_first;
-        while !li.is_null() {
-            xfree((*li).li_tv.vval.v_string.cast());
-            li = (*li).li_next;
-        }
+    let mut li = unsafe { (*sl).sl_list.lv_first };
+    while !li.is_null() {
+        unsafe { xfree((*li).li_tv.vval.v_string.cast()) };
+        li = unsafe { (*li).li_next };
     }
 }
 
@@ -170,88 +166,88 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
     // describes a live match — so the context still names the buffer the
     // submatch lines are read from; `no` is bounds-checked against the ten
     // capture slots by its caller (`submatch()` rejects anything else).
-    unsafe {
-        let rex = Rex::acquire();
+    let rex = unsafe { Rex::acquire() };
 
-        // A string match has no lines to cross.
-        let snapshot = Rsm::acquire();
-        if !snapshot.match_().is_null() {
-            let match_ = snapshot.match_();
-            let start = (*match_).startp[no];
-            if start.is_null() || (*match_).endp[no].is_null() {
-                return core::ptr::null_mut();
-            }
-            return xstrnsave(start, (*match_).endp[no].offset_from(start) as usize);
+    // A string match has no lines to cross.
+    let snapshot = unsafe { Rsm::acquire() };
+    if !snapshot.match_().is_null() {
+        let match_ = snapshot.match_();
+        let start = unsafe { (*match_).startp[no] };
+        if start.is_null() || unsafe { (*match_).endp[no].is_null() } {
+            return core::ptr::null_mut();
         }
+        return unsafe { xstrnsave(start, (*match_).endp[no].offset_from(start) as usize) };
+    }
 
-        let mmatch = snapshot.mmatch();
-        let mut retval: *mut c_char = core::ptr::null_mut();
-        for round in 1..=2 {
-            let mut lnum = (*mmatch).startpos[no].lnum;
-            if lnum < 0 || (*mmatch).endpos[no].lnum < 0 {
-                return core::ptr::null_mut();
-            }
-            let line = reg_getline_submatch(rex, lnum);
-            if line.is_null() {
-                // Anti-crash check; cannot happen.
-                break;
-            }
-            let scol = (*mmatch).startpos[no].col;
-            let ecol = (*mmatch).endpos[no].col;
-            let s = line.offset(scol as isize);
+    let mmatch = snapshot.mmatch();
+    let mut retval: *mut c_char = core::ptr::null_mut();
+    for round in 1..=2 {
+        let mut lnum = unsafe { (*mmatch).startpos[no].lnum };
+        if lnum < 0 || unsafe { (*mmatch).endpos[no].lnum } < 0 {
+            return core::ptr::null_mut();
+        }
+        let line = reg_getline_submatch(rex, lnum);
+        if line.is_null() {
+            // Anti-crash check; cannot happen.
+            break;
+        }
+        let scol = unsafe { (*mmatch).startpos[no].col };
+        let ecol = unsafe { (*mmatch).endpos[no].col };
+        let s = unsafe { line.offset(scol as isize) };
 
-            // Counts the terminating NUL, so that it is also the size to
-            // allocate at the end of round 1.
-            let mut len: usize;
-            if (*mmatch).endpos[no].lnum == lnum {
-                // Within one line: from the start column to the end one.
-                len = (ecol - scol) as usize;
+        // Counts the terminating NUL, so that it is also the size to
+        // allocate at the end of round 1.
+        let mut len: usize;
+        if unsafe { (*mmatch).endpos[no].lnum } == lnum {
+            // Within one line: from the start column to the end one.
+            len = (ecol - scol) as usize;
+            if round == 2 {
+                unsafe { xmemcpyz(retval.cast(), s.cast(), len) };
+            }
+            len += 1;
+        } else {
+            // The rest of the start line, then whole lines, then the
+            // head of the end line. Each break travels as a newline.
+            len = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
+            if round == 2 {
+                unsafe { strcpy(retval, s) };
+                unsafe { *retval.add(len) = b'\n' as c_char };
+            }
+            len += 1;
+            lnum += 1;
+            while lnum < unsafe { (*mmatch).endpos[no].lnum } {
+                let line = reg_getline_submatch(rex, lnum);
                 if round == 2 {
-                    xmemcpyz(retval.cast(), s.cast(), len);
+                    unsafe { strcpy(retval.add(len), line) };
                 }
-                len += 1;
-            } else {
-                // The rest of the start line, then whole lines, then the
-                // head of the end line. Each break travels as a newline.
-                len = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
+                len += reg_getline_submatch_len(rex, lnum) as usize;
                 if round == 2 {
-                    strcpy(retval, s);
-                    *retval.add(len) = b'\n' as c_char;
+                    unsafe { *retval.add(len) = b'\n' as c_char };
                 }
                 len += 1;
                 lnum += 1;
-                while lnum < (*mmatch).endpos[no].lnum {
-                    let line = reg_getline_submatch(rex, lnum);
-                    if round == 2 {
-                        strcpy(retval.add(len), line);
-                    }
-                    len += reg_getline_submatch_len(rex, lnum) as usize;
-                    if round == 2 {
-                        *retval.add(len) = b'\n' as c_char;
-                    }
-                    len += 1;
-                    lnum += 1;
-                }
-                if round == 2 {
+            }
+            if round == 2 {
+                unsafe {
                     strncpy(
                         retval.add(len),
                         reg_getline_submatch(rex, lnum),
                         ecol as usize,
-                    );
-                }
-                len += ecol as usize;
-                if round == 2 {
-                    *retval.add(len) = NUL as c_char;
-                }
-                len += 1;
+                    )
+                };
             }
-
-            if retval.is_null() {
-                retval = xmalloc(len).cast();
+            len += ecol as usize;
+            if round == 2 {
+                unsafe { *retval.add(len) = NUL as c_char };
             }
+            len += 1;
         }
-        retval
+
+        if retval.is_null() {
+            retval = unsafe { xmalloc(len) }.cast();
+        }
     }
+    retval
 }
 
 /// [`reg_submatch`] as one list item per line, which is what
@@ -263,45 +259,43 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
     }
     let no = no as usize;
     // SAFETY: as [`reg_submatch`].
-    unsafe {
-        let rex = Rex::acquire();
+    let rex = unsafe { Rex::acquire() };
 
-        // A string match is one item.
-        let snapshot = Rsm::acquire();
-        if !snapshot.match_().is_null() {
-            let match_ = snapshot.match_();
-            let start = (*match_).startp[no];
-            if start.is_null() || (*match_).endp[no].is_null() {
-                return core::ptr::null_mut();
-            }
-            let list = tv_list_alloc(1);
-            tv_list_append_string(list, start, (*match_).endp[no].offset_from(start));
-            tv_list_ref(list);
-            return list;
-        }
-
-        let mmatch = snapshot.mmatch();
-        let slnum = (*mmatch).startpos[no].lnum;
-        let elnum = (*mmatch).endpos[no].lnum;
-        if slnum < 0 || elnum < 0 {
+    // A string match is one item.
+    let snapshot = unsafe { Rsm::acquire() };
+    if !snapshot.match_().is_null() {
+        let match_ = snapshot.match_();
+        let start = unsafe { (*match_).startp[no] };
+        if start.is_null() || unsafe { (*match_).endp[no].is_null() } {
             return core::ptr::null_mut();
         }
-        let scol = (*mmatch).startpos[no].col;
-        let ecol = (*mmatch).endpos[no].col;
-
-        let list = tv_list_alloc((elnum - slnum + 1) as isize);
-        let s = reg_getline_submatch(rex, slnum).offset(scol as isize);
-        if slnum == elnum {
-            tv_list_append_string(list, s, (ecol - scol) as isize);
-        } else {
-            // A negative length means "to the end of the line".
-            tv_list_append_string(list, s, -1);
-            for lnum in slnum + 1..elnum {
-                tv_list_append_string(list, reg_getline_submatch(rex, lnum), -1);
-            }
-            tv_list_append_string(list, reg_getline_submatch(rex, elnum), ecol as isize);
-        }
-        tv_list_ref(list);
-        list
+        let list = unsafe { tv_list_alloc(1) };
+        unsafe { tv_list_append_string(list, start, (*match_).endp[no].offset_from(start)) };
+        unsafe { tv_list_ref(list) };
+        return list;
     }
+
+    let mmatch = snapshot.mmatch();
+    let slnum = unsafe { (*mmatch).startpos[no].lnum };
+    let elnum = unsafe { (*mmatch).endpos[no].lnum };
+    if slnum < 0 || elnum < 0 {
+        return core::ptr::null_mut();
+    }
+    let scol = unsafe { (*mmatch).startpos[no].col };
+    let ecol = unsafe { (*mmatch).endpos[no].col };
+
+    let list = unsafe { tv_list_alloc((elnum - slnum + 1) as isize) };
+    let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
+    if slnum == elnum {
+        unsafe { tv_list_append_string(list, s, (ecol - scol) as isize) };
+    } else {
+        // A negative length means "to the end of the line".
+        unsafe { tv_list_append_string(list, s, -1) };
+        for lnum in slnum + 1..elnum {
+            unsafe { tv_list_append_string(list, reg_getline_submatch(rex, lnum), -1) };
+        }
+        unsafe { tv_list_append_string(list, reg_getline_submatch(rex, elnum), ecol as isize) };
+    }
+    unsafe { tv_list_ref(list) };
+    list
 }

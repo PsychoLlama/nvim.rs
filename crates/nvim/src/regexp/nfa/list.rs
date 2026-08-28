@@ -183,8 +183,8 @@ impl ThreadList {
             unsafe {
                 emsg(gettext(
                     E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
-                ));
-            }
+                ))
+            };
             return false;
         }
         self.threads.reserve_exact(newlen - self.threads.len());
@@ -432,9 +432,7 @@ fn place(
         return Place::Full;
     }
     // SAFETY: `state` is a live state of the running program.
-    unsafe {
-        (*state).lastlist[nfa_ll_index.get() as usize] = l.id;
-    }
+    unsafe { (*state).lastlist[nfa_ll_index.get() as usize] = l.id };
     l.push(state, subs, pim);
     Place::Added
 }
@@ -449,7 +447,7 @@ fn past_line_start(rex: Rex) -> bool {
         && rex.byte() as c_int != NUL
         // SAFETY: `nfa_endp` is null or the position a lookaround was told
         // to stop at, which outlives the lookaround.
-        && (endp.is_null() || !rex.multi() || rex.lnum() == unsafe { (*endp).as_pos() }.lnum)
+        && (endp.is_null() || !rex.multi() || rex.lnum() == unsafe { (*endp).as_pos() .lnum })
 }
 
 /// Follow everything that consumes no input from `state`, recording what the

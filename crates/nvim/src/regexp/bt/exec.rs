@@ -94,16 +94,14 @@ fn settle_group_zero(rex: Rex, col: colnr_T) {
         )
     };
     // SAFETY: as above, for each of the four reads and writes below.
-    unsafe {
-        if !start.get().is_set(kind) {
-            start.set(match_start(rex, col));
-        }
-        if !end.get().is_set(kind) {
-            end.set(rex.here());
-        } else if rex.multi() {
-            // The matcher may have walked past the line the match ends on.
-            rex.set_lnum(end.get().as_pos().lnum);
-        }
+    if !unsafe { start.get() }.is_set(kind) {
+        unsafe { start.set(match_start(rex, col)) };
+    }
+    if !unsafe { end.get() }.is_set(kind) {
+        unsafe { end.set(rex.here()) };
+    } else if rex.multi() {
+        // The matcher may have walked past the line the match ends on.
+        rex.set_lnum(unsafe { end.get() }.as_pos().lnum);
     }
 }
 
@@ -127,28 +125,28 @@ fn match_start(rex: Rex, col: colnr_T) -> MatchPos {
 fn save_z_captures(rex: Rex) {
     let (startzpos, endzpos) = (reg_startzpos.get(), reg_endzpos.get());
     let (startzp, endzp) = (reg_startzp.get(), reg_endzp.get());
-    unsafe {
-        for i in 0..NSUBEXP as usize {
-            let text = if rex.multi() {
-                let (start, end) = (startzpos[i], endzpos[i]);
-                // A capture that spans lines cannot be handed over as one
-                // string, so it is dropped.
-                if start.lnum < 0 || end.lnum != start.lnum || end.col < start.col {
-                    continue;
-                }
+    for i in 0..NSUBEXP as usize {
+        let text = if rex.multi() {
+            let (start, end) = (startzpos[i], endzpos[i]);
+            // A capture that spans lines cannot be handed over as one
+            // string, so it is dropped.
+            if start.lnum < 0 || end.lnum != start.lnum || end.col < start.col {
+                continue;
+            }
+            unsafe {
                 xstrnsave(
                     reg_getline(rex, start.lnum).offset(start.col as isize),
                     (end.col - start.col) as usize,
                 )
-            } else {
-                let (start, end) = (startzp[i], endzp[i]);
-                if start.is_null() || end.is_null() {
-                    continue;
-                }
-                xstrnsave(start.cast::<c_char>(), end.offset_from(start) as usize)
-            };
-            (*re_extmatch_out.get()).matches[i] = text as *mut uint8_t;
-        }
+            }
+        } else {
+            let (start, end) = (startzp[i], endzp[i]);
+            if start.is_null() || end.is_null() {
+                continue;
+            }
+            unsafe { xstrnsave(start.cast::<c_char>(), end.offset_from(start) as usize) }
+        };
+        unsafe { (*re_extmatch_out.get()).matches[i] = text as *mut uint8_t };
     }
 }
 
@@ -161,16 +159,14 @@ fn save_z_captures(rex: Rex) {
 unsafe fn aim_at_capture_arrays(rex: Rex, line: *mut uint8_t) -> *mut uint8_t {
     // SAFETY: the caller promises the match structure, and the arrays are
     // fields of it.
-    unsafe {
-        if rex.multi() {
-            rex.set_reg_startpos((&raw mut (*rex.reg_mmatch()).startpos).cast());
-            rex.set_reg_endpos((&raw mut (*rex.reg_mmatch()).endpos).cast());
-            reg_getline(rex, 0).cast()
-        } else {
-            rex.set_reg_startp((&raw mut (*rex.reg_match()).startp).cast());
-            rex.set_reg_endp((&raw mut (*rex.reg_match()).endp).cast());
-            line
-        }
+    if rex.multi() {
+        rex.set_reg_startpos((unsafe { &raw mut (*rex.reg_mmatch()).startpos }).cast());
+        rex.set_reg_endpos((unsafe { &raw mut (*rex.reg_mmatch()).endpos }).cast());
+        reg_getline(rex, 0).cast()
+    } else {
+        rex.set_reg_startp((unsafe { &raw mut (*rex.reg_match()).startp }).cast());
+        rex.set_reg_endp((unsafe { &raw mut (*rex.reg_match()).endp }).cast());
+        line
     }
 }
 
@@ -253,15 +249,12 @@ fn bt_regexec_both(
 fn clamp_group_zero(rex: Rex) {
     let kind = rex.pos_kind();
     // SAFETY: as `settle_group_zero`.
-    unsafe {
-        let (start, end) = (
-            capture_slot(rex, RS_MOPEN, 0),
-            capture_slot(rex, RS_MCLOSE, 0),
-        );
-        let (start, end_slot) = (start.get(), end);
-        if end_slot.get().is_before(start, kind) {
-            end_slot.set(start);
-        }
+    let (start, end) = (unsafe { capture_slot(rex, RS_MOPEN, 0) }, unsafe {
+        capture_slot(rex, RS_MCLOSE, 0)
+    });
+    let (start, end_slot) = (unsafe { start.get() }, end);
+    if unsafe { end_slot.get() }.is_before(start, kind) {
+        unsafe { end_slot.set(start) };
     }
 }
 
@@ -270,30 +263,28 @@ fn clamp_group_zero(rex: Rex) {
 /// SAFETY: as `bt_regexec_both`. `regmust` is a NUL-terminated run the
 /// compiler kept and the walk below stops at `line`'s terminator.
 fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: colnr_T) -> bool {
-    unsafe {
-        let c = utf_ptr2char(prog.regmust().cast::<c_char>());
-        let mut s = line.offset(col as isize).cast::<c_char>();
-        loop {
-            // Case-insensitively, the first character has to be looked for
-            // with folding, which is what `cstrchr` adds over `vim_strchr`.
-            s = if rex.reg_ic() {
-                cstrchr(rex, s, c)
-            } else {
-                vim_strchr(s, c)
-            };
-            if s.is_null() {
-                return false;
-            }
-            // `cstrncmp` reports back how much it compared, and upstream let
-            // it write straight into the program's own `regmlen`.
-            let mut mlen = prog.regmlen();
-            let same = cstrncmp(rex, s, prog.regmust().cast::<c_char>(), &mut mlen) == 0;
-            prog.set_regmlen(mlen);
-            if same {
-                return true;
-            }
-            s = s.add(utfc_ptr2len(s) as usize);
+    let c = unsafe { utf_ptr2char(prog.regmust().cast::<c_char>()) };
+    let mut s = unsafe { line.offset(col as isize) }.cast::<c_char>();
+    loop {
+        // Case-insensitively, the first character has to be looked for
+        // with folding, which is what `cstrchr` adds over `vim_strchr`.
+        s = if rex.reg_ic() {
+            unsafe { cstrchr(rex, s, c) }
+        } else {
+            unsafe { vim_strchr(s, c) }
+        };
+        if s.is_null() {
+            return false;
         }
+        // `cstrncmp` reports back how much it compared, and upstream let
+        // it write straight into the program's own `regmlen`.
+        let mut mlen = prog.regmlen();
+        let same = unsafe { cstrncmp(rex, s, prog.regmust().cast::<c_char>(), &mut mlen) } == 0;
+        prog.set_regmlen(mlen);
+        if same {
+            return true;
+        }
+        s = unsafe { s.add(utfc_ptr2len(s) as usize) };
     }
 }
 
@@ -335,53 +326,51 @@ fn scan_columns(
     tm: *const proftime_T,
     timed_out: *mut c_int,
 ) -> c_int {
-    unsafe {
-        let mut tm_count = 0;
-        while !got_int.get() {
-            // The pattern's first character is known: skip straight to the
-            // next place it occurs.
-            if prog.regstart() != NUL {
-                let from = (rex.line() as *mut c_char).offset(*col as isize);
-                let s = cstrchr(rex, from, prog.regstart());
-                if s.is_null() {
-                    return 0;
-                }
-                *col = s.cast::<uint8_t>().offset_from(rex.line()) as colnr_T;
-            }
-            if rex.reg_maxcol() > 0 && *col >= rex.reg_maxcol() {
+    let mut tm_count = 0;
+    while !got_int.get() {
+        // The pattern's first character is known: skip straight to the
+        // next place it occurs.
+        if prog.regstart() != NUL {
+            let from = unsafe { (rex.line() as *mut c_char).offset(*col as isize) };
+            let s = unsafe { cstrchr(rex, from, prog.regstart()) };
+            if s.is_null() {
                 return 0;
             }
+            *col = unsafe { s.cast::<uint8_t>().offset_from(rex.line()) } as colnr_T;
+        }
+        if rex.reg_maxcol() > 0 && *col >= rex.reg_maxcol() {
+            return 0;
+        }
 
-            let retval = regtry(rex, prog, *col, tm, timed_out);
-            if retval > 0 {
-                return retval;
-            }
+        let retval = regtry(rex, prog, *col, tm, timed_out);
+        if retval > 0 {
+            return retval;
+        }
 
-            // A failed attempt may have walked onto a later line.
-            if rex.lnum() != 0 {
-                rex.set_lnum(0);
-                rex.set_line(reg_getline(rex, 0) as *mut uint8_t);
-            }
-            if *rex.line().offset(*col as isize) as c_int == NUL {
-                return 0;
-            }
-            *col += utfc_ptr2len((rex.line() as *mut c_char).offset(*col as isize));
+        // A failed attempt may have walked onto a later line.
+        if rex.lnum() != 0 {
+            rex.set_lnum(0);
+            rex.set_line(reg_getline(rex, 0) as *mut uint8_t);
+        }
+        if unsafe { *rex.line().offset(*col as isize) } as c_int == NUL {
+            return 0;
+        }
+        *col += unsafe { utfc_ptr2len((rex.line() as *mut c_char).offset(*col as isize)) };
 
-            if !tm.is_null() {
-                tm_count += 1;
-                if tm_count == TIME_CHECK_INTERVAL {
-                    tm_count = 0;
-                    if profile_passed_limit(*tm) {
-                        if !timed_out.is_null() {
-                            *timed_out = 1;
-                        }
-                        return 0;
+        if !tm.is_null() {
+            tm_count += 1;
+            if tm_count == TIME_CHECK_INTERVAL {
+                tm_count = 0;
+                if profile_passed_limit(unsafe { *tm }) {
+                    if !timed_out.is_null() {
+                        unsafe { *timed_out = 1 };
                     }
+                    return 0;
                 }
             }
         }
-        0
     }
+    0
 }
 
 /// Match against a string, treating `\n` as an ordinary character when
@@ -433,13 +422,11 @@ pub(crate) unsafe fn bt_regexec_multi(
 /// SAFETY: `scan` is a `RE_LNUM`/`RE_COL`/`RE_VCOL` node, which the compiler
 /// emits eight bytes long.
 pub(crate) fn re_num_cmp(val: uint32_t, scan: *const uint8_t) -> bool {
-    unsafe {
-        let b = |i: usize| *scan.add(i) as u32;
-        let n = (b(3) << 24) + (b(4) << 16) + (b(5) << 8) + b(6);
-        match *scan.add(7) as c_int {
-            c if c == '>' as c_int => val > n,
-            c if c == '<' as c_int => val < n,
-            _ => val == n,
-        }
+    let b = |i: usize| unsafe { *scan.add(i) } as u32;
+    let n = (b(3) << 24) + (b(4) << 16) + (b(5) << 8) + b(6);
+    match unsafe { *scan.add(7) } as c_int {
+        c if c == '>' as c_int => val > n,
+        c if c == '<' as c_int => val < n,
+        _ => val == n,
     }
 }

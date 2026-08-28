@@ -127,45 +127,45 @@ static LAST_CLASS: GlobalCell<usize> = GlobalCell::new(0);
 /// `*pp` must point into a NUL-terminated pattern.
 pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
     let p = *pp;
-    unsafe {
-        // Only `[:` followed by at least three lowercase letters is a
-        // candidate. That is load-bearing, not just a guard against reading
-        // off the end: `[:a:]` is a literal, not a class.
-        if *p.add(1) as u8 != b':' || !(2..5).all(|off| (*p.add(off) as u8).is_ascii_lowercase()) {
-            return CLASS_NONE as c_int;
-        }
-        let name = p.add(2);
-        // Order the pattern text against a class name the way the C
-        // `strncmp` over the name's length did: byte by byte, stopping at
-        // the first difference. A NUL in the pattern therefore just
-        // compares low, and no byte past it is read.
-        let cmp = |entry: &CStr| {
-            for (i, &want) in entry.to_bytes().iter().enumerate() {
-                match (*name.add(i) as u8).cmp(&want) {
-                    Ordering::Equal => {}
-                    other => return other,
-                }
+    // Only `[:` followed by at least three lowercase letters is a
+    // candidate. That is load-bearing, not just a guard against reading
+    // off the end: `[:a:]` is a literal, not a class.
+    if unsafe { *p.add(1) } as u8 != b':'
+        || !(2..5).all(|off| (unsafe { *p.add(off) } as u8).is_ascii_lowercase())
+    {
+        return CLASS_NONE as c_int;
+    }
+    let name = unsafe { p.add(2) };
+    // Order the pattern text against a class name the way the C
+    // `strncmp` over the name's length did: byte by byte, stopping at
+    // the first difference. A NUL in the pattern therefore just
+    // compares low, and no byte past it is read.
+    let cmp = |entry: &CStr| {
+        for (i, &want) in entry.to_bytes().iter().enumerate() {
+            match (unsafe { *name.add(i) } as u8).cmp(&want) {
+                Ordering::Equal => {}
+                other => return other,
             }
-            Ordering::Equal
-        };
-        let last = LAST_CLASS.get();
-        let hit = if cmp(CHAR_CLASS_TAB[last].0).is_eq() {
-            Some(last)
-        } else {
-            // `binary_search_by` orders each entry against the needle;
-            // `cmp` reads the other way round.
-            CHAR_CLASS_TAB
-                .binary_search_by(|(entry, _)| cmp(entry).reverse())
-                .ok()
-        };
-        match hit {
-            Some(i) => {
-                LAST_CLASS.set(i);
-                *pp = p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len());
-                CHAR_CLASS_TAB[i].1
-            }
-            None => CLASS_NONE as c_int,
         }
+        Ordering::Equal
+    };
+    let last = LAST_CLASS.get();
+    let hit = if cmp(CHAR_CLASS_TAB[last].0).is_eq() {
+        Some(last)
+    } else {
+        // `binary_search_by` orders each entry against the needle;
+        // `cmp` reads the other way round.
+        CHAR_CLASS_TAB
+            .binary_search_by(|(entry, _)| cmp(entry).reverse())
+            .ok()
+    };
+    match hit {
+        Some(i) => {
+            LAST_CLASS.set(i);
+            *pp = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
+            CHAR_CLASS_TAB[i].1
+        }
+        None => CLASS_NONE as c_int,
     }
 }
 
@@ -189,17 +189,15 @@ pub unsafe fn re_multiline(prog: *const regprog_T) -> c_int {
 /// `*pp` must point into a NUL-terminated pattern.
 pub(crate) unsafe fn take_bracketed(pp: &mut *mut c_char, delim: u8) -> c_int {
     let p = *pp;
-    unsafe {
-        if *p == 0 || *p.add(1) as u8 != delim || *p.add(2) == 0 {
-            return 0;
-        }
-        let len = utfc_ptr2len(p.add(2)) as usize;
-        if *p.add(len + 2) as u8 != delim || *p.add(len + 3) as u8 != b']' {
-            return 0;
-        }
-        *pp = p.add(len + 4);
-        utf_ptr2char(p.add(2))
+    if unsafe { *p } == 0 || unsafe { *p.add(1) } as u8 != delim || unsafe { *p.add(2) } == 0 {
+        return 0;
     }
+    let len = unsafe { utfc_ptr2len(p.add(2)) } as usize;
+    if unsafe { *p.add(len + 2) } as u8 != delim || unsafe { *p.add(len + 3) } as u8 != b']' {
+        return 0;
+    }
+    *pp = unsafe { p.add(len + 4) };
+    unsafe { utf_ptr2char(p.add(2)) }
 }
 
 /// Cache whether 'cpoptions' contains `l`, which makes `\r`, `\t` and

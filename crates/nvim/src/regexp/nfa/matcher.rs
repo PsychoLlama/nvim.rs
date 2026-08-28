@@ -52,45 +52,49 @@ pub(crate) fn nfa_regmatch(
 
     // SAFETY: `prog` and `start` are the running program; the two thread
     // lists below are owned by this call.
-    unsafe {
-        let capacity = ((*prog).nstate + 1) as usize;
-        let mut list = [
-            ThreadList::new(rex, capacity),
-            ThreadList::new(rex, capacity),
-        ];
+    let capacity = (unsafe { (*prog).nstate } + 1) as usize;
+    let mut list = [
+        ThreadList::new(rex, capacity),
+        ThreadList::new(rex, capacity),
+    ];
 
-        let mut listids: Vec<c_int> = Vec::new();
-        // Scratch for the one call that may not hand `addstate` a capture set
-        // that lives in the list it is adding to — see `deliver`.
-        let mut here: regsubs_T = core::mem::zeroed();
-        let mut run = Run {
-            prog,
-            submatch,
-            m,
-            listids: &mut listids,
-            here: &mut here,
-        };
+    let mut listids: Vec<c_int> = Vec::new();
+    // Scratch for the one call that may not hand `addstate` a capture set
+    // that lives in the list it is adding to — see `deliver`.
+    let mut here: regsubs_T = unsafe { core::mem::zeroed() };
+    let mut run = Run {
+        prog,
+        submatch,
+        m,
+        listids: &mut listids,
+        here: &mut here,
+    };
 
-        // The whole pattern is wrapped in group 0, and when it is the
-        // machine's own entry the match's start is recorded here rather
-        // than by walking into it.
-        let toplevel = (*start).c == NFA_MOPEN;
-        list[0].id = rex.nfa_listid() + 1;
-        let seeded = if toplevel {
-            record_match_start(rex, m, 0);
-            (*m).norm.in_use = 1;
-            addstate(&mut list[0], (*start).out, &mut *m, None, 0)
-        } else {
-            addstate(&mut list[0], start, &mut *m, None, 0)
-        };
+    // The whole pattern is wrapped in group 0, and when it is the
+    // machine's own entry the match's start is recorded here rather
+    // than by walking into it.
+    let toplevel = unsafe { (*start).c } == NFA_MOPEN;
+    list[0].id = rex.nfa_listid() + 1;
+    let seeded = if toplevel {
+        unsafe { record_match_start(rex, m, 0) };
+        unsafe { (*m).norm.in_use = 1 };
+        addstate(
+            &mut list[0],
+            unsafe { (*start).out },
+            unsafe { &mut *m },
+            None,
+            0,
+        )
+    } else {
+        addstate(&mut list[0], start, unsafe { &mut *m }, None, 0)
+    };
 
-        if !seeded {
-            nfa_match.set(NFA_TOO_EXPENSIVE);
-        } else {
-            scan(rex, &mut list, prog, start, toplevel, &mut run);
-        }
-        nfa_match.get()
+    if !seeded {
+        nfa_match.set(NFA_TOO_EXPENSIVE);
+    } else {
+        unsafe { scan(rex, &mut list, prog, start, toplevel, &mut run) };
     }
+    nfa_match.get()
 }
 
 /// Record where group 0 starts, `off` bytes past the input.
@@ -100,12 +104,10 @@ pub(crate) fn nfa_regmatch(
 /// `m` must be a live capture set and the match context live.
 unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
     // SAFETY: the caller promises a live capture set.
-    unsafe {
-        (*m).norm.list[0].start = rex.at_offset(off);
-        if rex.multi() {
-            // The column a `:substitute` resumes scanning from.
-            (*m).norm.orig_start_col = rex.col() + off;
-        }
+    unsafe { (*m).norm.list[0].start = rex.at_offset(off) };
+    if rex.multi() {
+        // The column a `:substitute` resumes scanning from.
+        unsafe { (*m).norm.orig_start_col = rex.col() + off };
     }
 }
 
@@ -242,7 +244,7 @@ unsafe fn sub_match_spans_lines(rex: Rex) -> bool {
     let endp = nfa_endp.get();
     // SAFETY: `nfa_endp` is null or the stopping point of the lookaround
     // being matched, which outlives it.
-    !endp.is_null() && rex.multi() && rex.lnum() < unsafe { (*endp).as_pos() }.lnum
+    !endp.is_null() && rex.multi() && rex.lnum() < unsafe { (*endp).as_pos().lnum }
 }
 
 /// Put the state a thread decided on onto a list.

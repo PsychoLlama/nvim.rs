@@ -293,26 +293,25 @@ fn in_class(rex: Rex, class: c_uint, c: c_int) -> bool {
     // SAFETY: every predicate here is a pure test on a code point, reading
     // only locale or option state; the ctype table is indexable over the
     // range `class_ceiling` allows.
-    unsafe {
-        let ctype = |mask: c_uint| *(*__ctype_b_loc()).offset(c as isize) as c_uint & mask != 0;
-        match class {
-            CLASS_ALNUM => ctype(_ISalnum),
-            CLASS_ALPHA => ctype(_ISalpha),
-            CLASS_CNTRL => ctype(_IScntrl),
-            CLASS_DIGIT => ascii_isdigit(c),
-            CLASS_GRAPH => ctype(_ISgraph),
-            CLASS_PUNCT => ctype(_ISpunct),
-            // U+00AA and U+00BA are the ordinal indicators: lowercase
-            // letters, but not the lower half of a case pair.
-            CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
-            CLASS_PRINT => vim_isprintc(c),
-            CLASS_UPPER => mb_isupper(c),
-            CLASS_XDIGIT => ascii_isxdigit(c),
-            CLASS_IDENT => vim_is_ident_char(c),
-            CLASS_KEYWORD => reg_iswordc(rex, c),
-            CLASS_FNAME => vim_isfilec(c),
-            _ => false,
-        }
+    let ctype =
+        |mask: c_uint| unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_uint & mask != 0;
+    match class {
+        CLASS_ALNUM => ctype(_ISalnum),
+        CLASS_ALPHA => ctype(_ISalpha),
+        CLASS_CNTRL => ctype(_IScntrl),
+        CLASS_DIGIT => ascii_isdigit(c),
+        CLASS_GRAPH => ctype(_ISgraph),
+        CLASS_PUNCT => ctype(_ISpunct),
+        // U+00AA and U+00BA are the ordinal indicators: lowercase
+        // letters, but not the lower half of a case pair.
+        CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
+        CLASS_PRINT => unsafe { vim_isprintc(c) },
+        CLASS_UPPER => mb_isupper(c),
+        CLASS_XDIGIT => ascii_isxdigit(c),
+        CLASS_IDENT => unsafe { vim_is_ident_char(c) },
+        CLASS_KEYWORD => reg_iswordc(rex, c),
+        CLASS_FNAME => unsafe { vim_isfilec(c) },
+        _ => false,
     }
 }
 

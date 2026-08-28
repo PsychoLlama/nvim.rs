@@ -62,45 +62,43 @@ fn is_inrange(c: u8) -> bool {
 ///
 /// `p` must point into a NUL-terminated pattern.
 pub(crate) unsafe fn skip_anyof(mut p: *mut c_char) -> *mut c_char {
-    unsafe {
-        // A leading `^` negates; a `]` or `-` immediately after that is
-        // literal rather than the close or a range.
-        if *p as u8 == b'^' {
-            p = p.add(1);
-        }
-        if matches!(*p as u8, b']' | b'-') {
-            p = p.add(1);
-        }
-        while !matches!(*p as u8, 0 | b']') {
-            let len = utfc_ptr2len(p);
-            if len > 1 {
-                p = p.add(len as usize);
-            } else if *p as u8 == b'-' {
-                p = p.add(1);
-                if !matches!(*p as u8, 0 | b']') {
-                    p = p.add(utfc_ptr2len(p) as usize);
-                }
-            } else if *p as u8 == b'\\'
-                && (is_inrange(*p.add(1) as u8)
-                    || (reg_cpo_lit.get() == 0 && is_abbr(*p.add(1) as u8)))
-            {
-                p = p.add(2);
-            } else if *p as u8 == b'[' {
-                // A `[:class:]`, `[=equi=]` or `[.coll.]` advances `p`
-                // itself; a bare `[` is literal.
-                if take_char_class(&mut p) == CLASS_NONE as c_int
-                    && take_bracketed(&mut p, b'=') == 0
-                    && take_bracketed(&mut p, b'.') == 0
-                    && *p as u8 != 0
-                {
-                    p = p.add(1);
-                }
-            } else {
-                p = p.add(1);
-            }
-        }
-        p
+    // A leading `^` negates; a `]` or `-` immediately after that is
+    // literal rather than the close or a range.
+    if unsafe { *p } as u8 == b'^' {
+        p = unsafe { p.add(1) };
     }
+    if matches!(unsafe { *p } as u8, b']' | b'-') {
+        p = unsafe { p.add(1) };
+    }
+    while !matches!(unsafe { *p } as u8, 0 | b']') {
+        let len = unsafe { utfc_ptr2len(p) };
+        if len > 1 {
+            p = unsafe { p.add(len as usize) };
+        } else if unsafe { *p } as u8 == b'-' {
+            p = unsafe { p.add(1) };
+            if !matches!(unsafe { *p } as u8, 0 | b']') {
+                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            }
+        } else if unsafe { *p } as u8 == b'\\'
+            && (is_inrange(unsafe { *p.add(1) } as u8)
+                || (reg_cpo_lit.get() == 0 && is_abbr(unsafe { *p.add(1) } as u8)))
+        {
+            p = unsafe { p.add(2) };
+        } else if unsafe { *p } as u8 == b'[' {
+            // A `[:class:]`, `[=equi=]` or `[.coll.]` advances `p`
+            // itself; a bare `[` is literal.
+            if unsafe { take_char_class(&mut p) } == CLASS_NONE as c_int
+                && unsafe { take_bracketed(&mut p, b'=') } == 0
+                && unsafe { take_bracketed(&mut p, b'.') } == 0
+                && unsafe { *p } as u8 != 0
+            {
+                p = unsafe { p.add(1) };
+            }
+        } else {
+            p = unsafe { p.add(1) };
+        }
+    }
+    p
 }
 
 /// Skip past the pattern starting at `startp`, stopping at `delim` or the
@@ -130,17 +128,17 @@ pub unsafe fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *m
 ///
 /// `startp` must point to a NUL-terminated pattern.
 pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char {
-    unsafe {
-        let p = skip_regexp(startp, delim, magic);
-        if *p as c_int != delim {
+    let p = unsafe { skip_regexp(startp, delim, magic) };
+    if unsafe { *p } as c_int != delim {
+        unsafe {
             semsg_c!(
                 gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR.as_ptr()),
                 startp,
-            );
-            return core::ptr::null_mut();
-        }
-        p
+            )
+        };
+        return core::ptr::null_mut();
     }
+    p
 }
 
 /// The full skip. Beyond [`skip_regexp`]'s job it can rewrite the pattern:
@@ -165,50 +163,52 @@ pub unsafe fn skip_regexp_ex(
     let mut p = startp;
     let mut startplen: usize = 0;
     refresh_cpo_flags();
-    unsafe {
-        while *p as u8 != 0 {
-            if *p as c_int == dirc {
+    while unsafe { *p } as u8 != 0 {
+        if unsafe { *p } as c_int == dirc {
+            break;
+        }
+        if (unsafe { *p } as u8 == b'[' && mymagic >= MAGIC_ON)
+            || (unsafe { *p } as u8 == b'\\'
+                && unsafe { *p.add(1) } as u8 == b'['
+                && mymagic <= MAGIC_OFF)
+        {
+            p = unsafe { skip_anyof(p.add(1)) };
+            if unsafe { *p } as u8 == 0 {
                 break;
             }
-            if (*p as u8 == b'[' && mymagic >= MAGIC_ON)
-                || (*p as u8 == b'\\' && *p.add(1) as u8 == b'[' && mymagic <= MAGIC_OFF)
-            {
-                p = skip_anyof(p.add(1));
-                if *p as u8 == 0 {
-                    break;
+        } else if unsafe { *p } as u8 == b'\\' && unsafe { *p.add(1) } as u8 != 0 {
+            if dirc == b'?' as c_int && !newp.is_null() && unsafe { *p.add(1) } as u8 == b'?' {
+                if startplen == 0 {
+                    startplen = unsafe { strlen(startp) };
                 }
-            } else if *p as u8 == b'\\' && *p.add(1) as u8 != 0 {
-                if dirc == b'?' as c_int && !newp.is_null() && *p.add(1) as u8 == b'?' {
-                    if startplen == 0 {
-                        startplen = strlen(startp);
-                    }
-                    if (*newp).is_null() {
-                        *newp = xstrnsave(startp, startplen);
-                        p = (*newp).offset(p.offset_from(startp));
-                        startp = *newp;
-                    }
-                    if !dropped.is_null() {
-                        *dropped += 1;
-                    }
+                if unsafe { (*newp).is_null() } {
+                    unsafe { *newp = xstrnsave(startp, startplen) };
+                    p = unsafe { (*newp).offset(p.offset_from(startp)) };
+                    startp = unsafe { *newp };
+                }
+                if !dropped.is_null() {
+                    unsafe { *dropped += 1 };
+                }
+                unsafe {
                     memmove(
                         p.cast(),
                         p.add(1).cast(),
                         startplen - p.add(1).offset_from(startp) as usize + 1,
-                    );
-                } else {
-                    p = p.add(1);
-                }
-                if *p as u8 == b'v' {
-                    mymagic = MAGIC_ALL;
-                } else if *p as u8 == b'V' {
-                    mymagic = MAGIC_NONE;
-                }
+                    )
+                };
+            } else {
+                p = unsafe { p.add(1) };
             }
-            p = p.add(utfc_ptr2len(p) as usize);
+            if unsafe { *p } as u8 == b'v' {
+                mymagic = MAGIC_ALL;
+            } else if unsafe { *p } as u8 == b'V' {
+                mymagic = MAGIC_NONE;
+            }
         }
-        if !magic_val.is_null() {
-            *magic_val = mymagic;
-        }
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+    }
+    if !magic_val.is_null() {
+        unsafe { *magic_val = mymagic };
     }
     p
 }

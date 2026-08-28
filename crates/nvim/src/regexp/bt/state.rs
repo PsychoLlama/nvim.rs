@@ -339,8 +339,8 @@ impl RegStack {
             unsafe {
                 emsg(gettext(
                     E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
-                ));
-            }
+                ))
+            };
             return false;
         }
         self.bytes += bytes;
@@ -616,10 +616,8 @@ pub(crate) unsafe fn capture_slot(rex: Rex, state: regstate_T, no: usize) -> Gro
 /// `slot` must still belong to the running match.
 pub(crate) unsafe fn save_capture(rex: Rex, savep: &mut MatchPos, slot: GroupSlot) {
     // SAFETY: the caller promises the slot.
-    unsafe {
-        *savep = slot.get();
-        slot.set(rex.here());
-    }
+    *savep = unsafe { slot.get() };
+    unsafe { slot.set(rex.here()) };
 }
 
 /// Copy every `\1`..`\9` capture into `bp`, so that a look-behind attempt can
@@ -634,16 +632,14 @@ pub(crate) fn save_subexpr(rex: Rex, bp: &mut regbehind_T) {
     }
     // SAFETY: whichever pair of capture arrays this match's kind names holds
     // `NSUBEXP` live entries for as long as the match runs.
-    unsafe {
-        if rex.multi() {
-            let (starts, ends) = (rex.reg_startpos(), rex.reg_endpos());
-            bp.save_start = core::array::from_fn(|i| MatchPos::from_pos(*starts.add(i)));
-            bp.save_end = core::array::from_fn(|i| MatchPos::from_pos(*ends.add(i)));
-        } else {
-            let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
-            bp.save_start = core::array::from_fn(|i| MatchPos::from_ptr(*starts.add(i)));
-            bp.save_end = core::array::from_fn(|i| MatchPos::from_ptr(*ends.add(i)));
-        }
+    if rex.multi() {
+        let (starts, ends) = (rex.reg_startpos(), rex.reg_endpos());
+        bp.save_start = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *starts.add(i) }));
+        bp.save_end = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *ends.add(i) }));
+    } else {
+        let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
+        bp.save_start = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *starts.add(i) }));
+        bp.save_end = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *ends.add(i) }));
     }
 }
 
@@ -654,25 +650,23 @@ pub(crate) fn restore_subexpr(rex: Rex, bp: &regbehind_T) {
         return;
     }
     // SAFETY: as `save_subexpr`.
-    unsafe {
-        if rex.multi() {
-            let starts = core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP_SLOTS);
-            let ends = core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP_SLOTS);
-            for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
-                *slot = saved.as_pos();
-            }
-            for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
-                *slot = saved.as_pos();
-            }
-        } else {
-            let starts = core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP_SLOTS);
-            let ends = core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP_SLOTS);
-            for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
-                *slot = saved.as_ptr();
-            }
-            for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
-                *slot = saved.as_ptr();
-            }
+    if rex.multi() {
+        let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP_SLOTS) };
+        let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP_SLOTS) };
+        for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
+            *slot = saved.as_pos();
+        }
+        for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
+            *slot = saved.as_pos();
+        }
+    } else {
+        let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP_SLOTS) };
+        let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP_SLOTS) };
+        for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
+            *slot = saved.as_ptr();
+        }
+        for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
+            *slot = saved.as_ptr();
         }
     }
 }

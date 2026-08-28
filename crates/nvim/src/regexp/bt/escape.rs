@@ -184,17 +184,15 @@ fn optional_sequence(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         br = ret;
         // SAFETY: `br` walks nodes of the program just written; stepping
         // three bytes past a branch lands on its operand.
-        unsafe {
-            while br != lastnode {
-                if *br as c_int == BRANCH {
-                    regtail(br, lastbranch);
-                    if reg_toolong.get() != 0 {
-                        return core::ptr::null_mut();
-                    }
-                    br = br.add(3);
-                } else {
-                    br = regnext(br);
+        while br != lastnode {
+            if unsafe { *br } as c_int == BRANCH {
+                regtail(br, lastbranch);
+                if reg_toolong.get() != 0 {
+                    return core::ptr::null_mut();
                 }
+                br = unsafe { br.add(3) };
+            } else {
+                br = regnext(br);
             }
         }
     }
@@ -331,21 +329,21 @@ fn compare_atom(first: c_int, save_prev_at_start: c_int) -> Option<*mut uint8_t>
 fn cursor_value(kind: u8) -> uint32_t {
     // SAFETY: `curwin` is the current window, and `getvvcol` writes only
     // through the out-parameters it is given.
-    unsafe {
-        match kind {
-            b'l' => (*curwin.get()).w_cursor.lnum as uint32_t,
-            b'c' => (*curwin.get()).w_cursor.col as uint32_t + 1,
-            _ => {
-                let mut vcol: colnr_T = 0;
+    match kind {
+        b'l' => (unsafe { (*curwin.get()).w_cursor.lnum }) as uint32_t,
+        b'c' => (unsafe { (*curwin.get()).w_cursor.col }) as uint32_t + 1,
+        _ => {
+            let mut vcol: colnr_T = 0;
+            unsafe {
                 getvvcol(
                     Win::new(curwin.get()),
                     &raw mut (*curwin.get()).w_cursor,
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
                     &raw mut vcol,
-                );
-                vcol as uint32_t + 1
-            }
+                )
+            };
+            vcol as uint32_t + 1
         }
     }
 }

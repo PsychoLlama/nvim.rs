@@ -109,14 +109,12 @@ pub(crate) fn emit(item: c_int) {
     // the allocation `buf` owns. No reference into the program is live —
     // the only one handed out is `with_items`', and the read phase does not
     // emit.
-    unsafe {
-        let program = POSTFIX.ptr();
-        if (*program).len == (*program).cap {
-            grow();
-        }
-        *(*program).items.add((*program).len) = item;
-        (*program).len += 1;
+    let program = POSTFIX.ptr();
+    if unsafe { (*program).len } == unsafe { (*program).cap } {
+        grow();
     }
+    unsafe { *(*program).items.add((*program).len) = item };
+    unsafe { (*program).len += 1 };
 }
 
 /// Append `item` followed by the `NFA_CONCAT` that joins it to what came
@@ -147,10 +145,8 @@ pub(crate) fn truncate(mark: usize) {
 #[inline(always)]
 pub(crate) fn drop_last() {
     // SAFETY: as `emit`.
-    unsafe {
-        let program = POSTFIX.ptr();
-        (*program).len = (*program).len.saturating_sub(1);
-    }
+    let program = POSTFIX.ptr();
+    unsafe { (*program).len = (*program).len.saturating_sub(1) };
 }
 
 /// Read the program back.
@@ -167,15 +163,13 @@ pub(crate) fn drop_last() {
 pub(crate) fn with_items<R>(f: impl FnOnce(&[c_int]) -> R) -> R {
     // SAFETY: `items` addresses `len` initialised items, and the read phase
     // does not emit, so nothing reallocates under the slice.
-    unsafe {
-        let program = POSTFIX.ptr();
-        // An empty program has no allocation yet, and a slice needs a
-        // non-null base even for a length of zero.
-        let base = if (*program).items.is_null() {
-            core::ptr::NonNull::dangling().as_ptr()
-        } else {
-            (*program).items
-        };
-        f(core::slice::from_raw_parts(base, (*program).len))
-    }
+    let program = POSTFIX.ptr();
+    // An empty program has no allocation yet, and a slice needs a
+    // non-null base even for a length of zero.
+    let base = if unsafe { (*program).items.is_null() } {
+        core::ptr::NonNull::dangling().as_ptr()
+    } else {
+        unsafe { (*program).items }
+    };
+    f(unsafe { core::slice::from_raw_parts(base, (*program).len) })
 }

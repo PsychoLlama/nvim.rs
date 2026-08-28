@@ -177,16 +177,14 @@ impl Out {
         // SAFETY: `room` clears the write below, and `utf_char2len` /
         // `utf_char2bytes` are pure over a code point and a buffer with that
         // many bytes free.
-        unsafe {
-            let charlen = utf_char2len(c);
-            if !self.room(charlen as isize) {
-                return false;
-            }
-            if self.copy {
-                utf_char2bytes(c, self.at);
-            }
-            self.skip((charlen - 1) as isize);
+        let charlen = utf_char2len(c);
+        if !self.room(charlen as isize) {
+            return false;
         }
+        if self.copy {
+            unsafe { utf_char2bytes(c, self.at) };
+        }
+        self.skip((charlen - 1) as isize);
         true
     }
 
@@ -242,92 +240,94 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
     // SAFETY: `source` is the caller's NUL-terminated replacement text, and
     // `reg_prev_sub` is null or a NUL-terminated string of `reg_prev_sublen`
     // bytes that this function is the sole writer of.
-    unsafe {
-        let tilde = if magic != 0 { c"~" } else { c"\\~" };
-        let tildelen = tilde.count_bytes();
+    let tilde = if magic != 0 { c"~" } else { c"\\~" };
+    let tildelen = tilde.count_bytes();
 
-        let mut newsub = source;
-        // Zero means "not measured yet"; a measured length is at least the
-        // tilde's own.
-        let mut newsublen: usize = 0;
-        let mut error = false;
+    let mut newsub = source;
+    // Zero means "not measured yet"; a measured length is at least the
+    // tilde's own.
+    let mut newsublen: usize = 0;
+    let mut error = false;
 
-        let mut p = newsub;
-        while *p != 0 {
-            if strncmp(p, tilde.as_ptr(), tildelen) != 0 {
-                if *p == b'\\' as c_char && *p.offset(1) != 0 {
-                    // An escaped character cannot be a tilde.
-                    p = p.offset(1);
-                }
-                p = p.offset(utfc_ptr2len(p) as isize);
-                continue;
+    let mut p = newsub;
+    while unsafe { *p } != 0 {
+        if unsafe { strncmp(p, tilde.as_ptr(), tildelen) } != 0 {
+            if unsafe { *p } == b'\\' as c_char && unsafe { *p.offset(1) } != 0 {
+                // An escaped character cannot be a tilde.
+                p = unsafe { p.offset(1) };
             }
+            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            continue;
+        }
 
-            let prefixlen = p.offset_from(newsub) as usize; // not including the tilde
-            let postfix = p.add(tildelen);
-            if newsublen == 0 {
-                newsublen = strlen(newsub);
-            }
-            newsublen -= tildelen;
-            let postfixlen = newsublen - prefixlen;
-            let tmpsublen = prefixlen + reg_prev_sublen.get() + postfixlen;
+        let prefixlen = unsafe { p.offset_from(newsub) } as usize; // not including the tilde
+        let postfix = unsafe { p.add(tildelen) };
+        if newsublen == 0 {
+            newsublen = unsafe { strlen(newsub) };
+        }
+        newsublen -= tildelen;
+        let postfixlen = newsublen - prefixlen;
+        let tmpsublen = prefixlen + reg_prev_sublen.get() + postfixlen;
 
-            if tmpsublen == 0 || reg_prev_sub.get().is_null() {
-                // Nothing to expand into: drop the tilde, NUL included, and
-                // rescan from where it was.
-                memmove(p.cast(), postfix.cast(), postfixlen + 1);
-                continue;
-            }
-            // Text longer than MAXCOL causes trouble further downstream.
-            if tmpsublen > MAXCOL as usize {
+        if tmpsublen == 0 || reg_prev_sub.get().is_null() {
+            // Nothing to expand into: drop the tilde, NUL included, and
+            // rescan from where it was.
+            unsafe { memmove(p.cast(), postfix.cast(), postfixlen + 1) };
+            continue;
+        }
+        // Text longer than MAXCOL causes trouble further downstream.
+        if tmpsublen > MAXCOL as usize {
+            unsafe {
                 emsg(gettext(
                     &raw const e_resulting_text_too_long as *const c_char,
-                ));
-                error = true;
-                break;
-            }
+                ))
+            };
+            error = true;
+            break;
+        }
 
-            let tmpsub: *mut c_char = xmalloc(tmpsublen + 1).cast();
-            memmove(tmpsub.cast(), newsub.cast(), prefixlen);
+        let tmpsub: *mut c_char = unsafe { xmalloc(tmpsublen + 1) }.cast();
+        unsafe { memmove(tmpsub.cast(), newsub.cast(), prefixlen) };
+        unsafe {
             memmove(
                 tmpsub.add(prefixlen).cast(),
                 reg_prev_sub.get().cast(),
                 reg_prev_sublen.get(),
-            );
-            let expanded = prefixlen + reg_prev_sublen.get();
-            strcpy(tmpsub.add(expanded), postfix);
+            )
+        };
+        let expanded = prefixlen + reg_prev_sublen.get();
+        unsafe { strcpy(tmpsub.add(expanded), postfix) };
 
-            if newsub != source {
-                xfree(newsub.cast());
-            }
-            newsub = tmpsub;
-            newsublen = tmpsublen;
-            // Rescan from just past what the tilde expanded into.
-            p = newsub.add(expanded);
+        if newsub != source {
+            unsafe { xfree(newsub.cast()) };
         }
-
-        if error {
-            if newsub != source {
-                xfree(newsub.cast());
-            }
-            return source;
-        }
-
-        // A preview must not disturb what the next real substitution's `~`
-        // means. Otherwise store a *copy*: a recursive call could free the
-        // text `newsub` points into.
-        if !preview {
-            newsublen = p.offset_from(newsub) as usize;
-            xfree(reg_prev_sub.get().cast());
-            reg_prev_sub.set(if newsublen == 0 {
-                core::ptr::null_mut()
-            } else {
-                xstrnsave(newsub, newsublen)
-            });
-            reg_prev_sublen.set(newsublen);
-        }
-        newsub
+        newsub = tmpsub;
+        newsublen = tmpsublen;
+        // Rescan from just past what the tilde expanded into.
+        p = unsafe { newsub.add(expanded) };
     }
+
+    if error {
+        if newsub != source {
+            unsafe { xfree(newsub.cast()) };
+        }
+        return source;
+    }
+
+    // A preview must not disturb what the next real substitution's `~`
+    // means. Otherwise store a *copy*: a recursive call could free the
+    // text `newsub` points into.
+    if !preview {
+        newsublen = unsafe { p.offset_from(newsub) } as usize;
+        unsafe { xfree(reg_prev_sub.get().cast()) };
+        reg_prev_sub.set(if newsublen == 0 {
+            core::ptr::null_mut()
+        } else {
+            unsafe { xstrnsave(newsub, newsublen) }
+        });
+        reg_prev_sublen.set(newsublen);
+    }
+    newsub
 }
 
 /// Expand `source` into `dest` using the captures of the string match
@@ -346,19 +346,17 @@ pub(crate) unsafe fn vim_regsub(
 ) -> c_int {
     // SAFETY: the arguments are the caller's; `with_rex` makes the context
     // ours for the call and restores any outer match's after it.
-    unsafe {
-        with_rex(|| {
-            let rex = Rex::acquire();
-            rex.set_reg_match(rmp);
-            rex.set_reg_mmatch(core::ptr::null_mut());
-            rex.set_reg_maxline(0);
-            rex.set_reg_buf(curbuf.get());
-            // A string replacement has no lines to cross, so a `\n` in it
-            // is a literal newline rather than a line break.
-            rex.set_reg_line_lbr(true);
-            vim_regsub_both(rex, source, expr, dest, destlen, flags)
-        })
-    }
+    with_rex(|| {
+        let rex = unsafe { Rex::acquire() };
+        rex.set_reg_match(rmp);
+        rex.set_reg_mmatch(core::ptr::null_mut());
+        rex.set_reg_maxline(0);
+        rex.set_reg_buf(curbuf.get());
+        // A string replacement has no lines to cross, so a `\n` in it
+        // is a literal newline rather than a line break.
+        rex.set_reg_line_lbr(true);
+        unsafe { vim_regsub_both(rex, source, expr, dest, destlen, flags) }
+    })
 }
 
 /// [`vim_regsub`] for a buffer match, whose captures can span lines from
@@ -372,18 +370,16 @@ pub(crate) unsafe fn vim_regsub_multi(
     flags: c_int,
 ) -> c_int {
     // SAFETY: as `vim_regsub`. A buffer match always works on `curbuf`.
-    unsafe {
-        with_rex(|| {
-            let rex = Rex::acquire();
-            rex.set_reg_match(core::ptr::null_mut());
-            rex.set_reg_mmatch(rmp);
-            rex.set_reg_buf(curbuf.get());
-            rex.set_reg_firstlnum(lnum);
-            rex.set_reg_maxline((*curbuf.get()).b_ml.ml_line_count - lnum);
-            rex.set_reg_line_lbr(false);
-            vim_regsub_both(rex, source, core::ptr::null_mut(), dest, destlen, flags)
-        })
-    }
+    with_rex(|| {
+        let rex = unsafe { Rex::acquire() };
+        rex.set_reg_match(core::ptr::null_mut());
+        rex.set_reg_mmatch(rmp);
+        rex.set_reg_buf(curbuf.get());
+        rex.set_reg_firstlnum(lnum);
+        rex.set_reg_maxline(unsafe { (*curbuf.get()).b_ml.ml_line_count } - lnum);
+        rex.set_reg_line_lbr(false);
+        unsafe { vim_regsub_both(rex, source, core::ptr::null_mut(), dest, destlen, flags) }
+    })
 }
 
 /// The expansion itself, against whatever match `rex` currently describes.
@@ -398,43 +394,41 @@ unsafe fn vim_regsub_both(
 ) -> c_int {
     // SAFETY: `source` and `dest` are the caller's, and `rex` describes a
     // match that is still live — see [`vim_regsub`].
-    unsafe {
-        if (source.is_null() && expr.is_null()) || dest.is_null() {
-            emsg(gettext(&raw const e_null as *const c_char));
-            return 0;
-        }
-        if prog_magic_wrong(rex) != 0 {
-            return 0;
-        }
-        if NESTING.get() == MAX_REGSUB_NESTING {
-            emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP.as_ptr()));
-            return 0;
-        }
-
-        let mut out = Out::new(dest, destlen, flags & REGSUB_COPY as c_int != 0);
-        // A caller-supplied function, or a replacement that starts `\=`, is
-        // a Vimscript expression rather than replacement text.
-        let outcome = if !expr.is_null()
-            || (*source == b'\\' as c_char && *source.offset(1) == b'=' as c_char)
-        {
-            eval_replacement(rex, source, expr, flags, &mut out);
-            Outcome::Done
-        } else {
-            expand_replacement(rex, source, flags, &mut out)
-        };
-
-        match outcome {
-            Outcome::NoSpace => return 0,
-            Outcome::Done => {
-                if out.copy {
-                    *out.at = NUL as c_char;
-                }
-            }
-            // Deliberately unterminated: upstream jumps past the NUL write.
-            Outcome::Damaged => {}
-        }
-        (out.written() + 1) as c_int
+    if (source.is_null() && expr.is_null()) || dest.is_null() {
+        unsafe { emsg(gettext(&raw const e_null as *const c_char)) };
+        return 0;
     }
+    if prog_magic_wrong(rex) != 0 {
+        return 0;
+    }
+    if NESTING.get() == MAX_REGSUB_NESTING {
+        unsafe { emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP.as_ptr())) };
+        return 0;
+    }
+
+    let mut out = Out::new(dest, destlen, flags & REGSUB_COPY as c_int != 0);
+    // A caller-supplied function, or a replacement that starts `\=`, is
+    // a Vimscript expression rather than replacement text.
+    let outcome = if !expr.is_null()
+        || (unsafe { *source } == b'\\' as c_char && unsafe { *source.offset(1) } == b'=' as c_char)
+    {
+        unsafe { eval_replacement(rex, source, expr, flags, &mut out) };
+        Outcome::Done
+    } else {
+        unsafe { expand_replacement(rex, source, flags, &mut out) }
+    };
+
+    match outcome {
+        Outcome::NoSpace => return 0,
+        Outcome::Done => {
+            if out.copy {
+                unsafe { *out.at = NUL as c_char };
+            }
+        }
+        // Deliberately unterminated: upstream jumps past the NUL write.
+        Outcome::Damaged => {}
+    }
+    (out.written() + 1) as c_int
 }
 
 /// The `\=` replacement: evaluate an expression and take its value as the
@@ -453,69 +447,67 @@ unsafe fn eval_replacement(
     // SAFETY: `source` is the caller's replacement text and `expr` its
     // callable, both live for the call. Nothing raw is held across the
     // evaluation below, which can run arbitrary Vimscript.
-    unsafe {
-        let nested = NESTING.get() as usize;
+    let nested = NESTING.get() as usize;
 
-        if out.copy {
-            let text = stashed(nested);
-            if text.is_null() {
-                return;
-            }
-            let len = strlen(text);
-            // A result that no longer fits means the measuring pass saw a
-            // different one; leave it for a later pass rather than overrun.
-            if len < out.destlen as usize {
-                strcpy(out.dest, text);
-                out.skip(len as isize);
-                xfree(text.cast());
-                stash(nested, core::ptr::null_mut());
-            }
+    if out.copy {
+        let text = stashed(nested);
+        if text.is_null() {
             return;
         }
-
-        xfree(stashed(nested).cast());
-        stash(nested, core::ptr::null_mut());
-
-        // The expression may itself run a substitution. `submatch()` has to
-        // keep answering about the outermost match, so hand it this one and
-        // put back whatever the caller above was showing.
-        let outer_can_f_submatch = can_f_submatch.get();
-        can_f_submatch.set(true);
-        // `replace` rather than a `get` and a `set`: the snapshot holds the
-        // outer match's structures, and a copy alongside the cell would be a
-        // second holder of them for the length of the evaluation.
-        let outer_rsm = rsm.replace(regsubmatch_T {
-            sm_match: rex.reg_match(),
-            sm_mmatch: rex.reg_mmatch(),
-            sm_firstlnum: rex.reg_firstlnum(),
-            sm_maxline: rex.reg_maxline(),
-            sm_line_lbr: rex.reg_line_lbr() as c_int,
-        });
-
-        NESTING.set(nested as c_int + 1);
-        let mut text = if expr.is_null() {
-            eval_to_string(source.offset(2), true, false)
-        } else {
-            call_replacement(expr)
-        };
-        NESTING.set(nested as c_int);
-
-        if !text.is_null() {
-            if line_breaks_to_cr(text) && flags & REGSUB_BACKSLASH as c_int != 0 {
-                // The backslashes will be consumed downstream; double them
-                // so they survive.
-                let doubled = vim_strsave_escaped(text, c"\\".as_ptr());
-                xfree(text.cast());
-                text = doubled;
-            }
-            out.skip(strlen(text) as isize);
+        let len = unsafe { strlen(text) };
+        // A result that no longer fits means the measuring pass saw a
+        // different one; leave it for a later pass rather than overrun.
+        if len < out.destlen as usize {
+            unsafe { strcpy(out.dest, text) };
+            out.skip(len as isize);
+            unsafe { xfree(text.cast()) };
+            stash(nested, core::ptr::null_mut());
         }
-        stash(nested, text);
+        return;
+    }
 
-        can_f_submatch.set(outer_can_f_submatch);
-        if outer_can_f_submatch {
-            rsm.set(outer_rsm);
+    unsafe { xfree(stashed(nested).cast()) };
+    stash(nested, core::ptr::null_mut());
+
+    // The expression may itself run a substitution. `submatch()` has to
+    // keep answering about the outermost match, so hand it this one and
+    // put back whatever the caller above was showing.
+    let outer_can_f_submatch = can_f_submatch.get();
+    can_f_submatch.set(true);
+    // `replace` rather than a `get` and a `set`: the snapshot holds the
+    // outer match's structures, and a copy alongside the cell would be a
+    // second holder of them for the length of the evaluation.
+    let outer_rsm = rsm.replace(regsubmatch_T {
+        sm_match: rex.reg_match(),
+        sm_mmatch: rex.reg_mmatch(),
+        sm_firstlnum: rex.reg_firstlnum(),
+        sm_maxline: rex.reg_maxline(),
+        sm_line_lbr: rex.reg_line_lbr() as c_int,
+    });
+
+    NESTING.set(nested as c_int + 1);
+    let mut text = if expr.is_null() {
+        unsafe { eval_to_string(source.offset(2), true, false) }
+    } else {
+        unsafe { call_replacement(expr) }
+    };
+    NESTING.set(nested as c_int);
+
+    if !text.is_null() {
+        if unsafe { line_breaks_to_cr(text) } && flags & REGSUB_BACKSLASH as c_int != 0 {
+            // The backslashes will be consumed downstream; double them
+            // so they survive.
+            let doubled = unsafe { vim_strsave_escaped(text, c"\\".as_ptr()) };
+            unsafe { xfree(text.cast()) };
+            text = doubled;
         }
+        out.skip(unsafe { strlen(text) } as isize);
+    }
+    stash(nested, text);
+
+    can_f_submatch.set(outer_can_f_submatch);
+    if outer_can_f_submatch {
+        rsm.set(outer_rsm);
     }
 }
 
@@ -524,24 +516,24 @@ unsafe fn eval_replacement(
 /// call failed, which has already reported itself.
 unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
     // SAFETY: `expr` is the caller's live callable.
-    unsafe {
-        // `fill_submatch_list` fills this in place if the function takes an
-        // argument at all, so it must outlive the call.
-        let mut match_list: staticList10_T = core::mem::zeroed();
-        match_list.sl_list.lv_lock = VarLock::Fixed;
-        let mut argv: [typval_T; 2] = core::mem::zeroed();
-        argv[0].v_type = VAR_LIST;
-        argv[0].vval.v_list = &raw mut match_list.sl_list;
+    // `fill_submatch_list` fills this in place if the function takes an
+    // argument at all, so it must outlive the call.
+    let mut match_list: staticList10_T = unsafe { core::mem::zeroed() };
+    match_list.sl_list.lv_lock = VarLock::Fixed;
+    let mut argv: [typval_T; 2] = unsafe { core::mem::zeroed() };
+    argv[0].v_type = VAR_LIST;
+    argv[0].vval.v_list = &raw mut match_list.sl_list;
 
-        let mut rettv: typval_T = core::mem::zeroed();
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = core::ptr::null_mut();
+    let mut rettv: typval_T = unsafe { core::mem::zeroed() };
+    rettv.v_type = VAR_STRING;
+    rettv.vval.v_string = core::ptr::null_mut();
 
-        let mut funcexe = FUNCEXE_INIT;
-        funcexe.fe_argv_func = Some(fill_submatch_list);
-        funcexe.fe_evaluate = true;
-        if (*expr).v_type == VAR_FUNC {
-            let name = (*expr).vval.v_string;
+    let mut funcexe = FUNCEXE_INIT;
+    funcexe.fe_argv_func = Some(fill_submatch_list);
+    funcexe.fe_evaluate = true;
+    if unsafe { (*expr).v_type } == VAR_FUNC {
+        let name = unsafe { (*expr).vval.v_string };
+        unsafe {
             call_func(
                 name,
                 -1,
@@ -549,11 +541,13 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
                 1,
                 argv.as_mut_ptr(),
                 &raw mut funcexe,
-            );
-        } else if (*expr).v_type == VAR_PARTIAL {
-            let partial: *mut partial_T = (*expr).vval.v_partial;
-            funcexe.fe_partial = partial;
-            let name = partial_name(partial);
+            )
+        };
+    } else if unsafe { (*expr).v_type } == VAR_PARTIAL {
+        let partial: *mut partial_T = unsafe { (*expr).vval.v_partial };
+        funcexe.fe_partial = partial;
+        let name = unsafe { partial_name(partial) };
+        unsafe {
             call_func(
                 name,
                 -1,
@@ -561,29 +555,29 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
                 1,
                 argv.as_mut_ptr(),
                 &raw mut funcexe,
-            );
-        }
-        if tv_list_len(&raw mut match_list.sl_list) > 0 {
-            // A non-empty list means `fill_submatch_list` ran and allocated.
-            clear_submatch_list(&raw mut match_list);
-        }
+            )
+        };
+    }
+    if unsafe { tv_list_len(&raw mut match_list.sl_list) } > 0 {
+        // A non-empty list means `fill_submatch_list` ran and allocated.
+        unsafe { clear_submatch_list(&raw mut match_list) };
+    }
 
-        // An unknown return type means the call failed and has already said
-        // so; there is no second error to report.
-        let text = if rettv.v_type == VAR_UNKNOWN {
+    // An unknown return type means the call failed and has already said
+    // so; there is no second error to report.
+    let text = if rettv.v_type == VAR_UNKNOWN {
+        core::ptr::null_mut()
+    } else {
+        let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+        let s = unsafe { tv_get_string_buf_chk(&raw mut rettv, buf.as_mut_ptr()) };
+        if s.is_null() {
             core::ptr::null_mut()
         } else {
-            let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-            let s = tv_get_string_buf_chk(&raw mut rettv, buf.as_mut_ptr());
-            if s.is_null() {
-                core::ptr::null_mut()
-            } else {
-                xstrdup(s)
-            }
-        };
-        tv_clear(&raw mut rettv);
-        text
-    }
+            unsafe { xstrdup(s) }
+        }
+    };
+    unsafe { tv_clear(&raw mut rettv) };
+    text
 }
 
 /// Rewrite the newlines in an expression's result as carriage returns,
@@ -592,26 +586,24 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
 /// literal. Reports whether the text contained a backslash escape.
 unsafe fn line_breaks_to_cr(text: *mut c_char) -> bool {
     // SAFETY: `text` is a NUL-terminated allocation this module owns.
-    unsafe {
-        let literal_nl = Rsm::acquire().line_lbr();
-        let mut had_backslash = false;
-        let mut s = text;
-        while *s != NUL as c_char {
-            if *s == NL as c_char && !literal_nl {
-                *s = CAR as c_char;
-            } else if *s == b'\\' as c_char && *s.offset(1) != NUL as c_char {
-                // Skip the escaped character — but convert it too, so that
-                // `:s/abc\\\ndef/\="aaa\\\nbbb"/` breaks the line.
-                s = s.offset(1);
-                if *s == NL as c_char && !literal_nl {
-                    *s = CAR as c_char;
-                }
-                had_backslash = true;
+    let literal_nl = unsafe { Rsm::acquire() }.line_lbr();
+    let mut had_backslash = false;
+    let mut s = text;
+    while unsafe { *s } != NUL as c_char {
+        if unsafe { *s } == NL as c_char && !literal_nl {
+            unsafe { *s = CAR as c_char };
+        } else if unsafe { *s } == b'\\' as c_char && unsafe { *s.offset(1) } != NUL as c_char {
+            // Skip the escaped character — but convert it too, so that
+            // `:s/abc\\\ndef/\="aaa\\\nbbb"/` breaks the line.
+            s = unsafe { s.offset(1) };
+            if unsafe { *s } == NL as c_char && !literal_nl {
+                unsafe { *s = CAR as c_char };
             }
-            s = s.offset(utfc_ptr2len(s) as isize);
+            had_backslash = true;
         }
-        had_backslash
+        s = unsafe { s.offset(utfc_ptr2len(s) as isize) };
     }
+    had_backslash
 }
 
 /// The ordinary replacement: copy `source` into `out`, expanding the
@@ -624,116 +616,117 @@ unsafe fn expand_replacement(
 ) -> Outcome {
     // SAFETY: `source` is NUL-terminated, and `rex` describes a live match
     // whose captures point into text that has not moved.
-    unsafe {
-        let magic = flags & REGSUB_MAGIC as c_int != 0;
-        let backslash = flags & REGSUB_BACKSLASH as c_int != 0;
-        let mut case = Case::default();
-        let mut src = source;
+    let magic = flags & REGSUB_MAGIC as c_int != 0;
+    let backslash = flags & REGSUB_BACKSLASH as c_int != 0;
+    let mut case = Case::default();
+    let mut src = source;
 
-        loop {
-            let mut c = *src as u8 as c_int;
-            src = src.offset(1);
-            if c == NUL {
-                return Outcome::Done;
-            }
+    loop {
+        let mut c = unsafe { *src } as u8 as c_int;
+        src = unsafe { src.offset(1) };
+        if c == NUL {
+            return Outcome::Done;
+        }
 
-            // Which capture this stands for, or -1 for ordinary text.
-            let mut no = -1;
-            if c == '&' as c_int && magic {
+        // Which capture this stands for, or -1 for ordinary text.
+        let mut no = -1;
+        if c == '&' as c_int && magic {
+            no = 0;
+        } else if c == '\\' as c_int && unsafe { *src } != NUL as c_char {
+            if unsafe { *src } == b'&' as c_char && !magic {
+                src = unsafe { src.offset(1) };
                 no = 0;
-            } else if c == '\\' as c_int && *src != NUL as c_char {
-                if *src == b'&' as c_char && !magic {
-                    src = src.offset(1);
-                    no = 0;
-                } else if (*src as u8).is_ascii_digit() {
-                    no = *src as c_int - '0' as c_int;
-                    src = src.offset(1);
-                } else if !vim_strchr(c"uUlLeE".as_ptr(), *src as u8 as c_int).is_null() {
-                    let hook = *src as u8;
-                    src = src.offset(1);
-                    match hook {
-                        b'u' => case.once = Some(mb_toupper),
-                        b'U' => case.rest = Some(mb_toupper),
-                        b'l' => case.once = Some(mb_tolower),
-                        b'L' => case.rest = Some(mb_tolower),
-                        // `\e` and `\E`, the only other members of the set
-                        // the lookup above accepted, end both.
-                        _ => case = Case::default(),
-                    }
-                    continue;
+            } else if (unsafe { *src } as u8).is_ascii_digit() {
+                no = unsafe { *src } as c_int - '0' as c_int;
+                src = unsafe { src.offset(1) };
+            } else if !unsafe { vim_strchr(c"uUlLeE".as_ptr(), *src as u8 as c_int) }.is_null() {
+                let hook = unsafe { *src } as u8;
+                src = unsafe { src.offset(1) };
+                match hook {
+                    b'u' => case.once = Some(mb_toupper),
+                    b'U' => case.rest = Some(mb_toupper),
+                    b'l' => case.once = Some(mb_tolower),
+                    b'L' => case.rest = Some(mb_tolower),
+                    // `\e` and `\E`, the only other members of the set
+                    // the lookup above accepted, end both.
+                    _ => case = Case::default(),
                 }
-            }
-
-            if no >= 0 {
-                match copy_capture(rex, no, &mut case, backslash, out) {
-                    Outcome::Done => continue,
-                    stopped => return stopped,
-                }
-            }
-
-            // A special key travels as its own three bytes.
-            if c == K_SPECIAL && *src != NUL as c_char && *src.offset(1) != NUL as c_char {
-                if !out.room(3) {
-                    return Outcome::NoSpace;
-                }
-                out.push(c as c_char);
-                out.push(*src);
-                out.push(*src.offset(1));
-                src = src.offset(2);
                 continue;
             }
-
-            if c == '\\' as c_int && *src != NUL as c_char {
-                match *src as u8 {
-                    b'r' => {
-                        c = CAR;
-                        src = src.offset(1);
-                    }
-                    b'n' => {
-                        c = NL;
-                        src = src.offset(1);
-                    }
-                    b't' => {
-                        c = TAB;
-                        src = src.offset(1);
-                    }
-                    // `\e` already means "end the case fold", so there is no
-                    // escape for ESC here.
-                    b'b' => {
-                        c = Ctrl_H;
-                        src = src.offset(1);
-                    }
-                    _ => {
-                        // A backslash the caller will strip later: double it
-                        // so the literal survives, e.g. an inserted CR.
-                        if backslash {
-                            if !out.room(1) {
-                                return Outcome::NoSpace;
-                            }
-                            out.push(b'\\' as c_char);
-                        }
-                        c = *src as u8 as c_int;
-                        src = src.offset(1);
-                    }
-                }
-            } else {
-                c = utf_ptr2char(src.offset(-1));
-            }
-
-            let first = src.offset(-1);
-            let totlen = utfc_ptr2len(first);
-            if !out.push_char(case.fold(c)) {
-                return Outcome::NoSpace;
-            }
-            // Anything past the base character is composing marks, which are
-            // copied as they stand.
-            let clen = utf_ptr2len(first);
-            if clen < totlen && !out.push_composing(first, clen, totlen) {
-                return Outcome::NoSpace;
-            }
-            src = src.offset((totlen - 1) as isize);
-            out.skip(1);
         }
+
+        if no >= 0 {
+            match unsafe { copy_capture(rex, no, &mut case, backslash, out) } {
+                Outcome::Done => continue,
+                stopped => return stopped,
+            }
+        }
+
+        // A special key travels as its own three bytes.
+        if c == K_SPECIAL
+            && unsafe { *src } != NUL as c_char
+            && unsafe { *src.offset(1) } != NUL as c_char
+        {
+            if !out.room(3) {
+                return Outcome::NoSpace;
+            }
+            out.push(c as c_char);
+            out.push(unsafe { *src });
+            out.push(unsafe { *src.offset(1) });
+            src = unsafe { src.offset(2) };
+            continue;
+        }
+
+        if c == '\\' as c_int && unsafe { *src } != NUL as c_char {
+            match unsafe { *src } as u8 {
+                b'r' => {
+                    c = CAR;
+                    src = unsafe { src.offset(1) };
+                }
+                b'n' => {
+                    c = NL;
+                    src = unsafe { src.offset(1) };
+                }
+                b't' => {
+                    c = TAB;
+                    src = unsafe { src.offset(1) };
+                }
+                // `\e` already means "end the case fold", so there is no
+                // escape for ESC here.
+                b'b' => {
+                    c = Ctrl_H;
+                    src = unsafe { src.offset(1) };
+                }
+                _ => {
+                    // A backslash the caller will strip later: double it
+                    // so the literal survives, e.g. an inserted CR.
+                    if backslash {
+                        if !out.room(1) {
+                            return Outcome::NoSpace;
+                        }
+                        out.push(b'\\' as c_char);
+                    }
+                    c = unsafe { *src } as u8 as c_int;
+                    src = unsafe { src.offset(1) };
+                }
+            }
+        } else {
+            c = unsafe { utf_ptr2char(src.offset(-1)) };
+        }
+
+        let first = unsafe { src.offset(-1) };
+        let totlen = unsafe { utfc_ptr2len(first) };
+        if !out.push_char(case.fold(c)) {
+            return Outcome::NoSpace;
+        }
+        // Anything past the base character is composing marks, which are
+        // copied as they stand.
+        let clen = unsafe { utf_ptr2len(first) };
+        if clen < totlen && !out.push_composing(first, clen, totlen) {
+            return Outcome::NoSpace;
+        }
+        src = unsafe { src.offset((totlen - 1) as isize) };
+        out.skip(1);
     }
 }
 
@@ -748,92 +741,90 @@ unsafe fn copy_capture(
 ) -> Outcome {
     // SAFETY: `rex` describes a live match; `no` is a single digit and both
     // capture arrays hold `NSUBEXP` = 10 slots.
-    unsafe {
-        let multi = rex.multi();
-        let no = no as usize;
+    let multi = rex.multi();
+    let no = no as usize;
 
-        // Where the capture starts, how much of it is on that line, and —
-        // for a buffer match — which line that is.
-        let mut clnum: linenr_T = 0;
-        let mut len: c_int = 0;
-        let mut s = if multi {
-            let mmatch = rex.reg_mmatch();
-            clnum = (*mmatch).startpos[no].lnum;
-            if clnum < 0 || (*mmatch).endpos[no].lnum < 0 {
-                core::ptr::null_mut()
-            } else {
-                len = if (*mmatch).endpos[no].lnum == clnum {
-                    (*mmatch).endpos[no].col - (*mmatch).startpos[no].col
-                } else {
-                    reg_getline_len(rex, clnum) - (*mmatch).startpos[no].col
-                };
-                reg_getline(rex, clnum).offset((*mmatch).startpos[no].col as isize)
-            }
+    // Where the capture starts, how much of it is on that line, and —
+    // for a buffer match — which line that is.
+    let mut clnum: linenr_T = 0;
+    let mut len: c_int = 0;
+    let mut s = if multi {
+        let mmatch = rex.reg_mmatch();
+        clnum = unsafe { (*mmatch).startpos[no].lnum };
+        if clnum < 0 || unsafe { (*mmatch).endpos[no].lnum } < 0 {
+            core::ptr::null_mut()
         } else {
-            let match_ = rex.reg_match();
-            let start = (*match_).startp[no];
-            if (*match_).endp[no].is_null() {
-                core::ptr::null_mut()
+            len = if unsafe { (*mmatch).endpos[no].lnum } == clnum {
+                unsafe { (*mmatch).endpos[no].col - (*mmatch).startpos[no].col }
             } else {
-                len = (*match_).endp[no].offset_from(start) as c_int;
-                start
+                reg_getline_len(rex, clnum) - unsafe { (*mmatch).startpos[no].col }
+            };
+            unsafe { reg_getline(rex, clnum).offset((*mmatch).startpos[no].col as isize) }
+        }
+    } else {
+        let match_ = rex.reg_match();
+        let start = unsafe { (*match_).startp[no] };
+        if unsafe { (*match_).endp[no].is_null() } {
+            core::ptr::null_mut()
+        } else {
+            len = unsafe { (*match_).endp[no].offset_from(start) } as c_int;
+            start
+        }
+    };
+    // A capture that did not participate contributes nothing.
+    if s.is_null() {
+        return Outcome::Done;
+    }
+
+    loop {
+        if len == 0 {
+            let mmatch = rex.reg_mmatch();
+            if !multi || unsafe { (*mmatch).endpos[no].lnum } == clnum {
+                return Outcome::Done;
             }
-        };
-        // A capture that did not participate contributes nothing.
-        if s.is_null() {
-            return Outcome::Done;
+            // The capture continues on the next line.
+            if !out.room(1) {
+                return Outcome::NoSpace;
+            }
+            out.push(CAR as c_char);
+            clnum += 1;
+            s = reg_getline(rex, clnum);
+            len = if unsafe { (*mmatch).endpos[no].lnum } == clnum {
+                unsafe { (*mmatch).endpos[no].col }
+            } else {
+                reg_getline_len(rex, clnum)
+            };
+            continue;
+        }
+        if unsafe { *s } == NUL as c_char {
+            // The line is shorter than it was when the match ran.
+            if out.copy {
+                unsafe { iemsg(gettext(&raw const e_re_damg as *const c_char)) };
+            }
+            return Outcome::Damaged;
         }
 
-        loop {
-            if len == 0 {
-                let mmatch = rex.reg_mmatch();
-                if !multi || (*mmatch).endpos[no].lnum == clnum {
-                    return Outcome::Done;
-                }
-                // The capture continues on the next line.
-                if !out.room(1) {
-                    return Outcome::NoSpace;
-                }
-                out.push(CAR as c_char);
-                clnum += 1;
-                s = reg_getline(rex, clnum);
-                len = if (*mmatch).endpos[no].lnum == clnum {
-                    (*mmatch).endpos[no].col
-                } else {
-                    reg_getline_len(rex, clnum)
-                };
-                continue;
+        if backslash && (unsafe { *s } == CAR as c_char || unsafe { *s } == b'\\' as c_char) {
+            // A bare CR would become a line break and a bare backslash
+            // would be halved away; double them.
+            if !out.room(2) {
+                return Outcome::NoSpace;
             }
-            if *s == NUL as c_char {
-                // The line is shorter than it was when the match ran.
-                if out.copy {
-                    iemsg(gettext(&raw const e_re_damg as *const c_char));
-                }
-                return Outcome::Damaged;
+            out.push(b'\\' as c_char);
+            out.push(unsafe { *s });
+        } else {
+            let c = case.fold(unsafe { utf_ptr2char(s) });
+            // Composing characters are copied one at a time, so step to
+            // the base character's last byte first.
+            let tail = unsafe { utf_ptr2len(s) } - 1;
+            s = unsafe { s.offset(tail as isize) };
+            len -= tail;
+            if !out.push_char(c) {
+                return Outcome::NoSpace;
             }
-
-            if backslash && (*s == CAR as c_char || *s == b'\\' as c_char) {
-                // A bare CR would become a line break and a bare backslash
-                // would be halved away; double them.
-                if !out.room(2) {
-                    return Outcome::NoSpace;
-                }
-                out.push(b'\\' as c_char);
-                out.push(*s);
-            } else {
-                let c = case.fold(utf_ptr2char(s));
-                // Composing characters are copied one at a time, so step to
-                // the base character's last byte first.
-                let tail = utf_ptr2len(s) - 1;
-                s = s.offset(tail as isize);
-                len -= tail;
-                if !out.push_char(c) {
-                    return Outcome::NoSpace;
-                }
-                out.skip(1);
-            }
-            s = s.offset(1);
-            len -= 1;
+            out.skip(1);
         }
+        s = unsafe { s.offset(1) };
+        len -= 1;
     }
 }

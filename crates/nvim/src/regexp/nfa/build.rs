@@ -67,17 +67,15 @@ fn state(c: c_int, out: *mut nfa_state_T, out1: *mut nfa_state_T) -> Option<*mut
     }
     // SAFETY: `state_ptr` is the program's state array and `istate` is
     // below `nstate`, its length.
-    unsafe {
-        let s = state_ptr.get().offset(istate.get() as isize);
-        istate.set(istate.get() + 1);
-        (*s).c = c;
-        (*s).out = out;
-        (*s).out1 = out1;
-        (*s).val = 0;
-        (*s).id = istate.get();
-        (*s).lastlist = [0, 0];
-        Some(s)
-    }
+    let s = unsafe { state_ptr.get().offset(istate.get() as isize) };
+    istate.set(istate.get() + 1);
+    unsafe { (*s).c = c };
+    unsafe { (*s).out = out };
+    unsafe { (*s).out1 = out1 };
+    unsafe { (*s).val = 0 };
+    unsafe { (*s).id = istate.get() };
+    unsafe { (*s).lastlist = [0, 0] };
+    Some(s)
 }
 
 /// A one-element patch list over the edge slot `slot`.
@@ -85,37 +83,31 @@ fn list1(slot: *mut *mut nfa_state_T) -> *mut Ptrlist {
     // SAFETY: `slot` is an `out`/`out1` field of a live state; writing a
     // list link into it is what the union is for, and `patch` overwrites it
     // with a state before the machine runs.
-    unsafe {
-        let list = slot.cast::<Ptrlist>();
-        (*list).next = core::ptr::null_mut();
-        list
-    }
+    let list = slot.cast::<Ptrlist>();
+    unsafe { (*list).next = core::ptr::null_mut() };
+    list
 }
 
 /// Point every edge in `list` at `state`.
 fn patch(list: *mut Ptrlist, state: *mut nfa_state_T) {
     // SAFETY: every node in the chain is an edge slot of a live state.
-    unsafe {
-        let mut node = list;
-        while !node.is_null() {
-            let next = (*node).next;
-            (*node).state = state;
-            node = next;
-        }
+    let mut node = list;
+    while !node.is_null() {
+        let next = unsafe { (*node).next };
+        unsafe { (*node).state = state };
+        node = next;
     }
 }
 
 /// Concatenate two patch lists, returning the first.
 fn append(first: *mut Ptrlist, second: *mut Ptrlist) -> *mut Ptrlist {
     // SAFETY: as `patch`; `first` is never empty where this is called.
-    unsafe {
-        let mut last = first;
-        while !(*last).next.is_null() {
-            last = (*last).next;
-        }
-        (*last).next = second;
-        first
+    let mut last = first;
+    while !unsafe { (*last).next.is_null() } {
+        last = unsafe { (*last).next };
     }
+    unsafe { (*last).next = second };
+    first
 }
 
 fn out_edge(s: *mut nfa_state_T) -> *mut *mut nfa_state_T {
@@ -348,12 +340,10 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                     return core::ptr::null_mut();
                 };
                 // SAFETY: both fragments are single member states.
-                unsafe {
-                    (*e2.start).val = (*e2.start).c;
-                    (*e2.start).c = NFA_RANGE_MAX;
-                    (*e1.start).val = (*e1.start).c;
-                    (*e1.start).c = NFA_RANGE_MIN;
-                }
+                unsafe { (*e2.start).val = (*e2.start).c };
+                unsafe { (*e2.start).c = NFA_RANGE_MAX };
+                unsafe { (*e1.start).val = (*e1.start).c };
+                unsafe { (*e1.start).c = NFA_RANGE_MIN };
                 patch(e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
@@ -523,15 +513,13 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
     // The accepting state, taken by hand rather than through `state`: it
     // must have id 0, which is how the matcher recognises it.
     // SAFETY: `istate` is below `nstate`, checked just above.
-    unsafe {
-        let matchstate = state_ptr.get().offset(istate.get() as isize);
-        istate.set(istate.get() + 1);
-        (*matchstate).c = NFA_MATCH;
-        (*matchstate).out = core::ptr::null_mut();
-        (*matchstate).out1 = core::ptr::null_mut();
-        (*matchstate).id = 0;
-        patch(e.out, matchstate);
-    }
+    let matchstate = unsafe { state_ptr.get().offset(istate.get() as isize) };
+    istate.set(istate.get() + 1);
+    unsafe { (*matchstate).c = NFA_MATCH };
+    unsafe { (*matchstate).out = core::ptr::null_mut() };
+    unsafe { (*matchstate).out1 = core::ptr::null_mut() };
+    unsafe { (*matchstate).id = 0 };
+    patch(e.out, matchstate);
     e.start
 }
 
@@ -587,48 +575,46 @@ fn closing_bracket(mopen: c_int) -> c_int {
 pub(crate) fn nfa_postprocess(prog: *mut nfa_regprog_T) {
     // SAFETY: `prog` is a program this module just built, with `nstate`
     // states inline.
-    unsafe {
-        let states = &raw mut (*prog).state as *mut nfa_state_T;
-        for i in 0..(*prog).nstate {
-            let s = states.offset(i as isize);
-            let c = (*s).c;
-            if !matches!(
+    let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
+    for i in 0..unsafe { (*prog).nstate } {
+        let s = unsafe { states.offset(i as isize) };
+        let c = unsafe { (*s).c };
+        if !matches!(
+            c,
+            NFA_START_INVISIBLE
+                | NFA_START_INVISIBLE_NEG
+                | NFA_START_INVISIBLE_BEFORE
+                | NFA_START_INVISIBLE_BEFORE_NEG
+        ) {
+            continue;
+        }
+        let follows = unsafe { (*(*s).out1).out };
+        let directly = if match_follows(follows, 0) {
+            // The pattern ends right after it, so there is nothing
+            // cheaper to try first.
+            true
+        } else {
+            let ch_invisible = failure_chance(unsafe { (*s).out }, 0);
+            let ch_follows = failure_chance(follows, 0);
+            if matches!(
                 c,
-                NFA_START_INVISIBLE
-                    | NFA_START_INVISIBLE_NEG
-                    | NFA_START_INVISIBLE_BEFORE
-                    | NFA_START_INVISIBLE_BEFORE_NEG
+                NFA_START_INVISIBLE_BEFORE | NFA_START_INVISIBLE_BEFORE_NEG
             ) {
-                continue;
-            }
-            let follows = (*(*s).out1).out;
-            let directly = if match_follows(follows, 0) {
-                // The pattern ends right after it, so there is nothing
-                // cheaper to try first.
-                true
-            } else {
-                let ch_invisible = failure_chance((*s).out, 0);
-                let ch_follows = failure_chance(follows, 0);
-                if matches!(
-                    c,
-                    NFA_START_INVISIBLE_BEFORE | NFA_START_INVISIBLE_BEFORE_NEG
-                ) {
-                    // A lookbehind of unknown width has to be retried from
-                    // every start position, so postpone it unless what
-                    // follows is very much cheaper.
-                    if (*s).val <= 0 && ch_follows > 0 {
-                        false
-                    } else {
-                        ch_follows * 10 < ch_invisible
-                    }
+                // A lookbehind of unknown width has to be retried from
+                // every start position, so postpone it unless what
+                // follows is very much cheaper.
+                if unsafe { (*s).val } <= 0 && ch_follows > 0 {
+                    false
                 } else {
-                    ch_follows < ch_invisible
+                    ch_follows * 10 < ch_invisible
                 }
-            };
-            if directly {
-                // The `_FIRST` variant of each opcode is the next one along.
-                (*s).c += 1;
+            } else {
+                ch_follows < ch_invisible
             }
+        };
+        if directly {
+            // The `_FIRST` variant of each opcode is the next one along.
+            unsafe { (*s).c += 1 };
         }
     }
 }

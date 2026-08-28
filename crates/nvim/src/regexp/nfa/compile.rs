@@ -62,28 +62,26 @@ pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> c
         return 0;
     }
     // SAFETY: the caller's program; `out`/`out1` stay inside it.
-    unsafe {
-        let mut p = start;
-        while !p.is_null() {
-            match (*p).c {
-                NFA_BOL | NFA_BOF => return 1,
-                // Zero-width, so the anchor is whatever follows. Note that
-                // `\%23l` and its neighbours are *not* here: unlike
-                // `nfa_get_regstart` below, a position assertion stops this
-                // walk.
-                NFA_CURSOR | NFA_VISUAL => p = (*p).out,
-                c if is_bracket(c) => p = (*p).out,
-                // Anchored only if both alternatives are.
-                NFA_SPLIT => {
-                    return (nfa_get_reganch((*p).out, depth + 1) != 0
-                        && nfa_get_reganch((*p).out1, depth + 1) != 0)
-                        as c_int;
-                }
-                _ => return 0,
+    let mut p = start;
+    while !p.is_null() {
+        match unsafe { (*p).c } {
+            NFA_BOL | NFA_BOF => return 1,
+            // Zero-width, so the anchor is whatever follows. Note that
+            // `\%23l` and its neighbours are *not* here: unlike
+            // `nfa_get_regstart` below, a position assertion stops this
+            // walk.
+            NFA_CURSOR | NFA_VISUAL => p = unsafe { (*p).out },
+            c if is_bracket(c) => p = unsafe { (*p).out },
+            // Anchored only if both alternatives are.
+            NFA_SPLIT => {
+                return (unsafe { nfa_get_reganch((*p).out, depth + 1) } != 0
+                    && unsafe { nfa_get_reganch((*p).out1, depth + 1) } != 0)
+                    as c_int;
             }
+            _ => return 0,
         }
-        0
     }
+    0
 }
 
 /// The character every match must start with, or 0 if there is no single
@@ -97,28 +95,26 @@ pub(crate) unsafe fn nfa_get_regstart(start: *mut nfa_state_T, depth: c_int) -> 
         return 0;
     }
     // SAFETY: the caller's program; `out`/`out1` stay inside it.
-    unsafe {
-        let mut p = start;
-        while !p.is_null() {
-            match (*p).c {
-                // Zero-width: the start character is whatever follows.
-                // `NFA_CURSOR..=NFA_VISUAL` is the whole position-assertion
-                // block, `\%#` through `\%V`.
-                NFA_BOL | NFA_BOF | NFA_BOW | NFA_EOW => p = (*p).out,
-                NFA_CURSOR..=NFA_VISUAL => p = (*p).out,
-                c if is_bracket(c) => p = (*p).out,
-                // Only if both alternatives agree.
-                NFA_SPLIT => {
-                    let c1 = nfa_get_regstart((*p).out, depth + 1);
-                    let c2 = nfa_get_regstart((*p).out1, depth + 1);
-                    return if c1 == c2 { c1 } else { 0 };
-                }
-                // A literal character is one; any other opcode is not.
-                c => return if c > 0 { c } else { 0 },
+    let mut p = start;
+    while !p.is_null() {
+        match unsafe { (*p).c } {
+            // Zero-width: the start character is whatever follows.
+            // `NFA_CURSOR..=NFA_VISUAL` is the whole position-assertion
+            // block, `\%#` through `\%V`.
+            NFA_BOL | NFA_BOF | NFA_BOW | NFA_EOW => p = unsafe { (*p).out },
+            NFA_CURSOR..=NFA_VISUAL => p = unsafe { (*p).out },
+            c if is_bracket(c) => p = unsafe { (*p).out },
+            // Only if both alternatives agree.
+            NFA_SPLIT => {
+                let c1 = unsafe { nfa_get_regstart((*p).out, depth + 1) };
+                let c2 = unsafe { nfa_get_regstart((*p).out1, depth + 1) };
+                return if c1 == c2 { c1 } else { 0 };
             }
+            // A literal character is one; any other opcode is not.
+            c => return if c > 0 { c } else { 0 },
         }
-        0
     }
+    0
 }
 
 /// The literal text the whole pattern matches, as a fresh NUL-terminated
@@ -131,33 +127,31 @@ pub(crate) unsafe fn nfa_get_match_text(start: *mut nfa_state_T) -> *mut uint8_t
     // SAFETY: the caller's program. The measuring walk proves the chain
     // ends in `NFA_MCLOSE` -> `NFA_MATCH` before the writing walk follows
     // it again.
-    unsafe {
-        if (*start).c != NFA_MOPEN {
-            return core::ptr::null_mut();
-        }
-        let mut p = (*start).out;
-        let mut len = 0;
-        while (*p).c > 0 {
-            len += utf_char2len((*p).c);
-            p = (*p).out;
-        }
-        if (*p).c != NFA_MCLOSE || (*(*p).out).c != NFA_MATCH {
-            return core::ptr::null_mut();
-        }
-
-        // `len` counted the first character too, and the write below skips
-        // it (it is reported separately as the program's `regstart`), so
-        // there is always at least one spare byte for the terminator.
-        let text = xmalloc(len as usize) as *mut uint8_t;
-        let mut out = text;
-        let mut p = (*(*start).out).out;
-        while (*p).c > 0 {
-            out = out.offset(utf_char2bytes((*p).c, out.cast()) as isize);
-            p = (*p).out;
-        }
-        *out = NUL as uint8_t;
-        text
+    if unsafe { (*start).c } != NFA_MOPEN {
+        return core::ptr::null_mut();
     }
+    let mut p = unsafe { (*start).out };
+    let mut len = 0;
+    while unsafe { (*p).c } > 0 {
+        len += utf_char2len(unsafe { (*p).c });
+        p = unsafe { (*p).out };
+    }
+    if unsafe { (*p).c } != NFA_MCLOSE || unsafe { (*(*p).out).c } != NFA_MATCH {
+        return core::ptr::null_mut();
+    }
+
+    // `len` counted the first character too, and the write below skips
+    // it (it is reported separately as the program's `regstart`), so
+    // there is always at least one spare byte for the terminator.
+    let text = unsafe { xmalloc(len as usize) } as *mut uint8_t;
+    let mut out = text;
+    let mut p = unsafe { (*(*start).out).out };
+    while unsafe { (*p).c } > 0 {
+        out = unsafe { out.offset(utf_char2bytes((*p).c, out.cast()) as isize) };
+        p = unsafe { (*p).out };
+    }
+    unsafe { *out = NUL as uint8_t };
+    text
 }
 
 /// The masks of `[a-z0-9_]`-shaped pieces that add up to one of the
@@ -214,50 +208,51 @@ pub(crate) unsafe fn nfa_recognize_char_class(
     let end = end.cast_mut();
     // SAFETY: the caller's collection; every read is between `start` and
     // `end`, which is where the loop keeps `p`.
-    unsafe {
-        if *end as c_int != ']' as c_int {
+    if unsafe { *end } as c_int != ']' as c_int {
+        return FAIL;
+    }
+    let mut config = 0;
+    let mut newl = extra_newl == 1;
+    let mut p = start;
+    if unsafe { *p } == b'^' {
+        config |= CLASS_not;
+        p = unsafe { p.add(1) };
+    }
+    while p < end {
+        if unsafe { p.add(2) } < end && unsafe { *p.add(1) } == b'-' {
+            config |= match (unsafe { *p }, unsafe { *p.add(2) }) {
+                (b'0', b'9') => CLASS_o9,
+                (b'0', b'7') => CLASS_o7,
+                (b'a', b'z') => CLASS_az,
+                (b'a', b'f') => CLASS_af,
+                (b'A', b'Z') => CLASS_AZ,
+                (b'A', b'F') => CLASS_AF,
+                _ => return FAIL,
+            };
+            p = unsafe { p.add(3) };
+        } else if unsafe { p.add(1) } < end
+            && unsafe { *p } == b'\\'
+            && unsafe { *p.add(1) } == b'n'
+        {
+            newl = true;
+            p = unsafe { p.add(2) };
+        } else if unsafe { *p } == b'_' {
+            config |= CLASS_underscore;
+            p = unsafe { p.add(1) };
+        } else if unsafe { *p } == b'\n' {
+            newl = true;
+            p = unsafe { p.add(1) };
+        } else {
             return FAIL;
         }
-        let mut config = 0;
-        let mut newl = extra_newl == 1;
-        let mut p = start;
-        if *p == b'^' {
-            config |= CLASS_not;
-            p = p.add(1);
-        }
-        while p < end {
-            if p.add(2) < end && *p.add(1) == b'-' {
-                config |= match (*p, *p.add(2)) {
-                    (b'0', b'9') => CLASS_o9,
-                    (b'0', b'7') => CLASS_o7,
-                    (b'a', b'z') => CLASS_az,
-                    (b'a', b'f') => CLASS_af,
-                    (b'A', b'Z') => CLASS_AZ,
-                    (b'A', b'F') => CLASS_AF,
-                    _ => return FAIL,
-                };
-                p = p.add(3);
-            } else if p.add(1) < end && *p == b'\\' && *p.add(1) == b'n' {
-                newl = true;
-                p = p.add(2);
-            } else if *p == b'_' {
-                config |= CLASS_underscore;
-                p = p.add(1);
-            } else if *p == b'\n' {
-                newl = true;
-                p = p.add(1);
-            } else {
-                return FAIL;
-            }
-        }
-        // A range that straddled `end` would have left `p` past it.
-        if p != end {
-            return FAIL;
-        }
-        let extra = if newl { NFA_ADD_NL } else { extra_newl };
-        match class_opcode(config) {
-            Some(op) => extra + op,
-            None => FAIL,
-        }
+    }
+    // A range that straddled `end` would have left `p` past it.
+    if p != end {
+        return FAIL;
+    }
+    let extra = if newl { NFA_ADD_NL } else { extra_newl };
+    match class_opcode(config) {
+        Some(op) => extra + op,
+        None => FAIL,
     }
 }

@@ -63,10 +63,8 @@ pub(crate) fn char_at(p: *mut c_char, off: c_int) -> c_int {
 pub(crate) fn step_back(anchor: *mut c_char) {
     // SAFETY: the cursor is past `anchor`, which is where this atom began,
     // and `utf_head_off` walks back no further than `anchor`.
-    unsafe {
-        let prev = regparse.get().sub(1);
-        regparse.set(prev.sub(utf_head_off(anchor, prev) as usize));
-    }
+    let prev = unsafe { regparse.get().sub(1) };
+    regparse.set(unsafe { prev.sub(utf_head_off(anchor, prev) as usize) });
 }
 
 /// Is `c` a combining character?

@@ -201,10 +201,8 @@ fn nomatch_unless(ok: bool) -> c_int {
 fn char_class(rex: Rex) -> c_int {
     // SAFETY: `rex.input` points into the current line and `reg_buf` is the
     // buffer being matched, so it has a 'iskeyword' table.
-    unsafe {
-        let chartab = (&raw mut (*rex.reg_buf()).b_chartab).cast::<uint64_t>();
-        mb_get_class_tab(rex.input_str(), chartab)
-    }
+    let chartab = (unsafe { &raw mut (*rex.reg_buf()).b_chartab }).cast::<uint64_t>();
+    unsafe { mb_get_class_tab(rex.input_str(), chartab) }
 }
 
 /// `\%23v` compares against this: the screen column the cursor sits in.
@@ -288,40 +286,40 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
 fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
     // SAFETY: `scan` is an `EXACTLY` node, whose operand is a NUL-terminated
     // string; `rex.input` is NUL-terminated too, so `cstrncmp` stops.
-    unsafe {
-        let opnd = scan.add(3);
-        if *opnd as c_int != rex.byte() as c_int && !rex.reg_ic() {
+    let opnd = unsafe { scan.add(3) };
+    if unsafe { *opnd } as c_int != rex.byte() as c_int && !rex.reg_ic() {
+        return RA_NOMATCH;
+    }
+    if unsafe { *opnd } as c_int == NUL {
+        return RA_CONT;
+    }
+    let mut len;
+    // A one-byte operand with no case folding needs no compare: the
+    // first-byte test above already settled it.
+    if unsafe { *opnd.add(1) } as c_int == NUL && !rex.reg_ic() {
+        len = 1;
+    } else {
+        len = unsafe { strlen(opnd.cast()) } as c_int;
+        if unsafe { cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) } != 0 {
             return RA_NOMATCH;
         }
-        if *opnd as c_int == NUL {
-            return RA_CONT;
-        }
-        let mut len;
-        // A one-byte operand with no case folding needs no compare: the
-        // first-byte test above already settled it.
-        if *opnd.add(1) as c_int == NUL && !rex.reg_ic() {
-            len = 1;
-        } else {
-            len = strlen(opnd.cast()) as c_int;
-            if cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) != 0 {
-                return RA_NOMATCH;
-            }
-        }
-        // A combining character right after the match means the input has a
-        // different grapheme here, unless 'reg_icombine' or a following `\%C`
-        // says to ignore combining characters.
-        if utf_composinglike(
+    }
+    // A combining character right after the match means the input has a
+    // different grapheme here, unless 'reg_icombine' or a following `\%C`
+    // says to ignore combining characters.
+    if unsafe {
+        utf_composinglike(
             rex.input().cast(),
             rex.input_str().add(len as usize),
             core::ptr::null_mut::<GraphemeState>(),
-        ) && !rex.reg_icombine()
-            && *next as c_int != RE_COMPOSING
-        {
-            return RA_NOMATCH;
-        }
-        rex.advance(len);
-        RA_CONT
+        )
+    } && !rex.reg_icombine()
+        && unsafe { *next } as c_int != RE_COMPOSING
+    {
+        return RA_NOMATCH;
     }
+    rex.advance(len);
+    RA_CONT
 }
 
 /// `[abc]` / `[^abc]`. The base character has to be in (or out of) the set,
@@ -329,33 +327,31 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
 fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
     // SAFETY: `scan` is an `ANYOF`/`ANYBUT` node with a NUL-terminated
     // operand; `rex.input` is NUL-terminated.
-    unsafe {
-        let mut q = scan.add(3);
-        if c == NUL {
-            return RA_NOMATCH;
-        }
-        if cstrchr(rex, q.cast(), c).is_null() == positive {
-            return RA_NOMATCH;
-        }
-        // The set entry may itself be a grapheme; its combining part has to
-        // match the input's byte for byte.
-        let combining = utfc_ptr2len(q.cast()) - utf_ptr2len(q.cast());
-        rex.advance(rex.base_len());
-        q = q.add(utf_ptr2len(q.cast()) as usize);
-        let mut status = RA_CONT;
-        if combining != 0 {
-            for i in 0..combining as usize {
-                if *q.add(i) != *rex.input().add(i) {
-                    status = RA_NOMATCH;
-                    break;
-                }
-            }
-            // Upstream advances even when the tail did not match; the status
-            // is what decides the outcome.
-            rex.advance(combining);
-        }
-        status
+    let mut q = unsafe { scan.add(3) };
+    if c == NUL {
+        return RA_NOMATCH;
     }
+    if unsafe { cstrchr(rex, q.cast(), c) }.is_null() == positive {
+        return RA_NOMATCH;
+    }
+    // The set entry may itself be a grapheme; its combining part has to
+    // match the input's byte for byte.
+    let combining = unsafe { utfc_ptr2len(q.cast()) } - unsafe { utf_ptr2len(q.cast()) };
+    rex.advance(rex.base_len());
+    q = unsafe { q.add(utf_ptr2len(q.cast()) as usize) };
+    let mut status = RA_CONT;
+    if combining != 0 {
+        for i in 0..combining as usize {
+            if unsafe { *q.add(i) } != unsafe { *rex.input().add(i) } {
+                status = RA_NOMATCH;
+                break;
+            }
+        }
+        // Upstream advances even when the tail did not match; the status
+        // is what decides the outcome.
+        rex.advance(combining);
+    }
+    status
 }
 
 /// One multibyte character, possibly a bare combining character — which
@@ -363,47 +359,45 @@ fn collection(rex: Rex, scan: *mut uint8_t, c: c_int, positive: bool) -> c_int {
 fn multibyte(rex: Rex, scan: *mut uint8_t) -> c_int {
     // SAFETY: `scan` is a `MULTIBYTECODE` node; both operand and input are
     // NUL-terminated.
-    unsafe {
-        let opnd = scan.add(3);
-        let mut len = utfc_ptr2len(opnd.cast());
-        if len < 2 {
-            return RA_NOMATCH;
-        }
-        let opndc = utf_ptr2char(opnd.cast());
-        if utf_iscomposing_legacy(opndc) {
-            // A bare combining character matches wherever it appears in the
-            // grapheme at the cursor.
-            let mut status = RA_NOMATCH;
-            let mut i = 0;
-            while *rex.input().add(i as usize) as c_int != NUL {
-                let at = rex.input_str().add(i as usize);
-                let inpc = utf_ptr2char(at);
-                if !utf_iscomposing_legacy(inpc) {
-                    // The base character is allowed to be the first thing
-                    // looked at; anything past it ends the grapheme.
-                    if i > 0 {
-                        break;
-                    }
-                } else if opndc == inpc {
-                    // Include the combining characters that follow.
-                    len = i + utfc_ptr2len(at);
-                    // RA_MATCH, not RA_CONT: upstream ends the whole pattern
-                    // here. Preserved rather than "fixed".
-                    status = RA_MATCH;
+    let opnd = unsafe { scan.add(3) };
+    let mut len = unsafe { utfc_ptr2len(opnd.cast()) };
+    if len < 2 {
+        return RA_NOMATCH;
+    }
+    let opndc = unsafe { utf_ptr2char(opnd.cast()) };
+    if utf_iscomposing_legacy(opndc) {
+        // A bare combining character matches wherever it appears in the
+        // grapheme at the cursor.
+        let mut status = RA_NOMATCH;
+        let mut i = 0;
+        while unsafe { *rex.input().add(i as usize) } as c_int != NUL {
+            let at = unsafe { rex.input_str().add(i as usize) };
+            let inpc = unsafe { utf_ptr2char(at) };
+            if !utf_iscomposing_legacy(inpc) {
+                // The base character is allowed to be the first thing
+                // looked at; anything past it ends the grapheme.
+                if i > 0 {
                     break;
                 }
-                i += utf_ptr2len(at);
+            } else if opndc == inpc {
+                // Include the combining characters that follow.
+                len = i + unsafe { utfc_ptr2len(at) };
+                // RA_MATCH, not RA_CONT: upstream ends the whole pattern
+                // here. Preserved rather than "fixed".
+                status = RA_MATCH;
+                break;
             }
-            // Upstream advances whether or not it found the character.
-            rex.advance(len);
-            return status;
+            i += unsafe { utf_ptr2len(at) };
         }
-        if cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) != 0 {
-            return RA_NOMATCH;
-        }
+        // Upstream advances whether or not it found the character.
         rex.advance(len);
-        RA_CONT
+        return status;
     }
+    if unsafe { cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) } != 0 {
+        return RA_NOMATCH;
+    }
+    rex.advance(len);
+    RA_CONT
 }
 
 /// `\1`..`\9`: the text group `no` captured, again.
@@ -411,55 +405,55 @@ fn back_reference(rex: Rex, no: c_int) -> c_int {
     cleanup_subexpr(rex);
     // SAFETY: the capture slots hold either null/negative-line markers or
     // positions inside the text being matched.
-    unsafe {
-        let mut len = 0;
-        let mut status = RA_CONT;
-        if !rex.multi() {
-            // A string match: the capture is a pair of pointers.
-            let start = *rex.reg_startp().add(no as usize);
-            let end = *rex.reg_endp().add(no as usize);
-            if !start.is_null() && !end.is_null() {
-                len = end.offset_from(start) as c_int;
-                if cstrncmp(rex, start.cast(), rex.input().cast(), &mut len) != 0 {
-                    status = RA_NOMATCH;
-                }
+    let mut len = 0;
+    let mut status = RA_CONT;
+    if !rex.multi() {
+        // A string match: the capture is a pair of pointers.
+        let start = unsafe { *rex.reg_startp().add(no as usize) };
+        let end = unsafe { *rex.reg_endp().add(no as usize) };
+        if !start.is_null() && !end.is_null() {
+            len = unsafe { end.offset_from(start) } as c_int;
+            if unsafe { cstrncmp(rex, start.cast(), rex.input().cast(), &mut len) } != 0 {
+                status = RA_NOMATCH;
             }
-        } else {
-            let start = *rex.reg_startpos().add(no as usize);
-            let end = *rex.reg_endpos().add(no as usize);
-            if start.lnum < 0 || end.lnum < 0 {
-                // Never captured: an empty match.
-            } else if start.lnum == rex.lnum() && end.lnum == rex.lnum() {
-                len = end.col - start.col;
-                if cstrncmp(
+        }
+    } else {
+        let start = unsafe { *rex.reg_startpos().add(no as usize) };
+        let end = unsafe { *rex.reg_endpos().add(no as usize) };
+        if start.lnum < 0 || end.lnum < 0 {
+            // Never captured: an empty match.
+        } else if start.lnum == rex.lnum() && end.lnum == rex.lnum() {
+            len = end.col - start.col;
+            if unsafe {
+                cstrncmp(
                     rex,
                     rex.line()
                         .cast::<core::ffi::c_char>()
                         .add(start.col as usize),
                     rex.input().cast(),
                     &mut len,
-                ) != 0
-                {
-                    status = RA_NOMATCH;
-                }
-            } else {
-                let r = match_with_backref(
-                    rex,
-                    start.lnum,
-                    start.col,
-                    end.lnum,
-                    end.col,
-                    Some(&mut len),
-                );
-                if r != RA_MATCH {
-                    status = r;
-                }
+                )
+            } != 0
+            {
+                status = RA_NOMATCH;
+            }
+        } else {
+            let r = match_with_backref(
+                rex,
+                start.lnum,
+                start.col,
+                end.lnum,
+                end.col,
+                Some(&mut len),
+            );
+            if r != RA_MATCH {
+                status = r;
             }
         }
-        // Upstream advances by whatever `len` ended up as, match or not.
-        rex.advance(len);
-        status
     }
+    // Upstream advances by whatever `len` ended up as, match or not.
+    rex.advance(len);
+    status
 }
 
 /// `\z1`..`\z9`: the text the enclosing syntax region captured. Missing
@@ -471,16 +465,14 @@ fn external_reference(rex: Rex, no: c_int) -> c_int {
         return RA_CONT;
     }
     // SAFETY: `re_extmatch_in`'s entries are NUL-terminated copies.
-    unsafe {
-        let text = (*captures).matches[no as usize];
-        if text.is_null() {
-            return RA_CONT;
-        }
-        let mut len = strlen(text.cast()) as c_int;
-        if cstrncmp(rex, text.cast(), rex.input().cast(), &mut len) != 0 {
-            return RA_NOMATCH;
-        }
-        rex.advance(len);
-        RA_CONT
+    let text = unsafe { (*captures).matches[no as usize] };
+    if text.is_null() {
+        return RA_CONT;
     }
+    let mut len = unsafe { strlen(text.cast()) } as c_int;
+    if unsafe { cstrncmp(rex, text.cast(), rex.input().cast(), &mut len) } != 0 {
+        return RA_NOMATCH;
+    }
+    rex.advance(len);
+    RA_CONT
 }

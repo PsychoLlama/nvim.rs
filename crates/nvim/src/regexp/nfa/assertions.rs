@@ -46,28 +46,27 @@ fn window(rex: Rex) -> *mut win_T {
 /// it.
 pub(crate) fn at_line(rex: Rex, state: *mut nfa_state_T) -> bool {
     // SAFETY: `state` is a live state of the running program.
-    unsafe {
-        let want = (*state).val;
-        assert!(
-            want >= 0 && rex.buf_lnum() >= 0,
-            "line assertion out of range"
-        );
-        rex.multi() && nfa_re_num_cmp(want as u64, op(state) - NFA_LNUM, lnum(rex) as u64)
-    }
+    let want = unsafe { (*state).val };
+    assert!(
+        want >= 0 && rex.buf_lnum() >= 0,
+        "line assertion out of range"
+    );
+    rex.multi() && nfa_re_num_cmp(want as u64, op(state) - NFA_LNUM, lnum(rex) as u64)
 }
 
 /// `\%23c`: the byte column, counted from one.
 pub(crate) fn at_col(rex: Rex, state: *mut nfa_state_T) -> bool {
     // SAFETY: as `at_line`.
-    unsafe {
-        debug_assert!((*state).val >= 0, "column assertion out of range");
-        assert!(rex.input() >= rex.line(), "input before the line");
-        nfa_re_num_cmp(
-            (*state).val as u64,
-            op(state) - NFA_COL,
-            col(rex) as u64 + 1,
-        )
-    }
+    debug_assert!(
+        unsafe { (*state).val } >= 0,
+        "column assertion out of range"
+    );
+    assert!(rex.input() >= rex.line(), "input before the line");
+    nfa_re_num_cmp(
+        unsafe { (*state).val } as u64,
+        op(state) - NFA_COL,
+        col(rex) as u64 + 1,
+    )
 }
 
 /// `\%23v`: the virtual column, counted from one — what the character looks
@@ -75,33 +74,31 @@ pub(crate) fn at_col(rex: Rex, state: *mut nfa_state_T) -> bool {
 pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
     // SAFETY: as `at_line`; `reg_getline` re-reads the line because
     // `win_linetabsize` can move the memline's buffer.
-    unsafe {
-        let op = op(state) - NFA_VCOL;
-        let want = (*state).val;
-        let col = col(rex);
-        // A virtual column is never smaller than the byte column divided by
-        // the widest a character can be, so a `\%<` can be answered without
-        // measuring anything.
-        if op != 1 && col > want * MB_MAXBYTES as c_int {
-            return false;
-        }
-        let wp = window(rex);
-        // Likewise for `\%>`, but the bound is the tab width: no character
-        // expands to more columns than one tab does.
-        if op == 1 && col - 1 > want && col > 100 {
-            let ts = ((*(*wp).w_buffer).b_p_ts).max(4);
-            if col as i64 > want as i64 * ts {
-                return true;
-            }
-        }
-        let mut lnum = if rex.multi() { lnum(rex) } else { 1 };
-        if rex.multi() && (lnum <= 0 || lnum > (*(*wp).w_buffer).b_ml.ml_line_count) {
-            lnum = 1;
-        }
-        let vcol = win_linetabsize(Win::new(wp), lnum, rex.line() as *mut c_char, col);
-        assert!(want >= 0, "virtual column assertion out of range");
-        nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
+    let op = op(state) - NFA_VCOL;
+    let want = unsafe { (*state).val };
+    let col = col(rex);
+    // A virtual column is never smaller than the byte column divided by
+    // the widest a character can be, so a `\%<` can be answered without
+    // measuring anything.
+    if op != 1 && col > want * MB_MAXBYTES as c_int {
+        return false;
     }
+    let wp = window(rex);
+    // Likewise for `\%>`, but the bound is the tab width: no character
+    // expands to more columns than one tab does.
+    if op == 1 && col - 1 > want && col > 100 {
+        let ts = (unsafe { (*(*wp).w_buffer).b_p_ts }).max(4);
+        if col as i64 > want as i64 * ts {
+            return true;
+        }
+    }
+    let mut lnum = if rex.multi() { lnum(rex) } else { 1 };
+    if rex.multi() && (lnum <= 0 || lnum > unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }) {
+        lnum = 1;
+    }
+    let vcol = unsafe { win_linetabsize(Win::new(wp), lnum, rex.line() as *mut c_char, col) };
+    assert!(want >= 0, "virtual column assertion out of range");
+    nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
 }
 
 /// `\%'m`: the position of mark `m`.
@@ -110,57 +107,55 @@ pub(crate) fn at_mark(rex: Rex, state: *mut nfa_state_T) -> bool {
     // store of its own, so it is computed straight into this frame's slot.
     let mut slot = fmark_T::UNSET;
     // SAFETY: reads the match context and the buffer's marks.
-    unsafe {
-        let col = if rex.multi() { col(rex) } else { 0 };
-        let fm: *mut fmark_T = mark_get(
+    let col = if rex.multi() { col(rex) } else { 0 };
+    let fm: *mut fmark_T = unsafe {
+        mark_get(
             rex.reg_buf(),
             curwin.get(),
             &raw mut slot,
             kMarkBufLocal,
             (*state).val,
-        );
-        // Looking a mark up can move the memline's buffer out from under
-        // the match.
-        if rex.multi() {
-            rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
-            rex.set_input(rex.line().offset(col as isize));
-        }
-        if fm.is_null() || (*fm).mark.lnum <= 0 {
-            return false;
-        }
-        let pos = (*fm).mark;
-        let here = lnum(rex);
-        // A mark parked at MAXCOL means the end of its line.
-        let pos_col = if pos.lnum == here && pos.col == MAXCOL as c_int {
-            reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
-        } else {
-            pos.col
-        };
-        let want = op(state);
-        if pos.lnum == here {
-            if pos_col == col {
-                want == NFA_MARK
-            } else if pos_col < col {
-                want == NFA_MARK_GT
-            } else {
-                want == NFA_MARK_LT
-            }
-        } else if pos.lnum < here {
+        )
+    };
+    // Looking a mark up can move the memline's buffer out from under
+    // the match.
+    if rex.multi() {
+        rex.set_line(reg_getline(rex, rex.lnum()) as *mut uint8_t);
+        rex.set_input(unsafe { rex.line().offset(col as isize) });
+    }
+    if fm.is_null() || unsafe { (*fm).mark.lnum } <= 0 {
+        return false;
+    }
+    let pos = unsafe { (*fm).mark };
+    let here = lnum(rex);
+    // A mark parked at MAXCOL means the end of its line.
+    let pos_col = if pos.lnum == here && pos.col == MAXCOL as c_int {
+        reg_getline_len(rex, pos.lnum - rex.reg_firstlnum())
+    } else {
+        pos.col
+    };
+    let want = op(state);
+    if pos.lnum == here {
+        if pos_col == col {
+            want == NFA_MARK
+        } else if pos_col < col {
             want == NFA_MARK_GT
         } else {
             want == NFA_MARK_LT
         }
+    } else if pos.lnum < here {
+        want == NFA_MARK_GT
+    } else {
+        want == NFA_MARK_LT
     }
 }
 
 /// `\%#`: the cursor's own position.
 pub(crate) fn at_cursor(rex: Rex) -> bool {
     // SAFETY: reads the match context and its window.
-    unsafe {
-        !rex.reg_win().is_null()
-            && lnum(rex) == (*rex.reg_win()).w_cursor.lnum
-            && col(rex) == (*rex.reg_win()).w_cursor.col
-    }
+    !rex.reg_win().is_null()
+        && lnum(rex) == unsafe { (*rex.reg_win()).w_cursor.lnum }
+        && col(rex) == unsafe { (*rex.reg_win()).w_cursor.col }
 }
 
 /// `\%V`: inside the Visual area.

@@ -273,15 +273,15 @@ fn cursor_col() -> i64 {
 fn cursor_vcol() -> i64 {
     // SAFETY: as `cursor_lnum`; `getvvcol` writes only through the pointers
     // it is given.
+    let mut vcol: colnr_T = 0;
     unsafe {
-        let mut vcol: colnr_T = 0;
         getvvcol(
             Win::new(curwin.get()),
             &raw mut (*curwin.get()).w_cursor,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
             &raw mut vcol,
-        );
-        vcol as i64
-    }
+        )
+    };
+    vcol as i64
 }

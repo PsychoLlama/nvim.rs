@@ -141,11 +141,9 @@ pub(crate) fn reg_getline_len(rex: Rex, lnum: linenr_T) -> colnr_T {
 /// hands it to a highlighter that outlives the match.
 pub(crate) fn make_extmatch() -> *mut reg_extmatch_T {
     // SAFETY: xcalloc returns a zeroed allocation of the requested size.
-    unsafe {
-        let em = xcalloc(1, size_of::<reg_extmatch_T>()) as *mut reg_extmatch_T;
-        (*em).refcnt = 1;
-        em
-    }
+    let em = unsafe { xcalloc(1, size_of::<reg_extmatch_T>()) } as *mut reg_extmatch_T;
+    unsafe { (*em).refcnt = 1 };
+    em
 }
 
 /// Take a reference to `em`, which may be NULL.
@@ -166,19 +164,17 @@ pub unsafe fn ref_extmatch(em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
 ///
 /// `em` must be null or a live [`make_extmatch`] allocation.
 pub unsafe fn unref_extmatch(em: *mut reg_extmatch_T) {
-    unsafe {
-        if em.is_null() {
-            return;
-        }
-        (*em).refcnt -= 1;
-        if (*em).refcnt > 0 {
-            return;
-        }
-        for m in (*em).matches {
-            xfree(m.cast());
-        }
-        xfree(em.cast());
+    if em.is_null() {
+        return;
     }
+    unsafe { (*em).refcnt -= 1 };
+    if unsafe { (*em).refcnt } > 0 {
+        return;
+    }
+    for m in unsafe { (*em).matches } {
+        unsafe { xfree(m.cast()) };
+    }
+    unsafe { xfree(em.cast()) };
 }
 
 /// The character class of the character before the cursor, or -1 at the
@@ -190,12 +186,10 @@ pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
     // SAFETY: the cursor is past the start of the line being matched, so the
     // byte before it is in the line and `utf_head_off` walks back no further
     // than `line`; `reg_buf` is the buffer whose 'iskeyword' applies.
-    unsafe {
-        let line = rex.line().cast::<c_char>();
-        let prev = rex.input_str().sub(1);
-        let chartab = (&raw mut (*rex.reg_buf()).b_chartab).cast::<u64>();
-        mb_get_class_tab(prev.sub(utf_head_off(line, prev) as usize), chartab)
-    }
+    let line = rex.line().cast::<c_char>();
+    let prev = unsafe { rex.input_str().sub(1) };
+    let chartab = (unsafe { &raw mut (*rex.reg_buf()).b_chartab }).cast::<u64>();
+    unsafe { mb_get_class_tab(prev.sub(utf_head_off(line, prev) as usize), chartab) }
 }
 
 /// Is the position being matched inside the Visual area? Backs `\%V`.
@@ -255,11 +249,9 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         // SAFETY: `wp` is a live window and the two positions are in its
         // buffer; the null argument is the "start of the character" output
         // this caller does not want.
-        unsafe {
-            let nul = core::ptr::null_mut();
-            getvvcol(wp, &raw mut top, &raw mut start, nul, &raw mut end);
-            getvvcol(wp, &raw mut bot, &raw mut start2, nul, &raw mut end2);
-        }
+        let nul = core::ptr::null_mut();
+        unsafe { getvvcol(wp, &raw mut top, &raw mut start, nul, &raw mut end) };
+        unsafe { getvvcol(wp, &raw mut bot, &raw mut start2, nul, &raw mut end2) };
         start = start.min(start2);
         end = end.max(end2);
         // `$` in blockwise Visual stretches the block to end of line.
@@ -283,7 +275,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
 /// magic number survived? Only that engine's programs carry one.
 pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
     // SAFETY: a running match holds a live program.
-    let nfa = unsafe { (*rex.regprog()).engine }.cast_const() == &raw const nfa_regengine;
+    let nfa = unsafe { (*rex.regprog()).engine.cast_const() } == &raw const nfa_regengine;
     // SAFETY: anything that is not the NFA's is this engine's, and opens with
     // the magic byte.
     let wrong = !nfa && unsafe { BtProg::of_match(rex) }.is_some_and(|p| p.magic() != REGMAGIC);
@@ -323,28 +315,24 @@ fn cleanup(rex: Rex, z: bool) {
         }
     } else if rex.multi() {
         // SAFETY: the caller's match structure holds NSUBEXP of each.
-        unsafe {
-            blank(
-                core::slice::from_raw_parts_mut(rex.reg_startpos(), n),
-                UNSET_POS,
-            );
-            blank(
-                core::slice::from_raw_parts_mut(rex.reg_endpos(), n),
-                UNSET_POS,
-            );
-        }
+        blank(
+            unsafe { core::slice::from_raw_parts_mut(rex.reg_startpos(), n) },
+            UNSET_POS,
+        );
+        blank(
+            unsafe { core::slice::from_raw_parts_mut(rex.reg_endpos(), n) },
+            UNSET_POS,
+        );
     } else {
         // SAFETY: as above.
-        unsafe {
-            blank(
-                core::slice::from_raw_parts_mut(rex.reg_startp(), n),
-                core::ptr::null_mut::<uint8_t>(),
-            );
-            blank(
-                core::slice::from_raw_parts_mut(rex.reg_endp(), n),
-                core::ptr::null_mut::<uint8_t>(),
-            );
-        }
+        blank(
+            unsafe { core::slice::from_raw_parts_mut(rex.reg_startp(), n) },
+            core::ptr::null_mut::<uint8_t>(),
+        );
+        blank(
+            unsafe { core::slice::from_raw_parts_mut(rex.reg_endp(), n) },
+            core::ptr::null_mut::<uint8_t>(),
+        );
     }
     if z {
         rex.set_need_clear_zsubexpr(0);
@@ -455,16 +443,14 @@ fn take_line_copy(rex: Rex) {
     }
     // SAFETY: `rex.line` is the NUL-terminated line being matched, and
     // `reg_tofree` is this module's own allocation, grown to fit it here.
-    unsafe {
-        let mut len = strlen(rex.line().cast()) as c_int;
-        if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
-            len += 50;
-            xfree(reg_tofree.get().cast());
-            reg_tofree.set(xmalloc(len as usize) as *mut uint8_t);
-            reg_tofreelen.set(len as u32);
-        }
-        strcpy(reg_tofree.get().cast(), rex.line().cast());
+    let mut len = unsafe { strlen(rex.line().cast()) } as c_int;
+    if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
+        len += 50;
+        unsafe { xfree(reg_tofree.get().cast()) };
+        reg_tofree.set(unsafe { xmalloc(len as usize) } as *mut uint8_t);
+        reg_tofreelen.set(len as u32);
     }
+    unsafe { strcpy(reg_tofree.get().cast(), rex.line().cast()) };
     let col = rex.col();
     rex.seek(reg_tofree.get(), col);
 }
@@ -493,10 +479,8 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
     rex.set_reg_buf(curbuf.get());
     rex.set_reg_win(core::ptr::null_mut::<win_T>());
     // SAFETY: the caller's match structure, live with a program.
-    unsafe {
-        rex.set_reg_ic((*rmp).rm_ic);
-        rex.set_reg_nobreak((*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0);
-    }
+    rex.set_reg_ic(unsafe { (*rmp).rm_ic });
+    rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
     rex.set_reg_icombine(false);
     rex.set_reg_maxcol(0);
 }
@@ -520,10 +504,8 @@ pub(crate) fn init_regexec_multi(
     rex.set_reg_line_lbr(false);
     rex.set_reg_icombine(false);
     // SAFETY: the caller's match structure and buffer, live for the match.
-    unsafe {
-        rex.set_reg_maxline((*buf).b_ml.ml_line_count - lnum);
-        rex.set_reg_ic((*rmp).rmm_ic != 0);
-        rex.set_reg_nobreak((*(*rmp).regprog).re_flags & RE_NOBREAK as u32 != 0);
-        rex.set_reg_maxcol((*rmp).rmm_maxcol);
-    }
+    rex.set_reg_maxline(unsafe { (*buf).b_ml.ml_line_count } - lnum);
+    rex.set_reg_ic(unsafe { (*rmp).rmm_ic } != 0);
+    rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
+    rex.set_reg_maxcol(unsafe { (*rmp).rmm_maxcol });
 }

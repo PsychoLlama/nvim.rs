@@ -27,51 +27,49 @@ pub(crate) unsafe fn matches_composing(
     curc: c_int,
     clen: c_int,
 ) -> bool {
-    unsafe {
-        let mut mc = curc;
-        let mut len = 0;
-        // A group whose first member is itself a combining character has no
-        // base character of its own: `\%C` matched one already.
-        if utf_iscomposing_legacy((*sta).c) {
-            len += utf_char2len(mc);
-        }
+    let mut mc = curc;
+    let mut len = 0;
+    // A group whose first member is itself a combining character has no
+    // base character of its own: `\%C` matched one already.
+    if utf_iscomposing_legacy(unsafe { (*sta).c }) {
+        len += utf_char2len(mc);
+    }
 
-        if rex.reg_icombine() && len == 0 {
-            // 'regexpengine' combining-insensitive: only the base character
-            // has to match, and the marks are skipped over.
-            let matched = (*sta).c == curc;
-            return matched;
+    if rex.reg_icombine() && len == 0 {
+        // 'regexpengine' combining-insensitive: only the base character
+        // has to match, and the marks are skipped over.
+        let matched = unsafe { (*sta).c } == curc;
+        return matched;
+    }
+    if len == 0 && mc != unsafe { (*sta).c } {
+        return false;
+    }
+    if len == 0 {
+        // The base character matched; the marks follow it.
+        len += utf_char2len(mc);
+        sta = unsafe { (*sta).out };
+    }
+
+    // The marks actually present at the input, capped at what a
+    // grapheme may carry.
+    let mut marks = [0; MAX_MCO as usize];
+    let mut count = 0;
+    while len < clen {
+        mc = unsafe { utf_ptr2char((rex.input_str()).offset(len as isize)) };
+        marks[count] = mc;
+        count += 1;
+        len += utf_char2len(mc);
+        if count == MAX_MCO as usize {
+            break;
         }
-        if len == 0 && mc != (*sta).c {
+    }
+
+    // Every mark the group names has to be one of them.
+    while unsafe { (*sta).c } != NFA_END_COMPOSING {
+        if !marks[..count].contains(unsafe { &(*sta).c }) {
             return false;
         }
-        if len == 0 {
-            // The base character matched; the marks follow it.
-            len += utf_char2len(mc);
-            sta = (*sta).out;
-        }
-
-        // The marks actually present at the input, capped at what a
-        // grapheme may carry.
-        let mut marks = [0; MAX_MCO as usize];
-        let mut count = 0;
-        while len < clen {
-            mc = utf_ptr2char((rex.input_str()).offset(len as isize));
-            marks[count] = mc;
-            count += 1;
-            len += utf_char2len(mc);
-            if count == MAX_MCO as usize {
-                break;
-            }
-        }
-
-        // Every mark the group names has to be one of them.
-        while (*sta).c != NFA_END_COMPOSING {
-            if !marks[..count].contains(&(*sta).c) {
-                return false;
-            }
-            sta = (*sta).out;
-        }
-        true
+        sta = unsafe { (*sta).out };
     }
+    true
 }

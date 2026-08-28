@@ -255,11 +255,9 @@ pub(crate) fn regc(b: c_int) {
     }
     // SAFETY: the writing pass sized the block with the same call sequence,
     // so there is room for this byte.
-    unsafe {
-        let at = regcode.get();
-        regcode.set(at.add(1));
-        *at = b as uint8_t;
-    }
+    let at = regcode.get();
+    regcode.set(unsafe { at.add(1) });
+    unsafe { *at = b as uint8_t };
 }
 
 /// Emit one character of program, as its UTF-8 bytes.
@@ -270,10 +268,8 @@ pub(crate) fn regmbc(c: c_int) {
     }
     // SAFETY: as `regc`; `utf_char2bytes` writes at most `utf_char2len(c)`
     // bytes, which is what the sizing pass charged.
-    unsafe {
-        let at = regcode.get();
-        regcode.set(at.add(utf_char2bytes(c, at.cast()) as usize));
-    }
+    let at = regcode.get();
+    regcode.set(unsafe { at.add(utf_char2bytes(c, at.cast()) as usize) });
 }
 
 /// Emit a node with opcode `op` and an unset next-offset, and hand back a
@@ -285,12 +281,10 @@ pub(crate) fn regnode(op: c_int) -> *mut uint8_t {
         return node;
     }
     // SAFETY: as `regc`, three bytes' worth.
-    unsafe {
-        regcode.set(node.add(NODE_HDR));
-        *node = op as uint8_t;
-        *node.add(1) = NUL as uint8_t;
-        *node.add(2) = NUL as uint8_t;
-    }
+    regcode.set(unsafe { node.add(NODE_HDR) });
+    unsafe { *node = op as uint8_t };
+    unsafe { *node.add(1) = NUL as uint8_t };
+    unsafe { *node.add(2) = NUL as uint8_t };
     node
 }
 
@@ -298,10 +292,8 @@ pub(crate) fn regnode(op: c_int) -> *mut uint8_t {
 /// four writable bytes, which every caller here has just charged for.
 fn put_uint32(p: *mut uint8_t, val: uint32_t) -> *mut uint8_t {
     // SAFETY: the four bytes were charged by the sizing pass.
-    unsafe {
-        p.copy_from_nonoverlapping(val.to_be_bytes().as_ptr(), 4);
-        p.add(4)
-    }
+    unsafe { p.copy_from_nonoverlapping(val.to_be_bytes().as_ptr(), 4) };
+    unsafe { p.add(4) }
 }
 
 /// Change an already-emitted node's opcode. `[]` uses this to widen an
@@ -327,15 +319,15 @@ pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
     }
     // SAFETY: `p` is a node in the program, so its two offset bytes are
     // readable.
-    unsafe {
-        let offset = usize::from(u16::from_be_bytes([*p.add(1), *p.add(2)]));
-        if offset == 0 {
-            core::ptr::null_mut()
-        } else if *p as c_int == BACK {
-            p.sub(offset)
-        } else {
-            p.add(offset)
-        }
+    let offset = usize::from(u16::from_be_bytes([unsafe { *p.add(1) }, unsafe {
+        *p.add(2)
+    }]));
+    if offset == 0 {
+        core::ptr::null_mut()
+    } else if unsafe { *p } as c_int == BACK {
+        unsafe { p.sub(offset) }
+    } else {
+        unsafe { p.add(offset) }
     }
 }
 
@@ -357,21 +349,19 @@ pub(crate) fn regtail(p: *mut uint8_t, val: *const uint8_t) {
     }
     // SAFETY: `scan` is a node in the program and `val` another node in the
     // same allocation, so the difference is well defined.
-    unsafe {
-        let offset = if *scan as c_int == BACK {
-            scan.offset_from(val)
-        } else {
-            val.offset_from(scan)
-        };
-        // A 16-bit offset cannot reach: the pattern is too long. The caller
-        // notices via `reg_toolong` and gives up on the whole program.
-        if offset > 0xffff {
-            reg_toolong.set(1);
-        } else {
-            let bytes = (offset as u16).to_be_bytes();
-            *scan.add(1) = bytes[0];
-            *scan.add(2) = bytes[1];
-        }
+    let offset = if unsafe { *scan } as c_int == BACK {
+        unsafe { scan.offset_from(val) }
+    } else {
+        unsafe { val.offset_from(scan) }
+    };
+    // A 16-bit offset cannot reach: the pattern is too long. The caller
+    // notices via `reg_toolong` and gives up on the whole program.
+    if offset > 0xffff {
+        reg_toolong.set(1);
+    } else {
+        let bytes = (offset as u16).to_be_bytes();
+        unsafe { *scan.add(1) = bytes[0] };
+        unsafe { *scan.add(2) = bytes[1] };
     }
 }
 
@@ -383,13 +373,11 @@ pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
     }
     // SAFETY: `p` is a node in the program, so its opcode is readable and a
     // node of either kind is followed by its operand.
-    unsafe {
-        let op = *p as c_int;
-        if op != BRANCH && !(BRACE_COMPLEX..=BRACE_COMPLEX + 9).contains(&op) {
-            return;
-        }
-        regtail(p.add(NODE_HDR), val);
+    let op = unsafe { *p } as c_int;
+    if op != BRANCH && !(BRACE_COMPLEX..=BRACE_COMPLEX + 9).contains(&op) {
+        return;
     }
+    regtail(unsafe { p.add(NODE_HDR) }, val);
 }
 
 /// Open `len` bytes in front of `opnd`, sliding everything written since it
@@ -401,20 +389,18 @@ fn open_before(op: c_int, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
     // SAFETY: `opnd` is a node in the program and everything from it to
     // `regcode` was written by this pass; the sizing pass charged `len` extra
     // bytes for this call, so the destination is in the same allocation.
-    unsafe {
-        let mut src = regcode.get();
-        regcode.set(src.add(len));
-        let mut dst = regcode.get();
-        while src > opnd {
-            src = src.sub(1);
-            dst = dst.sub(1);
-            *dst = *src;
-        }
-        *opnd = op as uint8_t;
-        *opnd.add(1) = NUL as uint8_t;
-        *opnd.add(2) = NUL as uint8_t;
-        opnd.add(NODE_HDR)
+    let mut src = regcode.get();
+    regcode.set(unsafe { src.add(len) });
+    let mut dst = regcode.get();
+    while src > opnd {
+        src = unsafe { src.sub(1) };
+        dst = unsafe { dst.sub(1) };
+        unsafe { *dst = *src };
     }
+    unsafe { *opnd = op as uint8_t };
+    unsafe { *opnd.add(1) = NUL as uint8_t };
+    unsafe { *opnd.add(2) = NUL as uint8_t };
+    unsafe { opnd.add(NODE_HDR) }
 }
 
 /// Insert an operand-less node in front of `opnd`.
@@ -465,19 +451,18 @@ pub(crate) fn seen_endbrace(refnum: c_int) -> bool {
     }
     // SAFETY: `regparse` points into the NUL-terminated pattern, so the walk
     // stops at its end; the message is a static NUL-terminated string.
-    unsafe {
-        let mut p = regparse.get().cast::<uint8_t>();
-        while *p as c_int != NUL {
-            if *p as c_int == '@' as c_int
-                && *p.add(1) as c_int == '<' as c_int
-                && (*p.add(2) as c_int == '!' as c_int || *p.add(2) as c_int == '=' as c_int)
-            {
-                return true;
-            }
-            p = p.add(1);
+    let mut p = regparse.get().cast::<uint8_t>();
+    while unsafe { *p } as c_int != NUL {
+        if unsafe { *p } as c_int == '@' as c_int
+            && unsafe { *p.add(1) } as c_int == '<' as c_int
+            && (unsafe { *p.add(2) } as c_int == '!' as c_int
+                || unsafe { *p.add(2) } as c_int == '=' as c_int)
+        {
+            return true;
         }
-        emsg(gettext(c"E65: Illegal back reference".as_ptr()));
+        p = unsafe { p.add(1) };
     }
+    unsafe { emsg(gettext(c"E65: Illegal back reference".as_ptr())) };
     rc_did_emsg.set(true);
     false
 }

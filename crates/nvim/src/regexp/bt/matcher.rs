@@ -43,10 +43,8 @@ use crate::types::{NUL, int16_t, int64_t, proftime_T, uint8_t};
 /// `p` must be a node whose operand runs at least `off + 4` bytes.
 pub(crate) unsafe fn operand_u32(p: *const uint8_t, off: usize) -> int64_t {
     // SAFETY: the caller promises the four bytes.
-    unsafe {
-        let b = |i: usize| *p.add(off + i) as int64_t;
-        (b(0) << 24) + (b(1) << 16) + (b(2) << 8) + b(3)
-    }
+    let b = |i: usize| unsafe { *p.add(off + i) } as int64_t;
+    (b(0) << 24) + (b(1) << 16) + (b(2) << 8) + b(3)
 }
 
 const MOPEN_9: c_int = MOPEN + 9;
@@ -106,85 +104,83 @@ unsafe fn walk(
     timed_out: *mut c_int,
 ) -> bool {
     // SAFETY: the caller promises the program and the match.
-    unsafe {
-        let mut scan = start;
-        let mut tm_count = 0;
-        let mut status;
+    let mut scan = start;
+    let mut tm_count = 0;
+    let mut status;
 
+    loop {
+        reg_breakcheck(rex);
+
+        // Walk forward until something needs deciding.
         loop {
-            reg_breakcheck(rex);
-
-            // Walk forward until something needs deciding.
-            loop {
-                if got_int.get() || scan.is_null() {
+            if got_int.get() || scan.is_null() {
+                status = RA_FAIL;
+                break;
+            }
+            if !tm.is_null() && {
+                tm_count += 1;
+                tm_count == 100
+            } {
+                tm_count = 0;
+                if profile_passed_limit(unsafe { *tm }) {
+                    if !timed_out.is_null() {
+                        unsafe { *timed_out = 1 };
+                    }
                     status = RA_FAIL;
                     break;
                 }
-                if !tm.is_null() && {
-                    tm_count += 1;
-                    tm_count == 100
-                } {
-                    tm_count = 0;
-                    if profile_passed_limit(*tm) {
-                        if !timed_out.is_null() {
-                            *timed_out = 1;
-                        }
-                        status = RA_FAIL;
-                        break;
-                    }
-                }
-
-                status = RA_CONT;
-                let mut next = regnext(scan);
-                let mut op = *scan as c_int;
-
-                // A `\_x` sitting at the end of the line consumes the line
-                // break and stays on the same node.
-                let at_line_end = rex.byte() as c_int == NUL;
-                if !rex.reg_line_lbr()
-                    && crosses_lines(op)
-                    && rex.multi()
-                    && at_line_end
-                    && rex.lnum() <= rex.reg_maxline()
-                {
-                    reg_nextline(rex);
-                } else if rex.reg_line_lbr()
-                    && crosses_lines(op)
-                    && rex.byte() as c_int == '\n' as c_int
-                {
-                    // With 'reg_line_lbr' the break is a real newline byte.
-                    rex.advance_char();
-                } else {
-                    // Past the line break, a `\_x` behaves as its plain form.
-                    if crosses_lines(op) {
-                        op -= ADD_NL;
-                    }
-                    let c = rex.char_here();
-                    status = match match_one(rex, op, scan, next, c) {
-                        Some(status) => status,
-                        None => push_frame(rex, stack, backpos, braces, op, scan, &mut next),
-                    };
-                }
-
-                if status != RA_CONT {
-                    break;
-                }
-                scan = next;
             }
 
-            resume(rex, stack, backpos, braces, &mut scan, &mut status);
+            status = RA_CONT;
+            let mut next = regnext(scan);
+            let mut op = unsafe { *scan } as c_int;
 
-            if status == RA_CONT {
-                continue;
-            }
-            if stack.depth() == 0 || status == RA_FAIL {
-                if scan.is_null() {
-                    // Should not happen. Providing a message and failing is
-                    // better than a crash.
-                    iemsg(gettext(&raw const e_re_corr as *const c_char));
+            // A `\_x` sitting at the end of the line consumes the line
+            // break and stays on the same node.
+            let at_line_end = rex.byte() as c_int == NUL;
+            if !rex.reg_line_lbr()
+                && crosses_lines(op)
+                && rex.multi()
+                && at_line_end
+                && rex.lnum() <= rex.reg_maxline()
+            {
+                reg_nextline(rex);
+            } else if rex.reg_line_lbr()
+                && crosses_lines(op)
+                && rex.byte() as c_int == '\n' as c_int
+            {
+                // With 'reg_line_lbr' the break is a real newline byte.
+                rex.advance_char();
+            } else {
+                // Past the line break, a `\_x` behaves as its plain form.
+                if crosses_lines(op) {
+                    op -= ADD_NL;
                 }
-                return status == RA_MATCH;
+                let c = rex.char_here();
+                status = match match_one(rex, op, scan, next, c) {
+                    Some(status) => status,
+                    None => push_frame(rex, stack, backpos, braces, op, scan, &mut next),
+                };
             }
+
+            if status != RA_CONT {
+                break;
+            }
+            scan = next;
+        }
+
+        resume(rex, stack, backpos, braces, &mut scan, &mut status);
+
+        if status == RA_CONT {
+            continue;
+        }
+        if stack.depth() == 0 || status == RA_FAIL {
+            if scan.is_null() {
+                // Should not happen. Providing a message and failing is
+                // better than a crash.
+                unsafe { iemsg(gettext(&raw const e_re_corr as *const c_char)) };
+            }
+            return status == RA_MATCH;
         }
     }
 }
@@ -206,118 +202,116 @@ fn push_frame(
     // SAFETY: as `regmatch`; `scan` is a node in the program and the frames
     // pushed here are read back by `resume` while this call is still on the
     // stack.
-    unsafe {
-        match op {
-            // A loop's back edge. Coming back to the same node at the same
-            // input position means the loop is not making progress.
-            BACK => {
-                if backpos.stepped(rex, scan) {
-                    RA_CONT
-                } else {
-                    RA_NOMATCH
-                }
+    match op {
+        // A loop's back edge. Coming back to the same node at the same
+        // input position means the loop is not making progress.
+        BACK => {
+            if backpos.stepped(rex, scan) {
+                RA_CONT
+            } else {
+                RA_NOMATCH
             }
+        }
 
-            // The capture-group boundaries. Each remembers the slot it is
-            // about to overwrite so a failure can put it back.
-            MOPEN..=MOPEN_9 => {
-                cleanup_subexpr(rex);
-                push_capture(rex, stack, RS_MOPEN, scan, op - MOPEN)
-            }
-            MCLOSE..=MCLOSE_9 => {
-                cleanup_subexpr(rex);
-                push_capture(rex, stack, RS_MCLOSE, scan, op - MCLOSE)
-            }
-            ZOPEN_1..=ZOPEN_9 => {
-                cleanup_zsubexpr(rex);
-                push_capture(rex, stack, RS_ZOPEN, scan, op - ZOPEN)
-            }
-            ZCLOSE_1..=ZCLOSE_9 => {
-                cleanup_zsubexpr(rex);
-                push_capture(rex, stack, RS_ZCLOSE, scan, op - ZCLOSE)
-            }
+        // The capture-group boundaries. Each remembers the slot it is
+        // about to overwrite so a failure can put it back.
+        MOPEN..=MOPEN_9 => {
+            cleanup_subexpr(rex);
+            unsafe { push_capture(rex, stack, RS_MOPEN, scan, op - MOPEN) }
+        }
+        MCLOSE..=MCLOSE_9 => {
+            cleanup_subexpr(rex);
+            unsafe { push_capture(rex, stack, RS_MCLOSE, scan, op - MCLOSE) }
+        }
+        ZOPEN_1..=ZOPEN_9 => {
+            cleanup_zsubexpr(rex);
+            unsafe { push_capture(rex, stack, RS_ZOPEN, scan, op - ZOPEN) }
+        }
+        ZCLOSE_1..=ZCLOSE_9 => {
+            cleanup_zsubexpr(rex);
+            unsafe { push_capture(rex, stack, RS_ZCLOSE, scan, op - ZCLOSE) }
+        }
 
-            // `\%(` captures nothing, but still needs a frame so that the
-            // unwinder has something to step over.
-            NOPEN | NCLOSE => {
-                if stack.push(RS_NOPEN, scan).is_none() {
-                    RA_FAIL
-                } else {
-                    RA_CONT
-                }
-            }
-
-            // The last branch of an alternation needs no frame: there is
-            // nothing left to fall back to.
-            BRANCH => {
-                if *(*next) as c_int != BRANCH {
-                    *next = scan.add(3);
-                    RA_CONT
-                } else if stack.push(RS_BRANCH, scan).is_none() {
-                    RA_FAIL
-                } else {
-                    RA_BREAK
-                }
-            }
-
-            // The bounds of the `{n,m}` that follows, stashed where the node
-            // they belong to can find them.
-            BRACE_LIMITS => {
-                let next_op = *(*next) as c_int;
-                if next_op == BRACE_SIMPLE {
-                    bl_minval.set(operand_u32(scan, 3));
-                    bl_maxval.set(operand_u32(scan, 7));
-                    RA_CONT
-                } else if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&next_op) {
-                    let brace = braces.slot((next_op - BRACE_COMPLEX) as usize);
-                    brace.min = operand_u32(scan, 3);
-                    brace.max = operand_u32(scan, 7);
-                    brace.count = 0;
-                    RA_CONT
-                } else {
-                    internal_error(c"BRACE_LIMITS".as_ptr());
-                    RA_FAIL
-                }
-            }
-
-            BRACE_COMPLEX..=BRACE_COMPLEX_9 => {
-                brace_complex(rex, stack, backpos, braces, op - BRACE_COMPLEX, scan, next)
-            }
-
-            BRACE_SIMPLE | STAR | PLUS => counted_repeat(rex, stack, op, scan),
-
-            // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
-            // outcome means.
-            NOMATCH | MATCH | SUBPAT => {
-                let Some(rp) = stack.push(RS_NOMATCH, scan) else {
-                    return RA_FAIL;
-                };
-                rp.rs_no = op as int16_t;
-                rp.rs_saved = reg_save(rex, backpos);
-                *next = scan.add(3);
+        // `\%(` captures nothing, but still needs a frame so that the
+        // unwinder has something to step over.
+        NOPEN | NCLOSE => {
+            if stack.push(RS_NOPEN, scan).is_none() {
+                RA_FAIL
+            } else {
                 RA_CONT
             }
+        }
 
-            // `\@<=` and `\@<!`: the operand has to match ending here, so the
-            // unwinder walks the start position backwards until it does.
-            BEHIND | NOBEHIND => {
-                // The capture snapshot rides in front of the frame.
-                if !stack.push_behind(RS_BEHIND1, scan) {
-                    return RA_FAIL;
-                }
-                let (rp, bp) = stack.top_behind();
-                save_subexpr(rex, bp);
-                rp.rs_no = op as int16_t;
-                rp.rs_saved = reg_save(rex, backpos);
+        // The last branch of an alternation needs no frame: there is
+        // nothing left to fall back to.
+        BRANCH => {
+            if unsafe { *(*next) } as c_int != BRANCH {
+                *next = unsafe { scan.add(3) };
                 RA_CONT
+            } else if stack.push(RS_BRANCH, scan).is_none() {
+                RA_FAIL
+            } else {
+                RA_BREAK
             }
+        }
 
-            _ => {
-                // Should not happen: the compiler emitted something the
-                // matcher does not know.
-                iemsg(gettext(&raw const e_re_corr as *const c_char));
+        // The bounds of the `{n,m}` that follows, stashed where the node
+        // they belong to can find them.
+        BRACE_LIMITS => {
+            let next_op = unsafe { *(*next) } as c_int;
+            if next_op == BRACE_SIMPLE {
+                bl_minval.set(unsafe { operand_u32(scan, 3) });
+                bl_maxval.set(unsafe { operand_u32(scan, 7) });
+                RA_CONT
+            } else if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&next_op) {
+                let brace = braces.slot((next_op - BRACE_COMPLEX) as usize);
+                brace.min = unsafe { operand_u32(scan, 3) };
+                brace.max = unsafe { operand_u32(scan, 7) };
+                brace.count = 0;
+                RA_CONT
+            } else {
+                unsafe { internal_error(c"BRACE_LIMITS".as_ptr()) };
                 RA_FAIL
             }
+        }
+
+        BRACE_COMPLEX..=BRACE_COMPLEX_9 => unsafe {
+            brace_complex(rex, stack, backpos, braces, op - BRACE_COMPLEX, scan, next)
+        },
+
+        BRACE_SIMPLE | STAR | PLUS => unsafe { counted_repeat(rex, stack, op, scan) },
+
+        // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
+        // outcome means.
+        NOMATCH | MATCH | SUBPAT => {
+            let Some(rp) = stack.push(RS_NOMATCH, scan) else {
+                return RA_FAIL;
+            };
+            rp.rs_no = op as int16_t;
+            rp.rs_saved = reg_save(rex, backpos);
+            *next = unsafe { scan.add(3) };
+            RA_CONT
+        }
+
+        // `\@<=` and `\@<!`: the operand has to match ending here, so the
+        // unwinder walks the start position backwards until it does.
+        BEHIND | NOBEHIND => {
+            // The capture snapshot rides in front of the frame.
+            if !stack.push_behind(RS_BEHIND1, scan) {
+                return RA_FAIL;
+            }
+            let (rp, bp) = stack.top_behind();
+            save_subexpr(rex, bp);
+            rp.rs_no = op as int16_t;
+            rp.rs_saved = reg_save(rex, backpos);
+            RA_CONT
+        }
+
+        _ => {
+            // Should not happen: the compiler emitted something the
+            // matcher does not know.
+            unsafe { iemsg(gettext(&raw const e_re_corr as *const c_char)) };
+            RA_FAIL
         }
     }
 }
@@ -336,15 +330,13 @@ unsafe fn push_capture(
     no: c_int,
 ) -> c_int {
     // SAFETY: as `push_frame`.
-    unsafe {
-        let slot = capture_slot(rex, state, no as usize);
-        let Some(rp) = stack.push(state, scan) else {
-            return RA_FAIL;
-        };
-        rp.rs_no = no as int16_t;
-        save_capture(rex, &mut rp.rs_saved.pos, slot);
-        RA_CONT
-    }
+    let slot = unsafe { capture_slot(rex, state, no as usize) };
+    let Some(rp) = stack.push(state, scan) else {
+        return RA_FAIL;
+    };
+    rp.rs_no = no as int16_t;
+    unsafe { save_capture(rex, &mut rp.rs_saved.pos, slot) };
+    RA_CONT
 }
 
 /// One pass of a `\{n,m}` around something that is not `SIMPLE`.
@@ -365,39 +357,37 @@ unsafe fn brace_complex(
     next: &mut *mut uint8_t,
 ) -> c_int {
     // SAFETY: as `push_frame`.
-    unsafe {
-        let brace = braces.slot(no as usize);
-        brace.count += 1;
-        let (count, min, max) = (brace.count, brace.min, brace.max);
-        let greedy = min <= max;
+    let brace = braces.slot(no as usize);
+    brace.count += 1;
+    let (count, min, max) = (brace.count, brace.min, brace.max);
+    let greedy = min <= max;
 
-        // Still below the smaller bound: another pass is mandatory.
-        if count <= min.min(max) {
-            let Some(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
+    // Still below the smaller bound: another pass is mandatory.
+    if count <= min.min(max) {
+        let Some(rp) = stack.push(RS_BRCPLX_MORE, scan) else {
+            return RA_FAIL;
+        };
+        rp.rs_no = no as int16_t;
+        rp.rs_saved = reg_save(rex, backpos);
+        *next = unsafe { scan.add(3) };
+    } else if greedy {
+        // Another pass is allowed; try it, and fall back to stopping.
+        if count <= max {
+            let Some(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
                 return RA_FAIL;
             };
             rp.rs_no = no as int16_t;
             rp.rs_saved = reg_save(rex, backpos);
-            *next = scan.add(3);
-        } else if greedy {
-            // Another pass is allowed; try it, and fall back to stopping.
-            if count <= max {
-                let Some(rp) = stack.push(RS_BRCPLX_LONG, scan) else {
-                    return RA_FAIL;
-                };
-                rp.rs_no = no as int16_t;
-                rp.rs_saved = reg_save(rex, backpos);
-                *next = scan.add(3);
-            }
-        } else if count <= min {
-            // Non-greedy: try stopping first, and fall back to another pass.
-            let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
-                return RA_FAIL;
-            };
-            rp.rs_saved = reg_save(rex, backpos);
+            *next = unsafe { scan.add(3) };
         }
-        RA_CONT
+    } else if count <= min {
+        // Non-greedy: try stopping first, and fall back to another pass.
+        let Some(rp) = stack.push(RS_BRCPLX_SHORT, scan) else {
+            return RA_FAIL;
+        };
+        rp.rs_saved = reg_save(rex, backpos);
     }
+    RA_CONT
 }
 
 /// `*`, `+` or `\{n,m}` around a `SIMPLE` item: count the matches in one go
@@ -407,58 +397,56 @@ unsafe fn brace_complex(
 /// As `push_frame`.
 unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: c_int, scan: *mut uint8_t) -> c_int {
     // SAFETY: as `push_frame`.
-    unsafe {
-        let mut rst = regstar_T {
-            nextb: NUL,
-            nextb_ic: NUL,
-            count: 0,
-            minval: 0,
-            maxval: 0,
-        };
-        // Knowing the byte the repeat has to stop before lets the unwinder
-        // skip positions that cannot possibly continue.
-        let next = regnext(scan);
-        if !next.is_null() && *next as c_int == EXACTLY {
-            rst.nextb = *next.add(3) as c_int;
-            rst.nextb_ic = if !rex.reg_ic() {
-                rst.nextb
-            } else if mb_isupper(rst.nextb) {
-                mb_tolower(rst.nextb)
-            } else {
-                mb_toupper(rst.nextb)
-            };
-        }
-        if op != BRACE_SIMPLE {
-            rst.minval = if op == STAR { 0 } else { 1 };
-            rst.maxval = MAX_LIMIT as int64_t;
+    let mut rst = regstar_T {
+        nextb: NUL,
+        nextb_ic: NUL,
+        count: 0,
+        minval: 0,
+        maxval: 0,
+    };
+    // Knowing the byte the repeat has to stop before lets the unwinder
+    // skip positions that cannot possibly continue.
+    let next = regnext(scan);
+    if !next.is_null() && unsafe { *next } as c_int == EXACTLY {
+        rst.nextb = unsafe { *next.add(3) } as c_int;
+        rst.nextb_ic = if !rex.reg_ic() {
+            rst.nextb
+        } else if mb_isupper(rst.nextb) {
+            mb_tolower(rst.nextb)
         } else {
-            rst.minval = bl_minval.get();
-            rst.maxval = bl_maxval.get();
-        }
-
-        rst.count = super::repeat::regrepeat(rex, scan.add(3), rst.maxval) as int64_t;
-        if got_int.get() {
-            return RA_FAIL;
-        }
-        // A reversed bound (`\{-n,m}`) is the non-greedy form, and then the
-        // *larger* number is the one that has to be reached.
-        let enough = if rst.minval <= rst.maxval {
-            rst.count >= rst.minval
-        } else {
-            rst.count >= rst.maxval
+            mb_toupper(rst.nextb)
         };
-        if !enough {
-            return RA_NOMATCH;
-        }
-        // The counter rides in front of the frame.
-        let state = if rst.minval <= rst.maxval {
-            RS_STAR_LONG
-        } else {
-            RS_STAR_SHORT
-        };
-        if !stack.push_star(state, scan, rst) {
-            return RA_FAIL;
-        }
-        RA_BREAK
     }
+    if op != BRACE_SIMPLE {
+        rst.minval = if op == STAR { 0 } else { 1 };
+        rst.maxval = MAX_LIMIT as int64_t;
+    } else {
+        rst.minval = bl_minval.get();
+        rst.maxval = bl_maxval.get();
+    }
+
+    rst.count = super::repeat::regrepeat(rex, unsafe { scan.add(3) }, rst.maxval) as int64_t;
+    if got_int.get() {
+        return RA_FAIL;
+    }
+    // A reversed bound (`\{-n,m}`) is the non-greedy form, and then the
+    // *larger* number is the one that has to be reached.
+    let enough = if rst.minval <= rst.maxval {
+        rst.count >= rst.minval
+    } else {
+        rst.count >= rst.maxval
+    };
+    if !enough {
+        return RA_NOMATCH;
+    }
+    // The counter rides in front of the frame.
+    let state = if rst.minval <= rst.maxval {
+        RS_STAR_LONG
+    } else {
+        RS_STAR_SHORT
+    };
+    if !stack.push_star(state, scan, rst) {
+        return RA_FAIL;
+    }
+    RA_BREAK
 }
