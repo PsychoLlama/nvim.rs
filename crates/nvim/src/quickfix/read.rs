@@ -74,15 +74,13 @@ impl Drop for Reader {
     fn drop(&mut self) {
         // SAFETY: the file is this reader's own, and the conversion
         // descriptor is torn down exactly once.
-        unsafe {
-            if let Source::File(fd) = self.source
-                && !fd.is_null()
-            {
-                fclose(fd);
-            }
-            if self.vc.vc_type != CONV_NONE {
-                convert_setup(&raw mut self.vc, ptr::null_mut(), ptr::null_mut());
-            }
+        if let Source::File(fd) = self.source
+            && !fd.is_null()
+        {
+            unsafe { fclose(fd) };
+        }
+        if self.vc.vc_type != CONV_NONE {
+            unsafe { convert_setup(&raw mut self.vc, ptr::null_mut(), ptr::null_mut()) };
         }
     }
 }
@@ -128,31 +126,29 @@ impl Reader {
             },
         };
         // SAFETY: the caller's strings are NUL-terminated.
-        unsafe {
-            if !enc.is_null() && *enc != 0 {
-                convert_setup(&raw mut reader.vc, enc, p_enc.get());
+        if !enc.is_null() && unsafe { *enc } != 0 {
+            unsafe { convert_setup(&raw mut reader.vc, enc, p_enc.get()) };
+        }
+        if !efile.is_null() {
+            let fd = if unsafe { strequal(efile, c"-".as_ptr()) } {
+                unsafe { fdopen(os_open_stdin_fd(), c"r".as_ptr()) }
+            } else {
+                unsafe { os_fopen(efile, c"r".as_ptr()) }
+            };
+            if fd.is_null() {
+                unsafe { semsg_c!(gettext(&raw const e_openerrf as *const c_char), efile) };
+                // Dropping tears the conversion down again.
+                return None;
             }
-            if !efile.is_null() {
-                let fd = if strequal(efile, c"-".as_ptr()) {
-                    fdopen(os_open_stdin_fd(), c"r".as_ptr())
-                } else {
-                    os_fopen(efile, c"r".as_ptr())
-                };
-                if fd.is_null() {
-                    semsg_c!(gettext(&raw const e_openerrf as *const c_char), efile);
-                    // Dropping tears the conversion down again.
-                    return None;
-                }
-                reader.source = Source::File(fd);
-            } else if !tv.is_null() {
-                reader.source = if (*tv).v_type == VAR_STRING as VarType {
-                    Source::Text((*tv).vval.v_string)
-                } else if (*tv).v_type == VAR_LIST as VarType {
-                    Source::List(tv_list_first((*tv).vval.v_list))
-                } else {
-                    Source::Unusable
-                };
-            }
+            reader.source = Source::File(fd);
+        } else if !tv.is_null() {
+            reader.source = if unsafe { (*tv).v_type } == VAR_STRING as VarType {
+                Source::Text(unsafe { (*tv).vval.v_string })
+            } else if unsafe { (*tv).v_type } == VAR_LIST as VarType {
+                Source::List(unsafe { tv_list_first((*tv).vval.v_list) })
+            } else {
+                Source::Unusable
+            };
         }
         Some(reader)
     }
@@ -207,12 +203,10 @@ impl Reader {
         }
         // The length still counts the newline; upstream only overwrites it.
         // SAFETY: `len` bytes of the buffer are initialised.
-        unsafe {
-            if self.len > 0 && self.line[self.len - 1] == b'\n' as c_char {
-                self.line[self.len - 1] = 0;
-            }
-            remove_bom(self.line());
+        if self.len > 0 && self.line[self.len - 1] == b'\n' as c_char {
+            self.line[self.len - 1] = 0;
         }
+        unsafe { remove_bom(self.line()) };
         Status::Ok
     }
 
@@ -226,23 +220,21 @@ impl Reader {
             unreachable!()
         };
         // SAFETY: the caller's string is NUL-terminated.
-        unsafe {
-            if *at == 0 {
-                return Status::EndOfInput;
-            }
-            let newline = vim_strchr(at, c_int::from(b'\n'));
-            let want = if newline.is_null() {
-                strlen(at)
-            } else {
-                newline.offset_from(at) as usize + 1
-            };
-            self.len = self.fit(want);
-            ptr::copy_nonoverlapping(at, self.line(), self.len);
-            self.line[self.len] = 0;
-            // Advance by the whole line, so that the part of an over-long
-            // line that did not fit is discarded rather than re-read.
-            self.source = Source::Text(at.add(want));
+        if unsafe { *at } == 0 {
+            return Status::EndOfInput;
         }
+        let newline = unsafe { vim_strchr(at, c_int::from(b'\n')) };
+        let want = if newline.is_null() {
+            unsafe { strlen(at) }
+        } else {
+            unsafe { newline.offset_from(at) as usize + 1 }
+        };
+        self.len = self.fit(want);
+        unsafe { ptr::copy_nonoverlapping(at, self.line(), self.len) };
+        self.line[self.len] = 0;
+        // Advance by the whole line, so that the part of an over-long
+        // line that did not fit is discarded rather than re-read.
+        self.source = Source::Text(unsafe { at.add(want) });
         Status::Ok
     }
 
@@ -257,22 +249,20 @@ impl Reader {
             unreachable!()
         };
         // SAFETY: the caller's list is live.
-        unsafe {
-            while !at.is_null()
-                && ((*at).li_tv.v_type != VAR_STRING as VarType
-                    || (*at).li_tv.vval.v_string.is_null())
-            {
-                at = (*at).li_next;
-            }
-            if at.is_null() {
-                self.source = Source::List(ptr::null_mut());
-                return Status::EndOfInput;
-            }
-            let text = (*at).li_tv.vval.v_string;
-            self.len = self.fit(strlen(text));
-            xstrlcpy(self.line(), text, self.len + 1);
-            self.source = Source::List((*at).li_next);
+        while !at.is_null()
+            && (unsafe { (*at).li_tv.v_type } != VAR_STRING as VarType
+                || unsafe { (*at).li_tv.vval.v_string }.is_null())
+        {
+            at = unsafe { (*at).li_next };
         }
+        if at.is_null() {
+            self.source = Source::List(ptr::null_mut());
+            return Status::EndOfInput;
+        }
+        let text = unsafe { (*at).li_tv.vval.v_string };
+        self.len = self.fit(unsafe { strlen(text) });
+        unsafe { xstrlcpy(self.line(), text, self.len + 1) };
+        self.source = Source::List(unsafe { (*at).li_next });
         Status::Ok
     }
 
@@ -289,11 +279,9 @@ impl Reader {
             return Status::EndOfInput;
         }
         // SAFETY: the caller's buffer is loaded and `lnum` is within it.
-        unsafe {
-            let text = ml_get_buf(buf.raw(), lnum);
-            self.len = self.fit(ml_get_buf_len(buf.raw(), lnum) as usize);
-            xstrlcpy(self.line(), text, self.len + 1);
-        }
+        let text = unsafe { ml_get_buf(buf.raw(), lnum) };
+        self.len = self.fit(unsafe { ml_get_buf_len(buf.raw(), lnum) } as usize);
+        unsafe { xstrlcpy(self.line(), text, self.len + 1) };
         self.source = Source::Buffer {
             buf,
             lnum: lnum + 1,
@@ -313,74 +301,72 @@ impl Reader {
     /// `fd` must be this reader's open file.
     unsafe fn read_file(&mut self, fd: *mut FILE) -> Status {
         // SAFETY: the file is open and the buffer is at least READ_CHUNK.
-        unsafe {
-            loop {
-                *__errno_location() = 0;
-                if !fgets(self.line(), READ_CHUNK as c_int, fd).is_null() {
+        loop {
+            unsafe { *__errno_location() = 0 };
+            if !unsafe { fgets(self.line(), READ_CHUNK as c_int, fd) }.is_null() {
+                break;
+            }
+            if unsafe { *__errno_location() } != EINTR {
+                return Status::EndOfInput;
+            }
+        }
+        self.len = unsafe { strlen(self.line.as_ptr()) };
+        if self.len != READ_CHUNK - 1 || self.line[self.len - 1] == b'\n' as c_char {
+            return unsafe { self.convert() };
+        }
+
+        // The line filled the chunk without ending: keep going.
+        if self.room == 0 {
+            self.room = 2 * (READ_CHUNK - 1);
+        }
+        if self.line.len() < self.room {
+            self.line.resize(self.room, 0);
+        }
+        let mut filled = self.len;
+        let mut discard = false;
+        loop {
+            unsafe { *__errno_location() = 0 };
+            let room = (self.room - filled) as c_int;
+            if unsafe { fgets(self.line().add(filled), room, fd) }.is_null() {
+                if unsafe { *__errno_location() } != EINTR {
                     break;
                 }
-                if *__errno_location() != EINTR {
-                    return Status::EndOfInput;
-                }
+                continue;
             }
-            self.len = strlen(self.line.as_ptr());
-            if self.len != READ_CHUNK - 1 || self.line[self.len - 1] == b'\n' as c_char {
-                return self.convert();
+            self.len = unsafe { strlen(self.line.as_ptr().add(filled)) };
+            filled += self.len;
+            if self.line[filled - 1] == b'\n' as c_char {
+                break;
             }
-
-            // The line filled the chunk without ending: keep going.
-            if self.room == 0 {
-                self.room = 2 * (READ_CHUNK - 1);
+            if self.room == LINE_MAXLEN {
+                discard = true;
+                break;
             }
+            self.room = (2 * self.room).min(LINE_MAXLEN);
             if self.line.len() < self.room {
                 self.line.resize(self.room, 0);
             }
-            let mut filled = self.len;
-            let mut discard = false;
-            loop {
-                *__errno_location() = 0;
-                let room = (self.room - filled) as c_int;
-                if fgets(self.line().add(filled), room, fd).is_null() {
-                    if *__errno_location() != EINTR {
-                        break;
-                    }
-                    continue;
-                }
-                self.len = strlen(self.line.as_ptr().add(filled));
-                filled += self.len;
-                if self.line[filled - 1] == b'\n' as c_char {
-                    break;
-                }
-                if self.room == LINE_MAXLEN {
-                    discard = true;
-                    break;
-                }
-                self.room = (2 * self.room).min(LINE_MAXLEN);
-                if self.line.len() < self.room {
-                    self.line.resize(self.room, 0);
-                }
-            }
-            if discard {
-                // Read on, keeping nothing, until the line ends or the file
-                // does. This must not use the line buffer: it still holds
-                // the 4095 bytes that were kept.
-                let mut scrap = [0 as c_char; READ_CHUNK];
-                loop {
-                    *__errno_location() = 0;
-                    if fgets(scrap.as_mut_ptr(), READ_CHUNK as c_int, fd).is_null() {
-                        if *__errno_location() != EINTR {
-                            break;
-                        }
-                    } else if strlen(scrap.as_ptr()) < READ_CHUNK - 1
-                        || scrap[READ_CHUNK - 2] == b'\n' as c_char
-                    {
-                        break;
-                    }
-                }
-            }
-            self.len = filled;
-            self.convert()
         }
+        if discard {
+            // Read on, keeping nothing, until the line ends or the file
+            // does. This must not use the line buffer: it still holds
+            // the 4095 bytes that were kept.
+            let mut scrap = [0 as c_char; READ_CHUNK];
+            loop {
+                unsafe { *__errno_location() = 0 };
+                if unsafe { fgets(scrap.as_mut_ptr(), READ_CHUNK as c_int, fd) }.is_null() {
+                    if unsafe { *__errno_location() } != EINTR {
+                        break;
+                    }
+                } else if unsafe { strlen(scrap.as_ptr()) } < READ_CHUNK - 1
+                    || scrap[READ_CHUNK - 2] == b'\n' as c_char
+                {
+                    break;
+                }
+            }
+        }
+        self.len = filled;
+        unsafe { self.convert() }
     }
 
     /// Convert the line just read out of the error file's encoding, if one
@@ -395,26 +381,25 @@ impl Reader {
         }
         // SAFETY: the line is NUL-terminated; `string_convert` answers a
         // freshly allocated string and writes back its length.
-        unsafe {
-            if !has_non_ascii(self.line.as_ptr()) {
-                return Status::Ok;
-            }
-            let converted = string_convert(&raw const self.vc, self.line(), &raw mut self.len);
-            if converted.is_null() {
-                return Status::Ok;
-            }
-            if self.line.len() < self.len + 1 {
-                self.line.resize(self.len + 1, 0);
-            }
-            xstrlcpy(self.line(), converted, self.len + 1);
-            xfree(converted.cast());
-            // Upstream adopts the converted allocation outright when the
-            // line no longer fits one chunk, and records how much of it the
-            // long-line reader may fill. Only that cap matters here, since
-            // the buffer is owned either way.
-            if self.len >= READ_CHUNK {
-                self.room = self.room.max(self.len.min(LINE_MAXLEN));
-            }
+        if !unsafe { has_non_ascii(self.line.as_ptr()) } {
+            return Status::Ok;
+        }
+        let converted =
+            unsafe { string_convert(&raw const self.vc, self.line(), &raw mut self.len) };
+        if converted.is_null() {
+            return Status::Ok;
+        }
+        if self.line.len() < self.len + 1 {
+            self.line.resize(self.len + 1, 0);
+        }
+        unsafe { xstrlcpy(self.line(), converted, self.len + 1) };
+        unsafe { xfree(converted.cast()) };
+        // Upstream adopts the converted allocation outright when the
+        // line no longer fits one chunk, and records how much of it the
+        // long-line reader may fill. Only that cap matters here, since
+        // the buffer is owned either way.
+        if self.len >= READ_CHUNK {
+            self.room = self.room.max(self.len.min(LINE_MAXLEN));
         }
         Status::Ok
     }
@@ -437,12 +422,12 @@ pub unsafe fn qf_init(
     enc: *mut c_char,
 ) -> c_int {
     // SAFETY: forwarded from the caller.
+    let qi = match wp {
+        Some(wp) => ll_get_or_alloc_list(wp),
+        None => QfStack::Global.raw(),
+    };
+    debug_assert!(!qi.is_null());
     unsafe {
-        let qi = match wp {
-            Some(wp) => ll_get_or_alloc_list(wp),
-            None => QfStack::Global.raw(),
-        };
-        debug_assert!(!qi.is_null());
         qf_init_ext(
             qi,
             (*qi).qf_curlist,
@@ -491,76 +476,75 @@ pub(crate) unsafe fn qf_init_ext(
     enc: *mut c_char,
 ) -> c_int {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        // Do not use the cached buffer, it may have been wiped out.
-        forget_last_buffer();
+    // Do not use the cached buffer, it may have been wiped out.
+    forget_last_buffer();
 
-        let mut old_last: *mut qfline_T = ptr::null_mut();
-        let mut retval = -1;
-        let reader = Reader::open(enc, efile, tv, buf, lnumfirst, lnumlast);
+    let mut old_last: *mut qfline_T = ptr::null_mut();
+    let mut retval = -1;
+    let reader = unsafe { Reader::open(enc, efile, tv, buf, lnumfirst, lnumlast) };
 
-        if let Some(mut reader) = reader {
-            let mut adding = false;
-            let qfl = if newlist || qf_idx == (*qi).qf_listcount {
-                // Make place for a new list.
-                qf_new_list(qi, qf_title);
-                qf_idx = (*qi).qf_curlist;
-                qf_get_list(qi, qf_idx)
-            } else {
-                // Adding to an existing list; remember its last entry.
-                adding = true;
-                let qfl = qf_get_list(qi, qf_idx);
-                if !qf_list_empty(qfl) {
-                    old_last = (*qfl).qf_last;
-                }
-                qfl
-            };
-
-            // Use the buffer-local 'errorformat' when it has one.
-            // The two cheap tests stay in front of the buffer's option, as
-            // C's `&&` chain had them.
-            let local_efm = if errorformat == p_efm.get() && tv.is_null() {
-                buf.map(|buf| buf.b_p_efm).filter(|&efm| *efm != 0)
-            } else {
-                None
-            };
-            let efm = local_efm.unwrap_or(errorformat);
-
-            // Take the compiled option out of the cache for the length of
-            // this read and put it back at the end. Adding an entry can
-            // fire `BufNew`, an autocommand can run another `:cexpr`, and
-            // upstream — which keeps the compiled option in a bare static
-            // and frees it whenever the option text changes — would then
-            // free what this loop is still walking. Owning it here costs
-            // the re-entrant call a recompile and nothing otherwise.
-            let mut compiled = EFM_CACHE.take();
-            let text = CStr::from_ptr(efm).to_bytes();
-            if !compiled.as_ref().is_some_and(|(had, _)| had == text) {
-                compiled = Efm::compile(efm).map(|parsed| (text.to_vec(), parsed));
+    if let Some(mut reader) = reader {
+        let mut adding = false;
+        let qfl = if newlist || qf_idx == unsafe { (*qi).qf_listcount } {
+            // Make place for a new list.
+            unsafe { qf_new_list(qi, qf_title) };
+            qf_idx = unsafe { (*qi).qf_curlist };
+            unsafe { qf_get_list(qi, qf_idx) }
+        } else {
+            // Adding to an existing list; remember its last entry.
+            adding = true;
+            let qfl = unsafe { qf_get_list(qi, qf_idx) };
+            if !unsafe { qf_list_empty(qfl) } {
+                old_last = unsafe { (*qfl).qf_last };
             }
-            let built = match compiled.as_mut() {
-                Some((_, parsed)) => read_lines(qfl, &mut reader, parsed),
-                None => false,
-            };
-            EFM_CACHE.set(compiled);
+            qfl
+        };
 
-            if built {
-                retval = (*qfl).qf_count;
-            } else if !adding {
-                // The new list came to nothing; free it again.
-                qf_free(qfl);
-                (*qi).qf_listcount -= 1;
-                if (*qi).qf_curlist > 0 {
-                    (*qi).qf_curlist -= 1;
-                }
+        // Use the buffer-local 'errorformat' when it has one.
+        // The two cheap tests stay in front of the buffer's option, as
+        // C's `&&` chain had them.
+        let local_efm = if errorformat == p_efm.get() && tv.is_null() {
+            buf.map(|buf| buf.b_p_efm)
+                .filter(|&efm| unsafe { *efm } != 0)
+        } else {
+            None
+        };
+        let efm = local_efm.unwrap_or(errorformat);
+
+        // Take the compiled option out of the cache for the length of
+        // this read and put it back at the end. Adding an entry can
+        // fire `BufNew`, an autocommand can run another `:cexpr`, and
+        // upstream — which keeps the compiled option in a bare static
+        // and frees it whenever the option text changes — would then
+        // free what this loop is still walking. Owning it here costs
+        // the re-entrant call a recompile and nothing otherwise.
+        let mut compiled = EFM_CACHE.take();
+        let text = unsafe { CStr::from_ptr(efm) }.to_bytes();
+        if !compiled.as_ref().is_some_and(|(had, _)| had == text) {
+            compiled = unsafe { Efm::compile(efm) }.map(|parsed| (text.to_vec(), parsed));
+        }
+        let built = match compiled.as_mut() {
+            Some((_, parsed)) => unsafe { read_lines(qfl, &mut reader, parsed) },
+            None => false,
+        };
+        EFM_CACHE.set(compiled);
+
+        if built {
+            retval = unsafe { (*qfl).qf_count };
+        } else if !adding {
+            // The new list came to nothing; free it again.
+            unsafe { qf_free(qfl) };
+            unsafe { (*qi).qf_listcount -= 1 };
+            if unsafe { (*qi).qf_curlist } > 0 {
+                unsafe { (*qi).qf_curlist -= 1 };
             }
         }
-
-        if qf_idx == (*qi).qf_curlist {
-            qf_update_buffer(qi, old_last);
-        }
-        retval
     }
+
+    if qf_idx == unsafe { (*qi).qf_curlist } {
+        unsafe { qf_update_buffer(qi, old_last) };
+    }
+    retval
 }
 
 /// Read every line the reader has and add an entry for each one the parser
@@ -576,37 +560,35 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
     // ":make" command, and the error file should still be read.
     got_int.set(false);
     // SAFETY: forwarded from the caller.
-    unsafe {
-        while !got_int.get() {
-            match reader.next_line() {
-                Status::EndOfInput => break,
-                Status::Ok => {}
-                _ => return false,
-            }
-            let parsed = parse_line(qfl, reader.line(), reader.len, efm, &mut fields);
-            if parsed == Status::Fail {
-                return false;
-            }
-            if parsed == Status::Ok {
-                qf_add_entry(qfl, &fields.entry(qfl));
-            }
-            line_breakcheck();
+    while !got_int.get() {
+        match unsafe { reader.next_line() } {
+            Status::EndOfInput => break,
+            Status::Ok => {}
+            _ => return false,
         }
-
-        if reader.had_error() {
-            emsg(gettext(&raw const e_readerrf as *const c_char));
+        let parsed = unsafe { parse_line(qfl, reader.line(), reader.len, efm, &mut fields) };
+        if parsed == Status::Fail {
             return false;
         }
-        if (*qfl).qf_index == 0 {
-            // No valid entry was found.
-            (*qfl).qf_ptr = (*qfl).qf_start;
-            (*qfl).qf_index = 1;
-            (*qfl).qf_nonevalid = true;
-        } else {
-            (*qfl).qf_nonevalid = false;
-            if (*qfl).qf_ptr.is_null() {
-                (*qfl).qf_ptr = (*qfl).qf_start;
-            }
+        if parsed == Status::Ok {
+            unsafe { qf_add_entry(qfl, &fields.entry(qfl)) };
+        }
+        line_breakcheck();
+    }
+
+    if reader.had_error() {
+        unsafe { emsg(gettext(&raw const e_readerrf as *const c_char)) };
+        return false;
+    }
+    if unsafe { (*qfl).qf_index } == 0 {
+        // No valid entry was found.
+        unsafe { (*qfl).qf_ptr = (*qfl).qf_start };
+        unsafe { (*qfl).qf_index = 1 };
+        unsafe { (*qfl).qf_nonevalid = true };
+    } else {
+        unsafe { (*qfl).qf_nonevalid = false };
+        if unsafe { (*qfl).qf_ptr }.is_null() {
+            unsafe { (*qfl).qf_ptr = (*qfl).qf_start };
         }
     }
     true
@@ -619,17 +601,15 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
 /// `qfl` must be a live list and `title` null or NUL-terminated.
 pub(crate) unsafe fn qf_store_title(qfl: *mut qf_list_T, title: *const c_char) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        xfree((*qfl).qf_title.cast());
-        (*qfl).qf_title = ptr::null_mut();
-        if title.is_null() {
-            return;
-        }
-        let len = strlen(title) + 1;
-        let p: *mut c_char = xmallocz(len).cast();
-        (*qfl).qf_title = p;
-        xstrlcpy(p, title, len + 1);
+    unsafe { xfree((*qfl).qf_title.cast()) };
+    unsafe { (*qfl).qf_title = ptr::null_mut() };
+    if title.is_null() {
+        return;
     }
+    let len = unsafe { strlen(title) } + 1;
+    let p: *mut c_char = unsafe { xmallocz(len) }.cast();
+    unsafe { (*qfl).qf_title = p };
+    unsafe { xstrlcpy(p, title, len + 1) };
 }
 
 /// A list's default title is the command that created it, with a `:` in
@@ -643,8 +623,6 @@ pub(crate) unsafe fn qf_cmdtitle(cmd: *const c_char) -> [c_char; READ_CHUNK + 1]
     let mut title = [0 as c_char; READ_CHUNK + 1];
     // SAFETY: the caller's command is NUL-terminated, and the buffer holds
     // the IOSIZE bytes `snprintf` is told about.
-    unsafe {
-        snprintf(title.as_mut_ptr(), READ_CHUNK, c":%s".as_ptr(), cmd);
-    }
+    unsafe { snprintf(title.as_mut_ptr(), READ_CHUNK, c":%s".as_ptr(), cmd) };
     title
 }

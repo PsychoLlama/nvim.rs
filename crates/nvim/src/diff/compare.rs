@@ -50,10 +50,8 @@ pub(crate) fn head_off(line: &[u8], i: usize) -> usize {
     // SAFETY: `line` is the byte range of a NUL-terminated line, so `base`
     // and `base + i` are both within one allocation, `i == line.len()`
     // addressing the terminator itself.
-    unsafe {
-        let base = line.as_ptr().cast::<c_char>();
-        utf_head_off(base, base.add(i)) as usize
-    }
+    let base = line.as_ptr().cast::<c_char>();
+    unsafe { utf_head_off(base, base.add(i)) as usize }
 }
 
 /// The length of the character both slices start with, if they are the same
@@ -71,32 +69,30 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
     // walks stop at the terminator and never leave the allocation.  A length
     // longer than the slice is therefore impossible; were it not, the
     // indexing below would panic rather than read out of bounds.
-    unsafe {
-        let s1 = p1.as_ptr().cast::<c_char>();
-        let s2 = p2.as_ptr().cast::<c_char>();
-        let l = utfc_ptr2len(s1);
-        if l != utfc_ptr2len(s2) {
+    let s1 = p1.as_ptr().cast::<c_char>();
+    let s2 = p2.as_ptr().cast::<c_char>();
+    let l = unsafe { utfc_ptr2len(s1) };
+    if l != unsafe { utfc_ptr2len(s2) } {
+        return None;
+    }
+    if l > 1 {
+        let l = l as usize;
+        if p1[..l] != p2[..l]
+            && (diff_flags.get() & DIFF_ICASE == 0
+                || utf_fold(unsafe { utf_ptr2char(s1) }) != utf_fold(unsafe { utf_ptr2char(s2) }))
+        {
             return None;
         }
-        if l > 1 {
-            let l = l as usize;
-            if p1[..l] != p2[..l]
-                && (diff_flags.get() & DIFF_ICASE == 0
-                    || utf_fold(utf_ptr2char(s1)) != utf_fold(utf_ptr2char(s2)))
-            {
-                return None;
-            }
-            Some(l)
-        } else {
-            let (b1, b2) = (byte_at(p1, 0), byte_at(p2, 0));
-            if b1 != b2
-                && (diff_flags.get() & DIFF_ICASE == 0
-                    || tolower(b1 as c_int) != tolower(b2 as c_int))
-            {
-                return None;
-            }
-            Some(1)
+        Some(l)
+    } else {
+        let (b1, b2) = (byte_at(p1, 0), byte_at(p2, 0));
+        if b1 != b2
+            && (diff_flags.get() & DIFF_ICASE == 0
+                || unsafe { tolower(b1 as c_int) } != unsafe { tolower(b2 as c_int) })
+        {
+            return None;
         }
+        Some(1)
     }
 }
 
@@ -141,27 +137,27 @@ pub(crate) fn lines_equal(s1: &CStr, s2: &CStr) -> bool {
 
 /// Whether a whole diff block holds the same text in two buffers.
 pub(crate) unsafe fn diff_equal_entry(dp: *mut diff_T, idx1: usize, idx2: usize) -> bool {
-    unsafe {
-        if (*dp).df_count[idx1] != (*dp).df_count[idx2] {
-            return false;
-        }
-        // SAFETY: `curtab` is set from startup to exit.
-        let tp = TabPage::current();
-        if diff_check_sanity(tp, dp) == FAIL {
-            return false;
-        }
-        for i in 0..(*dp).df_count[idx1] {
-            // The copy is not optional: the second `ml_get_buf` invalidates
-            // the buffer the first one answered with.
-            let line =
-                CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx1], (*dp).df_lnum[idx1] + i)).to_owned();
-            let other = CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx2], (*dp).df_lnum[idx2] + i));
-            if !lines_equal(&line, other) {
-                return false;
-            }
-        }
-        true
+    if unsafe { (*dp).df_count[idx1] } != unsafe { (*dp).df_count[idx2] } {
+        return false;
     }
+    // SAFETY: `curtab` is set from startup to exit.
+    let tp = unsafe { TabPage::current() };
+    if unsafe { diff_check_sanity(tp, dp) } == FAIL {
+        return false;
+    }
+    for i in 0..unsafe { (*dp).df_count[idx1] } {
+        // The copy is not optional: the second `ml_get_buf` invalidates
+        // the buffer the first one answered with.
+        let line =
+            unsafe { CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx1], (*dp).df_lnum[idx1] + i)) }
+                .to_owned();
+        let other =
+            unsafe { CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx2], (*dp).df_lnum[idx2] + i)) };
+        if !lines_equal(&line, other) {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

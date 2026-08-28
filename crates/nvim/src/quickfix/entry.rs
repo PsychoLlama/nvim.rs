@@ -38,21 +38,19 @@ pub(crate) fn forget_last_buffer() {
 /// `bufname` must be NUL-terminated.
 unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
     // SAFETY: forwarded from the caller; `bufref_valid` only reads.
-    unsafe {
-        let cached = last_bufname.with(|name| match name {
-            Some(name) => strcmp(bufname, name.as_ptr()) == 0,
-            None => false,
-        });
-        if cached && last_bufref.get().valid() {
-            return Buf::from_raw(last_bufref.get().raw());
-        }
-        let buf = buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int);
-        let name = Name::from_ptr(bufname);
-        last_bufname.with_mut(|slot| *slot = Some(name));
-        let buf = Buf::from_raw(buf);
-        last_bufref.set(BufRef::of_opt(buf));
-        buf
+    let cached = last_bufname.with(|name| match name {
+        Some(name) => unsafe { strcmp(bufname, name.as_ptr()) == 0 },
+        None => false,
+    });
+    if cached && last_bufref.get().valid() {
+        return unsafe { Buf::from_raw(last_bufref.get().raw()) };
     }
+    let buf = unsafe { buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int) };
+    let name = unsafe { Name::from_ptr(bufname) };
+    last_bufname.with_mut(|slot| *slot = Some(name));
+    let buf = unsafe { Buf::from_raw(buf) };
+    last_bufref.set(BufRef::of_opt(buf));
+    buf
 }
 
 /// The buffer number for the file an entry names, listing the buffer if it
@@ -68,39 +66,37 @@ pub(crate) unsafe fn qf_get_fnum(
     fname: *mut c_char,
 ) -> c_int {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        if fname.is_null() || *fname == 0 {
-            return 0;
-        }
-        // Owned only when the name had to be joined to a directory.
-        let mut joined: *mut c_char = ptr::null_mut();
-        let bufname = if !directory.is_null() && !vim_is_abs_name(fname) {
-            joined = concat_fnames(directory, fname, true);
-            // The file should be there. If it is not, `make` changed
-            // directory without a "leaving directory" message and the
-            // directory stack has to be re-guessed.
-            if !os_path_exists(joined) {
-                xfree(joined.cast());
-                let guess = qf_guess_filepath(Qfl::new(qfl), fname);
-                joined = if guess.is_null() {
-                    xstrdup(fname)
-                } else {
-                    concat_fnames(guess, fname, true)
-                };
-            }
-            joined
-        } else {
-            fname
-        };
-
-        let buf = buffer_for(bufname);
-        xfree(joined.cast());
-        let Some(mut buf) = buf else {
-            return 0;
-        };
-        buf.b_has_qf_entry = has_entry_flag(qfl);
-        buf.handle as c_int
+    if fname.is_null() || unsafe { *fname } == 0 {
+        return 0;
     }
+    // Owned only when the name had to be joined to a directory.
+    let mut joined: *mut c_char = ptr::null_mut();
+    let bufname = if !directory.is_null() && !unsafe { vim_is_abs_name(fname) } {
+        joined = unsafe { concat_fnames(directory, fname, true) };
+        // The file should be there. If it is not, `make` changed
+        // directory without a "leaving directory" message and the
+        // directory stack has to be re-guessed.
+        if !unsafe { os_path_exists(joined) } {
+            unsafe { xfree(joined.cast()) };
+            let guess = unsafe { qf_guess_filepath(Qfl::new(qfl), fname) };
+            joined = if guess.is_null() {
+                unsafe { xstrdup(fname) }
+            } else {
+                unsafe { concat_fnames(guess, fname, true) }
+            };
+        }
+        joined
+    } else {
+        fname
+    };
+
+    let buf = unsafe { buffer_for(bufname) };
+    unsafe { xfree(joined.cast()) };
+    let Some(mut buf) = buf else {
+        return 0;
+    };
+    buf.b_has_qf_entry = unsafe { has_entry_flag(qfl) };
+    buf.handle as c_int
 }
 
 impl DirStack {
@@ -143,36 +139,34 @@ pub(crate) unsafe fn qf_push_dir(
     is_file_stack: bool,
 ) -> *mut c_char {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        if (*slot).is_null() {
-            *slot = Box::into_raw(Box::new(DirStack { dirs: Vec::new() }));
-        }
-        let stack = &mut **slot;
-        let name = Name::from_ptr(dirbuf);
-        let plain = vim_is_abs_name(dirbuf) || stack.dirs.is_empty() || is_file_stack;
-        stack.dirs.push(name);
-        if plain {
-            return stack.top();
-        }
-
-        // Look for a directory on the stack that `dirbuf` is under.
-        let mut joined: *mut c_char = ptr::null_mut();
-        let found = stack.keep_matching(|dir| {
-            xfree(joined.cast());
-            joined = concat_fnames(dir.as_ptr(), dirbuf, true);
-            os_isdir(joined)
-        });
-        if found.is_some() {
-            // Under a known directory: keep the two joined.
-            *stack.dirs.last_mut().unwrap() = Name::from_ptr(joined);
-        }
-        // Nothing matched, so it must be a top-level directory: the name
-        // pushed above is already the right one. Upstream ends with a
-        // "dirname is still NULL, pop the entry and answer NULL" branch,
-        // which no path can reach — every branch above stores a name.
-        xfree(joined.cast());
-        stack.top()
+    if unsafe { *slot }.is_null() {
+        unsafe { *slot = Box::into_raw(Box::new(DirStack { dirs: Vec::new() })) };
     }
+    let stack = unsafe { &mut **slot };
+    let name = unsafe { Name::from_ptr(dirbuf) };
+    let plain = unsafe { vim_is_abs_name(dirbuf) } || stack.dirs.is_empty() || is_file_stack;
+    stack.dirs.push(name);
+    if plain {
+        return stack.top();
+    }
+
+    // Look for a directory on the stack that `dirbuf` is under.
+    let mut joined: *mut c_char = ptr::null_mut();
+    let found = stack.keep_matching(|dir| {
+        unsafe { xfree(joined.cast()) };
+        joined = unsafe { concat_fnames(dir.as_ptr(), dirbuf, true) };
+        unsafe { os_isdir(joined) }
+    });
+    if found.is_some() {
+        // Under a known directory: keep the two joined.
+        *stack.dirs.last_mut().unwrap() = unsafe { Name::from_ptr(joined) };
+    }
+    // Nothing matched, so it must be a top-level directory: the name
+    // pushed above is already the right one. Upstream ends with a
+    // "dirname is still NULL, pop the entry and answer NULL" branch,
+    // which no path can reach — every branch above stores a name.
+    unsafe { xfree(joined.cast()) };
+    stack.top()
 }
 
 /// Drop the top directory, answering the one below it.
@@ -182,14 +176,12 @@ pub(crate) unsafe fn qf_push_dir(
 /// `slot` must be a live `DirStack` pointer.
 pub(crate) unsafe fn qf_pop_dir(slot: *mut *mut DirStack) -> *mut c_char {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        if (*slot).is_null() {
-            return ptr::null_mut();
-        }
-        let stack = &mut **slot;
-        stack.dirs.pop();
-        stack.top()
+    if unsafe { *slot }.is_null() {
+        return ptr::null_mut();
     }
+    let stack = unsafe { &mut **slot };
+    stack.dirs.pop();
+    stack.top()
 }
 
 /// Throw the whole stack away.
@@ -200,11 +192,9 @@ pub(crate) unsafe fn qf_pop_dir(slot: *mut *mut DirStack) -> *mut c_char {
 pub(crate) unsafe fn qf_clean_dir_stack(slot: *mut *mut DirStack) {
     // SAFETY: forwarded from the caller; the pointer was made by
     // `Box::into_raw` in `qf_push_dir`.
-    unsafe {
-        if !(*slot).is_null() {
-            drop(Box::from_raw(*slot));
-            *slot = ptr::null_mut();
-        }
+    if !unsafe { *slot }.is_null() {
+        drop(unsafe { Box::from_raw(*slot) });
+        unsafe { *slot = ptr::null_mut() };
     }
 }
 
@@ -224,22 +214,20 @@ pub(crate) unsafe fn qf_guess_filepath(mut qfl: Qfl, filename: *mut c_char) -> *
     }
     // SAFETY: the list's own directory stack, just tested for null, and the
     // caller's NUL-terminated file name.
-    unsafe {
-        let stack = &mut *qfl.qf_dir_stack;
-        if stack.dirs.is_empty() {
-            return ptr::null_mut();
-        }
-        let mut joined: *mut c_char = ptr::null_mut();
-        let found = stack.keep_matching(|dir| {
-            xfree(joined.cast());
-            joined = concat_fnames(dir.as_ptr(), filename, true);
-            os_path_exists(joined)
-        });
-        xfree(joined.cast());
-        match found {
-            Some(at) => stack.dirs[at].as_mut_ptr(),
-            None => ptr::null_mut(),
-        }
+    let stack = unsafe { &mut *qfl.qf_dir_stack };
+    if stack.dirs.is_empty() {
+        return ptr::null_mut();
+    }
+    let mut joined: *mut c_char = ptr::null_mut();
+    let found = stack.keep_matching(|dir| {
+        unsafe { xfree(joined.cast()) };
+        joined = unsafe { concat_fnames(dir.as_ptr(), filename, true) };
+        unsafe { os_path_exists(joined) }
+    });
+    unsafe { xfree(joined.cast()) };
+    match found {
+        Some(at) => stack.dirs[at].as_mut_ptr(),
+        None => ptr::null_mut(),
     }
 }
 
@@ -441,13 +429,11 @@ pub(crate) fn qf_get_entry(
 /// `eap` must be a live command.
 pub unsafe fn qf_get_size(eap: *mut exarg_T) -> size_t {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let qi = qf_cmd_get_stack(eap, false);
-        if qi.is_null() {
-            return 0;
-        }
-        (*qf_get_curlist(qi)).qf_count as size_t
+    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    if qi.is_null() {
+        return 0;
     }
+    unsafe { (*qf_get_curlist(qi)).qf_count as size_t }
 }
 
 /// How many entries `:cdo`/`:ldo` would visit, or how many files
@@ -458,32 +444,30 @@ pub unsafe fn qf_get_size(eap: *mut exarg_T) -> size_t {
 /// `eap` must be a live command.
 pub unsafe fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let qi = qf_cmd_get_stack(eap, false);
-        if qi.is_null() {
-            return 0;
-        }
-        let per_entry = (*eap).cmdidx as c_int == CMD_cdo as c_int
-            || (*eap).cmdidx as c_int == CMD_ldo as c_int;
-        let qfl = qf_get_curlist(qi);
-        let mut prev_fnum = 0;
-        let mut size: size_t = 0;
-        let mut i = 1;
-        let mut qfp = (*qfl).qf_start;
-        while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
-            if (*qfp).qf_valid != 0 {
-                if per_entry {
-                    size += 1;
-                } else if (*qfp).qf_fnum > 0 && (*qfp).qf_fnum != prev_fnum {
-                    size += 1;
-                    prev_fnum = (*qfp).qf_fnum;
-                }
-            }
-            i += 1;
-            qfp = (*qfp).qf_next;
-        }
-        size
+    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    if qi.is_null() {
+        return 0;
     }
+    let per_entry = unsafe { (*eap).cmdidx } as c_int == CMD_cdo as c_int
+        || unsafe { (*eap).cmdidx } as c_int == CMD_ldo as c_int;
+    let qfl = unsafe { qf_get_curlist(qi) };
+    let mut prev_fnum = 0;
+    let mut size: size_t = 0;
+    let mut i = 1;
+    let mut qfp = unsafe { (*qfl).qf_start };
+    while !got_int.get() && i <= unsafe { (*qfl).qf_count } && !qfp.is_null() {
+        if unsafe { (*qfp).qf_valid } != 0 {
+            if per_entry {
+                size += 1;
+            } else if unsafe { (*qfp).qf_fnum } > 0 && unsafe { (*qfp).qf_fnum } != prev_fnum {
+                size += 1;
+                prev_fnum = unsafe { (*qfp).qf_fnum };
+            }
+        }
+        i += 1;
+        qfp = unsafe { (*qfp).qf_next };
+    }
+    size
 }
 
 /// Which entry of the current list is current. Zero when there is no list.
@@ -493,13 +477,11 @@ pub unsafe fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
 /// `eap` must be a live command.
 pub unsafe fn qf_get_cur_idx(eap: *mut exarg_T) -> size_t {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let qi = qf_cmd_get_stack(eap, false);
-        if qi.is_null() {
-            return 0;
-        }
-        (*qf_get_curlist(qi)).qf_index as size_t
+    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    if qi.is_null() {
+        return 0;
     }
+    unsafe { (*qf_get_curlist(qi)).qf_index as size_t }
 }
 
 /// Which entry is current, counting only the entries `:cdo` would visit —
@@ -510,35 +492,33 @@ pub unsafe fn qf_get_cur_idx(eap: *mut exarg_T) -> size_t {
 /// `eap` must be a live command.
 pub unsafe fn qf_get_cur_valid_idx(eap: *mut exarg_T) -> c_int {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let qi = qf_cmd_get_stack(eap, false);
-        if qi.is_null() {
-            return 1;
-        }
-        let qfl = qf_get_curlist(qi);
-        if !qf_list_has_valid_entries(qfl) {
-            return 1;
-        }
-        let per_file = (*eap).cmdidx as c_int == CMD_cfdo as c_int
-            || (*eap).cmdidx as c_int == CMD_lfdo as c_int;
-        let mut prev_fnum = 0;
-        let mut eidx = 0;
-        let mut i = 1;
-        let mut qfp = (*qfl).qf_start;
-        while i <= (*qfl).qf_index && !qfp.is_null() {
-            if (*qfp).qf_valid != 0 {
-                if !per_file {
-                    eidx += 1;
-                } else if (*qfp).qf_fnum > 0 && (*qfp).qf_fnum != prev_fnum {
-                    eidx += 1;
-                    prev_fnum = (*qfp).qf_fnum;
-                }
-            }
-            i += 1;
-            qfp = (*qfp).qf_next;
-        }
-        if eidx != 0 { eidx } else { 1 }
+    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    if qi.is_null() {
+        return 1;
     }
+    let qfl = unsafe { qf_get_curlist(qi) };
+    if !unsafe { qf_list_has_valid_entries(qfl) } {
+        return 1;
+    }
+    let per_file = unsafe { (*eap).cmdidx } as c_int == CMD_cfdo as c_int
+        || unsafe { (*eap).cmdidx } as c_int == CMD_lfdo as c_int;
+    let mut prev_fnum = 0;
+    let mut eidx = 0;
+    let mut i = 1;
+    let mut qfp = unsafe { (*qfl).qf_start };
+    while i <= unsafe { (*qfl).qf_index } && !qfp.is_null() {
+        if unsafe { (*qfp).qf_valid } != 0 {
+            if !per_file {
+                eidx += 1;
+            } else if unsafe { (*qfp).qf_fnum } > 0 && unsafe { (*qfp).qf_fnum } != prev_fnum {
+                eidx += 1;
+                prev_fnum = unsafe { (*qfp).qf_fnum };
+            }
+        }
+        i += 1;
+        qfp = unsafe { (*qfp).qf_next };
+    }
+    if eidx != 0 { eidx } else { 1 }
 }
 
 /// Which entry the `n`th thing `:cdo` and friends visit is, counting

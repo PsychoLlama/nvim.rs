@@ -94,10 +94,8 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 tempdir
             };
             // SAFETY: a NUL-terminated directory name; the editor exists.
-            unsafe {
-                os_chdir(tempdir);
-                shorten_fnames(1);
-            }
+            unsafe { os_chdir(tempdir) };
+            unsafe { shorten_fnames(1) };
         }
 
         // SAFETY: `p_pex` is the `'patchexpr'` option string.
@@ -110,11 +108,9 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
             // matched by the three NUL-terminated names.
             unsafe { vim_snprintf(buf, buflen, fmt, tmp_new, tmp_orig, esc_name) };
             // SAFETY: the editor exists, in all three calls.
-            unsafe {
-                block_autocmds();
-                call_shell(buf, ShellOpts::FILTER, ptr::null_mut::<c_char>());
-                unblock_autocmds();
-            }
+            unsafe { block_autocmds() };
+            unsafe { call_shell(buf, ShellOpts::FILTER, ptr::null_mut::<c_char>()) };
+            unsafe { unblock_autocmds() };
         }
 
         if saved_dir {
@@ -140,10 +136,8 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 let fname = cur_buf().b_fname;
                 // SAFETY: the buffer's own file name, NUL-terminated; the
                 // four extra bytes are for the `.new` appended next.
-                unsafe {
-                    newname = xstrnsave(fname, strlen(fname) + 4);
-                    strcat(newname, c".new".as_ptr());
-                }
+                newname = unsafe { xstrnsave(fname, strlen(fname) + 4) };
+                unsafe { strcat(newname, c".new".as_ptr()) };
             }
             cmdmod_set_tab(0);
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
@@ -158,19 +152,15 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 // against the live window list.
                 if curwin.get() != old_curwin && win_valid(old_curwin) {
                     // SAFETY: both windows are live, as just checked.
-                    unsafe {
-                        diff_win_options(cur_win(), true);
-                        diff_win_options(Win::new(old_curwin), true);
-                    }
+                    diff_win_options(cur_win(), true);
+                    diff_win_options(unsafe { Win::new(old_curwin) }, true);
                     if !newname.is_null() {
                         eap.arg = newname;
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
-                        unsafe {
-                            ex_file(eap.raw());
-                            if augroup_exists(c"filetypedetect".as_ptr()) {
-                                do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr());
-                            }
+                        unsafe { ex_file(eap.raw()) };
+                        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
+                            unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
                         }
                     }
                 }
@@ -216,11 +206,9 @@ fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
 fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
     // SAFETY: `buf` was sized for `name` plus the longest suffix, and both
     // inputs are NUL-terminated.
-    unsafe {
-        strcpy(buf, name);
-        strcat(buf, suffix);
-        os_remove(buf);
-    }
+    unsafe { strcpy(buf, name) };
+    unsafe { strcat(buf, suffix) };
+    unsafe { os_remove(buf) };
 }
 
 /// `:diffsplit {file}`: open `file` in a new window and diff it against the
@@ -234,10 +222,8 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     let old_curwin: *mut win_T = curwin.get();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
-    unsafe {
-        validate_cursor(Win::new(old_curwin));
-        set_fraction(old_curwin);
-    }
+    validate_cursor(unsafe { Win::new(old_curwin) });
+    unsafe { set_fraction(old_curwin) };
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT as c_int } else { 0 };
@@ -352,8 +338,8 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
             0 as scid_T,
             kOptScopeWin,
             wp.raw().cast::<c_void>(),
-        );
-    }
+        )
+    };
     if first_time {
         wp.w_onebuf_opt.wo_fen_save = wp.w_onebuf_opt.wo_fen;
         wp.w_onebuf_opt.wo_fdl_save = wp.w_onebuf_opt.wo_fdl;
@@ -375,12 +361,10 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
     wp.w_onebuf_opt.wo_fen = 1;
     wp.w_onebuf_opt.wo_fdl = 0 as OptInt;
     // SAFETY: a live window, in all three calls.
-    unsafe {
-        fold_update_all(wp);
-        changed_window_setting(wp);
-        if vim_strchr(p_sbo.get(), 'h' as c_int).is_null() {
-            do_cmdline_cmd(c"set sbo+=hor".as_ptr());
-        }
+    fold_update_all(wp);
+    changed_window_setting(wp);
+    if unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
+        unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
     }
     wp.w_onebuf_opt.wo_diff_saved = 1;
     set_diff_option(wp, true);

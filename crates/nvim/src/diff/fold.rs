@@ -292,10 +292,8 @@ pub unsafe fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // already clamps at zero.
     //
     // SAFETY: the caller's cells, and the current window is live.
-    unsafe {
-        let fill = diff_check_fill(cur_win(), tv_get_lnum(argvars));
-        (*rettv).vval.v_number = fill as varnumber_T;
-    }
+    let fill = diff_check_fill(cur_win(), unsafe { tv_get_lnum(argvars) });
+    unsafe { (*rettv).vval.v_number = fill as varnumber_T };
 }
 
 /// The window the editor is working in.

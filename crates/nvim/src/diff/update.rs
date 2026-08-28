@@ -235,10 +235,8 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
         } else {
             // SAFETY: `s` points into a NUL-terminated line, which is what
             // the multibyte readers walk.
-            unsafe {
-                let c = utf_ptr2char(s);
-                (utf_fold(c), utf_char2len(c))
-            }
+            let c = unsafe { utf_ptr2char(s) };
+            (utf_fold(c), utf_char2len(c))
         };
         // SAFETY: as above.
         let orig_len = unsafe { utfc_ptr2len(s) } as usize;
@@ -352,11 +350,9 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
             unsafe { ga_init(ga, item, 100) };
         } else {
             // SAFETY: the editor exists, for all three names.
-            unsafe {
-                dio.dio_orig.din_fname = vim_tempname();
-                dio.dio_new.din_fname = vim_tempname();
-                dio.dio_diff.dout_fname = vim_tempname();
-            }
+            dio.dio_orig.din_fname = unsafe { vim_tempname() };
+            dio.dio_new.din_fname = unsafe { vim_tempname() };
+            dio.dio_diff.dout_fname = unsafe { vim_tempname() };
             if dio.dio_orig.din_fname.is_null()
                 || dio.dio_new.din_fname.is_null()
                 || dio.dio_diff.dout_fname.is_null()
@@ -375,10 +371,8 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 let buf = tp.tp_diffbuf[idx];
                 // SAFETY: `buf_valid` compares against the live buffer list,
                 // and a valid buffer is what `buf_check_timestamp` wants.
-                unsafe {
-                    if buf_valid(buf) {
-                        buf_check_timestamp(Buf::new(buf));
-                    }
+                if unsafe { buf_valid(buf) } {
+                    unsafe { buf_check_timestamp(Buf::new(buf)) };
                 }
             }
         }
@@ -463,14 +457,12 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 }
                 let (start, end) = segment(idx_new);
                 // SAFETY: a live buffer, and `dio`'s own sides.
-                unsafe {
-                    if diff_write(Buf::new(buf), new_in, start, end) != FAIL
-                        && diff_file(dio.raw()) != FAIL
-                    {
-                        diff_read(idx_orig as c_int, idx_new as c_int, dio.raw());
-                        clear_diffin(new_in);
-                        clear_diffout(diff_out);
-                    }
+                if unsafe { diff_write(Buf::new(buf), new_in, start, end) } != FAIL
+                    && unsafe { diff_file(dio.raw()) } != FAIL
+                {
+                    unsafe { diff_read(idx_orig as c_int, idx_new as c_int, dio.raw()) };
+                    unsafe { clear_diffin(new_in) };
+                    unsafe { clear_diffout(diff_out) };
                 }
             }
             // SAFETY: `dio`'s own input side.
@@ -502,11 +494,9 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
         }
     }
     // SAFETY: `dio`'s own temp file names, or null.
-    unsafe {
-        xfree(dio.dio_orig.din_fname.cast());
-        xfree(dio.dio_new.din_fname.cast());
-        xfree(dio.dio_diff.dout_fname.cast());
-    }
+    unsafe { xfree(dio.dio_orig.din_fname.cast()) };
+    unsafe { xfree(dio.dio_new.din_fname.cast()) };
+    unsafe { xfree(dio.dio_diff.dout_fname.cast()) };
 }
 
 /// Whether the built-in diff engine is what a recompute would use.
@@ -563,10 +553,8 @@ pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
     if had_diffs || !tp.tp_first_diff.is_null() {
         let nul = ::core::ptr::null_mut::<c_char>();
         // SAFETY: the editor exists; `DiffUpdated` takes no file name.
-        unsafe {
-            diff_redraw(true);
-            apply_autocmds(EVENT_DIFFUPDATED, nul, nul, false, curbuf.get());
-        }
+        unsafe { diff_redraw(true) };
+        unsafe { apply_autocmds(EVENT_DIFFUPDATED, nul, nul, false, curbuf.get()) };
     }
 }
 

@@ -181,8 +181,8 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
                 semsg_c!(
                     gettext(c"E103: Buffer \"%s\" is not in diff mode".as_ptr()),
                     eap.arg,
-                );
-            }
+                )
+            };
             return;
         }
     }
@@ -250,10 +250,8 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };
     }
     // SAFETY: the current window is live, in both calls.
-    unsafe {
-        check_cursor(cur_win());
-        changed_line_abv_curs();
-    }
+    check_cursor(cur_win());
+    unsafe { changed_line_abv_curs() };
     if tp.tp_first_diff.is_null() {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
@@ -272,10 +270,8 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     } else {
         let nul = ::core::ptr::null_mut::<c_char>();
         // SAFETY: the editor exists; `DiffUpdated` takes no file name.
-        unsafe {
-            diff_redraw(false);
-            apply_autocmds(EVENT_DIFFUPDATED, nul, nul, false, curbuf.get());
-        }
+        unsafe { diff_redraw(false) };
+        unsafe { apply_autocmds(EVENT_DIFFUPDATED, nul, nul, false, curbuf.get()) };
     }
 }
 
@@ -374,10 +370,8 @@ fn diffgetput(
                 // SAFETY: a live buffer and a line number inside it.
                 let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
                 // SAFETY: the editor exists; `p` is our own copy of the line.
-                unsafe {
-                    ml_append(lnum + i - 1 as linenr_T, p, 0 as colnr_T, false);
-                    xfree(p.cast());
-                }
+                unsafe { ml_append(lnum + i - 1 as linenr_T, p, 0 as colnr_T, false) };
+                unsafe { xfree(p.cast()) };
                 added += 1;
                 if buf_empty && cur_buf().b_ml.ml_line_count == 2 as linenr_T {
                     buf_empty = false;
@@ -425,10 +419,15 @@ fn diffgetput(
             }
             let cb = curbuf.get();
             // SAFETY: the current buffer is live, in both calls.
-            unsafe {
-                extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
-                changed_lines(Buf::new(cb), lnum, 0 as colnr_T, lnum + count, amount, true);
-            }
+            unsafe { extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo) };
+            changed_lines(
+                unsafe { Buf::new(cb) },
+                lnum,
+                0 as colnr_T,
+                lnum + count,
+                amount,
+                true,
+            );
             if let Some(mut copy) = freed {
                 // SAFETY: `copy` is this frame's copy of the freed block.
                 unsafe { diff_fold_update(&raw mut copy, idx_to as c_int) };

@@ -275,16 +275,14 @@ impl Fields {
         // SAFETY: `end` points into the line, so terminating there makes
         // the match a C string for the length of the call; the byte it
         // displaced is put straight back.
-        unsafe {
-            let displaced = *end;
-            *end = 0;
-            expand_env(start, self.namebuf.as_mut_ptr(), CMDBUFFSIZE);
-            *end = displaced;
-            // A separate file-name format (%O, %P, %Q) only claims a line
-            // when the file it names really exists.
-            if b"OPQ".contains(&prefix) && !os_path_exists(self.namebuf.as_ptr()) {
-                return Status::Fail;
-            }
+        let displaced = unsafe { *end };
+        unsafe { *end = 0 };
+        unsafe { expand_env(start, self.namebuf.as_mut_ptr(), CMDBUFFSIZE) };
+        unsafe { *end = displaced };
+        // A separate file-name format (%O, %P, %Q) only claims a line
+        // when the file it names really exists.
+        if b"OPQ".contains(&prefix) && !unsafe { os_path_exists(self.namebuf.as_ptr()) } {
+            return Status::Fail;
         }
         Status::Ok
     }
@@ -324,74 +322,72 @@ impl Fields {
         let number = || unsafe { atol(start) };
         // SAFETY (each arm): `start`/`endp[midx]` are inside the line, and
         // the field buffers hold `FIELD_MAX + 1` bytes.
-        unsafe {
-            match idx {
-                1 => {
-                    // %b: a buffer number, which must name a live buffer.
-                    let bnr = number() as c_int;
-                    if find_buf(bnr).is_none() {
-                        return Status::Fail;
-                    }
-                    self.bnr = bnr;
+        match idx {
+            1 => {
+                // %b: a buffer number, which must name a live buffer.
+                let bnr = number() as c_int;
+                if find_buf(bnr).is_none() {
+                    return Status::Fail;
                 }
-                2 => self.enr = number() as c_int,         // %n
-                3 => self.lnum = number() as linenr_T,     // %l
-                4 => self.end_lnum = number() as linenr_T, // %e
-                5 => self.col = number() as c_int,         // %c
-                6 => self.end_col = number() as c_int,     // %k
-                7 => self.kind = *start,                   // %t
-                10 => {
-                    // %p: a pointer line such as "   ^", whose width is the
-                    // column. A tab advances to the next multiple of eight.
-                    let end = rmp.endp[midx];
-                    if end.is_null() {
-                        return Status::Fail;
-                    }
-                    self.col = 0;
-                    let mut at = start;
-                    while at != end {
-                        self.col += 1;
-                        if *at == TAB as c_char {
-                            self.col += 7;
-                            self.col -= self.col % 8;
-                        }
-                        at = at.add(1);
-                    }
-                    self.col += 1;
-                    self.use_viscol = true;
-                }
-                11 => {
-                    // %v: a screen column.
-                    self.col = number() as c_int;
-                    self.use_viscol = true;
-                }
-                12 => {
-                    // %s: the matched text, as a very-nomagic pattern
-                    // anchored at both ends. Five bytes go around it, so
-                    // that much less of the match fits.
-                    let end = rmp.endp[midx];
-                    if end.is_null() {
-                        return Status::Fail;
-                    }
-                    let len = (end.offset_from(start) as usize).min(FIELD_MAX - 5);
-                    xstrlcpy(self.pattern.as_mut_ptr(), c"^\\V".as_ptr(), 4);
-                    xstrlcat(self.pattern.as_mut_ptr(), start, len + 4);
-                    self.pattern[len + 3] = b'\\' as c_char;
-                    self.pattern[len + 4] = b'$' as c_char;
-                    self.pattern[len + 5] = 0;
-                }
-                13 => {
-                    // %o: the module name, appended to whatever is there.
-                    let end = rmp.endp[midx];
-                    if end.is_null() {
-                        return Status::Fail;
-                    }
-                    let len = end.offset_from(start) as usize;
-                    let dsize = (strlen(self.module.as_ptr()) + len + 1).min(FIELD_MAX);
-                    xstrlcat(self.module.as_mut_ptr(), start, dsize);
-                }
-                _ => unreachable!("conversion {idx} is handled by its caller"),
+                self.bnr = bnr;
             }
+            2 => self.enr = number() as c_int,         // %n
+            3 => self.lnum = number() as linenr_T,     // %l
+            4 => self.end_lnum = number() as linenr_T, // %e
+            5 => self.col = number() as c_int,         // %c
+            6 => self.end_col = number() as c_int,     // %k
+            7 => self.kind = unsafe { *start },        // %t
+            10 => {
+                // %p: a pointer line such as "   ^", whose width is the
+                // column. A tab advances to the next multiple of eight.
+                let end = rmp.endp[midx];
+                if end.is_null() {
+                    return Status::Fail;
+                }
+                self.col = 0;
+                let mut at = start;
+                while at != end {
+                    self.col += 1;
+                    if unsafe { *at } == TAB as c_char {
+                        self.col += 7;
+                        self.col -= self.col % 8;
+                    }
+                    at = unsafe { at.add(1) };
+                }
+                self.col += 1;
+                self.use_viscol = true;
+            }
+            11 => {
+                // %v: a screen column.
+                self.col = number() as c_int;
+                self.use_viscol = true;
+            }
+            12 => {
+                // %s: the matched text, as a very-nomagic pattern
+                // anchored at both ends. Five bytes go around it, so
+                // that much less of the match fits.
+                let end = rmp.endp[midx];
+                if end.is_null() {
+                    return Status::Fail;
+                }
+                let len = (unsafe { end.offset_from(start) } as usize).min(FIELD_MAX - 5);
+                unsafe { xstrlcpy(self.pattern.as_mut_ptr(), c"^\\V".as_ptr(), 4) };
+                unsafe { xstrlcat(self.pattern.as_mut_ptr(), start, len + 4) };
+                self.pattern[len + 3] = b'\\' as c_char;
+                self.pattern[len + 4] = b'$' as c_char;
+                self.pattern[len + 5] = 0;
+            }
+            13 => {
+                // %o: the module name, appended to whatever is there.
+                let end = rmp.endp[midx];
+                if end.is_null() {
+                    return Status::Fail;
+                }
+                let len = unsafe { end.offset_from(start) } as usize;
+                let dsize = (unsafe { strlen(self.module.as_ptr()) } + len + 1).min(FIELD_MAX);
+                unsafe { xstrlcat(self.module.as_mut_ptr(), start, dsize) };
+            }
+            _ => unreachable!("conversion {idx} is handled by its caller"),
         }
         Status::Ok
     }
@@ -452,10 +448,8 @@ pub(crate) unsafe fn parse_line(
             // SAFETY: the line is readable for `linelen` bytes.
             unsafe { no_match(linebuf, linelen, fields) };
             // SAFETY: the caller's list is live.
-            unsafe {
-                (*qfl).qf_multiline = false;
-                (*qfl).qf_multiignore = false;
-            }
+            unsafe { (*qfl).qf_multiline = false };
+            unsafe { (*qfl).qf_multiignore = false };
             return Status::Ok;
         };
 
@@ -484,10 +478,8 @@ pub(crate) unsafe fn parse_line(
 
         if b"AEWIN".contains(&prefix) {
             // SAFETY: the caller's list is live.
-            unsafe {
-                (*qfl).qf_multiline = true; // start of a multi-line message
-                (*qfl).qf_multiignore = false; // reset continuation
-            }
+            unsafe { (*qfl).qf_multiline = true }; // start of a multi-line message
+            unsafe { (*qfl).qf_multiignore = false }; // reset continuation
         } else if b"CZ".contains(&prefix) {
             // A continuation line never makes an entry of its own, so this
             // always ends the line.
@@ -549,20 +541,19 @@ unsafe fn no_match(linebuf: *const c_char, linelen: usize, fields: &mut Fields) 
 /// `qfl` must be a live list.
 unsafe fn push_pop_dir(prefix: u8, fields: &mut Fields, qfl: *mut qf_list_T) -> Status {
     // SAFETY: the caller's list is live; the name buffer is NUL-terminated.
-    unsafe {
-        if prefix == b'D' {
-            if !fields.has_name() {
-                emsg(gettext(c"E379: Missing or empty directory name".as_ptr()));
-                return Status::Fail;
-            }
-            (*qfl).qf_directory =
-                qf_push_dir(fields.namebuf(), &raw mut (*qfl).qf_dir_stack, false);
-            if (*qfl).qf_directory.is_null() {
-                return Status::Fail;
-            }
-        } else {
-            (*qfl).qf_directory = qf_pop_dir(&raw mut (*qfl).qf_dir_stack);
+    if prefix == b'D' {
+        if !fields.has_name() {
+            unsafe { emsg(gettext(c"E379: Missing or empty directory name".as_ptr())) };
+            return Status::Fail;
         }
+        unsafe {
+            (*qfl).qf_directory = qf_push_dir(fields.namebuf(), &raw mut (*qfl).qf_dir_stack, false)
+        };
+        if unsafe { (*qfl).qf_directory }.is_null() {
+            return Status::Fail;
+        }
+    } else {
+        unsafe { (*qfl).qf_directory = qf_pop_dir(&raw mut (*qfl).qf_dir_stack) };
     }
     Status::Ok
 }
@@ -581,20 +572,20 @@ unsafe fn claim_file(
 ) -> Status {
     fields.valid = false;
     // SAFETY: the caller's list is live; the name buffer is NUL-terminated.
-    unsafe {
-        if fields.has_name() && !os_path_exists(fields.namebuf.as_ptr()) {
-            return Status::Ok;
-        }
-        if fields.has_name() && prefix == b'P' {
-            (*qfl).qf_currfile = qf_push_dir(fields.namebuf(), &raw mut (*qfl).qf_file_stack, true);
-        } else if prefix == b'Q' {
-            (*qfl).qf_currfile = qf_pop_dir(&raw mut (*qfl).qf_file_stack);
-        }
-        fields.namebuf[0] = 0;
-        if !tail.is_null() && *tail != 0 {
-            (*qfl).qf_multiscan = true;
-            return Status::MultiScan;
-        }
+    if fields.has_name() && !unsafe { os_path_exists(fields.namebuf.as_ptr()) } {
+        return Status::Ok;
+    }
+    if fields.has_name() && prefix == b'P' {
+        unsafe {
+            (*qfl).qf_currfile = qf_push_dir(fields.namebuf(), &raw mut (*qfl).qf_file_stack, true)
+        };
+    } else if prefix == b'Q' {
+        unsafe { (*qfl).qf_currfile = qf_pop_dir(&raw mut (*qfl).qf_file_stack) };
+    }
+    fields.namebuf[0] = 0;
+    if !tail.is_null() && unsafe { *tail } != 0 {
+        unsafe { (*qfl).qf_multiscan = true };
+        return Status::MultiScan;
     }
     Status::Ok
 }
@@ -607,55 +598,57 @@ unsafe fn claim_file(
 /// `qfl` must be a live list.
 unsafe fn continue_multiline(prefix: u8, qfl: *mut qf_list_T, fields: &mut Fields) -> Status {
     // SAFETY: the caller's list is live, and `qf_last` is its last entry.
-    unsafe {
-        if !(*qfl).qf_multiignore {
-            let prev = (*qfl).qf_last;
-            if prev.is_null() {
-                return Status::Fail;
-            }
-            if *fields.errmsg() != 0 {
-                // Append the continuation as a new line of the message.
-                let textlen = strlen((*prev).qf_text);
-                let errlen = strlen(fields.errmsg());
-                (*prev).qf_text = xrealloc((*prev).qf_text.cast(), textlen + errlen + 2).cast();
-                *(*prev).qf_text.add(textlen) = b'\n' as c_char;
+    if !unsafe { (*qfl).qf_multiignore } {
+        let prev = unsafe { (*qfl).qf_last };
+        if prev.is_null() {
+            return Status::Fail;
+        }
+        if unsafe { *fields.errmsg() } != 0 {
+            // Append the continuation as a new line of the message.
+            let textlen = unsafe { strlen((*prev).qf_text) };
+            let errlen = unsafe { strlen(fields.errmsg()) };
+            unsafe {
+                (*prev).qf_text = xrealloc((*prev).qf_text.cast(), textlen + errlen + 2).cast()
+            };
+            unsafe { *(*prev).qf_text.add(textlen) = b'\n' as c_char };
+            unsafe {
                 xstrlcpy(
                     (*prev).qf_text.add(textlen + 1),
                     fields.errmsg(),
                     errlen + 1,
-                );
-            }
-            if (*prev).qf_nr == -1 {
-                (*prev).qf_nr = fields.enr;
-            }
-            if vim_isprintc(c_int::from(fields.kind)) && (*prev).qf_type == 0 {
-                // Only printable characters allowed.
-                (*prev).qf_type = fields.kind;
-            }
-            if (*prev).qf_lnum == 0 {
-                (*prev).qf_lnum = fields.lnum;
-            }
-            if (*prev).qf_end_lnum == 0 {
-                (*prev).qf_end_lnum = fields.end_lnum;
-            }
-            if (*prev).qf_col == 0 {
-                (*prev).qf_col = fields.col;
-                (*prev).qf_viscol = c_char::from(fields.use_viscol);
-            }
-            if (*prev).qf_end_col == 0 {
-                (*prev).qf_end_col = fields.end_col;
-            }
-            if (*prev).qf_fnum == 0 {
-                let name = entry_file_name(fields, qfl);
-                (*prev).qf_fnum = qf_get_fnum(qfl, (*qfl).qf_directory, name);
-            }
+                )
+            };
         }
-        if prefix == b'Z' {
-            (*qfl).qf_multiline = false;
-            (*qfl).qf_multiignore = false;
+        if unsafe { (*prev).qf_nr } == -1 {
+            unsafe { (*prev).qf_nr = fields.enr };
         }
-        line_breakcheck();
+        if unsafe { vim_isprintc(c_int::from(fields.kind)) } && unsafe { (*prev).qf_type } == 0 {
+            // Only printable characters allowed.
+            unsafe { (*prev).qf_type = fields.kind };
+        }
+        if unsafe { (*prev).qf_lnum } == 0 {
+            unsafe { (*prev).qf_lnum = fields.lnum };
+        }
+        if unsafe { (*prev).qf_end_lnum } == 0 {
+            unsafe { (*prev).qf_end_lnum = fields.end_lnum };
+        }
+        if unsafe { (*prev).qf_col } == 0 {
+            unsafe { (*prev).qf_col = fields.col };
+            unsafe { (*prev).qf_viscol = c_char::from(fields.use_viscol) };
+        }
+        if unsafe { (*prev).qf_end_col } == 0 {
+            unsafe { (*prev).qf_end_col = fields.end_col };
+        }
+        if unsafe { (*prev).qf_fnum } == 0 {
+            let name = unsafe { entry_file_name(fields, qfl) };
+            unsafe { (*prev).qf_fnum = qf_get_fnum(qfl, (*qfl).qf_directory, name) };
+        }
     }
+    if prefix == b'Z' {
+        unsafe { (*qfl).qf_multiline = false };
+        unsafe { (*qfl).qf_multiignore = false };
+    }
+    line_breakcheck();
 
     Status::Ignore
 }
@@ -668,14 +661,12 @@ unsafe fn continue_multiline(prefix: u8, qfl: *mut qf_list_T, fields: &mut Field
 /// `qfl` must be a live list.
 pub(crate) unsafe fn entry_file_name(fields: &mut Fields, qfl: *mut qf_list_T) -> *mut c_char {
     // SAFETY: the caller's list is live.
-    unsafe {
-        if fields.has_name() || !(*qfl).qf_directory.is_null() {
-            fields.namebuf()
-        } else if !(*qfl).qf_currfile.is_null() && fields.valid {
-            (*qfl).qf_currfile
-        } else {
-            ptr::null_mut()
-        }
+    if fields.has_name() || !unsafe { (*qfl).qf_directory }.is_null() {
+        fields.namebuf()
+    } else if !unsafe { (*qfl).qf_currfile }.is_null() && fields.valid {
+        unsafe { (*qfl).qf_currfile }
+    } else {
+        ptr::null_mut()
     }
 }
 
@@ -689,24 +680,22 @@ impl Fields {
     #[inline]
     pub(crate) unsafe fn entry(&mut self, qfl: *mut qf_list_T) -> NewEntry {
         // SAFETY: forwarded from the caller.
-        unsafe {
-            NewEntry {
-                dir: (*qfl).qf_directory,
-                fname: entry_file_name(self, qfl),
-                module: self.module(),
-                bufnum: self.bnr,
-                mesg: self.errmsg(),
-                lnum: self.lnum,
-                end_lnum: self.end_lnum,
-                col: self.col,
-                end_col: self.end_col,
-                vis_col: c_char::from(self.use_viscol),
-                pattern: self.pattern(),
-                nr: self.enr,
-                kind: self.kind,
-                user_data: self.user_data,
-                valid: self.valid,
-            }
+        NewEntry {
+            dir: unsafe { (*qfl).qf_directory },
+            fname: unsafe { entry_file_name(self, qfl) },
+            module: self.module(),
+            bufnum: self.bnr,
+            mesg: self.errmsg(),
+            lnum: self.lnum,
+            end_lnum: self.end_lnum,
+            col: self.col,
+            end_col: self.end_col,
+            vis_col: c_char::from(self.use_viscol),
+            pattern: self.pattern(),
+            nr: self.enr,
+            kind: self.kind,
+            user_data: self.user_data,
+            valid: self.valid,
         }
     }
 }

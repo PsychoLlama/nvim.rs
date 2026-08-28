@@ -470,14 +470,12 @@ unsafe fn ll_release(qi: *mut qf_info_T) {
 pub fn qf_free_all(wp: Option<Win>) {
     // SAFETY: the two slots are the window's own, and the global stack is
     // the editor's; both frees walk lists nothing else can reach.
-    unsafe {
-        match wp {
-            Some(mut wp) => {
-                ll_free_all(&raw mut wp.w_llist);
-                ll_free_all(&raw mut wp.w_llist_ref);
-            }
-            None => qf_free_list_stack_items(QfStack::Global.raw()),
+    match wp {
+        Some(mut wp) => {
+            unsafe { ll_free_all(&raw mut wp.w_llist) };
+            unsafe { ll_free_all(&raw mut wp.w_llist_ref) };
         }
+        None => unsafe { qf_free_list_stack_items(QfStack::Global.raw()) },
     }
 }
 
@@ -688,21 +686,21 @@ pub fn copy_loclist_stack(from: Win, mut to: Win) {
     }
     // SAFETY: `qi` is `from`'s own live stack, just tested for null, and
     // `copy` is the one just allocated; every index below is one both hold.
-    unsafe {
-        let mut qi = Qi::new(qi);
-        let mut copy = Qi::new(qf_alloc_stack(
+    let mut qi = unsafe { Qi::new(qi) };
+    let mut copy = unsafe {
+        Qi::new(qf_alloc_stack(
             QFLT_LOCATION,
             from.w_onebuf_opt.wo_lhi as c_int,
-        ));
-        to.w_llist = copy.raw();
-        to.w_onebuf_opt.wo_lhi = copy.max_count() as OptInt;
-        copy.qf_listcount = qi.qf_listcount;
-        for idx in 0..qi.qf_listcount {
-            copy.qf_curlist = idx;
-            copy_loclist(qf_get_list(qi.raw(), idx), qf_get_list(copy.raw(), idx));
-        }
-        copy.qf_curlist = qi.qf_curlist;
+        ))
+    };
+    to.w_llist = copy.raw();
+    to.w_onebuf_opt.wo_lhi = copy.max_count() as OptInt;
+    copy.qf_listcount = qi.qf_listcount;
+    for idx in 0..qi.qf_listcount {
+        copy.qf_curlist = idx;
+        unsafe { copy_loclist(qf_get_list(qi.raw(), idx), qf_get_list(copy.raw(), idx)) };
     }
+    copy.qf_curlist = qi.qf_curlist;
 }
 
 /// Throw away every list in a stack, and give a location list window that

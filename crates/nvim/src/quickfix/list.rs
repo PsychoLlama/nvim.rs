@@ -57,12 +57,10 @@ pub(crate) unsafe fn qf_list_changed(qfl: *mut qf_list_T) {
 /// using it: E925 for a quickfix list, E926 for a location list.
 pub(crate) unsafe fn emsg_list_changed(qfl_type: qfltype_T) {
     // SAFETY: both messages are static NUL-terminated strings.
-    unsafe {
-        if qfl_type == QFLT_QUICKFIX {
-            emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr()));
-        } else {
-            emsg(gettext(E_LOCATION_LIST_CHANGED.as_ptr()));
-        }
+    if qfl_type == QFLT_QUICKFIX {
+        unsafe { emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr())) };
+    } else {
+        unsafe { emsg(gettext(E_LOCATION_LIST_CHANGED.as_ptr())) };
     }
 }
 
@@ -77,26 +75,24 @@ pub(crate) unsafe fn emsg_list_changed(qfl_type: qfltype_T) {
 /// `qi` must be a live stack, and `qf_title` null or NUL-terminated.
 pub(crate) unsafe fn qf_new_list(qi: *mut qf_info_T, qf_title: *const c_char) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        while (*qi).qf_listcount > (*qi).qf_curlist + 1 {
-            (*qi).qf_listcount -= 1;
-            qf_free(qf_get_list(qi, (*qi).qf_listcount));
-        }
-        if (*qi).qf_listcount == (*qi).max_count() {
-            qf_pop_stack(qi, false);
-            (*qi).qf_curlist = (*qi).qf_listcount - 1;
-        } else {
-            (*qi).qf_curlist = (*qi).qf_listcount;
-            (*qi).qf_listcount += 1;
-        }
-        let qfl = qf_get_curlist(qi);
-        *qfl = empty_list();
-        qf_store_title(qfl, qf_title);
-        (*qfl).qfl_type = (*qi).qfl_type;
-        last_qf_id.set(last_qf_id.get().wrapping_add(1));
-        (*qfl).qf_id = last_qf_id.get();
-        (*qfl).qf_has_user_data = false;
+    while unsafe { (*qi).qf_listcount } > unsafe { (*qi).qf_curlist } + 1 {
+        unsafe { (*qi).qf_listcount -= 1 };
+        unsafe { qf_free(qf_get_list(qi, (*qi).qf_listcount)) };
     }
+    if unsafe { (*qi).qf_listcount } == unsafe { (*qi).max_count() } {
+        unsafe { qf_pop_stack(qi, false) };
+        unsafe { (*qi).qf_curlist = (*qi).qf_listcount - 1 };
+    } else {
+        unsafe { (*qi).qf_curlist = (*qi).qf_listcount };
+        unsafe { (*qi).qf_listcount += 1 };
+    }
+    let qfl = unsafe { qf_get_curlist(qi) };
+    unsafe { *qfl = empty_list() };
+    unsafe { qf_store_title(qfl, qf_title) };
+    unsafe { (*qfl).qfl_type = (*qi).qfl_type };
+    last_qf_id.set(last_qf_id.get().wrapping_add(1));
+    unsafe { (*qfl).qf_id = last_qf_id.get() };
+    unsafe { (*qfl).qf_has_user_data = false };
 }
 
 /// Everything one new entry is made of.
@@ -173,84 +169,84 @@ impl NewEntry {
 /// NUL-terminated.
 pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
     // SAFETY: forwarded from the caller.
+    let qfp: *mut qfline_T = unsafe { xmalloc(size_of::<qfline_T>()) }.cast();
+    let buf = if new.bufnum != 0 {
+        unsafe { (*qfp).qf_fnum = new.bufnum };
+        let buf = find_buf(new.bufnum);
+        if let Some(mut buf) = buf {
+            buf.b_has_qf_entry |= unsafe { has_entry_flag(qfl) };
+        }
+        buf
+    } else {
+        unsafe { (*qfp).qf_fnum = qf_get_fnum(qfl, new.dir, new.fname) };
+        find_buf(unsafe { (*qfp).qf_fnum })
+    };
+
+    // The entry shows a shortened name only when it differs from the
+    // buffer's own, which is what the quickfix window would print.
+    unsafe { (*qfp).qf_fname = ptr::null_mut() };
+    let fullname = if new.fname.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { fix_fname(new.fname) }
+    };
+    // C's `buf != NULL && buf->b_ffname != NULL && …`, in that order.
+    let buf_ffname = buf.map(|buf| buf.b_ffname).filter(|p| !p.is_null());
+    if let Some(buf_ffname) = buf_ffname
+        && !fullname.is_null()
+        && unsafe { path_fnamecmp(fullname, buf_ffname) } != 0
+    {
+        let short = unsafe { path_try_shorten_fname(fullname) };
+        if !short.is_null() {
+            unsafe { (*qfp).qf_fname = xstrdup(short) };
+        }
+    }
+    unsafe { xfree(fullname.cast()) };
+
+    unsafe { (*qfp).qf_text = xstrdup(new.mesg) };
+    unsafe { (*qfp).qf_lnum = new.lnum };
+    unsafe { (*qfp).qf_end_lnum = new.end_lnum };
+    unsafe { (*qfp).qf_col = new.col };
+    unsafe { (*qfp).qf_end_col = new.end_col };
+    unsafe { (*qfp).qf_viscol = new.vis_col };
+    if new.user_data.is_null() || unsafe { (*new.user_data).v_type } == VAR_UNKNOWN {
+        unsafe { (*qfp).qf_user_data.v_type = VAR_UNKNOWN };
+    } else {
+        unsafe { tv_copy(new.user_data, &raw mut (*qfp).qf_user_data) };
+        unsafe { (*qfl).qf_has_user_data = true };
+    }
+    unsafe { (*qfp).qf_pattern = dup_unless_empty(new.pattern) };
+    unsafe { (*qfp).qf_module = dup_unless_empty(new.module) };
+    unsafe { (*qfp).qf_nr = new.nr };
+    // 1 marks a help entry; anything else that cannot be printed is
+    // reported as no type at all.
     unsafe {
-        let qfp: *mut qfline_T = xmalloc(size_of::<qfline_T>()).cast();
-        let buf = if new.bufnum != 0 {
-            (*qfp).qf_fnum = new.bufnum;
-            let buf = find_buf(new.bufnum);
-            if let Some(mut buf) = buf {
-                buf.b_has_qf_entry |= has_entry_flag(qfl);
-            }
-            buf
-        } else {
-            (*qfp).qf_fnum = qf_get_fnum(qfl, new.dir, new.fname);
-            find_buf((*qfp).qf_fnum)
-        };
-
-        // The entry shows a shortened name only when it differs from the
-        // buffer's own, which is what the quickfix window would print.
-        (*qfp).qf_fname = ptr::null_mut();
-        let fullname = if new.fname.is_null() {
-            ptr::null_mut()
-        } else {
-            fix_fname(new.fname)
-        };
-        // C's `buf != NULL && buf->b_ffname != NULL && …`, in that order.
-        let buf_ffname = buf.map(|buf| buf.b_ffname).filter(|p| !p.is_null());
-        if let Some(buf_ffname) = buf_ffname
-            && !fullname.is_null()
-            && path_fnamecmp(fullname, buf_ffname) != 0
-        {
-            let short = path_try_shorten_fname(fullname);
-            if !short.is_null() {
-                (*qfp).qf_fname = xstrdup(short);
-            }
-        }
-        xfree(fullname.cast());
-
-        (*qfp).qf_text = xstrdup(new.mesg);
-        (*qfp).qf_lnum = new.lnum;
-        (*qfp).qf_end_lnum = new.end_lnum;
-        (*qfp).qf_col = new.col;
-        (*qfp).qf_end_col = new.end_col;
-        (*qfp).qf_viscol = new.vis_col;
-        if new.user_data.is_null() || (*new.user_data).v_type == VAR_UNKNOWN {
-            (*qfp).qf_user_data.v_type = VAR_UNKNOWN;
-        } else {
-            tv_copy(new.user_data, &raw mut (*qfp).qf_user_data);
-            (*qfl).qf_has_user_data = true;
-        }
-        (*qfp).qf_pattern = dup_unless_empty(new.pattern);
-        (*qfp).qf_module = dup_unless_empty(new.module);
-        (*qfp).qf_nr = new.nr;
-        // 1 marks a help entry; anything else that cannot be printed is
-        // reported as no type at all.
         (*qfp).qf_type = if new.kind != 1 && !vim_isprintc(new.kind as c_int) {
             0
         } else {
             new.kind
-        };
-        (*qfp).qf_valid = new.valid as c_char;
-        (*qfp).qf_next = ptr::null_mut();
-        (*qfp).qf_cleared = 0;
+        }
+    };
+    unsafe { (*qfp).qf_valid = new.valid as c_char };
+    unsafe { (*qfp).qf_next = ptr::null_mut() };
+    unsafe { (*qfp).qf_cleared = 0 };
 
-        if qf_list_empty(qfl) {
-            (*qfl).qf_start = qfp;
-            (*qfl).qf_ptr = qfp;
-            (*qfl).qf_index = 0;
-            (*qfp).qf_prev = ptr::null_mut();
-        } else {
-            let last = (*qfl).qf_last;
-            debug_assert!(!last.is_null());
-            (*qfp).qf_prev = last;
-            (*last).qf_next = qfp;
-        }
-        (*qfl).qf_last = qfp;
-        (*qfl).qf_count += 1;
-        if (*qfl).qf_index == 0 && (*qfp).qf_valid != 0 {
-            (*qfl).qf_index = (*qfl).qf_count;
-            (*qfl).qf_ptr = qfp;
-        }
+    if unsafe { qf_list_empty(qfl) } {
+        unsafe { (*qfl).qf_start = qfp };
+        unsafe { (*qfl).qf_ptr = qfp };
+        unsafe { (*qfl).qf_index = 0 };
+        unsafe { (*qfp).qf_prev = ptr::null_mut() };
+    } else {
+        let last = unsafe { (*qfl).qf_last };
+        debug_assert!(!last.is_null());
+        unsafe { (*qfp).qf_prev = last };
+        unsafe { (*last).qf_next = qfp };
+    }
+    unsafe { (*qfl).qf_last = qfp };
+    unsafe { (*qfl).qf_count += 1 };
+    if unsafe { (*qfl).qf_index } == 0 && unsafe { (*qfp).qf_valid } != 0 {
+        unsafe { (*qfl).qf_index = (*qfl).qf_count };
+        unsafe { (*qfl).qf_ptr = qfp };
     }
 }
 
@@ -277,12 +273,10 @@ pub(crate) unsafe fn has_entry_flag(qfl: *const qf_list_T) -> c_int {
 #[inline]
 unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        if s.is_null() || *s == 0 {
-            ptr::null_mut()
-        } else {
-            xstrdup(s)
-        }
+    if s.is_null() || unsafe { *s } == 0 {
+        ptr::null_mut()
+    } else {
+        unsafe { xstrdup(s) }
     }
 }
 
@@ -296,10 +290,10 @@ unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
 /// Both lists must be live, and `to_qfl` empty.
 unsafe fn copy_loclist_entries(from_qfl: *const qf_list_T, to_qfl: *mut qf_list_T) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut i = 1;
-        let mut from = (*from_qfl).qf_start;
-        while !got_int.get() && i <= (*from_qfl).qf_count && !from.is_null() {
+    let mut i = 1;
+    let mut from = unsafe { (*from_qfl).qf_start };
+    while !got_int.get() && i <= unsafe { (*from_qfl).qf_count } && !from.is_null() {
+        unsafe {
             qf_add_entry(
                 to_qfl,
                 &NewEntry {
@@ -315,16 +309,16 @@ unsafe fn copy_loclist_entries(from_qfl: *const qf_list_T, to_qfl: *mut qf_list_
                     valid: (*from).qf_valid != 0,
                     ..NewEntry::new((*from).qf_text)
                 },
-            );
-            let copy = (*to_qfl).qf_last;
-            (*copy).qf_fnum = (*from).qf_fnum;
-            (*copy).qf_type = (*from).qf_type;
-            if (*from_qfl).qf_ptr == from {
-                (*to_qfl).qf_ptr = copy;
-            }
-            i += 1;
-            from = (*from).qf_next;
+            )
+        };
+        let copy = unsafe { (*to_qfl).qf_last };
+        unsafe { (*copy).qf_fnum = (*from).qf_fnum };
+        unsafe { (*copy).qf_type = (*from).qf_type };
+        if unsafe { (*from_qfl).qf_ptr } == from {
+            unsafe { (*to_qfl).qf_ptr = copy };
         }
+        i += 1;
+        from = unsafe { (*from).qf_next };
     }
 }
 
@@ -335,46 +329,50 @@ unsafe fn copy_loclist_entries(from_qfl: *const qf_list_T, to_qfl: *mut qf_list_
 /// Both lists must be live, and `to_qfl` an unused slot.
 pub(crate) unsafe fn copy_loclist(from_qfl: *mut qf_list_T, to_qfl: *mut qf_list_T) {
     // SAFETY: forwarded from the caller.
+    // The entry fields are filled in by `qf_add_entry`.
+    unsafe { (*to_qfl).qfl_type = (*from_qfl).qfl_type };
+    unsafe { (*to_qfl).qf_nonevalid = (*from_qfl).qf_nonevalid };
+    unsafe { (*to_qfl).qf_has_user_data = (*from_qfl).qf_has_user_data };
+    unsafe { (*to_qfl).qf_count = 0 };
+    unsafe { (*to_qfl).qf_index = 0 };
+    unsafe { (*to_qfl).qf_start = ptr::null_mut() };
+    unsafe { (*to_qfl).qf_last = ptr::null_mut() };
+    unsafe { (*to_qfl).qf_ptr = ptr::null_mut() };
     unsafe {
-        // The entry fields are filled in by `qf_add_entry`.
-        (*to_qfl).qfl_type = (*from_qfl).qfl_type;
-        (*to_qfl).qf_nonevalid = (*from_qfl).qf_nonevalid;
-        (*to_qfl).qf_has_user_data = (*from_qfl).qf_has_user_data;
-        (*to_qfl).qf_count = 0;
-        (*to_qfl).qf_index = 0;
-        (*to_qfl).qf_start = ptr::null_mut();
-        (*to_qfl).qf_last = ptr::null_mut();
-        (*to_qfl).qf_ptr = ptr::null_mut();
         (*to_qfl).qf_title = if (*from_qfl).qf_title.is_null() {
             ptr::null_mut()
         } else {
             xstrdup((*from_qfl).qf_title)
-        };
+        }
+    };
+    unsafe {
         (*to_qfl).qf_ctx = if (*from_qfl).qf_ctx.is_null() {
             ptr::null_mut()
         } else {
             let ctx: *mut typval_T = xcalloc(1, size_of::<typval_T>()).cast();
             tv_copy((*from_qfl).qf_ctx, ctx);
             ctx
-        };
+        }
+    };
+    unsafe {
         callback_copy(
             &raw mut (*to_qfl).qf_qftf_cb,
             &raw mut (*from_qfl).qf_qftf_cb,
-        );
+        )
+    };
 
-        if (*from_qfl).qf_count != 0 {
-            copy_loclist_entries(from_qfl, to_qfl);
-        }
+    if unsafe { (*from_qfl).qf_count } != 0 {
+        unsafe { copy_loclist_entries(from_qfl, to_qfl) };
+    }
 
-        (*to_qfl).qf_index = (*from_qfl).qf_index;
-        last_qf_id.set(last_qf_id.get().wrapping_add(1));
-        (*to_qfl).qf_id = last_qf_id.get();
-        (*to_qfl).qf_changedtick = 0;
-        // With nothing valid to point at, the current entry is the first.
-        if (*to_qfl).qf_nonevalid {
-            (*to_qfl).qf_ptr = (*to_qfl).qf_start;
-            (*to_qfl).qf_index = 1;
-        }
+    unsafe { (*to_qfl).qf_index = (*from_qfl).qf_index };
+    last_qf_id.set(last_qf_id.get().wrapping_add(1));
+    unsafe { (*to_qfl).qf_id = last_qf_id.get() };
+    unsafe { (*to_qfl).qf_changedtick = 0 };
+    // With nothing valid to point at, the current entry is the first.
+    if unsafe { (*to_qfl).qf_nonevalid } {
+        unsafe { (*to_qfl).qf_ptr = (*to_qfl).qf_start };
+        unsafe { (*to_qfl).qf_index = 1 };
     }
 }
 
@@ -385,44 +383,42 @@ pub(crate) unsafe fn copy_loclist(from_qfl: *mut qf_list_T, to_qfl: *mut qf_list
 /// `qfl` must be a live list.
 pub(crate) unsafe fn qf_free_items(qfl: *mut qf_list_T) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let mut stop = false;
-        while (*qfl).qf_count != 0 && !(*qfl).qf_start.is_null() {
-            let qfp = (*qfl).qf_start;
-            let next = (*qfp).qf_next;
-            if !stop {
-                xfree((*qfp).qf_fname.cast());
-                xfree((*qfp).qf_module.cast());
-                xfree((*qfp).qf_text.cast());
-                xfree((*qfp).qf_pattern.cast());
-                tv_clear(&raw mut (*qfp).qf_user_data);
-                stop = qfp == next;
-                xfree(qfp.cast());
-                if stop {
-                    // `qf_count` can be wrong; setting it to one here stops
-                    // the loop rather than walking off the freed entry.
-                    // TODO(vim): Avoid qf_count being incorrect.
-                    (*qfl).qf_count = 1;
-                } else {
-                    (*qfl).qf_start = next;
-                }
+    let mut stop = false;
+    while unsafe { (*qfl).qf_count } != 0 && !unsafe { (*qfl).qf_start }.is_null() {
+        let qfp = unsafe { (*qfl).qf_start };
+        let next = unsafe { (*qfp).qf_next };
+        if !stop {
+            unsafe { xfree((*qfp).qf_fname.cast()) };
+            unsafe { xfree((*qfp).qf_module.cast()) };
+            unsafe { xfree((*qfp).qf_text.cast()) };
+            unsafe { xfree((*qfp).qf_pattern.cast()) };
+            unsafe { tv_clear(&raw mut (*qfp).qf_user_data) };
+            stop = qfp == next;
+            unsafe { xfree(qfp.cast()) };
+            if stop {
+                // `qf_count` can be wrong; setting it to one here stops
+                // the loop rather than walking off the freed entry.
+                // TODO(vim): Avoid qf_count being incorrect.
+                unsafe { (*qfl).qf_count = 1 };
+            } else {
+                unsafe { (*qfl).qf_start = next };
             }
-            (*qfl).qf_count -= 1;
         }
-        (*qfl).qf_start = ptr::null_mut();
-        (*qfl).qf_last = ptr::null_mut();
-        (*qfl).qf_ptr = ptr::null_mut();
-        (*qfl).qf_index = 0;
-        (*qfl).qf_nonevalid = true;
-
-        qf_clean_dir_stack(&raw mut (*qfl).qf_dir_stack);
-        (*qfl).qf_directory = ptr::null_mut();
-        qf_clean_dir_stack(&raw mut (*qfl).qf_file_stack);
-        (*qfl).qf_currfile = ptr::null_mut();
-        (*qfl).qf_multiline = false;
-        (*qfl).qf_multiignore = false;
-        (*qfl).qf_multiscan = false;
+        unsafe { (*qfl).qf_count -= 1 };
     }
+    unsafe { (*qfl).qf_start = ptr::null_mut() };
+    unsafe { (*qfl).qf_last = ptr::null_mut() };
+    unsafe { (*qfl).qf_ptr = ptr::null_mut() };
+    unsafe { (*qfl).qf_index = 0 };
+    unsafe { (*qfl).qf_nonevalid = true };
+
+    unsafe { qf_clean_dir_stack(&raw mut (*qfl).qf_dir_stack) };
+    unsafe { (*qfl).qf_directory = ptr::null_mut() };
+    unsafe { qf_clean_dir_stack(&raw mut (*qfl).qf_file_stack) };
+    unsafe { (*qfl).qf_currfile = ptr::null_mut() };
+    unsafe { (*qfl).qf_multiline = false };
+    unsafe { (*qfl).qf_multiignore = false };
+    unsafe { (*qfl).qf_multiscan = false };
 }
 
 /// Free a list: its entries, its title and its context.
@@ -432,16 +428,14 @@ pub(crate) unsafe fn qf_free_items(qfl: *mut qf_list_T) {
 /// `qfl` must be a live list.
 pub(crate) unsafe fn qf_free(qfl: *mut qf_list_T) {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        qf_free_items(qfl);
-        xfree((*qfl).qf_title.cast());
-        (*qfl).qf_title = ptr::null_mut();
-        tv_free((*qfl).qf_ctx);
-        (*qfl).qf_ctx = ptr::null_mut();
-        callback_free(&raw mut (*qfl).qf_qftf_cb);
-        (*qfl).qf_id = 0;
-        (*qfl).qf_changedtick = 0;
-    }
+    unsafe { qf_free_items(qfl) };
+    unsafe { xfree((*qfl).qf_title.cast()) };
+    unsafe { (*qfl).qf_title = ptr::null_mut() };
+    unsafe { tv_free((*qfl).qf_ctx) };
+    unsafe { (*qfl).qf_ctx = ptr::null_mut() };
+    unsafe { callback_free(&raw mut (*qfl).qf_qftf_cb) };
+    unsafe { (*qfl).qf_id = 0 };
+    unsafe { (*qfl).qf_changedtick = 0 };
 }
 
 /// Move the line numbers of every entry naming `buf` after an edit.
@@ -459,43 +453,41 @@ pub fn qf_mark_adjust(
     amount_after: linenr_T,
 ) -> bool {
     // SAFETY: forwarded from the caller.
-    unsafe {
-        let wanted = if wp.is_none() {
-            BUF_HAS_QF_ENTRY
-        } else {
-            BUF_HAS_LL_ENTRY
-        };
-        if buf.b_has_qf_entry & wanted == 0 {
-            return false;
-        }
-        let qi = match wp {
-            None => QfStack::Global.raw(),
-            Some(wp) if wp.w_llist.is_null() => return false,
-            Some(wp) => wp.w_llist,
-        };
-
-        let mut found_one = false;
-        for idx in 0..(*qi).qf_listcount {
-            let qfl = qf_get_list(qi, idx);
-            let mut i = 1;
-            let mut qfp = (*qfl).qf_start;
-            while !got_int.get() && i <= (*qfl).qf_count && !qfp.is_null() {
-                if (*qfp).qf_fnum == buf.handle {
-                    found_one = true;
-                    if (*qfp).qf_lnum >= line1 && (*qfp).qf_lnum <= line2 {
-                        if amount == MAXLNUM as linenr_T {
-                            (*qfp).qf_cleared = 1;
-                        } else {
-                            (*qfp).qf_lnum += amount;
-                        }
-                    } else if amount_after != 0 && (*qfp).qf_lnum > line2 {
-                        (*qfp).qf_lnum += amount_after;
-                    }
-                }
-                i += 1;
-                qfp = (*qfp).qf_next;
-            }
-        }
-        found_one
+    let wanted = if wp.is_none() {
+        BUF_HAS_QF_ENTRY
+    } else {
+        BUF_HAS_LL_ENTRY
+    };
+    if buf.b_has_qf_entry & wanted == 0 {
+        return false;
     }
+    let qi = match wp {
+        None => QfStack::Global.raw(),
+        Some(wp) if wp.w_llist.is_null() => return false,
+        Some(wp) => wp.w_llist,
+    };
+
+    let mut found_one = false;
+    for idx in 0..unsafe { (*qi).qf_listcount } {
+        let qfl = unsafe { qf_get_list(qi, idx) };
+        let mut i = 1;
+        let mut qfp = unsafe { (*qfl).qf_start };
+        while !got_int.get() && i <= unsafe { (*qfl).qf_count } && !qfp.is_null() {
+            if unsafe { (*qfp).qf_fnum } == buf.handle {
+                found_one = true;
+                if unsafe { (*qfp).qf_lnum } >= line1 && unsafe { (*qfp).qf_lnum } <= line2 {
+                    if amount == MAXLNUM as linenr_T {
+                        unsafe { (*qfp).qf_cleared = 1 };
+                    } else {
+                        unsafe { (*qfp).qf_lnum += amount };
+                    }
+                } else if amount_after != 0 && unsafe { (*qfp).qf_lnum } > line2 {
+                    unsafe { (*qfp).qf_lnum += amount_after };
+                }
+            }
+            i += 1;
+            qfp = unsafe { (*qfp).qf_next };
+        }
+    }
+    found_one
 }

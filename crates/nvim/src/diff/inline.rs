@@ -77,10 +77,8 @@ pub unsafe fn diff_change_parse(
         ch.dc_end[buf] as c_int
     };
     // SAFETY: the caller's out-parameters.
-    unsafe {
-        *change_start = start;
-        *change_end = end;
-    }
+    unsafe { *change_start = start };
+    unsafe { *change_end = end };
     if change == simple_diffline_change.ptr() {
         return false;
     }
@@ -261,10 +259,8 @@ pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_
         };
         // SAFETY: this module's own one-element answer buffer, and the
         // caller's out-parameter.
-        unsafe {
-            *change = only;
-            *diffline = line;
-        }
+        unsafe { *change = only };
+        unsafe { *diffline = line };
         return added;
     }
 

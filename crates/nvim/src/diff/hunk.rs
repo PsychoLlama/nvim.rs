@@ -44,52 +44,50 @@ unsafe fn extract_hunk_internal(
     hunk: *mut diffhunk_T,
     line_idx: &mut c_int,
 ) -> bool {
-    unsafe {
-        if *line_idx >= (*dout).dout_ga.ga_len {
-            return true;
-        }
-        *hunk = *((*dout).dout_ga.ga_data as *mut diffhunk_T).offset(*line_idx as isize);
-        *line_idx += 1;
-        false
+    if *line_idx >= unsafe { (*dout).dout_ga.ga_len } {
+        return true;
     }
+    unsafe { *hunk = *((*dout).dout_ga.ga_data as *mut diffhunk_T).offset(*line_idx as isize) };
+    *line_idx += 1;
+    false
 }
 
 /// Read lines from `fd` until one parses as a hunk header.  Answers end of
 /// input.
 unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut DiffStyle) -> bool {
-    unsafe {
-        loop {
-            let mut line = [0 as c_char; LBUFLEN as usize];
-            if vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) {
-                return true;
-            }
-            if *diffstyle == DiffStyle::Unknown {
-                if (line[0] as u8).is_ascii_digit() {
-                    *diffstyle = DiffStyle::Ed;
-                } else if strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) == 0 {
-                    *diffstyle = DiffStyle::Unified;
-                } else if strncmp(line.as_ptr(), c"--- ".as_ptr(), 4) == 0
-                    && !vim_fgets(line.as_mut_ptr(), LBUFLEN, fd)
-                    && strncmp(line.as_ptr(), c"+++ ".as_ptr(), 4) == 0
-                    && !vim_fgets(line.as_mut_ptr(), LBUFLEN, fd)
-                    && strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) == 0
-                {
-                    // A unified diff with its file header still attached.
-                    *diffstyle = DiffStyle::Unified;
-                } else {
-                    continue;
-                }
-            }
-            let parsed = if *diffstyle == DiffStyle::Ed {
-                (line[0] as u8).is_ascii_digit() && parse_diff_ed(line.as_ptr(), hunk) == OK
+    loop {
+        let mut line = [0 as c_char; LBUFLEN as usize];
+        if unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) } {
+            return true;
+        }
+        if *diffstyle == DiffStyle::Unknown {
+            if (line[0] as u8).is_ascii_digit() {
+                *diffstyle = DiffStyle::Ed;
+            } else if unsafe { strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) } == 0 {
+                *diffstyle = DiffStyle::Unified;
+            } else if unsafe { strncmp(line.as_ptr(), c"--- ".as_ptr(), 4) } == 0
+                && !unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) }
+                && unsafe { strncmp(line.as_ptr(), c"+++ ".as_ptr(), 4) } == 0
+                && !unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) }
+                && unsafe { strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) } == 0
+            {
+                // A unified diff with its file header still attached.
+                *diffstyle = DiffStyle::Unified;
             } else {
-                debug_assert_eq!(*diffstyle, DiffStyle::Unified);
+                continue;
+            }
+        }
+        let parsed = if *diffstyle == DiffStyle::Ed {
+            (line[0] as u8).is_ascii_digit() && unsafe { parse_diff_ed(line.as_ptr(), hunk) } == OK
+        } else {
+            debug_assert_eq!(*diffstyle, DiffStyle::Unified);
+            unsafe {
                 strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) == 0
                     && parse_diff_unified(line.as_ptr(), hunk) == OK
-            };
-            if parsed {
-                return false;
             }
+        };
+        if parsed {
+            return false;
         }
     }
 }
@@ -102,162 +100,165 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
 /// more existing blocks (they are widened to cover it and the extra ones
 /// freed), or it touches none (a new block).
 unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut diffhunk_T) {
-    unsafe {
-        // SAFETY: `curtab` is set from startup to exit.
-        let tp = TabPage::current();
-        let end_orig = (*hunk).lnum_orig + (*hunk).count_orig;
+    // SAFETY: `curtab` is set from startup to exit.
+    let tp = unsafe { TabPage::current() };
+    let end_orig = unsafe { (*hunk).lnum_orig } + unsafe { (*hunk).count_orig };
 
-        // Blocks entirely above the hunk: they keep whatever an earlier pass
-        // gave them, but `idx_new` still has to be filled in.
-        while !walk.dp.is_null()
-            && (*hunk).lnum_orig > (*walk.dp).df_lnum[idx_orig] + (*walk.dp).df_count[idx_orig]
-        {
-            if walk.notset {
-                diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new);
-            }
-            walk.dprev = walk.dp;
-            walk.dp = (*walk.dp).df_next;
-            walk.notset = true;
+    // Blocks entirely above the hunk: they keep whatever an earlier pass
+    // gave them, but `idx_new` still has to be filled in.
+    while !walk.dp.is_null()
+        && unsafe { (*hunk).lnum_orig }
+            > unsafe { (*walk.dp).df_lnum[idx_orig] } + unsafe { (*walk.dp).df_count[idx_orig] }
+    {
+        if walk.notset {
+            unsafe { diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new) };
         }
+        walk.dprev = walk.dp;
+        walk.dp = unsafe { (*walk.dp).df_next };
+        walk.notset = true;
+    }
 
-        let dp = walk.dp;
-        let overlaps = !dp.is_null()
-            && (*hunk).lnum_orig <= (*dp).df_lnum[idx_orig] + (*dp).df_count[idx_orig]
-            && end_orig >= (*dp).df_lnum[idx_orig];
-        if !overlaps {
-            // A change of its own.
-            let dp = diff_alloc_new(tp, walk.dprev, dp);
-            (*dp).df_lnum[idx_orig] = (*hunk).lnum_orig;
-            (*dp).df_count[idx_orig] = (*hunk).count_orig;
-            (*dp).df_lnum[idx_new] = (*hunk).lnum_new;
-            (*dp).df_count[idx_new] = (*hunk).count_new;
-            for i in idx_orig + 1..idx_new {
-                if !tp.tp_diffbuf[i].is_null() {
-                    diff_copy_entry(walk.dprev, dp, idx_orig, i);
-                }
-            }
-            walk.dp = dp;
-            walk.notset = false;
-            return;
-        }
-
-        // The last existing block this hunk reaches; everything from `dp` to
-        // `dpl` becomes one block.
-        let mut dpl = dp;
-        while !(*dpl).df_next.is_null() && end_orig >= (*(*dpl).df_next).df_lnum[idx_orig] {
-            dpl = (*dpl).df_next;
-        }
-
-        let mut off = (*dp).df_lnum[idx_orig] - (*hunk).lnum_orig;
-        if off > 0 {
-            // The hunk starts above the block: every buffer up to `idx_new`
-            // grows upwards by the same amount.
-            for i in idx_orig..idx_new {
-                if !tp.tp_diffbuf[i].is_null() {
-                    (*dp).df_lnum[i] -= off;
-                    (*dp).df_count[i] += off;
-                }
-            }
-            (*dp).df_lnum[idx_new] = (*hunk).lnum_new;
-            (*dp).df_count[idx_new] = (*hunk).count_new;
-        } else if walk.notset {
-            // First hunk to touch this block: it starts `off` lines into it.
-            (*dp).df_lnum[idx_new] = (*hunk).lnum_new + off;
-            (*dp).df_count[idx_new] = (*hunk).count_new - off;
-        } else {
-            // A second hunk inside a block this pass already wrote: extend
-            // `idx_new` by however much longer the new text is than the part
-            // of the block the hunk covers.
-            let orig_size_in_dp = (*hunk)
-                .count_orig
-                .min((*dp).df_lnum[idx_orig] + (*dp).df_count[idx_orig] - (*hunk).lnum_orig);
-            (*dp).df_count[idx_new] += (*hunk).count_new - orig_size_in_dp;
-            let past = (*hunk).lnum_new + (*hunk).count_new
-                - ((*dp).df_lnum[idx_new] + (*dp).df_count[idx_new]);
-            if past > 0 {
-                (*dp).df_count[idx_new] += past;
-            }
-        }
-
-        // How far the hunk reaches past the last block it touches.
-        off = end_orig - ((*dpl).df_lnum[idx_orig] + (*dpl).df_count[idx_orig]);
-        if off < 0 {
-            if walk.notset || dp != dpl {
-                (*dp).df_count[idx_new] += -off;
-            }
-            off = 0;
-        }
-        for i in idx_orig..idx_new {
+    let dp = walk.dp;
+    let overlaps = !dp.is_null()
+        && unsafe { (*hunk).lnum_orig }
+            <= unsafe { (*dp).df_lnum[idx_orig] } + unsafe { (*dp).df_count[idx_orig] }
+        && end_orig >= unsafe { (*dp).df_lnum[idx_orig] };
+    if !overlaps {
+        // A change of its own.
+        let dp = unsafe { diff_alloc_new(tp, walk.dprev, dp) };
+        unsafe { (*dp).df_lnum[idx_orig] = (*hunk).lnum_orig };
+        unsafe { (*dp).df_count[idx_orig] = (*hunk).count_orig };
+        unsafe { (*dp).df_lnum[idx_new] = (*hunk).lnum_new };
+        unsafe { (*dp).df_count[idx_new] = (*hunk).count_new };
+        for i in idx_orig + 1..idx_new {
             if !tp.tp_diffbuf[i].is_null() {
-                (*dp).df_count[i] = (*dpl).df_lnum[i] + (*dpl).df_count[i] - (*dp).df_lnum[i] + off;
+                unsafe { diff_copy_entry(walk.dprev, dp, idx_orig, i) };
             }
-        }
-
-        // Everything between `dp` and `dpl` is now covered by `dp`.
-        let mut dn = (*dp).df_next;
-        (*dp).df_next = (*dpl).df_next;
-        while dn != (*dp).df_next {
-            let next = (*dn).df_next;
-            clear_diffblock(dn);
-            dn = next;
         }
         walk.dp = dp;
         walk.notset = false;
+        return;
     }
+
+    // The last existing block this hunk reaches; everything from `dp` to
+    // `dpl` becomes one block.
+    let mut dpl = dp;
+    while !unsafe { (*dpl).df_next }.is_null()
+        && end_orig >= unsafe { (*(*dpl).df_next).df_lnum[idx_orig] }
+    {
+        dpl = unsafe { (*dpl).df_next };
+    }
+
+    let mut off = unsafe { (*dp).df_lnum[idx_orig] } - unsafe { (*hunk).lnum_orig };
+    if off > 0 {
+        // The hunk starts above the block: every buffer up to `idx_new`
+        // grows upwards by the same amount.
+        for i in idx_orig..idx_new {
+            if !tp.tp_diffbuf[i].is_null() {
+                unsafe { (*dp).df_lnum[i] -= off };
+                unsafe { (*dp).df_count[i] += off };
+            }
+        }
+        unsafe { (*dp).df_lnum[idx_new] = (*hunk).lnum_new };
+        unsafe { (*dp).df_count[idx_new] = (*hunk).count_new };
+    } else if walk.notset {
+        // First hunk to touch this block: it starts `off` lines into it.
+        unsafe { (*dp).df_lnum[idx_new] = (*hunk).lnum_new + off };
+        unsafe { (*dp).df_count[idx_new] = (*hunk).count_new - off };
+    } else {
+        // A second hunk inside a block this pass already wrote: extend
+        // `idx_new` by however much longer the new text is than the part
+        // of the block the hunk covers.
+        let orig_size_in_dp = unsafe { *hunk }.count_orig.min(
+            unsafe { (*dp).df_lnum[idx_orig] } + unsafe { (*dp).df_count[idx_orig] }
+                - unsafe { (*hunk).lnum_orig },
+        );
+        unsafe { (*dp).df_count[idx_new] += (*hunk).count_new - orig_size_in_dp };
+        let past = unsafe { (*hunk).lnum_new } + unsafe { (*hunk).count_new }
+            - (unsafe { (*dp).df_lnum[idx_new] } + unsafe { (*dp).df_count[idx_new] });
+        if past > 0 {
+            unsafe { (*dp).df_count[idx_new] += past };
+        }
+    }
+
+    // How far the hunk reaches past the last block it touches.
+    off = end_orig - (unsafe { (*dpl).df_lnum[idx_orig] } + unsafe { (*dpl).df_count[idx_orig] });
+    if off < 0 {
+        if walk.notset || dp != dpl {
+            unsafe { (*dp).df_count[idx_new] += -off };
+        }
+        off = 0;
+    }
+    for i in idx_orig..idx_new {
+        if !tp.tp_diffbuf[i].is_null() {
+            unsafe {
+                (*dp).df_count[i] = (*dpl).df_lnum[i] + (*dpl).df_count[i] - (*dp).df_lnum[i] + off
+            };
+        }
+    }
+
+    // Everything between `dp` and `dpl` is now covered by `dp`.
+    let mut dn = unsafe { (*dp).df_next };
+    unsafe { (*dp).df_next = (*dpl).df_next };
+    while dn != unsafe { (*dp).df_next } {
+        let next = unsafe { (*dn).df_next };
+        unsafe { clear_diffblock(dn) };
+        dn = next;
+    }
+    walk.dp = dp;
+    walk.notset = false;
 }
 
 /// Read a whole diff's worth of hunks into the current tabpage's block list.
 pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio_T) {
-    unsafe {
-        let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
-        let dout = &raw mut (*dio).dio_diff;
-        let internal = (*dio).dio_internal != 0;
-        let mut fd = ::core::ptr::null_mut::<FILE>();
-        if !internal {
-            fd = os_fopen((*dout).dout_fname, c"r".as_ptr());
-            if fd.is_null() {
-                emsg(gettext(c"E98: Cannot read diff output".as_ptr()));
-                return;
-            }
+    let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
+    let dout = unsafe { &raw mut (*dio).dio_diff };
+    let internal = unsafe { (*dio).dio_internal } != 0;
+    let mut fd = ::core::ptr::null_mut::<FILE>();
+    if !internal {
+        fd = unsafe { os_fopen((*dout).dout_fname, c"r".as_ptr()) };
+        if fd.is_null() {
+            unsafe { emsg(gettext(c"E98: Cannot read diff output".as_ptr())) };
+            return;
         }
+    }
 
-        let mut walk = Walk {
-            dp: (*curtab.get()).tp_first_diff,
-            dprev: ::core::ptr::null_mut(),
-            notset: true,
+    let mut walk = Walk {
+        dp: unsafe { (*curtab.get()).tp_first_diff },
+        dprev: ::core::ptr::null_mut(),
+        notset: true,
+    };
+    let mut line_hunk_idx = 0;
+    let mut diffstyle = DiffStyle::Unknown;
+    loop {
+        let mut hunk = diffhunk_T {
+            lnum_orig: 0,
+            count_orig: 0,
+            lnum_new: 0,
+            count_new: 0,
         };
-        let mut line_hunk_idx = 0;
-        let mut diffstyle = DiffStyle::Unknown;
-        loop {
-            let mut hunk = diffhunk_T {
-                lnum_orig: 0,
-                count_orig: 0,
-                lnum_new: 0,
-                count_new: 0,
-            };
-            let eof = if internal {
-                extract_hunk_internal(dout, &raw mut hunk, &mut line_hunk_idx)
-            } else {
-                extract_hunk(fd, &raw mut hunk, &mut diffstyle)
-            };
-            if eof {
-                break;
-            }
-            process_hunk(&mut walk, idx_orig, idx_new, &raw mut hunk);
+        let eof = if internal {
+            unsafe { extract_hunk_internal(dout, &raw mut hunk, &mut line_hunk_idx) }
+        } else {
+            unsafe { extract_hunk(fd, &raw mut hunk, &mut diffstyle) }
+        };
+        if eof {
+            break;
         }
+        unsafe { process_hunk(&mut walk, idx_orig, idx_new, &raw mut hunk) };
+    }
 
-        // Blocks below the last hunk still need `idx_new` filled in.
-        while !walk.dp.is_null() {
-            if walk.notset {
-                diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new);
-            }
-            walk.dprev = walk.dp;
-            walk.dp = (*walk.dp).df_next;
-            walk.notset = true;
+    // Blocks below the last hunk still need `idx_new` filled in.
+    while !walk.dp.is_null() {
+        if walk.notset {
+            unsafe { diff_copy_entry(walk.dprev, walk.dp, idx_orig, idx_new) };
         }
-        if !fd.is_null() {
-            fclose(fd);
-        }
+        walk.dprev = walk.dp;
+        walk.dp = unsafe { (*walk.dp).df_next };
+        walk.notset = true;
+    }
+    if !fd.is_null() {
+        unsafe { fclose(fd) };
     }
 }
 
@@ -266,38 +267,38 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio
 /// An `a` hunk adds after `f1`, so its original range is empty and starts on
 /// the *next* line; a `d` hunk is the mirror image.
 unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
+    let mut p = line as *mut c_char;
+    let f1 = unsafe { getdigits_int32(&raw mut p, true, 0) };
+    let l1 = if unsafe { *p } == b',' as c_char {
+        p = unsafe { p.offset(1) };
+        unsafe { getdigits_int(&raw mut p, true, 0) }
+    } else {
+        f1
+    };
+    let difftype = unsafe { *p } as u8;
+    if !matches!(difftype, b'a' | b'c' | b'd') {
+        return FAIL;
+    }
+    p = unsafe { p.offset(1) };
+    let f2 = unsafe { getdigits_int(&raw mut p, true, 0) };
+    let l2 = if unsafe { *p } == b',' as c_char {
+        p = unsafe { p.offset(1) };
+        unsafe { getdigits_int(&raw mut p, true, 0) }
+    } else {
+        f2
+    };
+    if l1 < f1 || l2 < f2 {
+        return FAIL;
+    }
     unsafe {
-        let mut p = line as *mut c_char;
-        let f1 = getdigits_int32(&raw mut p, true, 0);
-        let l1 = if *p == b',' as c_char {
-            p = p.offset(1);
-            getdigits_int(&raw mut p, true, 0)
-        } else {
-            f1
-        };
-        let difftype = *p as u8;
-        if !matches!(difftype, b'a' | b'c' | b'd') {
-            return FAIL;
-        }
-        p = p.offset(1);
-        let f2 = getdigits_int(&raw mut p, true, 0);
-        let l2 = if *p == b',' as c_char {
-            p = p.offset(1);
-            getdigits_int(&raw mut p, true, 0)
-        } else {
-            f2
-        };
-        if l1 < f1 || l2 < f2 {
-            return FAIL;
-        }
         *hunk = diffhunk_T {
             lnum_orig: if difftype == b'a' { f1 + 1 } else { f1 },
             count_orig: if difftype == b'a' { 0 } else { l1 - f1 + 1 },
             lnum_new: if difftype == b'd' { f2 + 1 } else { f2 },
             count_new: if difftype == b'd' { 0 } else { l2 - f2 + 1 },
-        };
-        OK
-    }
+        }
+    };
+    OK
 }
 
 /// `@@ -f1[,c1] +f2[,c2] @@` -- one unified hunk header.
@@ -306,43 +307,43 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
 /// deletes at that point rather than covering it, which shifts the line
 /// number by one.
 unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
+    let mut p = line as *mut c_char;
+    if unsafe { strncmp(p, c"@@ -".as_ptr(), 4) } != 0 {
+        return FAIL;
+    }
+    p = unsafe { p.add(4) };
+    let mut oldline = unsafe { getdigits_int32(&raw mut p, true, 0) };
+    let oldcount = if unsafe { *p } == b',' as c_char {
+        p = unsafe { p.offset(1) };
+        unsafe { getdigits_int(&raw mut p, true, 0) }
+    } else {
+        1
+    };
+    if unsafe { strncmp(p, c" +".as_ptr(), 2) } != 0 {
+        return FAIL;
+    }
+    p = unsafe { p.add(2) };
+    let mut newline = unsafe { getdigits_int(&raw mut p, true, 0) };
+    let newcount = if unsafe { *p } == b',' as c_char {
+        p = unsafe { p.offset(1) };
+        unsafe { getdigits_int(&raw mut p, true, 0) }
+    } else {
+        1
+    };
+    if oldcount == 0 {
+        oldline += 1;
+    }
+    if newcount == 0 {
+        newline += 1;
+    }
     unsafe {
-        let mut p = line as *mut c_char;
-        if strncmp(p, c"@@ -".as_ptr(), 4) != 0 {
-            return FAIL;
-        }
-        p = p.add(4);
-        let mut oldline = getdigits_int32(&raw mut p, true, 0);
-        let oldcount = if *p == b',' as c_char {
-            p = p.offset(1);
-            getdigits_int(&raw mut p, true, 0)
-        } else {
-            1
-        };
-        if strncmp(p, c" +".as_ptr(), 2) != 0 {
-            return FAIL;
-        }
-        p = p.add(2);
-        let mut newline = getdigits_int(&raw mut p, true, 0);
-        let newcount = if *p == b',' as c_char {
-            p = p.offset(1);
-            getdigits_int(&raw mut p, true, 0)
-        } else {
-            1
-        };
-        if oldcount == 0 {
-            oldline += 1;
-        }
-        if newcount == 0 {
-            newline += 1;
-        }
         *hunk = diffhunk_T {
             lnum_orig: oldline,
             count_orig: oldcount,
             // `@@ -1,2 +0,0 @@` deletes the whole file; line 0 is not a line.
             lnum_new: newline.max(1),
             count_new: newcount,
-        };
-        OK
-    }
+        }
+    };
+    OK
 }

@@ -159,45 +159,43 @@ pub(crate) unsafe fn cause_errthrow(
 /// `msg_list` is non-null and `mesg` is NUL-terminated.
 unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe: bool) -> bool {
     // SAFETY: caller contract; the list is this `do_cmdline`'s own.
-    unsafe {
-        let head = msg_list.get();
-        let mut plist = head;
-        while !(*plist).is_null() {
-            // Concatenate onto the last entry (a multi-part message).
-            if (**plist).next.is_null() && concat {
-                let joined = strlen((**plist).msg) + strlen(mesg) + 1;
-                (**plist).msg = xrealloc((**plist).msg.cast(), joined).cast();
-                (**plist).throw_msg = strcat((**plist).msg, mesg);
-                return true;
-            }
-            plist = &raw mut (**plist).next;
+    let head = msg_list.get();
+    let mut plist = head;
+    while !unsafe { *plist }.is_null() {
+        // Concatenate onto the last entry (a multi-part message).
+        if unsafe { (**plist).next }.is_null() && concat {
+            let joined = unsafe { strlen((**plist).msg) } + unsafe { strlen(mesg) } + 1;
+            unsafe { (**plist).msg = xrealloc((**plist).msg.cast(), joined).cast() };
+            unsafe { (**plist).throw_msg = strcat((**plist).msg, mesg) };
+            return true;
         }
-
-        let elem: *mut msglist_T = xmalloc(size_of::<msglist_T>()).cast();
-        (*elem).msg = xstrdup(mesg);
-        (*elem).multiline = multiline;
-        (*elem).next = ptr::null_mut();
-        (*elem).throw_msg = ptr::null_mut();
-        *plist = elem;
-
-        if plist == head || severe {
-            // Skip the extra "Vim " prefix, as on message "E458".
-            let tmsg = (*elem).msg;
-            let vim_prefixed = strncmp(tmsg, c"Vim E".as_ptr(), 5) == 0
-                && ascii_isdigit(*tmsg.add(5) as c_int)
-                && ascii_isdigit(*tmsg.add(6) as c_int)
-                && ascii_isdigit(*tmsg.add(7) as c_int)
-                && *tmsg.add(8) == b':' as c_char
-                && *tmsg.add(9) == b' ' as c_char;
-            (**head).throw_msg = if vim_prefixed { tmsg.add(4) } else { tmsg };
-        }
-
-        // Take the source name and line number now: they may change before
-        // `do_errthrow` runs.
-        (*elem).sfile = estack_sfile(ESTACK_NONE);
-        (*elem).slnum = sourcing_lnum();
-        true
+        plist = unsafe { &raw mut (**plist).next };
     }
+
+    let elem: *mut msglist_T = unsafe { xmalloc(size_of::<msglist_T>()) }.cast();
+    unsafe { (*elem).msg = xstrdup(mesg) };
+    unsafe { (*elem).multiline = multiline };
+    unsafe { (*elem).next = ptr::null_mut() };
+    unsafe { (*elem).throw_msg = ptr::null_mut() };
+    unsafe { *plist = elem };
+
+    if plist == head || severe {
+        // Skip the extra "Vim " prefix, as on message "E458".
+        let tmsg = unsafe { (*elem).msg };
+        let vim_prefixed = unsafe { strncmp(tmsg, c"Vim E".as_ptr(), 5) } == 0
+            && ascii_isdigit(unsafe { *tmsg.add(5) } as c_int)
+            && ascii_isdigit(unsafe { *tmsg.add(6) } as c_int)
+            && ascii_isdigit(unsafe { *tmsg.add(7) } as c_int)
+            && unsafe { *tmsg.add(8) } == b':' as c_char
+            && unsafe { *tmsg.add(9) } == b' ' as c_char;
+        unsafe { (**head).throw_msg = if vim_prefixed { tmsg.add(4) } else { tmsg } };
+    }
+
+    // Take the source name and line number now: they may change before
+    // `do_errthrow` runs.
+    unsafe { (*elem).sfile = estack_sfile(ESTACK_NONE) };
+    unsafe { (*elem).slnum = sourcing_lnum() };
+    true
 }
 
 /// Free a message list and everything in it.
@@ -206,15 +204,13 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
 /// `l` heads a message list this owns.
 unsafe fn free_msglist(l: *mut msglist_T) {
     // SAFETY: caller contract.
-    unsafe {
-        let mut messages = l;
-        while !messages.is_null() {
-            let next = (*messages).next;
-            xfree((*messages).msg.cast());
-            xfree((*messages).sfile.cast());
-            xfree(messages.cast());
-            messages = next;
-        }
+    let mut messages = l;
+    while !messages.is_null() {
+        let next = unsafe { (*messages).next };
+        unsafe { xfree((*messages).msg.cast()) };
+        unsafe { xfree((*messages).sfile.cast()) };
+        unsafe { xfree(messages.cast()) };
+        messages = next;
     }
 }
 
@@ -224,10 +220,8 @@ unsafe fn free_msglist(l: *mut msglist_T) {
 /// Module contract.
 pub(crate) unsafe fn free_global_msglist() {
     // SAFETY: module contract.
-    unsafe {
-        free_msglist(*msg_list.get());
-        *msg_list.get() = ptr::null_mut();
-    }
+    unsafe { free_msglist(*msg_list.get()) };
+    unsafe { *msg_list.get() = ptr::null_mut() };
 }
 
 /// Throw what [`cause_errthrow`] collected as an error exception. With a
@@ -244,21 +238,19 @@ pub(crate) unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
     }
 
     // SAFETY: module contract.
-    unsafe {
-        // Nothing to throw, or the conversion belongs to an outer
-        // `do_one_cmd`.
-        if msg_list.get().is_null() || (*msg_list.get()).is_null() {
-            return;
-        }
-        if throw_exception((*msg_list.get()).cast(), ET_ERROR, cmdname) == FAIL {
-            free_msglist(*msg_list.get());
-        } else if !cstack.is_null() {
-            super::trycmd::do_throw(cstack);
-        } else {
-            need_rethrow.set(true);
-        }
-        *msg_list.get() = ptr::null_mut();
+    // Nothing to throw, or the conversion belongs to an outer
+    // `do_one_cmd`.
+    if msg_list.get().is_null() || unsafe { *msg_list.get() }.is_null() {
+        return;
     }
+    if unsafe { throw_exception((*msg_list.get()).cast(), ET_ERROR, cmdname) } == FAIL {
+        unsafe { free_msglist(*msg_list.get()) };
+    } else if !cstack.is_null() {
+        unsafe { super::trycmd::do_throw(cstack) };
+    } else {
+        need_rethrow.set(true);
+    }
+    unsafe { *msg_list.get() = ptr::null_mut() };
 }
 
 /// Replace the current exception by an interrupt exception, if an interrupt
@@ -276,23 +268,23 @@ pub(crate) unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
 
     // SAFETY: module contract; `did_throw` implies a live
     // `current_exception`.
-    unsafe {
-        if did_throw.get() {
-            // An interrupt exception already being thrown stands.
-            if (*current_exception.get()).type_0 == ET_INTERRUPT {
-                return false;
-            }
-            // Otherwise it replaces the user or error exception.
-            discard_current_exception();
+    if did_throw.get() {
+        // An interrupt exception already being thrown stands.
+        if unsafe { (*current_exception.get()).type_0 } == ET_INTERRUPT {
+            return false;
         }
-        if throw_exception(
+        // Otherwise it replaces the user or error exception.
+        unsafe { discard_current_exception() };
+    }
+    if unsafe {
+        throw_exception(
             c"Vim:Interrupt".as_ptr().cast_mut().cast(),
             ET_INTERRUPT,
             ptr::null_mut(),
-        ) != FAIL
-        {
-            super::trycmd::do_throw(cstack);
-        }
+        )
+    } != FAIL
+    {
+        unsafe { super::trycmd::do_throw(cstack) };
     }
     true
 }
@@ -313,63 +305,63 @@ pub(crate) unsafe fn get_exception_string(
     should_free: *mut bool,
 ) -> *mut c_char {
     // SAFETY: caller contract.
-    unsafe {
-        if type_0 != ET_ERROR {
-            *should_free = false;
-            return value.cast();
-        }
-        *should_free = true;
+    if type_0 != ET_ERROR {
+        unsafe { *should_free = false };
+        return value.cast();
+    }
+    unsafe { *should_free = true };
 
-        let mesg = (*value.cast::<msglist_T>()).throw_msg;
-        let ret;
+    let mesg = unsafe { (*value.cast::<msglist_T>()).throw_msg };
+    let ret;
 
-        let val = if !cmdname.is_null() && *cmdname != NUL as c_char {
-            let cmdlen = strlen(cmdname);
-            ret = xstrnsave(c"Vim(".as_ptr(), 4 + cmdlen + 2 + strlen(mesg));
-            strcpy(ret.add(4), cmdname);
-            strcpy(ret.add(4 + cmdlen), c"):".as_ptr());
-            ret.add(4 + cmdlen + 2)
-        } else {
-            ret = xstrnsave(c"Vim:".as_ptr(), 4 + strlen(mesg));
-            ret.add(4)
-        };
+    let val = if !cmdname.is_null() && unsafe { *cmdname } != NUL as c_char {
+        let cmdlen = unsafe { strlen(cmdname) };
+        ret = unsafe { xstrnsave(c"Vim(".as_ptr(), 4 + cmdlen + 2 + strlen(mesg)) };
+        unsafe { strcpy(ret.add(4), cmdname) };
+        unsafe { strcpy(ret.add(4 + cmdlen), c"):".as_ptr()) };
+        unsafe { ret.add(4 + cmdlen + 2) }
+    } else {
+        ret = unsafe { xstrnsave(c"Vim:".as_ptr(), 4 + strlen(mesg)) };
+        unsafe { ret.add(4) }
+    };
 
-        // `msg_add_fname` may have prefixed the message with a file name in
-        // quotes. In the exception value the file name goes in parentheses
-        // at the end instead.
-        let mut p = mesg;
-        loop {
-            if *p == NUL as c_char || error_number_at(p) {
-                if *p == NUL as c_char || p == mesg {
-                    // "E123" missing, or at the very beginning.
-                    strcat(val, mesg);
-                    break;
-                }
-                if *mesg != b'"' as c_char
-                    || p.sub(2) < mesg.add(1)
-                    || *p.sub(2) != b'"' as c_char
-                    || *p.sub(1) != b' ' as c_char
-                {
-                    // "E123:" is part of the file name after all.
-                    p = p.add(1);
-                    continue;
-                }
-                // '"filename" E123: message text'
-                strcat(val, p);
-                *p.sub(2) = NUL as c_char;
+    // `msg_add_fname` may have prefixed the message with a file name in
+    // quotes. In the exception value the file name goes in parentheses
+    // at the end instead.
+    let mut p = mesg;
+    loop {
+        if unsafe { *p } == NUL as c_char || unsafe { error_number_at(p) } {
+            if unsafe { *p } == NUL as c_char || p == mesg {
+                // "E123" missing, or at the very beginning.
+                unsafe { strcat(val, mesg) };
+                break;
+            }
+            if unsafe { *mesg } != b'"' as c_char
+                || unsafe { p.sub(2) } < unsafe { mesg.add(1) }
+                || unsafe { *p.sub(2) } != b'"' as c_char
+                || unsafe { *p.sub(1) } != b' ' as c_char
+            {
+                // "E123:" is part of the file name after all.
+                p = unsafe { p.add(1) };
+                continue;
+            }
+            // '"filename" E123: message text'
+            unsafe { strcat(val, p) };
+            unsafe { *p.sub(2) = NUL as c_char };
+            unsafe {
                 snprintf(
                     val.add(strlen(p)),
                     c" (%s)".count_bytes(),
                     c" (%s)".as_ptr(),
                     mesg.add(1),
-                );
-                *p.sub(2) = b'"' as c_char;
-                break;
-            }
-            p = p.add(1);
+                )
+            };
+            unsafe { *p.sub(2) = b'"' as c_char };
+            break;
         }
-        ret
+        p = unsafe { p.add(1) };
     }
+    ret
 }
 
 /// Whether `p` starts an `E123:` message number, with one to three digits.
@@ -405,63 +397,61 @@ pub(super) unsafe fn throw_exception(
     cmdname: *mut c_char,
 ) -> c_int {
     // SAFETY: caller contract.
-    unsafe {
-        // Faking an interrupt or error exception as a user one is not
-        // allowed: `do_cmdline` treats the two differently when no active
-        // try block is found.
-        if type_0 == ET_USER {
-            let v = value.cast::<c_char>();
-            if strncmp(v, c"Vim".as_ptr(), 3) == 0
-                && (*v.add(3) == NUL as c_char
-                    || *v.add(3) == b':' as c_char
-                    || *v.add(3) == b'(' as c_char)
-            {
-                emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix".as_ptr());
-                current_exception.set(ptr::null_mut());
-                return FAIL;
-            }
-        }
-
-        let excp: *mut except_T = xmalloc(size_of::<except_T>()).cast();
-        if type_0 == ET_ERROR {
-            // Keep the original messages; the value is prefixed below.
-            (*excp).messages = value.cast();
-        }
-
-        let mut should_free = false;
-        (*excp).value = get_exception_string(value, type_0, cmdname, &raw mut should_free);
-        if (*excp).value.is_null() && should_free {
-            xfree(excp.cast());
-            suppress_errthrow.set(true);
-            emsg(message(&e_outofmem));
+    // Faking an interrupt or error exception as a user one is not
+    // allowed: `do_cmdline` treats the two differently when no active
+    // try block is found.
+    if type_0 == ET_USER {
+        let v = value.cast::<c_char>();
+        if unsafe { strncmp(v, c"Vim".as_ptr(), 3) } == 0
+            && (unsafe { *v.add(3) } == NUL as c_char
+                || unsafe { *v.add(3) } == b':' as c_char
+                || unsafe { *v.add(3) } == b'(' as c_char)
+        {
+            unsafe { emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix".as_ptr()) };
             current_exception.set(ptr::null_mut());
             return FAIL;
         }
-
-        (*excp).type_0 = type_0;
-        // An error exception throws from where the message was made, which
-        // is not where we are now.
-        let entry = value.cast::<msglist_T>();
-        if type_0 == ET_ERROR && !(*entry).sfile.is_null() {
-            (*excp).throw_name = (*entry).sfile;
-            (*entry).sfile = ptr::null_mut();
-            (*excp).throw_lnum = (*entry).slnum;
-        } else {
-            (*excp).throw_name = estack_sfile(ESTACK_NONE);
-            if (*excp).throw_name.is_null() {
-                (*excp).throw_name = xstrdup(c"".as_ptr());
-            }
-            (*excp).throw_lnum = sourcing_lnum();
-        }
-
-        (*excp).stacktrace = stacktrace_create();
-        tv_list_ref((*excp).stacktrace);
-
-        verbose_exception(c"Exception thrown: %s", (*excp).value);
-
-        current_exception.set(excp);
-        OK
     }
+
+    let excp: *mut except_T = unsafe { xmalloc(size_of::<except_T>()) }.cast();
+    if type_0 == ET_ERROR {
+        // Keep the original messages; the value is prefixed below.
+        unsafe { (*excp).messages = value.cast() };
+    }
+
+    let mut should_free = false;
+    unsafe { (*excp).value = get_exception_string(value, type_0, cmdname, &raw mut should_free) };
+    if unsafe { (*excp).value }.is_null() && should_free {
+        unsafe { xfree(excp.cast()) };
+        suppress_errthrow.set(true);
+        unsafe { emsg(message(&e_outofmem)) };
+        current_exception.set(ptr::null_mut());
+        return FAIL;
+    }
+
+    unsafe { (*excp).type_0 = type_0 };
+    // An error exception throws from where the message was made, which
+    // is not where we are now.
+    let entry = value.cast::<msglist_T>();
+    if type_0 == ET_ERROR && !unsafe { (*entry).sfile }.is_null() {
+        unsafe { (*excp).throw_name = (*entry).sfile };
+        unsafe { (*entry).sfile = ptr::null_mut() };
+        unsafe { (*excp).throw_lnum = (*entry).slnum };
+    } else {
+        unsafe { (*excp).throw_name = estack_sfile(ESTACK_NONE) };
+        if unsafe { (*excp).throw_name }.is_null() {
+            unsafe { (*excp).throw_name = xstrdup(c"".as_ptr()) };
+        }
+        unsafe { (*excp).throw_lnum = sourcing_lnum() };
+    }
+
+    unsafe { (*excp).stacktrace = stacktrace_create() };
+    unsafe { tv_list_ref((*excp).stacktrace) };
+
+    unsafe { verbose_exception(c"Exception thrown: %s", (*excp).value) };
+
+    current_exception.set(excp);
+    OK
 }
 
 /// Report an exception's fate under 'verbose' >= 13 or while debugging.
@@ -473,29 +463,27 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
         return;
     }
     // SAFETY: caller contract.
-    unsafe {
-        let debugging = debug_break_level.get() > 0;
-        // While debugging the messages have to be displayed.
-        let loud = debugging.then(Allow::messages);
-        if !debugging {
-            verbose_enter();
-        }
-        let no_prompt = Suppress::wait_return();
-        if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
-            // Always scroll up, don't overwrite.
-            msg_scroll.set(1);
-        }
-        smsg_c!(0, mesg.as_ptr(), value);
-        // Don't overwrite this either.
-        msg_puts(c"\n".as_ptr());
-        if debug_break_level.get() > 0 || *p_vfile.get() == NUL as c_char {
-            cmdline_row.set(msg_row.get());
-        }
-        drop(no_prompt);
-        drop(loud);
-        if !debugging {
-            verbose_leave();
-        }
+    let debugging = debug_break_level.get() > 0;
+    // While debugging the messages have to be displayed.
+    let loud = debugging.then(Allow::messages);
+    if !debugging {
+        unsafe { verbose_enter() };
+    }
+    let no_prompt = Suppress::wait_return();
+    if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
+        // Always scroll up, don't overwrite.
+        msg_scroll.set(1);
+    }
+    unsafe { smsg_c!(0, mesg.as_ptr(), value) };
+    // Don't overwrite this either.
+    unsafe { msg_puts(c"\n".as_ptr()) };
+    if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
+        cmdline_row.set(msg_row.get());
+    }
+    drop(no_prompt);
+    drop(loud);
+    if !debugging {
+        unsafe { verbose_leave() };
     }
 }
 
@@ -516,11 +504,11 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
     }
 
     // SAFETY: caller contract.
-    unsafe {
-        if p_verbose.get() >= 13 || debug_break_level.get() > 0 {
-            // Upstream saves and restores `IObuff` around this, because the
-            // report formatted through it and a caller may have been holding
-            // a message there. Nothing shares a buffer here any more.
+    if p_verbose.get() >= 13 || debug_break_level.get() > 0 {
+        // Upstream saves and restores `IObuff` around this, because the
+        // report formatted through it and a caller may have been holding
+        // a message there. Nothing shares a buffer here any more.
+        unsafe {
             verbose_exception(
                 if was_finished {
                     c"Exception finished: %s"
@@ -528,19 +516,19 @@ pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) 
                     c"Exception discarded: %s"
                 },
                 (*excp).value,
-            );
-        }
-        if (*excp).type_0 != ET_INTERRUPT {
-            // An interrupt exception's value is a string literal.
-            xfree((*excp).value.cast());
-        }
-        if (*excp).type_0 == ET_ERROR {
-            free_msglist((*excp).messages);
-        }
-        xfree((*excp).throw_name.cast());
-        tv_list_unref((*excp).stacktrace);
-        xfree(excp.cast());
+            )
+        };
     }
+    if unsafe { (*excp).type_0 } != ET_INTERRUPT {
+        // An interrupt exception's value is a string literal.
+        unsafe { xfree((*excp).value.cast()) };
+    }
+    if unsafe { (*excp).type_0 } == ET_ERROR {
+        unsafe { free_msglist((*excp).messages) };
+    }
+    unsafe { xfree((*excp).throw_name.cast()) };
+    unsafe { tv_list_unref((*excp).stacktrace) };
+    unsafe { xfree(excp.cast()) };
 }
 
 /// Discard the exception currently being thrown.
@@ -567,24 +555,24 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
     // Where `v:throwpoint` is rendered; upstream shares `IObuff`.
     let mut throwpoint = [0 as c_char; IOSIZE as usize];
     // SAFETY: caller contract.
-    unsafe {
-        if excp.is_null() {
-            set_vim_var_string(Vv::Exception, ptr::null(), -1);
-            set_vim_var_string(Vv::Throwpoint, ptr::null(), -1);
-            set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<list_T>());
-            return;
-        }
-        set_vim_var_string(Vv::Exception, (*excp).value, -1);
-        set_vim_var_list(Vv::Stacktrace, (*excp).stacktrace);
-        if *(*excp).throw_name == NUL as c_char {
-            // `throw_name` is unset for an exception from a typed command.
-            set_vim_var_string(Vv::Throwpoint, ptr::null(), -1);
-            return;
-        }
-        let point = throwpoint.as_mut_ptr();
-        let len = if (*excp).throw_lnum == 0 {
-            vim_snprintf_safelen(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name)
-        } else {
+    if excp.is_null() {
+        unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
+        unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
+        unsafe { set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<list_T>()) };
+        return;
+    }
+    unsafe { set_vim_var_string(Vv::Exception, (*excp).value, -1) };
+    unsafe { set_vim_var_list(Vv::Stacktrace, (*excp).stacktrace) };
+    if unsafe { *(*excp).throw_name } == NUL as c_char {
+        // `throw_name` is unset for an exception from a typed command.
+        unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
+        return;
+    }
+    let point = throwpoint.as_mut_ptr();
+    let len = if unsafe { (*excp).throw_lnum } == 0 {
+        unsafe { vim_snprintf_safelen(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name) }
+    } else {
+        unsafe {
             vim_snprintf_safelen(
                 point,
                 IOSIZE as usize,
@@ -592,9 +580,9 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
                 (*excp).throw_name,
                 (*excp).throw_lnum as int64_t,
             )
-        };
-        set_vim_var_string(Vv::Throwpoint, point, len as ptrdiff_t);
-    }
+        }
+    };
+    unsafe { set_vim_var_string(Vv::Throwpoint, point, len as ptrdiff_t) };
 }
 
 /// Push an exception onto the caught stack.
@@ -603,12 +591,10 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
 /// Module contract; `excp` is the exception just matched.
 pub(super) unsafe fn catch_exception(excp: *mut except_T) {
     // SAFETY: caller contract.
-    unsafe {
-        (*excp).caught = caught_stack.get();
-        caught_stack.set(excp);
-        set_exception_vars(excp);
-        verbose_exception(c"Exception caught: %s", (*excp).value);
-    }
+    unsafe { (*excp).caught = caught_stack.get() };
+    caught_stack.set(excp);
+    unsafe { set_exception_vars(excp) };
+    unsafe { verbose_exception(c"Exception caught: %s", (*excp).value) };
 }
 
 /// Pop `excp` off the caught stack and free it, restoring `v:exception` and
@@ -618,15 +604,13 @@ pub(super) unsafe fn catch_exception(excp: *mut except_T) {
 /// Module contract; `excp` is the top of the caught stack.
 pub(super) unsafe fn finish_exception(excp: *mut except_T) {
     // SAFETY: caller contract.
-    unsafe {
-        if excp != caught_stack.get() {
-            internal_error(c"finish_exception()".as_ptr());
-        }
-        caught_stack.set((*caught_stack.get()).caught);
-        set_exception_vars(caught_stack.get());
-        // Discard it, but use the "finished" wording for 'verbose'.
-        discard_exception(excp, true);
+    if excp != caught_stack.get() {
+        unsafe { internal_error(c"finish_exception()".as_ptr()) };
     }
+    caught_stack.set(unsafe { (*caught_stack.get()).caught });
+    unsafe { set_exception_vars(caught_stack.get()) };
+    // Discard it, but use the "finished" wording for 'verbose'.
+    unsafe { discard_exception(excp, true) };
 }
 
 /// Save the exception state, for a nested `do_cmdline` that must not see it.
@@ -635,13 +619,11 @@ pub(super) unsafe fn finish_exception(excp: *mut except_T) {
 /// Module contract; `estate` is writable.
 pub(crate) unsafe fn exception_state_save(estate: *mut exception_state_T) {
     // SAFETY: caller contract.
-    unsafe {
-        (*estate).estate_current_exception = current_exception.get();
-        (*estate).estate_did_throw = did_throw.get();
-        (*estate).estate_need_rethrow = need_rethrow.get();
-        (*estate).estate_trylevel = trylevel.get();
-        (*estate).estate_did_emsg = did_emsg.get();
-    }
+    unsafe { (*estate).estate_current_exception = current_exception.get() };
+    unsafe { (*estate).estate_did_throw = did_throw.get() };
+    unsafe { (*estate).estate_need_rethrow = need_rethrow.get() };
+    unsafe { (*estate).estate_trylevel = trylevel.get() };
+    unsafe { (*estate).estate_did_emsg = did_emsg.get() };
 }
 
 /// Restore what [`exception_state_save`] stored, after handling anything
@@ -651,16 +633,14 @@ pub(crate) unsafe fn exception_state_save(estate: *mut exception_state_T) {
 /// Module contract; `estate` was filled by [`exception_state_save`].
 pub(crate) unsafe fn exception_state_restore(estate: *mut exception_state_T) {
     // SAFETY: caller contract.
-    unsafe {
-        if did_throw.get() {
-            handle_did_throw();
-        }
-        current_exception.set((*estate).estate_current_exception);
-        did_throw.set((*estate).estate_did_throw);
-        need_rethrow.set((*estate).estate_need_rethrow);
-        trylevel.set((*estate).estate_trylevel);
-        did_emsg.set((*estate).estate_did_emsg);
+    if did_throw.get() {
+        unsafe { handle_did_throw() };
     }
+    current_exception.set(unsafe { (*estate).estate_current_exception });
+    did_throw.set(unsafe { (*estate).estate_did_throw });
+    need_rethrow.set(unsafe { (*estate).estate_need_rethrow });
+    trylevel.set(unsafe { (*estate).estate_trylevel });
+    did_emsg.set(unsafe { (*estate).estate_did_emsg });
 }
 
 /// Forget the exception state entirely.
@@ -709,46 +689,44 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
     let mut mesg = action.message().as_ptr().cast_mut();
 
     // SAFETY: caller contract.
-    unsafe {
-        let s = match pending {
-            CSTP_NONE => return,
-            CSTP_CONTINUE => c":continue".as_ptr().cast_mut(),
-            CSTP_BREAK => c":break".as_ptr().cast_mut(),
-            CSTP_FINISH => c":finish".as_ptr().cast_mut(),
-            // A ":return" producing a value; the text is allocated.
-            CSTP_RETURN => get_return_cmd(value),
-            _ if pending & CSTP_THROW != 0 => {
-                // "%s made pending" becomes "Exception made pending: %s".
-                let out = pending_msg.as_mut_ptr();
-                vim_snprintf(out, IOSIZE as usize, mesg, c"Exception".as_ptr());
-                mesg = concat_str(out, c": %s".as_ptr());
-                (*value.cast::<except_T>()).value
-            }
-            _ if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 => {
-                c"Error and interrupt".as_ptr().cast_mut()
-            }
-            _ if pending & CSTP_ERROR != 0 => c"Error".as_ptr().cast_mut(),
-            // Only CSTP_INTERRUPT is left.
-            _ => c"Interrupt".as_ptr().cast_mut(),
-        };
-
-        // While debugging the messages have to be displayed.
-        let loud = (debug_break_level.get() > 0).then(Allow::messages);
-        let no_prompt = Suppress::wait_return();
-        // Always scroll up, don't overwrite.
-        msg_scroll.set(1);
-        smsg_c!(0, mesg, s);
-        // Don't overwrite this either.
-        msg_puts(c"\n".as_ptr());
-        cmdline_row.set(msg_row.get());
-        drop(no_prompt);
-        drop(loud);
-
-        if pending == CSTP_RETURN {
-            xfree(s.cast());
-        } else if pending & CSTP_THROW != 0 {
-            xfree(mesg.cast());
+    let s = match pending {
+        CSTP_NONE => return,
+        CSTP_CONTINUE => c":continue".as_ptr().cast_mut(),
+        CSTP_BREAK => c":break".as_ptr().cast_mut(),
+        CSTP_FINISH => c":finish".as_ptr().cast_mut(),
+        // A ":return" producing a value; the text is allocated.
+        CSTP_RETURN => unsafe { get_return_cmd(value) },
+        _ if pending & CSTP_THROW != 0 => {
+            // "%s made pending" becomes "Exception made pending: %s".
+            let out = pending_msg.as_mut_ptr();
+            unsafe { vim_snprintf(out, IOSIZE as usize, mesg, c"Exception".as_ptr()) };
+            mesg = unsafe { concat_str(out, c": %s".as_ptr()) };
+            unsafe { (*value.cast::<except_T>()).value }
         }
+        _ if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 => {
+            c"Error and interrupt".as_ptr().cast_mut()
+        }
+        _ if pending & CSTP_ERROR != 0 => c"Error".as_ptr().cast_mut(),
+        // Only CSTP_INTERRUPT is left.
+        _ => c"Interrupt".as_ptr().cast_mut(),
+    };
+
+    // While debugging the messages have to be displayed.
+    let loud = (debug_break_level.get() > 0).then(Allow::messages);
+    let no_prompt = Suppress::wait_return();
+    // Always scroll up, don't overwrite.
+    msg_scroll.set(1);
+    unsafe { smsg_c!(0, mesg, s) };
+    // Don't overwrite this either.
+    unsafe { msg_puts(c"\n".as_ptr()) };
+    cmdline_row.set(msg_row.get());
+    drop(no_prompt);
+    drop(loud);
+
+    if pending == CSTP_RETURN {
+        unsafe { xfree(s.cast()) };
+    } else if pending & CSTP_THROW != 0 {
+        unsafe { xfree(mesg.cast()) };
     }
 }
 
@@ -763,14 +741,12 @@ unsafe fn report_if_verbose(action: PendingAction, pending: c_int, value: *mut c
     }
     let quiet = debug_break_level.get() <= 0;
     // SAFETY: caller contract.
-    unsafe {
-        if quiet {
-            verbose_enter();
-        }
-        report_pending(action, pending, value);
-        if quiet {
-            verbose_leave();
-        }
+    if quiet {
+        unsafe { verbose_enter() };
+    }
+    unsafe { report_pending(action, pending, value) };
+    if quiet {
+        unsafe { verbose_leave() };
     }
 }
 
