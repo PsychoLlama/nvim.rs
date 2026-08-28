@@ -37,7 +37,28 @@ import ratchet  # noqa: E402
 OPEN = re.compile(r"^(\s*)unsafe \{$")
 
 
-def unblanket(text: str, only: set[int] | None = None) -> tuple[str, int]:
+def whole_body(lines: list[str], open_at: int, close_at: int) -> bool:
+    """Whether the block at `open_at` is a function's *entire* body.
+
+    A blanket is the transpiler's, and removing it is the exercise. A tight
+    region is an author's, and removing it undoes work: a family an earlier
+    batch already converted is full of `unsafe {` / `}` pairs that match
+    `OPEN` exactly and mean the opposite thing. Batch 4 paid for that by hand
+    in every family batches 1 and 2 had reached.
+
+    The transpiler's blanket is the only statement in its function, so it
+    opens on the line after the signature's `{` and closes on the line before
+    the function's own `}`.
+    """
+    before = lines[open_at - 1].rstrip() if open_at else ""
+    after = lines[close_at + 1] if close_at + 1 < len(lines) else ""
+    outer = lines[open_at][: len(lines[open_at]) - len(lines[open_at].lstrip())]
+    return before.endswith("{") and after.rstrip() == outer[:-4] + "}"
+
+
+def unblanket(
+    text: str, only: set[int] | None = None, warn: bool = True
+) -> tuple[str, int]:
     """The text with blanket blocks removed, and how many were removed."""
     lines = text.split("\n")
     masked = ratchet.mask(text).split("\n")
@@ -54,6 +75,14 @@ def unblanket(text: str, only: set[int] | None = None) -> tuple[str, int]:
                     close = j
                     break
             if close is not None and lines[close] == indent + "}":
+                if warn and not whole_body(lines, i, close):
+                    print(
+                        f"  line {i + 1}: NOT a whole function body -- this "
+                        "looks like a region an author wrote, not a blanket "
+                        "the transpiler did. Removing it anyway; check the "
+                        "diff.",
+                        file=sys.stderr,
+                    )
                 body = lines[i + 1 : close]
                 out.extend(
                     line[4:] if line.startswith(indent + "    ") else line
