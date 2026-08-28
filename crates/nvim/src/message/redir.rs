@@ -49,12 +49,10 @@ unsafe fn verbosefile_set() -> bool {
 /// # Safety
 /// `s` must be a valid C string.
 pub unsafe fn verb_msg(s: *const c_char) -> c_int {
-    unsafe {
-        verbose_enter();
-        let n = msg_keep(s, 0, false, false) as c_int;
-        verbose_leave();
-        n
-    }
+    unsafe { verbose_enter() };
+    let n = unsafe { msg_keep(s, 0, false, false) as c_int };
+    unsafe { verbose_leave() };
+    n
 }
 
 /// Copy a message to `:redir`'s destination and to `'verbosefile'`.
@@ -65,90 +63,90 @@ pub unsafe fn verb_msg(s: *const c_char) -> c_int {
 /// `str` must be a valid C string, readable for `maxlen` bytes when that is
 /// not negative.
 pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
-    unsafe {
-        if maxlen == 0 {
-            return;
-        }
-        // Don't do anything for displaying prompts and the like.
-        if redir_off.get() {
-            return;
-        }
-        // If 'verbosefile' is set prepare for writing in that file.
-        if verbosefile_set() && verbose_fd.get().is_null() {
-            verbose_open();
-        }
-        if !redirecting() {
-            return;
-        }
+    if maxlen == 0 {
+        return;
+    }
+    // Don't do anything for displaying prompts and the like.
+    if redir_off.get() {
+        return;
+    }
+    // If 'verbosefile' is set prepare for writing in that file.
+    if unsafe { verbosefile_set() } && verbose_fd.get().is_null() {
+        unsafe { verbose_open() };
+    }
+    if !unsafe { redirecting() } {
+        return;
+    }
 
-        // One space to every sink this message is going to. A closure rather
-        // than a fn: it inherits the enclosing `unsafe` block, where a
-        // separate `unsafe`-declared fn would need one of its own.
-        let pad = || {
-            if !capture_ga.get().is_null() {
-                ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1);
-            }
-            if redir_reg.get() != 0 {
-                write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1);
-            } else if redir_vname.get() {
-                var_redir_str(c" ".as_ptr(), -1);
-            } else if !redir_fd.get().is_null() {
-                fputs(c" ".as_ptr(), redir_fd.get());
-            }
-            if !verbose_fd.get().is_null() {
-                fputs(c" ".as_ptr(), verbose_fd.get());
-            }
-        };
-
-        // If the string doesn't start with CR or NL, go to msg_col.
-        if *str != b'\n' as c_char && *str != b'\r' as c_char {
-            while redir_col.get() < msg_col.get() {
-                pad();
-                redir_col.set(redir_col.get() + 1);
-            }
-        }
-
-        let len = if maxlen == -1 {
-            strlen(str)
-        } else {
-            maxlen as size_t
-        };
+    // One space to every sink this message is going to. A closure rather
+    // than a fn: it inherits the enclosing `unsafe` block, where a
+    // separate `unsafe`-declared fn would need one of its own.
+    let pad = || {
         if !capture_ga.get().is_null() {
-            ga_concat_len(capture_ga.get(), str, len);
+            unsafe { ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1) };
         }
         if redir_reg.get() != 0 {
-            write_reg_contents(redir_reg.get(), str, len as ssize_t, 1);
+            unsafe { write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1) };
+        } else if redir_vname.get() {
+            unsafe { var_redir_str(c" ".as_ptr(), -1) };
+        } else if !redir_fd.get().is_null() {
+            unsafe { fputs(c" ".as_ptr(), redir_fd.get()) };
         }
-        if redir_vname.get() {
-            var_redir_str(str, maxlen as c_int);
+        if !verbose_fd.get().is_null() {
+            unsafe { fputs(c" ".as_ptr(), verbose_fd.get()) };
         }
+    };
 
-        // Write and adjust the current column. The file sinks are fed byte by
-        // byte because the column has to be tracked byte by byte anyway.
-        let mut s = str;
-        while *s != 0 && (maxlen < 0 || (s.offset_from(str) as c_int as ptrdiff_t) < maxlen) {
-            if redir_reg.get() == 0
-                && !redir_vname.get()
-                && capture_ga.get().is_null()
-                && !redir_fd.get().is_null()
-            {
-                putc(*s as c_int, redir_fd.get());
-            }
-            if !verbose_fd.get().is_null() {
-                putc(*s as c_int, verbose_fd.get());
-            }
-            match *s as u8 {
-                b'\r' | b'\n' => redir_col.set(0),
-                b'\t' => redir_col.set(redir_col.get() + 8 - redir_col.get() % 8),
-                _ => redir_col.set(redir_col.get() + 1),
-            }
-            s = s.add(1);
+    // If the string doesn't start with CR or NL, go to msg_col.
+    if unsafe { *str } != b'\n' as c_char && unsafe { *str } != b'\r' as c_char {
+        while redir_col.get() < msg_col.get() {
+            pad();
+            redir_col.set(redir_col.get() + 1);
         }
+    }
 
-        if msg_silent.get() != 0 {
-            // Should update msg_col.
-            msg_col.set(redir_col.get());
+    let len = if maxlen == -1 {
+        unsafe { strlen(str) }
+    } else {
+        maxlen as size_t
+    };
+    if !capture_ga.get().is_null() {
+        unsafe { ga_concat_len(capture_ga.get(), str, len) };
+    }
+    if redir_reg.get() != 0 {
+        unsafe { write_reg_contents(redir_reg.get(), str, len as ssize_t, 1) };
+    }
+    if redir_vname.get() {
+        unsafe { var_redir_str(str, maxlen as c_int) };
+    }
+
+    // Write and adjust the current column. The file sinks are fed byte by
+    // byte because the column has to be tracked byte by byte anyway.
+    let mut s = str;
+    while unsafe { *s } != 0
+        && (maxlen < 0 || (unsafe { s.offset_from(str) as c_int as ptrdiff_t }) < maxlen)
+    {
+        if redir_reg.get() == 0
+            && !redir_vname.get()
+            && capture_ga.get().is_null()
+            && !redir_fd.get().is_null()
+        {
+            unsafe { putc(*s as c_int, redir_fd.get()) };
         }
+        if !verbose_fd.get().is_null() {
+            unsafe { putc(*s as c_int, verbose_fd.get()) };
+        }
+        match unsafe { *s as u8 } {
+            b'\r' | b'\n' => redir_col.set(0),
+            b'\t' => redir_col.set(redir_col.get() + 8 - redir_col.get() % 8),
+            _ => redir_col.set(redir_col.get() + 1),
+        }
+        s = unsafe { s.add(1) };
+    }
+
+    if msg_silent.get() != 0 {
+        // Should update msg_col.
+        msg_col.set(redir_col.get());
     }
 }
 
@@ -157,13 +155,11 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
 /// # Safety
 /// Only that `p_vfile` holds a valid string.
 pub unsafe fn redirecting() -> bool {
-    unsafe {
-        !redir_fd.get().is_null()
-            || verbosefile_set()
-            || redir_reg.get() != 0
-            || redir_vname.get()
-            || !capture_ga.get().is_null()
-    }
+    !redir_fd.get().is_null()
+        || unsafe { verbosefile_set() }
+        || redir_reg.get() != 0
+        || redir_vname.get()
+        || !capture_ga.get().is_null()
 }
 
 /// Before giving a verbose message. Must always be paired with
@@ -172,20 +168,18 @@ pub unsafe fn redirecting() -> bool {
 /// # Safety
 /// Only that `p_vfile` holds a valid string.
 pub unsafe fn verbose_enter() {
-    unsafe {
-        if verbosefile_set() {
-            msg_silent.set(msg_silent.get() + 1);
-        }
-        // Don't set the verbose kind if message continuity is wanted, as with
-        // last_set_msg().
-        if !msg_ext_skip_verbose.get() {
-            if msg_ext_kind.get() != VERBOSE_KIND.as_ptr() {
-                pre_verbose_kind.set(msg_ext_kind.get());
-            }
-            msg_ext_set_kind(VERBOSE_KIND.as_ptr());
-        }
-        msg_ext_skip_verbose.set(false);
+    if unsafe { verbosefile_set() } {
+        msg_silent.set(msg_silent.get() + 1);
     }
+    // Don't set the verbose kind if message continuity is wanted, as with
+    // last_set_msg().
+    if !msg_ext_skip_verbose.get() {
+        if msg_ext_kind.get() != VERBOSE_KIND.as_ptr() {
+            pre_verbose_kind.set(msg_ext_kind.get());
+        }
+        unsafe { msg_ext_set_kind(VERBOSE_KIND.as_ptr()) };
+    }
+    msg_ext_skip_verbose.set(false);
 }
 
 /// After giving a verbose message. Must always be paired with
@@ -194,17 +188,15 @@ pub unsafe fn verbose_enter() {
 /// # Safety
 /// Only that `p_vfile` holds a valid string.
 pub unsafe fn verbose_leave() {
-    unsafe {
-        if verbosefile_set() {
-            msg_silent.set(msg_silent.get() - 1);
-            if msg_silent.get() < 0 {
-                msg_silent.set(0);
-            }
+    if unsafe { verbosefile_set() } {
+        msg_silent.set(msg_silent.get() - 1);
+        if msg_silent.get() < 0 {
+            msg_silent.set(0);
         }
-        if !pre_verbose_kind.get().is_null() {
-            msg_ext_set_kind(pre_verbose_kind.get());
-            pre_verbose_kind.set(ptr::null());
-        }
+    }
+    if !pre_verbose_kind.get().is_null() {
+        unsafe { msg_ext_set_kind(pre_verbose_kind.get()) };
+        pre_verbose_kind.set(ptr::null());
     }
 }
 
@@ -214,12 +206,10 @@ pub unsafe fn verbose_leave() {
 /// # Safety
 /// See [`verbose_enter`].
 pub unsafe fn verbose_enter_scroll() {
-    unsafe {
-        verbose_enter();
-        if !verbosefile_set() {
-            // Always scroll up, don't overwrite.
-            msg_scroll.set(1);
-        }
+    unsafe { verbose_enter() };
+    if !unsafe { verbosefile_set() } {
+        // Always scroll up, don't overwrite.
+        msg_scroll.set(1);
     }
 }
 
@@ -228,11 +218,9 @@ pub unsafe fn verbose_enter_scroll() {
 /// # Safety
 /// See [`verbose_leave`].
 pub unsafe fn verbose_leave_scroll() {
-    unsafe {
-        verbose_leave();
-        if !verbosefile_set() {
-            cmdline_row.set(msg_row.get());
-        }
+    unsafe { verbose_leave() };
+    if !unsafe { verbosefile_set() } {
+        cmdline_row.set(msg_row.get());
     }
 }
 
@@ -241,13 +229,11 @@ pub unsafe fn verbose_leave_scroll() {
 /// # Safety
 /// Only that no other thread is using the handle.
 pub unsafe fn verbose_stop() {
-    unsafe {
-        if !verbose_fd.get().is_null() {
-            fclose(verbose_fd.get());
-            verbose_fd.set(ptr::null_mut());
-        }
-        verbose_did_open.set(false);
+    if !verbose_fd.get().is_null() {
+        unsafe { fclose(verbose_fd.get()) };
+        verbose_fd.set(ptr::null_mut());
     }
+    verbose_did_open.set(false);
 }
 
 /// Open `'verbosefile'` for appending, once.
@@ -255,19 +241,19 @@ pub unsafe fn verbose_stop() {
 /// # Safety
 /// Only that `p_vfile` holds a valid string.
 pub unsafe fn verbose_open() -> c_int {
-    unsafe {
-        if verbose_fd.get().is_null() && !verbose_did_open.get() {
-            // Only give the error message once.
-            verbose_did_open.set(true);
-            verbose_fd.set(os_fopen(p_vfile.get(), c"a".as_ptr()));
-            if verbose_fd.get().is_null() {
+    if verbose_fd.get().is_null() && !verbose_did_open.get() {
+        // Only give the error message once.
+        verbose_did_open.set(true);
+        verbose_fd.set(unsafe { os_fopen(p_vfile.get(), c"a".as_ptr()) });
+        if verbose_fd.get().is_null() {
+            unsafe {
                 semsg_c!(
                     gettext(&raw const e_notopen as *const c_char),
                     p_vfile.get(),
-                );
-                return FAIL;
-            }
+                )
+            };
+            return FAIL;
         }
-        OK
     }
+    OK
 }

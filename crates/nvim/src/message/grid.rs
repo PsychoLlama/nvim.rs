@@ -112,46 +112,46 @@ pub unsafe fn msg_grid_validate() {
     grid_assign_handle(&mut grid);
     // SAFETY: the caller's promise, throughout -- the grids are initialised
     // and `curwin` is live, which is all `ui_ext_msg_set_pos` needs.
-    unsafe {
-        let should_alloc = msg_use_grid();
-        let max_rows = Rows.get() - p_ch.get() as c_int;
+    let should_alloc = unsafe { msg_use_grid() };
+    let max_rows = Rows.get() - p_ch.get() as c_int;
 
-        if should_alloc
-            && (grid.rows != Rows.get() || grid.cols != Columns.get() || !grid.is_allocated())
-        {
-            // Force a valid screen size.
-            grid_alloc(&mut grid, Rows.get(), Columns.get(), false, true);
-            grid.zindex = kZIndexMessages as c_int;
-            grid.track_dirty_cols(Rows.get());
+    if should_alloc
+        && (grid.rows != Rows.get() || grid.cols != Columns.get() || !grid.is_allocated())
+    {
+        // Force a valid screen size.
+        grid_alloc(&mut grid, Rows.get(), Columns.get(), false, true);
+        grid.zindex = kZIndexMessages as c_int;
+        grid.track_dirty_cols(Rows.get());
 
-            // Tell the compositor to put the grid at the bottom, or at the top
-            // while the pager owns the screen.
-            let pos = if State.get() & MODE_ASKMORE != 0 {
-                0
-            } else {
-                (max_rows - msg_scrolled.get()).max(0)
-            };
-            grid.throttled = false; // don't throttle in 'cmdheight' area
-            msg_grid_set_pos(pos, msg_scrolled.get() != 0);
-            let (rows, cols) = (grid.rows, grid.cols);
-            ui_comp_put_grid(grid.raw(), pos, 0, rows, cols, false, true);
-            ui_call_grid_resize(grid.handle.into(), cols.into(), rows.into());
+        // Tell the compositor to put the grid at the bottom, or at the top
+        // while the pager owns the screen.
+        let pos = if State.get() & MODE_ASKMORE != 0 {
+            0
+        } else {
+            (max_rows - msg_scrolled.get()).max(0)
+        };
+        grid.throttled = false; // don't throttle in 'cmdheight' area
+        unsafe { msg_grid_set_pos(pos, msg_scrolled.get() != 0) };
+        let (rows, cols) = (grid.rows, grid.cols);
+        unsafe { ui_comp_put_grid(grid.raw(), pos, 0, rows, cols, false, true) };
+        ui_call_grid_resize(grid.handle.into(), cols.into(), rows.into());
 
-            msg_scrolled_at_flush.set(msg_scrolled.get());
-            grid.mouse_enabled = false;
-        } else if !should_alloc && grid.is_allocated() {
-            // Note: we run this both on moving to ext_messages, and on
-            // resizing the screen while ext_messages is active.
-            ui_comp_remove_grid(grid.raw());
-            grid.free();
-            grid.forget_dirty_cols();
-            ui_call_grid_destroy(grid.handle.into());
-            grid.throttled = false;
-            redraw_cmdline.set(true);
-        } else if grid.is_allocated() && msg_scrolled.get() == 0 && msg_grid_pos.get() != max_rows {
-            let diff = msg_grid_pos.get() - max_rows;
-            msg_grid_set_pos(max_rows, false);
-            if diff > 0 {
+        msg_scrolled_at_flush.set(msg_scrolled.get());
+        grid.mouse_enabled = false;
+    } else if !should_alloc && grid.is_allocated() {
+        // Note: we run this both on moving to ext_messages, and on
+        // resizing the screen while ext_messages is active.
+        unsafe { ui_comp_remove_grid(grid.raw()) };
+        grid.free();
+        grid.forget_dirty_cols();
+        ui_call_grid_destroy(grid.handle.into());
+        grid.throttled = false;
+        redraw_cmdline.set(true);
+    } else if grid.is_allocated() && msg_scrolled.get() == 0 && msg_grid_pos.get() != max_rows {
+        let diff = msg_grid_pos.get() - max_rows;
+        unsafe { msg_grid_set_pos(max_rows, false) };
+        if diff > 0 {
+            unsafe {
                 grid_clear(
                     msg_grid_view(),
                     Rows.get() - diff,
@@ -159,14 +159,13 @@ pub unsafe fn msg_grid_validate() {
                     0,
                     Columns.get(),
                     hl_attr(HLF_MSG as c_int),
-                );
-            }
+                )
+            };
         }
+    }
 
-        if grid.is_allocated() && msg_scrolled.get() == 0 && cmdline_row.get() < msg_grid_pos.get()
-        {
-            cmdline_row.set(msg_grid_pos.get());
-        }
+    if grid.is_allocated() && msg_scrolled.get() == 0 && cmdline_row.get() < msg_grid_pos.get() {
+        cmdline_row.set(msg_grid_pos.get());
     }
 }
 
@@ -176,12 +175,10 @@ pub unsafe fn msg_grid_validate() {
 /// A grid line must be under construction.
 pub unsafe fn msg_line_flush() {
     // SAFETY: the caller's promise -- a batch is open.
-    unsafe {
-        if cmdmsg_rl.get() {
-            grid_line_mirror(msg_grid_ref().cols);
-        }
-        grid_line_flush_if_valid_row();
+    if cmdmsg_rl.get() {
+        grid_line_mirror(msg_grid_ref().cols);
     }
+    unsafe { grid_line_flush_if_valid_row() };
 }
 
 /// Put the cursor at `row`/`col` of the message area.
@@ -189,14 +186,12 @@ pub unsafe fn msg_line_flush() {
 /// # Safety
 /// Only that the grids are initialised.
 pub unsafe fn msg_cursor_goto(row: c_int, mut col: c_int) {
-    unsafe {
-        let mut row = row;
-        if cmdmsg_rl.get() {
-            col = Columns.get() - 1 - col;
-        }
-        let grid = grid_adjust(msg_grid_view(), &mut row, &mut col);
-        ui_grid_cursor_goto(grid.handle, row, col);
+    let mut row = row;
+    if cmdmsg_rl.get() {
+        col = Columns.get() - 1 - col;
     }
+    let grid = unsafe { grid_adjust(msg_grid_view(), &mut row, &mut col) };
+    ui_grid_cursor_goto(grid.handle, row, col);
 }
 
 /// How many screen lines the message area currently occupies.
@@ -222,26 +217,26 @@ pub unsafe fn msg_do_throttle() -> bool {
 pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
     let mut grid = msg_grid_ref();
     // SAFETY: the caller's promise -- the grids are initialised.
+    if may_throttle && unsafe { msg_do_throttle() } {
+        grid.throttled = true;
+    }
+    msg_did_scroll.set(true);
+    if msg_grid_pos.get() > 0 {
+        unsafe { msg_grid_set_pos(msg_grid_pos.get() - 1, !zerocmd) };
+        if zerocmd && grid.is_allocated() {
+            // When zerocmd is true, we're scrolling the first line of
+            // msg_grid onto the screen; it must be cleared first.
+            let (off, cols) = (grid.row_start(0), grid.cols);
+            grid.clear_line(off, cols, false);
+        }
+    } else {
+        let (rows, cols) = (grid.rows, grid.cols);
+        grid_del_lines(grid, 0, 1, rows, 0, cols);
+        // The dirty columns move up with the lines they describe.
+        grid.scroll_dirty_cols();
+    }
+    // Ensure the message area is cleared to the default background.
     unsafe {
-        if may_throttle && msg_do_throttle() {
-            grid.throttled = true;
-        }
-        msg_did_scroll.set(true);
-        if msg_grid_pos.get() > 0 {
-            msg_grid_set_pos(msg_grid_pos.get() - 1, !zerocmd);
-            if zerocmd && grid.is_allocated() {
-                // When zerocmd is true, we're scrolling the first line of
-                // msg_grid onto the screen; it must be cleared first.
-                let (off, cols) = (grid.row_start(0), grid.cols);
-                grid.clear_line(off, cols, false);
-            }
-        } else {
-            let (rows, cols) = (grid.rows, grid.cols);
-            grid_del_lines(grid, 0, 1, rows, 0, cols);
-            // The dirty columns move up with the lines they describe.
-            grid.scroll_dirty_cols();
-        }
-        // Ensure the message area is cleared to the default background.
         grid_clear(
             msg_grid_view(),
             Rows.get() - 1,
@@ -249,8 +244,8 @@ pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
             0,
             Columns.get(),
             hl_attr(HLF_MSG as c_int),
-        );
-    }
+        )
+    };
 }
 
 /// Send everything a throttled run of messages accumulated, as one scroll
@@ -262,50 +257,48 @@ pub unsafe fn msg_scroll_flush() {
     let mut grid = msg_grid_ref();
     // SAFETY: the caller's promise -- the grids are initialised, and
     // `ui_ext_msg_set_pos` only wants `curwin` alongside.
-    unsafe {
-        if grid.throttled {
-            grid.throttled = false;
-            let pos_delta = msg_grid_pos_at_flush.get() - msg_grid_pos.get();
-            debug_assert!(pos_delta >= 0);
-            let delta = (msg_scrolled.get() - msg_scrolled_at_flush.get()).min(grid.rows);
+    if grid.throttled {
+        grid.throttled = false;
+        let pos_delta = msg_grid_pos_at_flush.get() - msg_grid_pos.get();
+        debug_assert!(pos_delta >= 0);
+        let delta = (msg_scrolled.get() - msg_scrolled_at_flush.get()).min(grid.rows);
 
-            if pos_delta > 0 {
-                ui_ext_msg_set_pos(msg_grid_pos.get(), true);
-            }
-
-            let to_scroll = delta - pos_delta - msg_grid_scroll_discount.get();
-            debug_assert!(to_scroll >= 0);
-
-            // No scrolling to do while the grid is still moving down: the
-            // repositioning above already showed the new lines.
-            if to_scroll > 0 && msg_grid_pos.get() == 0 {
-                ui_call_grid_scroll(
-                    grid.handle.into(),
-                    0,
-                    Rows.get().into(),
-                    0,
-                    Columns.get().into(),
-                    to_scroll.into(),
-                    0,
-                );
-            }
-
-            // `Rows` is re-read each time round, as upstream does: it is a
-            // global that a resize changes, and this loop talks to the UI.
-            let mut i = (Rows.get() - delta.max(1)).max(0);
-            while i < Rows.get() {
-                let row = i - msg_grid_pos.get();
-                debug_assert!(row >= 0);
-                let (dirty, cols) = (grid.take_dirty_col(row), grid.cols);
-                let attr = hl_attr(HLF_MSG as c_int);
-                ui_line(grid, row, false, 0, dirty, cols, attr, false);
-                i += 1;
-            }
+        if pos_delta > 0 {
+            unsafe { ui_ext_msg_set_pos(msg_grid_pos.get(), true) };
         }
-        msg_scrolled_at_flush.set(msg_scrolled.get());
-        msg_grid_scroll_discount.set(0);
-        msg_grid_pos_at_flush.set(msg_grid_pos.get());
+
+        let to_scroll = delta - pos_delta - msg_grid_scroll_discount.get();
+        debug_assert!(to_scroll >= 0);
+
+        // No scrolling to do while the grid is still moving down: the
+        // repositioning above already showed the new lines.
+        if to_scroll > 0 && msg_grid_pos.get() == 0 {
+            ui_call_grid_scroll(
+                grid.handle.into(),
+                0,
+                Rows.get().into(),
+                0,
+                Columns.get().into(),
+                to_scroll.into(),
+                0,
+            );
+        }
+
+        // `Rows` is re-read each time round, as upstream does: it is a
+        // global that a resize changes, and this loop talks to the UI.
+        let mut i = (Rows.get() - delta.max(1)).max(0);
+        while i < Rows.get() {
+            let row = i - msg_grid_pos.get();
+            debug_assert!(row >= 0);
+            let (dirty, cols) = (grid.take_dirty_col(row), grid.cols);
+            let attr = unsafe { hl_attr(HLF_MSG as c_int) };
+            unsafe { ui_line(grid, row, false, 0, dirty, cols, attr, false) };
+            i += 1;
+        }
     }
+    msg_scrolled_at_flush.set(msg_scrolled.get());
+    msg_grid_scroll_discount.set(0);
+    msg_grid_pos_at_flush.set(msg_grid_pos.get());
 }
 
 /// The messages are gone: put the grid back under `'cmdheight'` and clear it.
@@ -315,30 +308,28 @@ pub unsafe fn msg_scroll_flush() {
 pub unsafe fn msg_reset_scroll() {
     let mut grid = msg_grid_ref();
     // SAFETY: the caller's promise -- the grids are initialised.
-    unsafe {
-        if ui_has(kUIMessages) {
-            // TODO(bfredl): some duplicate logic with update_screen(). Later
-            // on we should properly disentangle message clear with full screen
-            // redraw.
-            return;
-        }
-        grid.throttled = false;
-        // TODO(bfredl): calculate the conflict in the compositor instead.
-        msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
-        clear_cmdline.set(true);
-        if grid.is_allocated() {
-            // The bound is re-evaluated each time round, as upstream does.
-            let mut i = 0;
-            while i < msg_scrollsize().min(grid.rows) {
-                let (off, cols) = (grid.row_start(i), grid.cols);
-                grid.clear_line(off, cols, false);
-                i += 1;
-            }
-        }
-        msg_scrolled.set(0);
-        msg_scrolled_at_flush.set(0);
-        msg_grid_scroll_discount.set(0);
+    if ui_has(kUIMessages) {
+        // TODO(bfredl): some duplicate logic with update_screen(). Later
+        // on we should properly disentangle message clear with full screen
+        // redraw.
+        return;
     }
+    grid.throttled = false;
+    // TODO(bfredl): calculate the conflict in the compositor instead.
+    unsafe { msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false) };
+    clear_cmdline.set(true);
+    if grid.is_allocated() {
+        // The bound is re-evaluated each time round, as upstream does.
+        let mut i = 0;
+        while i < msg_scrollsize().min(grid.rows) {
+            let (off, cols) = (grid.row_start(i), grid.cols);
+            grid.clear_line(off, cols, false);
+            i += 1;
+        }
+    }
+    msg_scrolled.set(0);
+    msg_scrolled_at_flush.set(0);
+    msg_grid_scroll_discount.set(0);
 }
 
 /// The UI reattached or resized: restate the grid's size and position.
@@ -371,32 +362,32 @@ pub unsafe fn msg_ui_flush() {
 /// # Safety
 /// The exec stack must be non-empty. See [`sourcing_top`].
 pub(crate) unsafe fn inc_msg_scrolled() {
-    unsafe {
-        if *get_vim_var_str(Vv::Scrollstart) == 0 {
-            // v:scrollstart is empty: set it to the script/function name and
-            // line number the scrolling started at.
-            let mut p = String_0::from_raw_parts(sourcing_top().es_name, 0);
-            let mut tofree: *mut c_char = ptr::null_mut();
-            if p.data().is_null() {
-                p = cstr_as_string(gettext(c"Unknown".as_ptr()));
-            } else {
-                let tofreesize = strlen(p.data()) + 40;
-                tofree = xmalloc(tofreesize).cast();
-                p.set_len(vim_snprintf_safelen(
+    if unsafe { *get_vim_var_str(Vv::Scrollstart) } == 0 {
+        // v:scrollstart is empty: set it to the script/function name and
+        // line number the scrolling started at.
+        let mut p = String_0::from_raw_parts(sourcing_top().es_name, 0);
+        let mut tofree: *mut c_char = ptr::null_mut();
+        if p.data().is_null() {
+            p = unsafe { cstr_as_string(gettext(c"Unknown".as_ptr())) };
+        } else {
+            let tofreesize = unsafe { strlen(p.data()) } + 40;
+            tofree = unsafe { xmalloc(tofreesize) }.cast();
+            p.set_len(unsafe {
+                vim_snprintf_safelen(
                     tofree,
                     tofreesize,
                     gettext(c"%s line %ld".as_ptr()),
                     p.data(),
                     sourcing_top().es_lnum as int64_t,
-                ));
-                p.set_data(tofree);
-            }
-            set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t);
-            xfree(tofree.cast());
+                )
+            });
+            p.set_data(tofree);
         }
-        msg_scrolled.set(msg_scrolled.get() + 1);
-        set_must_redraw(UPD_VALID);
+        unsafe { set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t) };
+        unsafe { xfree(tofree.cast()) };
     }
+    msg_scrolled.set(msg_scrolled.get() + 1);
+    set_must_redraw(UPD_VALID);
 }
 
 /// Clear from the cursor to the end of the message area, unless silenced.
@@ -404,10 +395,8 @@ pub(crate) unsafe fn inc_msg_scrolled() {
 /// # Safety
 /// Only that the grids are initialised.
 pub unsafe fn msg_clr_eos() {
-    unsafe {
-        if msg_silent.get() == 0 {
-            msg_clr_eos_force();
-        }
+    if msg_silent.get() == 0 {
+        unsafe { msg_clr_eos_force() };
     }
 }
 
@@ -416,24 +405,24 @@ pub unsafe fn msg_clr_eos() {
 /// # Safety
 /// Only that the grids are initialised.
 pub unsafe fn msg_clr_eos_force() {
+    if ui_has(kUIMessages) {
+        return;
+    }
+    let (msg_startcol, msg_endcol) = if cmdmsg_rl.get() {
+        (0, Columns.get() - msg_col.get())
+    } else {
+        (msg_col.get(), Columns.get())
+    };
+
+    // Avoid clearing the line the grid is about to be moved off.
+    if msg_grid_ref().is_allocated() && msg_row.get() < msg_grid_pos.get() {
+        unsafe { msg_grid_validate() };
+        if msg_row.get() < msg_grid_pos.get() {
+            msg_row.set(msg_grid_pos.get());
+        }
+    }
+
     unsafe {
-        if ui_has(kUIMessages) {
-            return;
-        }
-        let (msg_startcol, msg_endcol) = if cmdmsg_rl.get() {
-            (0, Columns.get() - msg_col.get())
-        } else {
-            (msg_col.get(), Columns.get())
-        };
-
-        // Avoid clearing the line the grid is about to be moved off.
-        if msg_grid_ref().is_allocated() && msg_row.get() < msg_grid_pos.get() {
-            msg_grid_validate();
-            if msg_row.get() < msg_grid_pos.get() {
-                msg_row.set(msg_grid_pos.get());
-            }
-        }
-
         grid_clear(
             msg_grid_view(),
             msg_row.get(),
@@ -441,7 +430,9 @@ pub unsafe fn msg_clr_eos_force() {
             msg_startcol,
             msg_endcol,
             hl_attr(HLF_MSG as c_int),
-        );
+        )
+    };
+    unsafe {
         grid_clear(
             msg_grid_view(),
             msg_row.get() + 1,
@@ -449,14 +440,14 @@ pub unsafe fn msg_clr_eos_force() {
             0,
             Columns.get(),
             hl_attr(HLF_MSG as c_int),
-        );
+        )
+    };
 
-        redraw_cmdline.set(true);
-        if msg_row.get() < Rows.get() - 1 || msg_col.get() == 0 {
-            clear_cmdline.set(false);
-            mode_displayed.set(false);
-            cmdline_was_last_drawn.set(false);
-        }
+    redraw_cmdline.set(true);
+    if msg_row.get() < Rows.get() - 1 || msg_col.get() == 0 {
+        clear_cmdline.set(false);
+        mode_displayed.set(false);
+        cmdline_was_last_drawn.set(false);
     }
 }
 
@@ -465,9 +456,7 @@ pub unsafe fn msg_clr_eos_force() {
 /// # Safety
 /// Only that the grids are initialised.
 pub unsafe fn msg_clr_cmdline() {
-    unsafe {
-        msg_row.set(cmdline_row.get());
-        msg_col.set(0);
-        msg_clr_eos_force();
-    }
+    msg_row.set(cmdline_row.get());
+    msg_col.set(0);
+    unsafe { msg_clr_eos_force() };
 }

@@ -250,22 +250,22 @@ pub(crate) const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
 /// `array` must be [`EMPTY_ARRAY`] or the result of earlier `array_push`es,
 /// and must not be borrowed elsewhere: a growth reallocates `items`.
 unsafe fn array_push(array: &mut Array, value: Object) {
-    unsafe {
-        if array.size == array.capacity {
-            array.capacity = if array.capacity != 0 {
-                array.capacity * 2
-            } else {
-                8
-            };
-            array.items = xrealloc(
+    if array.size == array.capacity {
+        array.capacity = if array.capacity != 0 {
+            array.capacity * 2
+        } else {
+            8
+        };
+        array.items = unsafe {
+            xrealloc(
                 array.items.cast(),
                 ::core::mem::size_of::<Object>() * array.capacity,
             )
-            .cast();
         }
-        array.items.add(array.size).write(value);
-        array.size += 1;
+        .cast();
     }
+    unsafe { array.items.add(array.size).write(value) };
+    array.size += 1;
 }
 
 /// [`array_push`] for a [`HlMessage`], which is the same shape over
@@ -274,22 +274,22 @@ unsafe fn array_push(array: &mut Array, value: Object) {
 /// # Safety
 /// As [`array_push`], with [`EMPTY_HL_MESSAGE`] as the empty value.
 unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
-    unsafe {
-        if msg.size == msg.capacity {
-            msg.capacity = if msg.capacity != 0 {
-                msg.capacity * 2
-            } else {
-                8
-            };
-            msg.items = xrealloc(
+    if msg.size == msg.capacity {
+        msg.capacity = if msg.capacity != 0 {
+            msg.capacity * 2
+        } else {
+            8
+        };
+        msg.items = unsafe {
+            xrealloc(
                 msg.items.cast(),
                 ::core::mem::size_of::<HlMessageChunk>() * msg.capacity,
             )
-            .cast();
         }
-        msg.items.add(msg.size).write(chunk);
-        msg.size += 1;
+        .cast();
     }
+    unsafe { msg.items.add(msg.size).write(chunk) };
+    msg.size += 1;
 }
 
 /// Show a message. Exported for the unit specs.
@@ -318,38 +318,38 @@ pub unsafe fn msg_multiline(
     hist: bool,
     need_clear: *mut bool,
 ) {
-    unsafe {
-        let mut s = str.data().cast_const();
-        let mut chunk = s;
-        while (s.offset_from(str.data()) as size_t) < str.len() {
-            if check_int && got_int.get() {
-                return;
-            }
-            if matches!(*s as u8, b'\n' | b'\t' | b'\r' | 0x07) {
-                msg_outtrans_len(chunk, s.offset_from(chunk) as c_int, hl_id, hist);
-                if *s as c_int != TAB && *need_clear {
-                    msg_clr_eos();
-                    *need_clear = false;
-                }
-                if *s as c_int == BELL {
-                    vim_beep(kOptBoFlagShell as c_uint);
-                } else {
-                    msg_putchar_hl(*s as u8 as c_int, hl_id);
-                }
-                chunk = s.add(1);
-            }
-            s = s.add(1);
+    let mut s = str.data().cast_const();
+    let mut chunk = s;
+    while (unsafe { s.offset_from(str.data()) as size_t }) < str.len() {
+        if check_int && got_int.get() {
+            return;
         }
-        // The tail, and the whole of an empty message: an empty `str` still
-        // has to reach `msg_outtrans_len`, which is what clears the line.
-        if *chunk != 0 || chunk == str.data().cast_const() {
+        if matches!(unsafe { *s as u8 }, b'\n' | b'\t' | b'\r' | 0x07) {
+            unsafe { msg_outtrans_len(chunk, s.offset_from(chunk) as c_int, hl_id, hist) };
+            if unsafe { *s as c_int } != TAB && unsafe { *need_clear } {
+                unsafe { msg_clr_eos() };
+                unsafe { *need_clear = false };
+            }
+            if unsafe { *s as c_int } == BELL {
+                unsafe { vim_beep(kOptBoFlagShell as c_uint) };
+            } else {
+                unsafe { msg_putchar_hl(*s as u8 as c_int, hl_id) };
+            }
+            chunk = unsafe { s.add(1) };
+        }
+        s = unsafe { s.add(1) };
+    }
+    // The tail, and the whole of an empty message: an empty `str` still
+    // has to reach `msg_outtrans_len`, which is what clears the line.
+    if unsafe { *chunk } != 0 || chunk == str.data().cast_const() {
+        unsafe {
             msg_outtrans_len(
                 chunk,
                 (str.len() - chunk.offset_from(str.data()) as size_t) as c_int,
                 hl_id,
                 hist,
-            );
-        }
+            )
+        };
     }
 }
 
@@ -374,79 +374,77 @@ pub unsafe fn msg_multihl(
     msg_data: *mut MessageData,
     needs_msg_clear: *mut bool,
 ) -> Object {
-    unsafe {
-        let mut hl_msg = hl_msg;
-        // Message `id`:
-        // - Nil: generate a new Integer id.
-        // - Integer: an existing id.
-        // - String: a user-defined id, new or existing.
-        let id = if id.type_0 == kObjectTypeNil {
-            let next = msg_id_next.get();
-            msg_id_next.set(next + 1);
-            Object::integer(next)
-        } else {
-            if id.type_0 == kObjectTypeInteger && !msg_id_exists(id.data.integer) {
-                abort();
-            }
-            id
-        };
-
-        let is_progress = strequal(kind, c"progress".as_ptr());
-        // Don't display a progress message on the command line when the
-        // target does not include it.
-        if is_progress && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 {
-            *needs_msg_clear = true;
-            return id;
-        }
-
-        let no_prompt = Suppress::wait_return();
-        msg_start();
-        msg_clr_eos();
-        let mut need_clear = false;
-        let mut hl_msg_updated = false;
-        if !kind.is_null() {
-            msg_ext_set_kind(kind);
-        }
-        msg_ext_skip_flush.set(true);
-        msg_ext_id.set(id);
-
-        // A progress message displays as "title: percent% msg".
-        if is_progress && !msg_data.is_null() {
-            let formatted = format_progress_message(hl_msg.clone(), msg_data);
-            if formatted.items != hl_msg.items {
-                *needs_msg_clear = true;
-                hl_msg_updated = true;
-                hl_msg = formatted;
-            }
-        }
-
-        for i in 0..hl_msg.size {
-            let chunk = (*hl_msg.items.add(i)).clone();
-            is_multihl.set(is_multihl.get() + 1);
-            if err {
-                emsg_multiline(chunk.text.data(), kind, chunk.hl_id, true);
-            } else {
-                msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear);
-            }
-            debug_assert!(!ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind);
-        }
-
-        let kept = history && hl_msg.size != 0;
-        if kept {
-            msg_hist_add_multihl(hl_msg.clone(), false, msg_data);
-        }
-
-        msg_ext_skip_flush.set(false);
-        is_multihl.set(0);
-        drop(no_prompt);
-        msg_end();
-
-        // The reformatted message is ours to free unless the history took it.
-        if hl_msg_updated && !kept {
-            hl_msg_free(hl_msg);
+    let mut hl_msg = hl_msg;
+    // Message `id`:
+    // - Nil: generate a new Integer id.
+    // - Integer: an existing id.
+    // - String: a user-defined id, new or existing.
+    let id = if id.type_0 == kObjectTypeNil {
+        let next = msg_id_next.get();
+        msg_id_next.set(next + 1);
+        Object::integer(next)
+    } else {
+        if id.type_0 == kObjectTypeInteger && !msg_id_exists(unsafe { id.data.integer }) {
+            unsafe { abort() };
         }
         id
+    };
+
+    let is_progress = unsafe { strequal(kind, c"progress".as_ptr()) };
+    // Don't display a progress message on the command line when the
+    // target does not include it.
+    if is_progress && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 {
+        unsafe { *needs_msg_clear = true };
+        return id;
     }
+
+    let no_prompt = Suppress::wait_return();
+    unsafe { msg_start() };
+    unsafe { msg_clr_eos() };
+    let mut need_clear = false;
+    let mut hl_msg_updated = false;
+    if !kind.is_null() {
+        unsafe { msg_ext_set_kind(kind) };
+    }
+    msg_ext_skip_flush.set(true);
+    msg_ext_id.set(id);
+
+    // A progress message displays as "title: percent% msg".
+    if is_progress && !msg_data.is_null() {
+        let formatted = unsafe { format_progress_message(hl_msg.clone(), msg_data) };
+        if formatted.items != hl_msg.items {
+            unsafe { *needs_msg_clear = true };
+            hl_msg_updated = true;
+            hl_msg = formatted;
+        }
+    }
+
+    for i in 0..hl_msg.size {
+        let chunk = unsafe { (*hl_msg.items.add(i)).clone() };
+        is_multihl.set(is_multihl.get() + 1);
+        if err {
+            unsafe { emsg_multiline(chunk.text.data(), kind, chunk.hl_id, true) };
+        } else {
+            unsafe { msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear) };
+        }
+        debug_assert!(!ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind);
+    }
+
+    let kept = history && hl_msg.size != 0;
+    if kept {
+        unsafe { msg_hist_add_multihl(hl_msg.clone(), false, msg_data) };
+    }
+
+    msg_ext_skip_flush.set(false);
+    is_multihl.set(0);
+    drop(no_prompt);
+    unsafe { msg_end() };
+
+    // The reformatted message is ours to free unless the history took it.
+    if hl_msg_updated && !kept {
+        unsafe { hl_msg_free(hl_msg) };
+    }
+    id
 }
 
 /// Show a message, optionally keeping it displayed after a redraw.
@@ -458,81 +456,80 @@ pub unsafe fn msg_multihl(
 /// # Safety
 /// `s` must be a valid C string.
 pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bool) -> bool {
-    unsafe {
-        static entered: GlobalCell<c_int> = GlobalCell::new(0);
+    static entered: GlobalCell<c_int> = GlobalCell::new(0);
 
-        if keep && multiline {
-            // Not implemented. 'multiline' is only used by nvim-added
-            // messages, which should avoid 'keep' behaviour -- they should
-            // just show the message at the right time already.
-            abort();
-        }
-
-        // Skip messages that do not match ":filter pattern", but never filter
-        // when there is an error.
-        if !emsg_on_display.get() && message_filtered(s) {
-            return true;
-        }
-
-        if hl_id == 0 {
-            set_vim_var_string(Vv::Statusmsg, s, -1);
-        }
-
-        // Displaying a message can cause a problem (e.g. when redrawing the
-        // window), which causes another message, and so on. Break the loop by
-        // limiting the recursion to three levels.
-        if entered.get() >= 3 {
-            return true;
-        }
-        entered.set(entered.get() + 1);
-
-        // Add the message to the history unless it is a multihl, or a repeat
-        // of the kept message, or a truncated one.
-        if is_multihl.get() == 0
-            && (s != keep_msg.get().cast_const()
-                || (*s as u8 != b'<'
-                    && !msg_hist_last.get().is_null()
-                    && strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data()) != 0))
-        {
-            msg_hist_add(s, -1, hl_id);
-        }
-
-        if is_multihl.get() == 0 {
-            msg_start();
-        }
-
-        // Truncate the message if needed.
-        let buf = msg_strtrunc(s, 0);
-        let s = if buf.is_null() { s } else { buf.cast_const() };
-
-        let mut need_clear = true;
-        if multiline {
-            msg_multiline(cstr_as_string(s), hl_id, false, false, &raw mut need_clear);
-        } else {
-            msg_outtrans(s, hl_id, false);
-        }
-        if need_clear {
-            msg_clr_eos();
-        }
-
-        let mut retval = true;
-        if is_multihl.get() == 0 {
-            retval = msg_end();
-        }
-
-        if keep
-            && retval
-            && vim_strsize(s) < (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
-        {
-            set_keep_msg(s, 0);
-        }
-
-        need_fileinfo.set(false);
-
-        xfree(buf.cast());
-        entered.set(entered.get() - 1);
-        retval
+    if keep && multiline {
+        // Not implemented. 'multiline' is only used by nvim-added
+        // messages, which should avoid 'keep' behaviour -- they should
+        // just show the message at the right time already.
+        unsafe { abort() };
     }
+
+    // Skip messages that do not match ":filter pattern", but never filter
+    // when there is an error.
+    if !emsg_on_display.get() && unsafe { message_filtered(s) } {
+        return true;
+    }
+
+    if hl_id == 0 {
+        unsafe { set_vim_var_string(Vv::Statusmsg, s, -1) };
+    }
+
+    // Displaying a message can cause a problem (e.g. when redrawing the
+    // window), which causes another message, and so on. Break the loop by
+    // limiting the recursion to three levels.
+    if entered.get() >= 3 {
+        return true;
+    }
+    entered.set(entered.get() + 1);
+
+    // Add the message to the history unless it is a multihl, or a repeat
+    // of the kept message, or a truncated one.
+    if is_multihl.get() == 0
+        && (s != keep_msg.get().cast_const()
+            || (unsafe { *s as u8 } != b'<'
+                && !msg_hist_last.get().is_null()
+                && unsafe { strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data()) } != 0))
+    {
+        unsafe { msg_hist_add(s, -1, hl_id) };
+    }
+
+    if is_multihl.get() == 0 {
+        unsafe { msg_start() };
+    }
+
+    // Truncate the message if needed.
+    let buf = unsafe { msg_strtrunc(s, 0) };
+    let s = if buf.is_null() { s } else { buf.cast_const() };
+
+    let mut need_clear = true;
+    if multiline {
+        unsafe { msg_multiline(cstr_as_string(s), hl_id, false, false, &raw mut need_clear) };
+    } else {
+        unsafe { msg_outtrans(s, hl_id, false) };
+    }
+    if need_clear {
+        unsafe { msg_clr_eos() };
+    }
+
+    let mut retval = true;
+    if is_multihl.get() == 0 {
+        retval = unsafe { msg_end() };
+    }
+
+    if keep
+        && retval
+        && unsafe { vim_strsize(s) }
+            < (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
+    {
+        unsafe { set_keep_msg(s, 0) };
+    }
+
+    need_fileinfo.set(false);
+
+    unsafe { xfree(buf.cast()) };
+    entered.set(entered.get() - 1);
+    retval
 }
 
 /// Truncate `s` so it prints without causing a scroll.
@@ -543,35 +540,33 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 /// # Safety
 /// `s` must be a valid C string.
 pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
-    unsafe {
-        let mut buf: *mut c_char = ptr::null_mut();
-        // May truncate the message to avoid a hit-return prompt.
-        if (msg_scroll.get() == 0
-            && !need_wait_return.get()
-            && shortmess(ShmFlag::TRUNCALL)
-            && !exmode_active.get()
-            && msg_silent.get() == 0
-            && !ui_has(kUIMessages))
-            || force != 0
-        {
-            let mut len = vim_strsize(s);
-            let room = if msg_scrolled.get() != 0 {
-                // Use all the columns.
-                (Rows.get() - msg_row.get()) * Columns.get() - 1
-            } else {
-                // Use up to the 'showcmd' column.
-                (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1
-            };
-            if len > room && room > 0 {
-                // Up to 18 bytes per cell: six per character, and up to two
-                // composing characters.
-                len = (room + 2) * 18;
-                buf = xmalloc(len as size_t).cast();
-                trunc_string(s, buf, room, len);
-            }
+    let mut buf: *mut c_char = ptr::null_mut();
+    // May truncate the message to avoid a hit-return prompt.
+    if (msg_scroll.get() == 0
+        && !need_wait_return.get()
+        && shortmess(ShmFlag::TRUNCALL)
+        && !exmode_active.get()
+        && msg_silent.get() == 0
+        && !ui_has(kUIMessages))
+        || force != 0
+    {
+        let mut len = unsafe { vim_strsize(s) };
+        let room = if msg_scrolled.get() != 0 {
+            // Use all the columns.
+            (Rows.get() - msg_row.get()) * Columns.get() - 1
+        } else {
+            // Use up to the 'showcmd' column.
+            (Rows.get() - msg_row.get() - 1) * Columns.get() + sc_col.get() - 1
+        };
+        if len > room && room > 0 {
+            // Up to 18 bytes per cell: six per character, and up to two
+            // composing characters.
+            len = (room + 2) * 18;
+            buf = unsafe { xmalloc(len as size_t) }.cast();
+            unsafe { trunc_string(s, buf, room, len) };
         }
-        buf
     }
+    buf
 }
 
 /// Truncate `s` into `buf` at cell width `room`, replacing the middle with
@@ -590,97 +585,97 @@ pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
 /// # Safety
 /// `s` must be a valid C string and `buf` must have room for `buflen` bytes.
 pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int) {
-    unsafe {
-        let mut room = room_in - 3; // "..." takes 3 chars
-        let mut len = 0;
-        let mut n;
+    let mut room = room_in - 3; // "..." takes 3 chars
+    let mut len = 0;
+    let mut n;
 
-        if *s == 0 {
-            if buflen > 0 {
-                *buf = 0;
-            }
+    if unsafe { *s } == 0 {
+        if buflen > 0 {
+            unsafe { *buf = 0 };
+        }
+        return;
+    }
+    if room_in < 3 {
+        room = 0;
+    }
+    let mut half = room / 2;
+
+    // First part: the start of the string.
+    let mut e = 0;
+    while len < half && e < buflen {
+        if unsafe { *s.offset(e as isize) } == 0 {
+            // Text fits without truncating.
+            unsafe { *buf.offset(e as isize) = 0 };
             return;
         }
-        if room_in < 3 {
-            room = 0;
+        n = unsafe { ptr2cells(s.offset(e as isize)) };
+        if len + n > half {
+            break;
         }
-        let mut half = room / 2;
-
-        // First part: the start of the string.
-        let mut e = 0;
-        while len < half && e < buflen {
-            if *s.offset(e as isize) == 0 {
-                // Text fits without truncating.
-                *buf.offset(e as isize) = 0;
-                return;
-            }
-            n = ptr2cells(s.offset(e as isize));
-            if len + n > half {
+        len += n;
+        unsafe { *buf.offset(e as isize) = *s.offset(e as isize) };
+        // Copy the rest of a multibyte character one byte at a time; the
+        // inner break leaves the outer step to run, as upstream's does.
+        n = unsafe { utfc_ptr2len(s.offset(e as isize)) };
+        loop {
+            n -= 1;
+            if n <= 0 {
                 break;
-            }
-            len += n;
-            *buf.offset(e as isize) = *s.offset(e as isize);
-            // Copy the rest of a multibyte character one byte at a time; the
-            // inner break leaves the outer step to run, as upstream's does.
-            n = utfc_ptr2len(s.offset(e as isize));
-            loop {
-                n -= 1;
-                if n <= 0 {
-                    break;
-                }
-                e += 1;
-                if e == buflen {
-                    break;
-                }
-                *buf.offset(e as isize) = *s.offset(e as isize);
             }
             e += 1;
-        }
-
-        // Last part: the end of the string.
-        let mut i = strlen(s) as c_int;
-        half = i;
-        loop {
-            half = half - utf_head_off(s, s.offset(half as isize).offset(-1)) - 1;
-            n = ptr2cells(s.offset(half as isize));
-            if len + n > room || half == 0 {
+            if e == buflen {
                 break;
             }
-            len += n;
-            i = half;
+            unsafe { *buf.offset(e as isize) = *s.offset(e as isize) };
         }
+        e += 1;
+    }
 
-        if i <= e + 3 {
-            // Text fits without truncating.
-            if s != buf.cast_const() {
-                len = strlen(s) as c_int;
-                if len >= buflen {
-                    len = buflen - 1;
-                }
-                len = len - e + 1;
-                if len < 1 {
-                    *buf.offset((e - 1) as isize) = 0;
-                } else {
-                    ptr::copy(s.offset(e as isize), buf.offset(e as isize), len as usize);
-                }
+    // Last part: the end of the string.
+    let mut i = unsafe { strlen(s) as c_int };
+    half = i;
+    loop {
+        half = half - unsafe { utf_head_off(s, s.offset(half as isize).offset(-1)) } - 1;
+        n = unsafe { ptr2cells(s.offset(half as isize)) };
+        if len + n > room || half == 0 {
+            break;
+        }
+        len += n;
+        i = half;
+    }
+
+    if i <= e + 3 {
+        // Text fits without truncating.
+        if s != buf.cast_const() {
+            len = unsafe { strlen(s) as c_int };
+            if len >= buflen {
+                len = buflen - 1;
             }
-        } else if e + 3 < buflen {
-            // Set the middle and copy the last part.
-            ptr::copy_nonoverlapping(c"...".as_ptr(), buf.offset(e as isize), 3);
-            len = strlen(s.offset(i as isize)) as c_int + 1;
-            if len >= buflen - e - 3 {
-                len = buflen - e - 3 - 1;
+            len = len - e + 1;
+            if len < 1 {
+                unsafe { *buf.offset((e - 1) as isize) = 0 };
+            } else {
+                unsafe { ptr::copy(s.offset(e as isize), buf.offset(e as isize), len as usize) };
             }
+        }
+    } else if e + 3 < buflen {
+        // Set the middle and copy the last part.
+        unsafe { ptr::copy_nonoverlapping(c"...".as_ptr(), buf.offset(e as isize), 3) };
+        len = unsafe { strlen(s.offset(i as isize)) as c_int } + 1;
+        if len >= buflen - e - 3 {
+            len = buflen - e - 3 - 1;
+        }
+        unsafe {
             ptr::copy(
                 s.offset(i as isize),
                 buf.offset(e as isize).offset(3),
                 len as usize,
-            );
-            *buf.offset((e + 3 + len - 1) as isize) = 0;
-        } else {
-            // Can't fit the "...", so just truncate.
-            *buf.offset((buflen - 1) as isize) = 0;
-        }
+            )
+        };
+        unsafe { *buf.offset((e + 3 + len - 1) as isize) = 0 };
+    } else {
+        // Can't fit the "...", so just truncate.
+        unsafe { *buf.offset((buflen - 1) as isize) = 0 };
     }
 }
 
@@ -725,15 +720,13 @@ pub unsafe fn smsg_keep_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> 
 /// # Safety
 /// `s` must be a valid, writable C string -- the truncation writes into it.
 pub unsafe fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char {
-    unsafe {
-        // The history gets the whole message; only the display is truncated.
-        msg_hist_add(s, -1, hl_id);
-        let ts = msg_may_trunc(force, s);
-        msg_hist_off.set(true);
-        let n = msg(ts, hl_id);
-        msg_hist_off.set(false);
-        if n { ts } else { ptr::null_mut() }
-    }
+    // The history gets the whole message; only the display is truncated.
+    unsafe { msg_hist_add(s, -1, hl_id) };
+    let ts = unsafe { msg_may_trunc(force, s) };
+    msg_hist_off.set(true);
+    let n = unsafe { msg(ts, hl_id) };
+    msg_hist_off.set(false);
+    if n { ts } else { ptr::null_mut() }
 }
 
 /// Drop the *head* of `s` if it does not fit the message area, marking the
@@ -744,38 +737,36 @@ pub unsafe fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_cha
 /// # Safety
 /// `s` must be a valid, writable C string.
 pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
-    unsafe {
-        // Under ext_messages the UI decides what fits. This guard changes no
-        // answer -- nothing shrinks `cmdline_row` off `Rows` there, so `room`
-        // is already negative -- but it says what the intent is; see docket
-        // O-B13-6.
-        if ui_has(kUIMessages) {
+    // Under ext_messages the UI decides what fits. This guard changes no
+    // answer -- nothing shrinks `cmdline_row` off `Rows` there, so `room`
+    // is already negative -- but it says what the intent is; see docket
+    // O-B13-6.
+    if ui_has(kUIMessages) {
+        return s;
+    }
+    let mut s = s;
+    let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
+    if room > 0
+        && (force || (shortmess(ShmFlag::TRUNC) && !exmode_active.get()))
+        && unsafe { strlen(s) as c_int } - room > 0
+    {
+        // May have up to 18 bytes per cell (6 per char, up to two
+        // composing chars).
+        let mut size = unsafe { vim_strsize(s) };
+        if size <= room {
             return s;
         }
-        let mut s = s;
-        let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
-        if room > 0
-            && (force || (shortmess(ShmFlag::TRUNC) && !exmode_active.get()))
-            && strlen(s) as c_int - room > 0
-        {
-            // May have up to 18 bytes per cell (6 per char, up to two
-            // composing chars).
-            let mut size = vim_strsize(s);
-            if size <= room {
-                return s;
-            }
-            // Find the last character that fits.
-            let mut n = 0;
-            while size >= room {
-                size -= utf_ptr2cells(s.offset(n as isize));
-                n += utfc_ptr2len(s.offset(n as isize));
-            }
-            n -= 1;
-            s = s.offset(n as isize);
-            *s = b'<' as c_char;
+        // Find the last character that fits.
+        let mut n = 0;
+        while size >= room {
+            size -= unsafe { utf_ptr2cells(s.offset(n as isize)) };
+            n += unsafe { utfc_ptr2len(s.offset(n as isize)) };
         }
-        s
+        n -= 1;
+        s = unsafe { s.offset(n as isize) };
+        unsafe { *s = b'<' as c_char };
     }
+    s
 }
 
 /// Set `keep_msg` to `s`, freeing the old value.
@@ -783,21 +774,19 @@ pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `s` must be null or a valid C string.
 pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
-    unsafe {
-        // The kept message is not cleared and re-emitted with ext_messages:
-        // neovim/neovim#20416.
-        if ui_has(kUIMessages) {
-            return;
-        }
-        xfree(keep_msg.get().cast());
-        keep_msg.set(if !s.is_null() && msg_silent.get() == 0 {
-            xstrdup(s)
-        } else {
-            ptr::null_mut()
-        });
-        keep_msg_more.set(false);
-        keep_msg_hl_id.set(hl_id);
+    // The kept message is not cleared and re-emitted with ext_messages:
+    // neovim/neovim#20416.
+    if ui_has(kUIMessages) {
+        return;
     }
+    unsafe { xfree(keep_msg.get().cast()) };
+    keep_msg.set(if !s.is_null() && msg_silent.get() == 0 {
+        unsafe { xstrdup(s) }
+    } else {
+        ptr::null_mut()
+    });
+    keep_msg_more.set(false);
+    keep_msg_hl_id.set(hl_id);
 }
 
 /// Would a message be seen if it were shown now?
@@ -819,41 +808,43 @@ pub unsafe fn msgmore(n: c_int) {
     // autocmd reached from either could overwrite mid-assembly.
     let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
     let text = buf.as_mut_ptr();
-    unsafe {
-        if global_busy.get() != 0 || !messaging() {
-            // Don't report when :global is executing.
-            return;
-        }
-        // Keep the message from a previous msgmore(), but not another one.
-        if !keep_msg.get().is_null() && !keep_msg_more.get() {
-            return;
-        }
+    if global_busy.get() != 0 || !unsafe { messaging() } {
+        // Don't report when :global is executing.
+        return;
+    }
+    // Keep the message from a previous msgmore(), but not another one.
+    if !keep_msg.get().is_null() && !keep_msg_more.get() {
+        return;
+    }
 
-        let pn = abs(n);
-        if pn as OptInt <= p_report.get() {
-            return;
-        }
-        let (one, many) = if n > 0 {
-            (c"%d more line", c"%d more lines")
-        } else {
-            (c"%d line less", c"%d fewer lines")
-        };
+    let pn = unsafe { abs(n) };
+    if pn as OptInt <= p_report.get() {
+        return;
+    }
+    let (one, many) = if n > 0 {
+        (c"%d more line", c"%d more lines")
+    } else {
+        (c"%d line less", c"%d fewer lines")
+    };
+    unsafe {
         vim_snprintf(
             text,
             MSG_BUF_LEN as size_t,
             ngettext(one.as_ptr(), many.as_ptr(), pn as ::core::ffi::c_ulong),
             pn,
-        );
-        if got_int.get() {
+        )
+    };
+    if got_int.get() {
+        unsafe {
             xstrlcat(
                 text,
                 gettext(c" (Interrupted)".as_ptr()),
                 MSG_BUF_LEN as size_t,
-            );
-        }
-        if msg(text, 0) {
-            set_keep_msg(text, 0);
-            keep_msg_more.set(true);
-        }
+            )
+        };
+    }
+    if unsafe { msg(text, 0) } {
+        unsafe { set_keep_msg(text, 0) };
+        keep_msg_more.set(true);
     }
 }

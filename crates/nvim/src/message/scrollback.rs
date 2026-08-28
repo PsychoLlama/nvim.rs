@@ -42,88 +42,79 @@ pub(crate) unsafe fn store_sb_text(
     sb_col: *mut c_int,
     finish: c_int,
 ) {
-    unsafe {
-        if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
+    if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE {
+        unsafe { clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL) };
+        unsafe { msg_sb_eol() }; // prevent messages from overlapping
+        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
+            && s > unsafe { *sb_str }
+            && unsafe { **sb_str } == b'\n' as c_char
         {
-            clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL);
-            msg_sb_eol(); // prevent messages from overlapping
-            if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
-                && s > *sb_str
-                && **sb_str == b'\n' as c_char
-            {
-                *sb_str = (*sb_str).add(1);
-            }
-            do_clear_sb_text.set(SB_CLEAR_NONE);
+            unsafe { *sb_str = (*sb_str).add(1) };
         }
-
-        if s > *sb_str {
-            let len = s.offset_from(*sb_str) as size_t;
-            let mp: *mut msgchunk_T =
-                xmalloc(mem::offset_of!(msgchunk_T, sb_text) + len + 1).cast();
-            (*mp).sb_eol = finish as c_char;
-            (*mp).sb_msg_col = *sb_col;
-            (*mp).sb_hl_id = hl_id;
-            ptr::copy_nonoverlapping(*sb_str, sb_text(mp), len);
-            *sb_text(mp).add(len) = 0;
-
-            (*mp).sb_prev = last_msgchunk.get();
-            (*mp).sb_next = ptr::null_mut();
-            if !last_msgchunk.get().is_null() {
-                (*last_msgchunk.get()).sb_next = mp;
-            }
-            last_msgchunk.set(mp);
-        } else if finish != 0 && !last_msgchunk.get().is_null() {
-            (*last_msgchunk.get()).sb_eol = 1;
-        }
-
-        *sb_str = s;
-        *sb_col = 0;
+        do_clear_sb_text.set(SB_CLEAR_NONE);
     }
+
+    if s > unsafe { *sb_str } {
+        let len = unsafe { s.offset_from(*sb_str) as size_t };
+        let mp: *mut msgchunk_T =
+            unsafe { xmalloc(mem::offset_of!(msgchunk_T, sb_text) + len + 1) }.cast();
+        unsafe { (*mp).sb_eol = finish as c_char };
+        unsafe { (*mp).sb_msg_col = *sb_col };
+        unsafe { (*mp).sb_hl_id = hl_id };
+        unsafe { ptr::copy_nonoverlapping(*sb_str, sb_text(mp), len) };
+        unsafe { *sb_text(mp).add(len) = 0 };
+
+        unsafe { (*mp).sb_prev = last_msgchunk.get() };
+        unsafe { (*mp).sb_next = ptr::null_mut() };
+        if !last_msgchunk.get().is_null() {
+            unsafe { (*last_msgchunk.get()).sb_next = mp };
+        }
+        last_msgchunk.set(mp);
+    } else if finish != 0 && !last_msgchunk.get().is_null() {
+        unsafe { (*last_msgchunk.get()).sb_eol = 1 };
+    }
+
+    unsafe { *sb_str = s };
+    unsafe { *sb_col = 0 };
 }
 
 /// Finished showing messages: clear the scroll-back text on the next one.
 pub unsafe fn may_clear_sb_text() {
-    unsafe {
-        msg_ext_ui_flush(); // ensure messages until now are emitted
-        do_clear_sb_text.set(SB_CLEAR_ALL);
-        do_clear_hist_temp.set(true);
-    }
+    unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
+    do_clear_sb_text.set(SB_CLEAR_ALL);
+    do_clear_hist_temp.set(true);
 }
 
 /// Starting to edit the command line: do not clear messages now.
 pub unsafe fn sb_text_start_cmdline() {
-    unsafe {
-        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_BUSY {
-            // A recursive command line: the outer one need not be remembered,
-            // it will be redrawn when this level returns.
-            sb_text_restart_cmdline();
-        } else {
-            msg_sb_eol();
-            do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
-        }
+    if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_BUSY {
+        // A recursive command line: the outer one need not be remembered,
+        // it will be redrawn when this level returns.
+        unsafe { sb_text_restart_cmdline() };
+    } else {
+        unsafe { msg_sb_eol() };
+        do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     }
 }
 
 /// Redrawing the command line: drop the last unfinished line.
 pub unsafe fn sb_text_restart_cmdline() {
-    unsafe {
-        // Needed when returning from a nested command line.
-        do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
-        if last_msgchunk.get().is_null() || (*last_msgchunk.get()).sb_eol != 0 {
-            // No unfinished line: don't clear anything.
-            return;
-        }
+    // Needed when returning from a nested command line.
+    do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
+    if last_msgchunk.get().is_null() || unsafe { (*last_msgchunk.get()).sb_eol } != 0 {
+        // No unfinished line: don't clear anything.
+        return;
+    }
 
-        let mut tofree = msg_sb_start(last_msgchunk.get());
-        last_msgchunk.set((*tofree).sb_prev);
-        if !last_msgchunk.get().is_null() {
-            (*last_msgchunk.get()).sb_next = ptr::null_mut();
-        }
-        while !tofree.is_null() {
-            let next = (*tofree).sb_next;
-            xfree(tofree.cast());
-            tofree = next;
-        }
+    let mut tofree = unsafe { msg_sb_start(last_msgchunk.get()) };
+    last_msgchunk.set(unsafe { (*tofree).sb_prev });
+    if !last_msgchunk.get().is_null() {
+        unsafe { (*last_msgchunk.get()).sb_next = ptr::null_mut() };
+    }
+    while !tofree.is_null() {
+        let next = unsafe { (*tofree).sb_next };
+        unsafe { xfree(tofree.cast()) };
+        tofree = next;
     }
 }
 
@@ -135,83 +126,76 @@ pub unsafe fn sb_text_end_cmdline() {
 
 /// Forget the remembered text. With `all` false the last screen line is kept.
 pub unsafe fn clear_sb_text(all: bool) {
-    unsafe {
-        // The slot holding the newest chunk to drop: either the list head, or
-        // the `sb_prev` of the line that is being kept.
-        let lastp = if all {
-            last_msgchunk.ptr()
-        } else {
-            if last_msgchunk.get().is_null() {
-                return;
-            }
-            &raw mut (*msg_sb_start(last_msgchunk.get())).sb_prev
-        };
-        while !(*lastp).is_null() {
-            let prev = (**lastp).sb_prev;
-            xfree((*lastp).cast());
-            *lastp = prev;
+    // The slot holding the newest chunk to drop: either the list head, or
+    // the `sb_prev` of the line that is being kept.
+    let lastp = if all {
+        last_msgchunk.ptr()
+    } else {
+        if last_msgchunk.get().is_null() {
+            return;
         }
+        unsafe { &raw mut (*msg_sb_start(last_msgchunk.get())).sb_prev }
+    };
+    while !unsafe { (*lastp).is_null() } {
+        let prev = unsafe { (**lastp).sb_prev };
+        unsafe { xfree((*lastp).cast()) };
+        unsafe { *lastp = prev };
     }
 }
 
 /// The `g<` command.
 pub unsafe fn show_sb_text() {
-    unsafe {
-        if ui_has(kUIMessages) {
-            let mut ea = exarg_T {
-                arg: c"".as_ptr().cast_mut(),
-                skip: 1,
-                ..exarg_T::default()
-            };
-            ex_messages(&raw mut ea);
-            return;
-        }
-        // Only show something when there is more than one line: a command
-        // with no output would otherwise leave one line looking odd.
-        let mp = msg_sb_start(last_msgchunk.get());
-        if mp.is_null() || (*mp).sb_prev.is_null() {
-            vim_beep(kOptBoFlagMess as c_uint);
-        } else {
-            do_more_prompt(b'G' as c_int);
-            wait_return(0);
-        }
+    if ui_has(kUIMessages) {
+        let mut ea = exarg_T {
+            arg: c"".as_ptr().cast_mut(),
+            skip: 1,
+            ..exarg_T::default()
+        };
+        unsafe { ex_messages(&raw mut ea) };
+        return;
+    }
+    // Only show something when there is more than one line: a command
+    // with no output would otherwise leave one line looking odd.
+    let mp = unsafe { msg_sb_start(last_msgchunk.get()) };
+    if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
+        unsafe { vim_beep(kOptBoFlagMess as c_uint) };
+    } else {
+        unsafe { do_more_prompt(b'G' as c_int) };
+        unsafe { wait_return(0) };
     }
 }
 
 /// Walk back to the chunk that starts the screen line `mps` is part of.
 pub(crate) unsafe fn msg_sb_start(mps: *mut msgchunk_T) -> *mut msgchunk_T {
-    unsafe {
-        let mut mp = mps;
-        while !mp.is_null() && !(*mp).sb_prev.is_null() && (*(*mp).sb_prev).sb_eol == 0 {
-            mp = (*mp).sb_prev;
-        }
-        mp
+    let mut mp = mps;
+    while !mp.is_null()
+        && !unsafe { (*mp).sb_prev }.is_null()
+        && unsafe { (*(*mp).sb_prev).sb_eol } == 0
+    {
+        mp = unsafe { (*mp).sb_prev };
     }
+    mp
 }
 
 /// Mark the last chunk as finishing its screen line.
 pub unsafe fn msg_sb_eol() {
-    unsafe {
-        if !last_msgchunk.get().is_null() {
-            (*last_msgchunk.get()).sb_eol = 1;
-        }
+    if !last_msgchunk.get().is_null() {
+        unsafe { (*last_msgchunk.get()).sb_eol = 1 };
     }
 }
 
 /// Redisplay one remembered screen line at `row`, answering the chunk the
 /// next line starts at (null at the end of the list).
 pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut msgchunk_T) -> *mut msgchunk_T {
-    unsafe {
-        let mut mp = smp;
-        loop {
-            msg_row.set(row);
-            msg_col.set((*mp).sb_msg_col);
-            msg_puts_display(sb_text(mp), -1, (*mp).sb_hl_id, true);
-            if (*mp).sb_eol != 0 || (*mp).sb_next.is_null() {
-                break;
-            }
-            mp = (*mp).sb_next;
+    let mut mp = smp;
+    loop {
+        msg_row.set(row);
+        msg_col.set(unsafe { (*mp).sb_msg_col });
+        unsafe { msg_puts_display(sb_text(mp), -1, (*mp).sb_hl_id, true) };
+        if unsafe { (*mp).sb_eol } != 0 || unsafe { (*mp).sb_next }.is_null() {
+            break;
         }
-        (*mp).sb_next
+        mp = unsafe { (*mp).sb_next };
     }
+    unsafe { (*mp).sb_next }
 }

@@ -29,22 +29,20 @@ pub unsafe fn msg_putchar(c: c_int) {
 /// as, because that is what [`msg_outtrans_len`] and `str2special` downstream
 /// know how to read.
 pub unsafe fn msg_putchar_hl(c: c_int, hl_id: c_int) {
-    unsafe {
-        let mut buf = [0 as c_char; MB_MAXCHAR + 1];
-        if c < 0 {
-            // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
-            // arms: both of those codes are positive, so neither is reachable
-            // here.
-            let name = termcap_name(c);
-            buf[0] = K_SPECIAL as c_char;
-            buf[1] = name[0] as c_char;
-            buf[2] = name[1] as c_char;
-        } else {
-            let len = utf_char2bytes(c, buf.as_mut_ptr());
-            buf[len as usize] = 0;
-        }
-        msg_puts_hl(buf.as_ptr(), hl_id, false)
+    let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+    if c < 0 {
+        // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
+        // arms: both of those codes are positive, so neither is reachable
+        // here.
+        let name = termcap_name(c);
+        buf[0] = K_SPECIAL as c_char;
+        buf[1] = name[0] as c_char;
+        buf[2] = name[1] as c_char;
+    } else {
+        let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
+        buf[len as usize] = 0;
     }
+    unsafe { msg_puts_hl(buf.as_ptr(), hl_id, false) }
 }
 
 /// Show a number in decimal.
@@ -75,11 +73,9 @@ pub unsafe fn msg_home_replace(fname: *const c_char) {
 }
 
 pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
-    unsafe {
-        let name = home_replace_save(ptr::null_mut(), fname);
-        msg_outtrans(name, hl_id, false);
-        xfree(name.cast());
-    }
+    let name = unsafe { home_replace_save(ptr::null_mut(), fname) };
+    unsafe { msg_outtrans(name, hl_id, false) };
+    unsafe { xfree(name.cast()) };
 }
 
 /// Show a NUL-terminated string, translating what cannot be displayed.
@@ -91,16 +87,14 @@ pub unsafe fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_in
 
 /// Show the one character at `p`, answering a pointer to the next one.
 pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *const c_char {
-    unsafe {
-        let len = utfc_ptr2len(p);
-        if len > 1 {
-            msg_outtrans_len(p, len, hl_id, hist);
-            return p.add(len as usize);
-        }
-        let display = transchar_byte_buf(ptr::null(), *p as u8 as c_int);
-        msg_puts_hl(display.as_ptr(), hl_id, hist);
-        p.add(1)
+    let len = unsafe { utfc_ptr2len(p) };
+    if len > 1 {
+        unsafe { msg_outtrans_len(p, len, hl_id, hist) };
+        return unsafe { p.add(len as usize) };
     }
+    let display = unsafe { transchar_byte_buf(ptr::null(), *p as u8 as c_int) };
+    unsafe { msg_puts_hl(display.as_ptr(), hl_id, hist) };
+    unsafe { p.add(1) }
 }
 
 /// Show `len` bytes of `msgstr`, NULs included, translating what cannot be
@@ -120,82 +114,77 @@ pub unsafe fn msg_outtrans_len(
     hl_id: c_int,
     hist: bool,
 ) -> c_int {
-    unsafe {
-        let mut cells = 0;
-        let mut str = msgstr;
-        // Start of the run of printable bytes not yet emitted.
-        let mut plain_start = msgstr;
-        // Only quit when got_int was set in here.
-        let save_got_int = got_int.get();
-        got_int.set(false);
+    let mut cells = 0;
+    let mut str = msgstr;
+    // Start of the run of printable bytes not yet emitted.
+    let mut plain_start = msgstr;
+    // Only quit when got_int was set in here.
+    let save_got_int = got_int.get();
+    got_int.set(false);
 
-        if hist {
-            msg_hist_add(str, len, hl_id);
-        }
-
-        // When drawing over the command line there is no need to clear it
-        // later or to remove the mode message.
-        if msg_silent.get() == 0
-            && len > 0
-            && msg_row.get() >= cmdline_row.get()
-            && msg_col.get() == 0
-        {
-            clear_cmdline.set(false);
-            mode_displayed.set(false);
-        }
-
-        // `left` is how many bytes follow the one being looked at, which is
-        // what utfc_ptr2len_len needs as its bound.
-        let mut left = len;
-        loop {
-            left -= 1;
-            if left < 0 || got_int.get() {
-                break;
-            }
-            let flush_plain = |upto: *const c_char, plain_start: *const c_char| {
-                if upto > plain_start {
-                    msg_puts_len(plain_start, upto.offset_from(plain_start), hl_id, hist);
-                }
-            };
-            // Don't include composing chars after the end.
-            let mb_len = utfc_ptr2len_len(str, left + 1);
-            if mb_len > 1 {
-                let c = utf_ptr2char(str);
-                if vim_isprintc(c) {
-                    cells += utf_ptr2cells(str);
-                } else {
-                    flush_plain(str, plain_start);
-                    plain_start = str.add(mb_len as usize);
-                    let display = transchar_buf(ptr::null(), c);
-                    msg_puts_hl(display.as_ptr(), special_hl(hl_id), false);
-                    cells += char2cells(c);
-                }
-                left -= mb_len - 1;
-                str = str.add(mb_len as usize);
-            } else {
-                let rendered = transchar_byte_buf(ptr::null(), *str as u8 as c_int);
-                if rendered[1] != 0 {
-                    // Unprintable: emit the printable run so far, then it.
-                    flush_plain(str, plain_start);
-                    plain_start = str.add(1);
-                    msg_puts_hl(rendered.as_ptr(), special_hl(hl_id), false);
-                    cells += strlen(rendered.as_ptr()) as c_int;
-                } else {
-                    cells += 1;
-                }
-                str = str.add(1);
-            }
-        }
-
-        // The printable characters at the end -- or, for an empty string, the
-        // empty message the callers rely on being emitted.
-        if (str > plain_start || plain_start == msgstr) && !got_int.get() {
-            msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist);
-        }
-
-        got_int.set(got_int.get() | save_got_int);
-        cells
+    if hist {
+        unsafe { msg_hist_add(str, len, hl_id) };
     }
+
+    // When drawing over the command line there is no need to clear it
+    // later or to remove the mode message.
+    if msg_silent.get() == 0 && len > 0 && msg_row.get() >= cmdline_row.get() && msg_col.get() == 0
+    {
+        clear_cmdline.set(false);
+        mode_displayed.set(false);
+    }
+
+    // `left` is how many bytes follow the one being looked at, which is
+    // what utfc_ptr2len_len needs as its bound.
+    let mut left = len;
+    loop {
+        left -= 1;
+        if left < 0 || got_int.get() {
+            break;
+        }
+        let flush_plain = |upto: *const c_char, plain_start: *const c_char| {
+            if upto > plain_start {
+                unsafe { msg_puts_len(plain_start, upto.offset_from(plain_start), hl_id, hist) };
+            }
+        };
+        // Don't include composing chars after the end.
+        let mb_len = unsafe { utfc_ptr2len_len(str, left + 1) };
+        if mb_len > 1 {
+            let c = unsafe { utf_ptr2char(str) };
+            if unsafe { vim_isprintc(c) } {
+                cells += unsafe { utf_ptr2cells(str) };
+            } else {
+                flush_plain(str, plain_start);
+                plain_start = unsafe { str.add(mb_len as usize) };
+                let display = unsafe { transchar_buf(ptr::null(), c) };
+                unsafe { msg_puts_hl(display.as_ptr(), special_hl(hl_id), false) };
+                cells += unsafe { char2cells(c) };
+            }
+            left -= mb_len - 1;
+            str = unsafe { str.add(mb_len as usize) };
+        } else {
+            let rendered = unsafe { transchar_byte_buf(ptr::null(), *str as u8 as c_int) };
+            if rendered[1] != 0 {
+                // Unprintable: emit the printable run so far, then it.
+                flush_plain(str, plain_start);
+                plain_start = unsafe { str.add(1) };
+                unsafe { msg_puts_hl(rendered.as_ptr(), special_hl(hl_id), false) };
+                cells += unsafe { strlen(rendered.as_ptr()) as c_int };
+            } else {
+                cells += 1;
+            }
+            str = unsafe { str.add(1) };
+        }
+    }
+
+    // The printable characters at the end -- or, for an empty string, the
+    // empty message the callers rely on being emitted.
+    if (str > plain_start || plain_start == msgstr) && !got_int.get() {
+        unsafe { msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist) };
+    }
+
+    got_int.set(got_int.get() | save_got_int);
+    cells
 }
 
 /// Unprintable characters take `SPECIAL_HL` unless the caller asked for a
@@ -211,22 +200,20 @@ pub unsafe fn msg_make(arg: *const c_char) {
     const REVERSED: &[u8] = b"eeffoc";
     const SHIFTED: &[u8] = b"Plon#dqg#vxjduB";
 
-    unsafe {
-        let mut arg = skipwhite(arg);
-        let mut at = REVERSED.len() as isize - 1;
-        while *arg != 0 && at >= 0 {
-            let byte = *arg as u8;
-            arg = arg.add(1);
-            if byte != REVERSED[at as usize] {
-                break;
-            }
-            at -= 1;
+    let mut arg = unsafe { skipwhite(arg) };
+    let mut at = REVERSED.len() as isize - 1;
+    while unsafe { *arg } != 0 && at >= 0 {
+        let byte = unsafe { *arg as u8 };
+        arg = unsafe { arg.add(1) };
+        if byte != REVERSED[at as usize] {
+            break;
         }
-        if at < 0 {
-            msg_putchar(NL);
-            for &byte in SHIFTED {
-                msg_putchar((byte - 3) as c_int);
-            }
+        at -= 1;
+    }
+    if at < 0 {
+        unsafe { msg_putchar(NL) };
+        for &byte in SHIFTED {
+            unsafe { msg_putchar((byte - 3) as c_int) };
         }
     }
 }
@@ -244,36 +231,36 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
     }
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     let mut display: CharDisplay;
-    unsafe {
-        let mut str = strstart;
-        let mut cells = 0;
-        while *str != 0 {
-            let mut text = if *str == b' ' as c_char && (str == strstart || *str.add(1) == 0) {
-                str = str.add(1);
-                c"<Space>".as_ptr()
-            } else {
-                str2special(&raw mut str, from, false, &mut piece)
-            };
-            if *text != 0 && *text.add(1) == 0 {
-                // Single-byte character, or an illegal byte.
-                display = transchar_byte_buf(ptr::null(), *text as u8 as c_int);
-                text = display.as_ptr();
-            }
-            let len = vim_strsize(text);
-            if maxlen > 0 && cells + len >= maxlen {
-                break;
-            }
-            // Highlight the ones that came out as a `<>` name.
-            let hl_id = if len > 1 && utfc_ptr2len(text) <= 1 {
-                SPECIAL_HL
-            } else {
-                0
-            };
-            msg_puts_hl(text, hl_id, false);
-            cells += len;
+    let mut str = strstart;
+    let mut cells = 0;
+    while unsafe { *str } != 0 {
+        let mut text = if unsafe { *str } == b' ' as c_char
+            && (str == strstart || unsafe { *str.add(1) } == 0)
+        {
+            str = unsafe { str.add(1) };
+            c"<Space>".as_ptr()
+        } else {
+            unsafe { str2special(&raw mut str, from, false, &mut piece) }
+        };
+        if unsafe { *text } != 0 && unsafe { *text.add(1) } == 0 {
+            // Single-byte character, or an illegal byte.
+            display = unsafe { transchar_byte_buf(ptr::null(), *text as u8 as c_int) };
+            text = display.as_ptr();
         }
-        cells
+        let len = unsafe { vim_strsize(text) };
+        if maxlen > 0 && cells + len >= maxlen {
+            break;
+        }
+        // Highlight the ones that came out as a `<>` name.
+        let hl_id = if len > 1 && unsafe { utfc_ptr2len(text) } <= 1 {
+            SPECIAL_HL
+        } else {
+            0
+        };
+        unsafe { msg_puts_hl(text, hl_id, false) };
+        cells += len;
     }
+    cells
 }
 
 /// [`str2special`] over a whole string, into a freshly allocated one.
@@ -285,19 +272,19 @@ pub unsafe fn str2special_save(
     replace_lt: bool,
 ) -> *mut c_char {
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    unsafe {
-        let mut ga = garray_T::default();
-        ga_init(&raw mut ga, 1, 40);
-        let mut p = str;
-        while *p != 0 {
+    let mut ga = garray_T::default();
+    unsafe { ga_init(&raw mut ga, 1, 40) };
+    let mut p = str;
+    while unsafe { *p } != 0 {
+        unsafe {
             ga_concat(
                 &raw mut ga,
                 str2special(&raw mut p, replace_spaces, replace_lt, &mut piece),
-            );
-        }
-        ga_append(&raw mut ga, 0);
-        ga.ga_data.cast()
+            )
+        };
     }
+    unsafe { ga_append(&raw mut ga, 0) };
+    ga.ga_data.cast()
 }
 
 /// [`str2special`] over a whole string, into `arena`.
@@ -311,26 +298,24 @@ pub unsafe fn str2special_arena(
     arena: *mut Arena,
 ) -> *mut c_char {
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    unsafe {
-        let mut len: size_t = 0;
-        let mut p = str;
-        while *p != 0 {
-            let text = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
-            len += strlen(text);
-        }
-
-        let buf: *mut c_char = arena_alloc(arena, len + 1, false).cast();
-        let mut at: size_t = 0;
-        p = str;
-        while *p != 0 {
-            let text = str2special(&raw mut p, replace_spaces, replace_lt, &mut piece);
-            let piece_len = strlen(text);
-            ptr::copy_nonoverlapping(text, buf.add(at), piece_len);
-            at += piece_len;
-        }
-        *buf.add(at) = 0;
-        buf
+    let mut len: size_t = 0;
+    let mut p = str;
+    while unsafe { *p } != 0 {
+        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
+        len += unsafe { strlen(text) };
     }
+
+    let buf: *mut c_char = unsafe { arena_alloc(arena, len + 1, false) }.cast();
+    let mut at: size_t = 0;
+    p = str;
+    while unsafe { *p } != 0 {
+        let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
+        let piece_len = unsafe { strlen(text) };
+        unsafe { ptr::copy_nonoverlapping(text, buf.add(at), piece_len) };
+        at += piece_len;
+    }
+    unsafe { *buf.add(at) = 0 };
+    buf
 }
 
 /// Render one key code as printable text, advancing `*sp` past it.
@@ -353,60 +338,58 @@ pub(crate) unsafe fn str2special(
     out: &mut SpecialKeyName,
 ) -> *const c_char {
     let mut ch = [0 as c_char; MB_MAXCHAR];
-    unsafe {
-        // A multi-byte character escaped into the stream comes back whole.
-        if !mb_unescape(sp, &mut ch).is_null() {
-            out[..MB_MAXCHAR].copy_from_slice(&ch);
-            return out.as_ptr();
-        }
-
-        let mut str = *sp;
-        let mut c = *str as u8 as c_int;
-        let mut modifiers = 0;
-        let mut special = false;
-        if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
-            if *str.add(1) as u8 as c_int == KS_MODIFIER {
-                modifiers = *str.add(2) as u8 as c_int;
-                str = str.add(3);
-                c = *str as u8 as c_int;
-            }
-            if c == K_SPECIAL && *str.add(1) != 0 && *str.add(2) != 0 {
-                c = to_special(*str.add(1) as u8, *str.add(2) as u8);
-                str = str.add(2);
-            }
-            if c < 0 || modifiers != 0 {
-                special = true;
-            }
-        }
-
-        if c >= 0 && utf8len_tab[c as usize] > 1 {
-            *sp = str;
-            // Try to un-escape a multi-byte character after the modifiers.
-            let unescaped = mb_unescape(sp, &mut ch);
-            if unescaped.is_null() {
-                // Illegal byte.
-                *sp = str.add(1);
-            } else {
-                // `special` is set, so get_special_key_name() renders it.
-                c = utf_ptr2char(unescaped);
-            }
-        } else {
-            // Single-byte character, NUL or illegal byte.
-            *sp = str.add(usize::from(*str != 0));
-        }
-
-        if special
-            || c < b' ' as c_int
-            || (replace_spaces && c == b' ' as c_int)
-            || (replace_lt && c == b'<' as c_int)
-        {
-            *out = get_special_key_name(c, modifiers);
-            return out.as_ptr();
-        }
-        out[0] = c as c_char;
-        out[1] = 0;
-        out.as_ptr()
+    // A multi-byte character escaped into the stream comes back whole.
+    if !unsafe { mb_unescape(sp, &mut ch) }.is_null() {
+        out[..MB_MAXCHAR].copy_from_slice(&ch);
+        return out.as_ptr();
     }
+
+    let mut str = unsafe { *sp };
+    let mut c = unsafe { *str as u8 as c_int };
+    let mut modifiers = 0;
+    let mut special = false;
+    if c == K_SPECIAL && unsafe { *str.add(1) } != 0 && unsafe { *str.add(2) } != 0 {
+        if unsafe { *str.add(1) as u8 as c_int } == KS_MODIFIER {
+            modifiers = unsafe { *str.add(2) as u8 as c_int };
+            str = unsafe { str.add(3) };
+            c = unsafe { *str as u8 as c_int };
+        }
+        if c == K_SPECIAL && unsafe { *str.add(1) } != 0 && unsafe { *str.add(2) } != 0 {
+            c = to_special(unsafe { *str.add(1) as u8 }, unsafe { *str.add(2) as u8 });
+            str = unsafe { str.add(2) };
+        }
+        if c < 0 || modifiers != 0 {
+            special = true;
+        }
+    }
+
+    if c >= 0 && utf8len_tab[c as usize] > 1 {
+        unsafe { *sp = str };
+        // Try to un-escape a multi-byte character after the modifiers.
+        let unescaped = unsafe { mb_unescape(sp, &mut ch) };
+        if unescaped.is_null() {
+            // Illegal byte.
+            unsafe { *sp = str.add(1) };
+        } else {
+            // `special` is set, so get_special_key_name() renders it.
+            c = unsafe { utf_ptr2char(unescaped) };
+        }
+    } else {
+        // Single-byte character, NUL or illegal byte.
+        unsafe { *sp = str.add(usize::from(*str != 0)) };
+    }
+
+    if special
+        || c < b' ' as c_int
+        || (replace_spaces && c == b' ' as c_int)
+        || (replace_lt && c == b'<' as c_int)
+    {
+        *out = get_special_key_name(c, modifiers);
+        return out.as_ptr();
+    }
+    out[0] = c as c_char;
+    out[1] = 0;
+    out.as_ptr()
 }
 
 /// The key code a two-byte termcap name stands for (C's `TO_SPECIAL`).
@@ -423,15 +406,13 @@ fn to_special(second: u8, third: u8) -> c_int {
 ///
 /// Does not handle multi-byte characters.
 pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
-    unsafe {
-        let len = strlen(longstr) as c_int;
-        let mut tail = len;
-        let room = Columns.get() - msg_col.get();
-        if !ui_has(kUIMessages) && len > room && room >= 20 {
-            tail = (room - 3) / 2;
-            msg_outtrans_len(longstr, tail, hl_id, false);
-            msg_puts_hl(c"...".as_ptr(), SPECIAL_HL, false);
-        }
-        msg_outtrans_len(longstr.offset((len - tail) as isize), tail, hl_id, false);
+    let len = unsafe { strlen(longstr) as c_int };
+    let mut tail = len;
+    let room = Columns.get() - msg_col.get();
+    if !ui_has(kUIMessages) && len > room && room >= 20 {
+        tail = (room - 3) / 2;
+        unsafe { msg_outtrans_len(longstr, tail, hl_id, false) };
+        unsafe { msg_puts_hl(c"...".as_ptr(), SPECIAL_HL, false) };
     }
+    unsafe { msg_outtrans_len(longstr.offset((len - tail) as isize), tail, hl_id, false) };
 }
