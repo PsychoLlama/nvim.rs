@@ -689,6 +689,27 @@ BORROWED_DEREF = re.compile(
     r"&\s*(?:mut|raw\s+mut|raw\s+const)\s+unsafe\s*\{\s*\(*\s*\*"
 )
 
+# `unsafe { (*p).arr }.as_ptr()` -- the sixth face of "an `unsafe` block is a
+# value expression", and the one the compiler only sometimes catches.
+#
+# The block copies the array (or the struct holding it) out of the pointee,
+# and a method that borrows `self` to hand back an address then answers the
+# address of that *temporary*, dangling by the end of the statement. rustc's
+# `dangling_pointers_from_temporaries` fires on the direct spelling and two of
+# these still shipped during phase 23's batch 4 -- `spell/dump.rs` took the
+# address of a copy of `sl_regions` and compared strings through it, and
+# `cmdexpand/generate.rs` returned a pointer into a copy of a 1 KiB
+# `xp_buf` that `:scriptnames` completion then wrote to.
+#
+# A field chain may sit between the block and the call, which is exactly the
+# form that slipped past `DEREF_METHOD`: the method there must hang directly
+# off the brace, and `unsafe { (*xp) }.xp_buf.as_mut_ptr()` does not.
+TEMPORARY_ADDRESS = re.compile(
+    r"unsafe\s*\{\s*\(?\s*\*[^{}]*?\}"
+    r"(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*"
+    r"\s*\.\s*(as_ptr|as_mut_ptr|as_slice|as_mut_slice|as_bytes|as_bytes_mut)\s*\("
+)
+
 
 def balanced(text, start, opens, closes):
     """The index just past the bracket group beginning at `start`."""
@@ -842,6 +863,29 @@ def borrowed_derefs(tree):
             line = masked.count("\n", 0, match.start()) + 1
             found.append(f"  {file}:{line}: {match.group(0).strip()}...")
     return found
+
+
+def temporary_addresses(tree):
+    """`unsafe { (*p).arr }.as_ptr()` -- the address of the block's copy."""
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in TEMPORARY_ADDRESS.finditer(masked):
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(f"  {file}:{line}: .{match.group(1)}()")
+    return found
+
+
+def check_temporary_addresses(tree):
+    if found := temporary_addresses(tree):
+        sys.exit(
+            "ratchet: a method that borrows `self` to hand back an address, "
+            "called on the value an `unsafe` block produced, answers the "
+            "address of a *temporary* -- the copy the dereference made, which "
+            "is gone by the end of the statement:\n"
+            + "\n".join(found)
+            + "\nThe region has to cover the call: "
+            "`unsafe { (*p).arr.as_ptr() }`."
+        )
 
 
 def check_borrowed_derefs(tree):
@@ -1909,6 +1953,7 @@ def main():
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
     check_self_projections(tree)
+    check_temporary_addresses(tree)
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
