@@ -658,14 +658,15 @@ unsafe fn expand_args(
 /// Module contract; `eap` must be the command being executed.
 pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
-    let cmd = unsafe {
-        let scope = if (*eap).cmdidx == CMD_USER {
-            Scope::Global
-        } else {
-            Scope::Buffer
-        };
-        &scope.list()[(*eap).useridx as usize]
+    // SAFETY: module contract; `useridx` was set by `find_ucmd`.
+    let (cmdidx, useridx) = unsafe { ((*eap).cmdidx, (*eap).useridx as usize) };
+    let scope = if cmdidx == CMD_USER {
+        Scope::Global
+    } else {
+        Scope::Buffer
     };
+    // SAFETY: module contract; nothing has added or removed a command since.
+    let cmd = &unsafe { scope.list() }[useridx];
 
     if preview {
         debug_assert!(cmd.uc_preview_luaref > 0, "cmd->uc_preview_luaref > 0");
@@ -688,13 +689,11 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
     // Nothing may touch `cmd` past here: the body can define a command,
     // which reallocates the table it points into.
     // SAFETY: module contract.
+    let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
+    // SAFETY: module contract; `buf` is the expanded body this frame owns.
     unsafe {
-        do_cmdline(
-            buf,
-            (*eap).ea_getline,
-            (*eap).cookie,
-            DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,
-        )
+        let (getline, cookie) = ((*eap).ea_getline, (*eap).cookie);
+        do_cmdline(buf, getline, cookie, opts)
     };
     drop(script_ctx);
     // SAFETY: the block is this function's.
@@ -781,17 +780,10 @@ unsafe fn expand_pass(
             q = unsafe { q.add(len) };
         }
 
-        let mut len = unsafe {
-            uc_check_code(
-                start,
-                end.offset_from(start) as size_t,
-                q,
-                cmd,
-                eap,
-                split_buf,
-                split_len,
-            )
-        };
+        // SAFETY: module contract; `start..end` is one `<...>` of the body.
+        let code_len = unsafe { end.offset_from(start) } as size_t;
+        // SAFETY: as above; `q` has room for whatever the code expands to.
+        let mut len = unsafe { uc_check_code(start, code_len, q, cmd, eap, split_buf, split_len) };
         if len == !0 {
             // Not a code: carry on after the '<'.
             p = unsafe { start.add(1) };

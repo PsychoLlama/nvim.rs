@@ -119,12 +119,9 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     unsafe { ui_refresh() };
     if checkerr {
         let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
-        unsafe {
-            msg_schedule_semsg_c!(
-                c"Excessive errors in vim.ui_attach() callback (ns=%s)".as_ptr(),
-                ns,
-            )
-        };
+        let fmt = c"Excessive errors in vim.ui_attach() callback (ns=%s)".as_ptr();
+        // SAFETY: the one `%s` spends the namespace name.
+        unsafe { msg_schedule_semsg_c!(fmt, ns) };
     }
 }
 
@@ -194,17 +191,15 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
             msg: core::ptr::null_mut(),
         };
         ui_event_ns_id.set(ns_id);
-        let res = unsafe {
-            nlua_call_ref_ctx(
-                is_fast(name, args),
-                callback,
-                name.as_ptr().cast_mut(),
-                args,
-                kRetNilBool,
-                core::ptr::null_mut::<Arena>(),
-                &raw mut err,
-            )
-        };
+        // SAFETY: `args` is the event's own array, per this call's contract.
+        let fast = unsafe { is_fast(name, args) };
+        let event = name.as_ptr().cast_mut();
+        let no_arena = core::ptr::null_mut::<Arena>();
+        let slot = &raw mut err;
+        // SAFETY: `name` is a static protocol name, `args` is handed over to
+        // the callee, and `err` is this frame's own.
+        let res =
+            unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, slot) };
         ui_event_ns_id.set(0);
         if res.type_0 == kObjectTypeBoolean && unsafe { res.data.boolean } {
             handled = true;
@@ -264,18 +259,20 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
 unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
     let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
     let format = c"Error in \"%s\" UI event handler (ns=%s):\n%s".as_ptr();
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            core::ptr::null(),
-            c"report_error".as_ptr(),
-            line!() as i32,
-            true,
-            format,
-            name,
-            ns,
-            msg,
-        )
-    };
+    let who = c"report_error";
+    let (level, line) = (LOGLVL_ERR, line!() as i32);
+    let no_context = core::ptr::null();
+    // The format spends exactly the three C strings that follow it.
+    logmsg_c!(
+        level,
+        no_context,
+        who.as_ptr(),
+        line,
+        true,
+        format,
+        name,
+        ns,
+        msg
+    );
     unsafe { msg_schedule_semsg_multiline_c!(format, name, ns, msg) };
 }

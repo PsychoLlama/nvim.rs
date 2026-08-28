@@ -174,17 +174,9 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
         return arg;
     }
     if context == ExpandContext::Mappings {
-        return unsafe {
-            set_context_in_map_cmd(
-                xp,
-                c"map".as_ptr().cast_mut(),
-                arg.cast_mut(),
-                forceit,
-                false,
-                false,
-                CMD_map,
-            )
-        };
+        let (cmd, pat) = (c"map".as_ptr().cast_mut(), arg.cast_mut());
+        // SAFETY: caller contract; `xp` is writable and `arg` outlives it.
+        return unsafe { set_context_in_map_cmd(xp, cmd, pat, forceit, false, false, CMD_map) };
     }
     // The pattern is the last argument: walk to it, honouring escapes
     // and multibyte characters.

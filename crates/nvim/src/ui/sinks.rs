@@ -147,13 +147,13 @@ pub(super) fn log_event(name: &'static CStr) {
     if let Some(previous) = last_event.get()
         && seen.get() > 0
     {
-        unsafe {
-            log(
-                c"%s (+%zu times...)".as_ptr(),
-                previous.as_ptr(),
-                seen.get(),
-            )
-        };
+        let (fmt, was, n) = (
+            c"%s (+%zu times...)".as_ptr(),
+            previous.as_ptr(),
+            seen.get(),
+        );
+        // SAFETY: the format spends the `&'static CStr` and the count.
+        unsafe { log(fmt, was, n) };
     }
     unsafe { log(c"%s".as_ptr(), name.as_ptr(), 0) };
     seen.set(0);
@@ -165,18 +165,11 @@ pub(super) fn log_event(name: &'static CStr) {
 /// `format` must be a valid format string for the two arguments.
 unsafe fn log(format: *const core::ffi::c_char, name: *const core::ffi::c_char, count: usize) {
     const LOGLVL_DBG: c_int = 1;
-    unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            c"UI: ".as_ptr(),
-            core::ptr::null(),
-            -1,
-            true,
-            format,
-            name,
-            count,
-        )
-    };
+    let lvl = LOGLVL_DBG;
+    let tag = c"UI: ".as_ptr();
+    let no_func = core::ptr::null();
+    // The caller's promise: `format` spends `name` and `count`.
+    logmsg_c!(lvl, tag, no_func, -1, true, format, name, count);
 }
 
 /// Hands every UI that `reach` selects to `send`, and logs `name` if there
@@ -435,18 +428,11 @@ pub unsafe fn ui_call_raw_line(
             grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
         )
     };
+    let to = Reach::Uncomposed;
+    // SAFETY: as above.
     unsafe {
         raw_line_to(
-            Reach::Uncomposed,
-            grid,
-            row,
-            startcol,
-            endcol,
-            clearcol,
-            clearattr,
-            flags,
-            chunk,
-            attrs,
+            to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
         )
     };
 }
@@ -469,18 +455,12 @@ pub unsafe fn ui_composed_call_raw_line(
     chunk: *const schar_T,
     attrs: *const sattr_T,
 ) {
+    let to = Reach::Composed;
+    // SAFETY: the caller's promise -- `chunk` and `attrs` hold
+    // `endcol - startcol` readable elements.
     unsafe {
         raw_line_to(
-            Reach::Composed,
-            grid,
-            row,
-            startcol,
-            endcol,
-            clearcol,
-            clearattr,
-            flags,
-            chunk,
-            attrs,
+            to, grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
         )
     }
 }

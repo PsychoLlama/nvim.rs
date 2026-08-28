@@ -330,12 +330,10 @@ unsafe extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
 
 /// Queues [`ui_refresh`] for after the current redraw.
 pub fn ui_schedule_refresh() {
-    unsafe {
-        multiqueue_put_event(
-            resize_events.get(),
-            crate::types::Event::new(Some(ui_refresh_event), []),
-        )
-    };
+    let queue = resize_events.get();
+    let event = crate::types::Event::new(Some(ui_refresh_event), []);
+    // SAFETY: the resize queue is the editor's own and outlives the event.
+    unsafe { multiqueue_put_event(queue, event) };
 }
 
 /// Marks the default colours as needing to be re-sent.
@@ -559,17 +557,16 @@ pub unsafe fn ui_line(
 
     let off = grid.cell_offset(row, startcol);
     let (chars, attrs) = grid.cells(off, (grid.cols - startcol) as usize);
+    let handle = grid.handle as Integer;
+    let (at_row, from) = (row as Integer, startcol as Integer);
+    let (to, clear_from) = (endcol as Integer, clearcol as Integer);
+    let clear_attr = clearattr as Integer;
+    let (cells, cell_attrs) = (chars.as_ptr(), attrs.as_ptr());
+    // SAFETY: both slices came from the grid above and hold
+    // `endcol - startcol` elements, which is what the serializers read.
     unsafe {
         ui_call_raw_line(
-            grid.handle as Integer,
-            row as Integer,
-            startcol as Integer,
-            endcol as Integer,
-            clearcol as Integer,
-            clearattr as Integer,
-            flags,
-            chars.as_ptr(),
-            attrs.as_ptr(),
+            handle, at_row, from, to, clear_from, clear_attr, flags, cells, cell_attrs,
         )
     };
 
@@ -824,22 +821,21 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
             // protocol; those are only listed when turned on.
             let private = unsafe { *name } == b'_' as core::ffi::c_char;
             if !private || ui.ui_ext[widget] {
+                let on = Object::boolean(ui.ui_ext[widget]);
+                // SAFETY: `name` is one of the static protocol names, and
+                // `info` was reserved for every key written here.
                 unsafe {
-                    push(
-                        &mut info,
-                        cstr_as_string(name.cast_mut()),
-                        Object::boolean(ui.ui_ext[widget]),
-                    )
+                    let key = cstr_as_string(name.cast_mut());
+                    push(&mut info, key, on)
                 };
             }
         }
-        unsafe {
-            push(
-                &mut info,
-                static_string("chan"),
-                Object::integer(ui.channel_id as Integer),
-            )
-        };
+        let (key, id) = (
+            static_string("chan"),
+            Object::integer(ui.channel_id as Integer),
+        );
+        // SAFETY: as above.
+        unsafe { push(&mut info, key, id) };
 
         unsafe { *all_uis.items.add(all_uis.size) = Object::dict(info) };
         all_uis.size += 1;
@@ -864,15 +860,9 @@ pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int,
     }
     let wp = unsafe { get_win_by_grid_handle(grid_handle) };
     if wp.is_null() {
-        unsafe {
-            api_err_invalid(
-                err,
-                c"window handle".as_ptr(),
-                core::ptr::null(),
-                grid_handle as i64,
-                false,
-            )
-        };
+        let (what, no_text) = (c"window handle".as_ptr(), core::ptr::null());
+        // SAFETY: `err` is the caller's slot and `what` is a static string.
+        unsafe { api_err_invalid(err, what, no_text, grid_handle as i64, false) };
         return;
     }
     // SAFETY: `wp` is the window the grid handle names, checked non-null

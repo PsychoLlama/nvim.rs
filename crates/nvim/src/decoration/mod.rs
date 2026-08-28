@@ -455,13 +455,13 @@ pub unsafe fn clear_virttext(text: *mut VirtText) {
         unsafe { xfree((*(*text).items.add(i)).text.cast()) };
     }
     unsafe { xfree((*text).items.cast()) };
-    unsafe {
-        *text = VirtText {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut::<VirtTextChunk>(),
-        }
+    let empty = VirtText {
+        size: 0,
+        capacity: 0,
+        items: ptr::null_mut::<VirtTextChunk>(),
     };
+    // SAFETY: the caller's block, whose items have just been freed.
+    unsafe { *text = empty };
 }
 
 /// [`clear_virttext`] for a block of virtual lines.
@@ -474,13 +474,13 @@ pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
         unsafe { clear_virttext(&raw mut (*(*lines).items.add(i)).line) };
     }
     unsafe { xfree((*lines).items.cast()) };
-    unsafe {
-        *lines = VirtLines {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut::<virt_line>(),
-        }
+    let empty = VirtLines {
+        size: 0,
+        capacity: 0,
+        items: ptr::null_mut::<virt_line>(),
     };
+    // SAFETY: the caller's block, whose items have just been freed.
+    unsafe { *lines = empty };
 }
 
 /// Replaces any sign or conceal character that the glyph cache no longer
@@ -556,22 +556,17 @@ pub unsafe fn bufhl_add_hl_pos_offset(
             (1, 0)
         };
 
+        let ns = src_id as uint32_t;
+        let no_id = ptr::null_mut();
+        let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
+        let flags = MT_FLAG_DECOR_HL as uint16_t;
+        let no_err = ptr::null_mut();
+        // SAFETY: `buf` is the caller's live buffer and `decor` is the
+        // inline decoration built above, which the mark takes over.
         unsafe {
             extmark_set(
-                buf,
-                src_id as uint32_t,
-                ptr::null_mut(),
-                lnum as c_int - 1,
-                hl_start,
-                lnum as c_int - 1 + end_off,
-                hl_end,
-                decor,
-                MT_FLAG_DECOR_HL as uint16_t,
-                true,
-                false,
-                true,
-                false,
-                ptr::null_mut(),
+                buf, ns, no_id, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
+                false, no_err,
             )
         };
     }

@@ -120,12 +120,10 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 continue;
             }
             if !found {
-                // SAFETY: module contract.
-                unsafe {
-                    msg_puts_title(gettext(
-                        c"\n    Name              Args Address Complete    Definition".as_ptr(),
-                    ))
-                };
+                let heading =
+                    c"\n    Name              Args Address Complete    Definition".as_ptr();
+                // SAFETY: module contract; the heading is a static string.
+                unsafe { msg_puts_title(gettext(heading)) };
             }
             found = true;
             // SAFETY: module contract.
@@ -239,13 +237,11 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
             unsafe { msg_puts(c"\n                                               ".as_ptr()) };
         }
     }
-    unsafe {
-        msg_outtrans_special(
-            cmd.uc_rep,
-            false,
-            if name_len == 0 { Columns.get() - 47 } else { 0 },
-        )
-    };
+    // The definition column is what is left of the line when the whole table
+    // is being listed, and the whole width when one command is.
+    let room = if name_len == 0 { Columns.get() - 47 } else { 0 };
+    // SAFETY: module contract; `uc_rep` is the entry's own string.
+    unsafe { msg_outtrans_special(cmd.uc_rep, false, room) };
     if p_verbose.get() > 0 {
         unsafe { last_set_msg(cmd.uc_script_ctx) };
     }
@@ -309,16 +305,12 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
     // `api_new_luaref` takes a fresh one for the caller to own.
     let luaref = |r: LuaRef| (r != LUA_NOREF).then(|| Object::luaref(unsafe { api_new_luaref(r) }));
     // SAFETY: module contract; the three strings outlive the arena copy.
-    let (name, definition, complete_arg) = unsafe {
-        (
-            cstr_as_string(cmd.uc_name),
-            cstr_as_string(cmd.uc_rep),
-            if cmd.uc_compl_arg.is_null() {
-                Object::NIL
-            } else {
-                Object::string(cstr_as_string(cmd.uc_compl_arg))
-            },
-        )
+    let (name, definition) = unsafe { (cstr_as_string(cmd.uc_name), cstr_as_string(cmd.uc_rep)) };
+    let complete_arg = if cmd.uc_compl_arg.is_null() {
+        Object::NIL
+    } else {
+        // SAFETY: as above.
+        Object::string(unsafe { cstr_as_string(cmd.uc_compl_arg) })
     };
     // The completion is a Lua reference when the command was given one,
     // and the `-complete=` name otherwise.

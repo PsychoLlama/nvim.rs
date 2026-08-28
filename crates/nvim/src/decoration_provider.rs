@@ -111,7 +111,7 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
     let shown = c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr();
     // SAFETY: the caller's strings and the namespace name, and each format
     // spends exactly the three `%s` that follow it.
-    unsafe { logmsg!(LOGLVL_ERR, who, 29, logged, name, ns, msg) };
+    logmsg!(LOGLVL_ERR, who, 29, logged, name, ns, msg);
     // SAFETY: as above.
     unsafe { msg_schedule_semsg_multiline_c!(shown, name, ns, msg) };
 }

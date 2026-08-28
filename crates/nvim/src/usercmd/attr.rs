@@ -103,12 +103,12 @@ pub(crate) unsafe fn parse_addr_type_arg(
         i += 1;
     }
     unsafe { *value.add(i) = NUL as c_char };
-    // SAFETY: caller contract; `value` is now NUL-terminated at the word.
+    let untranslated = c"E180: Invalid address type value: %s".as_ptr();
+    // SAFETY: caller contract; `value` is now NUL-terminated at the word, and
+    // the one `%s` spends it.
     unsafe {
-        semsg_c!(
-            gettext(c"E180: Invalid address type value: %s".as_ptr()),
-            value,
-        )
+        let fmt = gettext(untranslated);
+        semsg_c!(fmt, value)
     };
     FAIL
 }
@@ -158,19 +158,15 @@ pub(crate) unsafe fn parse_compl_arg(
     let custom = expand == ExpandContext::UserDefined || expand == ExpandContext::UserList;
     // SAFETY: both messages are literals.
     if !custom && arg.is_some() {
-        unsafe {
-            emsg(gettext(
-                c"E468: Completion argument only allowed for custom completion".as_ptr(),
-            ))
-        };
+        let msg = c"E468: Completion argument only allowed for custom completion".as_ptr();
+        // SAFETY: the message is a static string.
+        unsafe { emsg(gettext(msg)) };
         return FAIL;
     }
     if custom && arg.is_none() {
-        unsafe {
-            emsg(gettext(
-                c"E467: Custom completion requires a function argument".as_ptr(),
-            ))
-        };
+        let msg = c"E467: Custom completion requires a function argument".as_ptr();
+        // SAFETY: as above.
+        unsafe { emsg(gettext(msg)) };
         return FAIL;
     }
     if let Some(arg) = arg {
@@ -255,19 +251,17 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
     } else if abbreviates(name, "complete") {
         match value {
             None => Err(Bad::Missing(c"-complete")),
-            // SAFETY: caller contract.
-            Some(v) => match unsafe {
-                parse_compl_arg(
-                    value_ptr(v),
-                    v.len() as c_int,
-                    into.complp,
-                    into.argt,
-                    into.compl_arg,
-                )
-            } {
-                FAIL => Err(Bad::Reported),
-                _ => Ok(()),
-            },
+            Some(v) => {
+                let (text, len) = (value_ptr(v), v.len() as c_int);
+                // SAFETY: caller contract; the three out-parameters are the
+                // caller's own.
+                let got =
+                    unsafe { parse_compl_arg(text, len, into.complp, into.argt, into.compl_arg) };
+                match got {
+                    FAIL => Err(Bad::Reported),
+                    _ => Ok(()),
+                }
+            }
         }
     } else if abbreviates(name, "addr") {
         *into.argt |= ExArgt::RANGE;
@@ -309,11 +303,11 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             unsafe { emsg(gettext(c"E178: Invalid default value for count".as_ptr())) };
         }
         Bad::Missing(what) => {
+            let untranslated = c"E179: Argument required for %s".as_ptr();
+            // SAFETY: the one `%s` spends the attribute name.
             unsafe {
-                semsg_c!(
-                    gettext(c"E179: Argument required for %s".as_ptr()),
-                    what.as_ptr(),
-                )
+                let fmt = gettext(untranslated);
+                semsg_c!(fmt, what.as_ptr())
             };
         }
         Bad::Reported => {}
