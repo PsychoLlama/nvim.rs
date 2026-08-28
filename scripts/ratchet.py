@@ -659,6 +659,25 @@ DEREF_METHOD = re.compile(
 # `Refcount`/`RefcountSize`, whose whole point is that the count moves.
 REFCOUNT_METHODS = frozenset({"retain", "release", "release_many"})
 
+# `*pp = *pp.add(3)` where the author meant `*pp = (*pp).add(3)`.
+#
+# A method call binds tighter than `*`, so on a `*mut *mut c_char` the first
+# form advances the *outer* pointer by one whole pointer and stores whatever
+# the neighbouring stack slot holds. It type-checks, because both sides are
+# still `*mut c_char`, and nothing warns. Batch 3 shipped two: `get_lambda_tv`
+# stored a stack neighbour into the expression cursor -- every lambda body
+# `{_, v -> ...}` in the runtime files then parsed from a garbage address, so
+# `nvim -l` and any `->method()` after a lambda segfaulted.
+#
+# Restricted to the self-assigning shape on purpose. `*files.offset(i)` on an
+# array of pointers is ordinary and correct; taking the *i*th element of an
+# array and storing it back into the array's own first slot is not something
+# anyone means.
+SELF_PROJECTION = re.compile(
+    r"\*\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\*\s*\1\s*\.\s*"
+    r"(?:add|offset|sub|wrapping_add|wrapping_offset|wrapping_sub)\s*\("
+)
+
 BORROWED_DEREF = re.compile(
     r"&\s*(?:mut|raw\s+mut|raw\s+const)\s+unsafe\s*\{\s*\(*\s*\*"
 )
@@ -773,6 +792,27 @@ def deref_temporary_mutations(tree):
             line = masked.count("\n", 0, match.start()) + 1
             found.append(f"  {file}:{line}: .{match.group(1)}()")
     return found
+
+
+def self_projections(tree):
+    """`*pp = *pp.add(3)` -- the parentheses `(*pp).add(3)` needed."""
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in SELF_PROJECTION.finditer(masked):
+            line = masked.count("\n", 0, match.start()) + 1
+            found.append(f"  {file}:{line}: {match.group(0).strip()}...)")
+    return found
+
+
+def check_self_projections(tree):
+    if found := self_projections(tree):
+        sys.exit(
+            "ratchet: `*p = *p.add(n)` advances the OUTER pointer -- a method "
+            "call binds tighter than `*`, so this stores the neighbouring "
+            "slot's contents instead of stepping the pointee:\n"
+            + "\n".join(found)
+            + "\nWrite `*p = (*p).add(n)`."
+        )
 
 
 def check_deref_temporary_mutations(tree):
@@ -1566,6 +1606,20 @@ SELF_TEST_DEREF_MUTATION = [
         0,
     ),
 ]
+# (source, expected self_projections)
+SELF_TEST_SELF_PROJECTION = [
+    # The two batch 3 shipped.
+    ("fn f() {\n    *arg = *arg.add(1);\n}\n", 1),
+    ("fn f() {\n    *pp = *pp.add(3);\n}\n", 1),
+    ("fn f() {\n    *p = *p.offset(-1);\n}\n", 1),
+    # The parenthesised form is the point.
+    ("fn f() {\n    *arg = (*arg).add(1);\n}\n", 0),
+    # An array of pointers indexed into a *different* place is ordinary.
+    ("fn f() {\n    *out = *files.offset(i);\n}\n", 0),
+    ("fn f() {\n    let file = *files.offset(i);\n}\n", 0),
+    # Prose about one costs nothing.
+    ("// *arg = *arg.add(1);\n", 0),
+]
 # (source, expected pub_items)
 SELF_TEST_PUB_ITEMS = [
     ("pub fn f() {}\n", 1),
@@ -1787,6 +1841,11 @@ def self_test():
     for source, expected in SELF_TEST_PLACE_WRITE:
         got = len(place_writes({"t.rs": mask(source)}))
         assert got == expected, f"place_writes={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_SELF_PROJECTION:
+        got = len(self_projections({"t.rs": mask(source)}))
+        assert got == expected, (
+            f"self_projections={got}, want {expected}, for {source!r}"
+        )
     for source, expected in SELF_TEST_DEREF_MUTATION:
         got = len(deref_temporary_mutations({"t.rs": mask(source)}))
         assert got == expected, (
@@ -1842,6 +1901,7 @@ def main():
     check_place_writes(tree)
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
+    check_self_projections(tree)
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)

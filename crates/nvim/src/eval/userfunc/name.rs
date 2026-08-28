@@ -402,7 +402,7 @@ pub unsafe fn trans_function_name(
         && unsafe { *(*pp).add(1) } as u8 as c_int == KS_EXTRA
         && unsafe { *(*pp).add(2) } as c_int == KE_SNR as c_int
     {
-        unsafe { *pp = *pp.add(3) };
+        unsafe { *pp = (*pp).add(3) };
         len = unsafe { get_id_len(pp as *mut *const c_char) } + 3;
         return unsafe { xmemdupz(start as *const c_void, len as size_t) } as *mut c_char;
     }

@@ -164,7 +164,7 @@ pub unsafe fn get_lambda_tv(
             unsafe { semsg_c!(gettext(c"E451: Expected }: %s".as_ptr()), *arg) };
             break 'errret false;
         }
-        unsafe { *arg = *arg.add(1) };
+        unsafe { *arg = (*arg).add(1) };
 
         if evaluate {
             let mut flags = 0;
