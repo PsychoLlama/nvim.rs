@@ -31,96 +31,91 @@ pub unsafe fn default_grid_alloc() -> bool {
     static RESIZING: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: `default_grid` is the editor's screen grid, on the main thread.
-    unsafe {
-        if RESIZING.get() {
-            return false;
-        }
-        RESIZING.set(true);
-
-        let mut grid = default_grid_ref();
-        let unchanged =
-            grid.is_allocated() && Rows.get() == grid.rows && Columns.get() == grid.cols;
-        if unchanged || Rows.get() == 0 || Columns.get() == 0 {
-            RESIZING.set(false);
-            return false;
-        }
-
-        // Allocates new arrays, moves the old lines across, clears the rest and
-        // frees the old ones. On failure the arrays are left NULL rather than
-        // at the old size, because the wrong size is a crash.
-        grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
-
-        let defs = tab_page_click_defs.get();
-        let size = tab_page_click_defs_size.get();
-        stl_clear_click_defs(defs, size);
-        let (defs, size) = stl_alloc_click_defs(defs, Columns.get(), size);
-        tab_page_click_defs.set(defs);
-        tab_page_click_defs_size.set(size);
-
-        grid.comp_height = Rows.get();
-        grid.comp_width = Columns.get();
-        grid.handle = DEFAULT_GRID_HANDLE as handle_T;
-
-        RESIZING.set(false);
-        true
+    if RESIZING.get() {
+        return false;
     }
+    RESIZING.set(true);
+
+    let mut grid = default_grid_ref();
+    let unchanged = grid.is_allocated() && Rows.get() == grid.rows && Columns.get() == grid.cols;
+    if unchanged || Rows.get() == 0 || Columns.get() == 0 {
+        RESIZING.set(false);
+        return false;
+    }
+
+    // Allocates new arrays, moves the old lines across, clears the rest and
+    // frees the old ones. On failure the arrays are left NULL rather than
+    // at the old size, because the wrong size is a crash.
+    grid_alloc(&mut grid, Rows.get(), Columns.get(), true, true);
+
+    let defs = tab_page_click_defs.get();
+    let size = tab_page_click_defs_size.get();
+    unsafe { stl_clear_click_defs(defs, size) };
+    let (defs, size) = unsafe { stl_alloc_click_defs(defs, Columns.get(), size) };
+    tab_page_click_defs.set(defs);
+    tab_page_click_defs_size.set(size);
+
+    grid.comp_height = Rows.get();
+    grid.comp_width = Columns.get();
+    grid.handle = DEFAULT_GRID_HANDLE as handle_T;
+
+    RESIZING.set(false);
+    true
 }
 
 /// Blank the screen and mark everything on it for redraw.
 pub unsafe fn screenclear() {
     // SAFETY: the screen grid and the message grid, on the main thread.
-    unsafe {
-        msg_check_for_delay(false);
+    unsafe { msg_check_for_delay(false) };
 
-        if !default_grid_ref().is_allocated() || starting.get() == NO_SCREEN {
-            return;
+    if !default_grid_ref().is_allocated() || starting.get() == NO_SCREEN {
+        return;
+    }
+
+    let mut grid = default_grid_ref();
+    for row in 0..grid.rows {
+        let (off, cols) = (grid.row_start(row), grid.cols);
+        grid.clear_line(off, cols, true);
+    }
+    ui_call_grid_clear(1);
+    ui_comp_set_screen_valid(true);
+
+    ns_hl_fast.set(-1);
+
+    clear_cmdline.set(false);
+    mode_displayed.set(false);
+
+    // Sets UPD_NOT_VALID on every window.
+    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    cmdline_was_last_drawn.set(false);
+    redraw_cmdline.set(true);
+    redraw_tabline.set(true);
+    redraw_popupmenu.set(true);
+    pum_invalidate();
+    for wp in windows_in_curtab() {
+        if unsafe { (*wp).w_floating } {
+            unsafe { (*wp).w_redr_type = UPD_CLEAR };
         }
+    }
+    if must_redraw.get() == UPD_CLEAR {
+        must_redraw.set(UPD_NOT_VALID); // no need to clear again
+    }
 
-        let mut grid = default_grid_ref();
-        for row in 0..grid.rows {
-            let (off, cols) = (grid.row_start(row), grid.cols);
-            grid.clear_line(off, cols, true);
-        }
-        ui_call_grid_clear(1);
-        ui_comp_set_screen_valid(true);
+    unsafe { compute_cmdrow() };
+    msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
+    msg_col.set(0);
+    unsafe { msg_reset_scroll() }; // can't scroll back
+    msg_didany.set(false);
+    msg_didout.set(false);
 
-        ns_hl_fast.set(-1);
-
-        clear_cmdline.set(false);
-        mode_displayed.set(false);
-
-        // Sets UPD_NOT_VALID on every window.
-        redraw_all_later(UPD_NOT_VALID);
-        cmdline_was_last_drawn.set(false);
-        redraw_cmdline.set(true);
-        redraw_tabline.set(true);
-        redraw_popupmenu.set(true);
-        pum_invalidate();
-        for wp in windows_in_curtab() {
-            if (*wp).w_floating {
-                (*wp).w_redr_type = UPD_CLEAR;
-            }
-        }
-        if must_redraw.get() == UPD_CLEAR {
-            must_redraw.set(UPD_NOT_VALID); // no need to clear again
-        }
-
-        compute_cmdrow();
-        msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
-        msg_col.set(0);
-        msg_reset_scroll(); // can't scroll back
-        msg_didany.set(false);
-        msg_didout.set(false);
-
-        if *hl_attr_active.get().add(HLF_MSG as usize) > 0
-            && msg_use_grid()
-            && msg_grid_ref().is_allocated()
-        {
-            msg_grid_ref().invalidate();
-            msg_grid_validate();
-            msg_grid_invalid.set(false);
-            clear_cmdline.set(true);
-        }
+    if unsafe { *hl_attr_active.get().add(HLF_MSG as usize) } > 0
+        && unsafe { msg_use_grid() }
+        && msg_grid_ref().is_allocated()
+    {
+        msg_grid_ref().invalidate();
+        unsafe { msg_grid_validate() };
+        msg_grid_invalid.set(false);
+        clear_cmdline.set(true);
     }
 }
 
@@ -137,145 +132,145 @@ pub(crate) fn cmdline_number_prompt() -> bool {
 pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     // SAFETY: the screen, the window layout and the autocommand machinery, all
     // on the main thread.
-    unsafe {
-        // Setting the window size can produce another window-changed signal.
-        if updating_screen.get() || resizing_screen.get() || cmdline_number_prompt() {
-            return;
-        }
-        if width < 0 || height < 0 {
-            return;
-        }
-        if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
-            State.set(MODE_SETWSIZE); // postpone the resize
-            return;
-        }
+    // Setting the window size can produce another window-changed signal.
+    if updating_screen.get() || resizing_screen.get() || cmdline_number_prompt() {
+        return;
+    }
+    if width < 0 || height < 0 {
+        return;
+    }
+    if State.get() == MODE_HITRETURN || State.get() == MODE_SETWSIZE {
+        State.set(MODE_SETWSIZE); // postpone the resize
+        return;
+    }
 
-        resizing_screen.set(true);
+    resizing_screen.set(true);
 
-        Rows.set(height);
-        Columns.set(width);
-        check_screensize();
+    Rows.set(height);
+    Columns.set(width);
+    unsafe { check_screensize() };
 
-        if !ui_has(kUIMessages) {
-            // Clamp 'cmdheight' so the windows still fit, on this tab page and
-            // on every other one.
-            let max_p_ch = Rows.get() - min_rows(curtab.get()) + 1;
-            if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
-                p_ch.set(max_p_ch.max(1) as OptInt);
-                (*curtab.get()).tp_ch_used = p_ch.get();
-            }
-            for mut tp in winlayer::tabs() {
-                if !tp.is_current() {
-                    let max_tp_ch = Rows.get() - min_rows(tp.raw()) + 1;
-                    if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
-                        tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
-                    }
+    if !ui_has(kUIMessages) {
+        // Clamp 'cmdheight' so the windows still fit, on this tab page and
+        // on every other one.
+        let max_p_ch = Rows.get() - unsafe { min_rows(curtab.get()) } + 1;
+        if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
+            p_ch.set(max_p_ch.max(1) as OptInt);
+            unsafe { (*curtab.get()).tp_ch_used = p_ch.get() };
+        }
+        for mut tp in winlayer::tabs() {
+            if !tp.is_current() {
+                let max_tp_ch = Rows.get() - unsafe { min_rows(tp.raw()) } + 1;
+                if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
+                    tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
                 }
             }
         }
+    }
 
-        // `check_screensize` may have clamped them.
-        let height = Rows.get();
-        let width = Columns.get();
-        p_lines.set(height as OptInt);
-        p_columns.set(width as OptInt);
+    // `check_screensize` may have clamped them.
+    let height = Rows.get();
+    let width = Columns.get();
+    p_lines.set(height as OptInt);
+    p_columns.set(width as OptInt);
 
-        ui_call_grid_resize(1, width as Integer, height as Integer);
+    ui_call_grid_resize(1, width as Integer, height as Integer);
 
-        // An autocommand may change Rows or Columns again, so the allocation is
-        // retried -- but at most three times, or an autocommand that always
-        // changes them never terminates.
-        let mut retry_count = 0;
-        resizing_autocmd.set(true);
-        while default_grid_alloc() {
-            // `win_new_screensize` recomputes float positions; tell the
-            // compositor not to draw them yet.
-            ui_comp_set_screen_valid(false);
-            if msg_grid_ref().is_allocated() {
-                msg_grid_invalid.set(true);
-            }
+    // An autocommand may change Rows or Columns again, so the allocation is
+    // retried -- but at most three times, or an autocommand that always
+    // changes them never terminates.
+    let mut retry_count = 0;
+    resizing_autocmd.set(true);
+    while unsafe { default_grid_alloc() } {
+        // `win_new_screensize` recomputes float positions; tell the
+        // compositor not to draw them yet.
+        ui_comp_set_screen_valid(false);
+        if msg_grid_ref().is_allocated() {
+            msg_grid_invalid.set(true);
+        }
 
-            let redraw_off = Suppress::redraw();
-            win_new_screensize(); // fit the windows in the new screen
-            comp_col(); // recompute the shown-command and ruler columns
-            drop(redraw_off);
+        let redraw_off = Suppress::redraw();
+        win_new_screensize(); // fit the windows in the new screen
+        unsafe { comp_col() }; // recompute the shown-command and ruler columns
+        drop(redraw_off);
 
-            retry_count += 1;
-            if retry_count > 3 {
-                break;
-            }
+        retry_count += 1;
+        if retry_count > 3 {
+            break;
+        }
+        unsafe {
             apply_autocmds(
                 EVENT_VIMRESIZED,
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
                 curbuf.get(),
-            );
-        }
-        resizing_autocmd.set(false);
+            )
+        };
+    }
+    resizing_autocmd.set(false);
 
-        redraw_all_later(UPD_CLEAR);
+    unsafe { redraw_all_later(UPD_CLEAR) };
 
-        if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
-            screenclear();
-        }
+    if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
+        unsafe { screenclear() };
+    }
 
-        if starting.get() != NO_SCREEN {
-            maketitle();
+    if starting.get() != NO_SCREEN {
+        unsafe { maketitle() };
 
-            changed_line_abv_curs();
-            invalidate_botline_win(Win::current());
+        unsafe { changed_line_abv_curs() };
+        invalidate_botline_win(unsafe { Win::current() });
 
-            // At a more prompt, running an external command, in Ex mode or at a
-            // one-key cmdline prompt, only the cursor is repositioned; anywhere
-            // else the screen is redrawn now.
-            let deferred = State.get() == MODE_ASKMORE
-                || State.get() == MODE_EXTERNCMD
-                || exmode_active.get()
-                || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
-            if deferred {
-                if State.get() & MODE_CMDLINE != 0 {
-                    update_screen();
+        // At a more prompt, running an external command, in Ex mode or at a
+        // one-key cmdline prompt, only the cursor is repositioned; anywhere
+        // else the screen is redrawn now.
+        let deferred = State.get() == MODE_ASKMORE
+            || State.get() == MODE_EXTERNCMD
+            || exmode_active.get()
+            || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
+        if deferred {
+            if State.get() & MODE_CMDLINE != 0 {
+                unsafe { update_screen() };
+            }
+            if msg_grid_ref().is_allocated() {
+                unsafe { msg_grid_validate() };
+            }
+            ui_comp_set_screen_valid(true);
+            unsafe { repeat_message() };
+        } else {
+            if unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0 {
+                unsafe { do_check_scrollbind(true) };
+            }
+            if State.get() & MODE_CMDLINE != 0 {
+                // The pum is redrawn by `cmdline_pum_display` below, at the
+                // new position; keep `update_screen` from drawing it at the
+                // old one.
+                redraw_popupmenu.set(false);
+                unsafe { update_screen() };
+                unsafe { redrawcmdline() };
+                if pum_drawn() {
+                    unsafe { cmdline_pum_display(false) };
                 }
-                if msg_grid_ref().is_allocated() {
-                    msg_grid_validate();
-                }
-                ui_comp_set_screen_valid(true);
-                repeat_message();
             } else {
-                if (*curwin.get()).w_onebuf_opt.wo_scb != 0 {
-                    do_check_scrollbind(true);
-                }
-                if State.get() & MODE_CMDLINE != 0 {
-                    // The pum is redrawn by `cmdline_pum_display` below, at the
-                    // new position; keep `update_screen` from drawing it at the
-                    // old one.
+                update_topline(unsafe { Win::current() });
+                if pum_drawn() {
+                    // Same again: `ins_compl_show_pum` wants the screen
+                    // redrawn first, and the nested `update_screen` inside
+                    // it must not draw the pum at its old position.
                     redraw_popupmenu.set(false);
-                    update_screen();
-                    redrawcmdline();
-                    if pum_drawn() {
-                        cmdline_pum_display(false);
-                    }
-                } else {
-                    update_topline(Win::current());
-                    if pum_drawn() {
-                        // Same again: `ins_compl_show_pum` wants the screen
-                        // redrawn first, and the nested `update_screen` inside
-                        // it must not draw the pum at its old position.
-                        redraw_popupmenu.set(false);
-                        ins_compl_show_pum();
-                    }
-                    update_screen();
-                    if redrawing() {
-                        setcursor();
-                    }
+                    unsafe { ins_compl_show_pum() };
+                }
+                unsafe { update_screen() };
+                if unsafe { redrawing() } {
+                    unsafe { setcursor() };
                 }
             }
-            ui_flush();
         }
-
-        resizing_screen.set(false);
+        unsafe { ui_flush() };
     }
+
+    resizing_screen.set(false);
 }
 
 /// Clamp the screen size to something the editor can lay out and index.

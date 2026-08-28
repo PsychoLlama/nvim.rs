@@ -191,23 +191,21 @@ pub(crate) unsafe fn win_endcol(wp: *const win_T) -> c_int {
 /// anyway, so this only matters when it did not.
 pub unsafe fn conceal_check_cursor_line() {
     // SAFETY: `curwin` is the editor's current window, on the main thread.
-    unsafe {
-        let wp = curwin.get();
-        let should_conceal = conceal_cursor_line(wp);
-        if (*wp).w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
-            return;
-        }
-
-        redraw_win_line(wp, (*wp).w_cursor.lnum);
-
-        // Whether the line is displayed at all may have changed with it.
-        if decor_conceal_line(wp, (*wp).w_cursor.lnum - 1, true) {
-            changed_window_setting(Win::new(wp));
-        }
-        // The cursor column has to be recomputed, e.g. when entering Visual
-        // mode stops the line being concealed.
-        curs_columns(Win::new(wp), c_int::from(true)); // may_scroll
+    let wp = curwin.get();
+    let should_conceal = unsafe { conceal_cursor_line(wp) };
+    if unsafe { (*wp).w_onebuf_opt.wo_cole } <= 0 || conceal_cursor_used.get() == should_conceal {
+        return;
     }
+
+    unsafe { redraw_win_line(wp, (*wp).w_cursor.lnum) };
+
+    // Whether the line is displayed at all may have changed with it.
+    if unsafe { decor_conceal_line(wp, (*wp).w_cursor.lnum - 1, true) } {
+        changed_window_setting(unsafe { Win::new(wp) });
+    }
+    // The cursor column has to be recomputed, e.g. when entering Visual
+    // mode stops the line being concealed.
+    curs_columns(unsafe { Win::new(wp) }, c_int::from(true)); // may_scroll
 }
 
 /// Whether redrawing should happen right now.
@@ -231,65 +229,65 @@ pub unsafe fn redrawing() -> bool {
 /// Called from [`update_screen`] with the screen grids allocated.
 unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     // SAFETY: the screen and message grids, on the main thread.
-    unsafe {
-        clear_cmdline.set(true);
+    clear_cmdline.set(true);
 
-        // `msg_scrollsize` is a pure function of `msg_scrolled` and 'cmdheight',
-        // neither of which changes until the end of this function.
-        let scrollsize = msg_scrollsize();
-        let valid = (Rows.get() - scrollsize).max(0);
+    // `msg_scrollsize` is a pure function of `msg_scrolled` and 'cmdheight',
+    // neither of which changes until the end of this function.
+    let scrollsize = msg_scrollsize();
+    let valid = (Rows.get() - scrollsize).max(0);
 
-        // The part of the message grid that is not displayed is invalid.
-        let mut mg = msg_grid_ref();
-        if mg.is_allocated() {
-            for i in 0..scrollsize.min(mg.rows) {
-                let (off, cols) = (mg.row_start(i), mg.cols);
-                mg.clear_line(off, cols, (i as OptInt) < p_ch.get());
-            }
+    // The part of the message grid that is not displayed is invalid.
+    let mut mg = msg_grid_ref();
+    if mg.is_allocated() {
+        for i in 0..scrollsize.min(mg.rows) {
+            let (off, cols) = (mg.row_start(i), mg.cols);
+            mg.clear_line(off, cols, (i as OptInt) < p_ch.get());
         }
-        mg.throttled = false;
-
-        let mut was_invalidated = false;
-        // UPD_CLEAR is already handled by the caller.
-        if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && msg_scrolled.get() != 0 {
-            was_invalidated = ui_comp_set_screen_valid(false);
-            let mut dg = default_grid_ref();
-            let mut row = valid;
-            while (row as OptInt) < Rows.get() as OptInt - p_ch.get() {
-                let off = dg.row_start(row);
-                dg.clear_line(off, Columns.get(), false);
-                row += 1;
-            }
-            for wp in windows_in_curtab() {
-                if (*wp).w_floating {
-                    continue;
-                }
-                if win_endrow(wp) > valid {
-                    // Pessimistic: `redr_type` could be UPD_NOT_VALID only
-                    // because of windows above the separator.
-                    (*wp).w_redr_type = (*wp).w_redr_type.max(UPD_NOT_VALID);
-                }
-                if !is_stl_global && win_endrow(wp) + (*wp).w_status_height > valid {
-                    (*wp).w_redr_status = true;
-                }
-            }
-            if is_stl_global && Rows.get() as OptInt - p_ch.get() - 1 > valid as OptInt {
-                (*curwin.get()).w_redr_status = true;
-            }
-        }
-
-        msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
-        msg_grid_invalid.set(false);
-        if was_invalidated {
-            // Only the message area was invalid, not the floats.
-            ui_comp_set_screen_valid(true);
-        }
-
-        msg_scrolled.set(0);
-        msg_scrolled_at_flush.set(0);
-        msg_grid_scroll_discount.set(0);
-        need_wait_return.set(false);
     }
+    mg.throttled = false;
+
+    let mut was_invalidated = false;
+    // UPD_CLEAR is already handled by the caller.
+    if redr_type == UPD_NOT_VALID && !ui_has(kUIMultigrid) && msg_scrolled.get() != 0 {
+        was_invalidated = ui_comp_set_screen_valid(false);
+        let mut dg = default_grid_ref();
+        let mut row = valid;
+        while (row as OptInt) < Rows.get() as OptInt - p_ch.get() {
+            let off = dg.row_start(row);
+            dg.clear_line(off, Columns.get(), false);
+            row += 1;
+        }
+        for wp in windows_in_curtab() {
+            if unsafe { (*wp).w_floating } {
+                continue;
+            }
+            if unsafe { win_endrow(wp) } > valid {
+                // Pessimistic: `redr_type` could be UPD_NOT_VALID only
+                // because of windows above the separator.
+                unsafe { (*wp).w_redr_type = (*wp).w_redr_type.max(UPD_NOT_VALID) };
+            }
+            if !is_stl_global
+                && unsafe { win_endrow(wp) } + unsafe { (*wp).w_status_height } > valid
+            {
+                unsafe { (*wp).w_redr_status = true };
+            }
+        }
+        if is_stl_global && Rows.get() as OptInt - p_ch.get() - 1 > valid as OptInt {
+            unsafe { (*curwin.get()).w_redr_status = true };
+        }
+    }
+
+    unsafe { msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false) };
+    msg_grid_invalid.set(false);
+    if was_invalidated {
+        // Only the message area was invalid, not the floats.
+        ui_comp_set_screen_valid(true);
+    }
+
+    msg_scrolled.set(0);
+    msg_scrolled_at_flush.set(0);
+    msg_grid_scroll_discount.set(0);
+    need_wait_return.set(false);
 }
 
 /// Bring every displayed buffer's cached syntax and decoration state up to date
@@ -302,22 +300,20 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 /// Called from [`update_screen`].
 unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
-    unsafe {
-        for wp in windows_in_curtab() {
-            update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed);
+    for wp in windows_in_curtab() {
+        unsafe { update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed) };
 
-            let buf = (*wp).w_buffer;
-            if !(*buf).b_mod_set {
-                continue;
-            }
-            if (*buf).b_mod_tick_syn < display_tick.get() && syntax_present(wp) {
-                syn_stack_apply_changes(buf);
-                (*buf).b_mod_tick_syn = display_tick.get();
-            }
-            if (*buf).b_mod_tick_decor < display_tick.get() {
-                decor_providers_invoke_buf(buf);
-                (*buf).b_mod_tick_decor = display_tick.get();
-            }
+        let buf = unsafe { (*wp).w_buffer };
+        if !unsafe { (*buf).b_mod_set } {
+            continue;
+        }
+        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && unsafe { syntax_present(wp) } {
+            unsafe { syn_stack_apply_changes(buf) };
+            unsafe { (*buf).b_mod_tick_syn = display_tick.get() };
+        }
+        if unsafe { (*buf).b_mod_tick_decor } < display_tick.get() {
+            unsafe { decor_providers_invoke_buf(buf) };
+            unsafe { (*buf).b_mod_tick_decor = display_tick.get() };
         }
     }
 }
@@ -334,86 +330,86 @@ pub unsafe fn update_screen() -> c_int {
     static STILL_MAY_INTRO: GlobalCell<bool> = GlobalCell::new(true);
 
     // SAFETY: the whole screen pipeline, on the main thread.
-    unsafe {
-        if STILL_MAY_INTRO.get() && !may_show_intro() {
-            redraw_later(first_win_raw(), UPD_NOT_VALID);
-            STILL_MAY_INTRO.set(false);
+    if STILL_MAY_INTRO.get() && !unsafe { may_show_intro() } {
+        unsafe { redraw_later(first_win_raw(), UPD_NOT_VALID) };
+        STILL_MAY_INTRO.set(false);
+    }
+
+    let is_stl_global = global_stl_height() > 0;
+
+    // A VimResized autocommand can redraw in the middle of a resize, which
+    // would bypass the checks in `screen_resize`.
+    if resizing_autocmd.get() || !default_grid_ref().is_allocated() {
+        return FAIL;
+    }
+
+    // May have postponed updating diffs.
+    if need_diff_redraw.get() {
+        unsafe { diff_redraw(true) };
+    }
+
+    if !unsafe { redrawing() } || updating_screen.get() || cmdline_number_prompt() {
+        return FAIL;
+    }
+
+    let mut redr_type = must_redraw.get();
+    // Reset now, so that a redraw asked for while redrawing -- by
+    // asynchronous scrolling, by `update_topline` in `win_update`, or by a
+    // decoration provider -- happens later rather than being lost.
+    must_redraw.set(0);
+
+    updating_screen.set(true);
+    display_tick.set(display_tick.get().wrapping_add(1));
+
+    // Glyph cache full, very rare. The screen buffers cannot be compared
+    // against their previous contents after this, so it has to be a CLEAR.
+    if unsafe { schar_cache_clear_if_full() } {
+        redr_type = redr_type.max(UPD_CLEAR);
+    }
+
+    // Tricky: other code can reset `msg_scrolled` behind our back, so this
+    // is bookkept separately.
+    if msg_did_scroll.get() {
+        msg_did_scroll.set(false);
+        msg_scrolled_at_flush.set(0);
+    }
+
+    if redr_type >= UPD_CLEAR || !default_grid_ref().valid {
+        ui_comp_set_screen_valid(false);
+    }
+
+    if msg_scrolled.get() != 0 || msg_grid_invalid.get() {
+        unsafe { restore_scrolled_messages(redr_type, is_stl_global) };
+    }
+
+    unsafe { win_ui_flush(true) };
+
+    // `cmdline_row` may have been moved temporarily.
+    unsafe { compute_cmdrow() };
+
+    let mut hl_changed = false;
+    if need_highlight_changed.get() {
+        unsafe { highlight_changed() };
+        hl_changed = true;
+    }
+
+    if redr_type == UPD_CLEAR {
+        // Resets `clear_cmdline` and sets UPD_NOT_VALID on every window.
+        unsafe { screenclear() };
+        unsafe { cmdline_screen_cleared() };
+        if ui_has(kUIMessages) {
+            ui_call_msg_clear();
         }
-
-        let is_stl_global = global_stl_height() > 0;
-
-        // A VimResized autocommand can redraw in the middle of a resize, which
-        // would bypass the checks in `screen_resize`.
-        if resizing_autocmd.get() || !default_grid_ref().is_allocated() {
-            return FAIL;
-        }
-
-        // May have postponed updating diffs.
-        if need_diff_redraw.get() {
-            diff_redraw(true);
-        }
-
-        if !redrawing() || updating_screen.get() || cmdline_number_prompt() {
-            return FAIL;
-        }
-
-        let mut redr_type = must_redraw.get();
-        // Reset now, so that a redraw asked for while redrawing -- by
-        // asynchronous scrolling, by `update_topline` in `win_update`, or by a
-        // decoration provider -- happens later rather than being lost.
+        redr_type = UPD_NOT_VALID;
+        // `must_redraw` may have been set indirectly; avoid another redraw.
         must_redraw.set(0);
+    } else if !default_grid_ref().valid {
+        default_grid_ref().revalidate();
+    }
 
-        updating_screen.set(true);
-        display_tick.set(display_tick.get().wrapping_add(1));
-
-        // Glyph cache full, very rare. The screen buffers cannot be compared
-        // against their previous contents after this, so it has to be a CLEAR.
-        if schar_cache_clear_if_full() {
-            redr_type = redr_type.max(UPD_CLEAR);
-        }
-
-        // Tricky: other code can reset `msg_scrolled` behind our back, so this
-        // is bookkept separately.
-        if msg_did_scroll.get() {
-            msg_did_scroll.set(false);
-            msg_scrolled_at_flush.set(0);
-        }
-
-        if redr_type >= UPD_CLEAR || !default_grid_ref().valid {
-            ui_comp_set_screen_valid(false);
-        }
-
-        if msg_scrolled.get() != 0 || msg_grid_invalid.get() {
-            restore_scrolled_messages(redr_type, is_stl_global);
-        }
-
-        win_ui_flush(true);
-
-        // `cmdline_row` may have been moved temporarily.
-        compute_cmdrow();
-
-        let mut hl_changed = false;
-        if need_highlight_changed.get() {
-            highlight_changed();
-            hl_changed = true;
-        }
-
-        if redr_type == UPD_CLEAR {
-            // Resets `clear_cmdline` and sets UPD_NOT_VALID on every window.
-            screenclear();
-            cmdline_screen_cleared();
-            if ui_has(kUIMessages) {
-                ui_call_msg_clear();
-            }
-            redr_type = UPD_NOT_VALID;
-            // `must_redraw` may have been set indirectly; avoid another redraw.
-            must_redraw.set(0);
-        } else if !default_grid_ref().valid {
-            default_grid_ref().revalidate();
-        }
-
-        // May need to clear space on the default grid for the message area.
-        if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
+    // May need to clear space on the default grid for the message area.
+    if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
+        unsafe {
             grid_clear(
                 default_gridview(),
                 Rows.get() - p_ch.get() as c_int,
@@ -421,155 +417,157 @@ pub unsafe fn update_screen() -> c_int {
                 0,
                 Columns.get(),
                 0,
-            );
+            )
+        };
+    }
+
+    ui_comp_set_screen_valid(true);
+
+    unsafe { decor_providers_start() };
+
+    // The "start" callback may have changed highlights used by the global
+    // elements.
+    if unsafe { win_check_ns_hl(::core::ptr::null_mut()) } {
+        redraw_cmdline.set(true);
+        redraw_tabline.set(true);
+    }
+
+    if clear_cmdline.get() {
+        unsafe { msg_check_for_delay(false) };
+    }
+
+    // Force a redraw when the width of the number column changed.
+    //
+    // Upstream special-cases `curwin` here and says so in a comment; either
+    // every window should be checked or none should. Reproduced.
+    let wp = curwin.get();
+    // `number_width` is NOT pure -- it caches its answer in the window and
+    // resets the 'statuscolumn' width estimate -- so it stays behind the
+    // `w_redr_type` test, where upstream's `&&` puts it.
+    if unsafe { (*wp).w_redr_type } < UPD_NOT_VALID {
+        let nrwidth = if unsafe { (*wp).w_onebuf_opt.wo_nu } != 0
+            || unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0
+            || unsafe { *(*wp).w_onebuf_opt.wo_stc } != 0
+        {
+            unsafe { number_width(wp) }
+        } else {
+            0
+        };
+        if unsafe { (*wp).w_nrwidth } != nrwidth {
+            unsafe { (*wp).w_redr_type = UPD_NOT_VALID };
         }
+    }
 
-        ui_comp_set_screen_valid(true);
+    if unsafe { (*wp).w_redr_type } == UPD_INVERTED {
+        // So the end of the Visual selection is right.
+        unsafe { update_curswant() };
+    }
 
-        decor_providers_start();
-
-        // The "start" callback may have changed highlights used by the global
-        // elements.
-        if win_check_ns_hl(::core::ptr::null_mut()) {
-            redraw_cmdline.set(true);
-            redraw_tabline.set(true);
-        }
-
-        if clear_cmdline.get() {
-            msg_check_for_delay(false);
-        }
-
-        // Force a redraw when the width of the number column changed.
-        //
-        // Upstream special-cases `curwin` here and says so in a comment; either
-        // every window should be checked or none should. Reproduced.
-        let wp = curwin.get();
-        // `number_width` is NOT pure -- it caches its answer in the window and
-        // resets the 'statuscolumn' width estimate -- so it stays behind the
-        // `w_redr_type` test, where upstream's `&&` puts it.
-        if (*wp).w_redr_type < UPD_NOT_VALID {
-            let nrwidth = if (*wp).w_onebuf_opt.wo_nu != 0
-                || (*wp).w_onebuf_opt.wo_rnu != 0
-                || *(*wp).w_onebuf_opt.wo_stc != 0
-            {
-                number_width(wp)
-            } else {
-                0
-            };
-            if (*wp).w_nrwidth != nrwidth {
-                (*wp).w_redr_type = UPD_NOT_VALID;
+    if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
+        unsafe { update_window_hl(curwin.get(), redr_type >= UPD_NOT_VALID) };
+        for tp in winlayer::tabs() {
+            if !tp.is_current() {
+                unsafe { update_window_hl(tp.tp_curwin, redr_type >= UPD_NOT_VALID) };
             }
         }
+        unsafe { draw_tabline() };
+    }
 
-        if (*wp).w_redr_type == UPD_INVERTED {
-            // So the end of the Visual selection is right.
-            update_curswant();
+    unsafe { update_buffer_state(redr_type, hl_changed) };
+
+    // Top to bottom through the windows, redrawing the ones that need it.
+    let mut did_one = false;
+    SearchHl::current().set_regprog(::core::ptr::null_mut());
+
+    for wp in windows_in_curtab() {
+        if unsafe { (*wp).w_redr_type } == UPD_CLEAR
+            && unsafe { (*wp).w_floating }
+            && unsafe { (*wp).w_grid_alloc.is_allocated() }
+        {
+            unsafe { (*wp).w_grid_alloc.invalidate() };
+            unsafe { (*wp).w_redr_type = UPD_NOT_VALID };
         }
 
-        if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
-            update_window_hl(curwin.get(), redr_type >= UPD_NOT_VALID);
-            for tp in winlayer::tabs() {
-                if !tp.is_current() {
-                    update_window_hl(tp.tp_curwin, redr_type >= UPD_NOT_VALID);
-                }
-            }
-            draw_tabline();
-        }
+        unsafe { win_check_ns_hl(wp) };
+        unsafe { win_grid_alloc(wp) };
 
-        update_buffer_state(redr_type, hl_changed);
-
-        // Top to bottom through the windows, redrawing the ones that need it.
-        let mut did_one = false;
-        SearchHl::current().set_regprog(::core::ptr::null_mut());
-
-        for wp in windows_in_curtab() {
-            if (*wp).w_redr_type == UPD_CLEAR
-                && (*wp).w_floating
-                && (*wp).w_grid_alloc.is_allocated()
-            {
-                (*wp).w_grid_alloc.invalidate();
-                (*wp).w_redr_type = UPD_NOT_VALID;
-            }
-
-            win_check_ns_hl(wp);
-            win_grid_alloc(wp);
-
-            if (*wp).w_redr_border || (*wp).w_redr_type >= UPD_NOT_VALID {
+        if unsafe { (*wp).w_redr_border } || unsafe { (*wp).w_redr_type } >= UPD_NOT_VALID {
+            unsafe {
                 grid_draw_border(
                     &raw mut (*wp).w_grid_alloc,
                     &raw mut (*wp).w_config,
                     (&raw mut (*wp).w_border_adj).cast::<c_int>(),
                     (*wp).w_onebuf_opt.wo_winbl as c_int,
                     (*wp).w_ns_hl_attr,
-                );
+                )
+            };
+        }
+
+        if unsafe { (*wp).w_redr_type } != 0 {
+            if !did_one {
+                did_one = true;
+                unsafe { start_search_hl() };
             }
-
-            if (*wp).w_redr_type != 0 {
-                if !did_one {
-                    did_one = true;
-                    start_search_hl();
-                }
-                win_update(wp);
-            }
-
-            // The status line and window bar go after the window, to minimise
-            // cursor movement.
-            if (*wp).w_redr_status {
-                win_redr_winbar(wp);
-                win_redr_status(wp);
-            }
+            unsafe { win_update(wp) };
         }
 
-        // Separator connectors go after every window update, so that a
-        // connector is never overwritten by a neighbour's separator.
-        if did_one {
-            for wp in windows_in_curtab() {
-                draw_sep_connectors_win(wp);
-            }
+        // The status line and window bar go after the window, to minimise
+        // cursor movement.
+        if unsafe { (*wp).w_redr_status } {
+            unsafe { win_redr_winbar(wp) };
+            unsafe { win_redr_status(wp) };
         }
-
-        end_search_hl();
-
-        if pum_drawn() && must_redraw_pum.get() {
-            win_check_ns_hl(curwin.get());
-            pum_redraw();
-        } else if State.get() & MODE_CMDLINE != 0 {
-            pum_check_clear();
-        }
-
-        win_check_ns_hl(::core::ptr::null_mut());
-
-        // Reset `b_mod_set`. Going through the windows is probably faster than
-        // going through every buffer.
-        for wp in windows_in_curtab() {
-            (*(*wp).w_buffer).b_mod_set = false;
-        }
-
-        updating_screen.set(false);
-
-        if need_maketitle.get() {
-            maketitle();
-        }
-
-        // Last, because scrolling may mess the command line up.
-        if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
-            showmode();
-        }
-
-        if STILL_MAY_INTRO.get() {
-            intro_message(false);
-        }
-        repeat_message();
-
-        decor_providers_invoke_end();
-
-        // Either the cmdline was cleared, not drawn, or the mode was drawn last.
-        // This does not necessarily overwrite an external cmdline.
-        if !ui_has(kUICmdline) {
-            cmdline_was_last_drawn.set(false);
-        }
-        OK
     }
+
+    // Separator connectors go after every window update, so that a
+    // connector is never overwritten by a neighbour's separator.
+    if did_one {
+        for wp in windows_in_curtab() {
+            unsafe { draw_sep_connectors_win(wp) };
+        }
+    }
+
+    end_search_hl();
+
+    if pum_drawn() && must_redraw_pum.get() {
+        unsafe { win_check_ns_hl(curwin.get()) };
+        unsafe { pum_redraw() };
+    } else if State.get() & MODE_CMDLINE != 0 {
+        unsafe { pum_check_clear() };
+    }
+
+    unsafe { win_check_ns_hl(::core::ptr::null_mut()) };
+
+    // Reset `b_mod_set`. Going through the windows is probably faster than
+    // going through every buffer.
+    for wp in windows_in_curtab() {
+        unsafe { (*(*wp).w_buffer).b_mod_set = false };
+    }
+
+    updating_screen.set(false);
+
+    if need_maketitle.get() {
+        unsafe { maketitle() };
+    }
+
+    // Last, because scrolling may mess the command line up.
+    if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
+        unsafe { showmode() };
+    }
+
+    if STILL_MAY_INTRO.get() {
+        unsafe { intro_message(false) };
+    }
+    unsafe { repeat_message() };
+
+    unsafe { decor_providers_invoke_end() };
+
+    // Either the cmdline was cleared, not drawn, or the mode was drawn last.
+    // This does not necessarily overwrite an external cmdline.
+    if !ui_has(kUICmdline) {
+        cmdline_was_last_drawn.set(false);
+    }
+    OK
 }
 
 /// The search-highlight matcher the whole redraw shares.
@@ -654,31 +652,32 @@ pub unsafe fn setcursor() {
 pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
     // SAFETY: a live window; `grid_adjust` maps its coordinates onto whichever
     // grid actually carries them.
-    unsafe {
-        if !force && !redrawing() {
-            return;
-        }
-        validate_cursor(Win::new(wp));
+    if !force && !unsafe { redrawing() } {
+        return;
+    }
+    validate_cursor(unsafe { Win::new(wp) });
 
-        let mut row = (*wp).w_wrow;
-        let mut col = (*wp).w_wcol;
-        if (*wp).w_onebuf_opt.wo_rl != 0 {
-            // With 'rightleft' and the cursor on a double-width character, the
-            // cursor goes on its leftmost column.
-            let cursor =
-                ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum).add((*wp).w_cursor.col as usize);
-            let cells = if utf_ptr2cells(cursor) == 2 && vim_isprintc(utf_ptr2char(cursor)) {
-                2
-            } else {
-                1
-            };
-            col = (*wp).w_view_width - (*wp).w_wcol - cells;
-        }
+    let mut row = unsafe { (*wp).w_wrow };
+    let mut col = unsafe { (*wp).w_wcol };
+    if unsafe { (*wp).w_onebuf_opt.wo_rl } != 0 {
+        // With 'rightleft' and the cursor on a double-width character, the
+        // cursor goes on its leftmost column.
+        let cursor = unsafe {
+            ml_get_buf((*wp).w_buffer, (*wp).w_cursor.lnum).add((*wp).w_cursor.col as usize)
+        };
+        let cells = if unsafe { utf_ptr2cells(cursor) } == 2
+            && unsafe { vim_isprintc(utf_ptr2char(cursor)) }
+        {
+            2
+        } else {
+            1
+        };
+        col = unsafe { (*wp).w_view_width } - unsafe { (*wp).w_wcol } - cells;
+    }
 
-        let grid = grid_adjust((*wp).w_grid, &mut row, &mut col);
-        if !grid.is_unresolved() {
-            ui_grid_cursor_goto(grid.handle, row, col);
-        }
+    let grid = unsafe { grid_adjust((*wp).w_grid, &mut row, &mut col) };
+    if !grid.is_unresolved() {
+        ui_grid_cursor_goto(grid.handle, row, col);
     }
 }
 
@@ -690,15 +689,13 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
 /// leaves one for the current window).
 pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
-    unsafe {
-        let fdc = win_fdccol_count(wp);
-        let min_width = if wp == curwin.get() && p_wmw.get() == 0 {
-            1
-        } else {
-            p_wmw.get() as c_int
-        };
-        fdc.min((*wp).w_view_width - (col + min_width))
-    }
+    let fdc = unsafe { win_fdccol_count(wp) };
+    let min_width = if wp == curwin.get() && p_wmw.get() == 0 {
+        1
+    } else {
+        p_wmw.get() as c_int
+    };
+    fdc.min(unsafe { (*wp).w_view_width } - (col + min_width))
 }
 
 /// The width of window `wp`'s `'number'`/`'relativenumber'` column.
@@ -708,81 +705,80 @@ pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
 /// for, since it only changes when that crosses a power of ten.
 pub unsafe fn number_width(wp: *mut win_T) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
-    unsafe {
-        // With 'relativenumber' alone the largest number shown is the window
-        // height (the cursor line shows "0"); otherwise it is the line count.
-        let largest = if (*wp).w_onebuf_opt.wo_rnu != 0 && (*wp).w_onebuf_opt.wo_nu == 0 {
-            (*wp).w_view_height as linenr_T
+    // With 'relativenumber' alone the largest number shown is the window
+    // height (the cursor line shows "0"); otherwise it is the line count.
+    let largest =
+        if unsafe { (*wp).w_onebuf_opt.wo_rnu } != 0 && unsafe { (*wp).w_onebuf_opt.wo_nu } == 0 {
+            unsafe { (*wp).w_view_height as linenr_T }
         } else {
-            (*(*wp).w_buffer).b_ml.ml_line_count
+            unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }
         };
 
-        if largest == (*wp).w_nrwidth_line_count {
-            return (*wp).w_nrwidth_width;
-        }
-        (*wp).w_nrwidth_line_count = largest;
+    if largest == unsafe { (*wp).w_nrwidth_line_count } {
+        return unsafe { (*wp).w_nrwidth_width };
+    }
+    unsafe { (*wp).w_nrwidth_line_count = largest };
 
-        if *(*wp).w_onebuf_opt.wo_stc != 0 {
-            // 'statuscolumn' draws the number itself, so all that is reserved
-            // here is 'numberwidth'; the real width is re-estimated from the
-            // expression's output.
-            (*wp).w_statuscol_line_count = 0;
+    if unsafe { *(*wp).w_onebuf_opt.wo_stc } != 0 {
+        // 'statuscolumn' draws the number itself, so all that is reserved
+        // here is 'numberwidth'; the real width is re-estimated from the
+        // expression's output.
+        unsafe { (*wp).w_statuscol_line_count = 0 };
+        unsafe {
             (*wp).w_nrwidth_width =
                 c_int::from((*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0)
-                    * (*wp).w_onebuf_opt.wo_nuw as c_int;
-            return (*wp).w_nrwidth_width;
-        }
-
-        // Digits in `largest`, at least one -- upstream's do-while, which
-        // answers 1 for a line count of 0.
-        let mut n = 0;
-        let mut rest = largest;
-        loop {
-            rest /= 10;
-            n += 1;
-            if rest <= 0 {
-                break;
-            }
-        }
-
-        // 'numberwidth' is the minimal width plus one.
-        n = n.max((*wp).w_onebuf_opt.wo_nuw as c_int - 1);
-
-        // With `'signcolumn'` "number" and a sign to show, the number column
-        // needs room for the two-cell sign text.
-        if n < 2
-            && buf_meta_total(Win::new(wp).buffer(), kMTMetaSignText) != 0
-            && (*wp).w_minscwidth == SCL_NUM
-        {
-            n = 2;
-        }
-
-        (*wp).w_nrwidth_width = n;
-        n
+                    * (*wp).w_onebuf_opt.wo_nuw as c_int
+        };
+        return unsafe { (*wp).w_nrwidth_width };
     }
+
+    // Digits in `largest`, at least one -- upstream's do-while, which
+    // answers 1 for a line count of 0.
+    let mut n = 0;
+    let mut rest = largest;
+    loop {
+        rest /= 10;
+        n += 1;
+        if rest <= 0 {
+            break;
+        }
+    }
+
+    // 'numberwidth' is the minimal width plus one.
+    n = n.max(unsafe { (*wp).w_onebuf_opt.wo_nuw } as c_int - 1);
+
+    // With `'signcolumn'` "number" and a sign to show, the number column
+    // needs room for the two-cell sign text.
+    if n < 2
+        && buf_meta_total(unsafe { Win::new(wp) }.buffer(), kMTMetaSignText) != 0
+        && unsafe { (*wp).w_minscwidth } == SCL_NUM
+    {
+        n = 2;
+    }
+
+    unsafe { (*wp).w_nrwidth_width = n };
+    n
 }
 
 /// Whether the cursor line in window `wp` may be concealed, per
 /// `'concealcursor'`.
 pub unsafe fn conceal_cursor_line(wp: *const win_T) -> bool {
     // SAFETY: a live window, on the main thread.
-    unsafe {
-        if *(*wp).w_onebuf_opt.wo_cocu == 0 {
-            return false;
-        }
-        let mode = if get_real_state() & MODE_VISUAL != 0 {
-            b'v'
-        } else if State.get() & MODE_INSERT != 0 {
-            b'i'
-        } else if State.get() & MODE_NORMAL != 0 {
-            b'n'
-        } else if State.get() & MODE_CMDLINE != 0 {
-            b'c'
-        } else {
-            return false;
-        };
-        !vim_strchr((*wp).w_onebuf_opt.wo_cocu, mode as c_int).is_null()
+    if unsafe { *(*wp).w_onebuf_opt.wo_cocu } == 0 {
+        return false;
     }
+    let mode = if get_real_state() & MODE_VISUAL != 0 {
+        b'v'
+    } else if State.get() & MODE_INSERT != 0 {
+        b'i'
+    } else if State.get() & MODE_NORMAL != 0 {
+        b'n'
+    } else if State.get() & MODE_CMDLINE != 0 {
+        b'c'
+    } else {
+        return false;
+    };
+    !unsafe { vim_strchr((*wp).w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
 }
 
 /// Whether the cursor line of window `wp` is drawn differently from any other.
@@ -810,12 +806,12 @@ pub unsafe fn win_update_cursorline(wp: *mut win_T, foldinfo: *mut foldinfo_T) {
             (*wp).w_cursor.lnum
         } else {
             0
-        };
-        if (*wp).w_onebuf_opt.wo_cul != 0 {
-            *foldinfo = fold_info(Win::new(wp), (*wp).w_cursor.lnum);
-            if (*foldinfo).fi_level != 0 && (*foldinfo).fi_lines > 0 {
-                (*wp).w_cursorline = (*foldinfo).fi_lnum;
-            }
+        }
+    };
+    if unsafe { (*wp).w_onebuf_opt.wo_cul } != 0 {
+        unsafe { *foldinfo = fold_info(Win::new(wp), (*wp).w_cursor.lnum) };
+        if unsafe { (*foldinfo).fi_level } != 0 && unsafe { (*foldinfo).fi_lines } > 0 {
+            unsafe { (*wp).w_cursorline = (*foldinfo).fi_lnum };
         }
     }
 }
