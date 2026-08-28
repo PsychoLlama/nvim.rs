@@ -15,7 +15,7 @@ use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, VAR_LIST, VAR_UNKNOWN};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, BufId, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -56,7 +56,10 @@ struct Counted {
     pat: *mut c_char,
     patlen: size_t,
     chgtick: c_int,
-    buf: *mut buf_T,
+    /// Which buffer the numbers were counted in, by identity rather than by
+    /// address: a wiped buffer's `buf_T` can be handed back out by the
+    /// allocator, and a *handle* is never reissued (p23-5).
+    buf: Option<BufId>,
 }
 
 impl Counted {
@@ -73,7 +76,7 @@ impl Counted {
         pat: ptr::null_mut(),
         patlen: 0,
         chgtick: 0,
-        buf: ptr::null_mut(),
+        buf: None,
     };
 
     /// Whether the remembered numbers still describe the current buffer,
@@ -83,14 +86,14 @@ impl Counted {
     /// Reads the current buffer and the remembered pattern.
     unsafe fn still_holds(&self, cursor_pos: pos_T) -> bool {
         let live = last_used_pattern();
-        self.chgtick as varnumber_T == unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
+        self.chgtick as varnumber_T == buf_get_changedtick(cur_buf())
             // The null test suppresses clang's "NULL passed as
             // nonnull parameter" on `strncmp`.
             && !self.pat.is_null()
             && unsafe { strncmp(self.pat, live.pat, self.patlen) } == 0
             && self.patlen == live.patlen
             && equalpos(self.at, cursor_pos)
-            && self.buf == curbuf.get()
+            && self.buf == Some(cur_buf().id())
     }
 
     /// Throw the numbers away and start counting the current buffer again.
@@ -100,8 +103,7 @@ impl Counted {
         self.exact_match = false;
         self.incomplete = 0;
         clearpos(&mut self.at);
-        // SAFETY: reads a global pointer.
-        self.buf = curbuf.get();
+        self.buf = Some(cur_buf().id());
     }
 
     /// Record what the numbers were counted from.
@@ -113,8 +115,8 @@ impl Counted {
         unsafe { xfree(self.pat as *mut c_void) };
         self.pat = unsafe { xstrnsave(live.pat, live.patlen) };
         self.patlen = live.patlen;
-        self.chgtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } as c_int;
-        self.buf = curbuf.get();
+        self.chgtick = buf_get_changedtick(cur_buf()) as c_int;
+        self.buf = Some(cur_buf().id());
         self.at = at;
     }
 }
@@ -465,4 +467,10 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
+}
+
+/// The buffer the editor is working in.
+fn cur_buf() -> Buf {
+    // SAFETY: `curbuf` is set from startup to exit.
+    unsafe { Buf::current() }
 }
