@@ -74,9 +74,8 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
             return false;
         }
         if st.read_undo_file {
-            st.sha.update(unsafe {
-                core::slice::from_raw_parts(line_start.cast::<u8>(), len as usize)
-            });
+            let (at, n) = (line_start.cast::<u8>(), len as usize);
+            st.sha.update(unsafe { core::slice::from_raw_parts(at, n) });
         }
         st.lnum += 1;
         true

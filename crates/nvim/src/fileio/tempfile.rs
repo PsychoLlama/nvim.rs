@@ -126,9 +126,8 @@ unsafe fn vim_mktempdir() {
         let mut tmp = Template::new();
         // Leave room for "/tmp/nvim.<user>/XXXXXX/999999999".
         let at = tmp.as_mut_ptr();
-        tmp.set_len(unsafe {
-            expand_env(root.as_ptr().cast_mut(), at, TEMP_FILE_PATH_MAXLEN - 64)
-        });
+        let from = root.as_ptr().cast_mut();
+        tmp.set_len(unsafe { expand_env(from, at, TEMP_FILE_PATH_MAXLEN - 64) });
 
         if !unsafe { os_isdir(tmp.as_ptr()) } {
             if root == c"$TMPDIR" {
@@ -388,12 +387,8 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
                 );
             }
             if notfound > 1 {
-                unsafe {
-                    msg_schedule_semsg_c!(
-                        c"E5431: tempdir disappeared (%d times)".as_ptr(),
-                        notfound
-                    )
-                };
+                let fmt = c"E5431: tempdir disappeared (%d times)".as_ptr();
+                unsafe { msg_schedule_semsg_c!(fmt, notfound) };
             }
         }
         unsafe { vim_mktempdir() };

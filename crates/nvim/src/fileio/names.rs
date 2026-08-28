@@ -180,9 +180,8 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
     for n in 123..99999 {
         let digits = n.to_string();
         let end = tail + digits.len();
-        tempname[tail..end].copy_from_slice(unsafe {
-            core::slice::from_raw_parts(digits.as_ptr().cast::<c_char>(), digits.len())
-        });
+        let (at, len) = (digits.as_ptr().cast::<c_char>(), digits.len());
+        tempname[tail..end].copy_from_slice(unsafe { core::slice::from_raw_parts(at, len) });
         tempname[end] = 0;
 
         if unsafe { os_path_exists(tempname.as_ptr()) } {
@@ -358,36 +357,17 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
     let mut p = list;
     while unsafe { *p } != 0 {
         let mut buf = [0 as c_char; MAXPATHL as usize];
-        unsafe {
-            copy_option_part(
-                &raw mut p,
-                buf.as_mut_ptr(),
-                buf.len(),
-                c",".as_ptr().cast_mut(),
-            )
-        };
+        let (at, into, room) = (&raw mut p, buf.as_mut_ptr(), buf.len());
+        unsafe { copy_option_part(at, into, room, c",".as_ptr().cast_mut()) };
         let mut allow_dirs: c_char = 0;
-        let regpat = unsafe {
-            file_pat_to_reg_pat(
-                buf.as_ptr(),
-                ptr::null(),
-                &raw mut allow_dirs,
-                false as c_int,
-            )
-        };
+        let dirs = &raw mut allow_dirs;
+        let regpat =
+            unsafe { file_pat_to_reg_pat(buf.as_ptr(), ptr::null(), dirs, false as c_int) };
         if regpat.is_null() {
             break;
         }
-        let matched = unsafe {
-            match_file_pat(
-                regpat,
-                ptr::null_mut(),
-                ffname,
-                sfname,
-                tail,
-                allow_dirs as c_int,
-            )
-        };
+        let (no_prog, dirs) = (ptr::null_mut(), allow_dirs as c_int);
+        let matched = unsafe { match_file_pat(regpat, no_prog, ffname, sfname, tail, dirs) };
         unsafe { xfree(regpat.cast()) };
         if matched {
             return true;
@@ -537,13 +517,12 @@ pub unsafe fn file_pat_to_reg_pat(
     }
 
     if nested != 0 {
-        unsafe {
-            emsg(gettext(if nested < 0 {
-                c"E219: Missing {.".as_ptr()
-            } else {
-                c"E220: Missing }.".as_ptr()
-            }))
+        let unbalanced = if nested < 0 {
+            c"E219: Missing {.".as_ptr()
+        } else {
+            c"E220: Missing }.".as_ptr()
         };
+        unsafe { emsg(gettext(unbalanced)) };
         return ptr::null_mut();
     }
     unsafe { xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()) }.cast()

@@ -297,10 +297,9 @@ fn warn_changed(buf: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reloa
         let warn = VIM_WARNING as c_int;
         // SAFETY: `tbuf` is this frame's NUL-terminated message, and the
         // title and buttons are static strings.
-        let answer = unsafe {
-            let (title, buttons) = (gettext(title), gettext(buttons));
-            do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int)
-        };
+        let (title, buttons) = unsafe { (gettext(title), gettext(buttons)) };
+        let answer =
+            unsafe { do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int) };
         return (
             match answer {
                 2 => Reload::Text,

@@ -36,26 +36,15 @@ pub(crate) struct Outcome {
 fn note_text(io: *mut c_char, buflen: c_int, text: *const c_char) -> c_int {
     // SAFETY: `io` is the caller's `IOSIZE`-byte report with `buflen` bytes
     // already in it, and `text` is a NUL-terminated message.
-    unsafe {
-        snprintf(
-            io.offset(buflen as isize),
-            (IOSIZE - buflen) as size_t,
-            text,
-        )
-    }
+    let at = unsafe { io.offset(buflen as isize) };
+    unsafe { snprintf(at, (IOSIZE - buflen) as size_t, text) }
 }
 
 /// [`note_text`] for a note carrying one `%ld`.
 fn note_num(io: *mut c_char, buflen: c_int, fmt: *const c_char, n: int64_t) {
     // SAFETY: as [`note_text`]; the one conversion matches the one argument.
-    unsafe {
-        snprintf(
-            io.offset(buflen as isize),
-            (IOSIZE - buflen) as size_t,
-            fmt,
-            n,
-        )
-    };
+    let at = unsafe { io.offset(buflen as isize) };
+    unsafe { snprintf(at, (IOSIZE - buflen) as size_t, fmt, n) };
 }
 
 /// Report what was read.

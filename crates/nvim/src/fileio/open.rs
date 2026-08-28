@@ -308,9 +308,8 @@ pub(crate) unsafe fn open_source(
             if !eap.is_null() {
                 unsafe { set_forced_fenc(eap) };
             }
-            unsafe {
-                apply_autocmds_exarg(EVENT_BUFNEWFILE, sfname, sfname, false, curbuf.get(), eap)
-            };
+            let event = EVENT_BUFNEWFILE;
+            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
             // Remember the current fileformat.
             save_file_ff(unsafe { Buf::current() });
 

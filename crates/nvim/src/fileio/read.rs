@@ -410,10 +410,8 @@ pub(crate) unsafe fn readfile(
                 } else if !skip_read {
                     let mut new_buffer: *mut c_char = ptr::null_mut();
                     while w.size >= 10 {
-                        new_buffer = unsafe {
-                            verbose_try_malloc(w.size as usize + w.linerest as usize + 1)
-                        }
-                        .cast();
+                        let want = w.size as usize + w.linerest as usize + 1;
+                        new_buffer = unsafe { verbose_try_malloc(want) }.cast();
                         if !new_buffer.is_null() {
                             break;
                         }
@@ -425,9 +423,8 @@ pub(crate) unsafe fn readfile(
                     }
                     if w.linerest != 0 {
                         // Copy the characters from the previous buffer.
-                        unsafe {
-                            ptr::copy(w.ptr.offset(-w.linerest), new_buffer, w.linerest as usize)
-                        };
+                        let from = unsafe { w.ptr.offset(-w.linerest) };
+                        unsafe { ptr::copy(from, new_buffer, w.linerest as usize) };
                     }
                     unsafe { xfree(w.buffer.cast()) };
                     w.buffer = new_buffer;
@@ -486,10 +483,8 @@ pub(crate) unsafe fn readfile(
                                 // done below.
                                 for ni in 0..n as usize {
                                     let b = unsafe { *p.add(ni) };
-                                    unsafe {
-                                        *w.ptr.offset(tlen) =
-                                            if b == NL as u8 { 0 } else { b as c_char }
-                                    };
+                                    let byte = if b == NL as u8 { 0 } else { b as c_char };
+                                    unsafe { *w.ptr.offset(tlen) = byte };
                                     tlen += 1;
                                 }
                                 if partial {
@@ -581,8 +576,9 @@ pub(crate) unsafe fn readfile(
                         None
                     } else {
                         check_for_bom(
-                            unsafe {
-                                core::slice::from_raw_parts(w.ptr.cast::<u8>(), w.size as usize)
+                            {
+                                let (at, n) = (w.ptr.cast::<u8>(), w.size as usize);
+                                unsafe { core::slice::from_raw_parts(at, n) }
                             },
                             if conv.flags == FIO_UCSBOM {
                                 FIO_ALL
@@ -752,9 +748,8 @@ pub(crate) unsafe fn readfile(
                 error = true;
             } else {
                 if read_undo_file {
-                    sha_ctx.update(unsafe {
-                        core::slice::from_raw_parts(w.line_start.cast::<u8>(), len as usize)
-                    });
+                    let (at, n) = (w.line_start.cast::<u8>(), len as usize);
+                    sha_ctx.update(unsafe { core::slice::from_raw_parts(at, n) });
                 }
                 lnum += 1;
                 read_no_eol_lnum = lnum;

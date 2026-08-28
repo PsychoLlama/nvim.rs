@@ -352,15 +352,9 @@ impl Conv {
         // On a conversion error, or when there is not enough room, try
         // another conversion — unless there is no alternative, as for
         // help files.
-        while unsafe {
-            iconv(
-                self.iconv,
-                (&raw mut fromp).cast::<*mut c_char>(),
-                &raw mut from_size,
-                &raw mut top,
-                &raw mut to_size,
-            )
-        } == -1i32 as size_t
+        let src = (&raw mut fromp).cast::<*mut c_char>();
+        let (srclen, dst, dstlen) = (&raw mut from_size, &raw mut top, &raw mut to_size);
+        while unsafe { iconv(self.iconv, src, srclen, dst, dstlen) } == -1i32 as size_t
             && unsafe { *__errno_location() } != ICONV_EINVAL
             || from_size > CONV_RESTLEN as size_t
         {

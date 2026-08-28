@@ -91,7 +91,7 @@ use crate::undo::{
     buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, Ea};
 use ::libc::{
     __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
     memchr, memcpy, read, readlink, strcmp, strlen, symlink, umask, write,
@@ -345,23 +345,15 @@ pub(crate) unsafe fn msg_add_lines(
     let lines_many = c"%s%ld lines, ".as_ptr();
     // SAFETY: the plural forms are static strings; `io` holds `IOSIZE` bytes
     // and `len` of them are used.
-    len += unsafe {
-        let fmt = ngettext(lines_one, lines_many, lnum as core::ffi::c_ulong);
-        snprintf(
-            io.add(len),
-            IOSIZE as size_t - len,
-            fmt,
-            space,
-            lnum as int64_t,
-        )
-    } as size_t;
+    let fmt = unsafe { ngettext(lines_one, lines_many, lnum as core::ffi::c_ulong) };
+    let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
+    len += unsafe { snprintf(at, room, fmt, space, lnum as int64_t) } as size_t;
     let bytes_one = c"%ld byte".as_ptr();
     let bytes_many = c"%ld bytes".as_ptr();
     // SAFETY: as above.
-    unsafe {
-        let fmt = ngettext(bytes_one, bytes_many, nchars as core::ffi::c_ulong);
-        snprintf(io.add(len), IOSIZE as size_t - len, fmt, nchars as int64_t);
-    };
+    let fmt = unsafe { ngettext(bytes_one, bytes_many, nchars as core::ffi::c_ulong) };
+    let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
+    unsafe { snprintf(at, room, fmt, nchars as int64_t) };
 }
 
 /// Like `fgets()`, but a line longer than the buffer is truncated and the rest
@@ -558,22 +550,24 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 /// forced to what buffer `buf` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
 pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: Buf) {
+    // SAFETY: the caller's command, live for the call.
+    let mut ea = unsafe { Ea::new(eap) };
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
     let cmd_len = 15 + unsafe { strlen(buf.b_p_fenc) };
-    unsafe { (*eap).cmd = xmalloc(cmd_len).cast() };
-    unsafe { snprintf((*eap).cmd, cmd_len, c"e ++enc=%s".as_ptr(), buf.b_p_fenc) };
+    ea.cmd = unsafe { xmalloc(cmd_len) }.cast();
+    unsafe { snprintf(ea.cmd, cmd_len, c"e ++enc=%s".as_ptr(), buf.b_p_fenc) };
     // Where the encoding name starts in that command.
-    unsafe { (*eap).force_enc = 8 };
-    unsafe { (*eap).bad_char = buf.b_bad_char };
+    ea.force_enc = 8;
+    ea.bad_char = buf.b_bad_char;
     // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    let fileformat = unsafe { *buf.b_p_ff } as u8 as c_int;
-    // SAFETY: the caller's command.
-    unsafe { (*eap).force_ff = fileformat };
-    let binary = buf.b_p_bin != 0;
-    // SAFETY: the caller's command.
-    unsafe { (*eap).force_bin = if binary { FORCE_BIN } else { FORCE_NOBIN } };
-    unsafe { (*eap).read_edit = false as c_int };
-    unsafe { (*eap).forceit = false as c_int };
+    ea.force_ff = unsafe { *buf.b_p_ff } as u8 as c_int;
+    ea.force_bin = if buf.b_p_bin != 0 {
+        FORCE_BIN
+    } else {
+        FORCE_NOBIN
+    };
+    ea.read_edit = false as c_int;
+    ea.forceit = false as c_int;
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.
@@ -601,10 +595,12 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
 pub unsafe fn set_forced_fenc(eap: *mut exarg_T) {
-    if unsafe { (*eap).force_enc } == 0 {
+    // SAFETY: the caller's command, live for the call.
+    let ea = unsafe { Ea::new(eap) };
+    if ea.force_enc == 0 {
         return;
     }
-    let fenc = unsafe { enc_canonize((*eap).cmd.offset((*eap).force_enc as isize)) };
+    let fenc = unsafe { enc_canonize(ea.cmd.offset(ea.force_enc as isize)) };
     set_option_direct(
         kOptFileencoding,
         OptVal {
