@@ -371,12 +371,8 @@ unsafe fn collect_args(
             // A handle is its id, like any integer.
             kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => unsafe {
                 let data_str: *mut c_char = arena_alloc(arena, NUMBUFLEN as size_t, false).cast();
-                snprintf(
-                    data_str,
-                    NUMBUFLEN as size_t,
-                    c"%ld".as_ptr(),
-                    elem.data.integer,
-                );
+                let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
+                snprintf(data_str, room, fmt, elem.data.integer);
                 array_add(args, Object::string(cstr_as_string(data_str)));
             },
             kObjectTypeString => {
@@ -449,10 +445,11 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
         if range.size > 0 {
             // SAFETY: both indices are in bounds and every item is an Integer,
             // checked above.
+            let last_idx = range.size - 1;
             let (first, last) = unsafe {
                 (
                     (*range.items).data.integer,
-                    (*range.items.add(range.size - 1)).data.integer,
+                    (*range.items.add(last_idx)).data.integer,
                 )
             };
             ea.line1 = first as linenr_T;
@@ -538,14 +535,9 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
     // SAFETY: `valid_yank_reg` reads only the register tables.
     if !unsafe { valid_yank_reg(regname as c_int, writing) } {
         // SAFETY: `err` is live; `%c` takes the one `c_int`.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Invalid register: \"%c".as_ptr(),
-                regname as c_int,
-            )
-        };
+        let fmt = c"Invalid register: \"%c".as_ptr();
+        // SAFETY: `err` is live; `%c` takes the one `c_int`.
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt, regname as c_int) };
         return false;
     }
     ea.regname = regname as uint8_t as c_int;
@@ -567,15 +559,11 @@ fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
 fn err_cannot_accept(err: &mut Error, what: &CStr, cmd: &KeyDict_cmd) {
     // SAFETY: `err` is live; `what` and `cmd.cmd` are both NUL-terminated,
     // and the format takes exactly those two.
-    unsafe {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            c"Command cannot accept %s: %s".as_ptr(),
-            what.as_ptr(),
-            cmd.cmd.data(),
-        )
-    };
+    let fmt = c"Command cannot accept %s: %s".as_ptr();
+    let (what, name) = (what.as_ptr(), cmd.cmd.data());
+    // SAFETY: `err` is live; the two `%s` spend the two NUL-terminated
+    // strings that follow them.
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, what, name) };
 }
 
 /// Unpack the `magic` sub-keyset, defaulting each half to what `argt` says.
@@ -738,11 +726,12 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &m
     if unsafe { *filter.pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
         // SAFETY: the pattern outlives the compiled program, which
         // `undo_cmdmod` frees.
-        unsafe {
-            cmdinfo.cmdmod.cmod_filter_pat = string_to_cstr(filter.pattern);
-            cmdinfo.cmdmod.cmod_filter_regmatch.regprog =
-                vim_regcomp(cmdinfo.cmdmod.cmod_filter_pat, RE_MAGIC);
-        }
+        // SAFETY: the pattern outlives the compiled program, which
+        // `undo_cmdmod` frees.
+        let pat = unsafe { string_to_cstr(filter.pattern) };
+        cmdinfo.cmdmod.cmod_filter_pat = pat;
+        // SAFETY: as above.
+        cmdinfo.cmdmod.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
     }
     true
 }

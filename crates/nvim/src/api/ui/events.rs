@@ -415,17 +415,21 @@ pub unsafe fn remote_ui_default_colors_set(
 ///
 /// `ui` must be live.
 pub unsafe fn remote_ui_flush(ui: *mut RemoteUI) {
-    unsafe {
-        if (*ui).nevents == 0 && !(*ui).flushed_events {
-            return;
-        }
-        if !linegrid(ui) {
-            // The cursor move deferred by `remote_ui_grid_cursor_goto`.
+    // SAFETY: the caller's promise -- `ui` is live.
+    if unsafe { (*ui).nevents } == 0 && !unsafe { (*ui).flushed_events } {
+        return;
+    }
+    // SAFETY: as above.
+    if !unsafe { linegrid(ui) } {
+        // The cursor move deferred by `remote_ui_grid_cursor_goto`.
+        // SAFETY: as above.
+        unsafe {
             let (row, col) = ((*ui).cursor_row, (*ui).cursor_col);
             remote_ui_cursor_goto(ui, row, col);
         }
     }
     send!(ui, c"flush");
+    // SAFETY: as above.
     unsafe {
         ui_flush_buf(ui, false);
         (*ui).flushed_events = false;

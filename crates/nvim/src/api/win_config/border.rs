@@ -25,6 +25,20 @@ use core::ffi::{CStr, c_char, c_int};
 use super::*;
 use crate::api::private::helpers::array_add;
 
+/// "Invalid 'border': expected `want`", the shape every rejection here takes.
+/// `got` names what arrived when it is not null.
+///
+/// The name and the four-argument call are spelled once so that each of the
+/// six call sites is one line rather than six.
+///
+/// # Safety
+/// `err` must be the caller's error slot and `got` null or a C string.
+unsafe fn err_border(err: *mut Error, want: &CStr, got: *const c_char) {
+    let name = c"border".as_ptr();
+    // SAFETY: the caller's promise; `name` and `want` are C strings.
+    unsafe { api_err_exp(err, name, want.as_ptr(), got) };
+}
+
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
 /// The same shape as one slot of `WinConfig::border_chars`.
 type BorderChar = [c_char; MAX_SCHAR_SIZE as usize];
@@ -182,28 +196,14 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         let arr = unsafe { item.data.array };
         if arr.size == 0 || arr.size > 2 {
             // SAFETY: the caller's error slot.
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"border".as_ptr(),
-                    c"1 or 2-item Array".as_ptr(),
-                    NULL_STR,
-                )
-            };
+            unsafe { err_border(err, c"1 or 2-item Array", NULL_STR) };
             return None;
         }
         // SAFETY: a non-empty array has an item at index 0.
         let first = unsafe { *arr.items };
         if first.type_0 != kObjectTypeString {
             // SAFETY: the caller's error slot.
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"border".as_ptr(),
-                    c"Array of Strings".as_ptr(),
-                    NULL_STR,
-                )
-            };
+            unsafe { err_border(err, c"Array of Strings", NULL_STR) };
             return None;
         }
         // SAFETY: the tag says the string arm is live.
@@ -226,14 +226,7 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         return Some((unsafe { item.data.string }, 0));
     }
     // SAFETY: the caller's error slot.
-    unsafe {
-        api_err_exp(
-            err,
-            c"border".as_ptr(),
-            c"String or Array".as_ptr(),
-            api_typename(item.type_0),
-        );
-    };
+    unsafe { err_border(err, c"String or Array", api_typename(item.type_0)) };
     None
 }
 
@@ -272,14 +265,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
     let size = arr.size;
     if size == 0 || size > 8 || !size.is_power_of_two() {
         // SAFETY: the caller's error slot.
-        unsafe {
-            api_err_exp(
-                err,
-                c"border".as_ptr(),
-                c"1, 2, 4, or 8 chars".as_ptr(),
-                NULL_STR,
-            )
-        };
+        unsafe { err_border(err, c"1, 2, 4, or 8 chars", NULL_STR) };
         return None;
     }
 
@@ -293,14 +279,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
             // SAFETY: the caller's error slot.
-            unsafe {
-                api_err_exp(
-                    err,
-                    c"border".as_ptr(),
-                    c"only one-cell chars".as_ptr(),
-                    NULL_STR,
-                )
-            };
+            unsafe { err_border(err, c"only one-cell chars", NULL_STR) };
             return None;
         }
         // SAFETY: as above.
@@ -325,14 +304,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
         || corner_gap(&chars, 5, 7, 6)
     {
         // SAFETY: the caller's error slot.
-        unsafe {
-            api_err_exp(
-                err,
-                c"border".as_ptr(),
-                c"corner char between edge chars".as_ptr(),
-                NULL_STR,
-            );
-        };
+        unsafe { err_border(err, c"corner char between edge chars", NULL_STR) };
     }
     Some((chars, hl_ids))
 }
@@ -402,14 +374,10 @@ pub(crate) unsafe fn generate_api_error(
     // SAFETY: the caller's window.
     if !wp.is_null() && unsafe { (*wp).w_floating } {
         // SAFETY: the caller's error slot, and a format the message takes.
-        unsafe {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Required: 'relative' when reconfiguring floating window %d".as_ptr(),
-                (*wp).handle,
-            );
-        };
+        let fmt = c"Required: 'relative' when reconfiguring floating window %d".as_ptr();
+        // SAFETY: the caller's error slot and window; the one `%d` spends the
+        // window handle.
+        unsafe { api_set_error(err, kErrorTypeValidation, fmt, (*wp).handle) };
     } else {
         // SAFETY: the caller's error slot and attribute name.
         unsafe { api_err_conflict(err, attribute, c"non-float window".as_ptr()) };
@@ -467,16 +435,15 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
     // SAFETY: the caller's option value, NUL-terminated; `copy_option_part`
     // advances `p` and writes at most `part.len()` bytes into `part`.
     while unsafe { *p } != 0 {
-        let empty = cells.size == cells.capacity
-            || unsafe {
-                copy_option_part(
-                    &raw mut p,
-                    part.as_mut_ptr(),
-                    part.len(),
-                    c",".as_ptr().cast_mut(),
-                ) == 0
-                    || part[0] == 0
-            };
+        let full = cells.size == cells.capacity;
+        let (next, into, room) = (&raw mut p, part.as_mut_ptr(), part.len());
+        let comma = c",".as_ptr().cast_mut();
+        // The copy is still short-circuited by `full`: a ninth part is
+        // already a failure and must not advance `p`.
+        //
+        // SAFETY: as above.
+        let empty =
+            full || unsafe { copy_option_part(next, into, room, comma) } == 0 || part[0] == 0;
         if empty {
             // SAFETY: the array holds only strings this loop allocated.
             unsafe { api_free_array(cells) };
@@ -485,10 +452,8 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
         // SAFETY: `part` is NUL-terminated by `copy_option_part`, and
         // `cells` is this function's own array.
         unsafe {
-            array_add(
-                &mut cells,
-                Object::string(cstr_to_string(part.as_mut_ptr())),
-            );
+            let cell = Object::string(cstr_to_string(part.as_mut_ptr()));
+            array_add(&mut cells, cell);
         };
     }
     if cells.size != cells.capacity {

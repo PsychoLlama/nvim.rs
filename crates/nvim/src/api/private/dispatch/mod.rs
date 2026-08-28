@@ -182,15 +182,8 @@ pub unsafe fn msgpack_rpc_get_handler_for(
         let empty = c"<empty>";
         (empty.to_bytes_with_nul().len() as c_int, empty.as_ptr())
     };
+    let fmt = c"Invalid method: %.*s".as_ptr();
     // SAFETY: `error` is live and the format string matches its arguments.
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Invalid method: %.*s".as_ptr(),
-            len,
-            text,
-        );
-    }
+    unsafe { api_set_error(error, kErrorTypeException, fmt, len, text) };
     NO_HANDLER
 }

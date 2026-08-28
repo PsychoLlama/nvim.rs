@@ -114,17 +114,9 @@ pub unsafe fn api_err_exp(
     } else {
         c"Invalid '%s': expected %s, got %s"
     };
+    let fmt = fmt.as_ptr();
     // SAFETY: as above, with three C strings.
-    unsafe {
-        api_set_error(
-            err,
-            kErrorTypeValidation,
-            fmt.as_ptr(),
-            name,
-            expected,
-            actual,
-        )
-    };
+    unsafe { api_set_error(err, kErrorTypeValidation, fmt, name, expected, actual) };
 }
 
 /// "Required: `name`", for an option the caller left out.
@@ -194,8 +186,8 @@ pub unsafe fn check_string_array(
             // SAFETY: the caller's promise about `err`; the type names are
             // static and `item_name` is the scratch buffer above.
             unsafe {
-                let got = api_typename(item.type_0);
-                api_err_exp(err, item_name, api_typename(kObjectTypeString), got);
+                let (want, got) = (api_typename(kObjectTypeString), api_typename(item.type_0));
+                api_err_exp(err, item_name, want, got);
             }
             return false;
         }
@@ -203,15 +195,9 @@ pub unsafe fn check_string_array(
         // the caller's, live for its own length.
         let l: String_0 = unsafe { item.data.string };
         if disallow_nl && unsafe { l.as_bytes() }.contains(&b'\n') {
+            let fmt = c"'%s' item contains newlines".as_ptr();
             // SAFETY: as above; the format takes the one C string.
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"'%s' item contains newlines".as_ptr(),
-                    name,
-                );
-            }
+            unsafe { api_set_error(err, kErrorTypeValidation, fmt, name) };
             return false;
         }
     }
