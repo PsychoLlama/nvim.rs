@@ -58,14 +58,12 @@ const USAGE: &[&CStr] = &[
 /// Print the usage summary on stdout.
 pub(crate) unsafe fn usage() {
     // SAFETY: stops the signal handlers and writes to stdout.
-    unsafe {
-        signal_stop();
-        for line in USAGE {
-            if line.is_empty() {
-                printf(c"\n".as_ptr());
-            } else {
-                printf(gettext(line.as_ptr()));
-            }
+    signal_stop();
+    for line in USAGE {
+        if line.is_empty() {
+            unsafe { printf(c"\n".as_ptr()) };
+        } else {
+            unsafe { printf(gettext(line.as_ptr())) };
         }
     }
 }
@@ -76,13 +74,11 @@ pub(crate) unsafe fn usage() {
 /// features that depend on it.
 pub(crate) unsafe fn version() {
     // SAFETY: initialises the Lua state with no argv and writes a message.
-    unsafe {
-        nlua_init(ptr::null_mut(), 0, -1);
-        info_message.set(true);
-        list_version();
-        msg_putchar('\n' as c_int);
-        msg_didout.set(false);
-    }
+    unsafe { nlua_init(ptr::null_mut(), 0, -1) };
+    info_message.set(true);
+    unsafe { list_version() };
+    unsafe { msg_putchar('\n' as c_int) };
+    msg_didout.set(false);
 }
 
 /// Report a command-line error on stderr, in the shape every other tool
@@ -92,28 +88,24 @@ pub(crate) unsafe fn version() {
 pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg3: *const c_char) {
     // SAFETY: the three messages are NUL-terminated or null, and `argv0` is
     // set before any caller can reach this.
-    unsafe {
-        let prgname = path_tail(argv0.get());
-        // Nothing beyond this point should be interrupted by a handler that
-        // expects a running editor.
-        signal_stop();
-        fprintf(stderr, c"%s: %s".as_ptr(), prgname, gettext(msg1));
-        if !msg2.is_null() {
-            fprintf(stderr, c": \"%s\"".as_ptr(), msg2);
-        }
-        if !msg3.is_null() {
-            fprintf(stderr, c": \"%s\"".as_ptr(), msg3);
-        }
-        fprintf(stderr, gettext(c"\nMore info with \"".as_ptr()));
-        fprintf(stderr, c"%s -h\"\n".as_ptr(), prgname);
+    let prgname = unsafe { path_tail(argv0.get()) };
+    // Nothing beyond this point should be interrupted by a handler that
+    // expects a running editor.
+    signal_stop();
+    unsafe { fprintf(stderr, c"%s: %s".as_ptr(), prgname, gettext(msg1)) };
+    if !msg2.is_null() {
+        unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg2) };
     }
+    if !msg3.is_null() {
+        unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg3) };
+    }
+    unsafe { fprintf(stderr, gettext(c"\nMore info with \"".as_ptr())) };
+    unsafe { fprintf(stderr, c"%s -h\"\n".as_ptr(), prgname) };
 }
 
 /// [`print_mainerr`] and then exit 1. Every argument error takes this path.
 pub(crate) unsafe fn mainerr(msg1: *const c_char, msg2: *const c_char, msg3: *const c_char) -> ! {
     // SAFETY: as `print_mainerr`; `os_exit` does not return.
-    unsafe {
-        print_mainerr(msg1, msg2, msg3);
-        os_exit(1);
-    }
+    unsafe { print_mainerr(msg1, msg2, msg3) };
+    unsafe { os_exit(1) };
 }

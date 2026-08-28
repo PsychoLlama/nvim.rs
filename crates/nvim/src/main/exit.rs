@@ -53,41 +53,41 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
 
     // SAFETY: shuts down the singleton UI, event loop and memfiles, in that
     // order, and never returns.
+    if ui_client_channel_id.get() != 0 {
+        unsafe { ui_client_stop() };
+        if r == 0 {
+            r = ui_client_exit_status.get();
+        }
+    } else {
+        unsafe { ui_flush() };
+        ui_call_stop();
+    }
+
+    if !unsafe { event_teardown() } && r == 0 {
+        // The main loop did not come down cleanly; say so in the status.
+        r = 1;
+    }
+
+    if ui_client_channel_id.get() != 0 {
+        // The last output to a TTY is sometimes lost (at least on
+        // FreeBSD). Drain it, after `event_teardown`, since libuv events
+        // may still have written to stderr.
+        if stdout_isatty.get() {
+            unsafe { tcdrain(STDOUT_FILENO) };
+        }
+        if stderr_isatty.get() {
+            unsafe { tcdrain(STDERR_FILENO) };
+        }
+    } else {
+        unsafe { ml_close_all(true) };
+    }
+
+    if used_stdin.get() {
+        // Put the stream back the way we found it (#2598).
+        stream_set_blocking(STDIN_FILENO, true);
+    }
+
     unsafe {
-        if ui_client_channel_id.get() != 0 {
-            ui_client_stop();
-            if r == 0 {
-                r = ui_client_exit_status.get();
-            }
-        } else {
-            ui_flush();
-            ui_call_stop();
-        }
-
-        if !event_teardown() && r == 0 {
-            // The main loop did not come down cleanly; say so in the status.
-            r = 1;
-        }
-
-        if ui_client_channel_id.get() != 0 {
-            // The last output to a TTY is sometimes lost (at least on
-            // FreeBSD). Drain it, after `event_teardown`, since libuv events
-            // may still have written to stderr.
-            if stdout_isatty.get() {
-                tcdrain(STDOUT_FILENO);
-            }
-            if stderr_isatty.get() {
-                tcdrain(STDERR_FILENO);
-            }
-        } else {
-            ml_close_all(true);
-        }
-
-        if used_stdin.get() {
-            // Put the stream back the way we found it (#2598).
-            stream_set_blocking(STDIN_FILENO, true);
-        }
-
         logmsg_c!(
             LOGLVL_INF,
             ptr::null(),
@@ -96,10 +96,10 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
             true,
             c"Nvim exit: %d".as_ptr(),
             r,
-        );
+        )
+    };
 
-        exit(r);
-    }
+    unsafe { exit(r) };
 }
 
 /// Exit properly: the only path that lets the user's autocommands see it
@@ -127,102 +127,103 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
 
     // SAFETY: walks the tab pages, windows and buffers, each of which the
     // autocommands below may free -- hence the `bufref` liveness checks.
-    unsafe {
-        set_vim_var_type(Vv::Exiting, VAR_NUMBER);
-        set_vim_var_nr(Vv::Exiting, exitval as varnumber_T);
+    unsafe { set_vim_var_type(Vv::Exiting, VAR_NUMBER) };
+    unsafe { set_vim_var_nr(Vv::Exiting, exitval as varnumber_T) };
 
-        // `:restart` and friends set a reason of their own first.
-        if *get_vim_var_str(Vv::Exitreason) as c_int == NUL {
-            set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4);
-        }
+    // `:restart` and friends set a reason of their own first.
+    if unsafe { *get_vim_var_str(Vv::Exitreason) } as c_int == NUL {
+        unsafe { set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4) };
+    }
 
-        // Every `:defer`red function still on the stack.
-        invoke_all_defer();
+    // Every `:defer`red function still on the stack.
+    unsafe { invoke_all_defer() };
 
-        if v_dying.get() <= 1 {
-            // `BufWinLeave` for every window, but only once per buffer: the
-            // changedtick is set to -1 to mark a buffer as already done.
-            let mut tab = first_tab();
-            while let Some(tp) = tab {
-                let mut next_tp = tp.next();
-                let mut win = match tp.is_current() {
-                    true => first_window(),
-                    false => tp.tp_firstwin.and_then(WinId::get),
-                };
-                while let Some(wp) = win {
-                    // An autocommand may already have closed the buffer.
-                    let buf = wp.w_buffer;
-                    // `buf_valid` does the null test itself.
-                    if buf_valid(buf) && buf_get_changedtick(Buf::new(buf)) != -1 {
-                        let bufref = BufRef::of_opt(Buf::from_raw(buf));
+    if v_dying.get() <= 1 {
+        // `BufWinLeave` for every window, but only once per buffer: the
+        // changedtick is set to -1 to mark a buffer as already done.
+        let mut tab = first_tab();
+        while let Some(tp) = tab {
+            let mut next_tp = tp.next();
+            let mut win = match tp.is_current() {
+                true => first_window(),
+                false => tp.tp_firstwin.and_then(WinId::get),
+            };
+            while let Some(wp) = win {
+                // An autocommand may already have closed the buffer.
+                let buf = wp.w_buffer;
+                // `buf_valid` does the null test itself.
+                if unsafe { buf_valid(buf) } && buf_get_changedtick(unsafe { Buf::new(buf) }) != -1
+                {
+                    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+                    unsafe {
                         apply_autocmds(
                             EVENT_BUFWINLEAVE,
                             (*buf).b_fname,
                             (*buf).b_fname,
                             false,
                             buf,
-                        );
-                        if bufref.valid() {
-                            buf_set_changedtick(buf, -1);
-                        }
-                        // The autocommands may have rearranged both lists;
-                        // start the whole walk again.
-                        next_tp = first_tab();
-                        break;
+                        )
+                    };
+                    if bufref.valid() {
+                        unsafe { buf_set_changedtick(buf, -1) };
                     }
-                    win = wp.next();
+                    // The autocommands may have rearranged both lists;
+                    // start the whole walk again.
+                    next_tp = first_tab();
+                    break;
                 }
-                tab = next_tp;
+                win = wp.next();
             }
+            tab = next_tp;
+        }
 
-            // `BufUnload` for every loaded buffer.
-            let mut cur = first_buffer();
-            while let Some(mut buf) = cur {
-                if !buf.b_ml.ml_mfp.is_null() {
-                    let bufref = BufRef::of(buf);
-                    let (name, raw) = (buf.b_fname, buf.raw());
-                    apply_autocmds(EVENT_BUFUNLOAD, name, name, false, raw);
-                    if !bufref.valid() {
-                        // An autocommand deleted the buffer we were standing
-                        // on, so the `b_next` link is gone with it.
-                        break;
-                    }
+        // `BufUnload` for every loaded buffer.
+        let mut cur = first_buffer();
+        while let Some(mut buf) = cur {
+            if !buf.b_ml.ml_mfp.is_null() {
+                let bufref = BufRef::of(buf);
+                let (name, raw) = (buf.b_fname, buf.raw());
+                unsafe { apply_autocmds(EVENT_BUFUNLOAD, name, name, false, raw) };
+                if !bufref.valid() {
+                    // An autocommand deleted the buffer we were standing
+                    // on, so the `b_next` link is gone with it.
+                    break;
                 }
-                cur = buf.next();
             }
-
-            with_autocmds_unblocked(EVENT_VIMLEAVEPRE);
+            cur = buf.next();
         }
 
-        if !p_shada.get().is_null() && *p_shada.get() as c_int != NUL {
-            // The registers, history, marks and the rest.
-            shada_write_file(ptr::null(), false);
-        }
-
-        if v_dying.get() <= 1 {
-            with_autocmds_unblocked(EVENT_VIMLEAVE);
-        }
-
-        profile_dump();
-
-        if did_emsg.get() != 0 {
-            // Give the user a chance to read the error.
-            no_wait_return.set(0);
-            // NB: upstream notes this may itself call getout(0) and clobber
-            // `exitval`.
-            wait_return(0);
-        }
-
-        if p_title.get() != 0 && *p_titleold.get() as c_int != NUL {
-            ui_call_set_title(cstr_as_string(p_titleold.get()));
-        }
-
-        if garbage_collect_at_exit.get() {
-            garbage_collect(false);
-        }
-
-        os_exit(exitval);
+        unsafe { with_autocmds_unblocked(EVENT_VIMLEAVEPRE) };
     }
+
+    if !p_shada.get().is_null() && unsafe { *p_shada.get() } as c_int != NUL {
+        // The registers, history, marks and the rest.
+        unsafe { shada_write_file(ptr::null(), false) };
+    }
+
+    if v_dying.get() <= 1 {
+        unsafe { with_autocmds_unblocked(EVENT_VIMLEAVE) };
+    }
+
+    profile_dump();
+
+    if did_emsg.get() != 0 {
+        // Give the user a chance to read the error.
+        no_wait_return.set(0);
+        // NB: upstream notes this may itself call getout(0) and clobber
+        // `exitval`.
+        unsafe { wait_return(0) };
+    }
+
+    if p_title.get() != 0 && unsafe { *p_titleold.get() } as c_int != NUL {
+        ui_call_set_title(unsafe { cstr_as_string(p_titleold.get()) });
+    }
+
+    if garbage_collect_at_exit.get() {
+        unsafe { garbage_collect(false) };
+    }
+
+    unsafe { os_exit(exitval) };
 }
 
 /// Fire one of the leave events even if autocommands are blocked, and leave
@@ -232,15 +233,13 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
 /// `VimLeave` are exactly the two the user still expects to see.
 unsafe fn with_autocmds_unblocked(event: crate::types::event_T) {
     // SAFETY: the block counter and the autocommand tables are global.
-    unsafe {
-        let blocked = is_autocmd_blocked();
-        if blocked {
-            unblock_autocmds();
-        }
-        apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get());
-        if blocked {
-            block_autocmds();
-        }
+    let blocked = is_autocmd_blocked();
+    if blocked {
+        unsafe { unblock_autocmds() };
+    }
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get()) };
+    if blocked {
+        unsafe { block_autocmds() };
     }
 }
 
@@ -258,26 +257,26 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
     // SAFETY: `errmsg`, when non-null, is a NUL-terminated string that
     // outlives the call; the buffer list is global.
-    unsafe {
-        if really_exiting.get() {
-            if used_stdin.get() {
-                // Put the stream back the way we found it (#2598).
-                stream_set_blocking(STDIN_FILENO, true);
-            }
-            exit(2);
+    if really_exiting.get() {
+        if used_stdin.get() {
+            // Put the stream back the way we found it (#2598).
+            stream_set_blocking(STDIN_FILENO, true);
         }
-        really_exiting.set(true);
+        unsafe { exit(2) };
+    }
+    really_exiting.set(true);
 
-        // Ignore SIGHUP now that we are already on the way out (#9274).
-        signal_reject_deadly();
+    // Ignore SIGHUP now that we are already on the way out (#9274).
+    signal_reject_deadly();
 
-        if ui_client_channel_id.get() != 0 {
-            // Leave the alternate screen so the message below can be read.
-            ui_client_stop();
-        }
+    if ui_client_channel_id.get() != 0 {
+        // Leave the alternate screen so the message below can be read.
+        unsafe { ui_client_stop() };
+    }
 
-        if !errmsg.is_null() && *errmsg as c_int != NUL {
-            let has_eol = *errmsg.add(strlen(errmsg) - 1) as u8 == b'\n';
+    if !errmsg.is_null() && unsafe { *errmsg } as c_int != NUL {
+        let has_eol = unsafe { *errmsg.add(strlen(errmsg) - 1) } as u8 == b'\n';
+        unsafe {
             fprintf(
                 stderr,
                 if has_eol {
@@ -286,36 +285,36 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
                     c"%s\n".as_ptr()
                 },
                 errmsg,
-            );
-        }
-
-        if ui_client_channel_id.get() != 0 {
-            // A UI client has no buffers to preserve.
-            os_exit(1);
-        }
-
-        ml_close_notmod();
-
-        for buf in buffers() {
-            let memfile = buf.b_ml.ml_mfp;
-            if !memfile.is_null() && !mf_fname(memfile).is_null() {
-                if !errmsg.is_null() {
-                    fprintf(stderr, c"Nvim: preserving files...\n".as_ptr());
-                }
-                // One sync writes every swap file, so stop at the first
-                // buffer that has one.
-                ml_sync_all(0, 0, true);
-                break;
-            }
-        }
-
-        // Close the memfiles without deleting them.
-        ml_close_all(false);
-
-        if !errmsg.is_null() {
-            fprintf(stderr, c"Nvim: Finished.\n".as_ptr());
-        }
-
-        getout(1);
+            )
+        };
     }
+
+    if ui_client_channel_id.get() != 0 {
+        // A UI client has no buffers to preserve.
+        unsafe { os_exit(1) };
+    }
+
+    unsafe { ml_close_notmod() };
+
+    for buf in buffers() {
+        let memfile = buf.b_ml.ml_mfp;
+        if !memfile.is_null() && !unsafe { mf_fname(memfile) }.is_null() {
+            if !errmsg.is_null() {
+                unsafe { fprintf(stderr, c"Nvim: preserving files...\n".as_ptr()) };
+            }
+            // One sync writes every swap file, so stop at the first
+            // buffer that has one.
+            unsafe { ml_sync_all(0, 0, true) };
+            break;
+        }
+    }
+
+    // Close the memfiles without deleting them.
+    unsafe { ml_close_all(false) };
+
+    if !errmsg.is_null() {
+        unsafe { fprintf(stderr, c"Nvim: Finished.\n".as_ptr()) };
+    }
+
+    unsafe { getout(1) };
 }

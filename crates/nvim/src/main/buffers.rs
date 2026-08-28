@@ -68,32 +68,29 @@ use crate::winlayer::{Buf, TabPage, Win, first_window};
 /// worth reading.
 fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
     // SAFETY: clears one flag and leaves; `getout` does not return.
-    unsafe {
-        if clear_hit_enter {
-            did_emsg.set(0);
-        }
-        ui_call_error_exit(1 as Integer);
-        getout(1)
+    if clear_hit_enter {
+        did_emsg.set(0);
     }
+    ui_call_error_exit(1 as Integer);
+    unsafe { getout(1) }
 }
 
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) unsafe fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the global argument list is initialised by `early_init`.
-    unsafe {
-        let list: *mut list_T = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
-        let alist = global_arglist();
-        for i in 0..(*alist).al_ga.ga_len {
-            let fname = alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize));
-            if !fname.is_null() {
-                vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false);
-                tv_list_append_string(list, full.as_mut_ptr(), -1 as ssize_t);
-            }
+    let list: *mut list_T = unsafe { tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t) };
+    let alist = global_arglist();
+    for i in 0..unsafe { (*alist).al_ga.ga_len } {
+        let fname =
+            unsafe { alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize)) };
+        if !fname.is_null() {
+            unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
+            unsafe { tv_list_append_string(list, full.as_mut_ptr(), -1 as ssize_t) };
         }
-        tv_list_set_lock(list, VarLock::Fixed);
-        set_vim_var_list(Vv::Argf, list);
     }
+    unsafe { tv_list_set_lock(list, VarLock::Fixed) };
+    unsafe { set_vim_var_list(Vv::Argf, list) };
 }
 
 /// The first file argument, which is what decides whether `-r` lists the swap
@@ -110,66 +107,68 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: `paramp` is the caller's live parameter block, and `title`
     // outlives the `qf_init` that reads it.
-    unsafe {
-        if (*paramp).edit_type != EDIT_QF as c_int {
-            return;
-        }
-        if !(*paramp).use_ef.is_null() {
-            set_option_direct(
-                kOptErrorfile,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: cstr_as_string((*paramp).use_ef),
-                    },
+    if unsafe { (*paramp).edit_type } != EDIT_QF as c_int {
+        return;
+    }
+    if !unsafe { (*paramp).use_ef }.is_null() {
+        set_option_direct(
+            kOptErrorfile,
+            OptVal {
+                type_0: kOptValTypeString,
+                data: OptValData {
+                    string: unsafe { cstr_as_string((*paramp).use_ef) },
                 },
-                OptionSetFlags::NONE,
-                SID_CARG,
-            );
-        }
-        // The title of the list is the command that would have made it.
+            },
+            OptionSetFlags::NONE,
+            SID_CARG,
+        );
+    }
+    // The title of the list is the command that would have made it.
+    unsafe {
         vim_snprintf(
             title.as_mut_ptr(),
             IOSIZE as size_t,
             c"cfile %s".as_ptr(),
             p_ef.get(),
-        );
-        if qf_init(
+        )
+    };
+    if unsafe {
+        qf_init(
             None,
             p_ef.get(),
             p_efm.get(),
             1,
             title.as_mut_ptr(),
             p_menc.get(),
-        ) < 0
-        {
-            msg_putchar('\n' as c_int);
-            os_exit(3);
-        }
-        time_msg_at(c"reading errorfile");
+        )
+    } < 0
+    {
+        unsafe { msg_putchar('\n' as c_int) };
+        unsafe { os_exit(3) };
     }
+    unsafe { time_msg_at(c"reading errorfile") };
 }
 
 /// `-t`: jump to a tag instead of opening a file.
 pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     let mut cmd = [0 as c_char; IOSIZE as usize];
     // SAFETY: `tagname`, when non-null, points into argv.
+    if tagname.is_null() {
+        return;
+    }
+    swap_exists_did_quit.set(false);
     unsafe {
-        if tagname.is_null() {
-            return;
-        }
-        swap_exists_did_quit.set(false);
         vim_snprintf(
             cmd.as_mut_ptr(),
             IOSIZE as size_t,
             c"ta %s".as_ptr(),
             tagname,
-        );
-        do_cmdline_cmd(cmd.as_mut_ptr());
-        time_msg_at(c"jumping to tag");
-        if swap_exists_did_quit.get() {
-            quit_on_swap_exists(false);
-        }
+        )
+    };
+    unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+    unsafe { time_msg_at(c"jumping to tag") };
+    if swap_exists_did_quit.get() {
+        quit_on_swap_exists(false);
     }
 }
 
@@ -181,20 +180,21 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
 pub(crate) unsafe fn read_stdin() {
     // SAFETY: creates and switches buffers, all of which are live for the
     // duration.
-    unsafe {
-        // Use a dialog for the ATTENTION prompt, not a message.
-        swap_exists_action.set(SEA_DIALOG);
-        no_wait_return.set(1);
-        let save_msg_didany = msg_didany.get();
+    // Use a dialog for the ATTENTION prompt, not a message.
+    swap_exists_action.set(SEA_DIALOG);
+    no_wait_return.set(1);
+    let save_msg_didany = msg_didany.get();
 
-        if !(*curbuf.get()).b_ffname.is_null() {
-            let stdin_buf = buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int);
-            if stdin_buf.is_null() {
-                semsg_c!(c"Failed to create buffer for stdin".as_ptr());
-                return;
-            }
-            let initial_buf_handle: handle_T = (*curbuf.get()).handle;
-            set_curbuf(Buf::new(stdin_buf), 0, false);
+    if !unsafe { (*curbuf.get()).b_ffname }.is_null() {
+        let stdin_buf =
+            unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
+        if stdin_buf.is_null() {
+            unsafe { semsg_c!(c"Failed to create buffer for stdin".as_ptr()) };
+            return;
+        }
+        let initial_buf_handle: handle_T = unsafe { (*curbuf.get()).handle };
+        unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
+        unsafe {
             readfile(
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -204,43 +204,47 @@ pub(crate) unsafe fn read_stdin() {
                 ptr::null_mut::<exarg_T>(),
                 READ_NEW as c_int + READ_STDIN as c_int,
                 true,
-            );
-            let stdin_buf_handle: handle_T = (*stdin_buf).handle;
-            let stdin_buf_empty = buf_is_empty(curbuf.get());
+            )
+        };
+        let stdin_buf_handle: handle_T = unsafe { (*stdin_buf).handle };
+        let stdin_buf_empty = unsafe { buf_is_empty(curbuf.get()) };
 
-            // Done as commands rather than calls so the autocommands and the
-            // window bookkeeping happen as they would for the user.
-            let mut cmd: [c_char; 100] = [0; 100];
+        // Done as commands rather than calls so the autocommands and the
+        // window bookkeeping happen as they would for the user.
+        let mut cmd: [c_char; 100] = [0; 100];
+        unsafe {
             vim_snprintf(
                 cmd.as_mut_ptr(),
                 size_of::<[c_char; 100]>(),
                 c"silent! buffer %d".as_ptr(),
                 initial_buf_handle,
-            );
-            do_cmdline_cmd(cmd.as_mut_ptr());
-            if stdin_buf_empty {
+            )
+        };
+        unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+        if stdin_buf_empty {
+            unsafe {
                 vim_snprintf(
                     cmd.as_mut_ptr(),
                     size_of::<[c_char; 100]>(),
                     c"silent! bwipeout! %d".as_ptr(),
                     stdin_buf_handle,
-                );
-                do_cmdline_cmd(cmd.as_mut_ptr());
-            }
-        } else {
-            set_buflisted(1);
-            open_buffer(true, ptr::null_mut::<exarg_T>(), 0);
-            if buf_is_empty(curbuf.get()) && Buf::current().b_next.is_some() {
-                do_cmdline_cmd(c"silent! bnext".as_ptr());
-                do_cmdline_cmd(c"silent! bwipeout 1".as_ptr());
-            }
+                )
+            };
+            unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         }
-
-        no_wait_return.set(0);
-        msg_didany.set(save_msg_didany);
-        time_msg_at(c"reading stdin");
-        check_swap_exists_action();
+    } else {
+        unsafe { set_buflisted(1) };
+        unsafe { open_buffer(true, ptr::null_mut::<exarg_T>(), 0) };
+        if unsafe { buf_is_empty(curbuf.get()) } && unsafe { Buf::current() }.b_next.is_some() {
+            unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
+            unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
+        }
     }
+
+    no_wait_return.set(0);
+    msg_didany.set(save_msg_didany);
+    unsafe { time_msg_at(c"reading stdin") };
+    unsafe { check_swap_exists_action() };
 }
 
 /// How many times the "open a buffer for every window" loop below may start
@@ -254,120 +258,120 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block; the window and
     // buffer lists are global and may be rearranged by the autocommands the
     // buffer loading fires.
-    unsafe {
-        if (*parmp).window_count == -1 {
-            // Not set: one window.
-            (*parmp).window_count = 1;
+    if unsafe { (*parmp).window_count } == -1 {
+        // Not set: one window.
+        unsafe { (*parmp).window_count = 1 };
+    }
+    if unsafe { (*parmp).window_count } == 0 {
+        // `-o`/`-O`/`-p` with no count: one per file.
+        unsafe { (*parmp).window_count = (*global_arglist()).al_ga.ga_len };
+    }
+    if unsafe { (*parmp).window_count } > 1 {
+        // Leave the layout alone if a vimrc command already split it.
+        if unsafe { (*parmp).window_layout } == 0 {
+            unsafe { (*parmp).window_layout = WIN_HOR as c_int };
         }
-        if (*parmp).window_count == 0 {
-            // `-o`/`-O`/`-p` with no count: one per file.
-            (*parmp).window_count = (*global_arglist()).al_ga.ga_len;
-        }
-        if (*parmp).window_count > 1 {
-            // Leave the layout alone if a vimrc command already split it.
-            if (*parmp).window_layout == 0 {
-                (*parmp).window_layout = WIN_HOR as c_int;
-            }
-            if (*parmp).window_layout == WIN_TABS as c_int {
-                (*parmp).window_count = make_tabpages((*parmp).window_count);
-                time_msg_at(c"making tab pages");
-            } else if first_win().next().is_none_or(|next| next.w_floating) {
+        if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+            unsafe { (*parmp).window_count = make_tabpages((*parmp).window_count) };
+            unsafe { time_msg_at(c"making tab pages") };
+        } else if first_win().next().is_none_or(|next| next.w_floating) {
+            unsafe {
                 (*parmp).window_count = make_windows(
                     (*parmp).window_count,
                     (*parmp).window_layout == WIN_VER as c_int,
-                );
-                time_msg_at(c"making windows");
-            } else {
-                (*parmp).window_count = win_count();
-            }
+                )
+            };
+            unsafe { time_msg_at(c"making windows") };
         } else {
-            (*parmp).window_count = 1;
+            unsafe { (*parmp).window_count = win_count() };
         }
+    } else {
+        unsafe { (*parmp).window_count = 1 };
+    }
 
-        if recoverymode.get() {
-            msg_scroll.set(1);
-            ml_recover(true);
-            if (*curbuf.get()).b_ml.ml_mfp.is_null() {
-                // Recovery failed; there is nothing to edit.
-                getout(1);
-            }
-            do_modelines(OptionSetFlags::NONE);
-            return;
+    if recoverymode.get() {
+        msg_scroll.set(1);
+        unsafe { ml_recover(true) };
+        if unsafe { (*curbuf.get()).b_ml.ml_mfp }.is_null() {
+            // Recovery failed; there is nothing to edit.
+            unsafe { getout(1) };
         }
+        do_modelines(OptionSetFlags::NONE);
+        return;
+    }
 
-        // Open a buffer for the windows that do not have one yet. Commands in
-        // the vimrc may have loaded a file or split the window, and an
-        // autocommand may delete one while we walk -- hence the rewind.
-        autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-        autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    // Open a buffer for the windows that do not have one yet. Commands in
+    // the vimrc may have loaded a file or split the window, and an
+    // autocommand may delete one while we walk -- hence the rewind.
+    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
 
-        let mut dorewind = true;
-        let mut passes = 0;
-        while passes < MAX_WINDOW_PASSES {
-            passes += 1;
-            if dorewind {
-                if (*parmp).window_layout == WIN_TABS as c_int {
-                    goto_tabpage(1);
-                } else {
-                    curwin.set(first_win().raw());
-                }
-            } else if (*parmp).window_layout == WIN_TABS as c_int {
-                if TabPage::current().next().is_none() {
-                    break;
-                }
-                goto_tabpage(0);
+    let mut dorewind = true;
+    let mut passes = 0;
+    while passes < MAX_WINDOW_PASSES {
+        passes += 1;
+        if dorewind {
+            if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+                goto_tabpage(1);
             } else {
-                let Some(next) = Win::current().next() else {
-                    break;
-                };
-                curwin.set(next.raw());
+                curwin.set(first_win().raw());
             }
-            dorewind = false;
-            curbuf.set((*curwin.get()).w_buffer);
-
-            if (*curbuf.get()).b_ml.ml_mfp.is_null() {
-                if p_fdls.get() >= 0 as OptInt {
-                    (*curwin.get()).w_onebuf_opt.wo_fdl = p_fdls.get();
-                }
-                // Ask, rather than print, if the swap file is in the way.
-                swap_exists_action.set(SEA_DIALOG);
-                set_buflisted(1);
-                open_buffer(false, ptr::null_mut::<exarg_T>(), 0);
-
-                if swap_exists_action.get() == SEA_QUIT {
-                    if got_int.get() || only_one_window() {
-                        quit_on_swap_exists(true);
-                    }
-                    // The window cannot be closed here without disturbing
-                    // what comes next: clear the name and mark the argument
-                    // index so it is deleted later.
-                    setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false);
-                    (*curwin.get()).w_arg_idx = -1;
-                    swap_exists_action.set(SEA_NONE);
-                } else {
-                    handle_swap_exists(None);
-                }
-                // The lists may have moved under us.
-                dorewind = true;
-            }
-
-            os_breakcheck();
-            if got_int.get() {
-                // Interrupt the file loading, not the rest of the startup.
-                vgetc();
+        } else if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+            if unsafe { TabPage::current() }.next().is_none() {
                 break;
             }
+            goto_tabpage(0);
+        } else {
+            let Some(next) = unsafe { Win::current() }.next() else {
+                break;
+            };
+            curwin.set(next.raw());
+        }
+        dorewind = false;
+        curbuf.set(unsafe { (*curwin.get()).w_buffer });
+
+        if unsafe { (*curbuf.get()).b_ml.ml_mfp }.is_null() {
+            if p_fdls.get() >= 0 as OptInt {
+                unsafe { (*curwin.get()).w_onebuf_opt.wo_fdl = p_fdls.get() };
+            }
+            // Ask, rather than print, if the swap file is in the way.
+            swap_exists_action.set(SEA_DIALOG);
+            unsafe { set_buflisted(1) };
+            unsafe { open_buffer(false, ptr::null_mut::<exarg_T>(), 0) };
+
+            if swap_exists_action.get() == SEA_QUIT {
+                if got_int.get() || unsafe { only_one_window() } {
+                    quit_on_swap_exists(true);
+                }
+                // The window cannot be closed here without disturbing
+                // what comes next: clear the name and mark the argument
+                // index so it is deleted later.
+                unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
+                unsafe { (*curwin.get()).w_arg_idx = -1 };
+                swap_exists_action.set(SEA_NONE);
+            } else {
+                handle_swap_exists(None);
+            }
+            // The lists may have moved under us.
+            dorewind = true;
         }
 
-        if (*parmp).window_layout == WIN_TABS as c_int {
-            goto_tabpage(1);
-        } else {
-            curwin.set(first_win().raw());
+        os_breakcheck();
+        if got_int.get() {
+            // Interrupt the file loading, not the rest of the startup.
+            vgetc();
+            break;
         }
-        curbuf.set((*curwin.get()).w_buffer);
-        autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-        autocmd_no_leave.set(autocmd_no_leave.get() - 1);
     }
+
+    if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+        goto_tabpage(1);
+    } else {
+        curwin.set(first_win().raw());
+    }
+    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 }
 
 /// Load the remaining file arguments into the windows [`create_windows`]
@@ -375,62 +379,64 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
 pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block; the window list
     // is global and `do_ecmd` may close windows through autocommands.
-    unsafe {
-        autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-        autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
 
-        // `create_windows` marks a window whose file could not be opened.
-        let mut advance = true;
-        if (*curwin.get()).w_arg_idx == -1 {
-            win_close(curwin.get(), true, false);
+    // `create_windows` marks a window whose file could not be opened.
+    let mut advance = true;
+    if unsafe { (*curwin.get()).w_arg_idx } == -1 {
+        unsafe { win_close(curwin.get(), true, false) };
+        advance = false;
+    }
+
+    // 'shortmess' with F added, saved for restoring after the tab pages
+    // are filled: the per-file messages are noise when there are many.
+    let mut p_shm_save: *mut c_char = ptr::null_mut();
+
+    let mut arg_idx: c_int = 1;
+    for i in 1..unsafe { (*parmp).window_count } {
+        if unsafe { (*curwin.get()).w_arg_idx } == -1 {
+            arg_idx += 1;
+            unsafe { win_close(curwin.get(), true, false) };
             advance = false;
+            continue;
         }
 
-        // 'shortmess' with F added, saved for restoring after the tab pages
-        // are filled: the per-file messages are noise when there are many.
-        let mut p_shm_save: *mut c_char = ptr::null_mut();
-
-        let mut arg_idx: c_int = 1;
-        for i in 1..(*parmp).window_count {
-            if (*curwin.get()).w_arg_idx == -1 {
-                arg_idx += 1;
-                win_close(curwin.get(), true, false);
-                advance = false;
-                continue;
-            }
-
-            if advance {
-                if (*parmp).window_layout == WIN_TABS as c_int {
-                    if TabPage::current().next().is_none() {
-                        break;
-                    }
-                    goto_tabpage(0);
-                    if i == 1 {
-                        p_shm_save = xstrdup(p_shm.get());
-                        let mut shm: [c_char; 100] = [0; 100];
+        if advance {
+            if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+                if unsafe { TabPage::current() }.next().is_none() {
+                    break;
+                }
+                goto_tabpage(0);
+                if i == 1 {
+                    p_shm_save = unsafe { xstrdup(p_shm.get()) };
+                    let mut shm: [c_char; 100] = [0; 100];
+                    unsafe {
                         snprintf(
                             shm.as_mut_ptr(),
                             size_of::<[c_char; 100]>(),
                             c"F%s".as_ptr(),
                             p_shm.get(),
-                        );
-                        set_shortmess(shm.as_mut_ptr());
-                    }
-                } else {
-                    let Some(next) = Win::current().next() else {
-                        break;
+                        )
                     };
-                    win_enter(next.raw(), false);
+                    unsafe { set_shortmess(shm.as_mut_ptr()) };
                 }
+            } else {
+                let Some(next) = unsafe { Win::current() }.next() else {
+                    break;
+                };
+                unsafe { win_enter(next.raw(), false) };
             }
-            advance = true;
+        }
+        advance = true;
 
-            // Only load a file into a window that is still showing the first
-            // window's buffer, or an unnamed one.
-            if curbuf.get() == first_win().w_buffer || (*curbuf.get()).b_ffname.is_null() {
-                (*curwin.get()).w_arg_idx = arg_idx;
-                swap_exists_did_quit.set(false);
-                let alist = global_arglist();
+        // Only load a file into a window that is still showing the first
+        // window's buffer, or an unnamed one.
+        if curbuf.get() == first_win().w_buffer || unsafe { (*curbuf.get()).b_ffname }.is_null() {
+            unsafe { (*curwin.get()).w_arg_idx = arg_idx };
+            swap_exists_did_quit.set(false);
+            let alist = global_arglist();
+            unsafe {
                 do_ecmd(
                     0,
                     if arg_idx < (*alist).al_ga.ga_len {
@@ -445,53 +451,55 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
                     ECMD_LASTL as c_int as linenr_T,
                     ECMD_HIDE as c_int,
                     curwin.get(),
-                );
-                if swap_exists_did_quit.get() {
-                    if got_int.get() || only_one_window() {
-                        quit_on_swap_exists(true);
-                    }
-                    win_close(curwin.get(), true, false);
-                    advance = false;
-                }
-                if arg_idx == (*alist).al_ga.ga_len - 1 {
-                    arg_had_last.set(true);
-                }
-                arg_idx += 1;
-            }
-
-            os_breakcheck();
-            if got_int.get() {
-                vgetc();
-                break;
-            }
-        }
-
-        if !p_shm_save.is_null() {
-            set_shortmess(p_shm_save);
-            xfree(p_shm_save as *mut c_void);
-        }
-
-        if (*parmp).window_layout == WIN_TABS as c_int {
-            goto_tabpage(1);
-        }
-        autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-
-        // Start in the first window that is not a preview.
-        let mut win = first_win();
-        while win.w_onebuf_opt.wo_pvw != 0 {
-            let Some(next) = win.next() else {
-                win = first_win();
-                break;
+                )
             };
-            win = next;
+            if swap_exists_did_quit.get() {
+                if got_int.get() || unsafe { only_one_window() } {
+                    quit_on_swap_exists(true);
+                }
+                unsafe { win_close(curwin.get(), true, false) };
+                advance = false;
+            }
+            if arg_idx == unsafe { (*alist).al_ga.ga_len } - 1 {
+                arg_had_last.set(true);
+            }
+            arg_idx += 1;
         }
-        win_enter(win.raw(), false);
-        autocmd_no_leave.set(autocmd_no_leave.get() - 1);
 
-        time_msg_at(c"editing files in windows");
-        if (*parmp).window_count > 1 && (*parmp).window_layout != WIN_TABS as c_int {
-            win_equal(curwin.get(), false, 'b' as c_int);
+        os_breakcheck();
+        if got_int.get() {
+            vgetc();
+            break;
         }
+    }
+
+    if !p_shm_save.is_null() {
+        unsafe { set_shortmess(p_shm_save) };
+        unsafe { xfree(p_shm_save as *mut c_void) };
+    }
+
+    if unsafe { (*parmp).window_layout } == WIN_TABS as c_int {
+        goto_tabpage(1);
+    }
+    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+
+    // Start in the first window that is not a preview.
+    let mut win = first_win();
+    while win.w_onebuf_opt.wo_pvw != 0 {
+        let Some(next) = win.next() else {
+            win = first_win();
+            break;
+        };
+        win = next;
+    }
+    unsafe { win_enter(win.raw(), false) };
+    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+
+    unsafe { time_msg_at(c"editing files in windows") };
+    if unsafe { (*parmp).window_count } > 1
+        && unsafe { (*parmp).window_layout } != WIN_TABS as c_int
+    {
+        unsafe { win_equal(curwin.get(), false, 'b' as c_int) };
     }
 }
 
@@ -499,18 +507,16 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
 unsafe fn set_shortmess(value: *mut c_char) {
     // SAFETY: `value` is a NUL-terminated string that outlives the call; the
     // option layer copies it.
-    unsafe {
-        set_option_value_give_err(
-            kOptShortmess,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(value),
-                },
+    set_option_value_give_err(
+        kOptShortmess,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { cstr_as_string(value) },
             },
-            OptionSetFlags::NONE,
-        );
-    }
+        },
+        OptionSetFlags::NONE,
+    );
 }
 
 /// Act on the ATTENTION prompt's answer after a buffer was loaded.
