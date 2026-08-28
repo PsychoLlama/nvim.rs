@@ -62,12 +62,8 @@ pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
 
 /// Record a startup-timing message, if `--startuptime` asked for one.
 ///
-/// The C spells this as the `TIME_MSG` macro; it appears two dozen times
-/// across the startup, and the `time_fd` test is the whole of it.
-///
-/// Safe: the only precondition is the one the startup-timing globals keep
-/// for themselves, and `what` is a `&CStr` the caller already owns -- so
-/// none of the three dozen call sites has to restate anything.
+/// The C spells this as the `TIME_MSG` macro. Safe: no raw pointer crosses
+/// the boundary, and the `time_fd` test is the whole of it.
 pub(crate) fn time_msg_at(what: &core::ffi::CStr) {
     if !time_fd.get().is_null() {
         // SAFETY: `time_fd` is the startup-timing file, opened once by
