@@ -235,6 +235,14 @@ def enclosing_unsafe(raw: bytes, at: int) -> int | None:
     return None
 
 
+# Methods that borrow `self` and hand back an address into it. Applied to the
+# value an `unsafe` block produced, every one of them answers a dangling
+# pointer -- see `chain_end`.
+ADDRESS_OF_SELF = frozenset(
+    (b"as_ptr", b"as_mut_ptr", b"as_slice", b"as_mut_slice", b"as_bytes")
+)
+
+
 def chain_end(raw: bytes, at: int) -> int:
     """The end of the `.field` / `[i]` chain starting at `at`.
 
@@ -254,6 +262,16 @@ def chain_end(raw: bytes, at: int) -> int:
                 j += 1
             # `.name(` is a method call, and `.0`/`.1` on a tuple is not.
             if raw[j : j + 1] == b"(" or raw[j : j + 1] == b":":
+                # ... except for the borrow-and-hand-out-an-address family.
+                # `unsafe { (*p).arr }.as_ptr()` copies the array out of the
+                # pointee and answers the address of that *temporary*, which
+                # is dangling by the end of the statement. Those calls have to
+                # be inside the region, not after it. rustc's
+                # `dangling_pointers_from_temporaries` catches the direct
+                # spelling and nothing catches the indirect ones.
+                if raw[i + 1 : j] in ADDRESS_OF_SELF and raw[j : j + 2] == b"()":
+                    i = j + 2
+                    continue
                 return i
             i = j
             continue
@@ -347,7 +365,19 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
         close = enclosing_unsafe(scan, span["byte_start"])
         if close is not None and scan[close + 1 : close + 2] in (b".", b"["):
             edits.add((close, chain_end(scan, close + 1), open_of(scan, close)))
-    for close, end, start in sorted(edits, reverse=True):
+    # Every offset above was measured against *this* text, and applying one
+    # edit shifts everything after it. Edits are applied from the back, so a
+    # nested one lands first and leaves the enclosing one's `end` a byte short
+    # -- which puts the brace *inside* the index, `f[i }]`, a parse error that
+    # then blinds rustc for the whole crate (p23-16 §4). An enclosing edit is
+    # therefore deferred to the next round, by which time the nested one is
+    # part of the text it measures against.
+    nested = {
+        (close, end, start)
+        for close, end, start in edits
+        if any(close < other < end for other, _, _ in edits)
+    }
+    for close, end, start in sorted(edits - nested, reverse=True):
         if end <= close + 1:
             continue  # nothing to move the brace past
         inner = raw[start:close].rstrip()
@@ -369,7 +399,7 @@ def rechain(raw: bytes, spans: list[dict] | None = None) -> tuple[bytes, int]:
             )
         else:
             raw = raw[:close] + raw[close + 1 : end] + b" }" + raw[end:]
-    return raw, sum(1 for close, end, _ in edits if end > close + 1)
+    return raw, sum(1 for close, end, _ in edits - nested if end > close + 1)
 
 
 def balanced_group(text: bytes) -> bool:
