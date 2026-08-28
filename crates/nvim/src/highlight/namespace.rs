@@ -47,6 +47,7 @@ use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
     LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, win_T,
 };
+use crate::winlayer::Win;
 use ::libc::strlen;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
@@ -344,12 +345,9 @@ pub unsafe fn hl_check_ns() -> bool {
 /// # Safety
 /// `wp` is null or a live window; main thread only.
 pub unsafe fn win_check_ns_hl(wp: *mut win_T) -> bool {
-    // SAFETY: the caller's window.
-    ns_hl_win.set(if wp.is_null() {
-        -1
-    } else {
-        unsafe { (*wp).w_ns_hl }
-    });
+    // SAFETY: the caller's promise -- null, or a live window.
+    let wp = unsafe { Win::from_raw(wp) };
+    ns_hl_win.set(wp.map_or(-1, |wp| wp.w_ns_hl));
     unsafe { hl_check_ns() }
 }
 
@@ -433,28 +431,29 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 /// # Safety
 /// `wp` is a live window; main thread only.
 pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window and the editor's own tables.
-    let ns_id = unsafe { (*wp).w_ns_hl };
+    let ns_id = wp.w_ns_hl;
     unsafe { update_ns_hl(ns_id) };
-    if ns_id != unsafe { (*wp).w_ns_hl_active } || unsafe { (*wp).w_ns_hl_attr }.is_null() {
-        unsafe { (*wp).w_ns_hl_active = ns_id };
+    if ns_id != wp.w_ns_hl_active || wp.w_ns_hl_attr.is_null() {
+        wp.w_ns_hl_active = ns_id;
         let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
         // No namespace table: read the global one.
-        unsafe { (*wp).w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table) };
+        wp.w_ns_hl_attr = table.unwrap_or_else(default_hl_attr_table);
     }
-    let hl_def = unsafe { (*wp).w_ns_hl_attr };
+    let hl_def = wp.w_ns_hl_attr;
 
-    if !unsafe { (*wp).w_hl_needs_update } && !invalid {
+    if !wp.w_hl_needs_update && !invalid {
         return;
     }
-    unsafe { (*wp).w_hl_needs_update = false };
+    wp.w_hl_needs_update = false;
 
     // A blending float always has a *named* normal group, because
     // `NormalFloat` always is one.
-    let float_win = unsafe { (*wp).w_floating } && !unsafe { (*wp).w_config.external };
+    let float_win = wp.w_floating && !wp.w_config.external;
     unsafe {
-        (*wp).w_hl_attr_normal = if float_win && *hl_def.add(HLF_NFLOAT as usize) != 0 && ns_id > 0
-        {
+        wp.w_hl_attr_normal = if float_win && *hl_def.add(HLF_NFLOAT as usize) != 0 && ns_id > 0 {
             *hl_def.add(HLF_NFLOAT as usize)
         } else if *hl_def.add(HLF_NONE as usize) > 0 {
             *hl_def.add(HLF_NONE as usize)
@@ -469,16 +468,16 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             0
         }
     };
-    if unsafe { (*wp).w_floating } {
-        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
-        unsafe { (*wp).w_hl_attr_normal = hl_apply_winblend(winbl, (*wp).w_hl_attr_normal) };
+    if wp.w_floating {
+        let winbl = wp.w_onebuf_opt.wo_winbl as c_int;
+        unsafe { wp.w_hl_attr_normal = hl_apply_winblend(winbl, wp.w_hl_attr_normal) };
     }
 
-    unsafe { (*wp).w_config.shadow = false };
-    if unsafe { (*wp).w_floating } && unsafe { (*wp).w_config.border } {
-        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
+    wp.w_config.shadow = false;
+    if wp.w_floating && wp.w_config.border {
+        let winbl = wp.w_onebuf_opt.wo_winbl as c_int;
         for i in 0..8 {
-            let id = unsafe { (*wp).w_config.border_hl_ids[i] };
+            let id = wp.w_config.border_hl_ids[i];
             let mut attr = if id != 0 {
                 unsafe { hl_get_ui_attr(ns_id, HLF_BORDER, id, false) }
             } else {
@@ -486,29 +485,29 @@ pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
             };
             attr = unsafe { hl_apply_winblend(winbl, attr) };
             if syn_attr2entry(attr).hl_blend > 0 {
-                unsafe { (*wp).w_config.shadow = true };
+                wp.w_config.shadow = true;
             }
-            unsafe { (*wp).w_config.border_attr[i] = attr };
+            wp.w_config.border_attr[i] = attr;
         }
     }
 
     // A shadow is itself a reason to blend.
-    unsafe { check_blending(wp) };
+    unsafe { check_blending(wp.raw()) };
 
     // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
     // to 'winhl' implementation?
     let inactive = unsafe { *hl_def.add(HLF_INACTIVE as usize) };
     unsafe {
-        (*wp).w_hl_attr_normalnc = if inactive == 0 {
+        wp.w_hl_attr_normalnc = if inactive == 0 {
             let global = *hl_attr_active.get().add(HLF_INACTIVE as usize);
-            hl_combine_attr(global, (*wp).w_hl_attr_normal)
+            hl_combine_attr(global, wp.w_hl_attr_normal)
         } else {
             inactive
         }
     };
-    if unsafe { (*wp).w_floating } {
-        let winbl = unsafe { (*wp).w_onebuf_opt.wo_winbl } as c_int;
-        unsafe { (*wp).w_hl_attr_normalnc = hl_apply_winblend(winbl, (*wp).w_hl_attr_normalnc) };
+    if wp.w_floating {
+        let winbl = wp.w_onebuf_opt.wo_winbl as c_int;
+        unsafe { wp.w_hl_attr_normalnc = hl_apply_winblend(winbl, wp.w_hl_attr_normalnc) };
     }
 }
 
@@ -554,20 +553,22 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 /// # Safety
 /// `wp` is a live window; main thread only.
 pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
-        let local = if wp == curwin.get() {
-            unsafe { (*wp).w_hl_attr_normal }
+        let local = if wp.raw() == curwin.get() {
+            wp.w_hl_attr_normal
         } else {
-            unsafe { (*wp).w_hl_attr_normalnc }
+            wp.w_hl_attr_normalnc
         };
         if local != 0 {
             return local;
         }
     }
     let inactive = unsafe { *hl_attr_active.get().add(HLF_INACTIVE as usize) };
-    if wp == curwin.get() || inactive == 0 {
+    if wp.raw() == curwin.get() || inactive == 0 {
         unsafe { *hl_attr_active.get().add(HLF_NONE as usize) }
     } else {
         inactive
@@ -581,10 +582,12 @@ pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
 /// `wp` is a live window; main thread only.
 #[inline]
 pub unsafe fn win_hl_attr(wp: *mut win_T, hlf: c_int) -> c_int {
+    // SAFETY: the caller's promise -- see this function's `# Safety`.
+    let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.
-    let table = if !unsafe { (*wp).w_ns_hl_attr }.is_null() && ns_hl_fast.get() < 0 {
-        unsafe { (*wp).w_ns_hl_attr }
+    let table = if !wp.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {
+        wp.w_ns_hl_attr
     } else {
         hl_attr_active.get()
     };
