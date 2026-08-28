@@ -126,22 +126,22 @@ pub(crate) unsafe fn ui_client_start_server(
     argc: usize,
     argv: *mut *mut c_char,
 ) -> u64 {
-    unsafe {
-        let args = xmalloc((argc + 2) * size_of::<*mut c_char>()).cast::<*mut c_char>();
-        *args = xstrdup(*argv);
-        *args.add(1) = xstrdup(c"--embed".as_ptr());
-        for i in 1..argc {
-            *args.add(i + 1) = xstrdup(*argv.add(i));
-        }
-        *args.add(argc + 1) = core::ptr::null_mut();
+    let args = unsafe { xmalloc((argc + 2) * size_of::<*mut c_char>()) }.cast::<*mut c_char>();
+    unsafe { *args = xstrdup(*argv) };
+    unsafe { *args.add(1) = xstrdup(c"--embed".as_ptr()) };
+    for i in 1..argc {
+        unsafe { *args.add(i + 1) = xstrdup(*argv.add(i)) };
+    }
+    unsafe { *args.add(argc + 1) = core::ptr::null_mut() };
 
-        // The server's stderr is forwarded so that a Lua error at startup
-        // is seen even though this process owns the terminal.
-        let mut on_err = no_reader();
-        on_err.fwd_err = true;
+    // The server's stderr is forwarded so that a Lua error at startup
+    // is seen even though this process owns the terminal.
+    let mut on_err = no_reader();
+    on_err.fwd_err = true;
 
-        let mut exit_status = 0;
-        let channel = channel_job_start(
+    let mut exit_status = 0;
+    let channel = unsafe {
+        channel_job_start(
             args,
             exepath,
             no_reader(),
@@ -162,23 +162,25 @@ pub(crate) unsafe fn ui_client_start_server(
             0 as uint16_t,
             core::ptr::null_mut::<dict_T>(),
             &raw mut exit_status,
-        );
-        if channel.is_null() {
-            return 0;
-        }
-        if ui_client_forward_stdin.get() {
-            // The user piped something in, which the server will read from
-            // the descriptor `dup` lands on; this process needs slot 0 for
-            // the terminal.
-            close(0);
+        )
+    };
+    if channel.is_null() {
+        return 0;
+    }
+    if ui_client_forward_stdin.get() {
+        // The user piped something in, which the server will read from
+        // the descriptor `dup` lands on; this process needs slot 0 for
+        // the terminal.
+        unsafe { close(0) };
+        unsafe {
             dup(if stderr_isatty.get() {
                 STDERR_FILENO
             } else {
                 STDOUT_FILENO
-            });
-        }
-        (*channel).id
+            })
+        };
     }
+    unsafe { (*channel).id }
 }
 
 /// Attaches this client to the server as a UI.
@@ -187,72 +189,79 @@ pub(crate) unsafe fn ui_client_start_server(
 ///
 /// `term` must be null or a valid C string, and a channel must be set.
 pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_char, rgb: bool) {
-    unsafe {
-        let mut opts = DictBuf::<8>::new();
-        opts.insert(c"rgb", Object::boolean(rgb));
-        // A TUI is always on the modern protocol and always owns its own
-        // palette, so it never has to be told the fallback colours.
-        opts.insert(c"ext_linegrid", Object::boolean(true));
-        opts.insert(c"ext_termcolors", Object::boolean(true));
-        if !term.is_null() {
-            opts.insert(c"term_name", Object::string(cstr_as_string(term)));
-        }
+    let mut opts = DictBuf::<8>::new();
+    opts.insert(c"rgb", Object::boolean(rgb));
+    // A TUI is always on the modern protocol and always owns its own
+    // palette, so it never has to be told the fallback colours.
+    opts.insert(c"ext_linegrid", Object::boolean(true));
+    opts.insert(c"ext_termcolors", Object::boolean(true));
+    if !term.is_null() {
         opts.insert(
-            c"term_colors",
-            Object::integer(Integer::from(t_colors.get())),
+            c"term_name",
+            Object::string(unsafe { cstr_as_string(term) }),
         );
-        opts.insert(c"stdin_tty", Object::boolean(stdin_isatty.get()));
-        opts.insert(c"stdout_tty", Object::boolean(stdout_isatty.get()));
-        if ui_client_forward_stdin.get() {
-            opts.insert(c"stdin_fd", Object::integer(FORWARDED_STDIN_FD));
-            // Only the first attach forwards it; a re-attach after
-            // `:restart` has nothing left to hand over.
-            ui_client_forward_stdin.set(false);
-        }
+    }
+    opts.insert(
+        c"term_colors",
+        Object::integer(Integer::from(t_colors.get())),
+    );
+    opts.insert(c"stdin_tty", Object::boolean(stdin_isatty.get()));
+    opts.insert(c"stdout_tty", Object::boolean(stdout_isatty.get()));
+    if ui_client_forward_stdin.get() {
+        opts.insert(c"stdin_fd", Object::integer(FORWARDED_STDIN_FD));
+        // Only the first attach forwards it; a re-attach after
+        // `:restart` has nothing left to hand over.
+        ui_client_forward_stdin.set(false);
+    }
 
-        let mut args = ArrayBuf::<3>::new();
-        args.push(Object::integer(Integer::from(width)));
-        args.push(Object::integer(Integer::from(height)));
-        args.push(opts.object());
+    let mut args = ArrayBuf::<3>::new();
+    args.push(Object::integer(Integer::from(width)));
+    args.push(Object::integer(Integer::from(height)));
+    args.push(opts.object());
+    unsafe {
         rpc_send_event(
             ui_client_channel_id.get(),
             c"nvim_ui_attach".as_ptr(),
             args.array(),
-        );
-        ui_client_attached.set(true);
-        log_startup_step(c"nvim_ui_attach");
+        )
+    };
+    ui_client_attached.set(true);
+    unsafe { log_startup_step(c"nvim_ui_attach") };
 
-        // Tell the server who is drawing for it, which is what
-        // `nvim_get_chan_info` reports and what `:checkhealth` reads.
-        let mut info = DictBuf::<3>::new();
-        info.insert(
-            c"website",
-            Object::string(cstr_as_string(c"https://neovim.io".as_ptr())),
-        );
-        info.insert(
-            c"license",
-            Object::string(cstr_as_string(c"Apache 2".as_ptr())),
-        );
-        info.insert(c"pid", Object::integer(os_get_pid()));
+    // Tell the server who is drawing for it, which is what
+    // `nvim_get_chan_info` reports and what `:checkhealth` reads.
+    let mut info = DictBuf::<3>::new();
+    info.insert(
+        c"website",
+        Object::string(unsafe { cstr_as_string(c"https://neovim.io".as_ptr()) }),
+    );
+    info.insert(
+        c"license",
+        Object::string(unsafe { cstr_as_string(c"Apache 2".as_ptr()) }),
+    );
+    info.insert(c"pid", Object::integer(os_get_pid()));
 
-        let mut client = ArrayBuf::<5>::new();
-        client.push(Object::string(cstr_as_string(c"nvim-tui".as_ptr())));
-        client.push(Object::dict(api_version()));
-        client.push(Object::string(cstr_as_string(c"ui".as_ptr())));
-        // A UI exposes no methods of its own.
-        client.push(Object::array(Array {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        }));
-        client.push(info.object());
+    let mut client = ArrayBuf::<5>::new();
+    client.push(Object::string(unsafe {
+        cstr_as_string(c"nvim-tui".as_ptr())
+    }));
+    client.push(Object::dict(unsafe { api_version() }));
+    client.push(Object::string(unsafe { cstr_as_string(c"ui".as_ptr()) }));
+    // A UI exposes no methods of its own.
+    client.push(Object::array(Array {
+        size: 0,
+        capacity: 0,
+        items: core::ptr::null_mut(),
+    }));
+    client.push(info.object());
+    unsafe {
         rpc_send_event(
             ui_client_channel_id.get(),
             c"nvim_set_client_info".as_ptr(),
             client.array(),
-        );
-        log_startup_step(c"nvim_set_client_info");
-    }
+        )
+    };
+    unsafe { log_startup_step(c"nvim_set_client_info") };
 }
 
 /// This binary's own `version` dict, out of its API metadata.
@@ -261,17 +270,16 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
 ///
 /// The API metadata must be initialised.
 unsafe fn api_version() -> Dict {
-    unsafe {
-        let metadata = api_metadata().data.dict;
-        assert!(metadata.size > 0, "API metadata is empty");
-        for i in 0..metadata.size {
-            let entry = *metadata.items.add(i);
-            if strequal(entry.key.data(), c"version".as_ptr()) {
-                return entry.value.data.dict;
-            }
+    // SAFETY: the caller's promise; the metadata object is a dict.
+    let metadata = unsafe { api_metadata().data.dict };
+    assert!(metadata.size > 0, "API metadata is empty");
+    for i in 0..metadata.size {
+        let entry = unsafe { *metadata.items.add(i) };
+        if unsafe { strequal(entry.key.data(), c"version".as_ptr()) } {
+            return unsafe { entry.value.data.dict };
         }
-        panic!("API metadata has no version");
     }
+    panic!("API metadata has no version");
 }
 
 /// Notes in `--startuptime` that `step` has been sent.
@@ -311,20 +319,20 @@ pub(crate) unsafe fn ui_client_detach() {
 ///
 /// Must be called once, on the main thread, with a server channel set.
 pub(crate) unsafe fn ui_client_run() -> ! {
-    unsafe {
-        // Published before the loop turns: a callback that runs during
-        // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
-        tui.set(tui_start());
-        let started = tui_wait_ready(tui.get());
-        tui_width.set(started.width);
-        tui_height.set(started.height);
-        tui_term.set(started.term);
-        tui_rgb.set(started.rgb);
-        ui_client_attach(started.width, started.height, started.term, started.rgb);
+    // Published before the loop turns: a callback that runs during
+    // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
+    tui.set(unsafe { tui_start() });
+    let started = unsafe { tui_wait_ready(tui.get()) };
+    tui_width.set(started.width);
+    tui_height.set(started.height);
+    tui_term.set(started.term);
+    tui_rgb.set(started.rgb);
+    unsafe { ui_client_attach(started.width, started.height, started.term, started.rgb) };
 
-        // The test harness waits for a line in the log before it starts
-        // driving the terminal, so that it is not racing startup.
-        if os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), true) {
+    // The test harness waits for a line in the log before it starts
+    // driving the terminal, so that it is not racing startup.
+    if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), true) } {
+        unsafe {
             logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
@@ -332,15 +340,15 @@ pub(crate) unsafe fn ui_client_run() -> ! {
                 line!() as c_int,
                 true,
                 c"test log message".as_ptr(),
-            );
-        }
-        time_finish();
+            )
+        };
+    }
+    time_finish();
 
-        // Never returns: the client exits from a callback, either because
-        // the server said so or because the channel closed.
-        loop {
-            process_events(main_loop.ptr(), (*main_loop.ptr()).events, -1);
-        }
+    // Never returns: the client exits from a callback, either because
+    // the server said so or because the channel closed.
+    loop {
+        unsafe { process_events(main_loop.ptr(), (*main_loop.ptr()).events, -1) };
     }
 }
 
@@ -351,10 +359,8 @@ pub(crate) unsafe fn ui_client_run() -> ! {
 /// The TUI must have been started.
 pub(crate) unsafe fn ui_client_stop() {
     ui_client_attached.set(false);
-    unsafe {
-        if !tui_is_stopped(tui.get()) {
-            tui_stop(tui.get());
-        }
+    if !unsafe { tui_is_stopped(tui.get()) } {
+        unsafe { tui_stop(tui.get()) };
     }
 }
 
@@ -667,21 +673,23 @@ forward! {
 ///
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_grid_resize(args: Array) {
-    unsafe {
-        let (Some(grid), Some(width), Some(height)) = (
-            arg(args, 0, Some(kObjectTypeInteger)),
-            arg(args, 1, Some(kObjectTypeInteger)),
-            arg(args, 2, Some(kObjectTypeInteger)),
-        ) else {
-            return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
-        };
-        let (grid, width, height) = (grid.data.integer, width.data.integer, height.data.integer);
-        tui_grid_resize(&mut *tui.get(), grid, width, height);
+    let (Some(grid), Some(width), Some(height)) = (
+        unsafe { arg(args, 0, Some(kObjectTypeInteger)) },
+        unsafe { arg(args, 1, Some(kObjectTypeInteger)) },
+        unsafe { arg(args, 2, Some(kObjectTypeInteger)) },
+    ) else {
+        return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
+    };
+    let (grid, width, height) = (
+        unsafe { grid.data.integer },
+        unsafe { width.data.integer },
+        unsafe { height.data.integer },
+    );
+    tui_grid_resize(unsafe { &mut *tui.get() }, grid, width, height);
 
-        // The decoder writes cells straight into these rather than
-        // building an array, so they have to hold the widest grid.
-        Unpacker::widen_grid_line_buf(width as usize);
-    }
+    // The decoder writes cells straight into these rather than
+    // building an array, so they have to hold the widest grid.
+    Unpacker::widen_grid_line_buf(width as usize);
 }
 
 /// Never called: the decoder recognises `grid_line` by this function's
@@ -698,12 +706,16 @@ pub(crate) fn ui_client_event_grid_line(_args: Array) {
 /// `g` must be the decoder's event, and the shared buffers must hold the
 /// cells it counted.
 pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
+    let [grid, row, startcol] = unsafe { (*g).args };
+    let endcol = Integer::from(startcol + unsafe { (*g).coloff });
+    let clearcol = endcol + Integer::from(unsafe { (*g).clear_width });
+    let flags = if unsafe { (*g).wrap } {
+        kLineFlagWrap
+    } else {
+        0
+    };
+    let (chars, attrs) = Unpacker::grid_line_cells();
     unsafe {
-        let [grid, row, startcol] = (*g).args;
-        let endcol = Integer::from(startcol + (*g).coloff);
-        let clearcol = endcol + Integer::from((*g).clear_width);
-        let flags = if (*g).wrap { kLineFlagWrap } else { 0 };
-        let (chars, attrs) = Unpacker::grid_line_cells();
         tui_raw_line(
             &mut *tui.get(),
             Integer::from(grid),
@@ -715,8 +727,8 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
             flags,
             chars,
             attrs,
-        );
-    }
+        )
+    };
 }
 
 /// Announces a highlight attribute id, converting both dicts back into the
@@ -726,23 +738,21 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 ///
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
-    unsafe {
-        let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
-            arg(args, 0, Some(kObjectTypeInteger)),
-            arg(args, 1, Some(kObjectTypeDict)),
-            arg(args, 2, Some(kObjectTypeDict)),
-            arg(args, 3, Some(kObjectTypeArray)),
-        ) else {
-            return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
-        };
-        tui_hl_attr_define(
-            &mut *tui.get(),
-            id.data.integer,
-            dict_to_hlattrs(rgb.data.dict, true),
-            dict_to_hlattrs(cterm.data.dict, false),
-            info.data.array,
-        );
-    }
+    let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
+        unsafe { arg(args, 0, Some(kObjectTypeInteger)) },
+        unsafe { arg(args, 1, Some(kObjectTypeDict)) },
+        unsafe { arg(args, 2, Some(kObjectTypeDict)) },
+        unsafe { arg(args, 3, Some(kObjectTypeArray)) },
+    ) else {
+        return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
+    };
+    tui_hl_attr_define(
+        unsafe { &mut *tui.get() },
+        unsafe { id.data.integer },
+        unsafe { dict_to_hlattrs(rgb.data.dict, true) },
+        unsafe { dict_to_hlattrs(cterm.data.dict, false) },
+        unsafe { info.data.array },
+    );
 }
 
 /// The attribute entry `d` describes, as the server's `hl_attr_define`
@@ -752,31 +762,31 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 ///
 /// `d` must be a valid dict.
 unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
-    unsafe {
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: core::ptr::null_mut(),
-        };
-        // Every field of a keyset is zero when nothing is set: the flags
-        // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
-        // whose null is their empty value.
-        let mut dict: KeyDict_highlight = core::mem::zeroed();
-        if !api_dict_to_keydict(
+    let mut err = Error {
+        type_0: kErrorTypeNone,
+        msg: core::ptr::null_mut(),
+    };
+    // Every field of a keyset is zero when nothing is set: the flags
+    // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
+    // whose null is their empty value.
+    let mut dict: KeyDict_highlight = unsafe { core::mem::zeroed() };
+    if !unsafe {
+        api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
             Some(key_dict_highlight_get_field),
             d,
             &raw mut err,
-        ) {
-            return HLATTRS_INIT;
-        }
-        let mut attrs = dict2hlattrs(&dict, rgb, None, None, &raw mut err);
-        // A URL is not an attribute the terminal understands; the TUI
-        // interns it and the entry keeps the index.
-        if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {
-            attrs.url = tui_add_url(&mut *tui.get(), dict.url.data());
-        }
-        attrs
+        )
+    } {
+        return HLATTRS_INIT;
     }
+    let mut attrs = unsafe { dict2hlattrs(&dict, rgb, None, None, &raw mut err) };
+    // A URL is not an attribute the terminal understands; the TUI
+    // interns it and the entry keeps the index.
+    if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {
+        attrs.url = unsafe { tui_add_url(&mut *tui.get(), dict.url.data()) };
+    }
+    attrs
 }
 
 /// Records the exit status the server asked for; the client exits when the
@@ -824,19 +834,21 @@ pub(crate) unsafe fn ui_client_event_connect(args: Array) {
 ///
 /// `argv[0]` must be an owned C string.
 unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
-    unsafe {
-        let server_addr = (*argv).cast::<c_char>();
-        let mut err = c"".as_ptr();
-        let is_tcp = socket_address_is_tcp(CStr::from_ptr(server_addr));
-        let chan = channel_connect(
+    let server_addr = unsafe { *argv }.cast::<c_char>();
+    let mut err = c"".as_ptr();
+    let is_tcp = socket_address_is_tcp(unsafe { CStr::from_ptr(server_addr) });
+    let chan = unsafe {
+        channel_connect(
             is_tcp,
             server_addr,
             true,
             no_reader(),
             UI_CONNECT_TIMEOUT_MS,
             &raw mut err,
-        );
-        if !strequal(err, c"".as_ptr()) {
+        )
+    };
+    if !unsafe { strequal(err, c"".as_ptr()) } {
+        unsafe {
             logmsg_c!(
                 LOGLVL_ERR,
                 core::ptr::null(),
@@ -846,18 +858,22 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
                 c"Cannot connect to server %s: %s".as_ptr(),
                 server_addr,
                 err,
-            );
-            xfree(server_addr.cast());
-            ui_client_exit_status.set(1);
-            os_exit(1);
-        }
-        ui_client_channel_id.set(chan);
+            )
+        };
+        unsafe { xfree(server_addr.cast()) };
+        ui_client_exit_status.set(1);
+        unsafe { os_exit(1) };
+    }
+    ui_client_channel_id.set(chan);
+    unsafe {
         ui_client_attach(
             tui_width.get(),
             tui_height.get(),
             tui_term.get(),
             tui_rgb.get(),
-        );
+        )
+    };
+    unsafe {
         logmsg_c!(
             LOGLVL_INF,
             core::ptr::null(),
@@ -867,9 +883,9 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
             c"Connected to server %s on channel %ld".as_ptr(),
             server_addr,
             chan,
-        );
-        xfree(server_addr.cast());
-    }
+        )
+    };
+    unsafe { xfree(server_addr.cast()) };
 }
 
 /// The copied `restart` event arguments, owned.
@@ -938,22 +954,24 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
     // The arguments move out here, so the cell has nothing left to free and
     // dropping `args` at the end of the scope is the only free.
     let args = restart_args.take();
-    unsafe {
-        let address = arg(args.0, 0, Some(kObjectTypeString));
-        match address {
-            None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
-            Some(address) => {
-                let listen_addr = address.data.string.data();
-                let mut err = c"".as_ptr();
-                let chan_id = channel_connect(
+    let address = unsafe { arg(args.0, 0, Some(kObjectTypeString)) };
+    match address {
+        None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
+        Some(address) => {
+            let listen_addr = unsafe { address.data.string }.data();
+            let mut err = c"".as_ptr();
+            let chan_id = unsafe {
+                channel_connect(
                     socket_address_is_tcp(CStr::from_ptr(listen_addr)),
                     listen_addr,
                     true,
                     no_reader(),
                     UI_CONNECT_TIMEOUT_MS,
                     &raw mut err,
-                );
-                if !strequal(err, c"".as_ptr()) {
+                )
+            };
+            if !unsafe { strequal(err, c"".as_ptr()) } {
+                unsafe {
                     logmsg_c!(
                         LOGLVL_ERR,
                         core::ptr::null(),
@@ -963,15 +981,19 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                         c"cannot connect to server %s: %s".as_ptr(),
                         listen_addr,
                         err,
-                    );
-                } else {
-                    ui_client_channel_id.set(chan_id);
+                    )
+                };
+            } else {
+                ui_client_channel_id.set(chan_id);
+                unsafe {
                     ui_client_attach(
                         tui_width.get(),
                         tui_height.get(),
                         tui_term.get(),
                         tui_rgb.get(),
-                    );
+                    )
+                };
+                unsafe {
                     logmsg_c!(
                         LOGLVL_INF,
                         core::ptr::null(),
@@ -981,8 +1003,8 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                         c"restarted server address=%s id=%ld".as_ptr(),
                         listen_addr,
                         chan_id,
-                    );
-                }
+                    )
+                };
             }
         }
     }

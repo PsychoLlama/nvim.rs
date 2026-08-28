@@ -144,18 +144,18 @@ pub(super) fn log_event(name: &'static CStr) {
         seen.set(seen.get() + 1);
         return;
     }
-    unsafe {
-        if let Some(previous) = last_event.get()
-            && seen.get() > 0
-        {
+    if let Some(previous) = last_event.get()
+        && seen.get() > 0
+    {
+        unsafe {
             log(
                 c"%s (+%zu times...)".as_ptr(),
                 previous.as_ptr(),
                 seen.get(),
-            );
-        }
-        log(c"%s".as_ptr(), name.as_ptr(), 0);
+            )
+        };
     }
+    unsafe { log(c"%s".as_ptr(), name.as_ptr(), 0) };
     seen.set(0);
     last_event.set(Some(name));
 }
@@ -433,7 +433,9 @@ pub unsafe fn ui_call_raw_line(
     unsafe {
         ui_comp_raw_line(
             grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
-        );
+        )
+    };
+    unsafe {
         raw_line_to(
             Reach::Uncomposed,
             grid,
@@ -445,8 +447,8 @@ pub unsafe fn ui_call_raw_line(
             flags,
             chunk,
             attrs,
-        );
-    }
+        )
+    };
 }
 
 /// [`ui_call_raw_line`] for the UIs the compositor draws for, called by the

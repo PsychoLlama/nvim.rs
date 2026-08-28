@@ -309,12 +309,10 @@ pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
 /// virtual-text chain is built. Freed by [`decor_free`].
 pub fn decor_put_vt(vt: DecorVirtText, next: *mut DecorVirtText) -> *mut DecorVirtText {
     // SAFETY: `xmalloc` never answers null and the size is this type's.
-    unsafe {
-        let alloc: *mut DecorVirtText = xmalloc(size_of::<DecorVirtText>()).cast();
-        *alloc = vt;
-        (*alloc).next = next;
-        alloc
-    }
+    let alloc: *mut DecorVirtText = unsafe { xmalloc(size_of::<DecorVirtText>()) }.cast();
+    unsafe { *alloc = vt };
+    unsafe { (*alloc).next = next };
+    alloc
 }
 
 /// The stored form of an inline highlight — the same thing with the fields a
@@ -369,26 +367,24 @@ pub unsafe fn decor_free(decor: DecorInline) {
     }
 
     // SAFETY: the caller's chains; the two lists are this file's.
-    unsafe {
-        let mut vt = head_vt;
-        let mut idx: uint32_t = head_idx;
-        while !vt.is_null() {
-            if (*vt).next.is_null() {
-                (*vt).next = TO_FREE_VIRT.get();
-                TO_FREE_VIRT.set(head_vt);
-                break;
-            }
-            vt = (*vt).next;
+    let mut vt = head_vt;
+    let mut idx: uint32_t = head_idx;
+    while !vt.is_null() {
+        if unsafe { (*vt).next }.is_null() {
+            unsafe { (*vt).next = TO_FREE_VIRT.get() };
+            TO_FREE_VIRT.set(head_vt);
+            break;
         }
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            if (*sh).next == DECOR_ID_INVALID {
-                (*sh).next = TO_FREE_SH.get();
-                TO_FREE_SH.set(head_idx);
-                break;
-            }
-            idx = (*sh).next;
+        vt = unsafe { (*vt).next };
+    }
+    while idx != DECOR_ID_INVALID {
+        let sh = decor_item(idx);
+        if unsafe { (*sh).next } == DECOR_ID_INVALID {
+            unsafe { (*sh).next = TO_FREE_SH.get() };
+            TO_FREE_SH.set(head_idx);
+            break;
         }
+        idx = unsafe { (*sh).next };
     }
 }
 
@@ -398,38 +394,36 @@ pub unsafe fn decor_free(decor: DecorInline) {
 /// Both chains must be live and unreachable.
 unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
     // SAFETY: the caller's chains.
-    unsafe {
-        while !vt.is_null() {
-            if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
-                clear_virtlines(&raw mut (*vt).data.virt_lines);
-            } else {
-                clear_virttext(&raw mut (*vt).data.virt_text);
-            }
-            let tofree = vt;
-            vt = (*vt).next;
-            xfree(tofree.cast());
+    while !vt.is_null() {
+        if unsafe { (*vt).flags } as c_int & kVTIsLines as c_int != 0 {
+            unsafe { clear_virtlines(&raw mut (*vt).data.virt_lines) };
+        } else {
+            unsafe { clear_virttext(&raw mut (*vt).data.virt_text) };
         }
+        let tofree = vt;
+        vt = unsafe { (*vt).next };
+        unsafe { xfree(tofree.cast()) };
+    }
 
-        let mut idx = first_idx;
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            if (*sh).flags & kSHIsSign != 0 {
-                xfree((*sh).sign_name.cast());
-                (*sh).sign_name = ptr::null_mut();
-            }
-            (*sh).flags = 0;
-            if !(*sh).url.is_null() {
-                xfree((*sh).url as *mut _);
-                (*sh).url = ptr::null();
-            }
-            // The whole chain goes on the freelist at once, head first.
-            if (*sh).next == DECOR_ID_INVALID {
-                (*sh).next = DECOR_FREELIST.get();
-                DECOR_FREELIST.set(first_idx);
-                break;
-            }
-            idx = (*sh).next;
+    let mut idx = first_idx;
+    while idx != DECOR_ID_INVALID {
+        let sh = decor_item(idx);
+        if unsafe { (*sh).flags } & kSHIsSign != 0 {
+            unsafe { xfree((*sh).sign_name.cast()) };
+            unsafe { (*sh).sign_name = ptr::null_mut() };
         }
+        unsafe { (*sh).flags = 0 };
+        if !unsafe { (*sh).url }.is_null() {
+            unsafe { xfree((*sh).url as *mut _) };
+            unsafe { (*sh).url = ptr::null() };
+        }
+        // The whole chain goes on the freelist at once, head first.
+        if unsafe { (*sh).next } == DECOR_ID_INVALID {
+            unsafe { (*sh).next = DECOR_FREELIST.get() };
+            DECOR_FREELIST.set(first_idx);
+            break;
+        }
+        idx = unsafe { (*sh).next };
     }
 }
 
@@ -457,17 +451,17 @@ pub unsafe fn decor_check_to_be_deleted() {
 /// `text` must point to a live `VirtText` that owns its chunks.
 pub unsafe fn clear_virttext(text: *mut VirtText) {
     // SAFETY: the caller's virtual text.
+    for i in 0..unsafe { (*text).size } {
+        unsafe { xfree((*(*text).items.add(i)).text.cast()) };
+    }
+    unsafe { xfree((*text).items.cast()) };
     unsafe {
-        for i in 0..(*text).size {
-            xfree((*(*text).items.add(i)).text.cast());
-        }
-        xfree((*text).items.cast());
         *text = VirtText {
             size: 0,
             capacity: 0,
             items: ptr::null_mut::<VirtTextChunk>(),
-        };
-    }
+        }
+    };
 }
 
 /// [`clear_virttext`] for a block of virtual lines.
@@ -476,17 +470,17 @@ pub unsafe fn clear_virttext(text: *mut VirtText) {
 /// `lines` must point to a live `VirtLines` that owns its lines.
 pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
     // SAFETY: the caller's virtual lines.
+    for i in 0..unsafe { (*lines).size } {
+        unsafe { clear_virttext(&raw mut (*(*lines).items.add(i)).line) };
+    }
+    unsafe { xfree((*lines).items.cast()) };
     unsafe {
-        for i in 0..(*lines).size {
-            clear_virttext(&raw mut (*(*lines).items.add(i)).line);
-        }
-        xfree((*lines).items.cast());
         *lines = VirtLines {
             size: 0,
             capacity: 0,
             items: ptr::null_mut::<virt_line>(),
-        };
-    }
+        }
+    };
 }
 
 /// Replaces any sign or conceal character that the glyph cache no longer
@@ -541,28 +535,28 @@ pub unsafe fn bufhl_add_hl_pos_offset(
     decor.data.hl.hl_id = hl_id;
 
     // SAFETY: the caller's buffer.
-    unsafe {
-        // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
-        for lnum in pos_start.lnum..=pos_end.lnum {
-            let first = lnum == pos_start.lnum;
-            let last = lnum == pos_end.lnum;
-            // A middle or last line starts one column left of `offset`. This
-            // is quite ad-hoc, but the space between the number column and
-            // the highlighted text is what shows that the `\n` is part of the
-            // substituted text.
-            let hl_start = if first {
-                pos_start.col + offset
-            } else {
-                (offset - 1).max(0)
-            };
-            // Anything but the last line runs to the end, which is spelled as
-            // "column 0 of the next line".
-            let (end_off, hl_end) = if last {
-                (0, pos_end.col + offset)
-            } else {
-                (1, 0)
-            };
+    // TODO(bfredl): if decoration had blocky mode, we could avoid this loop
+    for lnum in pos_start.lnum..=pos_end.lnum {
+        let first = lnum == pos_start.lnum;
+        let last = lnum == pos_end.lnum;
+        // A middle or last line starts one column left of `offset`. This
+        // is quite ad-hoc, but the space between the number column and
+        // the highlighted text is what shows that the `\n` is part of the
+        // substituted text.
+        let hl_start = if first {
+            pos_start.col + offset
+        } else {
+            (offset - 1).max(0)
+        };
+        // Anything but the last line runs to the end, which is spelled as
+        // "column 0 of the next line".
+        let (end_off, hl_end) = if last {
+            (0, pos_end.col + offset)
+        } else {
+            (1, 0)
+        };
 
+        unsafe {
             extmark_set(
                 buf,
                 src_id as uint32_t,
@@ -578,8 +572,8 @@ pub unsafe fn bufhl_add_hl_pos_offset(
                 true,
                 false,
                 ptr::null_mut(),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -595,33 +589,31 @@ pub unsafe fn decor_redraw(
     decor: DecorInline,
 ) {
     // SAFETY: the caller's buffer and decoration.
-    unsafe {
-        if !decor.ext {
-            decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl));
-            return;
-        }
+    if !decor.ext {
+        unsafe { decor_redraw_sh(buf, row1, row2, decor_sh_from_inline(decor.data.hl)) };
+        return;
+    }
 
-        let mut vt = decor.data.ext.vt;
-        while !vt.is_null() {
-            let is_lines = (*vt).flags & kVTIsLines != 0;
-            let below = is_lines && (*vt).flags & kVTLinesAbove == 0;
-            let vt_lnum = row1 as linenr_T + 1 + linenr_T::from(below);
-            redraw_buf_line_later(buf, vt_lnum, true);
-            // Virtual lines and inline virtual text change how much room the
-            // line takes, so the cached line sizes have to go as well.
-            if is_lines || (*vt).pos == kVPosInline {
-                let vt_col: colnr_T = if is_lines { 0 } else { col1 };
-                changed_lines_invalidate_buf(Buf::new(buf), vt_lnum, vt_col, vt_lnum + 1, 0);
-            }
-            vt = (*vt).next;
+    let mut vt = unsafe { decor.data.ext }.vt;
+    while !vt.is_null() {
+        let is_lines = unsafe { (*vt).flags } & kVTIsLines != 0;
+        let below = is_lines && unsafe { (*vt).flags } & kVTLinesAbove == 0;
+        let vt_lnum = row1 as linenr_T + 1 + linenr_T::from(below);
+        unsafe { redraw_buf_line_later(buf, vt_lnum, true) };
+        // Virtual lines and inline virtual text change how much room the
+        // line takes, so the cached line sizes have to go as well.
+        if is_lines || unsafe { (*vt).pos } == kVPosInline {
+            let vt_col: colnr_T = if is_lines { 0 } else { col1 };
+            changed_lines_invalidate_buf(unsafe { Buf::new(buf) }, vt_lnum, vt_col, vt_lnum + 1, 0);
         }
+        vt = unsafe { (*vt).next };
+    }
 
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            decor_redraw_sh(buf, row1, row2, *sh);
-            idx = (*sh).next;
-        }
+    let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
+    while idx != DECOR_ID_INVALID {
+        let sh = decor_item(idx);
+        unsafe { decor_redraw_sh(buf, row1, row2, *sh) };
+        idx = unsafe { (*sh).next };
     }
 }
 
@@ -631,25 +623,23 @@ pub unsafe fn decor_redraw(
 /// `buf` must be live.
 pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
     // SAFETY: the caller's buffer and the editor's window list.
-    unsafe {
-        let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
-        if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
-            redraw_buf_range_later(buf, row1 as linenr_T + 1, row2 as linenr_T + 1);
-        }
+    let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
+    if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
+        unsafe { redraw_buf_range_later(buf, row1 as linenr_T + 1, row2 as linenr_T + 1) };
+    }
 
-        if sh.flags & kSHConcealLines != 0 {
-            // TODO(luukvbaal): redraw only unconcealed lines, and scroll
-            // lines below it up or down. Also when opening/closing a fold.
-            for wp in winlayer::windows() {
-                if wp.w_buffer == buf {
-                    changed_window_setting(wp);
-                }
+    if sh.flags & kSHConcealLines != 0 {
+        // TODO(luukvbaal): redraw only unconcealed lines, and scroll
+        // lines below it up or down. Also when opening/closing a fold.
+        for wp in winlayer::windows() {
+            if wp.w_buffer == buf {
+                changed_window_setting(wp);
             }
         }
+    }
 
-        if sh.flags & kSHUIWatched != 0 {
-            redraw_buf_line_later(buf, row1 as linenr_T + 1, false);
-        }
+    if sh.flags & kSHUIWatched != 0 {
+        unsafe { redraw_buf_line_later(buf, row1 as linenr_T + 1, false) };
     }
 }
 
@@ -659,17 +649,15 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
 /// `buf` must be live and `decor` must be its mark's decoration.
 pub unsafe fn buf_put_decor(buf: *mut buf_T, decor: DecorInline, row: c_int, mut row2: c_int) {
     // SAFETY: the caller's buffer and decoration.
-    unsafe {
-        if !decor.ext || row as linenr_T >= (*buf).b_ml.ml_line_count {
-            return;
-        }
-        row2 = ((*buf).b_ml.ml_line_count - 1).min(row2 as linenr_T) as c_int;
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            buf_put_decor_sh(buf, sh, row, row2);
-            idx = (*sh).next;
-        }
+    if !decor.ext || row as linenr_T >= unsafe { (*buf).b_ml.ml_line_count } {
+        return;
+    }
+    row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as linenr_T) as c_int;
+    let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
+    while idx != DECOR_ID_INVALID {
+        let sh = decor_item(idx);
+        unsafe { buf_put_decor_sh(buf, sh, row, row2) };
+        idx = unsafe { (*sh).next };
     }
 }
 
@@ -687,19 +675,17 @@ pub unsafe fn buf_decor_remove(
     free: bool,
 ) {
     // SAFETY: the caller's buffer and decoration.
-    unsafe {
-        decor_redraw(buf, row1, row2, col1, decor);
-        if decor.ext && (row1 as linenr_T) < (*buf).b_ml.ml_line_count {
-            row2 = ((*buf).b_ml.ml_line_count - 1).min(row2 as linenr_T) as c_int;
-            let mut idx: uint32_t = decor.data.ext.sh_idx;
-            while idx != DECOR_ID_INVALID {
-                let sh = decor_item(idx);
-                buf_remove_decor_sh(buf, row1, row2, sh);
-                idx = (*sh).next;
-            }
+    unsafe { decor_redraw(buf, row1, row2, col1, decor) };
+    if decor.ext && (row1 as linenr_T) < unsafe { (*buf).b_ml.ml_line_count } {
+        row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as linenr_T) as c_int;
+        let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            unsafe { buf_remove_decor_sh(buf, row1, row2, sh) };
+            idx = unsafe { (*sh).next };
         }
-        if free {
-            decor_free(decor);
-        }
+    }
+    if free {
+        unsafe { decor_free(decor) };
     }
 }

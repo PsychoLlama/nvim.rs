@@ -96,20 +96,20 @@ pub(crate) unsafe fn parse_addr_type_arg(
     }
 
     // SAFETY: caller contract; the walk stops at the NUL.
-    unsafe {
-        let mut i = 0;
-        while *value.add(i) != NUL as c_char && !ascii_iswhite(*value.add(i) as c_int) {
-            i += 1;
-        }
-        *value.add(i) = NUL as c_char;
+    let mut i = 0;
+    while unsafe { *value.add(i) } != NUL as c_char
+        && !ascii_iswhite(unsafe { *value.add(i) } as c_int)
+    {
+        i += 1;
     }
+    unsafe { *value.add(i) = NUL as c_char };
     // SAFETY: caller contract; `value` is now NUL-terminated at the word.
     unsafe {
         semsg_c!(
             gettext(c"E180: Invalid address type value: %s".as_ptr()),
             value,
-        );
-    }
+        )
+    };
     FAIL
 }
 
@@ -142,9 +142,7 @@ pub(crate) unsafe fn parse_compl_arg(
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
-        unsafe {
-            semsg_c!(gettext(c"E180: Invalid complete value: %s".as_ptr()), value,);
-        }
+        unsafe { semsg_c!(gettext(c"E180: Invalid complete value: %s".as_ptr()), value,) };
         return FAIL;
     };
     *complp = expand;
@@ -159,19 +157,21 @@ pub(crate) unsafe fn parse_compl_arg(
 
     let custom = expand == ExpandContext::UserDefined || expand == ExpandContext::UserList;
     // SAFETY: both messages are literals.
-    unsafe {
-        if !custom && arg.is_some() {
+    if !custom && arg.is_some() {
+        unsafe {
             emsg(gettext(
                 c"E468: Completion argument only allowed for custom completion".as_ptr(),
-            ));
-            return FAIL;
-        }
-        if custom && arg.is_none() {
+            ))
+        };
+        return FAIL;
+    }
+    if custom && arg.is_none() {
+        unsafe {
             emsg(gettext(
                 c"E467: Custom completion requires a function argument".as_ptr(),
-            ));
-            return FAIL;
-        }
+            ))
+        };
+        return FAIL;
     }
     if let Some(arg) = arg {
         // SAFETY: `arg` is a sub-slice of `value`, which is live.
@@ -289,36 +289,34 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
     } else {
         // SAFETY: caller contract; the byte past the attribute is restored
         // as soon as the message has been formatted.
-        unsafe {
-            let ch = *attr.add(len);
-            *attr.add(len) = NUL as c_char;
-            semsg_c!(gettext(c"E181: Invalid attribute: %s".as_ptr()), attr,);
-            *attr.add(len) = ch;
-        }
+        let ch = unsafe { *attr.add(len) };
+        unsafe { *attr.add(len) = NUL as c_char };
+        unsafe { semsg_c!(gettext(c"E181: Invalid attribute: %s".as_ptr()), attr,) };
+        unsafe { *attr.add(len) = ch };
         return FAIL;
     };
 
     let Err(bad) = outcome else { return OK };
     // SAFETY: every message and argument here is a literal.
-    unsafe {
-        match bad {
-            Bad::Nargs => {
-                emsg(gettext(c"E176: Invalid number of arguments".as_ptr()));
-            }
-            Bad::TwoCount => {
-                emsg(gettext(c"E177: Count cannot be specified twice".as_ptr()));
-            }
-            Bad::InvalidCount => {
-                emsg(gettext(c"E178: Invalid default value for count".as_ptr()));
-            }
-            Bad::Missing(what) => {
+    match bad {
+        Bad::Nargs => {
+            unsafe { emsg(gettext(c"E176: Invalid number of arguments".as_ptr())) };
+        }
+        Bad::TwoCount => {
+            unsafe { emsg(gettext(c"E177: Count cannot be specified twice".as_ptr())) };
+        }
+        Bad::InvalidCount => {
+            unsafe { emsg(gettext(c"E178: Invalid default value for count".as_ptr())) };
+        }
+        Bad::Missing(what) => {
+            unsafe {
                 semsg_c!(
                     gettext(c"E179: Argument required for %s".as_ptr()),
                     what.as_ptr(),
-                );
-            }
-            Bad::Reported => {}
+                )
+            };
         }
+        Bad::Reported => {}
     }
     FAIL
 }

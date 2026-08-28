@@ -124,8 +124,8 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 unsafe {
                     msg_puts_title(gettext(
                         c"\n    Name              Args Address Complete    Definition".as_ptr(),
-                    ));
-                }
+                    ))
+                };
             }
             found = true;
             // SAFETY: module contract.
@@ -163,91 +163,91 @@ unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
     // The flag column is right-aligned in four cells.
     let mut blank = 4;
     // SAFETY: module contract.
+    for (present, mark) in [
+        (a.has(ExArgt::BANG), b'!'),
+        (a.has(ExArgt::REGSTR), b'"'),
+        (scope == Scope::Buffer, b'b'),
+        (a.has(ExArgt::TRLBAR), b'|'),
+    ] {
+        if present {
+            unsafe { msg_putchar(mark as c_int) };
+            blank -= 1;
+        }
+    }
+    if blank != 0 {
+        unsafe { msg_puts(c"    ".as_ptr().add(4 - blank)) };
+    }
+
+    unsafe { msg_outtrans(cmd.uc_name, HLF_D, false) };
+    // The name column is 17 wide; a longer name pushes the rest left.
+    let mut len = unsafe { ucmd_name(cmd) }.len() + 4;
+    if len < 21 {
+        // Field padding spaces   12345678901234567
+        static SPACES: &CStr = c"                 ";
+        unsafe { msg_puts(SPACES.as_ptr().add(len - 4)) };
+        len = 21;
+    }
+    unsafe { msg_putchar(b' ' as c_int) };
+    len += 1;
+    let over = len as int64_t - 22;
+
+    // The middle columns are assembled in one buffer and printed once.
+    {
+        let mut cols = Cols {
+            buf: &mut middle[..],
+            len: 0,
+        };
+        cols.put(nargs_str(a).to_bytes());
+        cols.pad_to(5, over);
+
+        if a.has(ExArgt::RANGE | ExArgt::COUNT) {
+            if a.has(ExArgt::COUNT) {
+                // -count=N
+                let _ = write!(cols, "{}c", cmd.uc_def);
+            } else if a.has(ExArgt::DFLALL) {
+                cols.push(b'%');
+            } else if cmd.uc_def >= 0 {
+                // -range=N
+                let _ = write!(cols, "{}", cmd.uc_def);
+            } else {
+                cols.push(b'.');
+            }
+        }
+        cols.pad_to(8, over);
+
+        if let Some(row) = named_addr_type(cmd.uc_addr_type) {
+            cols.put(row.shortname.to_bytes());
+        }
+        cols.pad_to(13, over);
+
+        if let Some(name) = command_complete_name(cmd.uc_compl) {
+            cols.put(name.to_bytes());
+        }
+        cols.pad_to(25, over);
+
+        let end = cols.len;
+        cols.buf[end] = NUL as c_char;
+    }
+    unsafe { msg_outtrans(middle.as_mut_ptr(), 0, false) };
+
+    if cmd.uc_luaref != LUA_NOREF {
+        let text = unsafe { nlua_funcref_str(cmd.uc_luaref, ptr::null_mut()) };
+        unsafe { msg_puts_hl(text, HLF_8, false) };
+        unsafe { xfree(text.cast()) };
+        // The definition goes on a line of its own.
+        if unsafe { *cmd.uc_rep } != NUL as c_char {
+            unsafe { msg_puts(c"\n                                               ".as_ptr()) };
+        }
+    }
     unsafe {
-        for (present, mark) in [
-            (a.has(ExArgt::BANG), b'!'),
-            (a.has(ExArgt::REGSTR), b'"'),
-            (scope == Scope::Buffer, b'b'),
-            (a.has(ExArgt::TRLBAR), b'|'),
-        ] {
-            if present {
-                msg_putchar(mark as c_int);
-                blank -= 1;
-            }
-        }
-        if blank != 0 {
-            msg_puts(c"    ".as_ptr().add(4 - blank));
-        }
-
-        msg_outtrans(cmd.uc_name, HLF_D, false);
-        // The name column is 17 wide; a longer name pushes the rest left.
-        let mut len = ucmd_name(cmd).len() + 4;
-        if len < 21 {
-            // Field padding spaces   12345678901234567
-            static SPACES: &CStr = c"                 ";
-            msg_puts(SPACES.as_ptr().add(len - 4));
-            len = 21;
-        }
-        msg_putchar(b' ' as c_int);
-        len += 1;
-        let over = len as int64_t - 22;
-
-        // The middle columns are assembled in one buffer and printed once.
-        {
-            let mut cols = Cols {
-                buf: &mut middle[..],
-                len: 0,
-            };
-            cols.put(nargs_str(a).to_bytes());
-            cols.pad_to(5, over);
-
-            if a.has(ExArgt::RANGE | ExArgt::COUNT) {
-                if a.has(ExArgt::COUNT) {
-                    // -count=N
-                    let _ = write!(cols, "{}c", cmd.uc_def);
-                } else if a.has(ExArgt::DFLALL) {
-                    cols.push(b'%');
-                } else if cmd.uc_def >= 0 {
-                    // -range=N
-                    let _ = write!(cols, "{}", cmd.uc_def);
-                } else {
-                    cols.push(b'.');
-                }
-            }
-            cols.pad_to(8, over);
-
-            if let Some(row) = named_addr_type(cmd.uc_addr_type) {
-                cols.put(row.shortname.to_bytes());
-            }
-            cols.pad_to(13, over);
-
-            if let Some(name) = command_complete_name(cmd.uc_compl) {
-                cols.put(name.to_bytes());
-            }
-            cols.pad_to(25, over);
-
-            let end = cols.len;
-            cols.buf[end] = NUL as c_char;
-        }
-        msg_outtrans(middle.as_mut_ptr(), 0, false);
-
-        if cmd.uc_luaref != LUA_NOREF {
-            let text = nlua_funcref_str(cmd.uc_luaref, ptr::null_mut());
-            msg_puts_hl(text, HLF_8, false);
-            xfree(text.cast());
-            // The definition goes on a line of its own.
-            if *cmd.uc_rep != NUL as c_char {
-                msg_puts(c"\n                                               ".as_ptr());
-            }
-        }
         msg_outtrans_special(
             cmd.uc_rep,
             false,
             if name_len == 0 { Columns.get() - 47 } else { 0 },
-        );
-        if p_verbose.get() > 0 {
-            last_set_msg(cmd.uc_script_ctx);
-        }
+        )
+    };
+    if p_verbose.get() > 0 {
+        unsafe { last_set_msg(cmd.uc_script_ctx) };
     }
 }
 
@@ -265,11 +265,9 @@ fn dict_of<const N: usize>(
     let mut dict = arena_dict(arena, capacity);
     // SAFETY: the dict was reserved for `capacity` pairs, at most `N` are
     // written, and this is the only thing that writes to it.
-    unsafe {
-        for (key, value) in entries {
-            if let Some(value) = value {
-                dict_put(&mut dict, key, value);
-            }
+    for (key, value) in entries {
+        if let Some(value) = value {
+            unsafe { dict_put(&mut dict, key, value) };
         }
     }
     dict
@@ -295,9 +293,7 @@ pub(crate) unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> Dict 
         let d = unsafe { describe(cmd, arena) };
         // SAFETY: `rv` was reserved for exactly one pair per command, and
         // this is the only thing that writes to it.
-        unsafe {
-            dict_put_str(&mut rv, cstr_as_string(cmd.uc_name), Object::dict(d));
-        }
+        unsafe { dict_put_str(&mut rv, cstr_as_string(cmd.uc_name), Object::dict(d)) };
     }
     rv
 }

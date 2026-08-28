@@ -96,58 +96,54 @@ pub(crate) unsafe fn set_context_in_user_cmd(
 ) -> *const c_char {
     let mut arg = arg_in;
     // SAFETY: caller contract; every step stays inside the line.
-    unsafe {
-        // The attributes come first.
-        while *arg == b'-' as c_char {
-            arg = arg.offset(1);
-            let p = skiptowhite(arg);
-            if *p != NUL as c_char {
-                arg = skipwhite(p);
-                continue;
-            }
-            // The cursor is still inside the attribute.
-            let Some(eq) = CStr::from_ptr(arg)
-                .to_bytes()
-                .iter()
-                .position(|&b| b == b'=')
-            else {
-                // No "=" yet, so complete attribute names.
-                set_context(xp, ExpandContext::UserCmdFlags, arg);
-                return ptr::null();
-            };
-            // `-complete=`, `-nargs=` and `-addr=` have values worth
-            // completing too; any other attribute's value does not.
-            let name = &CStr::from_ptr(arg).to_bytes()[..eq];
-            let value = arg.add(eq + 1);
-            if abbreviates(name, "complete") {
-                set_context(xp, ExpandContext::UserComplete, value);
-            } else if abbreviates(name, "nargs") {
-                set_context(xp, ExpandContext::UserNargs, value);
-            } else if abbreviates(name, "addr") {
-                set_context(xp, ExpandContext::UserAddrType, value);
-            }
-            return ptr::null();
+    // The attributes come first.
+    while unsafe { *arg } == b'-' as c_char {
+        arg = unsafe { arg.offset(1) };
+        let p = unsafe { skiptowhite(arg) };
+        if unsafe { *p } != NUL as c_char {
+            arg = unsafe { skipwhite(p) };
+            continue;
         }
-
-        // Then the name of the command being defined.
-        let p = skiptowhite(arg);
-        if *p == NUL as c_char {
-            set_context(xp, ExpandContext::UserCommands, arg);
+        // The cursor is still inside the attribute.
+        let Some(eq) = unsafe { CStr::from_ptr(arg) }
+            .to_bytes()
+            .iter()
+            .position(|&b| b == b'=')
+        else {
+            // No "=" yet, so complete attribute names.
+            unsafe { set_context(xp, ExpandContext::UserCmdFlags, arg) };
             return ptr::null();
+        };
+        // `-complete=`, `-nargs=` and `-addr=` have values worth
+        // completing too; any other attribute's value does not.
+        let name = &unsafe { CStr::from_ptr(arg) }.to_bytes()[..eq];
+        let value = unsafe { arg.add(eq + 1) };
+        if abbreviates(name, "complete") {
+            unsafe { set_context(xp, ExpandContext::UserComplete, value) };
+        } else if abbreviates(name, "nargs") {
+            unsafe { set_context(xp, ExpandContext::UserNargs, value) };
+        } else if abbreviates(name, "addr") {
+            unsafe { set_context(xp, ExpandContext::UserAddrType, value) };
         }
-        // And finally an ordinary command, which the caller parses.
-        skipwhite(p)
+        return ptr::null();
     }
+
+    // Then the name of the command being defined.
+    let p = unsafe { skiptowhite(arg) };
+    if unsafe { *p } == NUL as c_char {
+        unsafe { set_context(xp, ExpandContext::UserCommands, arg) };
+        return ptr::null();
+    }
+    // And finally an ordinary command, which the caller parses.
+    unsafe { skipwhite(p) }
 }
 
 /// # Safety
 /// `xp` must be writable and `pattern` must outlive it.
 unsafe fn set_context(xp: *mut expand_T, context: ExpandContext, pattern: *const c_char) {
     // SAFETY: caller contract.
-    unsafe {
-        (*xp).xp_context = context;
-        (*xp).xp_pattern = pattern.cast_mut();
-    }
+    unsafe { (*xp).xp_context = context };
+    unsafe { (*xp).xp_pattern = pattern.cast_mut() };
 }
 
 /// Completion context for the *arguments* of a user command, whose
@@ -171,15 +167,15 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
         return ptr::null();
     }
     // SAFETY: caller contract.
-    unsafe {
-        if context == ExpandContext::Menus {
-            return set_context_in_menu_cmd(xp, cmd, arg.cast_mut(), forceit);
-        }
-        if context == ExpandContext::Commands {
-            return arg;
-        }
-        if context == ExpandContext::Mappings {
-            return set_context_in_map_cmd(
+    if context == ExpandContext::Menus {
+        return unsafe { set_context_in_menu_cmd(xp, cmd, arg.cast_mut(), forceit) };
+    }
+    if context == ExpandContext::Commands {
+        return arg;
+    }
+    if context == ExpandContext::Mappings {
+        return unsafe {
+            set_context_in_map_cmd(
                 xp,
                 c"map".as_ptr().cast_mut(),
                 arg.cast_mut(),
@@ -187,22 +183,22 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
                 false,
                 false,
                 CMD_map,
-            );
-        }
-        // The pattern is the last argument: walk to it, honouring escapes
-        // and multibyte characters.
-        let mut last = arg;
-        let mut p = arg;
-        while *p != NUL as c_char {
-            if *p == b' ' as c_char {
-                last = p.offset(1);
-            } else if *p == b'\\' as c_char && *p.offset(1) != NUL as c_char {
-                p = p.offset(1);
-            }
-            p = p.add(utfc_ptr2len(p) as usize);
-        }
-        set_context(xp, context, last);
+            )
+        };
     }
+    // The pattern is the last argument: walk to it, honouring escapes
+    // and multibyte characters.
+    let mut last = arg;
+    let mut p = arg;
+    while unsafe { *p } != NUL as c_char {
+        if unsafe { *p } == b' ' as c_char {
+            last = unsafe { p.offset(1) };
+        } else if unsafe { *p } == b'\\' as c_char && unsafe { *p.offset(1) } != NUL as c_char {
+            p = unsafe { p.offset(1) };
+        }
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+    }
+    unsafe { set_context(xp, context, last) };
     ptr::null()
 }
 
@@ -254,12 +250,9 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_
         _ => return ptr::null_mut(),
     };
     // SAFETY: module contract.
-    unsafe {
-        scope
-            .list()
-            .get(idx as usize)
-            .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
-    }
+    unsafe { scope.list() }
+        .get(idx as usize)
+        .map_or(ptr::null_mut(), |cmd| cmd.uc_name)
 }
 
 /// `expand_generic()` item getter: the `-addr=` values.
@@ -337,12 +330,10 @@ pub(crate) unsafe fn cmdcomplete_type_to_str(
         return unsafe { xstrdup(name.as_ptr()) };
     }
     // SAFETY: caller contract.
-    unsafe {
-        let buflen = name.count_bytes() + strlen(compl_arg) + 2;
-        let buffer = xmalloc(buflen).cast::<c_char>();
-        snprintf(buffer, buflen, c"%s,%s".as_ptr(), name.as_ptr(), compl_arg);
-        buffer
-    }
+    let buflen = name.count_bytes() + unsafe { strlen(compl_arg) } + 2;
+    let buffer = unsafe { xmalloc(buflen) }.cast::<c_char>();
+    unsafe { snprintf(buffer, buflen, c"%s,%s".as_ptr(), name.as_ptr(), compl_arg) };
+    buffer
 }
 
 /// The `EXPAND_*` context `complete_str` names, or `ExpandContext::Nothing`.

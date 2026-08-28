@@ -90,10 +90,8 @@ pub(crate) unsafe fn uc_split_args_iter(
         l += 1;
         if white_at(pos + 1) {
             // SAFETY: caller contract.
-            unsafe {
-                *end = pos + 1;
-                *len = l;
-            }
+            unsafe { *end = pos + 1 };
+            unsafe { *len = l };
             return false;
         }
         pos += 1;
@@ -153,10 +151,8 @@ unsafe fn uc_split_args(
     } else {
         for i in 0..argc {
             // SAFETY: caller contract.
-            unsafe {
-                let start = *args.add(i);
-                quote_span(start, start.add(*arglens.add(i)), &mut out);
-            }
+            let start = unsafe { *args.add(i) };
+            unsafe { quote_span(start, start.add(*arglens.add(i)), &mut out) };
             if i != argc - 1 {
                 out.extend_from_slice(b"\", \"");
             }
@@ -165,13 +161,11 @@ unsafe fn uc_split_args(
     out.push(b'"');
 
     // SAFETY: the block is `out.len() + 1` bytes and is written whole.
-    unsafe {
-        let buf = xmalloc(out.len() + 1).cast::<c_char>();
-        ptr::copy_nonoverlapping(out.as_ptr(), buf.cast::<u8>(), out.len());
-        *buf.add(out.len()) = NUL as c_char;
-        *lenp = out.len();
-        buf
-    }
+    let buf = unsafe { xmalloc(out.len() + 1) }.cast::<c_char>();
+    unsafe { ptr::copy_nonoverlapping(out.as_ptr(), buf.cast::<u8>(), out.len()) };
+    unsafe { *buf.add(out.len()) = NUL as c_char };
+    unsafe { *lenp = out.len() };
+    buf
 }
 
 /// The whole argument string, split on unescaped whitespace.
@@ -181,29 +175,27 @@ unsafe fn uc_split_args(
 unsafe fn quote_line(arg: *const c_char, out: &mut Vec<u8>) {
     let mut p = arg;
     // SAFETY: caller contract; every step stays inside the string.
-    unsafe {
-        while *p != NUL as c_char {
-            let (first, second) = (*p as u8, *p.add(1) as u8);
-            if first == b'\\' && second == b'\\' {
-                out.extend_from_slice(b"\\\\");
-                p = p.add(2);
-            } else if first == b'\\' && ascii_iswhite(second as c_int) {
-                // An escaped separator stands for one literal separator.
-                out.push(second);
-                p = p.add(2);
-            } else if first == b'\\' || first == b'"' {
-                out.push(b'\\');
-                out.push(first);
-                p = p.add(1);
-            } else if ascii_iswhite(first as c_int) {
-                p = skipwhite(p);
-                if *p == NUL as c_char {
-                    break;
-                }
-                out.extend_from_slice(b"\", \"");
-            } else {
-                p = copy_char(p, out);
+    while unsafe { *p } != NUL as c_char {
+        let (first, second) = (unsafe { *p } as u8, unsafe { *p.add(1) } as u8);
+        if first == b'\\' && second == b'\\' {
+            out.extend_from_slice(b"\\\\");
+            p = unsafe { p.add(2) };
+        } else if first == b'\\' && ascii_iswhite(second as c_int) {
+            // An escaped separator stands for one literal separator.
+            out.push(second);
+            p = unsafe { p.add(2) };
+        } else if first == b'\\' || first == b'"' {
+            out.push(b'\\');
+            out.push(first);
+            p = unsafe { p.add(1) };
+        } else if ascii_iswhite(first as c_int) {
+            p = unsafe { skipwhite(p) };
+            if unsafe { *p } == NUL as c_char {
+                break;
             }
+            out.extend_from_slice(b"\", \"");
+        } else {
+            p = unsafe { copy_char(p, out) };
         }
     }
 }
@@ -215,15 +207,13 @@ unsafe fn quote_line(arg: *const c_char, out: &mut Vec<u8>) {
 unsafe fn quote_span(start: *const c_char, end: *const c_char, out: &mut Vec<u8>) {
     let mut p = start;
     // SAFETY: caller contract.
-    unsafe {
-        while p < end {
-            if *p == b'\\' as c_char || *p == b'"' as c_char {
-                out.push(b'\\');
-                out.push(*p as u8);
-                p = p.add(1);
-            } else {
-                p = copy_char(p, out);
-            }
+    while p < end {
+        if unsafe { *p } == b'\\' as c_char || unsafe { *p } == b'"' as c_char {
+            out.push(b'\\');
+            out.push(unsafe { *p } as u8);
+            p = unsafe { p.add(1) };
+        } else {
+            p = unsafe { copy_char(p, out) };
         }
     }
 }
@@ -235,11 +225,9 @@ unsafe fn quote_span(start: *const c_char, end: *const c_char, out: &mut Vec<u8>
 /// `p` must point at a character of a live string.
 unsafe fn copy_char(p: *const c_char, out: &mut Vec<u8>) -> *const c_char {
     // SAFETY: caller contract.
-    unsafe {
-        let len = utfc_ptr2len(p) as usize;
-        out.extend_from_slice(slice::from_raw_parts(p.cast::<u8>(), len));
-        p.add(len)
-    }
+    let len = unsafe { utfc_ptr2len(p) } as usize;
+    out.extend_from_slice(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) });
+    unsafe { p.add(len) }
 }
 
 /// A small fixed buffer that [`write!`] can format into, kept
@@ -297,12 +285,10 @@ unsafe fn add_cmd_modifier(
     }
     if !buf.is_null() {
         // SAFETY: caller contract.
-        unsafe {
-            if *multi_mods {
-                strcat(buf, c" ".as_ptr());
-            }
-            strcat(buf, mod_str);
+        if *multi_mods {
+            unsafe { strcat(buf, c" ".as_ptr()) };
         }
+        unsafe { strcat(buf, mod_str) };
     }
     *multi_mods = true;
     result
@@ -397,16 +383,14 @@ pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: &cmdmod_T, quote: bool) -> 
         buf
     } else {
         // SAFETY: caller contract.
-        unsafe {
-            let body = if quote {
-                *buf = b'"' as c_char;
-                buf.add(1)
-            } else {
-                buf
-            };
-            *body = NUL as c_char;
-            body
-        }
+        let body = if quote {
+            unsafe { *buf = b'"' as c_char };
+            unsafe { buf.add(1) }
+        } else {
+            buf
+        };
+        unsafe { *body = NUL as c_char };
+        body
     };
 
     for &(flag, name) in &MOD_ENTRIES {
@@ -507,12 +491,8 @@ impl Replacement {
         if !self.buf.is_null() {
             // SAFETY: caller contract.
             unsafe {
-                ptr::copy_nonoverlapping(
-                    bytes.as_ptr(),
-                    self.buf.add(self.len).cast(),
-                    bytes.len(),
-                );
-            }
+                ptr::copy_nonoverlapping(bytes.as_ptr(), self.buf.add(self.len).cast(), bytes.len())
+            };
         }
         self.len += bytes.len();
     }
@@ -523,14 +503,12 @@ impl Replacement {
     /// As [`Replacement::put`].
     unsafe fn quoted(&mut self, quote: Option<u8>, body: &[u8]) {
         // SAFETY: caller contract.
-        unsafe {
-            if let Some(q) = quote {
-                self.put(&[q]);
-            }
-            self.put(body);
-            if let Some(q) = quote {
-                self.put(&[q]);
-            }
+        if let Some(q) = quote {
+            unsafe { self.put(&[q]) };
+        }
+        unsafe { self.put(body) };
+        if let Some(q) = quote {
+            unsafe { self.put(&[q]) };
         }
     }
 }
@@ -646,26 +624,26 @@ unsafe fn expand_args(
         quote
     };
     // SAFETY: caller contract.
-    unsafe {
-        match quote {
-            Quote::None => out.put(arg),
-            Quote::One => {
-                out.put(b"\"");
-                for &byte in arg {
-                    if byte == b'\\' || byte == b'"' {
-                        out.put(b"\\");
-                    }
-                    out.put(&[byte]);
+    match quote {
+        Quote::None => unsafe { out.put(arg) },
+        Quote::One => {
+            unsafe { out.put(b"\"") };
+            for &byte in arg {
+                if byte == b'\\' || byte == b'"' {
+                    unsafe { out.put(b"\\") };
                 }
-                out.put(b"\"");
+                unsafe { out.put(&[byte]) };
             }
-            // Splitting is expensive, so it is done once and cached.
-            Quote::Split => {
-                if (*split_buf).is_null() {
-                    *split_buf = uc_split_args(eap.arg, eap.args, eap.arglens, eap.argc, split_len);
-                }
-                out.put(slice::from_raw_parts((*split_buf).cast::<u8>(), *split_len));
+            unsafe { out.put(b"\"") };
+        }
+        // Splitting is expensive, so it is done once and cached.
+        Quote::Split => {
+            if unsafe { *split_buf }.is_null() {
+                unsafe {
+                    *split_buf = uc_split_args(eap.arg, eap.args, eap.arglens, eap.argc, split_len)
+                };
             }
+            unsafe { out.put(slice::from_raw_parts((*split_buf).cast::<u8>(), *split_len)) };
         }
     }
     out.len
@@ -716,8 +694,8 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
             (*eap).ea_getline,
             (*eap).cookie,
             DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,
-        );
-    }
+        )
+    };
     drop(script_ctx);
     // SAFETY: the block is this function's.
     unsafe { xfree(buf.cast()) };
@@ -778,33 +756,33 @@ unsafe fn expand_pass(
     let mut q = buf;
     let mut totlen: size_t = 0;
     // SAFETY: module contract; every pointer walks `uc_rep`.
-    unsafe {
-        loop {
-            let start = vim_strchr(p, b'<' as c_int);
-            let end = if start.is_null() {
-                ptr::null_mut()
-            } else {
-                vim_strchr(start.add(1), b'>' as c_int)
-            };
+    loop {
+        let start = unsafe { vim_strchr(p, b'<' as c_int) };
+        let end = if start.is_null() {
+            ptr::null_mut()
+        } else {
+            unsafe { vim_strchr(start.add(1), b'>' as c_int) }
+        };
 
-            if !buf.is_null() && unescape_k_special(&mut p, &mut q, start, end) {
-                continue;
-            }
-            if start.is_null() || end.is_null() {
-                break;
-            }
-            let end = end.add(1); // include the '>'
+        if !buf.is_null() && unsafe { unescape_k_special(&mut p, &mut q, start, end) } {
+            continue;
+        }
+        if start.is_null() || end.is_null() {
+            break;
+        }
+        let end = unsafe { end.add(1) }; // include the '>'
 
-            // Everything up to the '<' is copied as it stands.
-            let len = start.offset_from(p) as size_t;
-            if buf.is_null() {
-                totlen += len;
-            } else {
-                memmove(q.cast(), p.cast(), len);
-                q = q.add(len);
-            }
+        // Everything up to the '<' is copied as it stands.
+        let len = unsafe { start.offset_from(p) } as size_t;
+        if buf.is_null() {
+            totlen += len;
+        } else {
+            unsafe { memmove(q.cast(), p.cast(), len) };
+            q = unsafe { q.add(len) };
+        }
 
-            let mut len = uc_check_code(
+        let mut len = unsafe {
+            uc_check_code(
                 start,
                 end.offset_from(start) as size_t,
                 q,
@@ -812,19 +790,19 @@ unsafe fn expand_pass(
                 eap,
                 split_buf,
                 split_len,
-            );
-            if len == !0 {
-                // Not a code: carry on after the '<'.
-                p = start.add(1);
-                len = 1;
-            } else {
-                p = end;
-            }
-            if buf.is_null() {
-                totlen += len;
-            } else {
-                q = q.add(len);
-            }
+            )
+        };
+        if len == !0 {
+            // Not a code: carry on after the '<'.
+            p = unsafe { start.add(1) };
+            len = 1;
+        } else {
+            p = end;
+        }
+        if buf.is_null() {
+            totlen += len;
+        } else {
+            q = unsafe { q.add(len) };
         }
     }
     Pass {
@@ -847,26 +825,24 @@ unsafe fn unescape_k_special(
     end: *const c_char,
 ) -> bool {
     // SAFETY: caller contract.
-    unsafe {
-        let mut ksp = *p;
-        while *ksp != NUL as c_char && *ksp as u8 as c_int != K_SPECIAL {
-            ksp = ksp.add(1);
-        }
-        if *ksp as u8 as c_int != K_SPECIAL
-            || !(start.is_null() || ksp.cast_const() < start || end.is_null())
-            || *ksp.add(1) as u8 as c_int != KS_SPECIAL
-            || *ksp.add(2) as c_int != KE_FILLER
-        {
-            return false;
-        }
-        let len = ksp.offset_from(*p) as size_t;
-        if len > 0 {
-            memmove((*q).cast(), (*p).cast(), len);
-            *q = (*q).add(len);
-        }
-        **q = K_SPECIAL as c_char;
-        *q = (*q).add(1);
-        *p = ksp.add(3);
-        true
+    let mut ksp = *p;
+    while unsafe { *ksp } != NUL as c_char && unsafe { *ksp } as u8 as c_int != K_SPECIAL {
+        ksp = unsafe { ksp.add(1) };
     }
+    if unsafe { *ksp } as u8 as c_int != K_SPECIAL
+        || !(start.is_null() || ksp.cast_const() < start || end.is_null())
+        || unsafe { *ksp.add(1) } as u8 as c_int != KS_SPECIAL
+        || unsafe { *ksp.add(2) } as c_int != KE_FILLER
+    {
+        return false;
+    }
+    let len = unsafe { ksp.offset_from(*p) } as size_t;
+    if len > 0 {
+        unsafe { memmove((*q).cast(), (*p).cast(), len) };
+        *q = unsafe { (*q).add(len) };
+    }
+    unsafe { **q = K_SPECIAL as c_char };
+    *q = unsafe { (*q).add(1) };
+    *p = unsafe { ksp.add(3) };
+    true
 }

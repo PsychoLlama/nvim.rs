@@ -267,12 +267,10 @@ pub(crate) unsafe fn find_ucmd(
             }
             if !xp.is_null() {
                 // SAFETY: caller contract.
-                unsafe {
-                    (*xp).xp_luaref = uc.uc_compl_luaref;
-                    (*xp).xp_arg = uc.uc_compl_arg;
-                    (*xp).xp_script_ctx = uc.uc_script_ctx;
-                    (*xp).xp_script_ctx.sc_lnum += sourcing_lnum();
-                }
+                unsafe { (*xp).xp_luaref = uc.uc_compl_luaref };
+                unsafe { (*xp).xp_arg = uc.uc_compl_arg };
+                unsafe { (*xp).xp_script_ctx = uc.uc_script_ctx };
+                unsafe { (*xp).xp_script_ctx.sc_lnum += sourcing_lnum() };
             }
             // Do not look for further abbreviations of an exact match.
             matchlen = k;
@@ -336,15 +334,13 @@ fn match_prefix(typed: &[u8], name: &[u8]) -> (usize, bool) {
 pub(crate) unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
     let mut name = name;
     // SAFETY: caller contract; the walk stops at the NUL.
-    unsafe {
-        if (*name as u8).is_ascii_alphabetic() {
-            while (*name as u8).is_ascii_alphanumeric() {
-                name = name.offset(1);
-            }
+    if (unsafe { *name } as u8).is_ascii_alphabetic() {
+        while (unsafe { *name } as u8).is_ascii_alphanumeric() {
+            name = unsafe { name.offset(1) };
         }
-        if ends_excmd(*name as c_int) == 0 && !ascii_iswhite(*name as c_int) {
-            return ptr::null_mut();
-        }
+    }
+    if ends_excmd(unsafe { *name } as c_int) == 0 && !ascii_iswhite(unsafe { *name } as c_int) {
+        return ptr::null_mut();
     }
     name
 }
@@ -384,10 +380,10 @@ pub(crate) unsafe fn uc_add_command(
             0,
             ptr::null_mut(),
             p_cpo.get(),
-        );
-        if rep_buf.is_null() {
-            rep_buf = xstrdup(rep);
-        }
+        )
+    };
+    if rep_buf.is_null() {
+        rep_buf = unsafe { xstrdup(rep) };
     }
 
     let table = if flags & UC_BUFFER != 0 {
@@ -431,9 +427,9 @@ pub(crate) unsafe fn uc_add_command(
                 semsg_c!(
                     gettext(c"E174: Command already exists: add ! to replace it: %s".as_ptr()),
                     name,
-                );
-                free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref);
-            }
+                )
+            };
+            unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };
             return FAIL;
         }
         // Everything the old entry owned bar its name, taken out of the
@@ -454,12 +450,10 @@ pub(crate) unsafe fn uc_add_command(
         // SAFETY: module contract; `steal` is a leaf.
         let (old_rep, old_compl_arg, old_luarefs) = unsafe { table.with_mut(steal) };
         // SAFETY: the entry owned all five and no longer names any of them.
-        unsafe {
-            xfree(old_rep.cast());
-            xfree(old_compl_arg.cast());
-            for mut luaref in old_luarefs {
-                free_luaref(&mut luaref);
-            }
+        unsafe { xfree(old_rep.cast()) };
+        unsafe { xfree(old_compl_arg.cast()) };
+        for mut luaref in old_luarefs {
+            unsafe { free_luaref(&mut luaref) };
         }
     }
 
@@ -524,12 +518,10 @@ unsafe fn free_new_command(
     preview_luaref: LuaRef,
 ) {
     // SAFETY: caller contract.
-    unsafe {
-        xfree(rep_buf.cast());
-        xfree(compl_arg.cast());
-        for mut r in [luaref, compl_luaref, preview_luaref] {
-            free_luaref(&mut r);
-        }
+    unsafe { xfree(rep_buf.cast()) };
+    unsafe { xfree(compl_arg.cast()) };
+    for mut r in [luaref, compl_luaref, preview_luaref] {
+        unsafe { free_luaref(&mut r) };
     }
 }
 
@@ -578,10 +570,8 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
     let name = p;
     if name_end.is_null() {
         // SAFETY: module contract; this call owns `compl_arg`.
-        unsafe {
-            emsg(gettext(c"E182: Invalid command name".as_ptr()));
-            xfree(compl_arg.cast());
-        }
+        unsafe { emsg(gettext(c"E182: Invalid command name".as_ptr())) };
+        unsafe { xfree(compl_arg.cast()) };
         return;
     }
     // SAFETY: module contract.
@@ -622,18 +612,16 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
                 addr_type_arg,
                 LUA_NOREF,
                 forceit,
-            );
-        }
+            )
+        };
         return;
     };
 
     // SAFETY: module contract; nothing above took `compl_arg`.
-    unsafe {
-        if let Some(message) = complaint {
-            emsg(gettext(message.as_ptr()));
-        }
-        xfree(compl_arg.cast());
+    if let Some(message) = complaint {
+        unsafe { emsg(gettext(message.as_ptr())) };
     }
+    unsafe { xfree(compl_arg.cast()) };
 }
 
 /// `:comclear` -- forget every user command, global and buffer-local.
@@ -642,11 +630,9 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
 /// Module contract.
 pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
     // SAFETY: module contract.
-    unsafe {
-        uc_clear(Table::Global);
-        if !curbuf.get().is_null() {
-            uc_clear(Table::Buffer(curbuf.get()));
-        }
+    unsafe { uc_clear(Table::Global) };
+    if !curbuf.get().is_null() {
+        unsafe { uc_clear(Table::Buffer(curbuf.get())) };
     }
 }
 
@@ -661,14 +647,12 @@ pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
 /// table and is being discarded.
 unsafe fn free_ucmd(mut cmd: ucmd_T) {
     // SAFETY: caller contract; the entry owns all six.
-    unsafe {
-        xfree(cmd.uc_name.cast());
-        xfree(cmd.uc_rep.cast());
-        xfree(cmd.uc_compl_arg.cast());
-        free_luaref(&mut cmd.uc_compl_luaref);
-        free_luaref(&mut cmd.uc_luaref);
-        free_luaref(&mut cmd.uc_preview_luaref);
-    }
+    unsafe { xfree(cmd.uc_name.cast()) };
+    unsafe { xfree(cmd.uc_rep.cast()) };
+    unsafe { xfree(cmd.uc_compl_arg.cast()) };
+    unsafe { free_luaref(&mut cmd.uc_compl_luaref) };
+    unsafe { free_luaref(&mut cmd.uc_luaref) };
+    unsafe { free_luaref(&mut cmd.uc_preview_luaref) };
 }
 
 /// Empty one command table, leaving it usable again.
@@ -746,8 +730,8 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
                     c"E184: No such user-defined command: %s".as_ptr()
                 }),
                 arg,
-            );
-        }
+            )
+        };
         return;
     };
 

@@ -281,18 +281,16 @@ pub unsafe fn ui_refresh() {
         ui_schedule_refresh();
         return;
     }
-    unsafe {
-        ui_default_colors_set();
-        // 'lazyredraw' would defer the resize past the point the UIs are
-        // told about it.
-        let save_p_lz = p_lz.get();
-        p_lz.set(0);
-        screen_resize(width, height);
-        p_lz.set(save_p_lz);
-        ui_mode_info_set();
-        pending_mode_update.set(true);
-        ui_cursor_shape();
-    }
+    unsafe { ui_default_colors_set() };
+    // 'lazyredraw' would defer the resize past the point the UIs are
+    // told about it.
+    let save_p_lz = p_lz.get();
+    p_lz.set(0);
+    unsafe { screen_resize(width, height) };
+    p_lz.set(save_p_lz);
+    ui_mode_info_set();
+    pending_mode_update.set(true);
+    unsafe { ui_cursor_shape() };
     pending_has_mouse.set(-1);
 }
 
@@ -319,12 +317,10 @@ pub unsafe fn ui_pum_get_pos(
     let Some(ui) = each_ui().find(|&ui| unsafe { (*ui).pum_pos }) else {
         return false;
     };
-    unsafe {
-        *pwidth = (*ui).pum_width;
-        *pheight = (*ui).pum_height;
-        *prow = (*ui).pum_row;
-        *pcol = (*ui).pum_col;
-    }
+    unsafe { *pwidth = (*ui).pum_width };
+    unsafe { *pheight = (*ui).pum_height };
+    unsafe { *prow = (*ui).pum_row };
+    unsafe { *pcol = (*ui).pum_col };
     true
 }
 
@@ -420,10 +416,8 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
         }
     }
     if !unsafe { vim_strchr(p_debug.get(), 'e' as c_int) }.is_null() {
-        unsafe {
-            msg_source(HLF_W);
-            msg(gettext(c"Beep!".as_ptr()), HLF_W);
-        }
+        unsafe { msg_source(HLF_W) };
+        unsafe { msg(gettext(c"Beep!".as_ptr()), HLF_W) };
     }
 }
 
@@ -462,10 +456,8 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     uis.with_mut(|table| table[attached.get()] = ui);
     attached.set(attached.get() + 1);
 
-    unsafe {
-        ui_refresh_options();
-        resettitle();
-    }
+    ui_refresh_options();
+    unsafe { resettitle() };
 
     // Tell it where the server is, so that a UI on another machine can
     // resolve the paths the server sends.
@@ -486,10 +478,8 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     if !sent {
         unsafe { ui_send_all_hls(ui) };
     }
-    unsafe {
-        ui_refresh();
-        do_autocmd_uienter(chanid, true);
-    }
+    unsafe { ui_refresh() };
+    do_autocmd_uienter(chanid, true);
 }
 
 /// Removes `ui` from the attach table.
@@ -677,10 +667,8 @@ pub unsafe fn ui_flush() {
     unsafe { win_ui_flush(false) };
     if textlock.get() == 0 && expr_map_lock.get() == 0 {
         // Both can run Lua handlers, which the locks exist to keep out.
-        unsafe {
-            cmdline_ui_flush();
-            msg_ext_ui_flush();
-        }
+        cmdline_ui_flush();
+        unsafe { msg_ext_ui_flush() };
     }
     unsafe { msg_scroll_flush() };
 
@@ -762,10 +750,8 @@ pub unsafe fn ui_cursor_shape_no_check_conceal() {
 ///
 /// May redraw the cursor line.
 pub unsafe fn ui_cursor_shape() {
-    unsafe {
-        ui_cursor_shape_no_check_conceal();
-        conceal_check_cursor_line();
-    }
+    unsafe { ui_cursor_shape_no_check_conceal() };
+    unsafe { conceal_check_cursor_line() };
 }
 
 /// # Safety

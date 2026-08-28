@@ -75,97 +75,99 @@ pub unsafe fn decor_to_dict_legacy(
     arena: *mut Arena,
 ) {
     // SAFETY: the caller's decoration, dictionary and arena.
-    unsafe {
-        let mut sh_hl: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
-        let mut sh_sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
-        let mut virt_text: *mut DecorVirtText = ptr::null_mut();
-        let mut virt_lines: *mut DecorVirtText = ptr::null_mut();
-        // A sentinel no real priority can take, so that "nothing here has a
-        // priority" stays distinct from priority 0.
-        let mut priority: i32 = -1;
+    let mut sh_hl: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
+    let mut sh_sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
+    let mut virt_text: *mut DecorVirtText = ptr::null_mut();
+    let mut virt_lines: *mut DecorVirtText = ptr::null_mut();
+    // A sentinel no real priority can take, so that "nothing here has a
+    // priority" stays distinct from priority 0.
+    let mut priority: i32 = -1;
 
-        if decor.ext {
-            let mut vt = decor.data.ext.vt;
-            while !vt.is_null() {
-                if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
-                    virt_lines = vt;
-                } else {
-                    virt_text = vt;
-                }
-                vt = (*vt).next;
+    if decor.ext {
+        let mut vt = unsafe { decor.data.ext }.vt;
+        while !vt.is_null() {
+            if unsafe { (*vt).flags } as c_int & kVTIsLines as c_int != 0 {
+                virt_lines = vt;
+            } else {
+                virt_text = vt;
             }
-
-            let mut idx: uint32_t = decor.data.ext.sh_idx;
-            while idx != DECOR_ID_INVALID {
-                let sh = decor_item(idx);
-                if (*sh).flags as c_int & kSHIsSign as c_int != 0 {
-                    sh_sign = *sh;
-                } else {
-                    sh_hl = *sh;
-                }
-                idx = (*sh).next;
-            }
-        } else {
-            sh_hl = decor_sh_from_inline(decor.data.hl);
+            vt = unsafe { (*vt).next };
         }
 
-        let flags = sh_hl.flags as c_int;
-        if sh_hl.hl_id != 0 {
-            put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name));
+        let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
+        while idx != DECOR_ID_INVALID {
+            let sh = decor_item(idx);
+            if unsafe { (*sh).flags } as c_int & kSHIsSign as c_int != 0 {
+                sh_sign = unsafe { *sh };
+            } else {
+                sh_hl = unsafe { *sh };
+            }
+            idx = unsafe { (*sh).next };
+        }
+    } else {
+        sh_hl = decor_sh_from_inline(unsafe { decor.data.hl });
+    }
+
+    let flags = sh_hl.flags as c_int;
+    if sh_hl.hl_id != 0 {
+        unsafe { put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name)) };
+        unsafe {
             put(
                 dict,
                 c"hl_eol",
                 Object::boolean(flags & kSHHlEol as c_int != 0),
-            );
-            priority = i32::from(sh_hl.priority);
-        }
+            )
+        };
+        priority = i32::from(sh_hl.priority);
+    }
 
-        if flags & kSHConceal as c_int != 0 {
-            let mut buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
-            schar_get(buf.as_mut_ptr(), sh_hl.text[0]);
+    if flags & kSHConceal as c_int != 0 {
+        let mut buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
+        unsafe { schar_get(buf.as_mut_ptr(), sh_hl.text[0]) };
+        unsafe {
             put(
                 dict,
                 c"conceal",
                 Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-            );
-        }
+            )
+        };
+    }
 
-        if flags & kSHConcealLines as c_int != 0 {
-            put(dict, c"conceal_lines", Object::literal(""));
-        }
+    if flags & kSHConcealLines as c_int != 0 {
+        unsafe { put(dict, c"conceal_lines", Object::literal("")) };
+    }
 
-        if flags & kSHSpellOn as c_int != 0 {
-            put(dict, c"spell", Object::boolean(true));
-        } else if flags & kSHSpellOff as c_int != 0 {
-            put(dict, c"spell", Object::boolean(false));
-        }
+    if flags & kSHSpellOn as c_int != 0 {
+        unsafe { put(dict, c"spell", Object::boolean(true)) };
+    } else if flags & kSHSpellOff as c_int != 0 {
+        unsafe { put(dict, c"spell", Object::boolean(false)) };
+    }
 
-        if flags & kSHUIWatched as c_int != 0 {
-            put(dict, c"ui_watched", Object::boolean(true));
-        }
+    if flags & kSHUIWatched as c_int != 0 {
+        unsafe { put(dict, c"ui_watched", Object::boolean(true)) };
+    }
 
-        if !sh_hl.url.is_null() {
-            put(dict, c"url", Object::string(cstr_as_string(sh_hl.url)));
-        }
+    if !sh_hl.url.is_null() {
+        unsafe { put(dict, c"url", Object::string(cstr_as_string(sh_hl.url))) };
+    }
 
-        if !virt_text.is_null() {
-            put_virt_text(dict, &*virt_text, hl_name, arena);
-            priority = i32::from((*virt_text).priority);
-        }
+    if !virt_text.is_null() {
+        unsafe { put_virt_text(dict, &*virt_text, hl_name, arena) };
+        priority = i32::from(unsafe { (*virt_text).priority });
+    }
 
-        if !virt_lines.is_null() {
-            put_virt_lines(dict, &*virt_lines, hl_name, arena);
-            priority = i32::from((*virt_lines).priority);
-        }
+    if !virt_lines.is_null() {
+        unsafe { put_virt_lines(dict, &*virt_lines, hl_name, arena) };
+        priority = i32::from(unsafe { (*virt_lines).priority });
+    }
 
-        if sh_sign.flags as c_int & kSHIsSign as c_int != 0 {
-            put_sign(dict, &mut sh_sign, hl_name, arena);
-            priority = i32::from(sh_sign.priority);
-        }
+    if sh_sign.flags as c_int & kSHIsSign as c_int != 0 {
+        unsafe { put_sign(dict, &mut sh_sign, hl_name, arena) };
+        priority = i32::from(sh_sign.priority);
+    }
 
-        if priority != -1 {
-            put(dict, c"priority", Object::integer(priority.into()));
-        }
+    if priority != -1 {
+        unsafe { put(dict, c"priority", Object::integer(priority.into())) };
     }
 }
 
@@ -175,38 +177,44 @@ pub unsafe fn decor_to_dict_legacy(
 /// `vt` must be a live virtual *text* item, not a virtual-lines one.
 unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
     // SAFETY: the caller's virtual text and arena.
-    unsafe {
-        if vt.hl_mode != 0 {
-            let mode = HL_MODE_STR[vt.hl_mode as usize];
+    if vt.hl_mode != 0 {
+        let mode = HL_MODE_STR[vt.hl_mode as usize];
+        unsafe {
             put(
                 dict,
                 c"hl_mode",
                 Object::string(cstr_as_string(mode.as_ptr())),
-            );
-        }
+            )
+        };
+    }
 
-        let chunks = virt_text_to_array(vt.data.virt_text, hl_name, arena);
-        put(dict, c"virt_text", Object::array(chunks));
+    let chunks = unsafe { virt_text_to_array(vt.data.virt_text, hl_name, arena) };
+    unsafe { put(dict, c"virt_text", Object::array(chunks)) };
+    unsafe {
         put(
             dict,
             c"virt_text_hide",
             Object::boolean(vt.flags as c_int & kVTHide as c_int != 0),
-        );
+        )
+    };
+    unsafe {
         put(
             dict,
             c"virt_text_repeat_linebreak",
             Object::boolean(vt.flags as c_int & kVTRepeatLinebreak as c_int != 0),
-        );
-        if vt.pos == kVPosWinCol {
-            put(dict, c"virt_text_win_col", Object::integer(vt.col.into()));
-        }
-        let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
+        )
+    };
+    if vt.pos == kVPosWinCol {
+        unsafe { put(dict, c"virt_text_win_col", Object::integer(vt.col.into())) };
+    }
+    let pos = VIRT_TEXT_POS_STR[vt.pos as usize];
+    unsafe {
         put(
             dict,
             c"virt_text_pos",
             Object::string(cstr_as_string(pos.as_ptr())),
-        );
-    }
+        )
+    };
 }
 
 /// The virt-lines half of [`decor_to_dict_legacy`].
@@ -219,42 +227,46 @@ unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, aren
 /// `vt` must be a live virtual *lines* item.
 unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
     // SAFETY: the caller's virtual lines and arena.
-    unsafe {
-        let lines = vt.data.virt_lines;
-        let mut all_chunks: Array = arena_array(arena, lines.size);
-        let mut line_flags: c_int = 0;
-        for i in 0..lines.size {
-            let line = *lines.items.add(i);
-            line_flags = line.flags;
-            let chunks = virt_text_to_array(line.line, hl_name, arena);
-            // `arena_array` was asked for exactly this many.
-            assert!(all_chunks.size < all_chunks.capacity, "virt_lines overflow");
-            *all_chunks.items.add(all_chunks.size) = Object::array(chunks);
-            all_chunks.size += 1;
-        }
+    let lines = unsafe { vt.data.virt_lines };
+    let mut all_chunks: Array = arena_array(arena, lines.size);
+    let mut line_flags: c_int = 0;
+    for i in 0..lines.size {
+        let line = unsafe { *lines.items.add(i) };
+        line_flags = line.flags;
+        let chunks = unsafe { virt_text_to_array(line.line, hl_name, arena) };
+        // `arena_array` was asked for exactly this many.
+        assert!(all_chunks.size < all_chunks.capacity, "virt_lines overflow");
+        unsafe { *all_chunks.items.add(all_chunks.size) = Object::array(chunks) };
+        all_chunks.size += 1;
+    }
 
-        put(dict, c"virt_lines", Object::array(all_chunks));
+    unsafe { put(dict, c"virt_lines", Object::array(all_chunks)) };
+    unsafe {
         put(
             dict,
             c"virt_lines_above",
             Object::boolean(vt.flags as c_int & kVTLinesAbove as c_int != 0),
-        );
+        )
+    };
+    unsafe {
         put(
             dict,
             c"virt_lines_leftcol",
             Object::boolean(line_flags & kVLLeftcol as c_int != 0),
-        );
-        let overflow = if line_flags & kVLScroll as c_int != 0 {
-            c"scroll"
-        } else {
-            c"trunc"
-        };
+        )
+    };
+    let overflow = if line_flags & kVLScroll as c_int != 0 {
+        c"scroll"
+    } else {
+        c"trunc"
+    };
+    unsafe {
         put(
             dict,
             c"virt_lines_overflow",
             Object::string(cstr_as_string(overflow.as_ptr())),
-        );
-    }
+        )
+    };
 }
 
 /// The sign half of [`decor_to_dict_legacy`].
@@ -263,34 +275,36 @@ unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, are
 /// `sh` must be a live sign item; `arena` valid or null.
 unsafe fn put_sign(dict: &mut Dict, sh: &mut DecorSignHighlight, hl_name: bool, arena: *mut Arena) {
     // SAFETY: the caller's sign and arena.
-    unsafe {
-        if sh.text[0] != 0 {
-            let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
-            describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr());
+    if sh.text[0] != 0 {
+        let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
+        unsafe { describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr()) };
+        unsafe {
             put(
                 dict,
                 c"sign_text",
                 Object::string(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-            );
-        }
+            )
+        };
+    }
 
-        if !sh.sign_name.is_null() {
+    if !sh.sign_name.is_null() {
+        unsafe {
             put(
                 dict,
                 c"sign_name",
                 Object::string(cstr_as_string(sh.sign_name)),
-            );
-        }
+            )
+        };
+    }
 
-        for (key, id) in [
-            (c"sign_hl_group", sh.hl_id),
-            (c"number_hl_group", sh.number_hl_id),
-            (c"line_hl_group", sh.line_hl_id),
-            (c"cursorline_hl_group", sh.cursorline_hl_id),
-        ] {
-            if id != 0 {
-                put(dict, key, hl_group_name(id, hl_name));
-            }
+    for (key, id) in [
+        (c"sign_hl_group", sh.hl_id),
+        (c"number_hl_group", sh.number_hl_id),
+        (c"line_hl_group", sh.line_hl_id),
+        (c"cursorline_hl_group", sh.cursorline_hl_id),
+    ] {
+        if id != 0 {
+            unsafe { put(dict, key, hl_group_name(id, hl_name)) };
         }
     }
 }
@@ -302,37 +316,35 @@ unsafe fn put_sign(dict: &mut Dict, sh: &mut DecorSignHighlight, hl_name: bool, 
 /// `decor` must be live.
 pub unsafe fn decor_type_flags(decor: DecorInline) -> uint16_t {
     // SAFETY: the caller's decoration.
-    unsafe {
-        if !decor.ext {
-            return if decor.data.hl.flags as c_int & kSHIsSign as c_int != 0 {
-                kExtmarkSign
-            } else {
-                kExtmarkHighlight
-            };
-        }
-
-        let mut type_flags = kExtmarkNone;
-        let mut vt = decor.data.ext.vt;
-        while !vt.is_null() {
-            type_flags |= if (*vt).flags as c_int & kVTIsLines as c_int != 0 {
-                kExtmarkVirtLines
-            } else {
-                kExtmarkVirtText
-            };
-            vt = (*vt).next;
-        }
-        let mut idx: uint32_t = decor.data.ext.sh_idx;
-        while idx != DECOR_ID_INVALID {
-            let sh = decor_item(idx);
-            type_flags |= if (*sh).flags as c_int & kSHIsSign as c_int != 0 {
-                kExtmarkSign
-            } else {
-                kExtmarkHighlight
-            };
-            idx = (*sh).next;
-        }
-        type_flags
+    if !decor.ext {
+        return if unsafe { decor.data.hl }.flags as c_int & kSHIsSign as c_int != 0 {
+            kExtmarkSign
+        } else {
+            kExtmarkHighlight
+        };
     }
+
+    let mut type_flags = kExtmarkNone;
+    let mut vt = unsafe { decor.data.ext }.vt;
+    while !vt.is_null() {
+        type_flags |= if unsafe { (*vt).flags } as c_int & kVTIsLines as c_int != 0 {
+            kExtmarkVirtLines
+        } else {
+            kExtmarkVirtText
+        };
+        vt = unsafe { (*vt).next };
+    }
+    let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
+    while idx != DECOR_ID_INVALID {
+        let sh = decor_item(idx);
+        type_flags |= if unsafe { (*sh).flags } as c_int & kSHIsSign as c_int != 0 {
+            kExtmarkSign
+        } else {
+            kExtmarkHighlight
+        };
+        idx = unsafe { (*sh).next };
+    }
+    type_flags
 }
 
 /// A highlight group as the API reports it: its name when the caller asked

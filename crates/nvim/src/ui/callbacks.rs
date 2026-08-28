@@ -210,10 +210,8 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
             handled = true;
         }
         if err.type_0 != kErrorTypeNone {
-            unsafe {
-                report_error(ns_id, name.as_ptr(), err.msg);
-                ui_remove_cb(ns_id, true);
-            }
+            unsafe { report_error(ns_id, name.as_ptr(), err.msg) };
+            unsafe { ui_remove_cb(ns_id, true) };
         }
         unsafe { api_clear_error(&raw mut err) };
     }
@@ -277,7 +275,7 @@ unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
             name,
             ns,
             msg,
-        );
-        msg_schedule_semsg_multiline_c!(format, name, ns, msg);
-    }
+        )
+    };
+    unsafe { msg_schedule_semsg_multiline_c!(format, name, ns, msg) };
 }
