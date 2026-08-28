@@ -116,19 +116,17 @@ impl FlagField {
     /// `aff` must be live.
     unsafe fn slot(self, aff: *mut afffile_T) -> *mut c_uint {
         // SAFETY: the caller promises `aff`.
-        unsafe {
-            match self {
-                Self::Rare => &raw mut (*aff).af_rare,
-                Self::KeepCase => &raw mut (*aff).af_keepcase,
-                Self::Bad => &raw mut (*aff).af_bad,
-                Self::NeedAffix => &raw mut (*aff).af_needaffix,
-                Self::Circumfix => &raw mut (*aff).af_circumfix,
-                Self::NoSuggest => &raw mut (*aff).af_nosuggest,
-                Self::NeedComp => &raw mut (*aff).af_needcomp,
-                Self::CompRoot => &raw mut (*aff).af_comproot,
-                Self::CompForbid => &raw mut (*aff).af_compforbid,
-                Self::CompPermit => &raw mut (*aff).af_comppermit,
-            }
+        match self {
+            Self::Rare => unsafe { &raw mut (*aff).af_rare },
+            Self::KeepCase => unsafe { &raw mut (*aff).af_keepcase },
+            Self::Bad => unsafe { &raw mut (*aff).af_bad },
+            Self::NeedAffix => unsafe { &raw mut (*aff).af_needaffix },
+            Self::Circumfix => unsafe { &raw mut (*aff).af_circumfix },
+            Self::NoSuggest => unsafe { &raw mut (*aff).af_nosuggest },
+            Self::NeedComp => unsafe { &raw mut (*aff).af_needcomp },
+            Self::CompRoot => unsafe { &raw mut (*aff).af_comproot },
+            Self::CompForbid => unsafe { &raw mut (*aff).af_compforbid },
+            Self::CompPermit => unsafe { &raw mut (*aff).af_comppermit },
         }
     }
 
@@ -254,18 +252,16 @@ unsafe fn is_aff_rule(items: &[*mut c_char], rulename: &CStr, mincount: usize) -
 /// `s` must be NUL-terminated.
 unsafe fn spell_info_item(s: *mut c_char) -> bool {
     // SAFETY: the caller promises the string.
-    unsafe {
-        [
-            c"NAME",
-            c"HOME",
-            c"VERSION",
-            c"AUTHOR",
-            c"EMAIL",
-            c"COPYRIGHT",
-        ]
-        .into_iter()
-        .any(|name| strcmp(s, name.as_ptr()) == 0)
-    }
+    [
+        c"NAME",
+        c"HOME",
+        c"VERSION",
+        c"AUTHOR",
+        c"EMAIL",
+        c"COPYRIGHT",
+    ]
+    .into_iter()
+    .any(|name| unsafe { strcmp(s, name.as_ptr()) } == 0)
 }
 
 /// Read a `.aff` file and return what it describes, or null if it could not
@@ -277,93 +273,98 @@ unsafe fn spell_info_item(s: *mut c_char) -> bool {
 pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) -> *mut afffile_T {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, the
     // bound `vim_fgets` is given.
-    unsafe {
-        let fd = os_fopen(fname, c"r".as_ptr());
-        if fd.is_null() {
-            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
-            return core::ptr::null_mut();
+    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    if fd.is_null() {
+        unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+        return core::ptr::null_mut();
+    }
+    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    spell_message_fmt(
+        unsafe { &*spin },
+        format_args!("Reading affix file {name}..."),
+    );
+
+    let mut st = AffState {
+        aff_todo: 0,
+        cur_aff: core::ptr::null_mut(),
+        did_postpone_prefix: false,
+        found_map: false,
+        compmax: 0,
+        compminlen: 0,
+        compsylmax: 0,
+        compoptions: 0,
+        compflags: core::ptr::null_mut(),
+        midword: core::ptr::null_mut(),
+        syllable: core::ptr::null_mut(),
+        sofofrom: core::ptr::null_mut(),
+        sofoto: core::ptr::null_mut(),
+        low: core::ptr::null_mut(),
+        fol: core::ptr::null_mut(),
+        upp: core::ptr::null_mut(),
+        // Only take these from the first file that has them.
+        do_rep: unsafe { (*spin).si_rep.ga_len } <= 0,
+        do_repsal: unsafe { (*spin).si_repsal.ga_len } <= 0,
+        do_sal: unsafe { (*spin).si_sal.ga_len } <= 0,
+        do_mapline: unsafe { (*spin).si_map.ga_len } <= 0,
+    };
+
+    let aff = unsafe { (*spin).si_arena.alloc::<afffile_T>() };
+    unsafe { hash_init(&raw mut (*aff).af_pref) };
+    unsafe { hash_init(&raw mut (*aff).af_suff) };
+    unsafe { hash_init(&raw mut (*aff).af_comp) };
+
+    let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
+    let mut items: [*mut c_char; MAXITEMCNT] = [core::ptr::null_mut(); MAXITEMCNT];
+    let mut pc: *mut c_char = core::ptr::null_mut();
+    let mut lnum: c_int = 0;
+
+    while !unsafe { vim_fgets(rline.as_mut_ptr(), MAXLINELEN, fd) } && !got_int.get() {
+        line_breakcheck();
+        lnum += 1;
+        if rline[0] as c_int == b'#' as c_int {
+            continue;
         }
-        let name = CStr::from_ptr(fname).to_string_lossy();
-        spell_message_fmt(&*spin, format_args!("Reading affix file {name}..."));
 
-        let mut st = AffState {
-            aff_todo: 0,
-            cur_aff: core::ptr::null_mut(),
-            did_postpone_prefix: false,
-            found_map: false,
-            compmax: 0,
-            compminlen: 0,
-            compsylmax: 0,
-            compoptions: 0,
-            compflags: core::ptr::null_mut(),
-            midword: core::ptr::null_mut(),
-            syllable: core::ptr::null_mut(),
-            sofofrom: core::ptr::null_mut(),
-            sofoto: core::ptr::null_mut(),
-            low: core::ptr::null_mut(),
-            fol: core::ptr::null_mut(),
-            upp: core::ptr::null_mut(),
-            // Only take these from the first file that has them.
-            do_rep: (*spin).si_rep.ga_len <= 0,
-            do_repsal: (*spin).si_repsal.ga_len <= 0,
-            do_sal: (*spin).si_sal.ga_len <= 0,
-            do_mapline: (*spin).si_map.ga_len <= 0,
-        };
-
-        let aff = (*spin).si_arena.alloc::<afffile_T>();
-        hash_init(&raw mut (*aff).af_pref);
-        hash_init(&raw mut (*aff).af_suff);
-        hash_init(&raw mut (*aff).af_comp);
-
-        let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-        let mut items: [*mut c_char; MAXITEMCNT] = [core::ptr::null_mut(); MAXITEMCNT];
-        let mut pc: *mut c_char = core::ptr::null_mut();
-        let mut lnum: c_int = 0;
-
-        while !vim_fgets(rline.as_mut_ptr(), MAXLINELEN, fd) && !got_int.get() {
-            line_breakcheck();
-            lnum += 1;
-            if rline[0] as c_int == b'#' as c_int {
-                continue;
-            }
-
-            xfree(pc.cast());
-            pc = core::ptr::null_mut();
-            let line = if (*spin).si_conv.vc_type != CONV_NONE {
-                pc = string_convert(
+        unsafe { xfree(pc.cast()) };
+        pc = core::ptr::null_mut();
+        let line = if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
+            pc = unsafe {
+                string_convert(
                     &raw mut (*spin).si_conv,
                     rline.as_mut_ptr(),
                     core::ptr::null_mut(),
-                );
-                if pc.is_null() {
+                )
+            };
+            if pc.is_null() {
+                unsafe {
                     smsg_c!(
                         0,
                         gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
                         fname,
                         lnum,
                         rline.as_mut_ptr(),
-                    );
-                    continue;
-                }
-                pc
-            } else {
-                rline.as_mut_ptr()
-            };
-
-            let itemcnt = split_items(line, &mut items);
-            if itemcnt == 0 {
+                    )
+                };
                 continue;
             }
-            if !handle_line(spin, aff, &mut st, &items[..itemcnt], fname, lnum) {
-                break;
-            }
-        }
+            pc
+        } else {
+            rline.as_mut_ptr()
+        };
 
-        finish_aff(spin, aff, &mut st, fname);
-        xfree(pc.cast());
-        fclose(fd);
-        aff
+        let itemcnt = unsafe { split_items(line, &mut items) };
+        if itemcnt == 0 {
+            continue;
+        }
+        if !unsafe { handle_line(spin, aff, &mut st, &items[..itemcnt], fname, lnum) } {
+            break;
+        }
     }
+
+    unsafe { finish_aff(spin, aff, &mut st, fname) };
+    unsafe { xfree(pc.cast()) };
+    unsafe { fclose(fd) };
+    aff
 }
 
 /// Split a line into white-space separated items, in place.
@@ -376,38 +377,38 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
 /// `line` must be NUL-terminated and writable.
 unsafe fn split_items(line: *mut c_char, items: &mut [*mut c_char; MAXITEMCNT]) -> usize {
     // SAFETY: the caller promises the line; the walk stops at its NUL.
-    unsafe {
-        let mut itemcnt = 0;
-        let mut p = line;
-        loop {
-            while *p as c_int != NUL && *p as uint8_t as c_int <= b' ' as c_int {
-                p = p.add(1);
-            }
-            if *p as c_int == NUL || itemcnt == MAXITEMCNT {
-                break;
-            }
-            items[itemcnt] = p;
-            itemcnt += 1;
-
-            if itemcnt == 2 && spell_info_item(items[0]) {
-                // Take the rest of the line, stopping only at a control
-                // character that is not a tab.
-                while *p as uint8_t as c_int >= b' ' as c_int || *p as c_int == TAB {
-                    p = p.add(1);
-                }
-            } else {
-                while *p as uint8_t as c_int > b' ' as c_int {
-                    p = p.add(1);
-                }
-            }
-            if *p as c_int == NUL {
-                break;
-            }
-            *p = NUL as c_char;
-            p = p.add(1);
+    let mut itemcnt = 0;
+    let mut p = line;
+    loop {
+        while unsafe { *p } as c_int != NUL && unsafe { *p } as uint8_t as c_int <= b' ' as c_int {
+            p = unsafe { p.add(1) };
         }
-        itemcnt
+        if unsafe { *p } as c_int == NUL || itemcnt == MAXITEMCNT {
+            break;
+        }
+        items[itemcnt] = p;
+        itemcnt += 1;
+
+        if itemcnt == 2 && unsafe { spell_info_item(items[0]) } {
+            // Take the rest of the line, stopping only at a control
+            // character that is not a tab.
+            while unsafe { *p } as uint8_t as c_int >= b' ' as c_int
+                || unsafe { *p } as c_int == TAB
+            {
+                p = unsafe { p.add(1) };
+            }
+        } else {
+            while unsafe { *p } as uint8_t as c_int > b' ' as c_int {
+                p = unsafe { p.add(1) };
+            }
+        }
+        if unsafe { *p } as c_int == NUL {
+            break;
+        }
+        unsafe { *p = NUL as c_char };
+        p = unsafe { p.add(1) };
     }
+    itemcnt
 }
 
 /// Handle one line. Returns false to stop reading the file.
@@ -425,261 +426,271 @@ unsafe fn handle_line(
     lnum: c_int,
 ) -> bool {
     // SAFETY: the caller promises the items and the two structures.
-    unsafe {
-        // SET must come before anything that could need converting.
-        if is_aff_rule(items, c"SET", 2) && (*aff).af_enc.is_null() {
-            (*aff).af_enc = enc_canonize(items[1]);
-            if (*spin).si_ascii == 0
-                && convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) == FAIL
-            {
+    // SET must come before anything that could need converting.
+    if unsafe { is_aff_rule(items, c"SET", 2) } && unsafe { (*aff).af_enc }.is_null() {
+        unsafe { (*aff).af_enc = enc_canonize(items[1]) };
+        if unsafe { (*spin).si_ascii } == 0
+            && unsafe { convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) }
+                == FAIL
+        {
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()),
                     fname,
                     (*aff).af_enc,
                     p_enc.get(),
-                );
-            }
-            (*spin).si_conv.vc_fail = true;
-            return true;
+                )
+            };
         }
+        unsafe { (*spin).si_conv.vc_fail = true };
+        return true;
+    }
 
-        if is_aff_rule(items, c"FLAG", 2) && (*aff).af_flagtype == AFT_CHAR {
-            handle_flag_type(aff, items, fname, lnum);
-            return true;
+    if unsafe { is_aff_rule(items, c"FLAG", 2) } && unsafe { (*aff).af_flagtype } == AFT_CHAR {
+        unsafe { handle_flag_type(aff, items, fname, lnum) };
+        return true;
+    }
+
+    if unsafe { spell_info_item(items[0]) } && items.len() > 1 {
+        unsafe { append_info(spin, items) };
+        return true;
+    }
+
+    if unsafe { is_aff_rule(items, c"MIDWORD", 2) } && st.midword.is_null() {
+        st.midword = unsafe { (*spin).si_arena.save_str(items[1]) };
+        return true;
+    }
+
+    // TRY is Hunspell's suggestion alphabet; nvim does not use it.
+    if unsafe { is_aff_rule(items, c"TRY", 2) } {
+        return true;
+    }
+
+    for (names, field) in FLAG_RULES {
+        if !names.iter().any(|n| unsafe { is_aff_rule(items, n, 2) }) {
+            continue;
         }
-
-        if spell_info_item(items[0]) && items.len() > 1 {
-            append_info(spin, items);
-            return true;
+        let slot = unsafe { field.slot(aff) };
+        // A second declaration is not this arm's business; it falls
+        // through and is reported as a duplicate.
+        if unsafe { *slot } != 0 {
+            break;
         }
-
-        if is_aff_rule(items, c"MIDWORD", 2) && st.midword.is_null() {
-            st.midword = (*spin).si_arena.save_str(items[1]);
-            return true;
+        unsafe { *slot = affitem2flag((*aff).af_flagtype, items[1], fname, lnum) };
+        if let Some(warning) = field.warn_after_pfx()
+            && unsafe { (*aff).af_pref.ht_used } > 0
+        {
+            unsafe { smsg_c!(0, gettext(warning.as_ptr()), fname, lnum) };
         }
+        return true;
+    }
 
-        // TRY is Hunspell's suggestion alphabet; nvim does not use it.
-        if is_aff_rule(items, c"TRY", 2) {
-            return true;
-        }
+    if unsafe { is_aff_rule(items, c"COMPOUNDFLAG", 2) } && st.compflags.is_null() {
+        // One flag becomes a pattern matching one or more of it.
+        let len = unsafe { strlen(items[1]) } + 2;
+        let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
+        unsafe { strcpy(p, items[1]) };
+        unsafe { strcat(p, c"+".as_ptr()) };
+        st.compflags = p;
+        return true;
+    }
 
-        for (names, field) in FLAG_RULES {
-            if !names.iter().any(|n| is_aff_rule(items, n, 2)) {
-                continue;
-            }
-            let slot = field.slot(aff);
-            // A second declaration is not this arm's business; it falls
-            // through and is reported as a duplicate.
-            if *slot != 0 {
-                break;
-            }
-            *slot = affitem2flag((*aff).af_flagtype, items[1], fname, lnum);
-            if let Some(warning) = field.warn_after_pfx()
-                && (*aff).af_pref.ht_used > 0
-            {
-                smsg_c!(0, gettext(warning.as_ptr()), fname, lnum);
-            }
-            return true;
-        }
-
-        if is_aff_rule(items, c"COMPOUNDFLAG", 2) && st.compflags.is_null() {
-            // One flag becomes a pattern matching one or more of it.
-            let p = (*spin).si_arena.alloc_bytes(strlen(items[1]) + 2, false);
-            strcpy(p, items[1]);
-            strcat(p, c"+".as_ptr());
-            st.compflags = p;
-            return true;
-        }
-
-        if is_aff_rule(items, c"COMPOUNDRULES", 2) {
-            if atoi(items[1]) == 0 {
+    if unsafe { is_aff_rule(items, c"COMPOUNDRULES", 2) } {
+        if unsafe { atoi(items[1]) } == 0 {
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Wrong COMPOUNDRULES value in %s line %d: %s".as_ptr()),
                     fname,
                     lnum,
                     items[1],
-                );
-            }
-            return true;
-        }
-
-        if is_aff_rule(items, c"COMPOUNDRULE", 2) {
-            // A rule that is only digits is the count line, unless a
-            // pattern has already been started.
-            if !st.compflags.is_null() || *skipdigits(items[1]) as c_int != NUL {
-                let mut len = strlen(items[1]) + 1;
-                if !st.compflags.is_null() {
-                    len += strlen(st.compflags) + 1;
-                }
-                let p = (*spin).si_arena.alloc_bytes(len, false);
-                if !st.compflags.is_null() {
-                    strcpy(p, st.compflags);
-                    strcat(p, c"/".as_ptr());
-                }
-                strcat(p, items[1]);
-                st.compflags = p;
-            }
-            return true;
-        }
-
-        for (name, field, complaint) in NUMBER_RULES {
-            if !is_aff_rule(items, name, 2) {
-                continue;
-            }
-            let slot = match field {
-                NumField::WordMax => &mut st.compmax,
-                NumField::Min => &mut st.compminlen,
-                NumField::SylMax => &mut st.compsylmax,
+                )
             };
-            if *slot != 0 {
-                break;
+        }
+        return true;
+    }
+
+    if unsafe { is_aff_rule(items, c"COMPOUNDRULE", 2) } {
+        // A rule that is only digits is the count line, unless a
+        // pattern has already been started.
+        if !st.compflags.is_null() || unsafe { *skipdigits(items[1]) } as c_int != NUL {
+            let mut len = unsafe { strlen(items[1]) } + 1;
+            if !st.compflags.is_null() {
+                len += unsafe { strlen(st.compflags) } + 1;
             }
-            *slot = atoi(items[1]);
-            if *slot == 0 {
-                smsg_c!(0, gettext(complaint.as_ptr()), fname, lnum, items[1]);
+            let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
+            if !st.compflags.is_null() {
+                unsafe { strcpy(p, st.compflags) };
+                unsafe { strcat(p, c"/".as_ptr()) };
             }
+            unsafe { strcat(p, items[1]) };
+            st.compflags = p;
+        }
+        return true;
+    }
+
+    for (name, field, complaint) in NUMBER_RULES {
+        if !unsafe { is_aff_rule(items, name, 2) } {
+            continue;
+        }
+        let slot = match field {
+            NumField::WordMax => &mut st.compmax,
+            NumField::Min => &mut st.compminlen,
+            NumField::SylMax => &mut st.compsylmax,
+        };
+        if *slot != 0 {
+            break;
+        }
+        *slot = unsafe { atoi(items[1]) };
+        if *slot == 0 {
+            unsafe { smsg_c!(0, gettext(complaint.as_ptr()), fname, lnum, items[1]) };
+        }
+        return true;
+    }
+
+    for (name, bit) in COMPOPT_RULES {
+        if unsafe { is_aff_rule(items, name, 1) } {
+            st.compoptions |= *bit as c_int;
             return true;
         }
+    }
 
-        for (name, bit) in COMPOPT_RULES {
-            if is_aff_rule(items, name, 1) {
-                st.compoptions |= *bit as c_int;
-                return true;
-            }
-        }
-
-        // The two-item form is the count line; the three-item form is a
-        // pattern pair.
-        if is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) {
-            if atoi(items[1]) == 0 {
+    // The two-item form is the count line; the three-item form is a
+    // pattern pair.
+    if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) } {
+        if unsafe { atoi(items[1]) } == 0 {
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s".as_ptr()),
                     fname,
                     lnum,
                     items[1],
-                );
-            }
-            return true;
-        }
-        if is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 3) {
-            add_comppat(spin, items);
-            return true;
-        }
-
-        if is_aff_rule(items, c"SYLLABLE", 2) && st.syllable.is_null() {
-            st.syllable = (*spin).si_arena.save_str(items[1]);
-            return true;
-        }
-
-        for (name, toggle) in TOGGLE_RULES {
-            if !is_aff_rule(items, name, 1) {
-                continue;
-            }
-            match toggle {
-                Toggle::NoBreak => (*spin).si_nobreak = 1,
-                Toggle::NoSplitSugs => (*spin).si_nosplitsugs = 1,
-                Toggle::NoCompoundSugs => (*spin).si_nocompoundsugs = 1,
-                Toggle::NoSugFile => (*spin).si_nosugfile = 1,
-                Toggle::PfxPostpone => (*aff).af_pfxpostpone = 1,
-                Toggle::IgnoreExtra => (*aff).af_ignoreextra = true,
-            }
-            return true;
-        }
-
-        let is_affix =
-            strcmp(items[0], c"PFX".as_ptr()) == 0 || strcmp(items[0], c"SFX".as_ptr()) == 0;
-        if is_affix && st.aff_todo == 0 && items.len() >= 4 {
-            return handle_affix_header(spin, aff, st, items, fname, lnum);
-        }
-        if is_affix
-            && st.aff_todo > 0
-            && strcmp(affheader_T::key(st.cur_aff), items[1]) == 0
-            && items.len() >= 5
-        {
-            handle_affix_entry(spin, aff, st, items, fname, lnum);
-            return true;
-        }
-
-        for (name, table) in CASE_RULES {
-            if !is_aff_rule(items, name, 2) {
-                continue;
-            }
-            let slot = match table {
-                CaseTable::Fol => &mut st.fol,
-                CaseTable::Low => &mut st.low,
-                CaseTable::Upp => &mut st.upp,
+                )
             };
-            if !slot.is_null() {
-                break;
-            }
-            *slot = xstrdup(items[1]);
-            return true;
         }
+        return true;
+    }
+    if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 3) } {
+        unsafe { add_comppat(spin, items) };
+        return true;
+    }
 
-        // The two-item form of REP/REPSAL is the count line.
-        if is_aff_rule(items, c"REP", 2) || is_aff_rule(items, c"REPSAL", 2) {
-            if !is_digit_byte(*items[1]) {
+    if unsafe { is_aff_rule(items, c"SYLLABLE", 2) } && st.syllable.is_null() {
+        st.syllable = unsafe { (*spin).si_arena.save_str(items[1]) };
+        return true;
+    }
+
+    for (name, toggle) in TOGGLE_RULES {
+        if !unsafe { is_aff_rule(items, name, 1) } {
+            continue;
+        }
+        match toggle {
+            Toggle::NoBreak => unsafe { (*spin).si_nobreak = 1 },
+            Toggle::NoSplitSugs => unsafe { (*spin).si_nosplitsugs = 1 },
+            Toggle::NoCompoundSugs => unsafe { (*spin).si_nocompoundsugs = 1 },
+            Toggle::NoSugFile => unsafe { (*spin).si_nosugfile = 1 },
+            Toggle::PfxPostpone => unsafe { (*aff).af_pfxpostpone = 1 },
+            Toggle::IgnoreExtra => unsafe { (*aff).af_ignoreextra = true },
+        }
+        return true;
+    }
+
+    let is_affix = unsafe { strcmp(items[0], c"PFX".as_ptr()) } == 0
+        || unsafe { strcmp(items[0], c"SFX".as_ptr()) } == 0;
+    if is_affix && st.aff_todo == 0 && items.len() >= 4 {
+        return unsafe { handle_affix_header(spin, aff, st, items, fname, lnum) };
+    }
+    if is_affix
+        && st.aff_todo > 0
+        && unsafe { strcmp(affheader_T::key(st.cur_aff), items[1]) } == 0
+        && items.len() >= 5
+    {
+        unsafe { handle_affix_entry(spin, aff, st, items, fname, lnum) };
+        return true;
+    }
+
+    for (name, table) in CASE_RULES {
+        if !unsafe { is_aff_rule(items, name, 2) } {
+            continue;
+        }
+        let slot = match table {
+            CaseTable::Fol => &mut st.fol,
+            CaseTable::Low => &mut st.low,
+            CaseTable::Upp => &mut st.upp,
+        };
+        if !slot.is_null() {
+            break;
+        }
+        *slot = unsafe { xstrdup(items[1]) };
+        return true;
+    }
+
+    // The two-item form of REP/REPSAL is the count line.
+    if unsafe { is_aff_rule(items, c"REP", 2) } || unsafe { is_aff_rule(items, c"REPSAL", 2) } {
+        if !unsafe { is_digit_byte(*items[1]) } {
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Expected REP(SAL) count in %s line %d".as_ptr()),
                     fname,
                     lnum,
-                );
+                )
+            };
+        }
+        return true;
+    }
+    let is_rep = unsafe { strcmp(items[0], c"REP".as_ptr()) } == 0
+        || unsafe { strcmp(items[0], c"REPSAL".as_ptr()) } == 0;
+    if is_rep && items.len() >= 3 {
+        unsafe { add_rep_entry(spin, st, items, fname, lnum) };
+        return true;
+    }
+
+    if unsafe { is_aff_rule(items, c"MAP", 2) } {
+        unsafe { handle_map(spin, st, items, fname, lnum) };
+        return true;
+    }
+
+    if unsafe { is_aff_rule(items, c"SAL", 3) } {
+        if st.do_sal {
+            unsafe { handle_sal(spin, items) };
+        }
+        return true;
+    }
+
+    if unsafe { is_aff_rule(items, c"SOFOFROM", 2) } && st.sofofrom.is_null() {
+        st.sofofrom = unsafe { (*spin).si_arena.save_str(items[1]) };
+        return true;
+    }
+    if unsafe { is_aff_rule(items, c"SOFOTO", 2) } && st.sofoto.is_null() {
+        st.sofoto = unsafe { (*spin).si_arena.save_str(items[1]) };
+        return true;
+    }
+
+    if unsafe { strcmp(items[0], c"COMMON".as_ptr()) } == 0 {
+        for &item in &items[1..] {
+            let hi = unsafe { hash_find(&raw mut (*spin).si_commonwords, item) };
+            if unsafe { (*hi).hi_key }.is_null()
+                || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
+            {
+                unsafe { hash_add(&raw mut (*spin).si_commonwords, xstrdup(item)) };
             }
-            return true;
         }
-        let is_rep =
-            strcmp(items[0], c"REP".as_ptr()) == 0 || strcmp(items[0], c"REPSAL".as_ptr()) == 0;
-        if is_rep && items.len() >= 3 {
-            add_rep_entry(spin, st, items, fname, lnum);
-            return true;
-        }
+        return true;
+    }
 
-        if is_aff_rule(items, c"MAP", 2) {
-            handle_map(spin, st, items, fname, lnum);
-            return true;
-        }
-
-        if is_aff_rule(items, c"SAL", 3) {
-            if st.do_sal {
-                handle_sal(spin, items);
-            }
-            return true;
-        }
-
-        if is_aff_rule(items, c"SOFOFROM", 2) && st.sofofrom.is_null() {
-            st.sofofrom = (*spin).si_arena.save_str(items[1]);
-            return true;
-        }
-        if is_aff_rule(items, c"SOFOTO", 2) && st.sofoto.is_null() {
-            st.sofoto = (*spin).si_arena.save_str(items[1]);
-            return true;
-        }
-
-        if strcmp(items[0], c"COMMON".as_ptr()) == 0 {
-            for &item in &items[1..] {
-                let hi = hash_find(&raw mut (*spin).si_commonwords, item);
-                if (*hi).hi_key.is_null()
-                    || (*hi).hi_key == (&raw const hash_removed).cast_mut().cast()
-                {
-                    hash_add(&raw mut (*spin).si_commonwords, xstrdup(item));
-                }
-            }
-            return true;
-        }
-
+    unsafe {
         smsg_c!(
             0,
             gettext(c"Unrecognized or duplicate item in %s line %d: %s".as_ptr()),
             fname,
             lnum,
             items[0],
-        );
-        true
-    }
+        )
+    };
+    true
 }
 
 /// Is this byte a digit, by the C library's classification?
@@ -708,43 +719,45 @@ unsafe fn handle_flag_type(
     lnum: c_int,
 ) {
     // SAFETY: the caller promises the items.
-    unsafe {
-        if strcmp(items[1], c"long".as_ptr()) == 0 {
-            (*aff).af_flagtype = AFT_LONG;
-        } else if strcmp(items[1], c"num".as_ptr()) == 0 {
-            (*aff).af_flagtype = AFT_NUM;
-        } else if strcmp(items[1], c"caplong".as_ptr()) == 0 {
-            (*aff).af_flagtype = AFT_CAPLONG;
-        } else {
+    if unsafe { strcmp(items[1], c"long".as_ptr()) } == 0 {
+        unsafe { (*aff).af_flagtype = AFT_LONG };
+    } else if unsafe { strcmp(items[1], c"num".as_ptr()) } == 0 {
+        unsafe { (*aff).af_flagtype = AFT_NUM };
+    } else if unsafe { strcmp(items[1], c"caplong".as_ptr()) } == 0 {
+        unsafe { (*aff).af_flagtype = AFT_CAPLONG };
+    } else {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Invalid value for FLAG in %s line %d: %s".as_ptr()),
                 fname,
                 lnum,
                 items[1],
-            );
-        }
-        // Anything already read used the old spelling, so it would be
-        // interpreted wrongly.
-        let used = (*aff).af_rare != 0
-            || (*aff).af_keepcase != 0
-            || (*aff).af_bad != 0
-            || (*aff).af_needaffix != 0
-            || (*aff).af_circumfix != 0
-            || (*aff).af_needcomp != 0
-            || (*aff).af_comproot != 0
-            || (*aff).af_nosuggest != 0
-            || (*aff).af_suff.ht_used > 0
-            || (*aff).af_pref.ht_used > 0;
-        if used {
+            )
+        };
+    }
+    // Anything already read used the old spelling, so it would be
+    // interpreted wrongly.
+    let used = unsafe { (*aff).af_rare } != 0
+        || unsafe { (*aff).af_keepcase } != 0
+        || unsafe { (*aff).af_bad } != 0
+        || unsafe { (*aff).af_needaffix } != 0
+        || unsafe { (*aff).af_circumfix } != 0
+        || unsafe { (*aff).af_needcomp } != 0
+        || unsafe { (*aff).af_comproot } != 0
+        || unsafe { (*aff).af_nosuggest } != 0
+        || unsafe { (*aff).af_suff.ht_used } > 0
+        || unsafe { (*aff).af_pref.ht_used } > 0;
+    if used {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"FLAG after using flags in %s line %d: %s".as_ptr()),
                 fname,
                 lnum,
                 items[1],
-            );
-        }
+            )
+        };
     }
 }
 
@@ -761,66 +774,70 @@ unsafe fn finish_aff(
     fname: *mut c_char,
 ) {
     // SAFETY: the caller promises the structures.
-    unsafe {
-        // The case tables are only used to decide whether the word
-        // characters need rebuilding; their contents are not kept.
-        if !st.fol.is_null() || !st.low.is_null() || !st.upp.is_null() {
-            if (*spin).si_clear_chartab != 0 {
-                init_spell_chartab();
-                (*spin).si_clear_chartab = 0;
-            }
-            xfree(st.fol.cast());
-            xfree(st.low.cast());
-            xfree(st.upp.cast());
+    // The case tables are only used to decide whether the word
+    // characters need rebuilding; their contents are not kept.
+    if !st.fol.is_null() || !st.low.is_null() || !st.upp.is_null() {
+        if unsafe { (*spin).si_clear_chartab } != 0 {
+            init_spell_chartab();
+            unsafe { (*spin).si_clear_chartab = 0 };
         }
+        unsafe { xfree(st.fol.cast()) };
+        unsafe { xfree(st.low.cast()) };
+        unsafe { xfree(st.upp.cast()) };
+    }
 
-        if st.compmax != 0 {
-            aff_check_number((*spin).si_compmax, st.compmax, c"COMPOUNDWORDMAX");
-            (*spin).si_compmax = st.compmax;
-        }
-        if st.compminlen != 0 {
-            aff_check_number((*spin).si_compminlen, st.compminlen, c"COMPOUNDMIN");
-            (*spin).si_compminlen = st.compminlen;
-        }
-        if st.compsylmax != 0 {
-            if st.syllable.is_null() {
+    if st.compmax != 0 {
+        unsafe { aff_check_number((*spin).si_compmax, st.compmax, c"COMPOUNDWORDMAX") };
+        unsafe { (*spin).si_compmax = st.compmax };
+    }
+    if st.compminlen != 0 {
+        unsafe { aff_check_number((*spin).si_compminlen, st.compminlen, c"COMPOUNDMIN") };
+        unsafe { (*spin).si_compminlen = st.compminlen };
+    }
+    if st.compsylmax != 0 {
+        if st.syllable.is_null() {
+            unsafe {
                 smsg_c!(
                     0,
                     c"%s".as_ptr(),
                     gettext(c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr()),
-                );
-            }
-            aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX");
-            (*spin).si_compsylmax = st.compsylmax;
-        }
-        if st.compoptions != 0 {
-            aff_check_number((*spin).si_compoptions, st.compoptions, c"COMPOUND options");
-            (*spin).si_compoptions |= st.compoptions;
-        }
-        if !st.compflags.is_null() {
-            process_compflags(spin, aff, st.compflags);
-        }
-
-        // Prefix ids count up and compound ids down; meeting means one kind
-        // ran out of room.
-        if (*spin).si_newcompID < (*spin).si_newprefID {
-            let complaint = if (*spin).si_newcompID == 127 || (*spin).si_newcompID == 255 {
-                c"Too many postponed prefixes"
-            } else if (*spin).si_newprefID == 0 || (*spin).si_newprefID == 127 {
-                c"Too many compound flags"
-            } else {
-                c"Too many postponed prefixes and/or compound flags"
+                )
             };
-            msg(gettext(complaint.as_ptr()), 0);
         }
+        unsafe { aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
+        unsafe { (*spin).si_compsylmax = st.compsylmax };
+    }
+    if st.compoptions != 0 {
+        unsafe { aff_check_number((*spin).si_compoptions, st.compoptions, c"COMPOUND options") };
+        unsafe { (*spin).si_compoptions |= st.compoptions };
+    }
+    if !st.compflags.is_null() {
+        unsafe { process_compflags(spin, aff, st.compflags) };
+    }
 
-        if !st.syllable.is_null() {
-            aff_check_string((*spin).si_syllable, st.syllable, c"SYLLABLE");
-            (*spin).si_syllable = st.syllable;
-        }
+    // Prefix ids count up and compound ids down; meeting means one kind
+    // ran out of room.
+    if unsafe { (*spin).si_newcompID } < unsafe { (*spin).si_newprefID } {
+        let complaint = if unsafe { (*spin).si_newcompID } == 127
+            || unsafe { (*spin).si_newcompID } == 255
+        {
+            c"Too many postponed prefixes"
+        } else if unsafe { (*spin).si_newprefID } == 0 || unsafe { (*spin).si_newprefID } == 127 {
+            c"Too many compound flags"
+        } else {
+            c"Too many postponed prefixes and/or compound flags"
+        };
+        unsafe { msg(gettext(complaint.as_ptr()), 0) };
+    }
 
-        if !st.sofofrom.is_null() || !st.sofoto.is_null() {
-            if st.sofofrom.is_null() || st.sofoto.is_null() {
+    if !st.syllable.is_null() {
+        unsafe { aff_check_string((*spin).si_syllable, st.syllable, c"SYLLABLE") };
+        unsafe { (*spin).si_syllable = st.syllable };
+    }
+
+    if !st.sofofrom.is_null() || !st.sofoto.is_null() {
+        if st.sofofrom.is_null() || st.sofoto.is_null() {
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Missing SOFO%s line in %s".as_ptr()),
@@ -830,23 +847,23 @@ unsafe fn finish_aff(
                         c"TO".as_ptr()
                     },
                     fname,
-                );
-            } else if (*spin).si_sal.ga_len > 0 {
-                // SAL rules and a SOFO pair are two ways to do the same
-                // thing; taking both would be ambiguous.
-                smsg_c!(0, gettext(c"Both SAL and SOFO lines in %s".as_ptr()), fname);
-            } else {
-                aff_check_string((*spin).si_sofofr, st.sofofrom, c"SOFOFROM");
-                aff_check_string((*spin).si_sofoto, st.sofoto, c"SOFOTO");
-                (*spin).si_sofofr = st.sofofrom;
-                (*spin).si_sofoto = st.sofoto;
-            }
+                )
+            };
+        } else if unsafe { (*spin).si_sal.ga_len } > 0 {
+            // SAL rules and a SOFO pair are two ways to do the same
+            // thing; taking both would be ambiguous.
+            unsafe { smsg_c!(0, gettext(c"Both SAL and SOFO lines in %s".as_ptr()), fname) };
+        } else {
+            unsafe { aff_check_string((*spin).si_sofofr, st.sofofrom, c"SOFOFROM") };
+            unsafe { aff_check_string((*spin).si_sofoto, st.sofoto, c"SOFOTO") };
+            unsafe { (*spin).si_sofofr = st.sofofrom };
+            unsafe { (*spin).si_sofoto = st.sofoto };
         }
+    }
 
-        if !st.midword.is_null() {
-            aff_check_string((*spin).si_midword, st.midword, c"MIDWORD");
-            (*spin).si_midword = st.midword;
-        }
+    if !st.midword.is_null() {
+        unsafe { aff_check_string((*spin).si_midword, st.midword, c"MIDWORD") };
+        unsafe { (*spin).si_midword = st.midword };
     }
 }
 
@@ -859,8 +876,8 @@ unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
                 0,
                 gettext(c"%s value differs from what is used in another .aff file".as_ptr()),
                 name.as_ptr(),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -871,14 +888,14 @@ unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
 /// Both values must be null or NUL-terminated.
 unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CStr) {
     // SAFETY: the caller promises the strings.
-    unsafe {
-        if !spinval.is_null() && strcmp(spinval, affval) != 0 {
+    if !spinval.is_null() && unsafe { strcmp(spinval, affval) } != 0 {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"%s value differs from what is used in another .aff file".as_ptr()),
                 name.as_ptr(),
-            );
-        }
+            )
+        };
     }
 }
 
@@ -889,10 +906,8 @@ unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CSt
 /// Non-null arguments must be NUL-terminated.
 pub(super) unsafe fn str_equal(s1: *mut c_char, s2: *mut c_char) -> bool {
     // SAFETY: the caller promises the strings.
-    unsafe {
-        if s1.is_null() || s2.is_null() {
-            return s1 == s2;
-        }
-        strcmp(s1, s2) == 0
+    if s1.is_null() || s2.is_null() {
+        return s1 == s2;
     }
+    unsafe { strcmp(s1, s2) == 0 }
 }

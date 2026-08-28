@@ -114,10 +114,8 @@ impl Walk {
         // SAFETY: the rewrite only moves the two characters just measured,
         // so it stays within the bytes they already occupy in the bad
         // word.
-        unsafe {
-            ptr::copy(p.offset(first_len as isize), p, second_len as usize);
-            utf_char2bytes(first, p.offset(second_len as isize));
-        }
+        unsafe { ptr::copy(p.offset(first_len as isize), p, second_len as usize) };
+        unsafe { utf_char2bytes(first, p.offset(second_len as isize)) };
         self.stack[self.depth as usize].change_from =
             (self.stack[level].bad_idx as c_int + first_len + second_len) as u8;
     }
@@ -133,17 +131,17 @@ impl Walk {
         // SAFETY: the two characters are the ones `swap` wrote, so their
         // lengths are readable from the bad word itself and the rewrite
         // stays within the bytes they occupy.
+        let p = unsafe { self.fword_ptr(self.stack[level].bad_idx as usize) };
+        let first_len = unsafe { utfc_ptr2len(p) };
+        let second = unsafe { utf_ptr2char(p.offset(first_len as isize)) };
         unsafe {
-            let p = self.fword_ptr(self.stack[level].bad_idx as usize);
-            let first_len = utfc_ptr2len(p);
-            let second = utf_ptr2char(p.offset(first_len as isize));
             ptr::copy(
                 p,
                 p.offset(utfc_ptr2len(p.offset(first_len as isize)) as isize),
                 first_len as usize,
-            );
-            utf_char2bytes(second, p);
-        }
+            )
+        };
+        unsafe { utf_char2bytes(second, p) };
 
         // `swap3` names its own successor on every path, so there is
         // nothing to set here.
@@ -199,11 +197,9 @@ impl Walk {
         let third_len = utf_char2len(third);
         // SAFETY: the rewrite only moves the three characters just
         // measured, so it stays within the bytes they already occupy.
-        unsafe {
-            ptr::copy(third_at, p, third_len as usize);
-            utf_char2bytes(middle, p.offset(third_len as isize));
-            utf_char2bytes(first, p.offset((middle_len + third_len) as isize));
-        }
+        unsafe { ptr::copy(third_at, p, third_len as usize) };
+        unsafe { utf_char2bytes(middle, p.offset(third_len as isize)) };
+        unsafe { utf_char2bytes(first, p.offset((middle_len + third_len) as isize)) };
         self.stack[self.depth as usize].change_from =
             (self.stack[level].bad_idx as c_int + first_len + middle_len + third_len) as u8;
     }
@@ -264,10 +260,8 @@ impl Walk {
         let first = unsafe { utf_ptr2char(p) };
         let mut rest_len = unsafe { utf_ptr2len(p.offset(first_len as isize)) };
         rest_len += unsafe { utf_ptr2len(p.offset((first_len + rest_len) as isize)) };
-        unsafe {
-            ptr::copy(p.offset(first_len as isize), p, rest_len as usize);
-            utf_char2bytes(first, p.offset(rest_len as isize));
-        }
+        unsafe { ptr::copy(p.offset(first_len as isize), p, rest_len as usize) };
+        unsafe { utf_char2bytes(first, p.offset(rest_len as isize)) };
         self.stack[self.depth as usize].change_from =
             (self.stack[level].bad_idx as c_int + first_len + rest_len) as u8;
     }
@@ -290,10 +284,8 @@ impl Walk {
         moved_len += unsafe { utfc_ptr2len(p.offset(moved_len as isize)) };
         let last = unsafe { utf_ptr2char(p.offset(moved_len as isize)) };
         let last_len = unsafe { utfc_ptr2len(p.offset(moved_len as isize)) };
-        unsafe {
-            ptr::copy(p, p.offset(last_len as isize), moved_len as usize);
-            utf_char2bytes(last, p);
-        }
+        unsafe { ptr::copy(p, p.offset(last_len as isize), moved_len as usize) };
+        unsafe { utf_char2bytes(last, p) };
 
         // SAFETY: `su` is the caller's suggestion state.
         if !unsafe { self.try_deeper(SCORE_SWAP3) } {
@@ -314,10 +306,8 @@ impl Walk {
         moved_len += unsafe { utf_ptr2len(p.offset(moved_len as isize)) };
         let last = unsafe { utf_ptr2char(p.offset(moved_len as isize)) };
         let last_len = unsafe { utf_ptr2len(p.offset(moved_len as isize)) };
-        unsafe {
-            ptr::copy(p, p.offset(last_len as isize), moved_len as usize);
-            utf_char2bytes(last, p);
-        }
+        unsafe { ptr::copy(p, p.offset(last_len as isize), moved_len as usize) };
+        unsafe { utf_char2bytes(last, p) };
         self.stack[self.depth as usize].change_from =
             (self.stack[level].bad_idx as c_int + moved_len + last_len) as u8;
     }
@@ -340,10 +330,8 @@ impl Walk {
         let first_len = unsafe { utfc_ptr2len(p) };
         let mut rest_len = unsafe { utfc_ptr2len(p.offset(first_len as isize)) };
         rest_len += unsafe { utfc_ptr2len(p.offset((first_len + rest_len) as isize)) };
-        unsafe {
-            ptr::copy(p.offset(first_len as isize), p, rest_len as usize);
-            utf_char2bytes(first, p.offset(rest_len as isize));
-        }
+        unsafe { ptr::copy(p.offset(first_len as isize), p, rest_len as usize) };
+        unsafe { utf_char2bytes(first, p.offset(rest_len as isize)) };
 
         // `rep_ini` names its own successor on every path.
         //

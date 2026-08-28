@@ -130,12 +130,10 @@ impl SpellArena {
     pub unsafe fn save_str(&mut self, s: *const c_char) -> *mut c_char {
         // SAFETY: the caller promises a terminated string, and the arena
         // just handed out `size` writable bytes.
-        unsafe {
-            let size = strlen(s) + 1;
-            let p = self.alloc_bytes(size, false);
-            ptr::copy_nonoverlapping(s, p, size);
-            p
-        }
+        let size = unsafe { strlen(s) } + 1;
+        let p = self.alloc_bytes(size, false);
+        unsafe { ptr::copy_nonoverlapping(s, p, size) };
+        p
     }
 
     /// Release every block. All pointers handed out become dangling.
@@ -254,21 +252,19 @@ pub(super) fn wordtree_alloc(spin: &mut spellinfo_T) -> *mut wordnode_T {
 /// `word` and `end` must delimit one readable range.
 pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -> bool {
     // SAFETY: the caller promises the range; the walk stops at `end`.
-    unsafe {
-        if !utf_valid_string(word, end) {
+    if !unsafe { utf_valid_string(word, end) } {
+        return false;
+    }
+    let mut p = word;
+    while unsafe { *p } as c_int != NUL && p < end {
+        if (unsafe { *p } as uint8_t as c_int) < b' ' as c_int
+            || (unsafe { *p } as c_int == b'/' as c_int && unsafe { *p.add(1) } as c_int == NUL)
+        {
             return false;
         }
-        let mut p = word;
-        while *p as c_int != NUL && p < end {
-            if (*p as uint8_t as c_int) < b' ' as c_int
-                || (*p as c_int == b'/' as c_int && *p.add(1) as c_int == NUL)
-            {
-                return false;
-            }
-            p = p.add(utfc_ptr2len(p) as usize);
-        }
-        true
+        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
+    true
 }
 
 /// File one word in the case-folded tree, and in the keep-case tree when
@@ -292,26 +288,28 @@ pub(super) unsafe fn store_word(
 ) -> c_int {
     // SAFETY: the caller promises terminated strings; `foldword` is a
     // MAXWLEN buffer, which is the bound spell_casefold is given.
+    let len = unsafe { strlen(word) } as c_int;
+    let ct = unsafe { captype(word, word.offset(len as isize)) };
+    let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut res = OK;
+
+    if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
+        return FAIL;
+    }
+
     unsafe {
-        let len = strlen(word) as c_int;
-        let ct = captype(word, word.offset(len as isize));
-        let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let mut res = OK;
-
-        if !valid_spell_word(word, word.offset(len as isize)) {
-            return FAIL;
-        }
-
         spell_casefold(
             curwin.get(),
             word,
             len,
             foldword.as_mut_ptr(),
             MAXWLEN as c_int,
-        );
+        )
+    };
 
-        let root = spin.si_foldroot;
-        res = add_per_affix(
+    let root = spin.si_foldroot;
+    res = unsafe {
+        add_per_affix(
             spin,
             foldword.as_ptr(),
             root,
@@ -319,16 +317,16 @@ pub(super) unsafe fn store_word(
             region,
             pfxlist,
             need_affix,
-        );
-        spin.si_foldwcount += 1;
+        )
+    };
+    spin.si_foldwcount += 1;
 
-        if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
-            let root = spin.si_keeproot;
-            res = add_per_affix(spin, word, root, flags, region, pfxlist, need_affix);
-            spin.si_keepwcount += 1;
-        }
-        res
+    if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
+        let root = spin.si_keeproot;
+        res = unsafe { add_per_affix(spin, word, root, flags, region, pfxlist, need_affix) };
+        spin.si_keepwcount += 1;
     }
+    res
 }
 
 /// Add `word` to `root` once per affix id in `pfxlist`, stopping at the
@@ -352,21 +350,23 @@ unsafe fn add_per_affix(
 ) -> c_int {
     // SAFETY: the caller promises the strings and the root; the walk stops
     // at `pfxlist`'s NUL.
-    unsafe {
-        let mut res = OK;
-        let mut p = pfxlist;
-        while res == OK {
-            let affix_id = if p.is_null() { 0 } else { *p as c_int };
-            if !need_affix || affix_id != NUL {
-                res = tree_add_word(spin, word, root, flags, region, affix_id);
-            }
-            if p.is_null() || *p as c_int == NUL {
-                break;
-            }
-            p = p.add(1);
+    let mut res = OK;
+    let mut p = pfxlist;
+    while res == OK {
+        let affix_id = if p.is_null() {
+            0
+        } else {
+            unsafe { *p as c_int }
+        };
+        if !need_affix || affix_id != NUL {
+            res = unsafe { tree_add_word(spin, word, root, flags, region, affix_id) };
         }
-        res
+        if p.is_null() || unsafe { *p } as c_int == NUL {
+            break;
+        }
+        p = unsafe { p.add(1) };
     }
+    res
 }
 
 /// Add one word to `root`, and compress the trees when the arena has grown
@@ -388,112 +388,111 @@ pub(super) unsafe fn tree_add_word(
 ) -> c_int {
     // SAFETY: nodes come from the arena and outlive the call; the walk
     // follows `word` only up to its NUL.
-    unsafe {
-        let mut node = root;
-        // Where to write back a replaced node: the parent's child or
-        // sibling slot, or null at the root.
-        let mut prev: *mut *mut wordnode_T = ptr::null_mut();
-        let mut i: isize = 0;
+    let mut node = root;
+    // Where to write back a replaced node: the parent's child or
+    // sibling slot, or null at the root.
+    let mut prev: *mut *mut wordnode_T = ptr::null_mut();
+    let mut i: isize = 0;
 
-        loop {
-            // A shared chain has to be copied before it can be changed.
-            if !node.is_null() && (*node).wn_refs > 1 {
-                (*node).wn_refs -= 1;
-                let mut copyprev = prev;
-                let mut copyp = node;
-                while !copyp.is_null() {
-                    let np = get_wordnode(spin);
-                    if np.is_null() {
-                        return FAIL;
-                    }
-                    (*np).wn_child = (*copyp).wn_child;
-                    if !(*np).wn_child.is_null() {
-                        (*(*np).wn_child).wn_refs += 1;
-                    }
-                    (*np).wn_byte = (*copyp).wn_byte;
-                    if (*np).wn_byte as c_int == NUL {
-                        (*np).wn_flags = (*copyp).wn_flags;
-                        (*np).wn_region = (*copyp).wn_region;
-                        (*np).wn_affixID = (*copyp).wn_affixID;
-                    }
-                    (*np).wn_refs = 1;
-                    if !copyprev.is_null() {
-                        *copyprev = np;
-                    }
-                    copyprev = &raw mut (*np).wn_sibling;
-                    if copyp == node {
-                        node = np;
-                    }
-                    copyp = (*copyp).wn_sibling;
+    loop {
+        // A shared chain has to be copied before it can be changed.
+        if !node.is_null() && unsafe { (*node).wn_refs } > 1 {
+            unsafe { (*node).wn_refs -= 1 };
+            let mut copyprev = prev;
+            let mut copyp = node;
+            while !copyp.is_null() {
+                let np = get_wordnode(spin);
+                if np.is_null() {
+                    return FAIL;
                 }
-            }
-
-            // Skip siblings that sort before what is being added.
-            while !node.is_null()
-                && sorts_before(spin, node, *word.offset(i), flags, region, affixID)
-            {
-                prev = &raw mut (*node).wn_sibling;
-                node = *prev;
-            }
-
-            // Insert a node when there is no matching one here. Word ends
-            // never merge in the prefix or sound-fold trees, and only merge
-            // elsewhere when the flags and affix id match too.
-            let need_new = node.is_null()
-                || (*node).wn_byte as c_int != *word.offset(i) as uint8_t as c_int
-                || (*word.offset(i) as c_int == NUL
-                    && (flags < 0
-                        || spin.si_sugtree != 0
-                        || (*node).wn_flags as c_int != flags & WN_MASK
-                        || (*node).wn_affixID as c_int != affixID));
-            if need_new && !insert_before(spin, &mut node, prev, *word.offset(i)) {
-                return FAIL;
-            }
-
-            if *word.offset(i) as c_int == NUL {
-                (*node).wn_flags = flags as uint16_t;
-                (*node).wn_region |= region as int16_t;
-                (*node).wn_affixID = affixID as uint8_t;
-                break;
-            }
-            prev = &raw mut (*node).wn_child;
-            node = *prev;
-            i += 1;
-        }
-
-        spin.si_msg_count += 1;
-
-        // Count down to the next compression run, then arm the "arena has
-        // grown again" test by adding the increment back.
-        if spin.si_compress_cnt > 1 {
-            spin.si_compress_cnt -= 1;
-            if spin.si_compress_cnt == 1 {
-                spin.si_arena.block_count += compress_inc.get();
+                unsafe { (*np).wn_child = (*copyp).wn_child };
+                if !unsafe { (*np).wn_child }.is_null() {
+                    unsafe { (*(*np).wn_child).wn_refs += 1 };
+                }
+                unsafe { (*np).wn_byte = (*copyp).wn_byte };
+                if unsafe { (*np).wn_byte } as c_int == NUL {
+                    unsafe { (*np).wn_flags = (*copyp).wn_flags };
+                    unsafe { (*np).wn_region = (*copyp).wn_region };
+                    unsafe { (*np).wn_affixID = (*copyp).wn_affixID };
+                }
+                unsafe { (*np).wn_refs = 1 };
+                if !copyprev.is_null() {
+                    unsafe { *copyprev = np };
+                }
+                copyprev = unsafe { &raw mut (*np).wn_sibling };
+                if copyp == node {
+                    node = np;
+                }
+                copyp = unsafe { (*copyp).wn_sibling };
             }
         }
-        let due = if spin.si_compress_cnt == 1 {
-            spin.si_free_count < MAXWLEN as c_int
-        } else {
-            spin.si_arena.block_count >= compress_start.get()
-        };
-        if due {
-            spin.si_arena.block_count -= compress_inc.get();
-            spin.si_compress_cnt = compress_added.get();
-            if spin.si_verbose != 0 {
-                msg_start();
-                msg_puts(gettext(MSG_COMPRESSING.as_ptr()));
-                msg_clr_eos();
-                msg_didout.set(false);
-                msg_col.set(0);
-                ui_flush();
-            }
-            wordtree_compress(spin, spin.si_foldroot, c"case-folded");
-            if affixID >= 0 {
-                wordtree_compress(spin, spin.si_keeproot, c"keep-case");
-            }
+
+        // Skip siblings that sort before what is being added.
+        while !node.is_null()
+            && unsafe { sorts_before(spin, node, *word.offset(i), flags, region, affixID) }
+        {
+            prev = unsafe { &raw mut (*node).wn_sibling };
+            node = unsafe { *prev };
         }
-        OK
+
+        // Insert a node when there is no matching one here. Word ends
+        // never merge in the prefix or sound-fold trees, and only merge
+        // elsewhere when the flags and affix id match too.
+        let need_new = node.is_null()
+            || unsafe { (*node).wn_byte } as c_int
+                != unsafe { *word.offset(i) } as uint8_t as c_int
+            || (unsafe { *word.offset(i) } as c_int == NUL
+                && (flags < 0
+                    || spin.si_sugtree != 0
+                    || unsafe { (*node).wn_flags } as c_int != flags & WN_MASK
+                    || unsafe { (*node).wn_affixID } as c_int != affixID));
+        if need_new && !unsafe { insert_before(spin, &mut node, prev, *word.offset(i)) } {
+            return FAIL;
+        }
+
+        if unsafe { *word.offset(i) } as c_int == NUL {
+            unsafe { (*node).wn_flags = flags as uint16_t };
+            unsafe { (*node).wn_region |= region as int16_t };
+            unsafe { (*node).wn_affixID = affixID as uint8_t };
+            break;
+        }
+        prev = unsafe { &raw mut (*node).wn_child };
+        node = unsafe { *prev };
+        i += 1;
     }
+
+    spin.si_msg_count += 1;
+
+    // Count down to the next compression run, then arm the "arena has
+    // grown again" test by adding the increment back.
+    if spin.si_compress_cnt > 1 {
+        spin.si_compress_cnt -= 1;
+        if spin.si_compress_cnt == 1 {
+            spin.si_arena.block_count += compress_inc.get();
+        }
+    }
+    let due = if spin.si_compress_cnt == 1 {
+        spin.si_free_count < MAXWLEN as c_int
+    } else {
+        spin.si_arena.block_count >= compress_start.get()
+    };
+    if due {
+        spin.si_arena.block_count -= compress_inc.get();
+        spin.si_compress_cnt = compress_added.get();
+        if spin.si_verbose != 0 {
+            unsafe { msg_start() };
+            unsafe { msg_puts(gettext(MSG_COMPRESSING.as_ptr())) };
+            unsafe { msg_clr_eos() };
+            msg_didout.set(false);
+            msg_col.set(0);
+            unsafe { ui_flush() };
+        }
+        unsafe { wordtree_compress(spin, spin.si_foldroot, c"case-folded") };
+        if affixID >= 0 {
+            unsafe { wordtree_compress(spin, spin.si_keeproot, c"keep-case") };
+        }
+    }
+    OK
 }
 
 /// Does `node` sort before the entry being added?
@@ -511,29 +510,27 @@ unsafe fn sorts_before(
     affixID: c_int,
 ) -> bool {
     // SAFETY: the caller promises a live node.
-    unsafe {
-        if ((*node).wn_byte as c_int) < byte as uint8_t as c_int {
-            return true;
-        }
-        if (*node).wn_byte as c_int != NUL {
-            return false;
-        }
-        // Word ends sort among themselves: by affix id in the prefix tree,
-        // otherwise by flags and then by region or affix id.
-        if flags < 0 {
-            return ((*node).wn_affixID as c_uint) < affixID as c_uint;
-        }
-        if ((*node).wn_flags as c_uint) < (flags & WN_MASK) as c_uint {
-            return true;
-        }
-        if (*node).wn_flags as c_int != flags & WN_MASK {
-            return false;
-        }
-        if spin.si_sugtree != 0 {
-            ((*node).wn_region as c_int & 0xffff) < region
-        } else {
-            ((*node).wn_affixID as c_uint) < affixID as c_uint
-        }
+    if (unsafe { (*node).wn_byte } as c_int) < byte as uint8_t as c_int {
+        return true;
+    }
+    if unsafe { (*node).wn_byte } as c_int != NUL {
+        return false;
+    }
+    // Word ends sort among themselves: by affix id in the prefix tree,
+    // otherwise by flags and then by region or affix id.
+    if flags < 0 {
+        return (unsafe { (*node).wn_affixID } as c_uint) < affixID as c_uint;
+    }
+    if (unsafe { (*node).wn_flags } as c_uint) < (flags & WN_MASK) as c_uint {
+        return true;
+    }
+    if unsafe { (*node).wn_flags } as c_int != flags & WN_MASK {
+        return false;
+    }
+    if spin.si_sugtree != 0 {
+        (unsafe { (*node).wn_region } as c_int & 0xffff) < region
+    } else {
+        (unsafe { (*node).wn_affixID } as c_uint) < affixID as c_uint
     }
 }
 
@@ -556,21 +553,19 @@ unsafe fn insert_before(
     }
     // SAFETY: `np` is a fresh arena node, `*node` a live one or null, and
     // `prev` the slot that holds it.
-    unsafe {
-        (*np).wn_byte = byte as uint8_t;
-        // The new node inherits the chain's reference count; the old head
-        // is now reached only through it.
-        if node.is_null() {
-            (*np).wn_refs = 1;
-        } else {
-            (*np).wn_refs = (**node).wn_refs;
-            (**node).wn_refs = 1;
-        }
-        if !prev.is_null() {
-            *prev = np;
-        }
-        (*np).wn_sibling = *node;
+    unsafe { (*np).wn_byte = byte as uint8_t };
+    // The new node inherits the chain's reference count; the old head
+    // is now reached only through it.
+    if node.is_null() {
+        unsafe { (*np).wn_refs = 1 };
+    } else {
+        unsafe { (*np).wn_refs = (**node).wn_refs };
+        unsafe { (**node).wn_refs = 1 };
     }
+    if !prev.is_null() {
+        unsafe { *prev = np };
+    }
+    unsafe { (*np).wn_sibling = *node };
     *node = np;
     true
 }
@@ -582,10 +577,8 @@ fn get_wordnode(spin: &mut spellinfo_T) -> *mut wordnode_T {
         return spin.si_arena.alloc::<wordnode_T>();
     }
     // SAFETY: the free list only holds nodes this module released.
-    unsafe {
-        spin.si_first_free = (*n).wn_child;
-        *n = mem::zeroed();
-    }
+    spin.si_first_free = unsafe { (*n).wn_child };
+    unsafe { *n = mem::zeroed() };
     spin.si_free_count -= 1;
     n
 }
@@ -601,23 +594,21 @@ fn get_wordnode(spin: &mut spellinfo_T) -> *mut wordnode_T {
 unsafe fn deref_wordnode(spin: &mut spellinfo_T, node: *mut wordnode_T) -> c_int {
     // SAFETY: the caller promises a live node; the walk stays inside the
     // tree it roots.
-    unsafe {
-        let mut cnt = 0;
-        (*node).wn_refs -= 1;
-        if (*node).wn_refs == 0 {
-            let mut np = node;
-            while !np.is_null() {
-                if !(*np).wn_child.is_null() {
-                    cnt += deref_wordnode(spin, (*np).wn_child);
-                }
-                free_wordnode(spin, np);
-                cnt += 1;
-                np = (*np).wn_sibling;
+    let mut cnt = 0;
+    unsafe { (*node).wn_refs -= 1 };
+    if unsafe { (*node).wn_refs } == 0 {
+        let mut np = node;
+        while !np.is_null() {
+            if !unsafe { (*np).wn_child }.is_null() {
+                cnt += unsafe { deref_wordnode(spin, (*np).wn_child) };
             }
+            unsafe { free_wordnode(spin, np) };
             cnt += 1;
+            np = unsafe { (*np).wn_sibling };
         }
-        cnt
+        cnt += 1;
     }
+    cnt
 }
 
 /// Put one node on the free list, chained through its child slot.
@@ -627,9 +618,7 @@ unsafe fn deref_wordnode(spin: &mut spellinfo_T, node: *mut wordnode_T) -> c_int
 /// `n` must be a node no longer reachable from any tree.
 unsafe fn free_wordnode(spin: &mut spellinfo_T, n: *mut wordnode_T) {
     // SAFETY: the caller promises the node is unreachable.
-    unsafe {
-        (*n).wn_child = spin.si_first_free;
-    }
+    unsafe { (*n).wn_child = spin.si_first_free };
     spin.si_first_free = n;
     spin.si_free_count += 1;
 }
@@ -645,28 +634,26 @@ pub(super) unsafe fn wordtree_compress(
     name: &core::ffi::CStr,
 ) {
     // SAFETY: the caller promises a live root.
-    unsafe {
-        // The root's own chain is what holds the tree; an empty one has
-        // nothing to share.
-        if (*root).wn_sibling.is_null() {
-            return;
-        }
-
-        let mut ht: hashtab_T = mem::zeroed();
-        hash_init(&raw mut ht);
-        let mut tot: c_int = 0;
-        let n = node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot);
-
-        if spin.si_verbose != 0 || p_verbose.get() > 2 {
-            let perc = remaining_percentage(n, tot);
-            let (name, left) = (name.to_string_lossy(), tot - n);
-            spell_message_fmt(
-                spin,
-                format_args!("Compressed {name}: {n} of {tot} nodes; {left} ({perc}%) remaining"),
-            );
-        }
-        hash_clear(&raw mut ht);
+    // The root's own chain is what holds the tree; an empty one has
+    // nothing to share.
+    if unsafe { (*root).wn_sibling }.is_null() {
+        return;
     }
+
+    let mut ht: hashtab_T = unsafe { mem::zeroed() };
+    unsafe { hash_init(&raw mut ht) };
+    let mut tot: c_int = 0;
+    let n = unsafe { node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot) };
+
+    if spin.si_verbose != 0 || p_verbose.get() > 2 {
+        let perc = remaining_percentage(n, tot);
+        let (name, left) = (name.to_string_lossy(), tot - n);
+        spell_message_fmt(
+            spin,
+            format_args!("Compressed {name}: {n} of {tot} nodes; {left} ({perc}%) remaining"),
+        );
+    }
+    unsafe { hash_clear(&raw mut ht) };
 }
 
 /// What share of `total` nodes survived compression, as a percentage, given
@@ -701,60 +688,58 @@ unsafe fn node_compress(
 ) -> c_int {
     // SAFETY: the caller promises a live chain and a live table; every key
     // in the table was entered below as a node address.
-    unsafe {
-        let mut compressed = 0;
-        let mut len = 0;
+    let mut compressed = 0;
+    let mut len = 0;
 
-        for np in siblings(node) {
-            if got_int.get() {
-                break;
+    for np in unsafe { siblings(node) } {
+        if got_int.get() {
+            break;
+        }
+        len += 1;
+        let child = unsafe { (*np).wn_child };
+        if !child.is_null() {
+            // Depth first: the child's digest is only meaningful once
+            // everything below it has been compressed.
+            compressed += unsafe { node_compress(spin, child, ht, tot) };
+
+            // The key is the node's own digest field, so the table
+            // borrows storage the node already owns and every entry
+            // names a node.
+            let key = digest_key(child);
+            let hash = unsafe { hash_hash(key) };
+            let hi = unsafe { hash_lookup(ht, key, strlen(key), hash) };
+            if unsafe { (*hi).hi_key }.is_null()
+                || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
+            {
+                unsafe { hash_add_item(ht, hi, key, hash) };
+                continue;
             }
-            len += 1;
-            let child = (*np).wn_child;
-            if !child.is_null() {
-                // Depth first: the child's digest is only meaningful once
-                // everything below it has been compressed.
-                compressed += node_compress(spin, child, ht, tot);
 
-                // The key is the node's own digest field, so the table
-                // borrows storage the node already owns and every entry
-                // names a node.
-                let key = digest_key(child);
-                let hash = hash_hash(key);
-                let hi = hash_lookup(ht, key, strlen(key), hash);
-                if (*hi).hi_key.is_null()
-                    || (*hi).hi_key == (&raw const hash_removed).cast_mut().cast()
-                {
-                    hash_add_item(ht, hi, key, hash);
-                    continue;
+            // Same digest: walk the chain of nodes sharing it looking
+            // for a genuinely equal sub-tree to point at instead.
+            let mut tp = unsafe { node_of_digest_key((*hi).hi_key) };
+            while !tp.is_null() {
+                if unsafe { node_equal(child, tp) } {
+                    unsafe { (*tp).wn_refs += 1 };
+                    compressed += unsafe { deref_wordnode(spin, child) };
+                    unsafe { (*np).wn_child = tp };
+                    break;
                 }
-
-                // Same digest: walk the chain of nodes sharing it looking
-                // for a genuinely equal sub-tree to point at instead.
-                let mut tp = node_of_digest_key((*hi).hi_key);
-                while !tp.is_null() {
-                    if node_equal(child, tp) {
-                        (*tp).wn_refs += 1;
-                        compressed += deref_wordnode(spin, child);
-                        (*np).wn_child = tp;
-                        break;
-                    }
-                    tp = (*tp).wn_link;
-                }
-                if tp.is_null() {
-                    // No match; join the chain for the next comer.
-                    let head = node_of_digest_key((*hi).hi_key);
-                    (*child).wn_link = (*head).wn_link;
-                    (*head).wn_link = child;
-                }
+                tp = unsafe { (*tp).wn_link };
+            }
+            if tp.is_null() {
+                // No match; join the chain for the next comer.
+                let head = unsafe { node_of_digest_key((*hi).hi_key) };
+                unsafe { (*child).wn_link = (*head).wn_link };
+                unsafe { (*head).wn_link = child };
             }
         }
-        *tot += len + 1;
-        write_digest(node, len);
-
-        veryfast_breakcheck();
-        compressed
     }
+    *tot += len + 1;
+    unsafe { write_digest(node, len) };
+
+    veryfast_breakcheck();
+    compressed
 }
 
 /// Digest `node`'s whole sibling chain into [`wordnode_S::wn_digest`]: the
@@ -772,29 +757,29 @@ unsafe fn node_compress(
 unsafe fn write_digest(node: *mut wordnode_T, len: c_int) {
     // SAFETY: the caller promises a live chain, and `siblings` walks it to
     // its null terminator without changing it.
-    unsafe {
-        let mut nr: c_uint = 0;
-        for np in siblings(node) {
-            let n: c_uint = if (*np).wn_byte as c_int == NUL {
-                ((*np).wn_flags as c_int
-                    + (((*np).wn_region as c_int) << 8)
-                    + (((*np).wn_affixID as c_int) << 16)) as c_uint
-            } else {
-                ((*np).wn_byte as usize)
-                    .wrapping_add((*np).wn_child.expose_provenance().wrapping_shl(8))
-                    as c_uint
-            };
-            nr = nr.wrapping_mul(101).wrapping_add(n);
-        }
-
-        let digest = &mut (*node).wn_digest;
-        digest[0] = len as uint8_t;
-        for (i, shift) in [0, 8, 16, 24].into_iter().enumerate() {
-            let b = (nr >> shift & 0xff) as uint8_t;
-            digest[i + 1] = if b == 0 { 1 } else { b };
-        }
-        digest[5] = NUL as uint8_t;
+    let mut nr: c_uint = 0;
+    for np in unsafe { siblings(node) } {
+        let n: c_uint = if unsafe { (*np).wn_byte } as c_int == NUL {
+            (unsafe { (*np).wn_flags } as c_int
+                + ((unsafe { (*np).wn_region } as c_int) << 8)
+                + ((unsafe { (*np).wn_affixID } as c_int) << 16)) as c_uint
+        } else {
+            (unsafe { (*np).wn_byte } as usize).wrapping_add(
+                unsafe { (*np).wn_child }
+                    .expose_provenance()
+                    .wrapping_shl(8),
+            ) as c_uint
+        };
+        nr = nr.wrapping_mul(101).wrapping_add(n);
     }
+
+    let digest = unsafe { &mut (*node).wn_digest };
+    digest[0] = len as uint8_t;
+    for (i, shift) in [0, 8, 16, 24].into_iter().enumerate() {
+        let b = (nr >> shift & 0xff) as uint8_t;
+        digest[i + 1] = if b == 0 { 1 } else { b };
+    }
+    digest[5] = NUL as uint8_t;
 }
 
 /// The nodes of a sibling chain, `node` first.
@@ -828,28 +813,28 @@ unsafe fn siblings(node: *mut wordnode_T) -> impl Iterator<Item = *mut wordnode_
 /// Both arguments must head live sibling chains.
 unsafe fn node_equal(n1: *mut wordnode_T, n2: *mut wordnode_T) -> bool {
     // SAFETY: the caller promises live chains.
-    unsafe {
-        let mut p1 = n1;
-        let mut p2 = n2;
-        while !p1.is_null() && !p2.is_null() {
-            if (*p1).wn_byte != (*p2).wn_byte {
-                break;
-            }
-            let differs = if (*p1).wn_byte as c_int == NUL {
+    let mut p1 = n1;
+    let mut p2 = n2;
+    while !p1.is_null() && !p2.is_null() {
+        if unsafe { (*p1).wn_byte } != unsafe { (*p2).wn_byte } {
+            break;
+        }
+        let differs = if unsafe { (*p1).wn_byte } as c_int == NUL {
+            unsafe {
                 (*p1).wn_flags != (*p2).wn_flags
                     || (*p1).wn_region != (*p2).wn_region
                     || (*p1).wn_affixID != (*p2).wn_affixID
-            } else {
-                (*p1).wn_child != (*p2).wn_child
-            };
-            if differs {
-                break;
             }
-            p1 = (*p1).wn_sibling;
-            p2 = (*p2).wn_sibling;
+        } else {
+            unsafe { (*p1).wn_child != (*p2).wn_child }
+        };
+        if differs {
+            break;
         }
-        p1.is_null() && p2.is_null()
+        p1 = unsafe { (*p1).wn_sibling };
+        p2 = unsafe { (*p2).wn_sibling };
     }
+    p1.is_null() && p2.is_null()
 }
 
 #[cfg(test)]

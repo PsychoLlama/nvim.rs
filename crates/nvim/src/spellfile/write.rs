@@ -95,11 +95,9 @@ impl SplWriter {
     /// `p` must point at a NUL-terminated string.
     unsafe fn payload_str(&mut self, p: *const c_char) -> usize {
         // SAFETY: the caller promises a terminated string.
-        unsafe {
-            let len = strlen(p);
-            self.payload(p.cast(), len);
-            len
-        }
+        let len = unsafe { strlen(p) };
+        unsafe { self.payload(p.cast(), len) };
+        len
     }
 
     /// Open a section: its id, its flags, and the payload length that
@@ -136,56 +134,54 @@ pub(super) unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void
 pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char) -> c_int {
     // SAFETY: every pointer read below comes from `spin`, whose strings are
     // arena-allocated and NUL-terminated, or from the word trees.
-    unsafe {
-        let fd = os_fopen(fname, c"w".as_ptr());
-        if fd.is_null() {
-            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
-            return FAIL;
-        }
-        let mut w = SplWriter { fd, ok: true };
-        let mut retval = OK;
-
-        w.payload(VIMSPELLMAGIC.as_ptr().cast(), VIMSPELLMAGICL);
-        // A failed magic write means the file is unusable; the C skipped
-        // straight to the close and so does this.
-        if w.ok {
-            w.byte(VIMSPELLVERSION);
-
-            put_info(&mut w, spin);
-            let regionmask = put_region(&mut w, spin);
-            put_charflags(&mut w, spin);
-            put_midword(&mut w, spin);
-            put_prefcond(&mut w, spin);
-            put_rep_and_sal(&mut w, spin);
-            put_sofo(&mut w, spin);
-            put_words(&mut w, spin);
-            put_map(&mut w, spin);
-            put_sugfile(&mut w, spin);
-            put_flag_sections(&mut w, spin);
-            put_compound(&mut w, spin);
-            put_syllable(&mut w, spin);
-
-            w.byte(SN_END as c_int);
-            put_trees(&mut w, spin, regionmask);
-
-            // The trailing byte the reader uses to tell a complete file
-            // from a truncated one.
-            if w.byte(0) == EOF {
-                retval = FAIL;
-            }
-        }
-
-        if fclose(fd) == EOF {
-            retval = FAIL;
-        }
-        if !w.ok {
-            retval = FAIL;
-        }
-        if retval == FAIL {
-            emsg(gettext((&raw const e_write).cast()));
-        }
-        retval
+    let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
+    if fd.is_null() {
+        unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+        return FAIL;
     }
+    let mut w = SplWriter { fd, ok: true };
+    let mut retval = OK;
+
+    unsafe { w.payload(VIMSPELLMAGIC.as_ptr().cast(), VIMSPELLMAGICL) };
+    // A failed magic write means the file is unusable; the C skipped
+    // straight to the close and so does this.
+    if w.ok {
+        w.byte(VIMSPELLVERSION);
+
+        unsafe { put_info(&mut w, spin) };
+        let regionmask = unsafe { put_region(&mut w, spin) };
+        unsafe { put_charflags(&mut w, spin) };
+        unsafe { put_midword(&mut w, spin) };
+        unsafe { put_prefcond(&mut w, spin) };
+        unsafe { put_rep_and_sal(&mut w, spin) };
+        unsafe { put_sofo(&mut w, spin) };
+        unsafe { put_words(&mut w, spin) };
+        unsafe { put_map(&mut w, spin) };
+        unsafe { put_sugfile(&mut w, spin) };
+        unsafe { put_flag_sections(&mut w, spin) };
+        unsafe { put_compound(&mut w, spin) };
+        unsafe { put_syllable(&mut w, spin) };
+
+        w.byte(SN_END as c_int);
+        unsafe { put_trees(&mut w, spin, regionmask) };
+
+        // The trailing byte the reader uses to tell a complete file
+        // from a truncated one.
+        if w.byte(0) == EOF {
+            retval = FAIL;
+        }
+    }
+
+    if unsafe { fclose(fd) } == EOF {
+        retval = FAIL;
+    }
+    if !w.ok {
+        retval = FAIL;
+    }
+    if retval == FAIL {
+        unsafe { emsg(gettext((&raw const e_write).cast())) };
+    }
+    retval
 }
 
 /// `SN_INFO`: the free-form text `:spellinfo` shows.
@@ -194,11 +190,9 @@ unsafe fn put_info(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_info` is a NUL-terminated arena string.
-    unsafe {
-        let len = strlen(spin.si_info);
-        w.section(SN_INFO as c_int, 0, len);
-        w.payload(spin.si_info.cast(), len);
-    }
+    let len = unsafe { strlen(spin.si_info) };
+    w.section(SN_INFO as c_int, 0, len);
+    unsafe { w.payload(spin.si_info.cast(), len) };
 }
 
 /// `SN_REGION`: the two-letter region names. Returns the mask of all
@@ -208,11 +202,9 @@ unsafe fn put_region(w: &mut SplWriter, spin: &spellinfo_T) -> c_int {
         return 0;
     }
     // SAFETY: `si_region_name` holds `si_region_count` two-byte names.
-    unsafe {
-        let len = spin.si_region_count as usize * 2;
-        w.section(SN_REGION as c_int, SNF_REQUIRED, len);
-        w.payload((&raw const spin.si_region_name).cast(), len);
-    }
+    let len = spin.si_region_count as usize * 2;
+    w.section(SN_REGION as c_int, SNF_REQUIRED, len);
+    unsafe { w.payload((&raw const spin.si_region_name).cast(), len) };
     (1 << spin.si_region_count) - 1
 }
 
@@ -228,29 +220,28 @@ unsafe fn put_charflags(w: &mut SplWriter, spin: &spellinfo_T) {
     // SAFETY: `folchars` has room for 128 characters at up to four bytes
     // each, well past what the fold table can produce, and `spelltab` is
     // initialised before any spell file is written.
-    unsafe {
-        let mut folchars: [c_char; 1024] = [0; 1024];
-        let mut folen = 0usize;
-        for i in 128..256 {
-            folen += utf_char2bytes(spelltab_fold(i) as c_int, folchars.as_mut_ptr().add(folen))
+    let mut folchars: [c_char; 1024] = [0; 1024];
+    let mut folen = 0usize;
+    for i in 128..256 {
+        folen +=
+            unsafe { utf_char2bytes(spelltab_fold(i) as c_int, folchars.as_mut_ptr().add(folen)) }
                 as usize;
-        }
-
-        w.section(SN_CHARFLAGS as c_int, SNF_REQUIRED, 1 + 128 + 2 + folen);
-        fputc(128, w.fd);
-        for i in 128..256 {
-            let mut flags = 0;
-            if spelltab_isw(i) {
-                flags |= CF_WORD as c_int;
-            }
-            if spelltab_isu(i) {
-                flags |= CF_UPPER as c_int;
-            }
-            fputc(flags, w.fd);
-        }
-        w.u16(folen);
-        w.payload(folchars.as_ptr().cast(), folen);
     }
+
+    w.section(SN_CHARFLAGS as c_int, SNF_REQUIRED, 1 + 128 + 2 + folen);
+    unsafe { fputc(128, w.fd) };
+    for i in 128..256 {
+        let mut flags = 0;
+        if spelltab_isw(i) {
+            flags |= CF_WORD as c_int;
+        }
+        if spelltab_isu(i) {
+            flags |= CF_UPPER as c_int;
+        }
+        unsafe { fputc(flags, w.fd) };
+    }
+    w.u16(folen);
+    unsafe { w.payload(folchars.as_ptr().cast(), folen) };
 }
 
 /// `SN_MIDWORD`: characters that may appear inside a word without ending
@@ -260,11 +251,9 @@ unsafe fn put_midword(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_midword` is a NUL-terminated arena string.
-    unsafe {
-        let len = strlen(spin.si_midword);
-        w.section(SN_MIDWORD as c_int, SNF_REQUIRED, len);
-        w.payload(spin.si_midword.cast(), len);
-    }
+    let len = unsafe { strlen(spin.si_midword) };
+    w.section(SN_MIDWORD as c_int, SNF_REQUIRED, len);
+    unsafe { w.payload(spin.si_midword.cast(), len) };
 }
 
 /// `SN_PREFCOND`: the regexps a prefix's condition compiles from, one per
@@ -275,13 +264,12 @@ unsafe fn put_prefcond(w: &mut SplWriter, spin: &mut spellinfo_T) {
         return;
     }
     // SAFETY: `si_prefcond` holds NUL-terminated strings and nulls.
-    unsafe {
-        let mut ok = w.ok;
-        let len = write_spell_prefcond(core::ptr::null_mut(), &raw mut spin.si_prefcond, &mut ok);
-        w.section(SN_PREFCOND as c_int, SNF_REQUIRED, len as usize);
-        write_spell_prefcond(w.fd, &raw mut spin.si_prefcond, &mut ok);
-        w.ok = ok;
-    }
+    let mut ok = w.ok;
+    let len =
+        unsafe { write_spell_prefcond(core::ptr::null_mut(), &raw mut spin.si_prefcond, &mut ok) };
+    w.section(SN_PREFCOND as c_int, SNF_REQUIRED, len as usize);
+    unsafe { write_spell_prefcond(w.fd, &raw mut spin.si_prefcond, &mut ok) };
+    w.ok = ok;
 }
 
 /// `SN_REP`, `SN_SAL` and `SN_REPSAL`: the three from/to tables.
@@ -293,68 +281,68 @@ unsafe fn put_prefcond(w: &mut SplWriter, spin: &mut spellinfo_T) {
 unsafe fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
     // SAFETY: each garray holds `ga_len` `fromto_T`s of NUL-terminated
     // arena strings.
-    unsafe {
-        let sofo = !spin.si_sofofr.is_null() && !spin.si_sofoto.is_null();
-        for round in 1..=3 {
-            let (gap, sect_id) = match round {
-                1 => (&raw mut spin.si_rep, SN_REP),
-                2 if sofo => continue,
-                2 => (&raw mut spin.si_sal, SN_SAL),
-                _ => (&raw mut spin.si_repsal, SN_REPSAL),
-            };
-            if (*gap).ga_len <= 0 {
-                continue;
-            }
-            if round != 2 {
+    let sofo = !spin.si_sofofr.is_null() && !spin.si_sofoto.is_null();
+    for round in 1..=3 {
+        let (gap, sect_id) = match round {
+            1 => (&raw mut spin.si_rep, SN_REP),
+            2 if sofo => continue,
+            2 => (&raw mut spin.si_sal, SN_SAL),
+            _ => (&raw mut spin.si_repsal, SN_REPSAL),
+        };
+        if unsafe { (*gap).ga_len } <= 0 {
+            continue;
+        }
+        if round != 2 {
+            unsafe {
                 qsort(
                     (*gap).ga_data,
                     (*gap).ga_len as size_t,
                     size_of::<fromto_T>(),
                     Some(rep_compare),
-                );
-            }
-            debug_assert!((*gap).ga_len >= 0);
+                )
+            };
+        }
+        debug_assert!(unsafe { (*gap).ga_len } >= 0);
 
-            // Two length-prefixed strings per entry, plus the count.
-            let entries = (*gap).ga_data.cast::<fromto_T>();
-            let mut len = 2usize;
-            for i in 0..(*gap).ga_len as usize {
-                let ftp = entries.add(i);
-                len += 1 + strlen((*ftp).ft_from);
-                len += 1 + strlen((*ftp).ft_to);
-            }
-            if round == 2 {
-                // The extra flags byte SAL carries.
-                len += 1;
-            }
-            w.section(sect_id as c_int, 0, len);
+        // Two length-prefixed strings per entry, plus the count.
+        let entries = unsafe { (*gap).ga_data }.cast::<fromto_T>();
+        let mut len = 2usize;
+        for i in 0..unsafe { (*gap).ga_len } as usize {
+            let ftp = unsafe { entries.add(i) };
+            len += 1 + unsafe { strlen((*ftp).ft_from) };
+            len += 1 + unsafe { strlen((*ftp).ft_to) };
+        }
+        if round == 2 {
+            // The extra flags byte SAL carries.
+            len += 1;
+        }
+        w.section(sect_id as c_int, 0, len);
 
-            if round == 2 {
-                let mut flags = 0;
-                if spin.si_followup != 0 {
-                    flags |= SAL_F0LLOWUP as c_int;
-                }
-                if spin.si_collapse != 0 {
-                    flags |= SAL_COLLAPSE as c_int;
-                }
-                if spin.si_rem_accents != 0 {
-                    flags |= SAL_REM_ACCENTS as c_int;
-                }
-                w.byte(flags);
+        if round == 2 {
+            let mut flags = 0;
+            if spin.si_followup != 0 {
+                flags |= SAL_F0LLOWUP as c_int;
             }
-            w.u16((*gap).ga_len as usize);
+            if spin.si_collapse != 0 {
+                flags |= SAL_COLLAPSE as c_int;
+            }
+            if spin.si_rem_accents != 0 {
+                flags |= SAL_REM_ACCENTS as c_int;
+            }
+            w.byte(flags);
+        }
+        w.u16(unsafe { (*gap).ga_len } as usize);
 
-            for i in 0..(*gap).ga_len as usize {
-                let ftp = entries.add(i);
-                for p in [(*ftp).ft_from, (*ftp).ft_to] {
-                    let l = strlen(p);
-                    debug_assert!(l < c_int::MAX as usize);
-                    w.byte(l as c_int);
-                    // A zero-length half is legitimate here, and writing
-                    // zero items would wrongly mark the file failed.
-                    if l > 0 {
-                        w.payload(p.cast(), l);
-                    }
+        for i in 0..unsafe { (*gap).ga_len } as usize {
+            let ftp = unsafe { entries.add(i) };
+            for p in [unsafe { (*ftp).ft_from }, unsafe { (*ftp).ft_to }] {
+                let l = unsafe { strlen(p) };
+                debug_assert!(l < c_int::MAX as usize);
+                w.byte(l as c_int);
+                // A zero-length half is legitimate here, and writing
+                // zero items would wrongly mark the file failed.
+                if l > 0 {
+                    unsafe { w.payload(p.cast(), l) };
                 }
             }
         }
@@ -367,16 +355,14 @@ unsafe fn put_sofo(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: both are NUL-terminated arena strings.
-    unsafe {
-        let from_len = strlen(spin.si_sofofr);
-        let to_len = strlen(spin.si_sofoto);
-        // Two length-prefixed strings.
-        w.section(SN_SOFO as c_int, 0, from_len + to_len + 4);
-        w.u16(from_len);
-        w.payload(spin.si_sofofr.cast(), from_len);
-        w.u16(to_len);
-        w.payload(spin.si_sofoto.cast(), to_len);
-    }
+    let from_len = unsafe { strlen(spin.si_sofofr) };
+    let to_len = unsafe { strlen(spin.si_sofoto) };
+    // Two length-prefixed strings.
+    w.section(SN_SOFO as c_int, 0, from_len + to_len + 4);
+    w.u16(from_len);
+    unsafe { w.payload(spin.si_sofofr.cast(), from_len) };
+    w.u16(to_len);
+    unsafe { w.payload(spin.si_sofoto.cast(), to_len) };
 }
 
 /// `SN_WORDS`: the `COMMON` word list, which makes suggestions of everyday
@@ -387,31 +373,29 @@ unsafe fn put_words(w: &mut SplWriter, spin: &spellinfo_T) {
     }
     // SAFETY: the hash table's array holds `ht_used` live keys, each a
     // NUL-terminated string.
-    unsafe {
-        w.byte(SN_WORDS as c_int);
-        w.byte(0);
-        for round in 1..=2 {
-            let mut todo = spin.si_commonwords.ht_used;
-            let mut hi = spin.si_commonwords.ht_array;
-            let mut len = 0usize;
-            while todo > 0 {
-                if !(*hi).hi_key.is_null()
-                    && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
-                {
-                    // Keys go out with their terminator, so the reader can
-                    // split them apart again.
-                    let l = strlen((*hi).hi_key) + 1;
-                    len += l;
-                    if round == 2 {
-                        w.payload((*hi).hi_key.cast(), l);
-                    }
-                    todo -= 1;
+    w.byte(SN_WORDS as c_int);
+    w.byte(0);
+    for round in 1..=2 {
+        let mut todo = spin.si_commonwords.ht_used;
+        let mut hi = spin.si_commonwords.ht_array;
+        let mut len = 0usize;
+        while todo > 0 {
+            if !unsafe { (*hi).hi_key }.is_null()
+                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
+            {
+                // Keys go out with their terminator, so the reader can
+                // split them apart again.
+                let l = unsafe { strlen((*hi).hi_key) } + 1;
+                len += l;
+                if round == 2 {
+                    unsafe { w.payload((*hi).hi_key.cast(), l) };
                 }
-                hi = hi.add(1);
+                todo -= 1;
             }
-            if round == 1 {
-                w.u32(len);
-            }
+            hi = unsafe { hi.add(1) };
+        }
+        if round == 1 {
+            w.u32(len);
         }
     }
 }
@@ -423,11 +407,9 @@ unsafe fn put_map(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `ga_data` holds `ga_len` bytes.
-    unsafe {
-        let len = spin.si_map.ga_len as usize;
-        w.section(SN_MAP as c_int, 0, len);
-        w.payload(spin.si_map.ga_data, len);
-    }
+    let len = spin.si_map.ga_len as usize;
+    w.section(SN_MAP as c_int, 0, len);
+    unsafe { w.payload(spin.si_map.ga_data, len) };
 }
 
 /// `SN_SUGFILE`: a timestamp stamped into both this file and the `.sug`
@@ -438,11 +420,9 @@ unsafe fn put_sugfile(w: &mut SplWriter, spin: &mut spellinfo_T) {
         return;
     }
     // SAFETY: `fd` is open.
-    unsafe {
-        w.section(SN_SUGFILE as c_int, 0, 8);
-        spin.si_sugtime = time(core::ptr::null_mut::<time_t>());
-        put_time(w.fd, spin.si_sugtime);
-    }
+    w.section(SN_SUGFILE as c_int, 0, 8);
+    spin.si_sugtime = unsafe { time(core::ptr::null_mut::<time_t>()) };
+    unsafe { put_time(w.fd, spin.si_sugtime) };
 }
 
 /// The sections that are pure on/off flags, carrying no payload.
@@ -465,32 +445,30 @@ unsafe fn put_compound(w: &mut SplWriter, spin: &spellinfo_T) {
     }
     // SAFETY: `si_comppat` holds `ga_len` NUL-terminated strings and
     // `si_compflags` is one too.
-    unsafe {
-        debug_assert!(spin.si_comppat.ga_len >= 0);
-        let patterns = spin.si_comppat.ga_data.cast::<*mut c_char>();
-        let count = spin.si_comppat.ga_len as usize;
+    debug_assert!(spin.si_comppat.ga_len >= 0);
+    let patterns = spin.si_comppat.ga_data.cast::<*mut c_char>();
+    let count = spin.si_comppat.ga_len as usize;
 
-        let mut len = strlen(spin.si_compflags);
-        for i in 0..count {
-            len += strlen(*patterns.add(i)) + 1;
-        }
-        // Five limit bytes, a spare, and the two-byte pattern count.
-        w.section(SN_COMPOUND as c_int, 0, len + 7);
-
-        w.byte(spin.si_compmax);
-        w.byte(spin.si_compminlen);
-        w.byte(spin.si_compsylmax);
-        w.byte(0);
-        w.byte(spin.si_compoptions);
-        w.u16(count);
-        for i in 0..count {
-            let p = *patterns.add(i);
-            debug_assert!(strlen(p) < c_int::MAX as usize);
-            w.byte(strlen(p) as c_int);
-            w.payload_str(p);
-        }
-        w.payload_str(spin.si_compflags);
+    let mut len = unsafe { strlen(spin.si_compflags) };
+    for i in 0..count {
+        len += unsafe { strlen(*patterns.add(i)) } + 1;
     }
+    // Five limit bytes, a spare, and the two-byte pattern count.
+    w.section(SN_COMPOUND as c_int, 0, len + 7);
+
+    w.byte(spin.si_compmax);
+    w.byte(spin.si_compminlen);
+    w.byte(spin.si_compsylmax);
+    w.byte(0);
+    w.byte(spin.si_compoptions);
+    w.u16(count);
+    for i in 0..count {
+        let p = unsafe { *patterns.add(i) };
+        debug_assert!(unsafe { strlen(p) } < c_int::MAX as usize);
+        w.byte(unsafe { strlen(p) } as c_int);
+        unsafe { w.payload_str(p) };
+    }
+    unsafe { w.payload_str(spin.si_compflags) };
 }
 
 /// `SN_SYLLABLE`: the character groups that count as one syllable, for
@@ -503,11 +481,9 @@ unsafe fn put_syllable(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_syllable` is a NUL-terminated arena string.
-    unsafe {
-        let len = strlen(spin.si_syllable);
-        w.section(SN_SYLLABLE as c_int, 0, len);
-        w.payload(spin.si_syllable.cast(), len);
-    }
+    let len = unsafe { strlen(spin.si_syllable) };
+    w.section(SN_SYLLABLE as c_int, 0, len);
+    unsafe { w.payload(spin.si_syllable.cast(), len) };
 }
 
 /// The three word trees, each preceded by its node count.
@@ -517,25 +493,23 @@ unsafe fn put_syllable(w: &mut SplWriter, spin: &spellinfo_T) {
 /// one byte plus one `int` per node is what the reader will allocate.
 unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int) {
     // SAFETY: the three roots are live and their trees compressed.
-    unsafe {
-        spin.si_memtot = 0;
-        for (round, root) in [spin.si_foldroot, spin.si_keeproot, spin.si_prefroot]
-            .into_iter()
-            .enumerate()
-        {
-            // The root node itself is only a holder; the tree hangs off it.
-            let tree = (*root).wn_sibling;
-            let prefixtree = round == 2;
+    spin.si_memtot = 0;
+    for (round, root) in [spin.si_foldroot, spin.si_keeproot, spin.si_prefroot]
+        .into_iter()
+        .enumerate()
+    {
+        // The root node itself is only a holder; the tree hangs off it.
+        let tree = unsafe { (*root).wn_sibling };
+        let prefixtree = round == 2;
 
-            clear_node(tree);
-            let nodecount =
-                put_node(core::ptr::null_mut(), tree, 0, regionmask, prefixtree) as usize;
-            w.u32(nodecount);
-            debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
-            spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
+        unsafe { clear_node(tree) };
+        let nodecount =
+            unsafe { put_node(core::ptr::null_mut(), tree, 0, regionmask, prefixtree) } as usize;
+        w.u32(nodecount);
+        debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
+        spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
 
-            put_node(w.fd, tree, 0, regionmask, prefixtree);
-        }
+        unsafe { put_node(w.fd, tree, 0, regionmask, prefixtree) };
     }
 }
 
@@ -547,16 +521,14 @@ unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int
 /// `node` must be null or head a live sibling chain.
 pub(super) unsafe fn clear_node(node: *mut wordnode_T) {
     // SAFETY: the caller promises the chain; recursion stays inside it.
-    unsafe {
-        let mut np = node;
-        while !np.is_null() {
-            (*np).wn_index = 0;
-            (*np).wn_link = core::ptr::null_mut();
-            if (*np).wn_byte as c_int != NUL {
-                clear_node((*np).wn_child);
-            }
-            np = (*np).wn_sibling;
+    let mut np = node;
+    while !np.is_null() {
+        unsafe { (*np).wn_index = 0 };
+        unsafe { (*np).wn_link = core::ptr::null_mut() };
+        if unsafe { (*np).wn_byte } as c_int != NUL {
+            unsafe { clear_node((*np).wn_child) };
         }
+        np = unsafe { (*np).wn_sibling };
     }
 }
 
@@ -585,60 +557,58 @@ pub(super) unsafe fn put_node(
     // SAFETY: the caller promises the chain; every child dereferenced below
     // belongs to a node whose byte is not NUL, which is exactly when a
     // child exists.
-    unsafe {
-        if node.is_null() {
-            return 0;
-        }
-        (*node).wn_index = idx;
-
-        let mut siblingcount = 0;
-        let mut np = node;
-        while !np.is_null() {
-            siblingcount += 1;
-            np = (*np).wn_sibling;
-        }
-        if !fd.is_null() {
-            putc(siblingcount, fd);
-        }
-
-        let mut np = node;
-        while !np.is_null() {
-            if (*np).wn_byte as c_int == 0 {
-                if !fd.is_null() {
-                    put_word_end(fd, np, regionmask, prefixtree);
-                }
-            } else {
-                let child = (*np).wn_child;
-                if (*child).wn_index != 0 && (*child).wn_link != node {
-                    // Already written under a different parent.
-                    if !fd.is_null() {
-                        putc(BY_INDEX as c_int, fd);
-                        put_bytes(fd, (*child).wn_index as uintmax_t, 3);
-                    }
-                } else if (*child).wn_link.is_null() {
-                    // Claim it: this chain will write it out below.
-                    (*child).wn_link = node;
-                }
-                if !fd.is_null() && putc((*np).wn_byte as c_int, fd) == EOF {
-                    emsg(gettext((&raw const e_write).cast()));
-                    return 0;
-                }
-            }
-            np = (*np).wn_sibling;
-        }
-
-        // Children come after the whole chain, so a chain's nodes are
-        // contiguous and one byte count covers them.
-        let mut newindex = idx + siblingcount + 1;
-        let mut np = node;
-        while !np.is_null() {
-            if (*np).wn_byte as c_int != 0 && (*(*np).wn_child).wn_link == node {
-                newindex = put_node(fd, (*np).wn_child, newindex, regionmask, prefixtree);
-            }
-            np = (*np).wn_sibling;
-        }
-        newindex
+    if node.is_null() {
+        return 0;
     }
+    unsafe { (*node).wn_index = idx };
+
+    let mut siblingcount = 0;
+    let mut np = node;
+    while !np.is_null() {
+        siblingcount += 1;
+        np = unsafe { (*np).wn_sibling };
+    }
+    if !fd.is_null() {
+        unsafe { putc(siblingcount, fd) };
+    }
+
+    let mut np = node;
+    while !np.is_null() {
+        if unsafe { (*np).wn_byte } as c_int == 0 {
+            if !fd.is_null() {
+                unsafe { put_word_end(fd, np, regionmask, prefixtree) };
+            }
+        } else {
+            let child = unsafe { (*np).wn_child };
+            if unsafe { (*child).wn_index } != 0 && unsafe { (*child).wn_link } != node {
+                // Already written under a different parent.
+                if !fd.is_null() {
+                    unsafe { putc(BY_INDEX as c_int, fd) };
+                    unsafe { put_bytes(fd, (*child).wn_index as uintmax_t, 3) };
+                }
+            } else if unsafe { (*child).wn_link }.is_null() {
+                // Claim it: this chain will write it out below.
+                unsafe { (*child).wn_link = node };
+            }
+            if !fd.is_null() && unsafe { putc((*np).wn_byte as c_int, fd) } == EOF {
+                unsafe { emsg(gettext((&raw const e_write).cast())) };
+                return 0;
+            }
+        }
+        np = unsafe { (*np).wn_sibling };
+    }
+
+    // Children come after the whole chain, so a chain's nodes are
+    // contiguous and one byte count covers them.
+    let mut newindex = idx + siblingcount + 1;
+    let mut np = node;
+    while !np.is_null() {
+        if unsafe { (*np).wn_byte } as c_int != 0 && unsafe { (*(*np).wn_child).wn_link } == node {
+            newindex = unsafe { put_node(fd, (*np).wn_child, newindex, regionmask, prefixtree) };
+        }
+        np = unsafe { (*np).wn_sibling };
+    }
+    newindex
 }
 
 /// Write the properties of one word end: how many bytes follow and what
@@ -649,48 +619,46 @@ pub(super) unsafe fn put_node(
 /// `np` must be a live node whose byte is NUL, and `fd` open.
 unsafe fn put_word_end(fd: *mut FILE, np: *mut wordnode_T, regionmask: c_int, prefixtree: bool) {
     // SAFETY: the caller promises a live node and an open file.
-    unsafe {
-        if prefixtree {
-            // Prefix ids carry their own flag set; the common case has
-            // none of the interesting bits and needs no flags byte.
-            if (*np).wn_flags as c_int == PFX_FLAGS as u16 as c_int {
-                putc(BY_NOFLAGS as c_int, fd);
-            } else {
-                putc(BY_FLAGS as c_int, fd);
-                putc((*np).wn_flags as c_int, fd);
-            }
-            putc((*np).wn_affixID as c_int, fd);
-            put_bytes(fd, (*np).wn_region as uintmax_t, 2);
-            return;
-        }
-
-        // Region and affix bytes only follow when the word is not in every
-        // region, or does take an affix.
-        let mut flags = (*np).wn_flags as c_int;
-        if regionmask != 0 && (*np).wn_region as c_int != regionmask {
-            flags |= WF_REGION as c_int;
-        }
-        if (*np).wn_affixID as c_int != 0 {
-            flags |= WF_AFX as c_int;
-        }
-        if flags == 0 {
-            putc(BY_NOFLAGS as c_int, fd);
-            return;
-        }
-        if (*np).wn_flags as c_int >= 0x100 {
-            putc(BY_FLAGS2 as c_int, fd);
-            putc(flags, fd);
-            putc((flags as core::ffi::c_uint >> 8) as c_int, fd);
+    if prefixtree {
+        // Prefix ids carry their own flag set; the common case has
+        // none of the interesting bits and needs no flags byte.
+        if unsafe { (*np).wn_flags } as c_int == PFX_FLAGS as u16 as c_int {
+            unsafe { putc(BY_NOFLAGS as c_int, fd) };
         } else {
-            putc(BY_FLAGS as c_int, fd);
-            putc(flags, fd);
+            unsafe { putc(BY_FLAGS as c_int, fd) };
+            unsafe { putc((*np).wn_flags as c_int, fd) };
         }
-        if flags & WF_REGION as c_int != 0 {
-            putc((*np).wn_region as c_int, fd);
-        }
-        if flags & WF_AFX as c_int != 0 {
-            putc((*np).wn_affixID as c_int, fd);
-        }
+        unsafe { putc((*np).wn_affixID as c_int, fd) };
+        unsafe { put_bytes(fd, (*np).wn_region as uintmax_t, 2) };
+        return;
+    }
+
+    // Region and affix bytes only follow when the word is not in every
+    // region, or does take an affix.
+    let mut flags = unsafe { (*np).wn_flags } as c_int;
+    if regionmask != 0 && unsafe { (*np).wn_region } as c_int != regionmask {
+        flags |= WF_REGION as c_int;
+    }
+    if unsafe { (*np).wn_affixID } as c_int != 0 {
+        flags |= WF_AFX as c_int;
+    }
+    if flags == 0 {
+        unsafe { putc(BY_NOFLAGS as c_int, fd) };
+        return;
+    }
+    if unsafe { (*np).wn_flags } as c_int >= 0x100 {
+        unsafe { putc(BY_FLAGS2 as c_int, fd) };
+        unsafe { putc(flags, fd) };
+        unsafe { putc((flags as core::ffi::c_uint >> 8) as c_int, fd) };
+    } else {
+        unsafe { putc(BY_FLAGS as c_int, fd) };
+        unsafe { putc(flags, fd) };
+    }
+    if flags & WF_REGION as c_int != 0 {
+        unsafe { putc((*np).wn_region as c_int, fd) };
+    }
+    if flags & WF_AFX as c_int != 0 {
+        unsafe { putc((*np).wn_affixID as c_int, fd) };
     }
 }
 
@@ -709,32 +677,30 @@ pub(super) unsafe fn write_spell_prefcond(
     ok: &mut bool,
 ) -> c_int {
     // SAFETY: the caller promises the array's shape.
-    unsafe {
-        debug_assert!((*gap).ga_len >= 0);
-        if !fd.is_null() {
-            put_bytes(fd, (*gap).ga_len as uintmax_t, 2);
-        }
-
-        // The count, plus one length byte per entry.
-        let mut totlen = 2 + (*gap).ga_len as usize;
-        let entries = (*gap).ga_data.cast::<*mut c_char>();
-        for i in 0..(*gap).ga_len as usize {
-            let p = *entries.add(i);
-            if p.is_null() {
-                if !fd.is_null() {
-                    fputc(0, fd);
-                }
-                continue;
-            }
-            let len = strlen(p);
-            if !fd.is_null() {
-                debug_assert!(len <= c_int::MAX as usize);
-                fputc(len as c_int, fd);
-                *ok &= fwrite(p.cast(), len, 1, fd) == 1;
-            }
-            totlen += len;
-        }
-        debug_assert!(totlen <= c_int::MAX as usize);
-        totlen as c_int
+    debug_assert!(unsafe { (*gap).ga_len } >= 0);
+    if !fd.is_null() {
+        unsafe { put_bytes(fd, (*gap).ga_len as uintmax_t, 2) };
     }
+
+    // The count, plus one length byte per entry.
+    let mut totlen = 2 + unsafe { (*gap).ga_len } as usize;
+    let entries = unsafe { (*gap).ga_data }.cast::<*mut c_char>();
+    for i in 0..unsafe { (*gap).ga_len } as usize {
+        let p = unsafe { *entries.add(i) };
+        if p.is_null() {
+            if !fd.is_null() {
+                unsafe { fputc(0, fd) };
+            }
+            continue;
+        }
+        let len = unsafe { strlen(p) };
+        if !fd.is_null() {
+            debug_assert!(len <= c_int::MAX as usize);
+            unsafe { fputc(len as c_int, fd) };
+            *ok &= unsafe { fwrite(p.cast(), len, 1, fd) } == 1;
+        }
+        totlen += len;
+    }
+    debug_assert!(totlen <= c_int::MAX as usize);
+    totlen as c_int
 }

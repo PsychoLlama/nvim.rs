@@ -75,151 +75,160 @@ pub unsafe fn spell_add_word(
 ) {
     // `smsg_c!` runs autocommands, so the path it reports is this frame's.
     let mut shown = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        if !valid_spell_word(word, word.offset(len as isize)) {
-            emsg(gettext(e_illegal_character_in_word.get()));
-            return;
-        }
+    if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
+        unsafe { emsg(gettext(e_illegal_character_in_word.get())) };
+        return;
+    }
 
-        // "fnamebuf" owns the name when it came from 'spellfile'; the
-        // internal word list's name is owned by the global.
-        let mut fnamebuf: *mut c_char = core::ptr::null_mut();
-        // The buffer the file is open in, if the user is editing it.
-        let mut buf: *mut buf_T = core::ptr::null_mut();
-        let mut new_spf = false;
+    // "fnamebuf" owns the name when it came from 'spellfile'; the
+    // internal word list's name is owned by the global.
+    let mut fnamebuf: *mut c_char = core::ptr::null_mut();
+    // The buffer the file is open in, if the user is editing it.
+    let mut buf: *mut buf_T = core::ptr::null_mut();
+    let mut new_spf = false;
 
-        let fname = if idx == 0 {
+    let fname = if idx == 0 {
+        if int_wordlist.get().is_null() {
+            int_wordlist.set(unsafe { vim_tempname() });
             if int_wordlist.get().is_null() {
-                int_wordlist.set(vim_tempname());
-                if int_wordlist.get().is_null() {
-                    return;
-                }
+                return;
             }
-            int_wordlist.get()
-        } else {
-            // Give 'spellfile' a sensible default if it has none.
-            if *(*(*curwin.get()).w_s).b_p_spf == 0 {
-                init_spellfile();
-                new_spf = true;
-            }
-            if *(*(*curwin.get()).w_s).b_p_spf == 0 {
+        }
+        int_wordlist.get()
+    } else {
+        // Give 'spellfile' a sensible default if it has none.
+        if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
+            unsafe { init_spellfile() };
+            new_spf = true;
+        }
+        if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
+            unsafe {
                 semsg_c!(
                     gettext(&raw const e_notset as *const c_char),
                     c"spellfile".as_ptr(),
-                );
-                return;
-            }
+                )
+            };
+            return;
+        }
 
-            fnamebuf = xmalloc(MAXPATHL as size_t) as *mut c_char;
-            let mut spf = (*(*curwin.get()).w_s).b_p_spf;
-            let mut i = 1;
-            while *spf != 0 {
+        fnamebuf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
+        let mut spf = unsafe { (*(*curwin.get()).w_s).b_p_spf };
+        let mut i = 1;
+        while unsafe { *spf } != 0 {
+            unsafe {
                 copy_option_part(
                     &raw mut spf,
                     fnamebuf,
                     MAXPATHL as size_t,
                     c",".as_ptr() as *mut c_char,
-                );
-                if i == idx {
-                    break;
-                }
-                if *spf == 0 {
+                )
+            };
+            if i == idx {
+                break;
+            }
+            if unsafe { *spf } == 0 {
+                unsafe {
                     semsg_c!(
                         gettext(c"E765: 'spellfile' does not have %d entries".as_ptr()),
                         idx,
-                    );
-                    xfree(fnamebuf as *mut c_void);
-                    return;
-                }
-                i += 1;
-            }
-
-            // Refuse to write the file behind the user's back if they are
-            // editing it and have unsaved changes.
-            buf = buflist_findname_exp(fnamebuf).map_or(core::ptr::null_mut(), |mut b| b.raw());
-            if !buf.is_null() && (*buf).b_ml.ml_mfp.is_null() {
-                buf = core::ptr::null_mut();
-            }
-            if !buf.is_null() && buf_is_changed(Buf::new(buf)) {
-                emsg(gettext(&raw const e_bufloaded as *const c_char));
-                xfree(fnamebuf as *mut c_void);
+                    )
+                };
+                unsafe { xfree(fnamebuf as *mut c_void) };
                 return;
             }
-
-            fnamebuf
-        };
-
-        // Whether the last attempt to open the file succeeded. What happens
-        // at the end hangs on this, and in C it was a test on the (already
-        // closed) FILE pointer.
-        let mut opened = false;
-
-        if what == SPELL_ADD_BAD as SpellAddType || undo {
-            // A good entry for the word sorts ahead of the banned one and
-            // would win, so it has to go first.
-            opened = comment_out_word(fname, word, len, undo);
+            i += 1;
         }
 
-        if !undo {
-            let mut fd = os_fopen(fname, c"a".as_ptr());
-            if fd.is_null() && new_spf {
-                // 'spellfile' was just given its default and the file will
-                // not open: the "spell" directory may not exist yet.
-                // init_spellfile() already checked the parent is writable.
-                let p = path_tail_with_sep(fname);
-                if !dir_of_file_exists(fname) && p != fname {
-                    let c = *p;
-                    *p = NUL as c_char;
-                    os_mkdir(fname, 0o755 as int32_t);
-                    *p = c;
-                    fd = os_fopen(fname, c"a".as_ptr());
-                }
+        // Refuse to write the file behind the user's back if they are
+        // editing it and have unsaved changes.
+        buf = unsafe { buflist_findname_exp(fnamebuf) }
+            .map_or(core::ptr::null_mut(), |mut b| b.raw());
+        if !buf.is_null() && unsafe { (*buf).b_ml.ml_mfp }.is_null() {
+            buf = core::ptr::null_mut();
+        }
+        if !buf.is_null() && buf_is_changed(unsafe { Buf::new(buf) }) {
+            unsafe { emsg(gettext(&raw const e_bufloaded as *const c_char)) };
+            unsafe { xfree(fnamebuf as *mut c_void) };
+            return;
+        }
+
+        fnamebuf
+    };
+
+    // Whether the last attempt to open the file succeeded. What happens
+    // at the end hangs on this, and in C it was a test on the (already
+    // closed) FILE pointer.
+    let mut opened = false;
+
+    if what == SPELL_ADD_BAD as SpellAddType || undo {
+        // A good entry for the word sorts ahead of the banned one and
+        // would win, so it has to go first.
+        opened = unsafe { comment_out_word(fname, word, len, undo) };
+    }
+
+    if !undo {
+        let mut fd = unsafe { os_fopen(fname, c"a".as_ptr()) };
+        if fd.is_null() && new_spf {
+            // 'spellfile' was just given its default and the file will
+            // not open: the "spell" directory may not exist yet.
+            // init_spellfile() already checked the parent is writable.
+            let p = unsafe { path_tail_with_sep(fname) };
+            if !unsafe { dir_of_file_exists(fname) } && p != fname {
+                let c = unsafe { *p };
+                unsafe { *p = NUL as c_char };
+                unsafe { os_mkdir(fname, 0o755 as int32_t) };
+                unsafe { *p = c };
+                fd = unsafe { os_fopen(fname, c"a".as_ptr()) };
             }
-            opened = !fd.is_null();
+        }
+        opened = !fd.is_null();
 
-            if fd.is_null() {
-                semsg_c!(gettext(&raw const e_notopen as *const c_char), fname);
+        if fd.is_null() {
+            unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), fname) };
+        } else {
+            let format = if what == SPELL_ADD_BAD as SpellAddType {
+                c"%.*s/!\n".as_ptr()
+            } else if what == SPELL_ADD_RARE as SpellAddType {
+                c"%.*s/?\n".as_ptr()
             } else {
-                let format = if what == SPELL_ADD_BAD as SpellAddType {
-                    c"%.*s/!\n".as_ptr()
-                } else if what == SPELL_ADD_RARE as SpellAddType {
-                    c"%.*s/?\n".as_ptr()
-                } else {
-                    c"%.*s\n".as_ptr()
-                };
-                fprintf(fd, format, len, word);
-                fclose(fd);
+                c"%.*s\n".as_ptr()
+            };
+            unsafe { fprintf(fd, format, len, word) };
+            unsafe { fclose(fd) };
 
+            unsafe {
                 home_replace(
                     core::ptr::null(),
                     fname,
                     shown.as_mut_ptr(),
                     MAXPATHL as size_t,
                     true,
-                );
+                )
+            };
+            unsafe {
                 smsg_c!(
                     0,
                     gettext(c"Word '%.*s' added to %s".as_ptr()),
                     len,
                     word,
                     shown.as_ptr(),
-                );
-            }
+                )
+            };
         }
-
-        if opened {
-            // Compile the word list into the .add.spl beside it, so the
-            // change takes effect without a full :mkspell.
-            let mut fname = fname;
-            mkspell(1, &raw mut fname, false, true, true);
-            if !buf.is_null() {
-                buf_reload(Buf::new(buf), (*buf).b_orig_mode, false);
-            }
-            redraw_all_later(UPD_SOME_VALID);
-        }
-
-        xfree(fnamebuf as *mut c_void);
     }
+
+    if opened {
+        // Compile the word list into the .add.spl beside it, so the
+        // change takes effect without a full :mkspell.
+        let mut fname = fname;
+        unsafe { mkspell(1, &raw mut fname, false, true, true) };
+        if !buf.is_null() {
+            unsafe { buf_reload(Buf::new(buf), (*buf).b_orig_mode, false) };
+        }
+        unsafe { redraw_all_later(UPD_SOME_VALID) };
+    }
+
+    unsafe { xfree(fnamebuf as *mut c_void) };
 }
 
 /// Comment out every line of `fname` holding `word[..len]`, by writing a
@@ -233,166 +242,181 @@ pub unsafe fn spell_add_word(
 /// position it had reached.
 unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, undo: bool) -> bool {
     let mut shown = [0 as c_char; MAXPATHL as usize];
-    unsafe {
-        let mut line = [0 as c_char; MAXWLEN * 2];
-        let mut fd: *mut FILE = os_fopen(fname, c"r".as_ptr());
-        if fd.is_null() {
-            return false;
+    let mut line = [0 as c_char; MAXWLEN * 2];
+    let mut fd: *mut FILE = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    if fd.is_null() {
+        return false;
+    }
+
+    // The offsets of the line just read and of the one after it.
+    let mut fpos: c_int = 0;
+    let mut fpos_next: c_int = 0;
+    while !unsafe { vim_fgets(line.as_mut_ptr(), MAXWLEN as c_int * 2, fd) } {
+        fpos = fpos_next;
+        fpos_next = unsafe { ftell(fd) } as c_int;
+        if fpos_next < 0 {
+            break; // should never happen
         }
 
-        // The offsets of the line just read and of the one after it.
-        let mut fpos: c_int = 0;
-        let mut fpos_next: c_int = 0;
-        while !vim_fgets(line.as_mut_ptr(), MAXWLEN as c_int * 2, fd) {
-            fpos = fpos_next;
-            fpos_next = ftell(fd) as c_int;
-            if fpos_next < 0 {
-                break; // should never happen
-            }
+        // The line holds the word when the flags or the line end
+        // follow it directly.
+        let matched = unsafe { strncmp(word, line.as_ptr(), len as size_t) } == 0
+            && (line[len as usize] == b'/' as c_char
+                || (line[len as usize] as uint8_t as c_int) < ' ' as c_int);
+        if !matched {
+            continue;
+        }
 
-            // The line holds the word when the flags or the line end
-            // follow it directly.
-            let matched = strncmp(word, line.as_ptr(), len as size_t) == 0
-                && (line[len as usize] == b'/' as c_char
-                    || (line[len as usize] as uint8_t as c_int) < ' ' as c_int);
-            if !matched {
-                continue;
-            }
-
-            fclose(fd);
-            fd = os_fopen(fname, c"r+".as_ptr());
-            if fd.is_null() {
-                break;
-            }
-            if fseek(fd, fpos as c_long, SEEK_SET) == 0 {
-                fputc('#' as c_int, fd);
-                if undo {
+        unsafe { fclose(fd) };
+        fd = unsafe { os_fopen(fname, c"r+".as_ptr()) };
+        if fd.is_null() {
+            break;
+        }
+        if unsafe { fseek(fd, fpos as c_long, SEEK_SET) } == 0 {
+            unsafe { fputc('#' as c_int, fd) };
+            if undo {
+                unsafe {
                     home_replace(
                         core::ptr::null(),
                         fname,
                         shown.as_mut_ptr(),
                         MAXPATHL as size_t,
                         true,
-                    );
+                    )
+                };
+                unsafe {
                     smsg_c!(
                         0,
                         gettext(c"Word '%.*s' removed from %s".as_ptr()),
                         len,
                         word,
                         shown.as_ptr(),
-                    );
-                }
+                    )
+                };
             }
-            if fseek(fd, fpos_next as c_long, SEEK_SET) != 0 {
+        }
+        if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {
+            unsafe {
                 semsg_c!(
                     c"%s: %s".as_ptr(),
                     gettext(c"Seek error in spellfile".as_ptr()),
                     strerror(*__errno_location()),
-                );
-                break;
-            }
+                )
+            };
+            break;
         }
-
-        if !fd.is_null() {
-            fclose(fd);
-            return true;
-        }
-        false
     }
+
+    if !fd.is_null() {
+        unsafe { fclose(fd) };
+        return true;
+    }
+    false
 }
 
 /// Give `'spellfile'` a default: the user's own `spell` directory, or the
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
 unsafe fn init_spellfile() {
-    unsafe {
-        if *(*(*curwin.get()).w_s).b_p_spl == 0 || (*(*curwin.get()).w_s).b_langp.ga_len <= 0 {
+    if unsafe { *(*(*curwin.get()).w_s).b_p_spl } == 0
+        || unsafe { (*(*curwin.get()).w_s).b_langp.ga_len } <= 0
+    {
+        return;
+    }
+
+    // Take the first 'spelllang' entry up to a separator. When it is a
+    // path, the file goes beside it and "lstart" is its last component.
+    let mut lstart = unsafe { (*curbuf.get()).b_s.b_p_spl };
+    let mut lend = unsafe { (*(*curwin.get()).w_s).b_p_spl };
+    let mut aspath = false;
+    while unsafe { *lend } != 0
+        && unsafe { vim_strchr(c",._".as_ptr(), *lend as uint8_t as c_int) }.is_null()
+    {
+        if vim_ispathsep(unsafe { *lend } as c_int) {
+            aspath = true;
+            lstart = unsafe { lend.offset(1) };
+        }
+        lend = unsafe { lend.offset(1) };
+    }
+
+    let buf_len = MAXPATHL as size_t;
+    let buf = unsafe { xmalloc(buf_len) } as *mut c_char;
+    if aspath {
+        // Use the directory 'spelllang' pointed at.
+        if unsafe { lend.offset_from((*curbuf.get()).b_s.b_p_spl) } as size_t >= buf_len {
+            unsafe { xfree(buf as *mut c_void) };
             return;
         }
-
-        // Take the first 'spelllang' entry up to a separator. When it is a
-        // path, the file goes beside it and "lstart" is its last component.
-        let mut lstart = (*curbuf.get()).b_s.b_p_spl;
-        let mut lend = (*(*curwin.get()).w_s).b_p_spl;
-        let mut aspath = false;
-        while *lend != 0 && vim_strchr(c",._".as_ptr(), *lend as uint8_t as c_int).is_null() {
-            if vim_ispathsep(*lend as c_int) {
-                aspath = true;
-                lstart = lend.offset(1);
-            }
-            lend = lend.offset(1);
-        }
-
-        let buf_len = MAXPATHL as size_t;
-        let buf = xmalloc(buf_len) as *mut c_char;
-        if aspath {
-            // Use the directory 'spelllang' pointed at.
-            if lend.offset_from((*curbuf.get()).b_s.b_p_spl) as size_t >= buf_len {
-                xfree(buf as *mut c_void);
-                return;
-            }
+        unsafe {
             xmemcpyz(
                 buf as *mut c_void,
                 (*curbuf.get()).b_s.b_p_spl as *const c_void,
                 lend.offset_from((*curbuf.get()).b_s.b_p_spl) as size_t,
-            );
-        } else {
-            // Otherwise the user's own site directory, created if need be.
-            let xdg_path = get_xdg_home(kXDGDataHome);
-            xstrlcpy(buf, xdg_path, buf_len);
-            xfree(xdg_path as *mut c_void);
-            xstrlcat(buf, c"/site/spell".as_ptr(), buf_len);
+            )
+        };
+    } else {
+        // Otherwise the user's own site directory, created if need be.
+        let xdg_path = get_xdg_home(kXDGDataHome);
+        unsafe { xstrlcpy(buf, xdg_path, buf_len) };
+        unsafe { xfree(xdg_path as *mut c_void) };
+        unsafe { xstrlcat(buf, c"/site/spell".as_ptr(), buf_len) };
 
-            let mut failed_dir: *mut c_char = core::ptr::null_mut();
-            if os_mkdir_recurse(
+        let mut failed_dir: *mut c_char = core::ptr::null_mut();
+        if unsafe {
+            os_mkdir_recurse(
                 buf,
                 0o755 as int32_t,
                 &raw mut failed_dir,
                 core::ptr::null_mut(),
-            ) != 0
-            {
-                xfree(buf as *mut c_void);
-                xfree(failed_dir as *mut c_void);
-                return;
-            }
+            )
+        } != 0
+        {
+            unsafe { xfree(buf as *mut c_void) };
+            unsafe { xfree(failed_dir as *mut c_void) };
+            return;
         }
+    }
 
-        // "<dir>/<lang>"
+    // "<dir>/<lang>"
+    unsafe {
         vim_snprintf(
             buf.add(strlen(buf)),
             buf_len - strlen(buf),
             c"/%.*s".as_ptr(),
             lend.offset_from(lstart) as c_int,
             lstart,
-        );
+        )
+    };
 
-        // The suffix has to match the file actually loaded, which may be
-        // the ASCII build of the language rather than the current encoding.
-        let fname =
-            (*(*((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T)).lp_slang).sl_fname;
-        let enc_suffix =
-            if !fname.is_null() && !strstr(path_tail(fname), c".ascii.".as_ptr()).is_null() {
-                c"ascii".as_ptr()
-            } else {
-                spell_enc() as *const c_char
-            };
+    // The suffix has to match the file actually loaded, which may be
+    // the ASCII build of the language rather than the current encoding.
+    let fname =
+        unsafe { (*(*((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T)).lp_slang).sl_fname };
+    let enc_suffix = if !fname.is_null()
+        && !unsafe { strstr(path_tail(fname), c".ascii.".as_ptr()) }.is_null()
+    {
+        c"ascii".as_ptr()
+    } else {
+        unsafe { spell_enc() as *const c_char }
+    };
+    unsafe {
         vim_snprintf(
             buf.add(strlen(buf)),
             buf_len - strlen(buf),
             c".%s.add".as_ptr(),
             enc_suffix,
-        );
+        )
+    };
 
-        set_option_value_give_err(
-            kOptSpellfile,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: cstr_as_string(buf),
-                },
+    set_option_value_give_err(
+        kOptSpellfile,
+        OptVal {
+            type_0: kOptValTypeString,
+            data: OptValData {
+                string: unsafe { cstr_as_string(buf) },
             },
-            OptionSetFlags::LOCAL,
-        );
-        xfree(buf as *mut c_void);
-    }
+        },
+        OptionSetFlags::LOCAL,
+    );
+    unsafe { xfree(buf as *mut c_void) };
 }

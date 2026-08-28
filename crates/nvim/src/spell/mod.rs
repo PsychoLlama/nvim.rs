@@ -263,36 +263,38 @@ pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
 pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
-    unsafe {
-        let pos: pos_T = (*curwin.get()).w_cursor;
-        // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
-        // comes back as 1.
-        let save_ws = p_ws.get() != 0;
-        let mut prev_lnum: linenr_T = 0;
+    let pos: pos_T = unsafe { (*curwin.get()).w_cursor };
+    // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
+    // comes back as 1.
+    let save_ws = p_ws.get() != 0;
+    let mut prev_lnum: linenr_T = 0;
 
-        if repl_from.get().is_null() || repl_to.get().is_null() {
-            emsg(gettext(c"E752: No previous spell replacement".as_ptr()));
-            return;
-        }
-        let repl_from_len = strlen(repl_from.get());
-        let repl_to_len = strlen(repl_to.get());
-        let addlen = repl_to_len as i64 - repl_from_len as i64;
+    if repl_from.get().is_null() || repl_to.get().is_null() {
+        unsafe { emsg(gettext(c"E752: No previous spell replacement".as_ptr())) };
+        return;
+    }
+    let repl_from_len = unsafe { strlen(repl_from.get()) };
+    let repl_to_len = unsafe { strlen(repl_to.get()) };
+    let addlen = repl_to_len as i64 - repl_from_len as i64;
 
-        let frompatsize = repl_from_len + 7;
-        let frompat = xmalloc(frompatsize) as *mut c_char;
-        let frompatlen = snprintf(
+    let frompatsize = repl_from_len + 7;
+    let frompat = unsafe { xmalloc(frompatsize) } as *mut c_char;
+    let frompatlen = unsafe {
+        snprintf(
             frompat,
             frompatsize,
             c"\\V\\<%s\\>".as_ptr(),
             repl_from.get(),
-        ) as size_t;
-        p_ws.set(0);
+        )
+    } as size_t;
+    p_ws.set(0);
 
-        sub_nsubs.set(0);
-        sub_nlines.set(0);
-        (*curwin.get()).w_cursor.lnum = 0;
-        while !got_int.get() {
-            if do_search(
+    sub_nsubs.set(0);
+    sub_nlines.set(0);
+    unsafe { (*curwin.get()).w_cursor.lnum = 0 };
+    while !got_int.get() {
+        if unsafe {
+            do_search(
                 ::core::ptr::null_mut::<oparg_T>(),
                 '/' as c_int,
                 '/' as c_int,
@@ -301,47 +303,51 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
                 1,
                 SEARCH_KEEP,
                 ::core::ptr::null_mut::<searchit_arg_T>(),
-            ) == 0
-                || u_save_cursor() == FAIL
-            {
-                break;
-            }
+            )
+        } == 0
+            || u_save_cursor() == FAIL
+        {
+            break;
+        }
 
-            // Only replace where the replacement is not already there. That
-            // happens when changing "etc" to "etc.".
-            let line = get_cursor_line_ptr();
-            let col = (*curwin.get()).w_cursor.col;
-            if addlen <= 0 || strncmp(line.offset(col as isize), repl_to.get(), repl_to_len) != 0 {
-                let p =
-                    xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) as *mut c_char;
-                memmove(p as *mut c_void, line as *const c_void, col as size_t);
-                strcpy(p.offset(col as isize), repl_to.get());
-                strcat(p, line.offset(col as isize).add(repl_from_len));
-                ml_replace((*curwin.get()).w_cursor.lnum, p, false);
+        // Only replace where the replacement is not already there. That
+        // happens when changing "etc" to "etc.".
+        let line = get_cursor_line_ptr();
+        let col = unsafe { (*curwin.get()).w_cursor.col };
+        if addlen <= 0
+            || unsafe { strncmp(line.offset(col as isize), repl_to.get(), repl_to_len) } != 0
+        {
+            let p = unsafe { xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) }
+                as *mut c_char;
+            unsafe { memmove(p as *mut c_void, line as *const c_void, col as size_t) };
+            unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
+            unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
+            unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };
+            unsafe {
                 inserted_bytes(
                     (*curwin.get()).w_cursor.lnum,
                     col,
                     repl_from_len as c_int,
                     repl_to_len as c_int,
-                );
+                )
+            };
 
-                if (*curwin.get()).w_cursor.lnum != prev_lnum {
-                    sub_nlines.set(sub_nlines.get() + 1);
-                    prev_lnum = (*curwin.get()).w_cursor.lnum;
-                }
-                sub_nsubs.set(sub_nsubs.get() + 1);
+            if unsafe { (*curwin.get()).w_cursor.lnum } != prev_lnum {
+                sub_nlines.set(sub_nlines.get() + 1);
+                prev_lnum = unsafe { (*curwin.get()).w_cursor.lnum };
             }
-            (*curwin.get()).w_cursor.col += repl_to_len as colnr_T;
+            sub_nsubs.set(sub_nsubs.get() + 1);
         }
+        unsafe { (*curwin.get()).w_cursor.col += repl_to_len as colnr_T };
+    }
 
-        p_ws.set(save_ws as c_int);
-        (*curwin.get()).w_cursor = pos;
-        xfree(frompat as *mut c_void);
+    p_ws.set(save_ws as c_int);
+    unsafe { (*curwin.get()).w_cursor = pos };
+    unsafe { xfree(frompat as *mut c_void) };
 
-        if sub_nsubs.get() == 0 {
-            semsg_c!(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get());
-        } else {
-            do_sub_msg(false);
-        }
+    if sub_nsubs.get() == 0 {
+        unsafe { semsg_c!(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get()) };
+    } else {
+        unsafe { do_sub_msg(false) };
     }
 }

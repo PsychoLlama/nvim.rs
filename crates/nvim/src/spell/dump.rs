@@ -72,64 +72,63 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
 pub unsafe fn ex_spellinfo(_eap: *mut exarg_T) {
-    unsafe {
-        if no_spell_checking(curwin.get()) {
-            return;
-        }
-
-        msg_ext_set_kind(c"list_cmd".as_ptr());
-        msg_start();
-        let langp = &(*(*curwin.get()).w_s).b_langp;
-        let mut lpi = 0;
-        while lpi < langp.ga_len && !got_int.get() {
-            let lp = (langp.ga_data as *mut langp_T).offset(lpi as isize);
-            msg_puts(c"file: ".as_ptr());
-            msg_puts((*(*lp).lp_slang).sl_fname);
-            let p = (*(*lp).lp_slang).sl_info;
-            if lpi < langp.ga_len || !p.is_null() {
-                msg_putchar('\n' as c_int);
-            }
-            if !p.is_null() {
-                msg_puts(p);
-                if lpi < langp.ga_len - 1 {
-                    msg_putchar('\n' as c_int);
-                }
-            }
-            lpi += 1;
-        }
-        msg_end();
+    if unsafe { no_spell_checking(curwin.get()) } {
+        return;
     }
+
+    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    unsafe { msg_start() };
+    // SAFETY: the current window and its syntax block are live.
+    let langp = unsafe { &(*(*curwin.get()).w_s).b_langp };
+    let mut lpi = 0;
+    while lpi < langp.ga_len && !got_int.get() {
+        let lp = unsafe { (langp.ga_data as *mut langp_T).offset(lpi as isize) };
+        unsafe { msg_puts(c"file: ".as_ptr()) };
+        unsafe { msg_puts((*(*lp).lp_slang).sl_fname) };
+        let p = unsafe { (*(*lp).lp_slang).sl_info };
+        if lpi < langp.ga_len || !p.is_null() {
+            unsafe { msg_putchar('\n' as c_int) };
+        }
+        if !p.is_null() {
+            unsafe { msg_puts(p) };
+            if lpi < langp.ga_len - 1 {
+                unsafe { msg_putchar('\n' as c_int) };
+            }
+        }
+        lpi += 1;
+    }
+    unsafe { msg_end() };
 }
 
 /// `:spelldump` — open a new window holding every word of the current
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
 pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
+    if unsafe { no_spell_checking(curwin.get()) } {
+        return;
+    }
+    let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
+
+    unsafe { do_cmdline_cmd(c"new".as_ptr()) };
+
+    // Spell checking has to be on in the new window for the dump to
+    // mean anything.
+    set_option_value_give_err(
+        kOptSpell,
+        OptVal {
+            type_0: kOptValTypeBoolean,
+            data: OptValData { boolean: 1 },
+        },
+        OptionSetFlags::LOCAL,
+    );
+    set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
+    optval_free(spl);
+
+    if !unsafe { buf_is_empty(curbuf.get()) } {
+        return;
+    }
+
     unsafe {
-        if no_spell_checking(curwin.get()) {
-            return;
-        }
-        let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
-
-        do_cmdline_cmd(c"new".as_ptr());
-
-        // Spell checking has to be on in the new window for the dump to
-        // mean anything.
-        set_option_value_give_err(
-            kOptSpell,
-            OptVal {
-                type_0: kOptValTypeBoolean,
-                data: OptValData { boolean: 1 },
-            },
-            OptionSetFlags::LOCAL,
-        );
-        set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
-        optval_free(spl);
-
-        if !buf_is_empty(curbuf.get()) {
-            return;
-        }
-
         spell_dump_compl(
             core::ptr::null_mut(),
             0,
@@ -139,14 +138,14 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
             } else {
                 0
             },
-        );
+        )
+    };
 
-        // Drop the empty line the new buffer started with.
-        if (*curbuf.get()).b_ml.ml_line_count > 1 {
-            ml_delete((*curbuf.get()).b_ml.ml_line_count);
-        }
-        redraw_later(curwin.get(), UPD_NOT_VALID);
+    // Drop the empty line the new buffer started with.
+    if unsafe { (*curbuf.get()).b_ml.ml_line_count } > 1 {
+        unsafe { ml_delete((*curbuf.get()).b_ml.ml_line_count) };
     }
+    unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
 }
 
 /// Walk every word of every loaded language.
@@ -162,135 +161,141 @@ pub unsafe fn spell_dump_compl(
     dumpflags_arg: c_int,
 ) {
     let mut header = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        let mut arridx = [0 as idx_T; MAXWLEN];
-        let mut curi = [0 as c_int; MAXWLEN];
-        let mut word = [0 as c_char; MAXWLEN];
-        let mut lnum: linenr_T = 0;
-        let mut region_names: *mut c_char = core::ptr::null_mut();
-        let mut do_region = true;
-        let mut dumpflags = dumpflags_arg;
+    let mut arridx = [0 as idx_T; MAXWLEN];
+    let mut curi = [0 as c_int; MAXWLEN];
+    let mut word = [0 as c_char; MAXWLEN];
+    let mut lnum: linenr_T = 0;
+    let mut region_names: *mut c_char = core::ptr::null_mut();
+    let mut do_region = true;
+    let mut dumpflags = dumpflags_arg;
 
-        // Case handling of the pattern is dump_word()'s problem, but what
-        // kind of handling it is gets decided once, here.
-        if !pat.is_null() {
-            if ic != 0 {
-                dumpflags |= DUMPFLAG_ICASE;
-            } else {
-                let n = captype(pat, core::ptr::null());
-                if n == WF_ONECAP as c_int {
-                    dumpflags |= DUMPFLAG_ONECAP;
-                } else if n == WF_ALLCAP as c_int && strlen(pat) as c_int > utfc_ptr2len(pat) {
-                    dumpflags |= DUMPFLAG_ALLCAP;
-                }
+    // Case handling of the pattern is dump_word()'s problem, but what
+    // kind of handling it is gets decided once, here.
+    if !pat.is_null() {
+        if ic != 0 {
+            dumpflags |= DUMPFLAG_ICASE;
+        } else {
+            let n = unsafe { captype(pat, core::ptr::null()) };
+            if n == WF_ONECAP as c_int {
+                dumpflags |= DUMPFLAG_ONECAP;
+            } else if n == WF_ALLCAP as c_int
+                && unsafe { strlen(pat) } as c_int > unsafe { utfc_ptr2len(pat) }
+            {
+                dumpflags |= DUMPFLAG_ALLCAP;
             }
         }
+    }
 
-        // Regions can only be dumped when every language agrees on them.
-        let langp_data = (*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T;
-        let langp_len = (*(*curwin.get()).w_s).b_langp.ga_len;
-        for lpi in 0..langp_len {
-            let lp = langp_data.offset(lpi as isize);
-            let p = (*(*lp).lp_slang).sl_regions.as_mut_ptr();
-            if *p != 0 {
-                if region_names.is_null() {
-                    region_names = p;
-                } else if strcmp(region_names, p) != 0 {
-                    do_region = false;
-                    break;
-                }
+    // Regions can only be dumped when every language agrees on them.
+    let langp_data = unsafe { (*(*curwin.get()).w_s).b_langp.ga_data } as *mut langp_T;
+    let langp_len = unsafe { (*(*curwin.get()).w_s).b_langp.ga_len };
+    for lpi in 0..langp_len {
+        let lp = unsafe { langp_data.offset(lpi as isize) };
+        let p = unsafe { (*(*lp).lp_slang).sl_regions }.as_mut_ptr();
+        if unsafe { *p } != 0 {
+            if region_names.is_null() {
+                region_names = p;
+            } else if unsafe { strcmp(region_names, p) } != 0 {
+                do_region = false;
+                break;
             }
         }
+    }
 
-        if do_region && !region_names.is_null() && pat.is_null() {
+    if do_region && !region_names.is_null() && pat.is_null() {
+        unsafe {
             vim_snprintf(
                 header.as_mut_ptr(),
                 IOSIZE as size_t,
                 c"/regions=%s".as_ptr(),
                 region_names,
-            );
-            ml_append(lnum, header.as_mut_ptr(), 0, false);
-            lnum += 1;
-        } else {
-            do_region = false;
+            )
+        };
+        unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+        lnum += 1;
+    } else {
+        do_region = false;
+    }
+
+    for lpi in 0..langp_len {
+        let lp = unsafe { langp_data.offset(lpi as isize) };
+        let slang = unsafe { (*lp).lp_slang };
+        if unsafe { (*slang).sl_fbyts }.is_null() {
+            continue; // reloading this language failed
         }
 
-        for lpi in 0..langp_len {
-            let lp = langp_data.offset(lpi as isize);
-            let slang = (*lp).lp_slang;
-            if (*slang).sl_fbyts.is_null() {
-                continue; // reloading this language failed
-            }
-
-            if pat.is_null() {
+        if pat.is_null() {
+            unsafe {
                 vim_snprintf(
                     header.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"# file: %s".as_ptr(),
                     (*slang).sl_fname,
-                );
-                ml_append(lnum, header.as_mut_ptr(), 0, false);
-                lnum += 1;
+                )
+            };
+            unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+            lnum += 1;
+        }
+
+        // Without prefixes, a pattern can prune the walk; with them, a
+        // prefix could still make a non-matching branch match.
+        let patlen = if !pat.is_null() && unsafe { (*slang).sl_pbyts }.is_null() {
+            unsafe { strlen(pat) as c_int }
+        } else {
+            -1
+        };
+
+        // Round 1 is the case-folded tree, round 2 the keep-case one.
+        for round in 1..=2 {
+            let (byts, idxs) = if round == 1 {
+                dumpflags &= !DUMPFLAG_KEEPCASE;
+                (unsafe { (*slang).sl_fbyts }, unsafe { (*slang).sl_fidxs })
+            } else {
+                dumpflags |= DUMPFLAG_KEEPCASE;
+                (unsafe { (*slang).sl_kbyts }, unsafe { (*slang).sl_kidxs })
+            };
+            if byts.is_null() {
+                continue; // this tree is empty
             }
 
-            // Without prefixes, a pattern can prune the walk; with them, a
-            // prefix could still make a non-matching branch match.
-            let patlen = if !pat.is_null() && (*slang).sl_pbyts.is_null() {
-                strlen(pat) as c_int
-            } else {
-                -1
-            };
-
-            // Round 1 is the case-folded tree, round 2 the keep-case one.
-            for round in 1..=2 {
-                let (byts, idxs) = if round == 1 {
-                    dumpflags &= !DUMPFLAG_KEEPCASE;
-                    ((*slang).sl_fbyts, (*slang).sl_fidxs)
-                } else {
-                    dumpflags |= DUMPFLAG_KEEPCASE;
-                    ((*slang).sl_kbyts, (*slang).sl_kidxs)
-                };
-                if byts.is_null() {
-                    continue; // this tree is empty
+            let mut depth: c_int = 0;
+            arridx[0] = 0;
+            curi[0] = 1;
+            while depth >= 0 && !got_int.get() && (pat.is_null() || !ins_compl_interrupted()) {
+                let d = depth as usize;
+                if curi[d] > unsafe { *byts.offset(arridx[d] as isize) } as c_int {
+                    // Every child of this node is done.
+                    depth -= 1;
+                    line_breakcheck();
+                    unsafe { ins_compl_check_keys(50, false) };
+                    continue;
                 }
 
-                let mut depth: c_int = 0;
-                arridx[0] = 0;
-                curi[0] = 1;
-                while depth >= 0 && !got_int.get() && (pat.is_null() || !ins_compl_interrupted()) {
-                    let d = depth as usize;
-                    if curi[d] > *byts.offset(arridx[d] as isize) as c_int {
-                        // Every child of this node is done.
-                        depth -= 1;
-                        line_breakcheck();
-                        ins_compl_check_keys(50, false);
-                        continue;
-                    }
+                let n = arridx[d] + curi[d];
+                curi[d] += 1;
+                let mut c = unsafe { *byts.offset(n as isize) } as c_int;
+                if c == 0 || d >= MAXWLEN - 1 {
+                    // A word ends here, or the depth limit was hit.
+                    // Keep-case words are skipped in the fold-case tree
+                    // — they show up in the keep-case one — and words
+                    // for other regions are skipped entirely.
+                    let mut flags = unsafe { *idxs.offset(n as isize) };
+                    if (round == 2 || flags & WF_KEEPCAP as c_int == 0)
+                        && flags & WF_NEEDCOMP as c_int == 0
+                        && (do_region
+                            || flags & WF_REGION as c_int == 0
+                            || (flags as c_uint >> 16) & unsafe { (*lp).lp_region } as c_uint != 0)
+                    {
+                        word[d] = NUL as c_char;
+                        if !do_region {
+                            flags &= !(WF_REGION as c_int);
+                        }
 
-                    let n = arridx[d] + curi[d];
-                    curi[d] += 1;
-                    let mut c = *byts.offset(n as isize) as c_int;
-                    if c == 0 || d >= MAXWLEN - 1 {
-                        // A word ends here, or the depth limit was hit.
-                        // Keep-case words are skipped in the fold-case tree
-                        // — they show up in the keep-case one — and words
-                        // for other regions are skipped entirely.
-                        let mut flags = *idxs.offset(n as isize);
-                        if (round == 2 || flags & WF_KEEPCAP as c_int == 0)
-                            && flags & WF_NEEDCOMP as c_int == 0
-                            && (do_region
-                                || flags & WF_REGION as c_int == 0
-                                || (flags as c_uint >> 16) & (*lp).lp_region as c_uint != 0)
-                        {
-                            word[d] = NUL as c_char;
-                            if !do_region {
-                                flags &= !(WF_REGION as c_int);
-                            }
-
-                            // Dump the bare word when it has no prefix, or
-                            // when this is the first of its prefixes.
-                            c = (flags as c_uint >> 24) as c_int;
-                            if c == 0 || curi[d] == 2 {
+                        // Dump the bare word when it has no prefix, or
+                        // when this is the first of its prefixes.
+                        c = (flags as c_uint >> 24) as c_int;
+                        if c == 0 || curi[d] == 2 {
+                            unsafe {
                                 dump_word(
                                     slang,
                                     word.as_mut_ptr(),
@@ -299,14 +304,16 @@ pub unsafe fn spell_dump_compl(
                                     dumpflags,
                                     flags,
                                     lnum,
-                                );
-                                if pat.is_null() {
-                                    lnum += 1;
-                                }
+                                )
+                            };
+                            if pat.is_null() {
+                                lnum += 1;
                             }
+                        }
 
-                            if c != 0 {
-                                lnum = dump_prefixes(
+                        if c != 0 {
+                            lnum = unsafe {
+                                dump_prefixes(
                                     slang,
                                     word.as_mut_ptr(),
                                     pat,
@@ -314,24 +321,25 @@ pub unsafe fn spell_dump_compl(
                                     dumpflags,
                                     flags,
                                     lnum,
-                                );
-                            }
+                                )
+                            };
                         }
-                    } else {
-                        // An ordinary byte: descend.
-                        word[d] = c as c_char;
-                        depth += 1;
-                        arridx[depth as usize] = *idxs.offset(n as isize);
-                        curi[depth as usize] = 1;
+                    }
+                } else {
+                    // An ordinary byte: descend.
+                    word[d] = c as c_char;
+                    depth += 1;
+                    arridx[depth as usize] = unsafe { *idxs.offset(n as isize) };
+                    curi[depth as usize] = 1;
 
-                        // Prune a branch that cannot match the pattern.
-                        // Case is always ignored here; dump_word() checks it
-                        // properly later. That is not exact when folding
-                        // changes a multi-byte character's length.
-                        if depth <= patlen && mb_strnicmp(word.as_ptr(), pat, depth as size_t) != 0
-                        {
-                            depth -= 1;
-                        }
+                    // Prune a branch that cannot match the pattern.
+                    // Case is always ignored here; dump_word() checks it
+                    // properly later. That is not exact when folding
+                    // changes a multi-byte character's length.
+                    if depth <= patlen
+                        && unsafe { mb_strnicmp(word.as_ptr(), pat, depth as size_t) } != 0
+                    {
+                        depth -= 1;
                     }
                 }
             }
@@ -355,88 +363,93 @@ unsafe fn dump_word(
     lnum: linenr_T,
 ) {
     let mut counted = [0 as c_char; IOSIZE as usize];
-    unsafe {
-        let mut keepcap = false;
-        let mut cword = [0 as c_char; MAXWLEN];
-        let mut badword = [0 as c_char; MAXWLEN + 10];
-        let mut flags = wordflags;
+    let mut keepcap = false;
+    let mut cword = [0 as c_char; MAXWLEN];
+    let mut badword = [0 as c_char; MAXWLEN + 10];
+    let mut flags = wordflags;
 
-        if dumpflags & DUMPFLAG_ONECAP != 0 {
-            flags |= WF_ONECAP as c_int;
-        }
-        if dumpflags & DUMPFLAG_ALLCAP != 0 {
-            flags |= WF_ALLCAP as c_int;
-        }
+    if dumpflags & DUMPFLAG_ONECAP != 0 {
+        flags |= WF_ONECAP as c_int;
+    }
+    if dumpflags & DUMPFLAG_ALLCAP != 0 {
+        flags |= WF_ALLCAP as c_int;
+    }
 
-        let mut p;
-        if dumpflags & DUMPFLAG_KEEPCASE == 0 && flags & WF_CAPMASK as c_int != 0 {
-            make_case_word(word, cword.as_mut_ptr(), flags);
-            p = cword.as_mut_ptr();
-        } else {
-            p = word;
-            if dumpflags & DUMPFLAG_KEEPCASE != 0
-                && (captype(word, core::ptr::null()) & WF_KEEPCAP as c_int == 0
-                    || flags & WF_FIXCAP as c_int != 0)
-            {
-                keepcap = true;
+    let mut p;
+    if dumpflags & DUMPFLAG_KEEPCASE == 0 && flags & WF_CAPMASK as c_int != 0 {
+        unsafe { make_case_word(word, cword.as_mut_ptr(), flags) };
+        p = cword.as_mut_ptr();
+    } else {
+        p = word;
+        if dumpflags & DUMPFLAG_KEEPCASE != 0
+            && (unsafe { captype(word, core::ptr::null()) } & WF_KEEPCAP as c_int == 0
+                || flags & WF_FIXCAP as c_int != 0)
+        {
+            keepcap = true;
+        }
+    }
+    let tw = p;
+
+    if pat.is_null() {
+        if flags & (WF_BANNED | WF_RARE | WF_REGION) as c_int != 0 || keepcap {
+            unsafe { strcpy(badword.as_mut_ptr(), p) };
+            unsafe { strcat(badword.as_mut_ptr(), c"/".as_ptr()) };
+            if keepcap {
+                unsafe { strcat(badword.as_mut_ptr(), c"=".as_ptr()) };
             }
-        }
-        let tw = p;
-
-        if pat.is_null() {
-            if flags & (WF_BANNED | WF_RARE | WF_REGION) as c_int != 0 || keepcap {
-                strcpy(badword.as_mut_ptr(), p);
-                strcat(badword.as_mut_ptr(), c"/".as_ptr());
-                if keepcap {
-                    strcat(badword.as_mut_ptr(), c"=".as_ptr());
-                }
-                if flags & WF_BANNED as c_int != 0 {
-                    strcat(badword.as_mut_ptr(), c"!".as_ptr());
-                } else if flags & WF_RARE as c_int != 0 {
-                    strcat(badword.as_mut_ptr(), c"?".as_ptr());
-                }
-                if flags & WF_REGION as c_int != 0 {
-                    for i in 0..7 {
-                        if flags & (0x10000 << i) != 0 {
-                            let badword_len = strlen(badword.as_ptr());
+            if flags & WF_BANNED as c_int != 0 {
+                unsafe { strcat(badword.as_mut_ptr(), c"!".as_ptr()) };
+            } else if flags & WF_RARE as c_int != 0 {
+                unsafe { strcat(badword.as_mut_ptr(), c"?".as_ptr()) };
+            }
+            if flags & WF_REGION as c_int != 0 {
+                for i in 0..7 {
+                    if flags & (0x10000 << i) != 0 {
+                        let badword_len = unsafe { strlen(badword.as_ptr()) };
+                        unsafe {
                             snprintf(
                                 badword.as_mut_ptr().add(badword_len),
                                 badword.len() - badword_len,
                                 c"%d".as_ptr(),
                                 i + 1,
-                            );
-                        }
+                            )
+                        };
                     }
                 }
-                p = badword.as_mut_ptr();
             }
+            p = badword.as_mut_ptr();
+        }
 
-            if dumpflags & DUMPFLAG_COUNT != 0 {
-                // ":spelldump!" wants the word's COMMON count.
-                let hi: *mut hashitem_T = hash_find(&raw mut (*slang).sl_wordcount, tw);
-                if !((*hi).hi_key.is_null() || core::ptr::eq((*hi).hi_key, &raw const hash_removed))
-                {
-                    let wc = (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) as *mut wordcount_T;
+        if dumpflags & DUMPFLAG_COUNT != 0 {
+            // ":spelldump!" wants the word's COMMON count.
+            let hi: *mut hashitem_T = unsafe { hash_find(&raw mut (*slang).sl_wordcount, tw) };
+            if !(unsafe { (*hi).hi_key }.is_null()
+                || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed))
+            {
+                let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
+                unsafe {
                     vim_snprintf(
                         counted.as_mut_ptr(),
                         IOSIZE as size_t,
                         c"%s\t%d".as_ptr(),
                         tw,
                         (*wc).wc_count as c_int,
-                    );
-                    p = counted.as_mut_ptr();
-                }
+                    )
+                };
+                p = counted.as_mut_ptr();
             }
+        }
 
-            ml_append(lnum, p, 0, false);
+        unsafe { ml_append(lnum, p, 0, false) };
+    } else {
+        let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
+            unsafe { mb_strnicmp(p, pat, strlen(pat)) == 0 }
         } else {
-            let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
-                mb_strnicmp(p, pat, strlen(pat)) == 0
-            } else {
-                strncmp(p, pat, strlen(pat)) == 0
-            };
-            if matches
-                && ins_compl_add_infercase(
+            unsafe { strncmp(p, pat, strlen(pat)) == 0 }
+        };
+        if matches
+            && unsafe {
+                ins_compl_add_infercase(
                     p,
                     strlen(p) as c_int,
                     p_ic.get() != 0,
@@ -444,11 +457,11 @@ unsafe fn dump_word(
                     *dir,
                     false,
                     0,
-                ) == OK
-            {
-                // A BACKWARD request is honoured only for the first match.
-                *dir = FORWARD;
-            }
+                )
+            } == OK
+        {
+            // A BACKWARD request is honoured only for the first match.
+            unsafe { *dir = FORWARD };
         }
     }
 }
@@ -468,59 +481,59 @@ unsafe fn dump_prefixes(
     flags: c_int,
     startlnum: linenr_T,
 ) -> linenr_T {
-    unsafe {
-        let mut arridx = [0 as idx_T; MAXWLEN];
-        let mut curi = [0 as c_int; MAXWLEN];
-        let mut prefix = [0 as c_char; MAXWLEN];
-        let mut word_up = [0 as c_char; MAXWLEN];
-        let mut has_word_up = false;
-        let mut lnum = startlnum;
+    let mut arridx = [0 as idx_T; MAXWLEN];
+    let mut curi = [0 as c_int; MAXWLEN];
+    let mut prefix = [0 as c_char; MAXWLEN];
+    let mut word_up = [0 as c_char; MAXWLEN];
+    let mut has_word_up = false;
+    let mut lnum = startlnum;
 
-        // A word starting lower-case gets an upper-case twin to try.
-        let c = utf_ptr2char(word);
-        if spell_toupper(c) != c {
-            onecap_copy(word, word_up.as_mut_ptr(), true);
-            has_word_up = true;
+    // A word starting lower-case gets an upper-case twin to try.
+    let c = unsafe { utf_ptr2char(word) };
+    if spell_toupper(c) != c {
+        unsafe { onecap_copy(word, word_up.as_mut_ptr(), true) };
+        has_word_up = true;
+    }
+
+    let byts = unsafe { (*slang).sl_pbyts };
+    let idxs = unsafe { (*slang).sl_pidxs };
+    if byts.is_null() {
+        return lnum;
+    }
+
+    // Build each prefix byte by byte in prefix[]; at the end of one,
+    // check whether it accepts "flags".
+    let mut depth: c_int = 0;
+    arridx[0] = 0;
+    curi[0] = 1;
+    while depth >= 0 && !got_int.get() {
+        let d = depth as usize;
+        let mut n = arridx[d];
+        let len = unsafe { *byts.offset(n as isize) } as c_int;
+        if curi[d] > len {
+            depth -= 1;
+            line_breakcheck();
+            continue;
         }
 
-        let byts = (*slang).sl_pbyts;
-        let idxs = (*slang).sl_pidxs;
-        if byts.is_null() {
-            return lnum;
-        }
-
-        // Build each prefix byte by byte in prefix[]; at the end of one,
-        // check whether it accepts "flags".
-        let mut depth: c_int = 0;
-        arridx[0] = 0;
-        curi[0] = 1;
-        while depth >= 0 && !got_int.get() {
-            let d = depth as usize;
-            let mut n = arridx[d];
-            let len = *byts.offset(n as isize) as c_int;
-            if curi[d] > len {
-                depth -= 1;
-                line_breakcheck();
-                continue;
-            }
-
-            n += curi[d];
-            curi[d] += 1;
-            let c = *byts.offset(n as isize) as c_int;
-            if c == 0 {
-                // End of a prefix; count how many IDs share it.
-                let mut i = 1;
-                while i < len {
-                    if *byts.offset((n + i) as isize) != 0 {
-                        break;
-                    }
-                    i += 1;
+        n += curi[d];
+        curi[d] += 1;
+        let c = unsafe { *byts.offset(n as isize) } as c_int;
+        if c == 0 {
+            // End of a prefix; count how many IDs share it.
+            let mut i = 1;
+            while i < len {
+                if unsafe { *byts.offset((n + i) as isize) } != 0 {
+                    break;
                 }
-                curi[d] += i - 1;
+                i += 1;
+            }
+            curi[d] += i - 1;
 
-                let c = valid_word_prefix(i, n, flags, word, slang, false);
-                if c != 0 {
-                    xstrlcpy(prefix.as_mut_ptr().add(d), word, MAXWLEN - d);
+            let c = unsafe { valid_word_prefix(i, n, flags, word, slang, false) };
+            if c != 0 {
+                unsafe { xstrlcpy(prefix.as_mut_ptr().add(d), word, MAXWLEN - d) };
+                unsafe {
                     dump_word(
                         slang,
                         prefix.as_mut_ptr(),
@@ -533,22 +546,27 @@ unsafe fn dump_prefixes(
                             flags
                         },
                         lnum,
-                    );
-                    if lnum != 0 {
-                        lnum += 1;
-                    }
+                    )
+                };
+                if lnum != 0 {
+                    lnum += 1;
                 }
+            }
 
-                // The same, for the upper-cased word — but only prefixes
-                // that carry a condition.
-                if has_word_up {
-                    let c = valid_word_prefix(i, n, flags, word_up.as_mut_ptr(), slang, true);
-                    if c != 0 {
+            // The same, for the upper-cased word — but only prefixes
+            // that carry a condition.
+            if has_word_up {
+                let c =
+                    unsafe { valid_word_prefix(i, n, flags, word_up.as_mut_ptr(), slang, true) };
+                if c != 0 {
+                    unsafe {
                         xstrlcpy(
                             prefix.as_mut_ptr().add(d),
                             word_up.as_mut_ptr(),
                             MAXWLEN - d,
-                        );
+                        )
+                    };
+                    unsafe {
                         dump_word(
                             slang,
                             prefix.as_mut_ptr(),
@@ -561,21 +579,21 @@ unsafe fn dump_prefixes(
                                 flags
                             },
                             lnum,
-                        );
-                        if lnum != 0 {
-                            lnum += 1;
-                        }
+                        )
+                    };
+                    if lnum != 0 {
+                        lnum += 1;
                     }
                 }
-            } else {
-                // An ordinary byte: descend.
-                prefix[d] = c as c_char;
-                depth += 1;
-                arridx[depth as usize] = *idxs.offset(n as isize);
-                curi[depth as usize] = 1;
             }
+        } else {
+            // An ordinary byte: descend.
+            prefix[d] = c as c_char;
+            depth += 1;
+            arridx[depth as usize] = unsafe { *idxs.offset(n as isize) };
+            curi[depth as usize] = 1;
         }
-
-        lnum
     }
+
+    lnum
 }

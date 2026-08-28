@@ -79,104 +79,112 @@ pub(super) unsafe fn spell_read_dic(
 ) -> c_int {
     // SAFETY: the caller promises the path and the affix file; every buffer
     // below is sized for what is written into it.
-    unsafe {
-        let fd = os_fopen(fname, c"r".as_ptr());
-        if fd.is_null() {
-            semsg_c!(gettext((&raw const e_notopen).cast()), fname);
-            return FAIL;
+    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    if fd.is_null() {
+        unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+        return FAIL;
+    }
+
+    let mut ht: hashtab_T = unsafe { core::mem::zeroed() };
+    unsafe { hash_init(&raw mut ht) };
+    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    spell_message_fmt(
+        unsafe { &*spin },
+        format_args!("Reading dictionary file {name}..."),
+    );
+
+    // Force the first progress message.
+    unsafe { (*spin).si_msg_count = 999999 };
+
+    let mut line: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
+    // The first line is a word count, which is only checked, not used.
+    if unsafe { vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) }
+        || !ascii_isdigit(unsafe { *skipwhite(line.as_mut_ptr()) } as c_int)
+    {
+        unsafe { semsg_c!(gettext(c"E760: No word count in %s".as_ptr()), fname) };
+    }
+
+    let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut message: [c_char; 754] = [0; 754];
+    let mut lnum: c_int = 1;
+    let mut non_ascii = 0;
+    let mut duplicate = 0;
+    let mut retval = OK;
+    let mut last_msg_time: Timestamp = 0;
+
+    while !unsafe { vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) } && !got_int.get() {
+        line_breakcheck();
+        lnum += 1;
+        if line[0] as c_int == b'#' as c_int || line[0] as c_int == b'/' as c_int {
+            continue;
         }
-
-        let mut ht: hashtab_T = core::mem::zeroed();
-        hash_init(&raw mut ht);
-        let name = CStr::from_ptr(fname).to_string_lossy();
-        spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
-
-        // Force the first progress message.
-        (*spin).si_msg_count = 999999;
-
-        let mut line: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-        // The first line is a word count, which is only checked, not used.
-        if vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd)
-            || !ascii_isdigit(*skipwhite(line.as_mut_ptr()) as c_int)
-        {
-            semsg_c!(gettext(c"E760: No word count in %s".as_ptr()), fname);
+        // Trim trailing white space, and skip the line if nothing is
+        // left.
+        let mut l = unsafe { strlen(line.as_ptr()) } as usize;
+        while l > 0 && line[l - 1] as uint8_t as c_int <= b' ' as c_int {
+            l -= 1;
         }
+        if l == 0 {
+            continue;
+        }
+        line[l] = NUL as c_char;
 
-        let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let mut message: [c_char; 754] = [0; 754];
-        let mut lnum: c_int = 1;
-        let mut non_ascii = 0;
-        let mut duplicate = 0;
-        let mut retval = OK;
-        let mut last_msg_time: Timestamp = 0;
-
-        while !vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) && !got_int.get() {
-            line_breakcheck();
-            lnum += 1;
-            if line[0] as c_int == b'#' as c_int || line[0] as c_int == b'/' as c_int {
-                continue;
-            }
-            // Trim trailing white space, and skip the line if nothing is
-            // left.
-            let mut l = strlen(line.as_ptr()) as usize;
-            while l > 0 && line[l - 1] as uint8_t as c_int <= b' ' as c_int {
-                l -= 1;
-            }
-            if l == 0 {
-                continue;
-            }
-            line[l] = NUL as c_char;
-
-            let mut pc: *mut c_char = core::ptr::null_mut();
-            let w = if (*spin).si_conv.vc_type != CONV_NONE {
-                pc = string_convert(
+        let mut pc: *mut c_char = core::ptr::null_mut();
+        let w = if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
+            pc = unsafe {
+                string_convert(
                     &raw mut (*spin).si_conv,
                     line.as_mut_ptr(),
                     core::ptr::null_mut(),
-                );
-                if pc.is_null() {
+                )
+            };
+            if pc.is_null() {
+                unsafe {
                     smsg_c!(
                         0,
                         gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()),
                         fname,
                         lnum,
                         line.as_mut_ptr(),
-                    );
-                    continue;
-                }
-                pc
-            } else {
-                line.as_mut_ptr()
-            };
-
-            // Split the stem from its affix flags. An escaped "\\" or "\/"
-            // is a literal, and collapses here.
-            let mut afflist: *mut c_char = core::ptr::null_mut();
-            let mut p = w;
-            while *p as c_int != NUL {
-                if *p as c_int == b'\\' as c_int
-                    && (*p.add(1) as c_int == b'\\' as c_int || *p.add(1) as c_int == b'/' as c_int)
-                {
-                    memmove(p.cast(), p.add(1).cast(), strlen(p.add(1)) + 1);
-                } else if *p as c_int == b'/' as c_int {
-                    *p = NUL as c_char;
-                    afflist = p.add(1);
-                    break;
-                }
-                p = p.add(utfc_ptr2len(p) as usize);
-            }
-
-            if (*spin).si_ascii != 0 && has_non_ascii(w) {
-                non_ascii += 1;
-                xfree(pc.cast());
+                    )
+                };
                 continue;
             }
+            pc
+        } else {
+            line.as_mut_ptr()
+        };
 
-            // Progress, at most once a second.
-            if (*spin).si_verbose != 0 && (*spin).si_msg_count > 10000 {
-                (*spin).si_msg_count = 0;
-                if os_time() > last_msg_time {
-                    last_msg_time = os_time();
+        // Split the stem from its affix flags. An escaped "\\" or "\/"
+        // is a literal, and collapses here.
+        let mut afflist: *mut c_char = core::ptr::null_mut();
+        let mut p = w;
+        while unsafe { *p } as c_int != NUL {
+            if unsafe { *p } as c_int == b'\\' as c_int
+                && (unsafe { *p.add(1) } as c_int == b'\\' as c_int
+                    || unsafe { *p.add(1) } as c_int == b'/' as c_int)
+            {
+                unsafe { memmove(p.cast(), p.add(1).cast(), strlen(p.add(1)) + 1) };
+            } else if unsafe { *p } as c_int == b'/' as c_int {
+                unsafe { *p = NUL as c_char };
+                afflist = unsafe { p.add(1) };
+                break;
+            }
+            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        }
+
+        if unsafe { (*spin).si_ascii } != 0 && unsafe { has_non_ascii(w) } {
+            non_ascii += 1;
+            unsafe { xfree(pc.cast()) };
+            continue;
+        }
+
+        // Progress, at most once a second.
+        if unsafe { (*spin).si_verbose } != 0 && unsafe { (*spin).si_msg_count } > 10000 {
+            unsafe { (*spin).si_msg_count = 0 };
+            if os_time() > last_msg_time {
+                last_msg_time = os_time();
+                unsafe {
                     vim_snprintf(
                         message.as_mut_ptr(),
                         size_of_val(&message),
@@ -184,93 +192,106 @@ pub(super) unsafe fn spell_read_dic(
                         lnum,
                         (*spin).si_foldwcount + (*spin).si_keepwcount,
                         w,
-                    );
-                    msg_start();
-                    msg_outtrans_long(message.as_mut_ptr(), 0);
-                    msg_clr_eos();
-                    msg_didout.set(false);
-                    msg_col.set(0);
-                    ui_flush();
-                }
+                    )
+                };
+                unsafe { msg_start() };
+                unsafe { msg_outtrans_long(message.as_mut_ptr(), 0) };
+                unsafe { msg_clr_eos() };
+                msg_didout.set(false);
+                msg_col.set(0);
+                unsafe { ui_flush() };
             }
+        }
 
-            // The word is kept in the arena so the duplicate table can
-            // point at it for the rest of the run.
-            let dw = (*spin).si_arena.save_str(w);
-            if dw.is_null() {
-                retval = FAIL;
-                xfree(pc.cast());
-                break;
-            }
+        // The word is kept in the arena so the duplicate table can
+        // point at it for the rest of the run.
+        let dw = unsafe { (*spin).si_arena.save_str(w) };
+        if dw.is_null() {
+            retval = FAIL;
+            unsafe { xfree(pc.cast()) };
+            break;
+        }
 
-            let hash: hash_T = hash_hash(dw);
-            let hi: *mut hashitem_T = hash_lookup(&raw mut ht, dw, strlen(dw), hash);
-            if (*hi).hi_key.is_null() || (*hi).hi_key == (&raw const hash_removed).cast_mut().cast()
-            {
-                hash_add_item(&raw mut ht, hi, dw, hash);
-            } else {
-                // Report every duplicate when 'verbose' is on, otherwise
-                // just the first, plus a count at the end.
-                if p_verbose.get() > 0 {
+        let hash: hash_T = unsafe { hash_hash(dw) };
+        let hi: *mut hashitem_T = unsafe { hash_lookup(&raw mut ht, dw, strlen(dw), hash) };
+        if unsafe { (*hi).hi_key }.is_null()
+            || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
+        {
+            unsafe { hash_add_item(&raw mut ht, hi, dw, hash) };
+        } else {
+            // Report every duplicate when 'verbose' is on, otherwise
+            // just the first, plus a count at the end.
+            if p_verbose.get() > 0 {
+                unsafe {
                     smsg_c!(
                         0,
                         gettext(c"Duplicate word in %s line %d: %s".as_ptr()),
                         fname,
                         lnum,
                         dw,
-                    );
-                } else if duplicate == 0 {
+                    )
+                };
+            } else if duplicate == 0 {
+                unsafe {
                     smsg_c!(
                         0,
                         gettext(c"First duplicate word in %s line %d: %s".as_ptr()),
                         fname,
                         lnum,
                         dw,
-                    );
-                }
-                duplicate += 1;
+                    )
+                };
             }
+            duplicate += 1;
+        }
 
-            let mut flags = 0;
-            store_afflist[0] = NUL as c_char;
-            let mut pfxlen = 0;
-            let mut need_affix = false;
-            if !afflist.is_null() {
-                flags |= get_affix_flags(affile, afflist);
-                if (*affile).af_needaffix != 0
-                    && flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_needaffix)
-                {
-                    need_affix = true;
+        let mut flags = 0;
+        store_afflist[0] = NUL as c_char;
+        let mut pfxlen = 0;
+        let mut need_affix = false;
+        if !afflist.is_null() {
+            flags |= unsafe { get_affix_flags(affile, afflist) };
+            if unsafe { (*affile).af_needaffix } != 0
+                && unsafe {
+                    flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_needaffix)
                 }
-                if (*affile).af_pfxpostpone != 0 {
-                    pfxlen = get_pfxlist(affile, afflist, store_afflist.as_mut_ptr());
-                }
-                if !(*spin).si_compflags.is_null() {
+            {
+                need_affix = true;
+            }
+            if unsafe { (*affile).af_pfxpostpone } != 0 {
+                pfxlen = unsafe { get_pfxlist(affile, afflist, store_afflist.as_mut_ptr()) };
+            }
+            if !unsafe { (*spin).si_compflags }.is_null() {
+                unsafe {
                     get_compflags(
                         affile,
                         afflist,
                         store_afflist.as_mut_ptr().offset(pfxlen as isize),
-                    );
-                }
+                    )
+                };
             }
+        }
 
-            let region = (*spin).si_region;
-            if store_word(
+        let region = unsafe { (*spin).si_region };
+        if unsafe {
+            store_word(
                 &mut *spin,
                 dw,
                 flags,
                 region,
                 store_afflist.as_ptr(),
                 need_affix,
-            ) == FAIL
-            {
-                retval = FAIL;
-            }
+            )
+        } == FAIL
+        {
+            retval = FAIL;
+        }
 
-            if !afflist.is_null() {
-                // Suffixes first, so a prefix can then be put on a word
-                // that already has one; then prefixes on the bare stem.
-                if store_aff_word(
+        if !afflist.is_null() {
+            // Suffixes first, so a prefix can then be put on a word
+            // that already has one; then prefixes on the bare stem.
+            if unsafe {
+                store_aff_word(
                     spin,
                     dw,
                     afflist,
@@ -281,11 +302,13 @@ pub(super) unsafe fn spell_read_dic(
                     flags,
                     store_afflist.as_mut_ptr(),
                     pfxlen,
-                ) == FAIL
-                {
-                    retval = FAIL;
-                }
-                if store_aff_word(
+                )
+            } == FAIL
+            {
+                retval = FAIL;
+            }
+            if unsafe {
+                store_aff_word(
                     spin,
                     dw,
                     afflist,
@@ -296,34 +319,38 @@ pub(super) unsafe fn spell_read_dic(
                     flags,
                     store_afflist.as_mut_ptr(),
                     pfxlen,
-                ) == FAIL
-                {
-                    retval = FAIL;
-                }
+                )
+            } == FAIL
+            {
+                retval = FAIL;
             }
-            xfree(pc.cast());
         }
+        unsafe { xfree(pc.cast()) };
+    }
 
-        if duplicate > 0 {
+    if duplicate > 0 {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"%d duplicate word(s) in %s".as_ptr()),
                 duplicate,
                 fname,
-            );
-        }
-        if (*spin).si_ascii != 0 && non_ascii > 0 {
+            )
+        };
+    }
+    if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
+        unsafe {
             smsg_c!(
                 0,
                 gettext(c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr()),
                 non_ascii,
                 fname,
-            );
-        }
-        hash_clear(&raw mut ht);
-        fclose(fd);
-        retval
+            )
+        };
     }
+    unsafe { hash_clear(&raw mut ht) };
+    unsafe { fclose(fd) };
+    retval
 }
 
 /// Turn the affix flags a word carries into the `WF_*` bits stored with it.
@@ -333,27 +360,25 @@ pub(super) unsafe fn spell_read_dic(
 /// `afflist` must be a NUL-terminated flag list and `affile` live.
 unsafe fn get_affix_flags(affile: *mut afffile_T, afflist: *mut c_char) -> c_int {
     // SAFETY: the caller promises both.
-    unsafe {
-        let flagtype = (*affile).af_flagtype;
-        let mut flags = 0;
-        for (declared, bits) in [
-            (
-                (*affile).af_keepcase,
-                WF_KEEPCAP as c_int | WF_FIXCAP as c_int,
-            ),
-            ((*affile).af_rare, WF_RARE as c_int),
-            ((*affile).af_bad, WF_BANNED as c_int),
-            ((*affile).af_needcomp, WF_NEEDCOMP as c_int),
-            ((*affile).af_comproot, WF_COMPROOT as c_int),
-            ((*affile).af_nosuggest, WF_NOSUGGEST as c_int),
-        ] {
-            // A flag of zero means the affix file never declared it.
-            if declared != 0 && flag_in_afflist(flagtype, afflist, declared) {
-                flags |= bits;
-            }
+    let flagtype = unsafe { (*affile).af_flagtype };
+    let mut flags = 0;
+    for (declared, bits) in [
+        (
+            unsafe { (*affile).af_keepcase },
+            WF_KEEPCAP as c_int | WF_FIXCAP as c_int,
+        ),
+        (unsafe { (*affile).af_rare }, WF_RARE as c_int),
+        (unsafe { (*affile).af_bad }, WF_BANNED as c_int),
+        (unsafe { (*affile).af_needcomp }, WF_NEEDCOMP as c_int),
+        (unsafe { (*affile).af_comproot }, WF_COMPROOT as c_int),
+        (unsafe { (*affile).af_nosuggest }, WF_NOSUGGEST as c_int),
+    ] {
+        // A flag of zero means the affix file never declared it.
+        if declared != 0 && unsafe { flag_in_afflist(flagtype, afflist, declared) } {
+            flags |= bits;
         }
-        flags
     }
+    flags
 }
 
 /// Collect the ids of the postponed prefixes a word accepts, and return how
@@ -370,38 +395,38 @@ unsafe fn get_pfxlist(
 ) -> c_int {
     // SAFETY: the caller promises the output buffer; `key` is AH_KEY_LEN
     // and `get_affitem` never advances past a flag that long.
-    unsafe {
-        let mut cnt = 0;
-        let mut key: [c_char; 17] = [0; 17];
-        let mut p = afflist;
-        while *p as c_int != NUL {
-            let prevp = p;
-            if get_affitem((*affile).af_flagtype, &raw mut p) != 0 {
+    let mut cnt = 0;
+    let mut key: [c_char; 17] = [0; 17];
+    let mut p = afflist;
+    while unsafe { *p } as c_int != NUL {
+        let prevp = p;
+        if unsafe { get_affitem((*affile).af_flagtype, &raw mut p) } != 0 {
+            unsafe {
                 xmemcpyz(
                     key.as_mut_ptr().cast(),
                     prevp.cast(),
                     p.offset_from(prevp) as size_t,
-                );
-                let hi = hash_find(&raw mut (*affile).af_pref, key.as_mut_ptr());
-                if !(*hi).hi_key.is_null()
-                    && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
-                {
-                    // Only prefixes that were actually postponed have an
-                    // id; the rest were expanded into the word list.
-                    let id = (*affheader_T::of_key((*hi).hi_key)).ah_newID;
-                    if id != 0 {
-                        *store_afflist.offset(cnt as isize) = id as uint8_t as c_char;
-                        cnt += 1;
-                    }
+                )
+            };
+            let hi = unsafe { hash_find(&raw mut (*affile).af_pref, key.as_mut_ptr()) };
+            if !unsafe { (*hi).hi_key }.is_null()
+                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
+            {
+                // Only prefixes that were actually postponed have an
+                // id; the rest were expanded into the word list.
+                let id = unsafe { (*affheader_T::of_key((*hi).hi_key)).ah_newID };
+                if id != 0 {
+                    unsafe { *store_afflist.offset(cnt as isize) = id as uint8_t as c_char };
+                    cnt += 1;
                 }
             }
-            if (*affile).af_flagtype == AFT_NUM && *p as c_int == b',' as c_int {
-                p = p.add(1);
-            }
         }
-        *store_afflist.offset(cnt as isize) = NUL as c_char;
-        cnt
+        if unsafe { (*affile).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+            p = unsafe { p.add(1) };
+        }
     }
+    unsafe { *store_afflist.offset(cnt as isize) = NUL as c_char };
+    cnt
 }
 
 /// Collect the compound ids a word accepts.
@@ -411,33 +436,35 @@ unsafe fn get_pfxlist(
 /// As [`get_pfxlist`].
 unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_afflist: *mut c_char) {
     // SAFETY: as above.
-    unsafe {
-        let mut cnt = 0;
-        let mut key: [c_char; 17] = [0; 17];
-        let mut p = afflist;
-        while *p as c_int != NUL {
-            let prevp = p;
-            if get_affitem((*affile).af_flagtype, &raw mut p) != 0 {
+    let mut cnt = 0;
+    let mut key: [c_char; 17] = [0; 17];
+    let mut p = afflist;
+    while unsafe { *p } as c_int != NUL {
+        let prevp = p;
+        if unsafe { get_affitem((*affile).af_flagtype, &raw mut p) } != 0 {
+            unsafe {
                 xmemcpyz(
                     key.as_mut_ptr().cast(),
                     prevp.cast(),
                     p.offset_from(prevp) as size_t,
-                );
-                let hi = hash_find(&raw mut (*affile).af_comp, key.as_mut_ptr());
-                if !(*hi).hi_key.is_null()
-                    && (*hi).hi_key != (&raw const hash_removed).cast_mut().cast()
-                {
+                )
+            };
+            let hi = unsafe { hash_find(&raw mut (*affile).af_comp, key.as_mut_ptr()) };
+            if !unsafe { (*hi).hi_key }.is_null()
+                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
+            {
+                unsafe {
                     *store_afflist.offset(cnt as isize) =
-                        (*compitem_T::of_key((*hi).hi_key)).ci_newID as uint8_t as c_char;
-                    cnt += 1;
-                }
-            }
-            if (*affile).af_flagtype == AFT_NUM && *p as c_int == b',' as c_int {
-                p = p.add(1);
+                        (*compitem_T::of_key((*hi).hi_key)).ci_newID as uint8_t as c_char
+                };
+                cnt += 1;
             }
         }
-        *store_afflist.offset(cnt as isize) = NUL as c_char;
+        if unsafe { (*affile).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+            p = unsafe { p.add(1) };
+        }
     }
+    unsafe { *store_afflist.offset(cnt as isize) = NUL as c_char };
 }
 
 /// Apply every affix in `ht` that `word` accepts, store each result, and
@@ -467,164 +494,181 @@ pub(super) unsafe fn store_aff_word(
     // SAFETY: the caller promises the strings and tables; `newword` is
     // MAXWLEN and every write to it goes through xstrlcpy/xstrlcat with
     // that bound.
-    unsafe {
-        let mut newword: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let mut retval = OK;
-        let wordlen = strlen(word);
+    let mut newword: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
+    let mut retval = OK;
+    let wordlen = unsafe { strlen(word) };
 
-        let mut todo = (*ht).ht_used as c_int;
-        let mut hi = (*ht).ht_array;
-        while todo > 0 && retval == OK {
-            if (*hi).hi_key.is_null() || (*hi).hi_key == (&raw const hash_removed).cast_mut().cast()
-            {
-                hi = hi.add(1);
-                continue;
-            }
-            todo -= 1;
-            let ah = affheader_T::of_key((*hi).hi_key);
+    let mut todo = unsafe { (*ht).ht_used } as c_int;
+    let mut hi = unsafe { (*ht).ht_array };
+    while todo > 0 && retval == OK {
+        if unsafe { (*hi).hi_key }.is_null()
+            || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
+        {
+            hi = unsafe { hi.add(1) };
+            continue;
+        }
+        todo -= 1;
+        let ah = unsafe { affheader_T::of_key((*hi).hi_key) };
 
-            if (condit & CONDIT_COMB == 0 || (*ah).ah_combine != 0)
-                && flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag)
-            {
-                let mut ae = (*ah).ah_first;
-                while !ae.is_null() {
-                    if affix_applies(affile, ae, xht, word, wordlen, condit) {
-                        build_affixed_word(&mut newword, word, ae, xht);
+        if (condit & CONDIT_COMB == 0 || unsafe { (*ah).ah_combine } != 0)
+            && unsafe { flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag) }
+        {
+            let mut ae = unsafe { (*ah).ah_first };
+            while !ae.is_null() {
+                if unsafe { affix_applies(affile, ae, xht, word, wordlen, condit) } {
+                    unsafe { build_affixed_word(&mut newword, word, ae, xht) };
 
-                        let mut use_flags = flags;
-                        let mut use_pfxlist = pfxlist;
-                        let mut use_pfxlen = pfxlen;
-                        let mut need_affix = false;
-                        let mut use_condit = condit | CONDIT_COMB | CONDIT_AFF;
+                    let mut use_flags = flags;
+                    let mut use_pfxlist = pfxlist;
+                    let mut use_pfxlen = pfxlen;
+                    let mut need_affix = false;
+                    let mut use_condit = condit | CONDIT_COMB | CONDIT_AFF;
 
-                        if !(*ae).ae_flags.is_null() {
-                            use_flags |= get_affix_flags(affile, (*ae).ae_flags);
-                            if (*affile).af_needaffix != 0
-                                && flag_in_afflist(
+                    if !unsafe { (*ae).ae_flags }.is_null() {
+                        use_flags |= unsafe { get_affix_flags(affile, (*ae).ae_flags) };
+                        if unsafe { (*affile).af_needaffix } != 0
+                            && unsafe {
+                                flag_in_afflist(
                                     (*affile).af_flagtype,
                                     (*ae).ae_flags,
                                     (*affile).af_needaffix,
                                 )
-                            {
-                                need_affix = true;
                             }
-                            if (*affile).af_circumfix != 0
-                                && flag_in_afflist(
+                        {
+                            need_affix = true;
+                        }
+                        if unsafe { (*affile).af_circumfix } != 0
+                            && unsafe {
+                                flag_in_afflist(
                                     (*affile).af_flagtype,
                                     (*ae).ae_flags,
                                     (*affile).af_circumfix,
                                 )
-                            {
-                                use_condit |= CONDIT_CFIX;
-                                // The first half of a circumfix is not a
-                                // word on its own.
-                                if condit & CONDIT_CFIX == 0 {
-                                    need_affix = true;
+                            }
+                        {
+                            use_condit |= CONDIT_CFIX;
+                            // The first half of a circumfix is not a
+                            // word on its own.
+                            if condit & CONDIT_CFIX == 0 {
+                                need_affix = true;
+                            }
+                        }
+                        if unsafe { (*affile).af_pfxpostpone } != 0
+                            || !unsafe { (*spin).si_compflags }.is_null()
+                        {
+                            use_pfxlen = if unsafe { (*affile).af_pfxpostpone } != 0 {
+                                unsafe {
+                                    get_pfxlist(affile, (*ae).ae_flags, store_afflist.as_mut_ptr())
+                                }
+                            } else {
+                                0
+                            };
+                            use_pfxlist = store_afflist.as_mut_ptr();
+
+                            // Merge in the ids the word already had,
+                            // skipping any this affix repeats.
+                            for i in 0..pfxlen {
+                                let want = unsafe { *pfxlist.offset(i as isize) };
+                                let mut j = 0;
+                                while j < use_pfxlen {
+                                    if want == unsafe { *use_pfxlist.offset(j as isize) } {
+                                        break;
+                                    }
+                                    j += 1;
+                                }
+                                if j == use_pfxlen {
+                                    unsafe { *use_pfxlist.offset(use_pfxlen as isize) = want };
+                                    use_pfxlen += 1;
                                 }
                             }
-                            if (*affile).af_pfxpostpone != 0 || !(*spin).si_compflags.is_null() {
-                                use_pfxlen = if (*affile).af_pfxpostpone != 0 {
-                                    get_pfxlist(affile, (*ae).ae_flags, store_afflist.as_mut_ptr())
-                                } else {
-                                    0
-                                };
-                                use_pfxlist = store_afflist.as_mut_ptr();
 
-                                // Merge in the ids the word already had,
-                                // skipping any this affix repeats.
-                                for i in 0..pfxlen {
-                                    let want = *pfxlist.offset(i as isize);
-                                    let mut j = 0;
-                                    while j < use_pfxlen {
-                                        if want == *use_pfxlist.offset(j as isize) {
-                                            break;
-                                        }
-                                        j += 1;
-                                    }
-                                    if j == use_pfxlen {
-                                        *use_pfxlist.offset(use_pfxlen as isize) = want;
-                                        use_pfxlen += 1;
-                                    }
-                                }
-
-                                // The compound ids follow the prefix ids.
-                                if !(*spin).si_compflags.is_null() {
+                            // The compound ids follow the prefix ids.
+                            if !unsafe { (*spin).si_compflags }.is_null() {
+                                unsafe {
                                     get_compflags(
                                         affile,
                                         (*ae).ae_flags,
                                         use_pfxlist.offset(use_pfxlen as isize),
-                                    );
-                                } else {
-                                    *use_pfxlist.offset(use_pfxlen as isize) = NUL as c_char;
-                                }
-                                let mut i = pfxlen;
-                                while *pfxlist.offset(i as isize) as c_int != NUL {
-                                    let want = *pfxlist.offset(i as isize);
-                                    let mut j = use_pfxlen;
-                                    while *use_pfxlist.offset(j as isize) as c_int != NUL {
-                                        if want == *use_pfxlist.offset(j as isize) {
-                                            break;
-                                        }
-                                        j += 1;
+                                    )
+                                };
+                            } else {
+                                unsafe { *use_pfxlist.offset(use_pfxlen as isize) = NUL as c_char };
+                            }
+                            let mut i = pfxlen;
+                            while unsafe { *pfxlist.offset(i as isize) } as c_int != NUL {
+                                let want = unsafe { *pfxlist.offset(i as isize) };
+                                let mut j = use_pfxlen;
+                                while unsafe { *use_pfxlist.offset(j as isize) } as c_int != NUL {
+                                    if want == unsafe { *use_pfxlist.offset(j as isize) } {
+                                        break;
                                     }
-                                    if *use_pfxlist.offset(j as isize) as c_int == NUL {
-                                        *use_pfxlist.offset(j as isize) = want;
-                                        *use_pfxlist.offset(j as isize + 1) = NUL as c_char;
-                                    }
-                                    i += 1;
+                                    j += 1;
                                 }
+                                if unsafe { *use_pfxlist.offset(j as isize) } as c_int == NUL {
+                                    unsafe { *use_pfxlist.offset(j as isize) = want };
+                                    unsafe { *use_pfxlist.offset(j as isize + 1) = NUL as c_char };
+                                }
+                                i += 1;
                             }
                         }
+                    }
 
-                        // An affix that forbids compounding gets its own
-                        // copy of the list, so truncating it below does
-                        // not disturb the caller's.
-                        if !use_pfxlist.is_null() && (*ae).ae_compforbid as c_int != 0 {
+                    // An affix that forbids compounding gets its own
+                    // copy of the list, so truncating it below does
+                    // not disturb the caller's.
+                    if !use_pfxlist.is_null() && unsafe { (*ae).ae_compforbid } as c_int != 0 {
+                        unsafe {
                             xmemcpyz(
                                 pfx_pfxlist.as_mut_ptr().cast(),
                                 use_pfxlist.cast(),
                                 use_pfxlen as size_t,
-                            );
-                            use_pfxlist = pfx_pfxlist.as_mut_ptr();
-                        }
+                            )
+                        };
+                        use_pfxlist = pfx_pfxlist.as_mut_ptr();
+                    }
 
-                        if !(*spin).si_prefroot.is_null()
-                            && !(*(*spin).si_prefroot).wn_sibling.is_null()
-                        {
-                            use_flags |= WF_HAS_AFF as c_int;
-                            // A non-combinable affix keeps only the
-                            // compound ids, not the prefix ids.
-                            if (*ah).ah_combine == 0 && !use_pfxlist.is_null() {
-                                use_pfxlist = use_pfxlist.offset(use_pfxlen as isize);
-                            }
+                    if !unsafe { (*spin).si_prefroot }.is_null()
+                        && !unsafe { (*(*spin).si_prefroot).wn_sibling }.is_null()
+                    {
+                        use_flags |= WF_HAS_AFF as c_int;
+                        // A non-combinable affix keeps only the
+                        // compound ids, not the prefix ids.
+                        if unsafe { (*ah).ah_combine } == 0 && !use_pfxlist.is_null() {
+                            use_pfxlist = unsafe { use_pfxlist.offset(use_pfxlen as isize) };
                         }
-                        if !(*spin).si_compflags.is_null() && (*ae).ae_comppermit == 0 {
-                            use_flags |= if xht.is_null() {
-                                WF_NOCOMPBEF as c_int
-                            } else {
-                                WF_NOCOMPAFT as c_int
-                            };
-                        }
+                    }
+                    if !unsafe { (*spin).si_compflags }.is_null()
+                        && unsafe { (*ae).ae_comppermit } == 0
+                    {
+                        use_flags |= if xht.is_null() {
+                            WF_NOCOMPBEF as c_int
+                        } else {
+                            WF_NOCOMPAFT as c_int
+                        };
+                    }
 
-                        let region = (*spin).si_region;
-                        if store_word(
+                    let region = unsafe { (*spin).si_region };
+                    if unsafe {
+                        store_word(
                             &mut *spin,
                             newword.as_mut_ptr(),
                             use_flags,
                             region,
                             use_pfxlist,
                             need_affix,
-                        ) == FAIL
-                        {
-                            retval = FAIL;
-                        }
+                        )
+                    } == FAIL
+                    {
+                        retval = FAIL;
+                    }
 
-                        // A suffix may follow, if this affix allows one.
-                        if condit & CONDIT_SUF != 0 && !(*ae).ae_flags.is_null() {
-                            let deeper = use_condit & if xht.is_null() { !0 } else { !CONDIT_SUF };
-                            if store_aff_word(
+                    // A suffix may follow, if this affix allows one.
+                    if condit & CONDIT_SUF != 0 && !unsafe { (*ae).ae_flags }.is_null() {
+                        let deeper = use_condit & if xht.is_null() { !0 } else { !CONDIT_SUF };
+                        if unsafe {
+                            store_aff_word(
                                 spin,
                                 newword.as_mut_ptr(),
                                 (*ae).ae_flags,
@@ -635,16 +679,18 @@ pub(super) unsafe fn store_aff_word(
                                 use_flags,
                                 use_pfxlist,
                                 pfxlen,
-                            ) == FAIL
-                            {
-                                retval = FAIL;
-                            }
+                            )
+                        } == FAIL
+                        {
+                            retval = FAIL;
                         }
+                    }
 
-                        // And a prefix, when this is the suffix pass and
-                        // the suffix is combinable.
-                        if !xht.is_null() && (*ah).ah_combine != 0 {
-                            let a = store_aff_word(
+                    // And a prefix, when this is the suffix pass and
+                    // the suffix is combinable.
+                    if !xht.is_null() && unsafe { (*ah).ah_combine } != 0 {
+                        let a = unsafe {
+                            store_aff_word(
                                 spin,
                                 newword.as_mut_ptr(),
                                 afflist,
@@ -655,10 +701,12 @@ pub(super) unsafe fn store_aff_word(
                                 use_flags,
                                 use_pfxlist,
                                 pfxlen,
-                            );
-                            if a == FAIL
-                                || (!(*ae).ae_flags.is_null()
-                                    && store_aff_word(
+                            )
+                        };
+                        if a == FAIL
+                            || (!unsafe { (*ae).ae_flags }.is_null()
+                                && unsafe {
+                                    store_aff_word(
                                         spin,
                                         newword.as_mut_ptr(),
                                         (*ae).ae_flags,
@@ -669,19 +717,19 @@ pub(super) unsafe fn store_aff_word(
                                         use_flags,
                                         use_pfxlist,
                                         pfxlen,
-                                    ) == FAIL)
-                            {
-                                retval = FAIL;
-                            }
+                                    )
+                                } == FAIL)
+                        {
+                            retval = FAIL;
                         }
                     }
-                    ae = (*ae).ae_next;
                 }
+                ae = unsafe { (*ae).ae_next };
             }
-            hi = hi.add(1);
         }
-        retval
+        hi = unsafe { hi.add(1) };
     }
+    retval
 }
 
 /// Does this affix entry apply to `word`?
@@ -698,38 +746,38 @@ unsafe fn affix_applies(
     condit: c_int,
 ) -> bool {
     // SAFETY: the caller promises the entry and the word.
-    unsafe {
-        // A postponed prefix with nothing to chop, nothing to add and no
-        // flags is handled at match time instead.
-        if xht.is_null()
-            && (*affile).af_pfxpostpone != 0
-            && (*ae).ae_chop.is_null()
-            && (*ae).ae_flags.is_null()
-        {
-            return false;
-        }
-        // There has to be something left after chopping.
-        if !(*ae).ae_chop.is_null() && strlen((*ae).ae_chop) >= wordlen {
-            return false;
-        }
-        // The affix's condition must match the word.
-        if !(*ae).ae_prog.is_null()
-            && !vim_regexec_prog(&raw mut (*ae).ae_prog, false, word, 0 as colnr_T)
-        {
-            return false;
-        }
-        // A circumfix affix only counts once its partner is present, and
-        // a non-circumfix one only while no partner is expected.
-        let at_cfix = condit & CONDIT_CFIX == 0;
-        let is_plain = condit & CONDIT_AFF == 0
-            || (*ae).ae_flags.is_null()
-            || !flag_in_afflist(
+    // A postponed prefix with nothing to chop, nothing to add and no
+    // flags is handled at match time instead.
+    if xht.is_null()
+        && unsafe { (*affile).af_pfxpostpone } != 0
+        && unsafe { (*ae).ae_chop }.is_null()
+        && unsafe { (*ae).ae_flags }.is_null()
+    {
+        return false;
+    }
+    // There has to be something left after chopping.
+    if !unsafe { (*ae).ae_chop }.is_null() && unsafe { strlen((*ae).ae_chop) } >= wordlen {
+        return false;
+    }
+    // The affix's condition must match the word.
+    if !unsafe { (*ae).ae_prog }.is_null()
+        && !unsafe { vim_regexec_prog(&raw mut (*ae).ae_prog, false, word, 0 as colnr_T) }
+    {
+        return false;
+    }
+    // A circumfix affix only counts once its partner is present, and
+    // a non-circumfix one only while no partner is expected.
+    let at_cfix = condit & CONDIT_CFIX == 0;
+    let is_plain = condit & CONDIT_AFF == 0
+        || unsafe { (*ae).ae_flags }.is_null()
+        || !unsafe {
+            flag_in_afflist(
                 (*affile).af_flagtype,
                 (*ae).ae_flags,
                 (*affile).af_circumfix,
-            );
-        at_cfix == is_plain
-    }
+            )
+        };
+    at_cfix == is_plain
 }
 
 /// Chop and add what one affix says, into `newword`.
@@ -744,38 +792,36 @@ unsafe fn build_affixed_word(
     xht: *mut hashtab_T,
 ) {
     // SAFETY: every write is bounded by MAXWLEN, the array's size.
-    unsafe {
-        let cap = MAXWLEN as size_t;
-        if xht.is_null() {
-            // A prefix: chop from the front, then put the addition before
-            // what is left.
-            if (*ae).ae_add.is_null() {
-                newword[0] = NUL as c_char;
-            } else {
-                xstrlcpy(newword.as_mut_ptr(), (*ae).ae_add, cap);
-            }
-            let mut p = word;
-            if !(*ae).ae_chop.is_null() {
-                for _ in 0..mb_charlen((*ae).ae_chop) {
-                    p = p.add(utfc_ptr2len(p) as usize);
-                }
-            }
-            xstrlcat(newword.as_mut_ptr(), p, cap);
-            return;
+    let cap = MAXWLEN as size_t;
+    if xht.is_null() {
+        // A prefix: chop from the front, then put the addition before
+        // what is left.
+        if unsafe { (*ae).ae_add }.is_null() {
+            newword[0] = NUL as c_char;
+        } else {
+            unsafe { xstrlcpy(newword.as_mut_ptr(), (*ae).ae_add, cap) };
         }
+        let mut p = word;
+        if !unsafe { (*ae).ae_chop }.is_null() {
+            for _ in 0..unsafe { mb_charlen((*ae).ae_chop) } {
+                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+            }
+        }
+        unsafe { xstrlcat(newword.as_mut_ptr(), p, cap) };
+        return;
+    }
 
-        // A suffix: chop from the end, then append.
-        xstrlcpy(newword.as_mut_ptr(), word, cap);
-        if !(*ae).ae_chop.is_null() {
-            let mut p = newword.as_mut_ptr().add(strlen(newword.as_ptr()));
-            for _ in 0..mb_charlen((*ae).ae_chop) {
-                // Step back one whole character.
-                p = p.offset(-((utf_head_off(newword.as_mut_ptr(), p.sub(1)) + 1) as isize));
-            }
-            *p = NUL as c_char;
+    // A suffix: chop from the end, then append.
+    unsafe { xstrlcpy(newword.as_mut_ptr(), word, cap) };
+    if !unsafe { (*ae).ae_chop }.is_null() {
+        let mut p = unsafe { newword.as_mut_ptr().add(strlen(newword.as_ptr())) };
+        for _ in 0..unsafe { mb_charlen((*ae).ae_chop) } {
+            // Step back one whole character.
+            p = unsafe { p.offset(-((utf_head_off(newword.as_mut_ptr(), p.sub(1)) + 1) as isize)) };
         }
-        if !(*ae).ae_add.is_null() {
-            xstrlcat(newword.as_mut_ptr(), (*ae).ae_add, cap);
-        }
+        unsafe { *p = NUL as c_char };
+    }
+    if !unsafe { (*ae).ae_add }.is_null() {
+        unsafe { xstrlcat(newword.as_mut_ptr(), (*ae).ae_add, cap) };
     }
 }
