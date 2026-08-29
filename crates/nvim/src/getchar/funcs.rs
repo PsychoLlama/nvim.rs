@@ -72,12 +72,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
             opts.allow_number = unsafe { tv_dict_get_bool(d, c"number".as_ptr(), 1) } != 0;
         } else if unsafe { tv_dict_has_key(d, c"number".as_ptr()) } {
             // getcharstr() never answers a number, so asking is an error.
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_invarg2 as *const c_char),
-                    c"number".as_ptr(),
-                )
-            };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"number".as_ptr(),) };
         }
 
         opts.simplify = unsafe { tv_dict_get_bool(d, c"simplify".as_ptr(), 1) } != 0;
@@ -91,13 +86,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
             } else if unsafe { strcmp(cursor, c"msg".as_ptr()) } == 0 {
                 CursorFlag::Msg
             } else {
-                unsafe {
-                    semsg_c!(
-                        gettext(&raw const e_invargNval as *const c_char),
-                        c"cursor".as_ptr(),
-                        cursor,
-                    )
-                };
+                unsafe { semsg_c!(gettext(e_invargNval.as_ptr()), c"cursor".as_ptr(), cursor,) };
                 CursorFlag::Default
             };
         }

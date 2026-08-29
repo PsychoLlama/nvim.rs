@@ -132,12 +132,12 @@ pub(super) fn main_loop_events() -> *mut MultiQueue {
 ///
 /// They are plain `static`s -- `const char e_x[]` upstream, never written --
 /// so a shared pointer is all any caller wants.
-fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
+fn message(msg: &'static CStr) -> *const c_char {
     msg.as_ptr()
 }
 
 /// The translated text of one of them.
-pub(super) fn translated<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
+pub(super) fn translated(msg: &'static CStr) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the loaded
     // message catalog; both outlive the call.
     unsafe { gettext(message(msg)) }
@@ -476,9 +476,9 @@ impl CloseError {
     /// The shared message string this reports as.
     fn message(self) -> *const c_char {
         match self {
-            CloseError::NoSuchChannel => message(&e_invchan),
-            CloseError::NoSuchStream => message(&e_invstream),
-            CloseError::RpcStream => message(&e_invstreamrpc),
+            CloseError::NoSuchChannel => message(e_invchan),
+            CloseError::NoSuchStream => message(e_invstream),
+            CloseError::RpcStream => message(e_invstreamrpc),
         }
     }
 }
@@ -647,7 +647,7 @@ pub unsafe fn channel_send(
     // queue and returns, or falls through to the free below.
     let chan = find_channel(id);
     if chan.is_null() {
-        unsafe { *error = translated(&e_invchan) };
+        unsafe { *error = translated(e_invchan) };
     } else {
         match unsafe { send_to_channel(chan, data, len, data_owned) } {
             Ok(Sent::Bytes(n)) => {

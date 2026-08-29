@@ -30,18 +30,18 @@ use crate::keycodes::{
 };
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_reselect, allow_keys, arrow_used, c_bytes, called_emsg,
-    cmd_silent, cmdline_row, cmdline_star, cmdwin_type, ctrl_c_interrupts, curbuf, curwin,
-    debug_did_msg, did_ai, did_emsg, did_outofmem_msg, did_swapwrite_msg, e_invarg2, e_invargNval,
-    e_nesting, e_notopen_2, e_toocompl, emsg_silent, ex_normal_busy, exmode_active, finish_op,
-    got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
-    may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col,
-    msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping,
-    no_zero_mapping, p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm,
-    p_ttimeout, p_ttm, p_uc, pending_end_reg_executing, pending_exmode_active, redo_VIsual_busy,
-    redraw_cmdline, reg_executing, reg_recording, repeat_luaref, restart_edit, scriptout,
-    test_disable_char_avail, typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char,
-    vgetc_mod_mask, want_garbage_collect,
+    KeyStuffed, KeyTyped, State, VIsual_reselect, allow_keys, arrow_used, called_emsg, cmd_silent,
+    cmdline_row, cmdline_star, cmdwin_type, ctrl_c_interrupts, curbuf, curwin, debug_did_msg,
+    did_ai, did_emsg, did_outofmem_msg, did_swapwrite_msg, e_invarg2, e_invargNval, e_nesting,
+    e_notopen_2, e_toocompl, emsg_silent, ex_normal_busy, exmode_active, finish_op, got_int,
+    ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick, may_garbage_collect,
+    mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col, msg_didout, msg_row,
+    msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping, no_zero_mapping, p_fs,
+    p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
+    pending_end_reg_executing, pending_exmode_active, redo_VIsual_busy, redraw_cmdline,
+    reg_executing, reg_recording, repeat_luaref, restart_edit, scriptout, test_disable_char_avail,
+    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
@@ -207,11 +207,11 @@ static KeyNoremap: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core:
 /// nothing is trimmed, which is what upstream does. `test_registers`'
 /// Test_recording_with_select_mode reaches it.
 static last_recorded_len: GlobalCell<size_t> = GlobalCell::new(0);
-static e_recursive_mapping: [::core::ffi::c_char; 24] = c_bytes(b"E223: Recursive mapping\0");
-static e_cmd_mapping_must_end_with_cr: [::core::ffi::c_char; 40] =
-    c_bytes(b"E1255: <Cmd> mapping must end with <CR>\0");
-static e_cmd_mapping_must_end_with_cr_before_second_cmd: [::core::ffi::c_char; 60] =
-    c_bytes(b"E1136: <Cmd> mapping must end with <CR> before second <Cmd>\0");
+static e_recursive_mapping: &::core::ffi::CStr = c"E223: Recursive mapping";
+static e_cmd_mapping_must_end_with_cr: &::core::ffi::CStr =
+    c"E1255: <Cmd> mapping must end with <CR>";
+static e_cmd_mapping_must_end_with_cr_before_second_cmd: &::core::ffi::CStr =
+    c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
 static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static old_mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

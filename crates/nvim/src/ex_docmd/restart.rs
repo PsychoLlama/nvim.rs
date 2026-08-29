@@ -377,7 +377,7 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
     }
     let chan = find_channel(current_ui.get());
     if chan.is_null() {
-        emsg(&raw const e_invchan as *const c_char);
+        emsg(e_invchan.as_ptr());
         return;
     }
 

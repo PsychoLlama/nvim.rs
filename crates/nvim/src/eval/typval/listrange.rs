@@ -24,7 +24,7 @@ pub unsafe fn tv_list_check_range_index_one(
 ) -> *mut listitem_T {
     let li = unsafe { tv_list_find_index(l, n1) };
     if li.is_null() && !quiet {
-        unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n1),) };
+        unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), int64_t::from(*n1),) };
     }
     li
 }
@@ -42,7 +42,7 @@ pub unsafe fn tv_list_check_range_index_two(
         let ni = unsafe { tv_list_find(l, *n2) };
         if ni.is_null() {
             if !quiet {
-                unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n2),) };
+                unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), int64_t::from(*n2),) };
             }
             return FAIL;
         }
@@ -53,7 +53,7 @@ pub unsafe fn tv_list_check_range_index_two(
     }
     if unsafe { *n2 } < unsafe { *n1 } {
         if !quiet {
-            unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), int64_t::from(*n2),) };
+            unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), int64_t::from(*n2),) };
         }
         return FAIL;
     }
@@ -232,7 +232,7 @@ pub unsafe fn tv_list_slice_or_index(
         // A list index out of range is an error.
         if !range {
             if verbose {
-                unsafe { semsg_c!(tr_bytes(&e_list_index_out_of_range_nr), n1_arg,) };
+                unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), n1_arg,) };
             }
             return FAIL;
         }
@@ -362,7 +362,7 @@ pub unsafe fn tv_list_join(
 pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(&raw const e_listreq as *const ::core::ffi::c_char)) };
+        unsafe { emsg(gettext(e_listreq.as_ptr())) };
         return;
     }
     let sep = if unsafe { (*argvars.add(1)).v_type } == VAR_UNKNOWN {
@@ -392,7 +392,7 @@ pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
     if args.v_type != VAR_LIST {
-        unsafe { emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char)) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
     let l = args.list();

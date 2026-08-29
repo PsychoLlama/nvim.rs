@@ -292,7 +292,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
 
     // SAFETY: the caller's names; every stream opened here is closed here, and
     // `lineidx` is kept below `line1.len() - 1` by the shift below.
-    let cant_read = (&raw const e_cant_read_file_str).cast::<c_char>();
+    let cant_read = e_cant_read_file_str.as_ptr();
     let fd1: *mut FILE = unsafe { os_fopen(fname1, READBIN.as_ptr()) };
     if fd1.is_null() {
         diff.verdict_len = unsafe {

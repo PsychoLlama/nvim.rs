@@ -9,8 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::c_char;
-
 use super::*;
 use crate::semsg_c;
 
@@ -103,7 +101,7 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
         }
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(tr_bytes(&e_intern2), c"tv_copy(UNKNOWN)".as_ptr(),) };
+            unsafe { semsg_c!(tr(e_intern2), c"tv_copy(UNKNOWN)".as_ptr(),) };
         }
         _ => {}
     }
@@ -232,10 +230,10 @@ pub unsafe fn value_check_lock(
     // the compiler's.
     let error_message = match (lock, name.is_null()) {
         (VarLock::Unlocked, _) => return false,
-        (VarLock::Locked, true) => &raw const e_value_is_locked as *const c_char,
-        (VarLock::Locked, false) => &raw const e_value_is_locked_str as *const c_char,
-        (VarLock::Fixed, true) => &raw const e_cannot_change_value as *const c_char,
-        (VarLock::Fixed, false) => &raw const e_cannot_change_value_of_str as *const c_char,
+        (VarLock::Locked, true) => e_value_is_locked.as_ptr(),
+        (VarLock::Locked, false) => e_value_is_locked_str.as_ptr(),
+        (VarLock::Fixed, true) => e_cannot_change_value.as_ptr(),
+        (VarLock::Fixed, false) => e_cannot_change_value_of_str.as_ptr(),
     };
 
     if name.is_null() {

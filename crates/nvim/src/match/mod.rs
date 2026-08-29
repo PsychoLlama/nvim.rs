@@ -142,7 +142,7 @@ unsafe fn match_add(
     if !pat.is_null() {
         regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
         if regprog.is_null() {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), pat) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), pat) };
             return -1;
         }
     }
@@ -434,7 +434,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
     if unsafe { (*eap).line2 } > 3 {
-        unsafe { emsg(&raw const e_invcmd as *const c_char) };
+        unsafe { emsg(e_invcmd.as_ptr()) };
         return;
     }
     let id = unsafe { (*eap).line2 } as c_int;
@@ -467,7 +467,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
         if unsafe { *p } == 0 {
             // There must be two arguments.
             unsafe { xfree(g.cast()) };
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
             return;
         }
         // `*p` is the pattern's delimiter, whatever character it is.
@@ -483,7 +483,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
             if unsafe { *end } != unsafe { *p } {
                 // The closing delimiter is missing.
                 unsafe { xfree(g.cast()) };
-                unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), p) };
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), p) };
                 return;
             }
             // Terminate the pattern in place for the compile, then put

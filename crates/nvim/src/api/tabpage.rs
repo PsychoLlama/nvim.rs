@@ -195,7 +195,7 @@ pub unsafe fn nvim_open_tabpage(
         return (0 as Tabpage).reported(err);
     };
     if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
-        let msg = (&raw const e_cmdwin).cast::<::core::ffi::c_char>();
+        let msg = e_cmdwin.as_ptr();
         let (slot, fmt) = (&raw mut err, c"%s".as_ptr());
         // SAFETY: `err` is this frame's own and `e_cmdwin` is a static
         // message.

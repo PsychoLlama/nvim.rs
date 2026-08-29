@@ -133,11 +133,11 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
     let parsed = match tabstop::parse(text) {
         Ok(parsed) => parsed,
         Err(tabstop::ParseError::NotPositive(_)) => {
-            unsafe { emsg(gettext(&raw const e_positive as *const c_char)) };
+            unsafe { emsg(gettext(e_positive.as_ptr())) };
             return false;
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), var.add(at)) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), var.add(at)) };
             return false;
         }
     };

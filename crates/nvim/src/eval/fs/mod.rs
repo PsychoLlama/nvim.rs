@@ -39,7 +39,6 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
     tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_string,
 };
-use crate::main::c_bytes;
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -90,8 +89,7 @@ pub const kFileReadOnly: FileOpenFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static e_error_while_writing_str: [::core::ffi::c_char; 29] =
-    c_bytes(b"E80: Error while writing: %s\0");
+static e_error_while_writing_str: &::core::ffi::CStr = c"E80: Error while writing: %s";
 
 // ---------------------------------------------------------------------
 // The safe layer

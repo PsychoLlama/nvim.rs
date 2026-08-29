@@ -586,7 +586,7 @@ fn leave_last_window(
         buf.b_locked_split += 1;
         if fire_named(event, buf) && !bufref.valid() {
             // Autocommands deleted the buffer.
-            err_raw(tr_raw(&raw const e_auabort as *const c_char));
+            err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
         }
         buf = bufref.get()?;
@@ -594,7 +594,7 @@ fn leave_last_window(
         buf.b_locked_split -= 1;
         if abort_if_last && !win.is_null() && is_only_window(win) {
             // Autocommands made this the only window.
-            err_raw(tr_raw(&raw const e_auabort as *const c_char));
+            err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
         }
     }

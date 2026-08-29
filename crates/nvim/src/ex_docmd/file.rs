@@ -508,7 +508,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 
     if read != OK {
         if !aborting() {
-            unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), eap.arg) };
+            unsafe { semsg_c!(gettext(e_notopen.as_ptr()), eap.arg) };
         }
         return;
     }

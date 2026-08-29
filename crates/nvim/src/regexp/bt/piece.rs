@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::atom::regatom;
 use super::compile::{
@@ -426,7 +426,7 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
     // allocation, sized by the pass that runs before anything is written into
     // it, and is either handed to the caller or freed here.
     if expr.is_null() {
-        unsafe { iemsg(gettext(&raw const e_null as *const c_char)) };
+        unsafe { iemsg(gettext(e_null.as_ptr())) };
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }

@@ -81,7 +81,7 @@ use ::libc::strlen;
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        emsg(gettext(&raw const e_empty_buffer as *const c_char));
+        emsg(gettext(e_empty_buffer.as_ptr()));
     } else {
         let idx = eap.cmdidx as c_int;
         let numbered =
@@ -185,7 +185,7 @@ pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
             return;
         }
     }
@@ -331,7 +331,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
     if n == MAXLNUM as linenr_T || n < 0 || n > cur_buf().b_ml.ml_line_count {
-        emsg(gettext(&raw const e_invrange as *const c_char));
+        emsg(gettext(e_invrange.as_ptr()));
         return;
     }
 
@@ -479,9 +479,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     }
 
     if step >= cur_buf().b_u_seq_cur as linenr_T {
-        emsg(gettext(
-            &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
-        ));
+        emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
         return;
     }
     // Count how many states back `step` is along this branch.
@@ -503,9 +501,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
     if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as linenr_T) < step) {
-        emsg(gettext(
-            &raw const e_undobang_cannot_redo_or_move_branch as *const c_char,
-        ));
+        emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
         return;
     }
     u_undo_and_forget(count, true);
@@ -560,7 +556,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
         }
     }
     if byte(p) != NUL {
-        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
         return;
     }
     undo_time(
@@ -579,11 +575,11 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) == NUL {
-        emsg(gettext(&raw const e_argreq as *const c_char));
+        emsg(gettext(e_argreq.as_ptr()));
         return;
     }
     if byte_at(eap.arg, 1) != NUL {
-        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), eap.arg,) };
+        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), eap.arg,) };
         return;
     }
     // The mark is set at the first non-blank of the addressed line, so
@@ -663,7 +659,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
         return;
     }
     if expr_map_locked() {
-        emsg(gettext(&raw const e_secure as *const c_char));
+        emsg(gettext(e_secure.as_ptr()));
         return;
     }
     if ex_normal_busy.get() as crate::types::OptInt >= p_mmd.get() {

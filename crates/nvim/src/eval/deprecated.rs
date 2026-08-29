@@ -127,7 +127,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     if argv[0].v_type != VAR_STRING || (argv[1].v_type != VAR_LIST && argv[1].v_type != VAR_UNKNOWN)
     {
         // Wrong argument types.
-        emsg_static(&e_invarg);
+        emsg_static(e_invarg);
         return;
     }
 
@@ -153,7 +153,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: a `VAR_STRING` holds a NUL-terminated string or NULL.
     let prog = unsafe { argv[0].vval.v_string };
     if prog.is_null() || unsafe { *prog } == 0 {
-        emsg_static(&e_api_spawn_failed);
+        emsg_static(e_api_spawn_failed);
         return;
     }
 
@@ -220,7 +220,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
     let argv = unsafe { args(argvars) };
     if argv[0].v_type != VAR_NUMBER {
         // Wrong argument types.
-        emsg_static(&e_invarg);
+        emsg_static(e_invarg);
         return;
     }
 

@@ -361,7 +361,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> c_int {
     let mut items = ptr::null_mut::<list_T>();
     if let Some(di) = unsafe { find(d, c"items") } {
         if unsafe { (*di).di_tv.v_type } != VAR_LIST {
-            unsafe { emsg(gettext((&raw const e_listreq).cast())) };
+            unsafe { emsg(gettext(e_listreq.as_ptr())) };
             return FAIL;
         }
         items = unsafe { (*di).di_tv.vval.v_list };

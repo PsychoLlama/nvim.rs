@@ -56,7 +56,7 @@ use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::ga_grow;
 use crate::hashtab::{hash_lock, hash_unlock};
-use crate::main::{c_bytes, e_listdictblobarg};
+use crate::main::e_listdictblobarg;
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
@@ -83,10 +83,10 @@ pub use self::filtermap::{f_filter, f_foreach, f_map, f_mapnew};
 /// to run the name through `gettext` and measure it themselves.
 const TV_TRANSLATE: size_t = size_t::MAX;
 
-static e_argument_of_str_must_be_list_string_or_dictionary: [c_char; 58] =
-    c_bytes(b"E706: Argument of %s must be a List, String or Dictionary\0");
-static e_argument_of_str_must_be_list_string_dictionary_or_blob: [c_char; 65] =
-    c_bytes(b"E1250: Argument of %s must be a List, String, Dictionary or Blob\0");
+static e_argument_of_str_must_be_list_string_or_dictionary: &CStr =
+    c"E706: Argument of %s must be a List, String or Dictionary";
+static e_argument_of_str_must_be_list_string_dictionary_or_blob: &CStr =
+    c"E1250: Argument of %s must be a List, String, Dictionary or Blob";
 
 /// A cleared `typval_T`, the `{ .v_type = VAR_UNKNOWN }` every walk starts
 /// its per-item result from.
@@ -758,14 +758,14 @@ pub(crate) fn check_fixed(flags: c_int, what: &CStr) -> bool {
 
 /// Report `msg`, one of `main.rs`'s shared error texts, translated.
 #[inline(always)]
-pub(crate) fn err(msg: &[c_char]) {
+pub(crate) fn err(msg: &CStr) {
     // SAFETY: every `e_*` text is NUL-terminated.
     unsafe { emsg(gettext(msg.as_ptr())) };
 }
 
 /// Report `msg` -- a shared error text with one `%s` -- naming `what`.
 #[inline(always)]
-pub(crate) fn err_str(msg: &[c_char], what: &CStr) {
+pub(crate) fn err_str(msg: &CStr, what: &CStr) {
     // SAFETY: `msg` is a NUL-terminated single-`%s` format and `what` a
     // NUL-terminated string, which is what vim's printf reads.  The format
     // is translated, the name is not -- upstream's `semsg(_(msg), what)`.
@@ -774,7 +774,7 @@ pub(crate) fn err_str(msg: &[c_char], what: &CStr) {
 
 /// Report `msg` -- a shared error text with one `%ld` -- naming `n`.
 #[inline(always)]
-pub(crate) fn err_nr(msg: &[c_char], n: int64_t) {
+pub(crate) fn err_nr(msg: &CStr, n: int64_t) {
     // SAFETY: as `err_str`, with a `%ld` and a 64-bit integer.
     let _: bool = unsafe { semsg_c!(gettext(msg.as_ptr()), n) };
 }
@@ -784,7 +784,7 @@ pub(crate) fn err_nr(msg: &[c_char], n: int64_t) {
 #[inline(always)]
 pub(crate) fn err_not_container(func_name: &CStr) {
     err_str(
-        &e_argument_of_str_must_be_list_string_dictionary_or_blob,
+        e_argument_of_str_must_be_list_string_dictionary_or_blob,
         func_name,
     );
 }
@@ -793,7 +793,7 @@ pub(crate) fn err_not_container(func_name: &CStr) {
 #[inline(always)]
 pub(crate) fn err_not_countable(func_name: &CStr) {
     err_str(
-        &e_argument_of_str_must_be_list_string_or_dictionary,
+        e_argument_of_str_must_be_list_string_or_dictionary,
         func_name,
     );
 }
@@ -921,7 +921,7 @@ pub unsafe fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         Container::Dict(_) => unsafe { tv_dict_remove(argvars, rettv, arg_errmsg) },
         Container::Blob(_) => unsafe { tv_blob_remove(argvars, rettv, arg_errmsg) },
         Container::List(_) => unsafe { tv_list_remove(argvars, rettv, arg_errmsg) },
-        _ => err_str(&e_listdictblobarg, c"remove()"),
+        _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }
 

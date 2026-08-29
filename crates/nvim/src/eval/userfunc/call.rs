@@ -501,14 +501,9 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
     match error {
         FCERR_UNKNOWN => {
             if found_var {
-                unsafe {
-                    semsg_c!(
-                        gettext(&raw const e_not_callable_type_str as *const c_char),
-                        name,
-                    )
-                };
+                unsafe { semsg_c!(gettext(e_not_callable_type_str.as_ptr()), name,) };
             } else {
-                unsafe { emsg_funcname(&raw const e_unknown_function_str as *const c_char, name) };
+                unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
             }
         }
         FCERR_NOTMETHOD => {
@@ -518,10 +513,10 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
             unsafe { emsg_funcname(c"E933: Function was deleted: %s".as_ptr(), name) };
         }
         FCERR_TOOMANY => {
-            unsafe { emsg_funcname(gettext(&raw const e_toomanyarg as *const c_char), name) };
+            unsafe { emsg_funcname(gettext(e_toomanyarg.as_ptr()), name) };
         }
         FCERR_TOOFEW => {
-            unsafe { emsg_funcname(gettext(&raw const e_toofewarg as *const c_char), name) };
+            unsafe { emsg_funcname(gettext(e_toofewarg.as_ptr()), name) };
         }
         FCERR_SCRIPT => {
             let fmt = c"E120: Using <SID> not in a script context: %s";

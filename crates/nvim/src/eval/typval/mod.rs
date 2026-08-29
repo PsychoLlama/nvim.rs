@@ -21,10 +21,9 @@ use crate::hashtab::{
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::main::{
-    c_bytes, curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str,
-    e_dictkey, e_intern2, e_invalid_value_for_blob_nr, e_invarg, e_invrange,
-    e_list_index_out_of_range_nr, e_listarg, e_listreq, e_toomanyarg, e_value_is_locked,
-    e_value_is_locked_str, got_int,
+    curwin, did_emsg, e_blobidx, e_cannot_change_value, e_cannot_change_value_of_str, e_dictkey,
+    e_intern2, e_invalid_value_for_blob_nr, e_invarg, e_invrange, e_list_index_out_of_range_nr,
+    e_listarg, e_listreq, e_toomanyarg, e_value_is_locked, e_value_is_locked_str, got_int,
 };
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
@@ -131,40 +130,40 @@ pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TV_TRANSLATE: ::core::ffi::c_ulong = SIZE_MAX;
 pub const TV_CSTRING: ::core::ffi::c_ulong = SIZE_MAX.wrapping_sub(1 as ::core::ffi::c_ulong);
-static e_variable_nested_too_deep_for_unlock: [::core::ffi::c_char; 44] =
-    c_bytes(b"E743: Variable nested too deep for (un)lock\0");
-static e_using_invalid_value_as_string: [::core::ffi::c_char; 41] =
-    c_bytes(b"E908: Using an invalid value as a String\0");
-static e_string_required_for_argument_nr: [::core::ffi::c_char; 39] =
-    c_bytes(b"E1174: String required for argument %d\0");
-static e_non_empty_string_required_for_argument_nr: [::core::ffi::c_char; 49] =
-    c_bytes(b"E1175: Non-empty string required for argument %d\0");
-static e_dict_required_for_argument_nr: [::core::ffi::c_char; 43] =
-    c_bytes(b"E1206: Dictionary required for argument %d\0");
-static e_number_required_for_argument_nr: [::core::ffi::c_char; 39] =
-    c_bytes(b"E1210: Number required for argument %d\0");
-static e_list_required_for_argument_nr: [::core::ffi::c_char; 37] =
-    c_bytes(b"E1211: List required for argument %d\0");
-static e_bool_required_for_argument_nr: [::core::ffi::c_char; 37] =
-    c_bytes(b"E1212: Bool required for argument %d\0");
-static e_float_or_number_required_for_argument_nr: [::core::ffi::c_char; 48] =
-    c_bytes(b"E1219: Float or Number required for argument %d\0");
-static e_string_or_number_required_for_argument_nr: [::core::ffi::c_char; 49] =
-    c_bytes(b"E1220: String or Number required for argument %d\0");
-static e_string_or_list_required_for_argument_nr: [::core::ffi::c_char; 47] =
-    c_bytes(b"E1222: String or List required for argument %d\0");
-static e_list_dict_blob_or_string_required_for_argument_nr: [::core::ffi::c_char; 65] =
-    c_bytes(b"E1225: List, Dictionary, Blob or String required for argument %d\0");
-static e_list_or_blob_required_for_argument_nr: [::core::ffi::c_char; 45] =
-    c_bytes(b"E1226: List or Blob required for argument %d\0");
-static e_blob_required_for_argument_nr: [::core::ffi::c_char; 37] =
-    c_bytes(b"E1238: Blob required for argument %d\0");
-static e_string_list_or_blob_required_for_argument_nr: [::core::ffi::c_char; 53] =
-    c_bytes(b"E1252: String, List or Blob required for argument %d\0");
-static e_string_or_function_required_for_argument_nr: [::core::ffi::c_char; 51] =
-    c_bytes(b"E1256: String or function required for argument %d\0");
-static e_non_null_dict_required_for_argument_nr: [::core::ffi::c_char; 52] =
-    c_bytes(b"E1297: Non-NULL Dictionary required for argument %d\0");
+static e_variable_nested_too_deep_for_unlock: &::core::ffi::CStr =
+    c"E743: Variable nested too deep for (un)lock";
+static e_using_invalid_value_as_string: &::core::ffi::CStr =
+    c"E908: Using an invalid value as a String";
+static e_string_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1174: String required for argument %d";
+static e_non_empty_string_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1175: Non-empty string required for argument %d";
+static e_dict_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1206: Dictionary required for argument %d";
+static e_number_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1210: Number required for argument %d";
+static e_list_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1211: List required for argument %d";
+static e_bool_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1212: Bool required for argument %d";
+static e_float_or_number_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1219: Float or Number required for argument %d";
+static e_string_or_number_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1220: String or Number required for argument %d";
+static e_string_or_list_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1222: String or List required for argument %d";
+static e_list_dict_blob_or_string_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1225: List, Dictionary, Blob or String required for argument %d";
+static e_list_or_blob_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1226: List or Blob required for argument %d";
+static e_blob_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1238: Blob required for argument %d";
+static e_string_list_or_blob_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1252: String, List or Blob required for argument %d";
+static e_string_or_function_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1256: String or function required for argument %d";
+static e_non_null_dict_required_for_argument_nr: &::core::ffi::CStr =
+    c"E1297: Non-NULL Dictionary required for argument %d";
 /// A zeroed `sortinfo_T`, which is what a bare `sortinfo_T info;` declaration
 /// is before `parse_sort_uniq_args` fills it in.
 pub const SORTINFO_INIT: sortinfo_T = sortinfo_T {

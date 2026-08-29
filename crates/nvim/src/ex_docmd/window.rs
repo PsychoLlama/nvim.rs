@@ -212,7 +212,7 @@ pub(crate) fn current_tab_nr(tab: *mut tabpage_T) -> c_int {
 pub(crate) unsafe fn ex_wrongmodifier(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(eap);
-    ea.errmsg = err_msg(&raw const e_invcmd as *const c_char);
+    ea.errmsg = err_msg(e_invcmd.as_ptr());
 }
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
@@ -390,7 +390,7 @@ fn tabnext(mut ea: Ex) {
             || byte(p) != NUL
             || tab_number == 0
         {
-            let (msg, arg) = (&raw const e_invarg2 as *const c_char, ea.arg);
+            let (msg, arg) = (e_invarg2.as_ptr(), ea.arg);
             // SAFETY: a message with one `%s`, and the argument for it.
             ea.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
             return;
@@ -400,7 +400,7 @@ fn tabnext(mut ea: Ex) {
     } else {
         tab_number = ea.line2 as c_int;
         if tab_number < 1 {
-            ea.errmsg = err_msg(&raw const e_invrange as *const c_char);
+            ea.errmsg = err_msg(e_invrange.as_ptr());
             return;
         }
     }
@@ -527,7 +527,7 @@ pub(crate) unsafe fn ex_mode(eap: *mut exarg_T) {
         // SAFETY: a live command.
         unsafe { ex_redraw(ea.raw()) };
     } else {
-        err(&raw const e_screenmode as *const c_char);
+        err(e_screenmode.as_ptr());
     }
 }
 
@@ -587,7 +587,7 @@ pub(crate) unsafe fn ex_winsize(eap: *mut exarg_T) {
 fn winsize(ea: Ex) {
     let mut arg = ea.arg;
     if !ascii_isdigit(byte(arg)) {
-        let (msg, at) = (&raw const e_invarg2 as *const c_char, arg);
+        let (msg, at) = (e_invarg2.as_ptr(), arg);
         // SAFETY: a message with one `%s`, and the argument for it.
         unsafe { semsg_c!(gettext(msg), at) };
         return;
@@ -625,7 +625,7 @@ fn wincmd(mut ea: Ex) {
     if byte(ea.arg) == 'g' as c_int || byte(ea.arg) == Ctrl_G {
         let second = ea.arg.wrapping_add(1);
         if byte(second) == NUL {
-            err(&raw const e_invarg as *const c_char);
+            err(e_invarg.as_ptr());
             return;
         }
         xchar = byte(second) as uint8_t as c_int;
@@ -638,7 +638,7 @@ fn wincmd(mut ea: Ex) {
     ea.nextcmd = unsafe { check_nextcmd(p) };
     p = skip_white(p);
     if byte(p) != NUL && byte(p) != '"' as c_int && ea.nextcmd.is_null() {
-        err(&raw const e_invarg as *const c_char);
+        err(e_invarg.as_ptr());
     } else if ea.skip == 0 {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.

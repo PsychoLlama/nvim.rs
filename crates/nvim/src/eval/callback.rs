@@ -9,8 +9,8 @@ use crate::ascii::ascii_isdigit;
 use crate::eval::collect::set_ref_in_item;
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
+use crate::eval::vars::emsg_static;
 use crate::eval::vars::get_vim_var_partial;
-use crate::eval::vars::{emsg_lit, emsg_static};
 use crate::eval::window::cur_win;
 use crate::eval::{
     ARRAY_DICT_INIT, Cb, FUNCEXE_INIT, Tv, callback_depth, check_luafunc_name, kRetNilBool,
@@ -115,7 +115,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
 
     if r == FAIL {
         // SAFETY: the message is a NUL-terminated literal.
-        emsg_lit(c"E921: Invalid callback argument");
+        emsg_static(c"E921: Invalid callback argument");
         return false;
     }
     true
@@ -142,7 +142,7 @@ pub unsafe fn callback_call(
 ) -> bool {
     if callback_depth.get() as OptInt > p_mfd.get() {
         // SAFETY: the message is a NUL-terminated literal.
-        emsg_static(&e_command_too_recursive);
+        emsg_static(e_command_too_recursive);
         return false;
     }
 

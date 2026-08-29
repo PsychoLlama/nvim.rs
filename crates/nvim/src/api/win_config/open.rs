@@ -41,7 +41,7 @@ pub unsafe fn nvim_open_win(
     }
     if cmdwin_type.get() != 0 && enter || b == cmdwin_buf.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
-        unsafe { err_msg_raw(report, kErrorTypeException, (&raw const e_cmdwin).cast()) };
+        unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return (0 as Window).reported(error);
     }
     let mut fconfig = WIN_CONFIG_INIT;
@@ -371,7 +371,7 @@ pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: *m
     }
     if textlock.get() != 0 || expr_map_locked() {
         // SAFETY: `e_textlock` is a static NUL-terminated message.
-        unsafe { err_msg_raw(report, kErrorTypeException, (&raw const e_textlock).cast()) };
+        unsafe { err_msg_raw(report, kErrorTypeException, e_textlock.as_ptr()) };
         return false;
     }
     if is_aucmd_win(wp) {
@@ -381,7 +381,7 @@ pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: *m
     }
     if wp == cmdwin_win.get() || wp == cmdwin_old_curwin.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
-        unsafe { err_msg_raw(report, kErrorTypeException, (&raw const e_cmdwin).cast()) };
+        unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return false;
     }
     true

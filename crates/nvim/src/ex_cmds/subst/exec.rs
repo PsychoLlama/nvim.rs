@@ -658,7 +658,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         if got_int.get() {
             // Interrupted.
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
+            unsafe { emsg(gettext(e_interr.as_ptr())) };
         } else if st.got_match {
             // Did find something, but nothing was substituted.
             // SAFETY: message state.
@@ -669,12 +669,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         } else if subflags.with(|flags| flags.do_error) {
             // Nothing found.
             // SAFETY: the search pattern is a live C string.
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_patnotf2 as *const c_char),
-                    get_search_pat(),
-                )
-            };
+            unsafe { semsg_c!(gettext(e_patnotf2.as_ptr()), get_search_pat(),) };
         }
     }
 

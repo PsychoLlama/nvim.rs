@@ -147,7 +147,7 @@ fn split_ins(
     let first = first_win();
     if is_only_window(first, None) && p_ls.get() == 1 as OptInt && oldwin.w_status_height == 0 {
         if oldwin.w_height as OptInt <= p_wmh.get() {
-            err(&raw const e_noroom as *const c_char);
+            err(e_noroom.as_ptr());
             return None;
         }
         need_status = STATUS_HEIGHT as c_int;
@@ -273,7 +273,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
     };
     needed += minwidth;
     if available < needed {
-        err(&raw const e_noroom as *const c_char);
+        err(e_noroom.as_ptr());
         return None;
     }
 
@@ -344,7 +344,7 @@ fn split_room_horizontal(
     };
     needed += minheight;
     if available < needed {
-        err(&raw const e_noroom as *const c_char);
+        err(e_noroom.as_ptr());
         return None;
     }
 

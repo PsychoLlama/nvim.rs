@@ -131,7 +131,7 @@ unsafe fn pattern_to_search(
     }
     let subst = substitute_pattern();
     if subst.pat.is_null() {
-        unsafe { emsg(gettext(&raw const e_noprevre as *const c_char)) };
+        unsafe { emsg(gettext(e_noprevre.as_ptr())) };
         return None;
     }
     Some((subst.pat, subst.patlen))

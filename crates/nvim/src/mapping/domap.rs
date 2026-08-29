@@ -640,7 +640,7 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
     // SAFETY: as above.
     if !local && unsafe { c_int::from(*arg) } != NUL {
         // SAFETY: `e_invarg` is a static NUL-terminated message.
-        unsafe { emsg(gettext((&raw const e_invarg).cast())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
     // SAFETY: the caller's promise — `cmdp` is a live command name — and
@@ -704,7 +704,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
     // `parsed_args` is this frame's struct.
     if unsafe { str_to_mapargs(eap.arg, is_unmap, parsed) } != 0 {
         // SAFETY: a static NUL-terminated message.
-        unsafe { emsg(gettext((&raw const e_invarg).cast())) }; // invalid arguments
+        unsafe { emsg(gettext(e_invarg.as_ptr())) }; // invalid arguments
     } else {
         let lhs = (&raw mut parsed_args.lhs).cast::<c_char>();
         // SAFETY: as above; `curbuf` is live.
@@ -714,13 +714,13 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
         unsafe {
             match answer {
                 1 => {
-                    emsg(gettext((&raw const e_invarg).cast()));
+                    emsg(gettext(e_invarg.as_ptr()));
                 }
                 2 => {
                     emsg(gettext(if isabbrev {
-                        (&raw const e_noabbr).cast()
+                        e_noabbr.as_ptr()
                     } else {
-                        (&raw const e_nomap).cast()
+                        e_nomap.as_ptr()
                     }));
                 }
                 5 => {

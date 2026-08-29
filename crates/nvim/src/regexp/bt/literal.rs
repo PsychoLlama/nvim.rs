@@ -4,7 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::compile::{regc, regmbc, regnode, use_multibytecode};
 use crate::main::{e_nopresub, rc_did_emsg};
@@ -153,7 +153,7 @@ pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
     // replacement, owned by the substitute code.
     let sub = reg_prev_sub.get().cast::<uint8_t>();
     if sub.is_null() {
-        unsafe { emsg(gettext(&raw const e_nopresub as *const c_char)) };
+        unsafe { emsg(gettext(e_nopresub.as_ptr())) };
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }

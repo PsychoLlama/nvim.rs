@@ -248,15 +248,15 @@ pub fn undo_allowed(buf: Buf) -> bool {
     // SAFETY: three NUL-terminated message literals, and `expr_map_locked`
     // only reads the editor's own mapping state.
     if buf.b_p_ma == 0 {
-        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         return false;
     }
     if sandbox.get() != 0 {
-        unsafe { emsg(gettext(&raw const e_sandbox as *const c_char)) };
+        unsafe { emsg(gettext(e_sandbox.as_ptr())) };
         return false;
     }
     if textlock.get() != 0 || expr_map_locked() {
-        unsafe { emsg(gettext(&raw const e_textlock as *const c_char)) };
+        unsafe { emsg(gettext(e_textlock.as_ptr())) };
         return false;
     }
     true

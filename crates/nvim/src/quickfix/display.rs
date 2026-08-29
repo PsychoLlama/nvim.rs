@@ -189,7 +189,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
         return;
     };
     if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
-        qf_emsg(&raw const e_no_errors as *const c_char);
+        qf_emsg(e_no_errors.as_ptr());
         return;
     }
 
@@ -207,7 +207,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
     {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), arg) };
+        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), arg) };
         return;
     }
     let qfl = qf_current_list(qi);
@@ -416,7 +416,7 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
     let stack = qf_cmd_stack(eap, false);
     if eap.addr_count > 0 {
         match stack {
-            None => qf_emsg(&raw const e_loclist as *const c_char),
+            None => qf_emsg(e_loclist.as_ptr()),
             Some(mut qi) if eap.line2 > 0 && eap.line2 <= qi.qf_listcount as linenr_T => {
                 qi.qf_curlist = (eap.line2 - 1) as c_int;
                 // SAFETY: `qi` is live and `qf_curlist` names one of its
@@ -424,7 +424,7 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
                 unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };
                 qf_redraw(qi, ptr::null_mut());
             }
-            Some(_) => qf_emsg(&raw const e_invrange as *const c_char),
+            Some(_) => qf_emsg(e_invrange.as_ptr()),
         }
         return;
     }
@@ -500,7 +500,7 @@ pub unsafe fn qf_view_result(split: bool) {
         qf_global()
     };
     if qfl_is_empty(qf_current_list(qi)) {
-        qf_emsg(&raw const e_no_errors as *const c_char);
+        qf_emsg(e_no_errors.as_ptr());
         return;
     }
     if split {

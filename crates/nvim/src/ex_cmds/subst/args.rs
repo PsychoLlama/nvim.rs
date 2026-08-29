@@ -143,7 +143,7 @@ unsafe fn read_pattern(
         if previous.is_null() {
             // There is no previous command.
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_nopresub as *const c_char)) };
+            unsafe { emsg(gettext(e_nopresub.as_ptr())) };
             return None;
         }
         return Some(Parsed {
@@ -176,7 +176,7 @@ unsafe fn read_pattern(
         // substitute pattern (like "//sub/").
         cmd = unsafe { cmd.add(1) };
         if unsafe { vim_strchr(c"/?&".as_ptr(), *cmd as u8 as c_int) }.is_null() {
-            unsafe { emsg(gettext(&raw const e_backslash as *const c_char)) };
+            unsafe { emsg(gettext(e_backslash.as_ptr())) };
             return None;
         }
         if unsafe { *cmd } as c_int != '&' as c_int {
@@ -261,7 +261,7 @@ unsafe fn read_count(eap: *mut exarg_T, cmd: &mut *mut c_char) -> bool {
     let skip = unsafe { (*eap).skip } != 0;
     if i <= 0 as c_int && !skip && subflags.with(|flags| flags.do_error) {
         // SAFETY: a live message string.
-        unsafe { emsg(gettext(&raw const e_zerocount as *const c_char)) };
+        unsafe { emsg(gettext(e_zerocount.as_ptr())) };
         return false;
     }
     // Upstream writes `i >= INT_MAX`, which for a `c_int` is `==`.
@@ -269,7 +269,7 @@ unsafe fn read_count(eap: *mut exarg_T, cmd: &mut *mut c_char) -> bool {
         // SAFETY: `count_arg` is the digits just read, `cmd` their end.
         unsafe {
             semsg_c!(
-                gettext(&raw const e_val_too_large_len as *const c_char),
+                gettext(e_val_too_large_len.as_ptr()),
                 (*cmd).offset_from(count_arg) as c_int,
                 count_arg,
             )
@@ -345,7 +345,7 @@ pub(super) unsafe fn parse_sub(
         // Not end-of-line or comment.
         unsafe { (*eap).nextcmd = check_nextcmd(cmd) };
         if unsafe { (*eap).nextcmd.is_null() } {
-            unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), cmd) };
+            unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), cmd) };
             return None;
         }
     }
@@ -361,7 +361,7 @@ pub(super) unsafe fn parse_sub(
     // SAFETY: the current buffer is live.
     if !subflags.with(|flags| flags.do_count) && cur_buf().b_p_ma == 0 {
         // SAFETY: a live message string.
-        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         return None;
     }
 
@@ -385,7 +385,7 @@ pub(super) unsafe fn parse_sub(
     if compiled == FAIL {
         if subflags.with(|flags| flags.do_error) {
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_invcmd as *const c_char)) };
+            unsafe { emsg(gettext(e_invcmd.as_ptr())) };
         }
         return None;
     }

@@ -18,7 +18,7 @@ use crate::types::{
     CMD_lnfile, CMD_lpfile, CMD_lprevious, CMD_lrewind,
 };
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 /// One entry of a list together with its number, which the adjacency search
 /// tracks in step with the entry it walks to.
@@ -385,7 +385,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     if eap.addr_count > 0 && eap.line2 <= 0 {
-        qf_emsg(&raw const e_invrange as *const c_char);
+        qf_emsg(e_invrange.as_ptr());
         return;
     }
 
@@ -400,7 +400,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
         BUF_HAS_LL_ENTRY
     };
     if cur_buf().b_has_qf_entry & buf_has_flag == 0 {
-        qf_emsg(&raw const e_no_errors as *const c_char);
+        qf_emsg(e_no_errors.as_ptr());
         return;
     }
 
@@ -409,7 +409,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     };
     let qfl = qf_current_list(qi);
     if !unsafe { qf_list_has_valid_entries(qfl.raw().cast_const()) } {
-        qf_emsg(&raw const e_no_errors as *const c_char);
+        qf_emsg(e_no_errors.as_ptr());
         return;
     }
 

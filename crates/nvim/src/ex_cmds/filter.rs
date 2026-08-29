@@ -87,7 +87,7 @@ unsafe fn xmalloc_cstr(bytes: &[u8]) -> *mut c_char {
 unsafe fn prevcmd_is_set() -> bool {
     if prevcmd.get().is_null() {
         // SAFETY: `e_noprev` is a NUL-terminated message.
-        unsafe { emsg(gettext(&raw const e_noprev as *const c_char)) };
+        unsafe { emsg(gettext(e_noprev.as_ptr())) };
         return false;
     }
     true
@@ -358,7 +358,7 @@ unsafe fn do_filter(
         }
         if no_tempname {
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_notmp as *const c_char)) };
+            unsafe { emsg(gettext(e_notmp.as_ptr())) };
         }
     }
 
@@ -467,7 +467,7 @@ unsafe fn do_filter(
                         unsafe { msg_putchar('\n' as c_int) };
                         unsafe {
                             semsg_c!(
-                                gettext(&raw const e_cant_read_file_str as *const c_char),
+                                gettext(e_cant_read_file_str.as_ptr()),
                                 TempFile::name(&otmp),
                             )
                         };

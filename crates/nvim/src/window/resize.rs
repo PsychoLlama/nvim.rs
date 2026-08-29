@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use super::arith::NextCurwin;
@@ -495,7 +495,7 @@ pub unsafe fn command_height() {
 
     while p_ch.get() > old_p_ch as OptInt && command_frame_height.get() {
         let Some(fr) = frp else {
-            err(&raw const e_noroom as *const c_char);
+            err(e_noroom.as_ptr());
             p_ch.set(old_p_ch as OptInt);
             break;
         };
@@ -607,7 +607,7 @@ fn resizable_frame(fr: Frame) -> Option<Frame> {
 fn resize_frame_for_status(fr: Frame) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr) else {
-        err(&raw const e_noroom as *const c_char);
+        err(e_noroom.as_ptr());
         return false;
     };
     if fp != fr {
@@ -625,7 +625,7 @@ fn resize_frame_for_status(fr: Frame) -> bool {
 fn resize_frame_for_winbar(fr: Frame) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr).filter(|fp| *fp != fr) else {
-        err(&raw const e_noroom as *const c_char);
+        err(e_noroom.as_ptr());
         return false;
     };
     new_height(fp, fp.fr_height - 1, false, false, false);
@@ -687,7 +687,7 @@ fn winbar_win(wp: Win, make_room: bool, valid_cursor: bool) -> c_int {
     if wp.w_winbar_height != winbar_height {
         if winbar_height == 1 && wp.w_view_height <= 1 {
             if wp.w_floating {
-                err(&raw const e_noroom as *const c_char);
+                err(e_noroom.as_ptr());
                 return NOTDONE;
             } else if !make_room || !resize_frame_for_winbar(wp.frame()) {
                 return FAIL;

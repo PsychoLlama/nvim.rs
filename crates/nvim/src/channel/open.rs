@@ -89,7 +89,7 @@ pub unsafe fn channel_job_start(
     unsafe { (*chan).on_exit = on_exit };
 
     if pty && detach {
-        unsafe { semsg_c!(translated(&e_invarg2), PTY_DETACHED.as_ptr()) };
+        unsafe { semsg_c!(translated(e_invarg2), PTY_DETACHED.as_ptr()) };
         unsafe { shell_free_argv(argv) };
         if !env.is_null() {
             unsafe { tv_dict_free(env) };
@@ -140,7 +140,7 @@ pub unsafe fn channel_job_start(
     let cmd = unsafe { xstrdup(proc_get_exepath(proc)) };
     let status = unsafe { proc_spawn(proc, has_in, has_out, has_err) };
     if status != 0 {
-        unsafe { semsg_c!(translated(&e_jobspawn), uv_strerror(status), cmd) };
+        unsafe { semsg_c!(translated(e_jobspawn), uv_strerror(status), cmd) };
     }
     unsafe { xfree(cmd.cast()) };
     if !unsafe { (*proc).env }.is_null() {

@@ -166,7 +166,7 @@ pub(crate) unsafe fn get_function_args(
             if mustend && p.chr() != endchar {
                 if !skip {
                     let at = unsafe { *argp };
-                    unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), at) };
+                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), at) };
                 }
                 break;
             }

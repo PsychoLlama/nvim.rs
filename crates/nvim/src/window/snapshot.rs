@@ -296,7 +296,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
             col = if peek(s) == '-' as c_int { -1 } else { 1 };
             s = step(s);
             if !ascii_isdigit(peek(s)) {
-                return &raw const e_invarg as *const c_char;
+                return e_invarg.as_ptr();
             }
             col *= digits(&mut s);
             if tw == 0 {
@@ -313,7 +313,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
         } else if ascii_isdigit(peek(s)) {
             col = digits(&mut s);
         } else {
-            return &raw const e_invarg as *const c_char;
+            return e_invarg.as_ptr();
         }
         if !skip {
             color_cols[count as usize] = col - 1; // 1-based to 0-based
@@ -323,11 +323,11 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
             break;
         }
         if peek(s) != ',' as c_int {
-            return &raw const e_invarg as *const c_char;
+            return e_invarg.as_ptr();
         }
         s = step(s);
         if peek(s) == NUL {
-            return &raw const e_invarg as *const c_char; // illegal trailing comma
+            return e_invarg.as_ptr(); // illegal trailing comma
         }
     }
 

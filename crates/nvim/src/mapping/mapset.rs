@@ -391,18 +391,8 @@ pub unsafe fn modify_keymap(
         // whose only conversion, where it has one, is the live `lhs`.
         unsafe {
             match answer {
-                1 => api_set_error(
-                    err,
-                    kErrorTypeException,
-                    (&raw const e_invarg).cast::<c_char>(),
-                    0,
-                ),
-                2 => api_set_error(
-                    err,
-                    kErrorTypeException,
-                    (&raw const e_nomap).cast::<c_char>(),
-                    0,
-                ),
+                1 => api_set_error(err, kErrorTypeException, e_invarg.as_ptr(), 0),
+                2 => api_set_error(err, kErrorTypeException, e_nomap.as_ptr(), 0),
                 5 => api_set_error(
                     err,
                     kErrorTypeException,

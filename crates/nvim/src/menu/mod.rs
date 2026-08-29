@@ -132,7 +132,7 @@ pub(crate) static E_NOMENU: &CStr = c"E329: No menu \"%s\"";
 /// The translated text of one of the shared `e_*` message constants. The
 /// `_c` message macros want a `printf` format string, which a
 /// `format_args!` literal cannot be.
-pub(crate) fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
+pub(crate) fn message(msg: &'static CStr) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the
     // loaded message catalog; both are `'static`.
     unsafe { gettext(msg.as_ptr()) }
@@ -151,7 +151,7 @@ pub(crate) fn emsg_c(msg: &'static CStr) {
 }
 
 /// `emsg(_(msg))` for one of the shared `e_*` constants.
-pub(crate) fn emsg_shared<const N: usize>(msg: &'static [c_char; N]) {
+pub(crate) fn emsg_shared(msg: &'static CStr) {
     // SAFETY: as [`emsg_c`].
     unsafe { emsg(message(msg)) };
 }
@@ -175,7 +175,7 @@ static MENUS_LOCKED: GlobalCell<c_int> = GlobalCell::new(0);
 /// Whether the menus are locked, reporting it if they are.
 pub(crate) fn is_menus_locked() -> bool {
     if MENUS_LOCKED.get() > 0 {
-        emsg_shared(&e_cannot_change_menus_while_listing);
+        emsg_shared(e_cannot_change_menus_while_listing);
         return true;
     }
     false

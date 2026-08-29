@@ -385,7 +385,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
             let name = unsafe { how.string(argvars.add(1)) };
             sort_info.item_compare_func = name;
         } else if nr != 0 {
-            unsafe { emsg(gettext(&raw const e_invarg as *const ::core::ffi::c_char)) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return FAIL;
         }
 
@@ -436,7 +436,7 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
     if args.v_type != VAR_LIST {
         unsafe {
             semsg_c!(
-                tr_bytes(&e_listarg),
+                tr(e_listarg),
                 if sort {
                     c"sort()".as_ptr()
                 } else {

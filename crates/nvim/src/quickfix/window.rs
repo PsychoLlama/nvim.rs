@@ -495,7 +495,7 @@ pub unsafe fn did_set_quickfixtextfunc(_args: *mut optset_T) -> *const c_char {
     let (value, cb) = (p_qftf.get(), global_qftf());
     // SAFETY: the option's own value and its callback slot.
     if unsafe { option_set_callback_func(value, cb) } == FAIL {
-        return &raw const e_invarg as *const c_char;
+        return e_invarg.as_ptr();
     }
     ptr::null()
 }

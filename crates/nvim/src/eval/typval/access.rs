@@ -233,18 +233,6 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
     unsafe { gettext(msg.as_ptr()) }
 }
 
-/// `_()` on one of the `c_bytes` error statics.
-///
-/// Those are `[c_char; N]` arrays rather than `CStr`s, so the NUL is the
-/// literal's last byte rather than the type's promise — which is checked here
-/// with a `debug_assert` rather than left to a comment.
-#[inline(always)]
-pub(crate) fn tr_bytes(msg: &'static [::core::ffi::c_char]) -> *const ::core::ffi::c_char {
-    debug_assert!(msg.last() == Some(&0));
-    // SAFETY: as `tr`, with the NUL checked just above.
-    unsafe { gettext(msg.as_ptr()) }
-}
-
 /// The unlocked scalars and container handles, spelled once.
 ///
 /// c2rust wrote the designated initialiser out in full at every site — three

@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
@@ -84,7 +84,7 @@ pub(crate) fn exchange(prenum: c_int) {
     let mut cur = cur_win();
     if cur.w_floating {
         // SAFETY: a static message.
-        unsafe { emsg(&raw const e_floatexchange as *const c_char) };
+        unsafe { emsg(e_floatexchange.as_ptr()) };
         return;
     }
     // SAFETY: beeps; reads no argument of ours.
@@ -171,7 +171,7 @@ pub(crate) fn exchange(prenum: c_int) {
 pub(crate) fn rotate(upwards: bool, count: c_int) {
     if cur_win().w_floating {
         // SAFETY: a static message.
-        unsafe { emsg(&raw const e_floatexchange as *const c_char) };
+        unsafe { emsg(e_floatexchange.as_ptr()) };
         return;
     }
     if count <= 0 || is_only_window(cur_win(), None) {

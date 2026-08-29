@@ -70,11 +70,11 @@ use crate::keycodes::{
     get_special_key_name,
 };
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, State, allbuf_lock, c_bytes, cmd_silent, cmdline_row,
-    cmdline_star, cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl, cmdpreview, cmdwin_buf,
-    cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, current_sctx,
-    curwin, did_emsg, e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2,
-    e_invarg, e_positive, e_textlock, emsg_on_display, emsg_silent, ex_normal_busy, exec_from_reg,
+    Columns, KeyStuffed, KeyTyped, Rows, State, allbuf_lock, cmd_silent, cmdline_row, cmdline_star,
+    cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl, cmdpreview, cmdwin_buf, cmdwin_level,
+    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, current_sctx, curwin,
+    did_emsg, e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2, e_invarg,
+    e_positive, e_textlock, emsg_on_display, emsg_silent, ex_normal_busy, exec_from_reg,
     exmode_active, global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask,
     mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled,
     need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, p_ari, p_arshape, p_cedit, p_ch,
@@ -729,8 +729,8 @@ static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static e_active_window_or_buffer_changed_or_deleted: [::core::ffi::c_char; 49] =
-    c_bytes(b"E199: Active window or buffer changed or deleted\0");
+static e_active_window_or_buffer_changed_or_deleted: &::core::ffi::CStr =
+    c"E199: Active window or buffer changed or deleted";
 pub const PATH_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<";
 pub const SHELL_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[{`$\\%#'\"|!<>();&";
 pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";

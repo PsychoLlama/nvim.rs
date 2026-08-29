@@ -339,7 +339,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
     let mut ea = unsafe { Ea::new(eap) };
     let mut retv: c_int = 0;
     if do_cmdline_start() == FAIL {
-        unsafe { emsg(gettext(&raw const e_command_too_recursive as *const c_char)) };
+        unsafe { emsg(gettext(e_command_too_recursive.as_ptr())) };
         return retv;
     }
 

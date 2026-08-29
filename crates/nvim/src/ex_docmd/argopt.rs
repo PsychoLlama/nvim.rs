@@ -448,13 +448,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_mkdir as *const c_char),
-                name,
-                uv_strerror(ret),
-            )
-        };
+        unsafe { semsg_c!(gettext(e_mkdir.as_ptr()), name, uv_strerror(ret),) };
         return FAIL;
     }
     OK
@@ -466,7 +460,7 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 /// command's `!`.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     if unsafe { os_isdir(fname) } {
-        unsafe { semsg_c!(gettext(&raw const e_isadir2 as *const c_char), fname) };
+        unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), fname) };
         return ptr::null_mut();
     }
     if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {

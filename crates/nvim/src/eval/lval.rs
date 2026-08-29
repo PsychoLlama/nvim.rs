@@ -41,7 +41,7 @@ use crate::eval::typval::{
     tv_list_check_range_index_two, value_check_lock,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
-use crate::eval::vars::{clear_local, emsg_lit, emsg_static};
+use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{
     eval_variable, find_var, get_vimvar_dict, set_var, set_var_const, set_vvar_item, valid_varname,
     var_check_lock, var_check_ro, var_wrong_func_name,
@@ -433,7 +433,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 && container.v_type != VAR_BLOB
             {
                 if !quiet {
-                    emsg_lit(c"E689: Can only index a List, Dictionary or Blob");
+                    emsg_static(c"E689: Can only index a List, Dictionary or Blob");
                 }
                 return null_mut();
             }
@@ -447,7 +447,7 @@ pub(crate) unsafe fn get_lval_subscript(
 
             if lp.ll_range {
                 if !quiet {
-                    emsg_lit(c"E708: [:] must come last");
+                    emsg_static(c"E708: [:] must come last");
                 }
                 break 'done;
             }
@@ -466,7 +466,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
                 if len == 0 {
                     if !quiet {
-                        emsg_lit(c"E713: Cannot use empty key after .");
+                        emsg_static(c"E713: Cannot use empty key after .");
                     }
                     return null_mut();
                 }
@@ -490,7 +490,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 if unsafe { *p } == b':' as c_char {
                     if container.v_type == VAR_DICT {
                         if !quiet {
-                            emsg_lit(e_cannot_slice_dictionary);
+                            emsg_static(e_cannot_slice_dictionary);
                         }
                         break 'done;
                     }
@@ -504,7 +504,7 @@ pub(crate) unsafe fn get_lval_subscript(
                             && !unsafe { (*rettv).vval.v_blob }.is_null());
                     if !sliceable {
                         if !quiet {
-                            emsg_lit(c"E709: [:] requires a List or Blob value");
+                            emsg_static(c"E709: [:] requires a List or Blob value");
                         }
                         break 'done;
                     }
@@ -528,7 +528,7 @@ pub(crate) unsafe fn get_lval_subscript(
 
                 if unsafe { *p } != b']' as c_char {
                     if !quiet {
-                        emsg_lit(e_missbrac);
+                        emsg_static(e_missbrac);
                     }
                     break 'done;
                 }
@@ -753,7 +753,7 @@ pub unsafe fn set_var_lval(
 
     if lp.ll_range {
         if is_const {
-            emsg_lit(c"E996: Cannot lock a range");
+            emsg_static(c"E996: Cannot lock a range");
             return;
         }
         // Crash fix, upstream reads the union the wrong way here: the
@@ -765,7 +765,7 @@ pub unsafe fn set_var_lval(
         // `blob_T` as a `list_T`. `let l = [1,2] | let l[0:] = 0z11`
         // is enough. Report what the assignment actually needs.
         if value.v_type != VAR_LIST {
-            emsg_static(&e_listreq);
+            emsg_static(e_listreq);
             return;
         }
         // SAFETY: `VAR_LIST` says `v_list` is live; `ll_list` is the target.
@@ -786,7 +786,7 @@ pub unsafe fn set_var_lval(
     let watched = unsafe { tv_dict_is_watched(dict) };
 
     if is_const {
-        emsg_lit(c"E996: Cannot lock a list or dict");
+        emsg_static(c"E996: Cannot lock a list or dict");
         return;
     }
 
@@ -901,7 +901,7 @@ unsafe fn set_whole_var(
     } else if !op.is_null() && unsafe { *op } != b'=' as c_char {
         // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
         if is_const {
-            emsg_static(&e_cannot_mod);
+            emsg_static(e_cannot_mod);
             unsafe { *endp = cc };
             return;
         }

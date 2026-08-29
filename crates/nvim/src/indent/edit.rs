@@ -94,7 +94,7 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
     let start_lnum = unsafe { (*win).w_cursor.lnum };
     let line_count = unsafe { (*oap).line_count };
     if unsafe { (*buf).b_p_ma } == 0 {
-        unsafe { emsg(gettext((&raw const e_modifiable).cast())) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         return;
     }
     let mut first_changed: linenr_T = 0;
@@ -650,7 +650,7 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
 /// There must be a message layer, i.e. anywhere in the editor.
 unsafe fn emsg_text_too_long() {
     // SAFETY: the message is a NUL-terminated constant.
-    unsafe { emsg(gettext((&raw const e_resulting_text_too_long).cast())) };
+    unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
     if trylevel.get() == 0 {
         got_int.set(true);
     }
@@ -957,7 +957,7 @@ pub unsafe fn ex_retab(eap: *mut exarg_T) {
         lnum += 1;
     }
     if got_int.get() {
-        unsafe { emsg(gettext((&raw const e_interr).cast())) };
+        unsafe { emsg(gettext(e_interr.as_ptr())) };
     }
     // A single value given is equal to either 'tabstop' or 'vartabstop',
     // and then nothing on screen changed.

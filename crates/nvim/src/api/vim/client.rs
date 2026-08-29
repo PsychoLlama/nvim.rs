@@ -84,7 +84,7 @@ pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Re
     let err = &raw mut error;
     let mut chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
-        let msg = (&raw const e_invchan).cast::<::core::ffi::c_char>();
+        let msg = e_invchan.as_ptr();
         // SAFETY: `err` is this frame's own slot and `e_invchan` is static.
         unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
         return ().reported(error);

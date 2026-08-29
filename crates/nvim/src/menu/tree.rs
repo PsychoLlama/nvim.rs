@@ -112,7 +112,7 @@ pub(crate) fn remove_menu(menup: Link, name: CText, modes: c_int, silent: bool) 
             }
         } else if named {
             if !silent {
-                emsg_shared(&e_menu_only_exists_in_another_mode);
+                emsg_shared(e_menu_only_exists_in_another_mode);
             }
             return false;
         }
@@ -309,7 +309,7 @@ fn find_menu(menu: Option<Menu>, path_name: &CStr, modes: c_int) -> Option<Menu>
                 return None;
             }
             if !node.in_modes(modes) {
-                emsg_shared(&e_menu_only_exists_in_another_mode);
+                emsg_shared(e_menu_only_exists_in_another_mode);
                 return None;
             }
             if rest.is_empty() {

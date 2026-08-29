@@ -116,7 +116,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
         if saved_dir {
             // SAFETY: the directory name `save_cwd` filled in.
             if unsafe { os_chdir(dirbuf.as_mut_ptr()) } != 0 {
-                emsg_gettext(&raw const e_prev_dir as *const c_char);
+                emsg_gettext(e_prev_dir.as_ptr());
             }
             // SAFETY: the editor exists.
             unsafe { shorten_fnames(1) };

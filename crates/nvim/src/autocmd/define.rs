@@ -130,8 +130,7 @@ pub unsafe fn do_autocmd(
         if unsafe { *cmd } != 0 {
             unsafe {
                 emsg(gettext(
-                    (&raw const e_cannot_define_autocommands_for_all_events)
-                        .cast::<::core::ffi::c_char>(),
+                    e_cannot_define_autocommands_for_all_events.as_ptr(),
                 ))
             };
         } else {
@@ -630,12 +629,7 @@ unsafe fn arg_autocmd_flag_get(
         if unsafe { *flag } {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
-            unsafe {
-                semsg_c!(
-                    gettext((&raw const e_duparg2).cast::<::core::ffi::c_char>()),
-                    pattern.as_ptr(),
-                )
-            };
+            unsafe { semsg_c!(gettext(e_duparg2.as_ptr()), pattern.as_ptr(),) };
             return true;
         }
         unsafe { *flag = true };

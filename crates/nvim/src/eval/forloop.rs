@@ -22,7 +22,7 @@ use crate::eval::typval::{
     tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_list_first, tv_list_unref,
     tv_list_watch_add, tv_list_watch_remove,
 };
-use crate::eval::vars::{clear_local, emsg_lit};
+use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
 use crate::eval::{EVAL_EVALUATE, Fi, e_string_list_or_blob_required, eval0, forinfo_T};
 use crate::guard::Suppress;
@@ -79,7 +79,7 @@ pub unsafe fn eval_for_line(
             || ascii_iswhite(unsafe { *expr.add(2) } as c_int))
     {
         // SAFETY: the message is a NUL-terminated literal.
-        emsg_lit(c"E690: Missing \"in\" after :for");
+        emsg_static(c"E690: Missing \"in\" after :for");
         return fi.raw() as *mut c_void;
     }
 
@@ -148,7 +148,7 @@ pub unsafe fn eval_for_line(
                 _ => {
                     // SAFETY: the message is a NUL-terminated literal, and
                     // `tv` is this frame's.
-                    emsg_lit(e_string_list_or_blob_required);
+                    emsg_static(e_string_list_or_blob_required);
                     // SAFETY: `tv` is this frame's.
                     clear_local(&mut tv);
                 }

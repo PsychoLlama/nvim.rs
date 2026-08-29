@@ -306,7 +306,7 @@ pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
         retval
     };
     if retval == FAIL {
-        &raw const e_invarg as *const c_char
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }
@@ -334,7 +334,7 @@ pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
         retval
     };
     if retval == FAIL {
-        &raw const e_invarg as *const c_char
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }
@@ -470,7 +470,7 @@ pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
         retval
     };
     if retval == FAIL {
-        &raw const e_invarg as *const c_char
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }
@@ -693,12 +693,7 @@ pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
         cpt_sources().set_index(idx + 1);
         return OK;
     }
-    unsafe {
-        semsg_c!(
-            gettext(&raw const e_list_index_out_of_range_nr as *const c_char),
-            idx,
-        )
-    };
+    unsafe { semsg_c!(gettext(e_list_index_out_of_range_nr.as_ptr()), idx,) };
     FAIL
 }
 

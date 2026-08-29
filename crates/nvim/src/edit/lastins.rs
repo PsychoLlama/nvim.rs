@@ -100,7 +100,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
     // every step stops at the NUL.
     let mut insert = unsafe { get_last_insert() }; // text to be inserted
     if insert.data().is_null() {
-        unsafe { emsg(gettext(&raw const e_noinstext as *const c_char)) };
+        unsafe { emsg(gettext(e_noinstext.as_ptr())) };
         return FAIL;
     }
 

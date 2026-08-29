@@ -128,7 +128,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
             filetype_detect.set(Some(false));
         }
     } else {
-        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
     }
 }
 

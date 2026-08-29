@@ -43,8 +43,8 @@ use crate::indent::ex_retab;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
 use crate::main::{
-    c_bytes, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
-    e_zerocount, searchcmdlen,
+    e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange, e_zerocount,
+    searchcmdlen,
 };
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
@@ -77,7 +77,7 @@ use crate::types::{
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
 use crate::version::{ex_intro, ex_version};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 
 use crate::winlayer::Ea;
@@ -300,35 +300,33 @@ pub const FORCE_NOBIN: c_int = 2 as c_int;
 pub const EXFLAG_LIST: c_int = 0x1 as c_int;
 pub const EXFLAG_NR: c_int = 0x2 as c_int;
 pub const EXFLAG_PRINT: c_int = 0x4 as c_int;
-static e_ambiguous_use_of_user_defined_command: [c_char; 44] =
-    c_bytes(b"E464: Ambiguous use of user-defined command\0");
-static e_no_call_stack_to_substitute_for_stack: [c_char; 48] =
-    c_bytes(b"E489: No call stack to substitute for \"<stack>\"\0");
-static e_not_an_editor_command: [c_char; 28] = c_bytes(b"E492: Not an editor command\0");
-static e_no_autocommand_file_name_to_substitute_for_afile: [c_char; 59] =
-    c_bytes(b"E495: No autocommand file name to substitute for \"<afile>\"\0");
-static e_no_autocommand_buffer_number_to_substitute_for_abuf: [c_char; 62] =
-    c_bytes(b"E496: No autocommand buffer number to substitute for \"<abuf>\"\0");
-static e_no_autocommand_match_name_to_substitute_for_amatch: [c_char; 61] =
-    c_bytes(b"E497: No autocommand match name to substitute for \"<amatch>\"\0");
-static e_no_source_file_name_to_substitute_for_sfile: [c_char; 55] =
-    c_bytes(b"E498: No :source file name to substitute for \"<sfile>\"\0");
-static e_no_line_number_to_use_for_slnum: [c_char; 42] =
-    c_bytes(b"E842: No line number to use for \"<slnum>\"\0");
-static e_no_line_number_to_use_for_sflnum: [c_char; 43] =
-    c_bytes(b"E961: No line number to use for \"<sflnum>\"\0");
-static e_no_script_file_name_to_substitute_for_script: [c_char; 56] =
-    c_bytes(b"E1274: No script file name to substitute for \"<script>\"\0");
+static e_ambiguous_use_of_user_defined_command: &CStr =
+    c"E464: Ambiguous use of user-defined command";
+static e_no_call_stack_to_substitute_for_stack: &CStr =
+    c"E489: No call stack to substitute for \"<stack>\"";
+static e_not_an_editor_command: &CStr = c"E492: Not an editor command";
+static e_no_autocommand_file_name_to_substitute_for_afile: &CStr =
+    c"E495: No autocommand file name to substitute for \"<afile>\"";
+static e_no_autocommand_buffer_number_to_substitute_for_abuf: &CStr =
+    c"E496: No autocommand buffer number to substitute for \"<abuf>\"";
+static e_no_autocommand_match_name_to_substitute_for_amatch: &CStr =
+    c"E497: No autocommand match name to substitute for \"<amatch>\"";
+static e_no_source_file_name_to_substitute_for_sfile: &CStr =
+    c"E498: No :source file name to substitute for \"<sfile>\"";
+static e_no_line_number_to_use_for_slnum: &CStr = c"E842: No line number to use for \"<slnum>\"";
+static e_no_line_number_to_use_for_sflnum: &CStr = c"E961: No line number to use for \"<sflnum>\"";
+static e_no_script_file_name_to_substitute_for_script: &CStr =
+    c"E1274: No script file name to substitute for \"<script>\"";
 static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
 /// The `+cmd` argument a bare `+` stands for. Never written, and
 /// recognised by *address* in `expand_filename`, which is why it is one
 /// static rather than a literal at each of its two uses.
-static dollar_command: [c_char; 2] = c_bytes(b"$\0");
+static dollar_command: &CStr = c"$";
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// The command Ex mode substitutes for a bare newline. Never written, and
 /// recognised by address in `ex_range_without_command`.
-static exmode_plus: [c_char; 2] = c_bytes(b"+\0");
+static exmode_plus: &CStr = c"+";
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
     data: Callback_data {
         funcref: ::core::ptr::null_mut::<c_char>(),
@@ -340,12 +338,12 @@ static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_indent: GlobalCell<Option<bool>> = GlobalCell::new(None);
 pub const MSG_BUF_LEN: c_int = 480 as c_int;
-pub const FILETYPE_FILE: [c_char; 26] = c_bytes(b"filetype.lua filetype.vim\0");
-pub const FTPLUGIN_FILE: [c_char; 13] = c_bytes(b"ftplugin.vim\0");
-pub const INDENT_FILE: [c_char; 11] = c_bytes(b"indent.vim\0");
-pub const FTOFF_FILE: [c_char; 10] = c_bytes(b"ftoff.vim\0");
-pub const FTPLUGOF_FILE: [c_char; 13] = c_bytes(b"ftplugof.vim\0");
-pub const INDOFF_FILE: [c_char; 11] = c_bytes(b"indoff.vim\0");
+pub const FILETYPE_FILE: &CStr = c"filetype.lua filetype.vim";
+pub const FTPLUGIN_FILE: &CStr = c"ftplugin.vim";
+pub const INDENT_FILE: &CStr = c"indent.vim";
+pub const FTOFF_FILE: &CStr = c"ftoff.vim";
+pub const FTPLUGOF_FILE: &CStr = c"ftplugof.vim";
+pub const INDOFF_FILE: &CStr = c"indoff.vim";
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const KS_SPECIAL: c_int = 254 as c_int;

@@ -115,7 +115,7 @@ unsafe fn ex_call_inner(
         if ea.addr_count > 0 {
             // Default is the line number, not the range.
             if lnum > cur_buf().b_ml.ml_line_count {
-                unsafe { emsg(gettext(&raw const e_invrange as *const c_char)) };
+                unsafe { emsg(gettext(e_invrange.as_ptr())) };
                 break;
             }
             cur_win().w_cursor.lnum = lnum;
@@ -164,7 +164,7 @@ unsafe fn ex_defer_inner(
     if current_funccal.get().is_null() {
         unsafe {
             semsg_c!(
-                gettext(&raw const e_str_not_inside_function as *const c_char),
+                gettext(e_str_not_inside_function.as_ptr()),
                 c"defer".as_ptr(),
             )
         };
@@ -202,7 +202,7 @@ unsafe fn ex_defer_inner(
         if unsafe { builtin_function(name, -1) } {
             let fdef = unsafe { find_internal_func(name) };
             if fdef.is_null() {
-                unsafe { emsg_funcname(&raw const e_unknown_function_str as *const c_char, name) };
+                unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
                 r = FAIL;
             } else if unsafe { check_internal_func(fdef, argcount) } == -1 {
                 r = FAIL;
@@ -236,7 +236,7 @@ pub unsafe fn can_add_defer() -> bool {
     if unsafe { get_current_funccal() }.is_null() {
         unsafe {
             semsg_c!(
-                gettext(&raw const e_str_not_inside_function as *const c_char),
+                gettext(e_str_not_inside_function.as_ptr()),
                 c"defer".as_ptr(),
             )
         };
@@ -368,12 +368,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
     let tofree = unsafe { trans_function_name(argp, false, TFN_INT, dictp, partialp) };
     if !fudi.fd_newkey.is_null() {
         // Still need to give an error message for missing key.
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_dictkey as *const c_char),
-                fudi.fd_newkey,
-            )
-        };
+        unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), fudi.fd_newkey,) };
         unsafe { xfree(fudi.fd_newkey as *mut c_void) };
     }
     if tofree.is_null() {
@@ -402,7 +397,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 
     let startarg = unsafe { skipwhite(arg) };
     if unsafe { *startarg } != b'(' as c_char {
-        unsafe { semsg_c!(gettext(&raw const e_missingparen as *const c_char), ea.arg,) };
+        unsafe { semsg_c!(gettext(e_missingparen.as_ptr()), ea.arg,) };
     } else {
         let failed = if ea.cmdidx == CMD_defer {
             arg = startarg;
@@ -427,7 +422,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
             if ends_excmd(unsafe { *arg } as c_int) == 0 {
                 if !failed && !aborting() {
                     emsg_severe.set(true);
-                    unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), arg) };
+                    unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), arg) };
                 }
             } else {
                 ea.nextcmd = unsafe { check_nextcmd(arg) };

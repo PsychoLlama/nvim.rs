@@ -274,11 +274,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         }
         // Text longer than MAXCOL causes trouble further downstream.
         if tmpsublen > MAXCOL as usize {
-            unsafe {
-                emsg(gettext(
-                    &raw const e_resulting_text_too_long as *const c_char,
-                ))
-            };
+            unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
             error = true;
             break;
         }
@@ -387,7 +383,7 @@ unsafe fn vim_regsub_both(
     // SAFETY: `source` and `dest` are the caller's, and `rex` describes a
     // match that is still live — see [`vim_regsub`].
     if (source.is_null() && expr.is_null()) || dest.is_null() {
-        unsafe { emsg(gettext(&raw const e_null as *const c_char)) };
+        unsafe { emsg(gettext(e_null.as_ptr())) };
         return 0;
     }
     if prog_magic_wrong(rex) != 0 {
@@ -783,7 +779,7 @@ unsafe fn copy_capture(
         if unsafe { *s } == NUL as c_char {
             // The line is shorter than it was when the match ran.
             if out.copy {
-                unsafe { iemsg(gettext(&raw const e_re_damg as *const c_char)) };
+                unsafe { iemsg(gettext(e_re_damg.as_ptr())) };
             }
             return Outcome::Damaged;
         }

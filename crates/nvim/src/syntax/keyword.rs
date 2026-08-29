@@ -298,7 +298,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
     }
 
     if rest.is_null() {
-        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
     } else {
         unsafe { (*eap).nextcmd = check_nextcmd(rest) };
     }

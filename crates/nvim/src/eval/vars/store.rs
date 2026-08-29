@@ -32,33 +32,18 @@ use crate::types::{FAIL, NUL};
 /// The translation of one of the editor's message strings, which are held as
 /// NUL-terminated `static` byte arrays.
 ///
-/// Safe because the whole array is passed rather than a pointer into it: its
-/// last byte is the terminator, so `gettext` is handed a NUL-terminated
-/// string, and what it answers is either that `static` or one of its own --
-/// both of which outlive the report it is passed to.
-pub(crate) fn translate<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
-    debug_assert_eq!(msg[N - 1], 0, "an editor message is NUL-terminated");
-    // SAFETY: a NUL-terminated `static`, as the assertion above says.
-    unsafe { gettext(msg.as_ptr()) }
-}
-
-/// [`translate`] for a message written as a literal, where the terminator is
-/// the type's own guarantee.
-pub(crate) fn translate_lit(msg: &'static CStr) -> *const c_char {
-    // SAFETY: a `CStr` is NUL-terminated by construction.
+/// Safe by construction: a `CStr` carries its terminator in the type, and
+/// what `gettext` answers is either that `static` or one of its own -- both
+/// of which outlive the report it is passed to.
+pub(crate) fn translate(msg: &'static CStr) -> *const c_char {
+    // SAFETY: a NUL-terminated `static`, as the type says.
     unsafe { gettext(msg.as_ptr()) }
 }
 
 /// Report one of the editor's `static` messages, translated.
-pub(crate) fn emsg_static<const N: usize>(msg: &'static [c_char; N]) {
+pub(crate) fn emsg_static(msg: &'static CStr) {
     // SAFETY: [`translate`]'s answer is a live NUL-terminated string.
     unsafe { emsg(translate(msg)) };
-}
-
-/// [`emsg_static`] for a message written as a literal.
-pub(crate) fn emsg_lit(msg: &'static CStr) {
-    // SAFETY: as [`emsg_static`].
-    unsafe { emsg(translate_lit(msg)) };
 }
 
 /// Clear a value this frame owns, freeing whatever it holds.
@@ -102,7 +87,7 @@ pub unsafe fn set_var_const(
     let watched = unsafe { tv_dict_is_watched(dict) };
 
     if ht.is_null() || unsafe { *varname } == NUL as c_char {
-        unsafe { semsg_c!(translate(&e_illvar), name) };
+        unsafe { semsg_c!(translate(e_illvar), name) };
         return;
     }
     // `varname` is `name` itself or `name + 2`, so this cannot go
@@ -125,7 +110,7 @@ pub unsafe fn set_var_const(
     let mut oldtv = TV_INITIAL_VALUE;
     if !di.is_null() {
         if is_const {
-            emsg_static(&e_cannot_mod);
+            emsg_static(e_cannot_mod);
             return;
         }
 
@@ -150,12 +135,7 @@ pub unsafe fn set_var_const(
         if ht == get_vimvar_ht() && !unsafe { before_set_vvar(varname, di, tv, copy, watched, err) }
         {
             if type_error {
-                unsafe {
-                    semsg_c!(
-                        translate_lit(e_setting_v_str_to_value_with_wrong_type),
-                        varname,
-                    )
-                };
+                unsafe { semsg_c!(translate(e_setting_v_str_to_value_with_wrong_type), varname,) };
             }
             return;
         }
@@ -168,7 +148,7 @@ pub unsafe fn set_var_const(
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if ht == get_vimvar_ht() || ht == unsafe { get_funccal_args_ht() } {
-            unsafe { semsg_c!(translate(&e_illvar), name) };
+            unsafe { semsg_c!(translate(e_illvar), name) };
             return;
         }
         if !unsafe { valid_varname(varname) } {
@@ -233,9 +213,9 @@ pub unsafe fn set_var_const(
 /// `name` is NUL-terminated, or `name_len` bytes long.
 pub unsafe fn var_check_ro(flags: c_int, mut name: *const c_char, mut name_len: size_t) -> bool {
     let error_message = if flags & DI_FLAGS_RO as c_int != 0 {
-        &raw const e_cannot_change_readonly_variable_str as *const c_char
+        e_cannot_change_readonly_variable_str.as_ptr()
     } else if flags & DI_FLAGS_RO_SBX as c_int != 0 && sandbox.get() != 0 {
-        &raw const e_cannot_set_variable_in_sandbox_str as *const c_char
+        e_cannot_set_variable_in_sandbox_str.as_ptr()
     } else {
         return false;
     };
@@ -266,7 +246,7 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
     }
     unsafe {
         semsg_c!(
-            translate_lit(c"E1122: Variable is locked: %.*s"),
+            translate(c"E1122: Variable is locked: %.*s"),
             name_len as c_int,
             name,
         )
@@ -291,7 +271,7 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
     }
     unsafe {
         semsg_c!(
-            translate(&e_cannot_delete_variable_str),
+            translate(e_cannot_delete_variable_str),
             name_len as c_int,
             name,
         )
@@ -326,7 +306,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
         && unsafe { vim_strchr(name, b'#' as c_int) }.is_null()
     {
         let msg = c"E704: Funcref variable name must start with a capital: %s";
-        unsafe { semsg_c!(translate_lit(msg), name) };
+        unsafe { semsg_c!(translate(msg), name) };
         return true;
     }
     // Don't allow hiding a function. With an existing variable this may
@@ -334,7 +314,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
     // caller checks.
     if new_var && unsafe { function_exists(name, false) } {
         let msg = c"E705: Variable name conflicts with existing function: %s";
-        unsafe { semsg_c!(translate_lit(msg), name) };
+        unsafe { semsg_c!(translate(msg), name) };
         return true;
     }
     false
@@ -354,7 +334,7 @@ pub unsafe fn valid_varname(varname: *const c_char) -> bool {
             && (p == varname || !ascii_isdigit(c_int::from(c)))
             && c != AUTOLOAD_CHAR as c_char
         {
-            unsafe { semsg_c!(translate(&e_illvar), varname) };
+            unsafe { semsg_c!(translate(e_illvar), varname) };
             return false;
         }
         p = unsafe { p.add(1) };

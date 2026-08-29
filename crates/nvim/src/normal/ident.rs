@@ -236,7 +236,7 @@ pub(crate) unsafe fn find_ident_at_pos(
             unsafe { emsg(gettext(c"E348: No string under cursor".as_ptr())) };
         } else {
             // SAFETY: `e_noident` is a static NUL-terminated message.
-            unsafe { emsg(gettext(&raw const e_noident as *const c_char)) };
+            unsafe { emsg(gettext(e_noident.as_ptr())) };
         }
         return 0;
     }
@@ -632,7 +632,7 @@ unsafe fn build_keywordprg_cmd(
     }
     if n == 0 {
         // SAFETY: `e_noident` is a static NUL-terminated message.
-        unsafe { emsg(gettext(&raw const e_noident as *const c_char)) };
+        unsafe { emsg(gettext(e_noident.as_ptr())) };
         out.free();
         *ptr_arg = word;
         return 0;
@@ -805,7 +805,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
         // SAFETY: `word` points into a NUL-terminated buffer line.
         if unsafe { *skipwhite(word) } as c_int == NUL {
             // SAFETY: `e_noident` is a static NUL-terminated message.
-            unsafe { emsg(gettext(&raw const e_noident as *const c_char)) };
+            unsafe { emsg(gettext(e_noident.as_ptr())) };
             return;
         }
     }

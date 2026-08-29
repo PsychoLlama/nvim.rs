@@ -116,7 +116,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
     let in_cmdwin = || {
         let locked = cmdwin_type.get() != 0;
         if locked {
-            err(&raw const e_cmdwin as *const c_char);
+            err(e_cmdwin.as_ptr());
         }
         locked
     };
@@ -357,9 +357,9 @@ fn split_alternate(prenum: c_int) {
     };
     if find_buffer(fnum).is_none() {
         if prenum == 0 {
-            err(&raw const e_noalt as *const c_char);
+            err(e_noalt.as_ptr());
         } else {
-            err_number(&raw const e_buffer_nr_not_found as *const c_char, prenum);
+            err_number(e_buffer_nr_not_found.as_ptr(), prenum);
         }
         return;
     }

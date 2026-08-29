@@ -83,7 +83,7 @@ pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
     {
         unsafe { eval_to_string_skip(arg, eap, (*eap).skip != 0) }
     } else {
-        unsafe { emsg(message(&e_argreq)) };
+        unsafe { emsg(message(e_argreq)) };
         ptr::null_mut()
     };
 
@@ -252,7 +252,7 @@ pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
                 && unsafe { *end } != NUL as c_char
                 && ends_excmd(unsafe { *skipwhite(end.add(1)) } as c_int) == 0
             {
-                unsafe { semsg_c!(message(&e_trailing_arg), end) };
+                unsafe { semsg_c!(message(e_trailing_arg), end) };
                 return;
             }
             // When debugging, show the prompt before matching: a helpful
@@ -330,7 +330,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
     }
     p_cpo.set(save_cpo);
     if regmatch.regprog.is_null() {
-        unsafe { semsg_c!(message(&e_invarg2), pat) };
+        unsafe { semsg_c!(message(e_invarg2), pat) };
         return false;
     }
     // Save got_int and reset it: an earlier interruption must not cancel

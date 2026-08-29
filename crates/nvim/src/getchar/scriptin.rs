@@ -35,7 +35,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         // SAFETY (this body): `expanded` is this frame's own `MAXPATHL`
         // buffer, and `curscript` was just checked to be in range of the
         // stack.
-        unsafe { emsg(gettext(&raw const e_nesting as *const c_char)) };
+        unsafe { emsg(gettext(e_nesting.as_ptr())) };
         return;
     }
     // Not in the sandbox: the commands would run later, possibly outside
@@ -59,13 +59,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         )
     };
     if error != 0 {
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_notopen_2 as *const c_char),
-                name,
-                uv_strerror(error),
-            )
-        };
+        unsafe { semsg_c!(gettext(e_notopen_2.as_ptr()), name, uv_strerror(error),) };
         curscript.set(curscript.get() - 1);
         return;
     }

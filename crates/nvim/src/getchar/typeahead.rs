@@ -553,7 +553,7 @@ pub unsafe fn ins_typebuf(
     if !inserted {
         // Outside the borrow: `emsg` also flushes the buffers, i.e.
         // reaches the typeahead itself.
-        unsafe { emsg(gettext(&raw const e_toocompl as *const c_char)) };
+        unsafe { emsg(gettext(e_toocompl.as_ptr())) };
         unsafe { setcursor() };
         return FAIL;
     }

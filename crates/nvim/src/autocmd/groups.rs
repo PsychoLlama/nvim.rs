@@ -225,7 +225,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
     if del_group {
         if unsafe { *arg } == 0 {
             // SAFETY: `e_argreq` is a static message string.
-            unsafe { emsg(gettext((&raw const e_argreq).cast::<::core::ffi::c_char>())) };
+            unsafe { emsg(gettext(e_argreq.as_ptr())) };
         } else {
             // SAFETY: `arg` is the caller's string.
             unsafe { augroup_del(arg, true) };

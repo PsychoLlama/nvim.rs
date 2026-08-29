@@ -281,7 +281,7 @@ pub(crate) fn prog_magic_wrong(rex: Rex) -> c_int {
     let wrong = !nfa && unsafe { BtProg::of_match(rex) }.is_some_and(|p| p.magic() != REGMAGIC);
     if wrong {
         // SAFETY: a static message.
-        unsafe { emsg(gettext(&raw const e_re_corr as *const c_char)) };
+        unsafe { emsg(gettext(e_re_corr.as_ptr())) };
         return 1;
     }
     0

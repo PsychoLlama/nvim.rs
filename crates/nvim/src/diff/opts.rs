@@ -98,11 +98,7 @@ pub(crate) unsafe fn parse_diffanchors(
     } else {
         let shown = windows().find(|w| w.w_buffer == buf.raw() && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && unsafe { *dia } != 0 {
-            unsafe {
-                emsg(gettext(
-                    &raw const e_diff_anchors_with_hidden_windows as *const c_char,
-                ))
-            };
+            unsafe { emsg(gettext(e_diff_anchors_with_hidden_windows.as_ptr())) };
             return FAIL;
         }
         shown.map_or(::core::ptr::null_mut(), Win::raw)
@@ -146,7 +142,7 @@ pub(crate) unsafe fn parse_diffanchors(
         if !check_only
             && (lnum == MAXLNUM as linenr_T || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
         {
-            unsafe { emsg(gettext(&raw const e_invrange as *const c_char)) };
+            unsafe { emsg(gettext(e_invrange.as_ptr())) };
             return FAIL;
         }
         if !anchors.is_null() {
@@ -160,7 +156,7 @@ pub(crate) unsafe fn parse_diffanchors(
     if i == MAX_DIFF_ANCHORS && unsafe { *dia } != 0 {
         unsafe {
             semsg_c!(
-                gettext(&raw const e_cannot_have_more_than_nr_diff_anchors as *const c_char),
+                gettext(e_cannot_have_more_than_nr_diff_anchors.as_ptr()),
                 MAX_DIFF_ANCHORS,
             )
         };

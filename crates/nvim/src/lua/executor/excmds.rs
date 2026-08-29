@@ -55,7 +55,7 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
             if (*eap).addr_count > 0 {
                 cmd_source_buffer(eap, true);
             } else {
-                emsg(gettext(&raw const e_argreq as *const _));
+                emsg(gettext(e_argreq.as_ptr()));
             }
             return;
         }

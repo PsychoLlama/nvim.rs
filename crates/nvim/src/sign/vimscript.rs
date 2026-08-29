@@ -148,7 +148,7 @@ unsafe fn each_dict(
             let retval = if (*tv).v_type == VAR_DICT {
                 one((*tv).vval.v_dict)
             } else {
-                emsg(gettext((&raw const e_dictreq).cast::<c_char>()));
+                emsg(gettext(e_dictreq.as_ptr()));
                 -1
             };
             tv_list_append_number(retlist, varnumber_T::from(retval));
@@ -173,7 +173,7 @@ unsafe fn each_dict_arg(
     let retlist = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
     if args.ty(0) != VAR_LIST {
         // SAFETY: a static message.
-        unsafe { emsg(gettext((&raw const e_listreq).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_listreq.as_ptr())) };
         return;
     }
     // SAFETY: the tag says the list arm is live, and `retlist` was just
@@ -513,7 +513,7 @@ pub(crate) unsafe fn f_sign_jump(
     }
     if id <= 0 {
         // SAFETY: a static message.
-        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
 
@@ -568,7 +568,7 @@ unsafe fn sign_place_from_dict(
             return -1;
         }
         if id < 0 {
-            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return -1;
         }
     }
@@ -605,7 +605,7 @@ unsafe fn sign_place_from_dict(
     if let Some(tv) = unsafe { key(dict, "lnum") } {
         lnum = unsafe { tv_get_lnum(tv) };
         if lnum <= 0 {
-            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return -1;
         }
     }
@@ -742,7 +742,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
         if unsafe { key(dict, "id") }.is_some() {
             id = number_as_int(unsafe { tv_dict_get_number(dict, c"id".as_ptr()) });
             if id <= 0 {
-                unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+                unsafe { emsg(gettext(e_invarg.as_ptr())) };
                 return -1;
             }
         }

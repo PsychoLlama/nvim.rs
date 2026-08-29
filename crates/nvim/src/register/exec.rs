@@ -408,7 +408,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // escaped with CTRL-V or the typeahead buffer would act on them.
         if last_cmdline.get().is_null() {
             // SAFETY: `e_nolastcmd` is a NUL-terminated static message.
-            unsafe { emsg(gettext(&raw const e_nolastcmd as *const c_char)) };
+            unsafe { emsg(gettext(e_nolastcmd.as_ptr())) };
             return FAIL;
         }
         // SAFETY: `new_last_cmdline` owns whatever it holds, and is cleared
@@ -462,7 +462,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         let p = unsafe { get_last_insert_save() };
         if p.is_null() {
             // SAFETY: `e_noinstext` is a NUL-terminated static message.
-            unsafe { emsg(gettext(&raw const e_noinstext as *const c_char)) };
+            unsafe { emsg(gettext(e_noinstext.as_ptr())) };
             return FAIL;
         }
         // SAFETY: as above -- `p` is NUL-terminated and ours to free.

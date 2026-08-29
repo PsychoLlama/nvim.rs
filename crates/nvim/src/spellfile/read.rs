@@ -195,10 +195,10 @@ unsafe fn load_spl(
     // SAFETY: as the caller's contract.
     if fd.is_null() {
         if !silent {
-            unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+            unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
         } else if p_verbose.get() > 2 as OptInt {
             unsafe { verbose_enter() };
-            unsafe { smsg_c!(0, (&raw const e_notopen).cast::<c_char>(), fname) };
+            unsafe { smsg_c!(0, e_notopen.as_ptr(), fname) };
             unsafe { verbose_leave() };
         }
         return false;

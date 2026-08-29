@@ -127,7 +127,7 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
     }
     if got_int.get() {
         // SAFETY: a live message string.
-        unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
+        unsafe { emsg(gettext(e_interr.as_ptr())) };
         return true;
     }
     false

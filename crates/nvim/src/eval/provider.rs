@@ -144,10 +144,10 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
         let wrong_kind = !data.is_null() && unsafe { (*data).streamtype } != kChannelStreamProc;
         if wrong_kind {
             // SAFETY: a shared NUL-terminated message.
-            emsg_static(&e_invchanjob);
+            emsg_static(e_invchanjob);
         } else {
             // SAFETY: as above.
-            emsg_static(&e_invchan);
+            emsg_static(e_invchan);
         }
     }
     null_mut()
@@ -165,7 +165,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
     let (arg, mut ret) = unsafe { (Tv::new(argvars), Tv::new(rettv)) };
     if arg.v_type != VAR_STRING {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
-        emsg_static(&e_invarg);
+        emsg_static(e_invarg);
         return;
     }
     // SAFETY: the List is fresh and this frame's.

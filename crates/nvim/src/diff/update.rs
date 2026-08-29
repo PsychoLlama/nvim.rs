@@ -394,7 +394,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 // room for `MAX_DIFF_ANCHORS` line numbers.
                 let ok = unsafe { parse_diffanchors(false, Buf::new(buf), into, count) };
                 if ok != OK {
-                    let msg = &raw const e_failed_to_find_all_diff_anchors as *const c_char;
+                    let msg = e_failed_to_find_all_diff_anchors.as_ptr();
                     // SAFETY: a static message string.
                     unsafe { emsg(gettext(msg)) };
                     num_anchors = 0;

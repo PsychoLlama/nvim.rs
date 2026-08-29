@@ -205,12 +205,12 @@ pub fn check_secure() -> bool {
     if secure.get() != 0 {
         secure.set(2);
         // SAFETY: a live message string.
-        unsafe { emsg(gettext(&raw const e_curdir as *const ::core::ffi::c_char)) };
+        unsafe { emsg(gettext(e_curdir.as_ptr())) };
         return true;
     }
     if sandbox.get() != 0 {
         // SAFETY: as above.
-        unsafe { emsg(gettext(&raw const e_sandbox as *const ::core::ffi::c_char)) };
+        unsafe { emsg(gettext(e_sandbox.as_ptr())) };
         return true;
     }
     false

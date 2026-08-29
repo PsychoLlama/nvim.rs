@@ -232,7 +232,7 @@ fn bt_regexec_both(
             }
         }
         // SAFETY: a static message.
-        _ => unsafe { iemsg(gettext(&raw const e_null as *const c_char)) },
+        _ => unsafe { iemsg(gettext(e_null.as_ptr())) },
     }
 
     trim_working_set();

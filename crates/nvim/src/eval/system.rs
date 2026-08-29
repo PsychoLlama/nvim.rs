@@ -79,7 +79,7 @@ pub unsafe fn tv_to_argv(
     let argc = unsafe { tv_list_len(argl) };
     if argc == 0 {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
-        emsg_static(&e_invarg);
+        emsg_static(e_invarg);
         return null_mut();
     }
 

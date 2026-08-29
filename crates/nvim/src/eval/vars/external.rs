@@ -196,7 +196,7 @@ pub unsafe fn get_spellword(
     if unsafe { tv_list_len(list) } != 2 {
         let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
         // SAFETY: a NUL-terminated literal.
-        emsg_lit(msg);
+        emsg_static(msg);
         return -1;
     }
     unsafe { *ret_word = tv_list_find_str(list, 0, numbuf) };

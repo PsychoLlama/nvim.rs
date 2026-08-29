@@ -21,7 +21,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
         return (0 as Integer).reported(slot);
     }
     if b == cmdwin_buf.get() {
-        let msg = (&raw const e_cmdwin).cast::<::core::ffi::c_char>();
+        let msg = e_cmdwin.as_ptr();
         // SAFETY: `err` is this frame's slot and `e_cmdwin` a static message.
         unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
         return (0 as Integer).reported(slot);

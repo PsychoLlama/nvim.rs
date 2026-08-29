@@ -459,7 +459,7 @@ pub unsafe fn find_special_key(
             len = unsafe { number_at(bp.skip(5)) }.1;
             if len == 0 {
                 // SAFETY: a static message and the editor's own message path.
-                unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+                unsafe { emsg(gettext(e_invarg.as_ptr())) };
                 return 0;
             }
             bp = bp.skip((len + 5) as isize);
@@ -497,7 +497,7 @@ pub unsafe fn find_special_key(
         len = digits;
         if len == 0 {
             // SAFETY: a static message and the editor's own message path.
-            unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return 0;
         }
         number as c_int
@@ -716,7 +716,7 @@ pub unsafe fn replace_termcodes(
             if end.gap(src) >= 4 && starts_with_ignoring_case(src, c"<SID>") {
                 if sid_arg < 0 || (sid_arg == 0 && current_sctx.get().sc_sid <= 0) {
                     // SAFETY: a static message and the editor's message path.
-                    unsafe { emsg(gettext(&raw const e_usingsid as *const c_char)) };
+                    unsafe { emsg(gettext(e_usingsid.as_ptr())) };
                 } else {
                     let sid = if sid_arg != 0 {
                         sid_arg

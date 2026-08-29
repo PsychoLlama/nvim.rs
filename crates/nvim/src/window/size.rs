@@ -389,7 +389,7 @@ pub unsafe fn did_set_winminheight(_args: *mut optset_T) -> *const c_char {
         }
         p_wmh.set(p_wmh.get() - 1);
         if first {
-            err(&raw const e_noroom as *const c_char);
+            err(e_noroom.as_ptr());
             first = false;
         }
     }
@@ -404,7 +404,7 @@ pub unsafe fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
         }
         p_wmw.set(p_wmw.get() - 1);
         if first {
-            err(&raw const e_noroom as *const c_char);
+            err(e_noroom.as_ptr());
             first = false;
         }
     }

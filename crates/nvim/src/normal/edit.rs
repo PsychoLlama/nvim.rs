@@ -245,7 +245,7 @@ pub(crate) unsafe fn nv_replace_mode(cap: *mut cmdarg_T) {
         return;
     }
     if cur_buf().b_p_ma == 0 {
-        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         return;
     }
     if virtual_active(cur_win()) {
@@ -273,7 +273,7 @@ pub(crate) unsafe fn nv_vreplace(cap: *mut cmdarg_T) {
         return;
     }
     if cur_buf().b_p_ma == 0 {
-        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         return;
     }
     if ca.extra_char == Ctrl_V || ca.extra_char == Ctrl_Q {
@@ -512,7 +512,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
     }
     // A terminal buffer is not 'modifiable' and is still editable.
     if cur_buf().b_p_ma == 0 && cur_buf().terminal.is_null() {
-        unsafe { emsg(gettext(&raw const e_modifiable as *const c_char)) };
+        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
         clear_op(ca.op());
         return;
     }

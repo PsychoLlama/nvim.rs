@@ -107,7 +107,7 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
 
     let menu_path = arg;
     if menu_path.byte(0) == b'.' {
-        semsg_name(message(&e_invarg2), menu_path.raw());
+        semsg_name(message(e_invarg2), menu_path.raw());
         return;
     }
 
@@ -121,7 +121,7 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
         return;
     }
     if !map_to.is_empty() && (unmenu || enable != Enable::Unchanged) {
-        semsg_name(message(&e_trailing_arg), map_to.raw());
+        semsg_name(message(e_trailing_arg), map_to.raw());
         return;
     }
 

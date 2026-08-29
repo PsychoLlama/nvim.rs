@@ -223,12 +223,12 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
         // `:delmarks!` takes no argument at all; naming one is E474 rather
         // than "clear these, forcefully".
         // SAFETY: a `'static` message.
-        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
     if empty {
         // SAFETY: as above.
-        unsafe { emsg(gettext((&raw const e_argreq).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_argreq.as_ptr())) };
         return;
     }
 
@@ -257,7 +257,7 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             // NUL-terminated argument.
             if !unsafe { delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) } {
                 // SAFETY: as above.
-                unsafe { semsg_c!(gettext((&raw const e_invarg2).cast::<c_char>()), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
                 return;
             }
             i += 1;
@@ -277,7 +277,7 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             };
             if !same_class || end < from {
                 // SAFETY: `rest` points inside the NUL-terminated argument.
-                unsafe { semsg_c!(gettext((&raw const e_invarg2).cast::<c_char>()), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
                 return;
             }
             i += 2;

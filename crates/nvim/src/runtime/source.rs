@@ -35,13 +35,13 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
     if named && !eap.is_null() && addr_count > 0 {
         // A range only makes sense when the lines come from a buffer.
         // SAFETY: a static message.
-        unsafe { emsg(gettext(&raw const e_norange as *const c_char)) };
+        unsafe { emsg(gettext(e_norange.as_ptr())) };
         return;
     }
     // SAFETY: as above; every callee below takes the command or the name.
     if !eap.is_null() && !named {
         if forceit {
-            unsafe { emsg(gettext(&raw const e_argreq as *const c_char)) };
+            unsafe { emsg(gettext(e_argreq.as_ptr())) };
         } else {
             unsafe { cmd_source_buffer(eap, false) };
         }
@@ -53,7 +53,7 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
             || unsafe { (*(*eap).cstack).cs_idx } >= 0;
         unsafe { openscript(fname, busy) };
     } else if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
-        unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), fname) };
+        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
     }
 }
 
@@ -823,7 +823,7 @@ unsafe fn source_bracket(
         unsafe { profile_script_stop(wait_start) };
     }
     if got_int.get() {
-        unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
+        unsafe { emsg(gettext(e_interr.as_ptr())) };
     }
     estack_pop();
     if p_verbose.get() > 1 {

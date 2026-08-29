@@ -184,11 +184,7 @@ unsafe fn nlua_wait_condition(
 pub(crate) unsafe extern "C-unwind" fn nlua_wait(lstate: *mut lua_State) -> c_int {
     unsafe {
         if in_fast_callback.get() != 0 {
-            return luaL_error(
-                lstate,
-                &raw const e_fast_api_disabled as *const _,
-                c"vim.wait".as_ptr(),
-            );
+            return luaL_error(lstate, e_fast_api_disabled.as_ptr(), c"vim.wait".as_ptr());
         }
 
         let timeout_number = luaL_checknumber(lstate, 1);

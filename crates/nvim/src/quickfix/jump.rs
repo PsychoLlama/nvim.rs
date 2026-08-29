@@ -175,7 +175,7 @@ unsafe fn escape_winfixbuf(
     }
     if qi.qfl_type == QFLT_LOCATION {
         // A location list cannot split or reassign its window.
-        qf_emsg(&raw const e_winfixbuf_cannot_go_to_buffer as *const c_char);
+        qf_emsg(e_winfixbuf_cannot_go_to_buffer.as_ptr());
         return None;
     }
     // Try the previously used window, if it can take another buffer.
@@ -197,7 +197,7 @@ unsafe fn escape_winfixbuf(
     }
     // The split failed, or autocommands set 'winfixbuf' again or sent
     // us to another window that has it.
-    qf_emsg(&raw const e_winfixbuf_cannot_go_to_buffer as *const c_char);
+    qf_emsg(e_winfixbuf_cannot_go_to_buffer.as_ptr());
     Some(false)
 }
 
@@ -455,7 +455,7 @@ pub(crate) unsafe fn qf_jump_newwin(
     // SAFETY: the caller's stack, which may be null for the quickfix one.
     let qi = qf_opt(qi).unwrap_or_else(qf_global);
     if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
-        qf_emsg(&raw const e_no_errors as *const c_char);
+        qf_emsg(e_no_errors.as_ptr());
         return;
     }
     let old_swb = p_swb.get();

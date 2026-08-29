@@ -620,9 +620,9 @@ pub unsafe fn buflist_getfile(
 ) -> c_int {
     let Some(mut buf) = find_buf(n) else {
         if options & GETF_ALT as c_int != 0 && n == 0 {
-            err(tr_raw((&raw const e_noalt).cast::<c_char>()));
+            err(tr_raw(e_noalt.as_ptr()));
         } else {
-            let fmt = tr_raw((&raw const e_buffer_nr_not_found).cast::<c_char>());
+            let fmt = tr_raw(e_buffer_nr_not_found.as_ptr());
             err_num(fmt, n);
         }
         return FAIL;

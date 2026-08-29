@@ -361,14 +361,14 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
     // both built by now.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
         return;
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
     if unsafe { fwrite(VIMSUGMAGIC.as_ptr().cast(), VIMSUGMAGICL as size_t, 1, fd) } != 1 {
-        unsafe { emsg(gettext((&raw const e_write).cast())) };
+        unsafe { emsg(gettext(e_write.as_ptr())) };
         unsafe { fclose(fd) };
         return;
     }
@@ -396,7 +396,7 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
         // The stored terminator goes out with the line.
         let len = unsafe { ml_get_buf_len(spin.si_spellbuf, lnum) } + 1;
         if unsafe { fwrite(line.cast(), len as size_t, 1, fd) } == 0 {
-            unsafe { emsg(gettext((&raw const e_write).cast())) };
+            unsafe { emsg(gettext(e_write.as_ptr())) };
             failed = true;
             break;
         }
@@ -405,7 +405,7 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
 
     if !failed {
         if unsafe { putc(0, fd) } == EOF {
-            unsafe { emsg(gettext((&raw const e_write).cast())) };
+            unsafe { emsg(gettext(e_write.as_ptr())) };
         }
         let used = spin.si_memtot;
         spell_message_fmt(

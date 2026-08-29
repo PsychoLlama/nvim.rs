@@ -242,7 +242,7 @@ pub(crate) unsafe fn ex_emenu(eap: *mut exarg_T) {
             b'i' => MENU_INDEX_INSERT,
             b'c' => MENU_INDEX_CMDLINE,
             _ => {
-                semsg_name(message(&e_invarg2), arg.raw());
+                semsg_name(message(e_invarg2), arg.raw());
                 return;
             }
         };

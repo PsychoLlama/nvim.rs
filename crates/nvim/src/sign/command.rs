@@ -254,7 +254,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
         } else if let Some(v) = after(c"priority=") {
             prio = unsafe { atoi(v) };
         } else {
-            unsafe { semsg_c!(gettext((&raw const e_invarg2).cast::<c_char>()), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
             return;
         }
 
@@ -288,14 +288,14 @@ unsafe fn sign_place_cmd(
         // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
         // A `line=` or a `name=` means a placement was intended.
         if lnum >= 0 || !name.is_null() || empty_group {
-            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
         } else {
             unsafe { sign_list_placed(buf, group) };
         }
         return;
     }
     if name.is_null() || buf.is_null() || empty_group {
-        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
     let mut uid = id.cast_unsigned();
@@ -320,7 +320,7 @@ unsafe fn sign_unplace_cmd(
 ) {
     // SAFETY: the caller's buffer, name and group.
     if lnum >= 0 || !name.is_null() || (!group.is_null() && unsafe { *group } == 0) {
-        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
 
@@ -351,14 +351,14 @@ unsafe fn sign_jump_cmd(
 ) {
     // SAFETY: the caller's buffer, name and group.
     if name.is_null() && group.is_null() && id == -1 {
-        unsafe { emsg(gettext((&raw const e_argreq).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_argreq.as_ptr())) };
         return;
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
     if buf.is_null() || (!group.is_null() && unsafe { *group } == 0) || lnum >= 0 || !name.is_null()
     {
-        unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
     unsafe { sign_jump(id, group, buf) };
@@ -437,7 +437,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
         } else if cmd == SIGNCMD_UNPLACE && unsafe { *arg } == STAR {
             // `:sign unplace *`: every sign, and not with an id too.
             if out.id != -1 {
-                unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+                unsafe { emsg(gettext(e_invarg.as_ptr())) };
                 return None;
             }
             out.id = -2;
@@ -477,23 +477,18 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if unsafe { *skipwhite(p) } != 0 {
-                unsafe { semsg_c!(gettext((&raw const e_trailing_arg).cast::<c_char>()), p) };
+                unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
             }
             break;
         } else {
-            unsafe { emsg(gettext((&raw const e_invarg).cast::<c_char>())) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return None;
         }
         arg = unsafe { skipwhite(arg) };
     }
 
     if !filename.is_null() && out.buf.is_null() {
-        unsafe {
-            semsg_c!(
-                gettext((&raw const e_invalid_buffer_name_str).cast::<c_char>()),
-                filename,
-            )
-        };
+        unsafe { semsg_c!(gettext(e_invalid_buffer_name_str.as_ptr()), filename,) };
         return None;
     }
 

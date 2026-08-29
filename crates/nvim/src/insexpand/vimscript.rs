@@ -330,7 +330,7 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
     }
 
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
     } else {
         let startcol = unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as colnr_T;
         if startcol > 0 {
@@ -514,7 +514,7 @@ pub unsafe fn f_complete_info(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let mut what_list: *mut list_T = ptr::null_mut();
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
         if unsafe { (*argvars).v_type } != VAR_LIST {
-            unsafe { emsg(gettext(&raw const e_listreq as *const c_char)) };
+            unsafe { emsg(gettext(e_listreq.as_ptr())) };
             return;
         }
         what_list = unsafe { (*argvars).vval.v_list };

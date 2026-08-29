@@ -62,7 +62,7 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, c_bytes, curbuf, e_nobufnr, e_noinstext, e_nolastcmd, e_noprevre,
+    Columns, State, curbuf, e_nobufnr, e_noinstext, e_nolastcmd, e_noprevre,
     e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush, must_redraw,
     new_last_cmdline, p_ch, p_report, p_sel, pending_end_reg_executing, redir_reg, reg_executing,
     reg_recorded, reg_recording, restart_edit,
@@ -193,7 +193,7 @@ static y_regs: GlobalCell<[yankreg_T; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]
 static y_previous: GlobalCell<*mut yankreg_T> =
     GlobalCell::new(::core::ptr::null_mut::<yankreg_T>());
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
-    [::core::ffi::c_char; 79] =
-    c_bytes(b"E883: Search pattern and expression register may not contain two or more lines\0");
+    &::core::ffi::CStr =
+    c"E883: Search pattern and expression register may not contain two or more lines";
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

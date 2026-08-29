@@ -55,7 +55,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
-use crate::main::{c_bytes, curbuf, curwin};
+use crate::main::{curbuf, curwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::xfree;
@@ -215,8 +215,8 @@ pub fn buf_get_changedtick(buf: Buf) -> varnumber_T {
     // the only variant this union is ever given here.
     unsafe { buf.changedtick_di.di_tv.vval.v_number }
 }
-static e_attempt_to_delete_buffer_that_is_in_use_str: [::core::ffi::c_char; 52] =
-    c_bytes(b"E937: Attempt to delete a buffer that is in use: %s\0");
+static e_attempt_to_delete_buffer_that_is_in_use_str: &::core::ffi::CStr =
+    c"E937: Attempt to delete a buffer that is in use: %s";
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 

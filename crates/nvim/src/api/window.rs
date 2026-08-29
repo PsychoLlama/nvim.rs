@@ -69,7 +69,7 @@ pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
                 &raw mut err,
                 kErrorTypeException,
                 c"%s".as_ptr(),
-                (&raw const e_cmdwin).cast::<::core::ffi::c_char>(),
+                e_cmdwin.as_ptr(),
             )
         };
         return ().reported(err);
@@ -306,7 +306,7 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
         return ().reported(err);
     };
     let tabpage = win_find_tabpage(w.raw());
-    let refused = (&raw const e_autocmd_close).cast::<::core::ffi::c_char>();
+    let refused = e_autocmd_close.as_ptr();
     let is_aucmd = is_aucmd_win(w.raw());
     let same_tab = tabpage == curtab.get();
     api_try(&mut err, |_| {

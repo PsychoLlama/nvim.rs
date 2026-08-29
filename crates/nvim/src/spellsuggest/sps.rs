@@ -161,7 +161,7 @@ pub(super) unsafe fn spell_suggest_file(mut su: Sug, fname: *mut c_char) {
     if fd.is_null() {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), fname) };
+        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
         return;
     }
 

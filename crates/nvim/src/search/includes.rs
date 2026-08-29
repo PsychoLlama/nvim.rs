@@ -922,7 +922,7 @@ pub unsafe fn find_pattern_in_path(
         }
     } else if !walk.found && action != ACTION_EXPAND && !silent {
         if got_int.get() || ins_compl_interrupted() {
-            unsafe { emsg(gettext(&raw const e_interr as *const c_char)) };
+            unsafe { emsg(gettext(e_interr.as_ptr())) };
         } else if kind == FIND_DEFINE {
             unsafe { emsg(gettext(c"E388: Couldn't find definition".as_ptr())) };
         } else {

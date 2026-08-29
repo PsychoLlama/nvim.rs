@@ -111,7 +111,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
     if unsafe { *(*cur_win().w_s).b_p_spl } as c_int == NUL {
-        unsafe { emsg(gettext(&raw const e_no_spell as *const c_char)) };
+        unsafe { emsg(gettext(e_no_spell.as_ptr())) };
         return;
     }
 

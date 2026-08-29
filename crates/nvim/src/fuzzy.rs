@@ -834,7 +834,7 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
 }
 
 /// The translated text of one of the shared `e_*` message strings.
-fn message<const N: usize>(msg: &'static [c_char; N]) -> *const c_char {
+fn message(msg: &'static CStr) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the
     // loaded message catalog; both outlive the call.
     unsafe { gettext(msg.as_ptr()) }
@@ -853,12 +853,12 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
         } else {
             c"matchfuzzy()".as_ptr()
         };
-        unsafe { semsg_c!(message(&e_listarg), who) };
+        unsafe { semsg_c!(message(e_listarg), who) };
         return;
     }
     let pat = unsafe { &*argvars.add(1) };
     if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
-        unsafe { semsg_c!(message(&e_invarg2), numbuf.string(pat)) };
+        unsafe { semsg_c!(message(e_invarg2), numbuf.string(pat)) };
         return;
     }
 
@@ -885,18 +885,18 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                 || unsafe { *(*di).di_tv.vval.v_string } == 0
             {
                 let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
-                unsafe { semsg_c!(message(&e_invargNval), c"key".as_ptr(), got) };
+                unsafe { semsg_c!(message(e_invargNval), c"key".as_ptr(), got) };
                 return;
             }
             key = unsafe { numbuf3.string(&raw const (*di).di_tv) };
         } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
-            unsafe { semsg_c!(message(&e_invargval), c"text_cb".as_ptr()) };
+            unsafe { semsg_c!(message(e_invargval), c"text_cb".as_ptr()) };
             return;
         }
         let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
-                unsafe { semsg_c!(message(&e_invargval), c"limit".as_ptr()) };
+                unsafe { semsg_c!(message(e_invargval), c"limit".as_ptr()) };
                 return;
             }
             limit = unsafe { tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) }

@@ -48,7 +48,7 @@ pub unsafe fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
                 }
             }
         }
-        _ => err(&e_listblobreq),
+        _ => err(e_listblobreq),
     }
 }
 
@@ -97,7 +97,7 @@ fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> varnumb
         return 0;
     }
     let Some(first) = l.find(idx as c_int) else {
-        err_nr(&e_list_index_out_of_range_nr, idx);
+        err_nr(e_list_index_out_of_range_nr, idx);
         return 0;
     };
 
@@ -164,7 +164,7 @@ pub unsafe fn f_count(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             }
             Container::Dict(d) if !d.is_null() => {
                 if args.has(2) && args.has(3) {
-                    err(&e_invarg);
+                    err(e_invarg);
                 } else {
                     n = count_dict(d, args.get_mut(1), ic);
                 }

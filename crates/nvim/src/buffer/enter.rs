@@ -466,34 +466,33 @@ fn do_autochdir_now() {
 
 pub fn no_write_message_buf(mut buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
-        err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
+        err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {
-        let fmt = &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
-        err_num(tr_raw(fmt.cast::<c_char>()), buf.handle as c_int);
+        let fmt = e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
+        err_num(tr_raw(fmt.as_ptr()), buf.handle as c_int);
     }
 }
 
 pub fn no_write_message() {
     let buf = cur_buf();
     if !buf.terminal.is_null() && job_running(buf) {
-        err_static(&raw const e_job_still_running_add_bang_to_end_the_job);
+        err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {
-        err_static(&raw const e_no_write_since_last_change_add_bang_to_override);
+        err_static(e_no_write_since_last_change_add_bang_to_override);
     }
 }
 
 pub fn no_write_message_nobang(buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
-        err_static(&raw const e_job_still_running);
+        err_static(e_job_still_running);
     } else {
-        err_static(&raw const e_no_write_since_last_change);
+        err_static(e_no_write_since_last_change);
     }
 }
 
-/// `emsg(_(msg))` over one of `main.rs`'s message statics, which are byte
-/// arrays rather than pointers.
-fn err_static<const N: usize>(msg: *const [c_char; N]) {
-    err_raw(tr_raw(msg.cast::<c_char>()));
+/// `emsg(_(msg))` over one of `main.rs`'s message statics.
+fn err_static(msg: &'static CStr) {
+    err_raw(tr_raw(msg.as_ptr()));
 }
 
 // ---------------------------------------------------------------------------

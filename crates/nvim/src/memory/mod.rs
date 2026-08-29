@@ -189,7 +189,7 @@ pub unsafe extern "C" fn xmalloc(size: usize) -> *mut c_void {
     unsafe {
         let ret = try_malloc(size);
         if ret.is_null() {
-            preserve_exit((&raw const e_outofmem).cast::<c_char>());
+            preserve_exit(e_outofmem.as_ptr());
         }
         ret
     }
@@ -231,7 +231,7 @@ pub unsafe extern "C" fn xcalloc(count: usize, size: usize) -> *mut c_void {
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_calloc(allocated_count, allocated_size) };
     if ret.is_null() {
-        unsafe { preserve_exit((&raw const e_outofmem).cast::<c_char>()) };
+        unsafe { preserve_exit(e_outofmem.as_ptr()) };
     }
     ret
 }
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     unsafe { try_to_free_memory() };
     let ret = unsafe { seam_realloc(ptr, allocated_size) };
     if ret.is_null() {
-        unsafe { preserve_exit((&raw const e_outofmem).cast::<c_char>()) };
+        unsafe { preserve_exit(e_outofmem.as_ptr()) };
     }
     ret
 }

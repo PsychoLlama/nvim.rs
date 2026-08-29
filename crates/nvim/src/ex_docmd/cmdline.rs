@@ -177,7 +177,7 @@ pub unsafe fn do_cmdline(
     msg_list.set(&raw mut private_msg_list);
 
     if do_cmdline_start() == FAIL {
-        emsg(gettext(&raw const e_command_too_recursive as *const c_char));
+        emsg(gettext(e_command_too_recursive.as_ptr()));
         // No command name: this is not an error of any one command.
         do_errthrow(ptr::null_mut(), ptr::null_mut());
         msg_list.set(saved_msg_list);
@@ -624,13 +624,13 @@ pub unsafe fn do_cmdline(
         {
             let flags_here = cstack.cs_flags[cstack.cs_idx as usize];
             let missing = if flags_here & CSF_TRY as c_int != 0 {
-                &raw const e_endtry as *const c_char
+                e_endtry.as_ptr()
             } else if flags_here & CSF_WHILE as c_int != 0 {
-                &raw const e_endwhile as *const c_char
+                e_endwhile.as_ptr()
             } else if flags_here & CSF_FOR as c_int != 0 {
-                &raw const e_endfor as *const c_char
+                e_endfor.as_ptr()
             } else {
-                &raw const e_endif as *const c_char
+                e_endif.as_ptr()
             };
             emsg(gettext(missing));
         }

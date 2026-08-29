@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
@@ -254,7 +254,7 @@ fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
             cmdwin_result.set(Ctrl_C);
             return false;
         } else if win.raw() == cmdwin_old_curwin.get() {
-            set_err(err, &raw const e_cmdwin as *const c_char);
+            set_err(err, e_cmdwin.as_ptr());
             return false;
         }
     }
@@ -376,7 +376,7 @@ fn close_all_others(message: bool, forceit: bool) {
     let announce = message && !autocmd_busy.get();
     if old_curwin.w_floating {
         if announce {
-            err_raw(&raw const e_floatonly as *const c_char);
+            err_raw(e_floatonly.as_ptr());
         }
         return;
     }

@@ -157,7 +157,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
     let mut path = [0 as c_char; MAXPATHL as usize];
     if by_number {
         if !script_id_valid(unsafe { (*eap).line2 } as c_int) {
-            unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+            unsafe { emsg(gettext(e_invarg.as_ptr())) };
             return;
         }
         unsafe { (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name };
@@ -363,7 +363,7 @@ unsafe fn script_query(
             // SAFETY: as above; the message borrows the item's string form.
             unsafe {
                 semsg_c!(
-                    gettext(&raw const e_invargNval as *const c_char),
+                    gettext(e_invargNval.as_ptr()),
                     c"sid".as_ptr(),
                     numbuf.string(&raw mut (*sid_di).di_tv),
                 )

@@ -124,7 +124,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
             Some(b'/' | b'?') => RE_SEARCH as c_int,
             _ => {
                 // SAFETY: a live message string.
-                unsafe { emsg(gettext(&raw const e_backslash as *const c_char)) };
+                unsafe { emsg(gettext(e_backslash.as_ptr())) };
                 return None;
             }
         };
@@ -274,7 +274,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
     };
     if compiled == FAIL {
         // SAFETY: a live message string.
-        unsafe { emsg(gettext(&raw const e_invcmd as *const c_char)) };
+        unsafe { emsg(gettext(e_invcmd.as_ptr())) };
         return;
     }
 
@@ -291,7 +291,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
             // SAFETY: a live message string.
-            unsafe { msg(gettext(&raw const e_interr as *const c_char), 0 as c_int) };
+            unsafe { msg(gettext(e_interr.as_ptr()), 0 as c_int) };
         } else if ndone == 0 as c_int {
             let fmt = if kind == b'v' {
                 c"Pattern found in every line: %s".as_ptr()

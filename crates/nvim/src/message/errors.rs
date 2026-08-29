@@ -375,7 +375,7 @@ pub unsafe fn iemsg(s: *const c_char) {
 /// # Safety
 /// `where_0` must be a valid C string.
 pub unsafe fn internal_error(where_0: *const c_char) {
-    unsafe { crate::siemsg_c!(gettext(&raw const e_intern2 as *const c_char), where_0) };
+    unsafe { crate::siemsg_c!(gettext(e_intern2.as_ptr()), where_0) };
 }
 
 /// Deferred-event handler for [`msg_schedule_semsg`].

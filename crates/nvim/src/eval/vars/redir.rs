@@ -68,7 +68,7 @@ unsafe fn resolve_redir_lval() -> *mut c_char {
 pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     // Catch a bad name early.
     if !eval_isnamec1(unsafe { *name } as c_int) {
-        emsg_static(&e_invarg);
+        emsg_static(e_invarg);
         return FAIL;
     }
 
@@ -93,9 +93,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     {
         unsafe { clear_lval(redir_lval.get()) };
         if trailing.is_some_and(|c| c != NUL as c_char) {
-            unsafe { semsg_c!(translate(&e_trailing_arg), endp) };
+            unsafe { semsg_c!(translate(e_trailing_arg), endp) };
         } else {
-            unsafe { semsg_c!(translate(&e_invarg2), name) };
+            unsafe { semsg_c!(translate(e_invarg2), name) };
         }
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());

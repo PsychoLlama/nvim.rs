@@ -629,7 +629,7 @@ pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut exarg_T, print_emsg: bool) -> *m
     }
     let qi = win_loclist(cur_win());
     if qi.is_null() && print_emsg {
-        qf_emsg(&raw const e_loclist as *const c_char);
+        qf_emsg(e_loclist.as_ptr());
     }
     qi
 }

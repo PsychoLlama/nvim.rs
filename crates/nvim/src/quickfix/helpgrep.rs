@@ -286,7 +286,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     } else {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), eap.arg) };
+        unsafe { semsg_c!(gettext(e_nomatch2.as_ptr()), eap.arg) };
     }
 
     qf_busy_end();

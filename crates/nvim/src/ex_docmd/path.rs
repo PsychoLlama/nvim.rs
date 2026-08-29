@@ -99,9 +99,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
         if rettv.v_type as c_uint == VAR_LIST as c_uint {
             retlist = unsafe { tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copy_id()) };
         } else {
-            emsg(gettext(
-                &raw const e_invalid_return_type_from_findfunc as *const c_char,
-            ));
+            emsg(gettext(e_invalid_return_type_from_findfunc.as_ptr()));
         }
         unsafe { tv_clear(&raw mut rettv) };
     }
@@ -158,19 +156,9 @@ pub(crate) unsafe fn findfunc_find_file(
     let fname_list = call_findfunc(findarg, kBoolVarFalse);
     let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_cant_find_file_str_in_path as *const c_char),
-                findarg,
-            )
-        };
+        unsafe { semsg_c!(gettext(e_cant_find_file_str_in_path.as_ptr()), findarg,) };
     } else if count > fname_count {
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_no_more_file_str_found_in_path as *const c_char),
-                findarg,
-            )
-        };
+        unsafe { semsg_c!(gettext(e_no_more_file_str_found_in_path.as_ptr()), findarg,) };
     } else {
         let li = unsafe { tv_list_find(fname_list, count - 1) };
         if !li.is_null() && unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
@@ -201,7 +189,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
         r
     };
     if retval == FAIL {
-        return &raw const e_invarg as *const c_char;
+        return e_invarg.as_ptr();
     }
     let varp = unsafe { (*args).os_varp }.string_var();
     let name = unsafe { get_scriptlocal_funcname(*varp) };
@@ -313,7 +301,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if dir_differs {
         do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
         if unsafe { vim_chdir(new_dir) } != 0 {
-            emsg(gettext(&raw const e_failed as *const c_char));
+            emsg(gettext(e_failed.as_ptr()));
             xfree(pdir as *mut c_void);
             return false;
         }

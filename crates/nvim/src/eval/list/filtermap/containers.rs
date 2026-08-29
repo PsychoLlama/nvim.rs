@@ -177,7 +177,7 @@ pub(crate) fn filter_map_blob(
         if filtermap != FilterMap::Foreach {
             if newtv.v_type != VAR_NUMBER && newtv.v_type != VAR_BOOL {
                 clear_tv(&mut newtv);
-                err(&e_invalblob);
+                err(e_invalblob);
                 break;
             }
             if filtermap != FilterMap::Filter {
@@ -241,7 +241,7 @@ pub(crate) fn filter_map_string(
             if newtv.v_type != VAR_STRING {
                 clear_tv(&mut newtv);
                 clear_tv(&mut tv);
-                err(&e_string_required);
+                err(e_string_required);
                 break;
             }
             Gap(&mut ga).concat(string_bytes(&newtv));

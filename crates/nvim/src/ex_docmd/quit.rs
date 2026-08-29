@@ -341,7 +341,7 @@ pub(crate) unsafe fn ex_pclose(eap: *mut exarg_T) {
 /// other close path.
 pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) {
     if is_aucmd_win(win) {
-        emsg(gettext(&raw const e_autocmd_close as *const c_char));
+        emsg(gettext(e_autocmd_close.as_ptr()));
         return;
     }
     // A floating window is not part of the layout, so a locked layout

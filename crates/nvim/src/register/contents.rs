@@ -568,10 +568,7 @@ pub unsafe fn write_reg_contents_ex(
                 let num = atoi(str);
                 let buf = find_buf(num);
                 if buf.is_none() {
-                    semsg_c!(
-                        gettext(&raw const e_nobufnr as *const c_char),
-                        int64_t::from(num),
-                    );
+                    semsg_c!(gettext(e_nobufnr.as_ptr()), int64_t::from(num),);
                 }
                 buf
             } else {

@@ -111,7 +111,7 @@ fn global_opfunc() -> *mut Callback {
 pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
     if unsafe { option_set_callback_func(p_opfunc.get(), global_opfunc()) } == FAIL {
-        return &raw const e_invarg as *const c_char;
+        return e_invarg.as_ptr();
     }
     ::core::ptr::null()
 }

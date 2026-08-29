@@ -444,7 +444,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let lines = buf.b_ml.ml_line_count;
     let cursor = win.w_cursor.lnum;
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        out.put_str(c"%s", tr_raw((&raw const no_lines_msg).cast::<c_char>()));
+        out.put_str(c"%s", tr_raw(no_lines_msg.as_ptr()));
     } else if p_ru.get() != 0 {
         // The current line and column are already on the screen -- webb
         let fmt = tr_n(c"%ld line --%d%%--", c"%ld lines --%d%%--", lines);

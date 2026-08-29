@@ -149,11 +149,11 @@ unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
 
     // SAFETY: `curbuf`/`find_buf` answer a live buffer or null.
     let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
-        qf_emsg(&raw const e_invarg as *const c_char);
+        qf_emsg(e_invarg.as_ptr());
         return None;
     };
     if buf.b_ml.ml_mfp.is_null() {
-        qf_emsg(&raw const e_buffer_is_not_loaded as *const c_char);
+        qf_emsg(e_buffer_is_not_loaded.as_ptr());
         return None;
     }
 
@@ -166,7 +166,7 @@ unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
         || eap.line2 < 1
         || eap.line2 > buf.b_ml.ml_line_count
     {
-        qf_emsg(&raw const e_invrange as *const c_char);
+        qf_emsg(e_invrange.as_ptr());
         return None;
     }
     Some(buf)

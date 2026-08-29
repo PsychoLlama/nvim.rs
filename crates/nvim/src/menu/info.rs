@@ -62,7 +62,7 @@ pub(crate) unsafe fn ex_menutranslate(eap: *mut exarg_T) {
     from_end.set(0, 0);
     let to_end = menu_skip_part(to);
     if to_end.same(to) {
-        emsg_shared(&e_invarg);
+        emsg_shared(e_invarg);
         return;
     }
 

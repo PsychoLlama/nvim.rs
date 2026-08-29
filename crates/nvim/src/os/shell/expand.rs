@@ -379,7 +379,7 @@ pub unsafe fn os_expand_wildcards(
 
         let tempname = vim_tempname();
         if tempname.is_null() {
-            emsg(gettext((&raw const e_notmp).cast()));
+            emsg(gettext(e_notmp.as_ptr()));
             return FAIL;
         }
         let style = pick_shell_style(num_pat, pat);
@@ -420,7 +420,7 @@ pub unsafe fn os_expand_wildcards(
             if !flags.has(ExpandFlags::SILENT) {
                 msg_putchar('\n' as c_int); // clear the bottom line quickly
                 cmdline_row.set(Rows.get() - 1); // continue on the last line
-                msg(gettext((&raw const e_wildexpand).cast()), 0);
+                msg(gettext(e_wildexpand.as_ptr()), 0);
                 msg_start(); // do not overwrite this message
             }
             // A failed `cmd` expansion must not list `cmd` as a match, even
@@ -544,7 +544,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
             // Something went wrong — perhaps a file name with a special
             // character in it.
             if !flags.has(ExpandFlags::SILENT) {
-                msg(gettext((&raw const e_wildexpand).cast()), 0);
+                msg(gettext(e_wildexpand.as_ptr()), 0);
                 msg_start(); // do not overwrite this message
             }
             xfree(tempname.cast());
@@ -569,7 +569,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
         fclose(fd);
         os_remove(tempname);
         if readlen as usize != len {
-            semsg_c!(gettext((&raw const e_cant_read_file_str).cast()), tempname);
+            semsg_c!(gettext(e_cant_read_file_str.as_ptr()), tempname);
             xfree(tempname.cast());
             return Read::Failed;
         }

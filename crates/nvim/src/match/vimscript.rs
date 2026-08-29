@@ -62,7 +62,7 @@ unsafe fn matchadd_dict_arg(
 ) -> c_int {
     // SAFETY: the caller's typval and out-parameters.
     if unsafe { (*tv).v_type } != VAR_DICT {
-        unsafe { emsg(gettext(&raw const e_dictreq as *const c_char)) };
+        unsafe { emsg(gettext(e_dictreq.as_ptr())) };
         return FAIL;
     }
     let dict = unsafe { (*tv).vval.v_dict };
@@ -77,7 +77,7 @@ unsafe fn matchadd_dict_arg(
         return OK;
     }
     let Some(found) = (unsafe { find_win_by_nr_or_id(&raw mut (*di).di_tv) }) else {
-        unsafe { emsg(gettext(&raw const e_invalwindow as *const c_char)) };
+        unsafe { emsg(gettext(e_invalwindow.as_ptr())) };
         return FAIL;
     };
     unsafe { *win = found.raw() };
@@ -177,7 +177,7 @@ pub(crate) unsafe fn f_setmatches(
 
     unsafe { (*rettv).vval.v_number = -1 };
     if unsafe { (*argvars).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(&raw const e_listreq as *const c_char)) };
+        unsafe { emsg(gettext(e_listreq.as_ptr())) };
         return;
     }
     if win.is_null() {
@@ -387,12 +387,7 @@ pub(crate) unsafe fn f_matchaddpos(
         return;
     }
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
-        unsafe {
-            semsg_c!(
-                gettext(&raw const e_listarg as *const c_char),
-                c"matchaddpos()".as_ptr(),
-            )
-        };
+        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"matchaddpos()".as_ptr(),) };
         return;
     }
     let l = unsafe { (*argvars.offset(1)).vval.v_list };

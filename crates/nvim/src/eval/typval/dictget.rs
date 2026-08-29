@@ -408,7 +408,7 @@ pub unsafe fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         _ => {
             unsafe {
                 semsg_c!(
-                    tr_bytes(&e_list_dict_blob_or_string_required_for_argument_nr),
+                    tr(e_list_dict_blob_or_string_required_for_argument_nr),
                     1 as ::core::ffi::c_int,
                 )
             };

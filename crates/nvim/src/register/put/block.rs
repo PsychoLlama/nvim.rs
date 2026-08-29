@@ -223,11 +223,7 @@ impl Put {
             && self.count > (c_int::MAX - (land.startspaces + land.endspaces)) / (yanklen + spaces)
         {
             // SAFETY: a NUL-terminated message literal.
-            unsafe {
-                emsg(gettext(
-                    &raw const e_resulting_text_too_long as *const c_char,
-                ))
-            };
+            unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
             return false;
         }
         *totlen = (self.count as size_t)

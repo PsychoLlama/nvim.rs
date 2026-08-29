@@ -81,7 +81,7 @@ pub(super) unsafe fn spell_read_dic(
     // below is sized for what is written into it.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext((&raw const e_notopen).cast()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
         return FAIL;
     }
 

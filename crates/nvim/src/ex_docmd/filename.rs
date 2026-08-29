@@ -638,7 +638,7 @@ pub unsafe fn eval_vars(
             }
             SPEC_SID => {
                 if current_sctx.get().sc_sid <= 0 {
-                    unsafe { *errormsg = gettext(&raw const e_usingsid as *const c_char) };
+                    unsafe { *errormsg = gettext(e_usingsid.as_ptr()) };
                     return ptr::null_mut();
                 }
                 unsafe {

@@ -243,7 +243,7 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
             let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
             if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) } == FAIL
             {
-                unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
                 break;
             }
             // SAFETY: `scl_id` is a live cluster index; the address comes off
@@ -263,6 +263,6 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { emsg(gettext(c"E400: No cluster specified".as_ptr())) };
     }
     if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) == 0 {
-        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
     }
 }

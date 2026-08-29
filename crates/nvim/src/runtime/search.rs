@@ -441,13 +441,7 @@ pub unsafe fn do_in_path(
         };
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_dirnotf as *const c_char),
-                    basepath.as_ptr(),
-                    name,
-                )
-            };
+            unsafe { semsg_c!(gettext(e_dirnotf.as_ptr()), basepath.as_ptr(), name,) };
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
             unsafe {

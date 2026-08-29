@@ -7,7 +7,7 @@ use crate::cstr;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::main::{c_bytes, e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
+use crate::main::{e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
@@ -288,10 +288,9 @@ pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
 static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E758: Truncated spell file".as_ptr());
-static e_error_while_reading_sug_file_str: [::core::ffi::c_char; 40] =
-    c_bytes(b"E782: Error while reading .sug file: %s\0");
-static e_duplicate_char_in_map_entry: [::core::ffi::c_char; 34] =
-    c_bytes(b"E783: Duplicate char in MAP entry\0");
+static e_error_while_reading_sug_file_str: &::core::ffi::CStr =
+    c"E782: Error while reading .sug file: %s";
+static e_duplicate_char_in_map_entry: &::core::ffi::CStr = c"E783: Duplicate char in MAP entry";
 static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
 static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =
@@ -669,7 +668,7 @@ unsafe fn output_is_writable(
 ) -> bool {
     // SAFETY: the caller promises the path.
     if incount <= 0 {
-        unsafe { emsg(gettext((&raw const e_invarg).cast())) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
     } else if !unsafe { vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int) }.is_null() {
         unsafe {
             emsg(gettext(
@@ -680,9 +679,9 @@ unsafe fn output_is_writable(
         let fmt = unsafe { gettext(c"E754: Only up to %d regions supported".as_ptr()) };
         unsafe { semsg_c!(fmt, MAXREGIONS as ::core::ffi::c_int) };
     } else if !over_write && unsafe { os_path_exists(wfname) } {
-        unsafe { emsg(gettext((&raw const e_exists).cast())) };
+        unsafe { emsg(gettext(e_exists.as_ptr())) };
     } else if unsafe { os_isdir(wfname) } {
-        unsafe { semsg_c!(gettext((&raw const e_isadir2).cast()), wfname) };
+        unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), wfname) };
     } else {
         return true;
     }

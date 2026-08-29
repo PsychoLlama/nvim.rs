@@ -149,11 +149,7 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> c_int {
             )
         } < 0
     {
-        unsafe {
-            emsg(gettext(
-                &raw const e_problem_creating_internal_diff as *const c_char,
-            ))
-        };
+        unsafe { emsg(gettext(e_problem_creating_internal_diff.as_ptr())) };
         return FAIL;
     }
     OK

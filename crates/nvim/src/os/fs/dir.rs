@@ -160,7 +160,7 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
         // `tail + strlen(tail) - 1` is written for.
         let last_char = *tail.add(CStr::from_ptr(tail).to_bytes().len()).sub(1);
         if vim_ispathsep(last_char as c_int) {
-            emsg(gettext((&raw const e_noname).cast()));
+            emsg(gettext(e_noname.as_ptr()));
             return -1;
         }
         let c = *tail;
@@ -168,11 +168,7 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
         let mut failed_dir: *mut c_char = ptr::null_mut();
         let r = os_mkdir_recurse(fname, mode, &raw mut failed_dir, ptr::null_mut());
         if r < 0 {
-            semsg_c!(
-                gettext((&raw const e_mkdir).cast()),
-                failed_dir,
-                uv_strerror(r),
-            );
+            semsg_c!(gettext(e_mkdir.as_ptr()), failed_dir, uv_strerror(r),);
             xfree(failed_dir.cast());
         }
         *tail = c;

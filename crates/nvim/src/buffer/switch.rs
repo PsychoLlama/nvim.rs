@@ -147,7 +147,7 @@ fn put_message(msg: &CStr) {
     unsafe { msg_puts(msg.as_ptr()) };
 }
 fn err_nobufnr<T>(n: T) {
-    err_num(tr_raw((&raw const e_nobufnr).cast::<c_char>()), n);
+    err_num(tr_raw(e_nobufnr.as_ptr()), n);
 }
 
 /// `smsg(0, NGETTEXT(one, many, n), n)`: the "N buffers deleted" report.
@@ -185,7 +185,7 @@ fn find_by_pattern(pattern: *mut c_char, end: *mut c_char, unlisted: bool) -> c_
 }
 fn trailing_arg_error(arg: *mut c_char) -> Option<CString> {
     // SAFETY: the message static and the caller's NUL-terminated argument.
-    Some(unsafe { ex_errmsg((&raw const e_trailing_arg).cast::<c_char>(), arg) })
+    Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), arg) })
 }
 fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0
@@ -527,9 +527,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
     if buf.raw() != curbuf.get() && buf.b_locked_split != 0 {
-        err_raw(tr_raw(
-            (&raw const e_cannot_switch_to_a_closing_buffer).cast::<c_char>(),
-        ));
+        err_raw(tr_raw(e_cannot_switch_to_a_closing_buffer.as_ptr()));
         return FAIL;
     }
     if action == DOBUF_SPLIT as c_int && split_window() == FAIL {
@@ -798,8 +796,8 @@ fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<c_int> {
                 return Some(FAIL);
             }
         } else {
-            let fmt = &raw const e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
-            err_num(tr_raw(fmt.cast::<c_char>()), buf.handle as c_int);
+            let fmt = e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
+            err_num(tr_raw(fmt.as_ptr()), buf.handle as c_int);
             return Some(FAIL);
         }
     }

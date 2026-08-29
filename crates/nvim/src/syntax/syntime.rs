@@ -20,7 +20,7 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
         b"clear" => unsafe { syntime_clear() },
         b"report" => unsafe { syntime_report() },
         _ => {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), (*eap).arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), (*eap).arg) };
         }
     }
 }

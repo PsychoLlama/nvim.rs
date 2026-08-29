@@ -102,7 +102,7 @@ pub unsafe fn spell_add_word(
             new_spf = true;
         }
         if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
-            let fmt = unsafe { gettext(&raw const e_notset as *const c_char) };
+            let fmt = unsafe { gettext(e_notset.as_ptr()) };
             unsafe { semsg_c!(fmt, c"spellfile".as_ptr()) };
             return;
         }
@@ -134,7 +134,7 @@ pub unsafe fn spell_add_word(
             buf = core::ptr::null_mut();
         }
         if !buf.is_null() && buf_is_changed(unsafe { Buf::new(buf) }) {
-            unsafe { emsg(gettext(&raw const e_bufloaded as *const c_char)) };
+            unsafe { emsg(gettext(e_bufloaded.as_ptr())) };
             unsafe { xfree(fnamebuf as *mut c_void) };
             return;
         }
@@ -171,7 +171,7 @@ pub unsafe fn spell_add_word(
         opened = !fd.is_null();
 
         if fd.is_null() {
-            unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), fname) };
+            unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
         } else {
             let format = if what == SPELL_ADD_BAD as SpellAddType {
                 c"%.*s/!\n".as_ptr()

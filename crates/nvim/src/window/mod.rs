@@ -34,7 +34,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 use crate::api::private::helpers::{api_clear_error, api_set_error};
@@ -47,7 +47,7 @@ use crate::ex_getln::{ERROR_INIT, is_in_cmdwin};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    c_bytes, curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
+    curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
     e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, swb_flags,
     topframe,
 };
@@ -199,10 +199,9 @@ pub const TAB: ::core::ffi::c_int = 9;
 pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
-static e_cannot_close_last_window: [::core::ffi::c_char; 31] =
-    c_bytes(b"E444: Cannot close last window\0");
-static e_cannot_split_window_when_closing_buffer: [::core::ffi::c_char; 53] =
-    c_bytes(b"E1159: Cannot split a window when closing the buffer\0");
+static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";
+static e_cannot_split_window_when_closing_buffer: &::core::ffi::CStr =
+    c"E1159: Cannot split a window when closing the buffer";
 static m_onlyone: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(c"Already only one window".as_ptr() as *mut ::core::ffi::c_char);
 static split_disallowed: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
@@ -262,7 +261,7 @@ fn locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
     let msg = if close_disallowed.get() == 0 && cmd as ::core::ffi::c_int == CMD_tabnew as c_int {
         e_cannot_split_window_when_closing_buffer.as_ptr()
     } else {
-        &raw const e_not_allowed_to_change_window_layout_in_this_autocmd as *const c_char
+        e_not_allowed_to_change_window_layout_in_this_autocmd.as_ptr()
     };
     set_err(err, msg);
     true
@@ -280,7 +279,7 @@ pub fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
 /// so if it does not.
 fn winfixbuf_allows() -> bool {
     if cur_win().w_onebuf_opt.wo_wfb != 0 {
-        err(&raw const e_winfixbuf_cannot_go_to_buffer as *const c_char);
+        err(e_winfixbuf_cannot_go_to_buffer.as_ptr());
         return false;
     }
     true

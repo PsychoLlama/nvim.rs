@@ -237,7 +237,7 @@ pub(crate) unsafe fn typval_compare(
         let eq = || unsafe { tv_blob_equal((*typ1).vval.v_blob, (*typ2).vval.v_blob) };
         let wrong_type = c"E977: Can only compare Blob with Blob";
         // SAFETY: a message constant is a NUL-terminated literal.
-        let wrong_op = unsafe { CStr::from_ptr((&raw const e_invalblob).cast()) };
+        let wrong_op = unsafe { CStr::from_ptr(e_invalblob.as_ptr()) };
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
         match cmp {
             Some(n) => n,

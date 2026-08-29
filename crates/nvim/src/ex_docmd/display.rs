@@ -129,7 +129,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         }
         if byte(arg) != NUL {
             redir_reg.set(0);
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
         close_redir();
@@ -142,7 +142,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
             redir_vname.set(true);
         }
     } else {
-        unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), eap.arg) };
+        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
     }
     // Whichever form succeeded, output is being captured again.
     if !redir_fd.get().is_null() || redir_reg.get() != 0 || redir_vname.get() {

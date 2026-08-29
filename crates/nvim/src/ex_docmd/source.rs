@@ -159,7 +159,7 @@ pub unsafe fn do_exmode() {
             || changedtick != buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
         if moved && !ex_no_reprint.get() {
             if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(&raw const e_empty_buffer as *const c_char));
+                emsg(gettext(e_empty_buffer.as_ptr()));
             } else {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
@@ -177,7 +177,7 @@ pub unsafe fn do_exmode() {
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
             if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(&raw const e_empty_buffer as *const c_char));
+                emsg(gettext(e_empty_buffer.as_ptr()));
             } else {
                 emsg(gettext(c"E501: At end-of-file".as_ptr()));
             }

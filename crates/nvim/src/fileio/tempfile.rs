@@ -240,7 +240,7 @@ pub unsafe fn readdir_core(
 
     let mut dir = Directory::default();
     if !unsafe { os_scandir(&raw mut dir, path) } {
-        unsafe { smsg_c!(0, gettext(&raw const e_notopen as *const c_char), path) };
+        unsafe { smsg_c!(0, gettext(e_notopen.as_ptr()), path) };
         return FAIL;
     }
 

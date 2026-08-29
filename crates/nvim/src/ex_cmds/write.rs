@@ -155,7 +155,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
             || unsafe { (*eap).line2 } > 0
             || unsafe { (*eap).addr_count } > 1)
     {
-        unsafe { emsg(gettext(&raw const e_invarg as *const c_char)) };
+        unsafe { emsg(gettext(e_invarg.as_ptr())) };
         return;
     }
 
@@ -262,7 +262,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     let other = if unsafe { *ffname } as c_int == NUL {
         if unsafe { (*eap).cmdidx } == CMD_saveas {
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_argreq as *const c_char)) };
+            unsafe { emsg(gettext(e_argreq.as_ptr())) };
             return FAIL;
         }
         false
@@ -295,7 +295,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
             && !alt_buf.b_ml.ml_mfp.is_null()
         {
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_bufloaded as *const c_char)) };
+            unsafe { emsg(gettext(e_bufloaded.as_ptr())) };
             return FAIL;
         }
     }
@@ -510,12 +510,12 @@ pub unsafe fn check_overwrite(
     if unsafe { (*eap).forceit } == 0 && unsafe { (*eap).append } == 0 {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
-            unsafe { semsg_c!(gettext(&raw const e_isadir2 as *const c_char), ffname,) };
+            unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), ffname,) };
             return FAIL;
         }
         if !confirming() {
             // SAFETY: a live message string.
-            unsafe { emsg(gettext(&raw const e_exists as *const c_char)) };
+            unsafe { emsg(gettext(e_exists.as_ptr())) };
             return FAIL;
         }
         // SAFETY: one `%s` for `fname`.
@@ -775,7 +775,7 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: Buf) -> bool {
     if !confirming() || name.is_null() {
         // SAFETY: live message strings; one `%s` for one string.
         if is_ro {
-            unsafe { emsg(gettext(&raw const e_readonly as *const c_char)) };
+            unsafe { emsg(gettext(e_readonly.as_ptr())) };
         } else {
             unsafe {
                 semsg_c!(

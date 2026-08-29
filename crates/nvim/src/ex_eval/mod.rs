@@ -49,7 +49,6 @@
 mod exception;
 mod trycmd;
 
-use crate::cstr;
 use crate::debugger::dbg_check_skipped;
 use crate::eval::typval::{tv_clear, tv_free};
 use crate::eval::{
@@ -159,13 +158,13 @@ static cause_abort: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The address of a message constant, for the identity test in
 /// [`cause_errthrow`](exception::cause_errthrow).
-fn message<const N: usize>(msg: &'static [c_char; N]) -> *mut c_char {
+fn message(msg: &'static CStr) -> *mut c_char {
     msg.as_ptr().cast_mut()
 }
 
 /// A message constant as an owned `eap->errmsg`.
-fn err_msg<const N: usize>(msg: &'static [c_char; N]) -> Option<CString> {
-    Some(cstr::in_chars(msg).to_owned())
+fn err_msg(msg: &'static CStr) -> Option<CString> {
+    Some(msg.to_owned())
 }
 
 /// Do not do something after an error, an interrupt or a throw, nor when the
@@ -380,7 +379,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
         && unsafe { *(*eap).arg } != b'"' as c_char
         && ends_excmd(unsafe { *(*eap).arg } as c_int) != 0
     {
-        unsafe { semsg_c!(message(&e_invexpr2), (*eap).arg) };
+        unsafe { semsg_c!(message(e_invexpr2), (*eap).arg) };
     } else {
         result = unsafe { eval_to_bool((*eap).arg, &raw mut error, eap, skip, false) };
     }
@@ -544,9 +543,9 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     let cstack = unsafe { (*eap).cstack };
     let ending_while = unsafe { (*eap).cmdidx } == CMD_endwhile;
     let err = if ending_while {
-        err_msg(&e_while)
+        err_msg(e_while)
     } else {
-        err_msg(&e_for)
+        err_msg(e_for)
     };
     let csf = if ending_while { CSF_WHILE } else { CSF_FOR };
 
@@ -567,9 +566,9 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     }
     if fl & (CSF_WHILE | CSF_FOR) == 0 {
         if fl & CSF_TRY == 0 {
-            unsafe { (*eap).errmsg = err_msg(&e_endif) };
+            unsafe { (*eap).errmsg = err_msg(e_endif) };
         } else if fl & CSF_FINALLY != 0 {
-            unsafe { (*eap).errmsg = err_msg(&e_endtry) };
+            unsafe { (*eap).errmsg = err_msg(e_endtry) };
         }
         // Find the matching ":while" and report what is missing.
         let mut idx = unsafe { (*cstack).cs_idx };
@@ -756,11 +755,11 @@ unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
     // SAFETY: module contract.
     let flags = unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] };
     if flags & CSF_WHILE != 0 {
-        err_msg(&e_endwhile)
+        err_msg(e_endwhile)
     } else if flags & CSF_FOR != 0 {
-        err_msg(&e_endfor)
+        err_msg(e_endfor)
     } else {
-        err_msg(&e_endif)
+        err_msg(e_endif)
     }
 }
 
@@ -795,12 +794,7 @@ pub(crate) unsafe fn rewind_conditionals(
 /// Module contract.
 pub(crate) unsafe fn ex_endfunction(_eap: *mut exarg_T) {
     // SAFETY: module contract.
-    unsafe {
-        semsg_c!(
-            message(&e_str_not_inside_function),
-            c":endfunction".as_ptr()
-        )
-    };
+    unsafe { semsg_c!(message(e_str_not_inside_function), c":endfunction".as_ptr()) };
 }
 
 /// Whether `p` looks like a `:while` or `:for` command.

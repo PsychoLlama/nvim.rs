@@ -265,7 +265,7 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
     if unsafe { (*argvars).v_type } as c_uint != VAR_LIST as c_uint
         || unsafe { (*argvars).vval.v_list }.is_null()
     {
-        unsafe { emsg(gettext(&raw const e_listreq as *const c_char)) };
+        unsafe { emsg(gettext(e_listreq.as_ptr())) };
         return;
     }
     let __v = unsafe { parse_cell_widths((*argvars).vval.v_list) };

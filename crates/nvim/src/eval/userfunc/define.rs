@@ -160,12 +160,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         // an exception.
         if !aborting() {
             if !fudi.fd_newkey.is_null() {
-                unsafe {
-                    semsg_c!(
-                        gettext(&raw const e_dictkey as *const c_char),
-                        fudi.fd_newkey,
-                    )
-                };
+                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), fudi.fd_newkey,) };
             }
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
@@ -234,7 +229,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     i += 1;
                 }
                 if unsafe { *name_base.offset(i) } != NUL as c_char {
-                    unsafe { emsg_funcname(&raw const e_invarg2 as *const c_char, arg) };
+                    unsafe { emsg_funcname(e_invarg2.as_ptr(), arg) };
                     break 'ret_free;
                 }
             }
@@ -298,7 +293,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         && ea.skip == 0
                         && did_emsg.get() == 0
                     {
-                        unsafe { semsg_c!(gettext(&raw const e_trailing_arg as *const c_char), p) };
+                        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
                     }
 
                     if KeyTyped.get() {

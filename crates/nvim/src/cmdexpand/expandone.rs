@@ -372,7 +372,7 @@ unsafe fn expand_one_start(
     }
     if xp.xp_numfiles == 0 {
         if !options.has(WildOpts::SILENT) {
-            unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), str) };
+            unsafe { semsg_c!(gettext(e_nomatch2.as_ptr()), str) };
         }
         return ptr::null_mut();
     }
@@ -412,7 +412,7 @@ unsafe fn expand_one_start(
         // Don't really want to wait for this message (and possibly have
         // to hit return to continue!).
         if !options.has(WildOpts::SILENT) {
-            unsafe { emsg(gettext(&raw const e_toomany as *const c_char)) };
+            unsafe { emsg(gettext(e_toomany.as_ptr())) };
         } else if !options.has(WildOpts::NO_BEEP) {
             beep_flush();
         }

@@ -168,7 +168,7 @@ pub(crate) fn new_tabpage(
 ) -> Option<(TabPage, Win)> {
     let old_curtab = cur_tab();
     if enter && cmdwin_type.get() != 0 {
-        err(&raw const e_cmdwin as *const c_char);
+        err(e_cmdwin.as_ptr());
         return None;
     }
     if layout_locked(CMD_tabnew) {
@@ -649,7 +649,7 @@ pub unsafe fn goto_tabpage_tp(
 /// Go to tab page `tp`. Note: does not update the GUI tab.
 pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_autocmds: bool) {
     if (trigger_enter_autocmds || trigger_leave_autocmds) && cmdwin_type.get() != 0 {
-        err(&raw const e_cmdwin as *const c_char);
+        err(e_cmdwin.as_ptr());
         return;
     }
     // Don't repeat a message in another tab page.

@@ -107,7 +107,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL }
     };
     if failed {
-        unsafe { semsg_c!(gettext(&raw const e_notopen as *const c_char), (*eap).arg) };
+        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), (*eap).arg) };
     }
 
     cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
@@ -233,7 +233,7 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
         unsafe { free_synpat(&item) };
         unsafe { free_opt_lists(&opt) };
         if rest.is_null() {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
         }
     }
 }
@@ -422,7 +422,7 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
                 )
             };
         } else if rest.is_null() {
-            unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
         }
     }
 }

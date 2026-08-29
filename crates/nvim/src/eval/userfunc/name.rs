@@ -316,7 +316,7 @@ unsafe fn mangle_function_name(
         {
             // It's "s:" or "<SID>".
             if current_sctx.get().sc_sid <= 0 {
-                unsafe { emsg(gettext(&raw const e_usingsid as *const c_char)) };
+                unsafe { emsg(gettext(e_usingsid.as_ptr())) };
                 return ptr::null_mut();
             }
             let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
@@ -435,7 +435,7 @@ pub unsafe fn trans_function_name(
             // or an exception.
             if !aborting() {
                 if !end.is_null() {
-                    unsafe { semsg_c!(gettext(&raw const e_invarg2 as *const c_char), start) };
+                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), start) };
                 }
             } else {
                 unsafe {
@@ -466,9 +466,7 @@ pub unsafe fn trans_function_name(
                 {
                     len = unsafe { check_luafunc_name(end.add(1), true) };
                     if len == 0 {
-                        unsafe {
-                            semsg_c!(&raw const e_invexpr2 as *const c_char, c"v:lua".as_ptr())
-                        };
+                        unsafe { semsg_c!(e_invexpr2.as_ptr(), c"v:lua".as_ptr()) };
                         break 'theend;
                     }
                     name = unsafe { xmallocz(len as size_t) } as *mut c_char;
@@ -562,7 +560,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     }
     let sid = current_sctx.get().sc_sid;
     if !script_id_valid(sid) {
-        unsafe { emsg(gettext(&raw const e_usingsid as *const c_char)) };
+        unsafe { emsg(gettext(e_usingsid.as_ptr())) };
         return ptr::null_mut();
     }
 

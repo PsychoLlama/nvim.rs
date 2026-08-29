@@ -211,7 +211,7 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
             )
         };
     } else {
-        unsafe { semsg_c!(translated(&e_streamkey), (*reader).type_0, (*chan).id,) };
+        unsafe { semsg_c!(translated(e_streamkey), (*reader).type_0, (*chan).id,) };
     }
     unsafe { (*reader).eof = false };
 }

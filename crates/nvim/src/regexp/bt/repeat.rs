@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordp_buf};
@@ -269,7 +269,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // Everything else is one of the `RI_*` byte classes.
         _ => {
             let Some((mask, positive)) = byte_class(op) else {
-                unsafe { iemsg(gettext(&raw const e_re_corr as *const c_char)) };
+                unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
                 rex.set_input(scan);
                 return count as c_int;
             };

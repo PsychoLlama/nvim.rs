@@ -215,13 +215,7 @@ pub(crate) unsafe fn do_in_cached_path(
     if !did_one && !name.is_null() {
         // SAFETY: `name` is the caller's NUL-terminated pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe {
-                semsg_c!(
-                    gettext(&raw const e_dirnotf as *const c_char),
-                    c"runtime path".as_ptr(),
-                    name,
-                )
-            };
+            unsafe { semsg_c!(gettext(e_dirnotf.as_ptr()), c"runtime path".as_ptr(), name,) };
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
             unsafe {

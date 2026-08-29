@@ -65,7 +65,7 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
         retval
     };
     if retval == FAIL {
-        (&raw const e_invarg).cast()
+        e_invarg.as_ptr()
     } else {
         ptr::null()
     }

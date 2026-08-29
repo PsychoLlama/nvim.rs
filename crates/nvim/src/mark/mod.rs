@@ -539,7 +539,7 @@ unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buf: Buf) {
 pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>) -> bool {
     if fm.is_null() {
         // SAFETY: a NUL-terminated message static.
-        *errormsg = Some(unsafe { ex_msg((&raw const e_umark).cast::<c_char>()) });
+        *errormsg = Some(unsafe { ex_msg(e_umark.as_ptr()) });
         return false;
     }
     // SAFETY: the caller promised a live record.
@@ -549,7 +549,7 @@ pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>
         // "not set", so it gets no message at all.
         if fm.lnum() == 0 {
             // SAFETY: as above.
-            *errormsg = Some(unsafe { ex_msg((&raw const e_marknotset).cast::<c_char>()) });
+            *errormsg = Some(unsafe { ex_msg(e_marknotset.as_ptr()) });
         }
         return false;
     }
@@ -584,7 +584,7 @@ pub(crate) unsafe fn mark_check_line_bounds(
         return true;
     }
     // SAFETY: a NUL-terminated message static.
-    *errormsg = Some(unsafe { ex_msg((&raw const e_markinval).cast::<c_char>()) });
+    *errormsg = Some(unsafe { ex_msg(e_markinval.as_ptr()) });
     false
 }
 

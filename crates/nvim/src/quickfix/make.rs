@@ -195,7 +195,7 @@ unsafe fn get_mef_name() -> *mut c_char {
     if unsafe { *p_mef.get() } as c_int == NUL {
         let name = unsafe { vim_tempname() };
         if name.is_null() {
-            qf_emsg(&raw const e_notmp as *const c_char);
+            qf_emsg(e_notmp.as_ptr());
         }
         return name;
     }

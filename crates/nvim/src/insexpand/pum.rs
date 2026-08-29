@@ -716,7 +716,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
         let text = if compl_status_adding() && compl_length.get() > 1 {
             E_HITEND.as_ptr()
         } else {
-            (&raw const e_patnotf).cast::<c_char>()
+            e_patnotf.as_ptr()
         };
         // SAFETY: both are static NUL-terminated messages.
         edit_submode_extra.set(unsafe { gettext(text) });

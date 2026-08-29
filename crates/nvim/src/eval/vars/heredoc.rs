@@ -36,7 +36,7 @@ pub unsafe fn eval_one_expr_in_str(
     let block_start = unsafe { skipwhite(p.add(1)) };
     let mut block_end = block_start;
     if unsafe { *block_start } == NUL as c_char {
-        unsafe { semsg_c!(translate(&e_missing_close_curly_str), p,) };
+        unsafe { semsg_c!(translate(e_missing_close_curly_str), p,) };
         return ptr::null_mut();
     }
     if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) } == FAIL {
@@ -44,7 +44,7 @@ pub unsafe fn eval_one_expr_in_str(
     }
     block_end = unsafe { skipwhite(block_end) };
     if unsafe { *block_end } != b'}' as c_char {
-        unsafe { semsg_c!(translate(&e_missing_close_curly_str), p,) };
+        unsafe { semsg_c!(translate(e_missing_close_curly_str), p,) };
         return ptr::null_mut();
     }
     if evaluate {
@@ -95,7 +95,7 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(1) };
             escaped_brace = true;
         } else if here == b'}' {
-            unsafe { semsg_c!(translate(&e_stray_closing_curly_str), str,) };
+            unsafe { semsg_c!(translate(e_stray_closing_curly_str), str,) };
             unsafe { ga_clear(&raw mut ga) };
             return ptr::null_mut();
         }
@@ -162,7 +162,7 @@ pub unsafe fn heredoc_get(
         line_arg = unsafe { nl_ptr.add(1) };
         unsafe { *nl_ptr = NUL as c_char };
     } else if ea.ea_getline.is_none() {
-        emsg_lit(e_cannot_use_heredoc_here);
+        emsg_static(e_cannot_use_heredoc_here);
         return ptr::null_mut();
     }
 
@@ -210,7 +210,7 @@ pub unsafe fn heredoc_get(
         let p = unsafe { skiptowhite(marker) };
         let after = unsafe { *skipwhite(p) };
         if after != NUL as c_char && after != COMMENT_CHAR {
-            unsafe { semsg_c!(translate(&e_trailing_arg), p) };
+            unsafe { semsg_c!(translate(e_trailing_arg), p) };
             return ptr::null_mut();
         }
         unsafe { *p = NUL as c_char };
@@ -220,14 +220,14 @@ pub unsafe fn heredoc_get(
         let class = unsafe { *(*__ctype_b_loc()).offset(*marker as uint8_t as isize) };
         if !script_get && c_int::from(class) & _ISlower as c_int != 0 {
             let msg = c"E221: Marker cannot start with lower case letter";
-            emsg_lit(msg);
+            emsg_static(msg);
             return ptr::null_mut();
         }
     } else if script_get {
         // An embedded script with no marker takes '.'.
         marker = dot.as_ptr() as *mut c_char;
     } else {
-        emsg_lit(c"E172: Missing marker");
+        emsg_static(c"E172: Missing marker");
         return ptr::null_mut();
     }
 
@@ -238,7 +238,7 @@ pub unsafe fn heredoc_get(
         if heredoc_in_string {
             if unsafe { *line_arg } == NUL as c_char {
                 if !script_get {
-                    unsafe { semsg_c!(translate_lit(e_missing_end_marker_str), marker) };
+                    unsafe { semsg_c!(translate(e_missing_end_marker_str), marker) };
                 }
                 break;
             }
@@ -258,7 +258,7 @@ pub unsafe fn heredoc_get(
             theline = unsafe { getline(NUL as c_int, ea.cookie, 0, false) };
             if theline.is_null() {
                 if !script_get {
-                    unsafe { semsg_c!(translate_lit(e_missing_end_marker_str), marker) };
+                    unsafe { semsg_c!(translate(e_missing_end_marker_str), marker) };
                 }
                 break;
             }

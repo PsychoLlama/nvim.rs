@@ -19,7 +19,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
 use crate::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// `vim.spell.check(str)`: the misspellings in `str`, each as a
@@ -57,7 +57,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     if unsafe { *(*(*win).w_s).b_p_spl } == 0 {
         // SAFETY: as above; `e_no_spell` is a `static` message.
         unsafe {
-            emsg(gettext((&raw const e_no_spell).cast::<c_char>()));
+            emsg(gettext(e_no_spell.as_ptr()));
             (*win).w_onebuf_opt.wo_spell = wo_spell_save;
         }
         return 0;

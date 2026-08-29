@@ -152,11 +152,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         {
             unsafe { (*cur_win().w_buffer).b_nwindows -= 1 };
         }
-        unsafe {
-            emsg(gettext(
-                &raw const e_cannot_switch_to_a_closing_buffer as *const c_char,
-            ))
-        };
+        unsafe { emsg(gettext(e_cannot_switch_to_a_closing_buffer.as_ptr())) };
         return Switch::Abandon;
     }
 

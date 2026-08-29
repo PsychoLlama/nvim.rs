@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::compile::regnext;
 use super::resume::resume;
@@ -178,7 +178,7 @@ unsafe fn walk(
             if scan.is_null() {
                 // Should not happen. Providing a message and failing is
                 // better than a crash.
-                unsafe { iemsg(gettext(&raw const e_re_corr as *const c_char)) };
+                unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
             }
             return status == RA_MATCH;
         }
@@ -310,7 +310,7 @@ fn push_frame(
         _ => {
             // Should not happen: the compiler emitted something the
             // matcher does not know.
-            unsafe { iemsg(gettext(&raw const e_re_corr as *const c_char)) };
+            unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
             RA_FAIL
         }
     }

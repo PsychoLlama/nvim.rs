@@ -65,7 +65,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 c"Vimscript function \"%s\"".as_ptr(),
                 name,
             );
-            let fmt = &raw const e_fast_api_disabled as *const _;
+            let fmt = e_fast_api_disabled.as_ptr();
             return luaL_error(lstate, fmt, refused.as_ptr());
         }
 
@@ -145,11 +145,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
 pub(crate) unsafe extern "C-unwind" fn nlua_rpcrequest(lstate: *mut lua_State) -> c_int {
     unsafe {
         if !nlua_is_deferred_safe() {
-            return luaL_error(
-                lstate,
-                &raw const e_fast_api_disabled as *const _,
-                c"rpcrequest".as_ptr(),
-            );
+            return luaL_error(lstate, e_fast_api_disabled.as_ptr(), c"rpcrequest".as_ptr());
         }
         nlua_rpc(lstate, true)
     }

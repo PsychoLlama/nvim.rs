@@ -61,7 +61,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
         let status = nlua_pcall(lstate, nargs, nresult);
         let retval = if status != 0 {
             if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-                preserve_exit(&raw const e_outofmem as *const _);
+                preserve_exit(e_outofmem.as_ptr());
             }
             let mut len: size_t = 0;
             let error = nlua_get_error(lstate, &raw mut len);
@@ -161,7 +161,7 @@ unsafe fn nlua_luv_thread_common_cfpcall(
         let status = lua_pcall(lstate, nargs, nresult, 0);
         if status != 0 {
             if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
-                fprintf(stderr, c"%s\n".as_ptr(), &raw const e_outofmem as *const _);
+                fprintf(stderr, c"%s\n".as_ptr(), e_outofmem.as_ptr());
                 lua_close(lstate);
                 pthread_exit(ptr::null_mut());
             }

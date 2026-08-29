@@ -1,7 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::main::c_bytes;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, Callback_data, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode,
@@ -161,10 +160,8 @@ pub const CONTEXT_INIT: Context = Context {
     gvars: String_0::NULL,
     funcs: ARRAY_DICT_INIT,
 };
-static e_string_list_or_blob_required: [::core::ffi::c_char; 37] =
-    c_bytes(b"E1098: String, List or Blob required\0");
-static e_missing_function_argument: [::core::ffi::c_char; 33] =
-    c_bytes(b"E1132: Missing function argument\0");
+static e_string_list_or_blob_required: &::core::ffi::CStr = c"E1098: String, List or Blob required";
+static e_missing_function_argument: &::core::ffi::CStr = c"E1132: Missing function argument";
 static dummy_ap: GlobalCell<::core::ffi::VaList<'static>> = GlobalCell::new(unsafe {
     ::core::mem::transmute::<[u8; 24], ::core::ffi::VaList<'static>>([0u8; 24])
 });

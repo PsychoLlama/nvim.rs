@@ -263,7 +263,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         if unsafe { *get_complete_funcname(ctrl_x_mode.get()) } as c_int == NUL {
             unsafe {
                 semsg_c!(
-                    gettext(&raw const e_notset as *const c_char),
+                    gettext(e_notset.as_ptr()),
                     if ctrl_x_mode_function() {
                         c"completefunc".as_ptr()
                     } else {

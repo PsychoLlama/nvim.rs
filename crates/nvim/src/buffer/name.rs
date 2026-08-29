@@ -267,7 +267,7 @@ pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
     // SAFETY: two locals to fill in.
     if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) } == FAIL {
         if errmsg {
-            err(tr_raw((&raw const e_noalt).cast::<c_char>()));
+            err(tr_raw(e_noalt.as_ptr()));
         }
         return ptr::null_mut();
     }

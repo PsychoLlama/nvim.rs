@@ -138,7 +138,7 @@ pub(crate) unsafe fn list_arg_vars(
             let c = c_int::from(unsafe { *arg });
             if !ascii_iswhite(c) && ends_excmd(c) == 0 {
                 emsg_severe.set(true);
-                unsafe { semsg_c!(translate(&e_trailing_arg), arg) };
+                unsafe { semsg_c!(translate(e_trailing_arg), arg) };
                 break;
             }
             arg = unsafe { skipwhite(arg) };
@@ -154,7 +154,7 @@ pub(crate) unsafe fn list_arg_vars(
             if len <= 0 {
                 if len < 0 && !aborting() {
                     emsg_severe.set(true);
-                    unsafe { semsg_c!(translate(&e_invarg2), arg) };
+                    unsafe { semsg_c!(translate(e_invarg2), arg) };
                     unsafe { xfree(tofree.cast()) };
                     return arg;
                 }
@@ -198,9 +198,7 @@ pub(crate) unsafe fn list_arg_vars(
                     Some(lister) => unsafe { lister(first) },
                     None => {
                         // SAFETY: `name` is the caller's NUL-terminated name.
-                        unsafe {
-                            semsg_c!(translate_lit(c"E738: Can't list variables for %s"), name)
-                        };
+                        unsafe { semsg_c!(translate(c"E738: Can't list variables for %s"), name) };
                     }
                 }
             } else {

@@ -112,7 +112,7 @@ pub(crate) unsafe fn cause_errthrow(
     // interrupt exception stays catchable by the innermost one instead of
     // being replaced by an error exception carrying its text. The identity
     // test is upstream's: only *this* message is meant.
-    if mesg == message(&e_interr) {
+    if mesg == message(e_interr) {
         // SAFETY: caller contract.
         unsafe { *ignore = true };
         return true;
@@ -424,7 +424,7 @@ pub(super) unsafe fn throw_exception(
     if unsafe { (*excp).value }.is_null() && should_free {
         unsafe { xfree(excp.cast()) };
         suppress_errthrow.set(true);
-        unsafe { emsg(message(&e_outofmem)) };
+        unsafe { emsg(message(e_outofmem)) };
         current_exception.set(ptr::null_mut());
         return FAIL;
     }

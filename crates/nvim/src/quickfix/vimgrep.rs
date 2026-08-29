@@ -67,7 +67,7 @@ impl Files {
         let ok =
             unsafe { get_arglist_exp(arg, &raw mut files.count, &raw mut files.names, true) } == OK;
         if !ok || files.count == 0 {
-            qf_emsg(&raw const e_nomatch as *const c_char);
+            qf_emsg(e_nomatch.as_ptr());
             return None;
         }
         Some(files)
@@ -139,7 +139,7 @@ impl Search {
 
         let p = unsafe { skip_vimgrep_pat(eap.arg, &raw mut search.spat, &raw mut search.flags) };
         if p.is_null() {
-            qf_emsg(&raw const e_invalpat as *const c_char);
+            qf_emsg(e_invalpat.as_ptr());
             return None;
         }
 
@@ -173,7 +173,7 @@ unsafe fn compile_pattern(spat: *mut c_char) -> *mut regprog_T {
         return unsafe { vim_regcomp(spat, RE_MAGIC) };
     }
     if last_search_pat().is_null() {
-        qf_emsg(&raw const e_noprevre as *const c_char);
+        qf_emsg(e_noprevre.as_ptr());
         return ptr::null_mut();
     }
     unsafe { vim_regcomp(last_search_pat(), RE_MAGIC) }
@@ -680,7 +680,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     if qfl_is_empty(qf_current_list(qi)) {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(&raw const e_nomatch2 as *const c_char), search.spat) };
+        unsafe { semsg_c!(gettext(e_nomatch2.as_ptr()), search.spat) };
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
         unsafe { jump_to_match(qi.raw(), eap.forceit, &mut out) };
     }

@@ -213,11 +213,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
     pum_size.set(entries.len() as c_int);
     if entries.is_empty() {
         // SAFETY: a static message from the editor's own catalogue.
-        unsafe {
-            emsg(gettext(
-                &raw const e_menu_only_exists_in_another_mode as *const c_char,
-            ))
-        };
+        unsafe { emsg(gettext(e_menu_only_exists_in_another_mode.as_ptr())) };
         return;
     }
 

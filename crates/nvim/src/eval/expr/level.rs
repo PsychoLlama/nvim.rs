@@ -216,9 +216,9 @@ pub unsafe fn eval0(
             && called_emsg.get() == called_emsg_before
         {
             let (fmt, subject) = if end_error {
-                ((&raw const e_trailing_arg).cast(), p)
+                (e_trailing_arg.as_ptr(), p)
             } else {
-                ((&raw const e_invexpr2).cast(), arg)
+                (e_invexpr2.as_ptr(), arg)
             };
             // SAFETY: both messages take one NUL-terminated string, and
             // `p` and `arg` are tails of the expression.

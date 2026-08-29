@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::*;
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(&raw const e_nogroup as *const c_char), arg) };
+                    unsafe { semsg_c!(gettext(e_nogroup.as_ptr()), arg) };
                 } else {
                     unsafe { syn_list_one(id, false, true) };
                 }

@@ -68,7 +68,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
             if is_new {
                 d1.unref();
             }
-            err_str(&e_invarg2, name);
+            err_str(e_invarg2, name);
             return;
         }
         action = name;
@@ -121,7 +121,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
             }
             match l1.find(idx) {
                 Some(item) => break 'find Some(item),
-                None => err_nr(&e_list_index_out_of_range_nr, idx as int64_t),
+                None => err_nr(e_list_index_out_of_range_nr, idx as int64_t),
             }
         }
         if is_new {
@@ -153,7 +153,7 @@ fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: b
         (Container::List(_), Container::List(_)) => extend_list(args, arg_errmsg, is_new, rettv),
         (Container::Dict(_), Container::Dict(_)) => extend_dict(args, arg_errmsg, is_new, rettv),
         _ => err_str(
-            &e_listdictarg,
+            e_listdictarg,
             if is_new { c"extendnew()" } else { c"extend()" },
         ),
     }
@@ -207,7 +207,7 @@ pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 }
                 if before < 0 || before > len {
                     let mut numbuf = NumBuf::new();
-                    err_str(&e_invarg2, cstr_of(args.get_mut(2), &mut numbuf));
+                    err_str(e_invarg2, cstr_of(args.get_mut(2), &mut numbuf));
                     return;
                 }
             }
@@ -217,7 +217,7 @@ pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             }
             if !(0..=255).contains(&val) {
                 let mut numbuf = NumBuf::new();
-                err_str(&e_invarg2, cstr_of(args.get_mut(1), &mut numbuf));
+                err_str(e_invarg2, cstr_of(args.get_mut(1), &mut numbuf));
                 return;
             }
             b.insert_byte(before, val as uint8_t);
@@ -239,13 +239,13 @@ pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             if before != l.len() as int64_t {
                 item = l.find(before as c_int);
                 if item.is_none() {
-                    err_nr(&e_list_index_out_of_range_nr, before);
+                    err_nr(e_list_index_out_of_range_nr, before);
                     return;
                 }
             }
             l.insert_tv(args.get_mut(1), item);
             copy_tv(args.get_mut(0), rettv);
         }
-        _ => err_str(&e_listblobarg, c"insert()"),
+        _ => err_str(e_listblobarg, c"insert()"),
     }
 }

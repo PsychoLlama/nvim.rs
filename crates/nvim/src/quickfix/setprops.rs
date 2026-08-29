@@ -640,7 +640,7 @@ pub unsafe fn set_errorlist(
     if !list.is_null() && unsafe { tv_list_len(list) } != 0 && !what.is_null() {
         unsafe {
             semsg_c!(
-                gettext(&raw const e_invarg2 as *const c_char),
+                gettext(e_invarg2.as_ptr()),
                 gettext(c"cannot have both a list and a \"what\" argument".as_ptr()),
             )
         };

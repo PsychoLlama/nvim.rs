@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg_c;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 
 use super::*;
 
@@ -186,7 +186,7 @@ pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(&raw const e_nogroup as *const c_char), arg) };
+                    unsafe { semsg_c!(gettext(e_nogroup.as_ptr()), arg) };
                     break;
                 }
                 unsafe { syn_clear_one(id, syncing != 0) };

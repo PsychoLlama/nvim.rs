@@ -251,11 +251,7 @@ pub(crate) unsafe fn command_line_enter(
     if cmdline_level.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
         // out. (C's `goto theend`.)
-        unsafe {
-            emsg(gettext(
-                &raw const e_command_too_recursive as *const ::core::ffi::c_char,
-            ))
-        };
+        unsafe { emsg(gettext(e_command_too_recursive.as_ptr())) };
     } else {
         unsafe { expand_init(s.xpc()) };
         cc.xpc = s.xpc();
