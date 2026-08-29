@@ -63,7 +63,7 @@ impl<const ECHO: bool> TextSink<'_, ECHO> {
     ///
     /// `N` is the size of the stack buffer upstream declares at the site:
     /// `NUMBUFLEN` for a number, [`MARKERBUFLEN`] for a self-reference marker.
-    fn concat_num<const N: usize, T>(&mut self, fmt: &CStr, num: T) {
+    fn concat_num<const N: usize, T: crate::message_fmt::CArg>(&mut self, fmt: &CStr, num: T) {
         let mut numbuf = [0 as c_char; N];
         let formatted = unsafe {
             let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), N, fmt.as_ptr(), num);

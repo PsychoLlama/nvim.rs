@@ -295,7 +295,8 @@ unsafe fn qf_jump_print_msg(
         gettext(c" (line deleted)")
     } else {
         c""
-    };
+    }
+    .as_ptr();
     let types = qf_types(qf_ptr.qf_type as c_int, qf_ptr.qf_nr);
     let options = types.as_ptr();
     let len = unsafe {

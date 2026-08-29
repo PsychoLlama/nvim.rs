@@ -55,7 +55,7 @@ impl JsonSink<'_> {
     /// The three spellings the sink needs are `%ld`, `%lu` and `%g`, and only
     /// `%g` has no Rust equivalent that is guaranteed to agree byte for byte —
     /// so all three go through `vim_snprintf` and stay consistent.
-    fn concat_num<T>(&mut self, fmt: &CStr, num: T) {
+    fn concat_num<T: crate::message_fmt::CArg>(&mut self, fmt: &CStr, num: T) {
         let mut numbuf = [0 as c_char; NUMBUFLEN];
         let formatted = unsafe {
             let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), NUMBUFLEN, fmt.as_ptr(), num);
