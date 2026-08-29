@@ -174,8 +174,6 @@ pub(crate) const e_cannot_index_a_funcref: &CStr = c"E695: Cannot index a Funcre
 pub(crate) const e_variable_nested_too_deep_for_making_copy: &CStr =
     c"E698: Variable nested too deep for making a copy";
 pub(crate) const e_string_list_or_blob_required: &CStr = c"E1098: String, List or Blob required";
-pub(crate) const e_dot_can_only_be_used_on_dictionary_str: &CStr =
-    c"E1203: Dot can only be used on a dictionary: %s";
 pub(crate) const e_empty_function_name: &CStr = c"E1192: Empty function name";
 pub(crate) const e_cannot_use_partial_here: &CStr = c"E1265: Cannot use a partial here";
 

@@ -11,7 +11,6 @@ use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::optionstr::is_empty_option;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
@@ -55,7 +54,9 @@ pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"on", c"off"]) } {
         cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E390: Illegal argument: {arg}");
     }
 }
 
@@ -76,7 +77,9 @@ pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"match", c"ignore"]) } {
         cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E390: Illegal argument: {arg}");
     }
 }
 
@@ -101,7 +104,9 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
         Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
         Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
-            unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E390: Illegal argument: {arg}");
             return;
         }
     }
@@ -109,7 +114,9 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
     // Unlike the other mode commands, this one diagnoses trailing text.
     let arg = unsafe { skipwhite(arg_end) };
     if unsafe { *arg } as c_int != NUL {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E390: Illegal argument: {arg}");
     }
 }
 
@@ -136,7 +143,9 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
             _ => SYNSPL_DEFAULT,
         };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E390: Illegal argument: {arg}");
         return;
     }
 

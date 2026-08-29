@@ -11,23 +11,23 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 use super::{
-    CLASS_NONE, E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
-    MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, NOT_MULTI, REGEXP_ABBR, REGEXP_INRANGE, at_start,
-    backslash_abbr, curchr, magic_T, nextchr, parse_state_T, prev_at_start, prevchr, prevchr_len,
-    prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic, regnpar, regparse, take_bracketed,
-    take_char_class, toggle_magic, unmagic,
+    CLASS_NONE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE,
+    NOT_MULTI, REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, magic_T, nextchr,
+    parse_state_T, prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags,
+    reg_cpo_lit, reg_magic, regnpar, regparse, take_bracketed, take_char_class, toggle_magic,
+    unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int, hex2nr};
 use crate::global_cell::GlobalCell;
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::memmove;
 use crate::strings::xstrnsave;
 use crate::types::{FAIL, OK};
 use ::libc::strlen;
@@ -131,12 +131,9 @@ pub unsafe fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *m
 pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char {
     let p = unsafe { skip_regexp(startp, delim, magic) };
     if unsafe { *p } as c_int != delim {
-        unsafe {
-            semsg_c!(
-                gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR),
-                startp,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let startp = unsafe { c_str(startp) };
+        semsg!("E654: Missing delimiter after search pattern: {startp}");
         return core::ptr::null_mut();
     }
     p

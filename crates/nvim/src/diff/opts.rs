@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, OK};
 use crate::winlayer::{Buf, Win, tabs, windows};
 use core::ffi::{c_char, c_int};
@@ -154,12 +154,10 @@ pub(crate) unsafe fn parse_diffanchors(
         i += 1;
     }
     if i == MAX_DIFF_ANCHORS && unsafe { *dia } != 0 {
-        unsafe {
-            semsg_c!(
-                gettext(e_cannot_have_more_than_nr_diff_anchors),
-                MAX_DIFF_ANCHORS,
-            )
-        };
+        semsg!(
+            "E1549: Cannot have more than {} diff anchors",
+            MAX_DIFF_ANCHORS
+        );
         return FAIL;
     }
     if !num_anchors.is_null() {

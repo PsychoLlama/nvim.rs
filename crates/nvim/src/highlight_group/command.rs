@@ -10,7 +10,6 @@
 
 use crate::highlight::HlAttrFlags;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::helpers::cstr_as_string;
@@ -34,10 +33,10 @@ use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
     ATTR_NAMES, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
-    e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str, group,
-    highlight_attr_set_all, highlight_clear, highlight_list_one, highlight_num_groups,
-    hl_has_settings, init_highlight, kColorIdxNone, kOptValTypeString, lookup_color, name_to_color,
-    restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_len, with_group,
+    e_group_has_settings_highlight_link_ignored, group, highlight_attr_set_all, highlight_clear,
+    highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, kColorIdxNone,
+    kOptValTypeString, lookup_color, name_to_color, restore_cterm_colors, set_hl_attr,
+    syn_check_group, syn_name2id_len, with_group,
 };
 use crate::highlight_group::highlight_changed;
 
@@ -148,7 +147,8 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
     if !doclear && !dolink && line.at_end() {
         let id = unsafe { syn_name2id_len(name.as_ptr().cast(), name.len()) };
         if id == 0 {
-            unsafe { semsg_c!(gettext(e_highlight_group_name_not_found_str), name.as_ptr(),) };
+            let shown = msg_bytes(name);
+            semsg!("E411: Highlight group not found: {shown}");
         } else {
             unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
             unsafe { highlight_list_one(id) };

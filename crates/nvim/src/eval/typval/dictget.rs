@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::message::emsg_ptr;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, NUL, OK};
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
@@ -407,12 +407,10 @@ pub unsafe fn f_items(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         VAR_BLOB => unsafe { tv_blob2items(argvars, rettv) },
         VAR_DICT => unsafe { tv_dict2items(argvars, rettv) },
         _ => {
-            unsafe {
-                semsg_c!(
-                    tr(e_list_dict_blob_or_string_required_for_argument_nr),
-                    1 as ::core::ffi::c_int,
-                )
-            };
+            semsg!(
+                "E1225: List, Dictionary, Blob or String required for argument {}",
+                1 as ::core::ffi::c_int
+            );
         }
     }
 }

@@ -50,8 +50,8 @@ use crate::eval::vars::{
 };
 use crate::eval::{
     FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, TV_CSTRING,
-    e_cannot_slice_dictionary, e_dot_can_only_be_used_on_dictionary_str, e_missbrac, eval_isnamec,
-    eval_isnamec1, eval1, find_name_end, glv_status_T, make_expanded_name, tv_init, tv_is_luafunc,
+    e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1, find_name_end,
+    glv_status_T, make_expanded_name, tv_init, tv_is_luafunc,
 };
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
@@ -59,7 +59,7 @@ use crate::ex_eval::aborting;
 use crate::main::{e_cannot_mod, e_invalid_value_for_blob_nr, e_listreq, emsg_severe};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, dict_T,
@@ -423,10 +423,9 @@ pub(crate) unsafe fn get_lval_subscript(
             let mut container = unsafe { Tv::new(lp.ll_tv) };
             if c == b'.' as c_char && container.v_type != VAR_DICT {
                 if !quiet {
-                    let fmt = e_dot_can_only_be_used_on_dictionary_str.as_ptr();
-                    // SAFETY: a shared message, whose format takes one
-                    // NUL-terminated string.
-                    unsafe { semsg_c!(gettext_ptr(fmt), name) };
+                    // SAFETY: a shared message, whose format takes one // NUL-terminated string.
+                    let name = unsafe { c_str(name) };
+                    semsg!("E1203: Dot can only be used on a dictionary: {name}");
                 }
                 return null_mut();
             }

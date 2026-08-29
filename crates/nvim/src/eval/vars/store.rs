@@ -140,7 +140,9 @@ pub unsafe fn set_var_const(
         if ht == get_vimvar_ht() && !unsafe { before_set_vvar(varname, di, tv, copy, watched, err) }
         {
             if type_error {
-                unsafe { semsg_c!(translate(e_setting_v_str_to_value_with_wrong_type), varname,) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let varname = unsafe { c_str(varname) };
+                semsg!("E963: Setting v:{varname} to value with wrong type");
             }
             return;
         }

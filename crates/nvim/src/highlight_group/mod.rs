@@ -64,9 +64,6 @@ pub(crate) const KEYSET_OPTIDX_get_highlight__link: c_int = 2;
 pub(crate) const KEYSET_OPTIDX_get_highlight__name: c_int = 3;
 pub(crate) const KEYSET_OPTIDX_get_highlight__create: c_int = 4;
 
-/// The `:highlight` parse errors.
-pub(crate) const e_highlight_group_name_not_found_str: &CStr =
-    c"E411: Highlight group not found: %s";
 pub(crate) const e_group_has_settings_highlight_link_ignored: &CStr =
     c"E414: Group has settings, highlight link ignored";
 

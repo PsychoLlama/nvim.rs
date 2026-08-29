@@ -11,7 +11,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -665,7 +666,9 @@ pub(crate) unsafe fn set_vvar_item(
     let typed = unsafe { before_set_vvar(varname, di, val, copy_out, watched, err) };
     if !typed {
         if type_error {
-            unsafe { semsg_c!(translate(e_setting_v_str_to_value_with_wrong_type), varname,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let varname = unsafe { c_str(varname) };
+            semsg!("E963: Setting v:{varname} to value with wrong type");
         }
         // SAFETY: a live local.
         clear_local(&mut tmp);

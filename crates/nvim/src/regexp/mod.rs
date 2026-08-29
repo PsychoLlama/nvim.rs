@@ -411,8 +411,6 @@ pub const REGMAGIC: c_int = 0o234;
 pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =
     c"E363: Pattern uses more memory than 'maxmempattern'";
-const E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR: &CStr =
-    c"E654: Missing delimiter after search pattern: %s";
 const E_RECURSIVE: &CStr = c"E956: Cannot use pattern recursively";
 const E_SUBSTITUTE_NESTING_TOO_DEEP: &CStr = c"E1290: substitute nesting too deep";
 pub const NOT_MULTI: c_int = 0;

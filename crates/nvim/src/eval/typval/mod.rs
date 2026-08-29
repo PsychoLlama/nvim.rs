@@ -152,8 +152,6 @@ static e_string_or_number_required_for_argument_nr: &::core::ffi::CStr =
     c"E1220: String or Number required for argument %d";
 static e_string_or_list_required_for_argument_nr: &::core::ffi::CStr =
     c"E1222: String or List required for argument %d";
-static e_list_dict_blob_or_string_required_for_argument_nr: &::core::ffi::CStr =
-    c"E1225: List, Dictionary, Blob or String required for argument %d";
 static e_list_or_blob_required_for_argument_nr: &::core::ffi::CStr =
     c"E1226: List or Blob required for argument %d";
 static e_blob_required_for_argument_nr: &::core::ffi::CStr =

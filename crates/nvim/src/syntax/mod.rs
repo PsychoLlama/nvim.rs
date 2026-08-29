@@ -222,13 +222,9 @@ pub(crate) const SPO_RS_OFF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub(crate) const SPO_RE_OFF: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub(crate) const SPO_LC_OFF: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub(crate) const SPO_COUNT: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub(crate) const E_ILLEGAL_ARG: &::core::ffi::CStr = c"E390: Illegal argument: %s";
 pub(crate) const E_CONTAINS_NOT_ACCEPTED_HERE: &::core::ffi::CStr =
     c"E395: Contains argument not accepted here";
 pub(crate) const E_INVALID_CCHAR_VALUE: &::core::ffi::CStr = c"E844: Invalid cchar value";
-/// `%s` is the text before the `]`, `%s` the text after it.
-pub(crate) const E_TRAILING_CHAR_AFTER_RSB: &::core::ffi::CStr =
-    c"E890: Trailing char after ']': %s]%s";
 pub(crate) const SPTYPE_MATCH: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const SPTYPE_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub(crate) const SPTYPE_END: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

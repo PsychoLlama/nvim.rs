@@ -7,7 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -20,7 +21,6 @@ use crate::eval::typval::{
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::garray::{ga_clear, ga_concat_len, ga_init};
-use crate::main::e_streamkey;
 use crate::terminal::terminal_receive;
 use crate::types::{
     CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
@@ -28,7 +28,7 @@ use crate::types::{
 };
 use ::libc::strlen;
 
-use super::{channel_decref, channel_incref, translated};
+use super::{channel_decref, channel_incref};
 
 /// A `typval_T` of no type, which is what an argument slot starts as.
 fn unknown_tv() -> typval_T {
@@ -211,7 +211,9 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
             )
         };
     } else {
-        unsafe { semsg_c!(translated(e_streamkey), (*reader).type_0, (*chan).id,) };
+        // SAFETY: the reader's own stream name and the channel's id.
+        let (kind, id) = unsafe { (c_str((*reader).type_0), (*chan).id) };
+        semsg!("E5210: dict key '{kind}' already set for buffered stream in channel {id}");
     }
     unsafe { (*reader).eof = false };
 }

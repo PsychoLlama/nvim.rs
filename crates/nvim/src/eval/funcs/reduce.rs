@@ -13,14 +13,13 @@ use crate::eval::typval::{
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::hashtab::hash_removed;
-use crate::main::{called_emsg, e_reduce_of_an_empty_str_with_no_initial_value};
+use crate::main::called_emsg;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
@@ -224,8 +223,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         (*args.get(2), unsafe { tv_list_first(l) })
     } else {
         if unsafe { tv_list_len(l) } == 0 {
-            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext_ptr(fmt), c"List".as_ptr()) };
+            semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
         }
         let first = unsafe { tv_list_first(l) };
@@ -260,8 +258,10 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
     let called_emsg_start = called_emsg.get();
     if !args.has(2) {
         if unsafe { *p } as c_int == NUL {
-            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext_ptr(fmt), c"String".as_ptr()) };
+            semsg!(
+                "E998: Reduce of an empty {} with no initial value",
+                "String"
+            );
             return;
         }
         // With no initial value the first character is it.
@@ -301,8 +301,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
         (*args.get(2), 0)
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
-            let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext_ptr(fmt), c"Blob".as_ptr()) };
+            semsg!("E998: Reduce of an empty {} with no initial value", "Blob");
             return;
         }
         (number_tv(unsafe { tv_blob_get(b, 0) } as varnumber_T), 1)

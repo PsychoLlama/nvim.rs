@@ -14,8 +14,7 @@
 
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
-use crate::semsg_c;
-use crate::siemsg_c;
+use crate::siemsg;
 use core::ffi::{
     CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
 };
@@ -34,13 +33,6 @@ use crate::types::{VAR_UNKNOWN, size_t, typval_T};
 /// this is a unit struct rather than the `Result<(), ()>` it replaces.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BadFormat;
-
-const E_FIELD_WIDTH_REUSED: &CStr =
-    c"E1502: Positional argument %d used as field width reused as different type: %s/%s";
-const E_POS_TYPE_INCONSISTENT: &CStr =
-    c"E1504: Positional argument %d type used inconsistently: %s/%s";
-const E_APTYPES_IS_NULL: &CStr =
-    c"E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s";
 
 /// A field width or precision may not exceed 1 MiB.
 pub(crate) const MAX_ALLOWED_STRING_WIDTH: c_int = 1048576;
@@ -196,17 +188,25 @@ unsafe fn adjust_types(
                 spec
             };
             if unsafe { *other as u8 } != b'*' && !matches!(unsafe { *other as u8 }, b'd' | b'i') {
-                let msg = gettext(E_FIELD_WIDTH_REUSED);
                 let was = unsafe { format_typename(seen) };
                 let now = unsafe { format_typename(spec) };
-                unsafe { semsg_c!(msg, arg, was, now) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (was, now) = unsafe { (c_str(was), c_str(now)) };
+                semsg!(
+                    "E1502: Positional argument {} used as field width reused as different type: {was}/{now}",
+                    arg
+                );
                 return Err(BadFormat);
             }
         } else if unsafe { format_typeof(spec) } != unsafe { format_typeof(seen) } {
-            let msg = gettext(E_POS_TYPE_INCONSISTENT);
             let now = unsafe { format_typename(spec) };
             let was = unsafe { format_typename(seen) };
-            unsafe { semsg_c!(msg, arg, now, was) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (now, was) = unsafe { (c_str(now), c_str(was)) };
+            semsg!(
+                "E1504: Positional argument {} type used inconsistently: {now}/{was}",
+                arg
+            );
             return Err(BadFormat);
         }
     }
@@ -505,7 +505,10 @@ pub(crate) unsafe fn skip_to_arg<'f>(
     unsafe { *arg_cur = arg_min };
     while unsafe { *arg_cur } < unsafe { *arg_idx } - 1 {
         if ap_types.is_null() || unsafe { (*ap_types.offset(*arg_cur as isize)).is_null() } {
-            unsafe { siemsg_c!(E_APTYPES_IS_NULL.as_ptr(), fmt, *arg_cur) };
+            // SAFETY: `arg_cur` is the caller's index cell and `fmt` its
+            // NUL-terminated format string.
+            let (at, fmt) = unsafe { (*arg_cur, c_str(fmt)) };
+            siemsg!("E1507: Internal error: ap_types or ap_types[idx] is NULL: {fmt}: {at}");
             return;
         }
         // Consume one argument at its recorded width.

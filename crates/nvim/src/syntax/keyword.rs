@@ -9,7 +9,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -203,7 +202,9 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
         }
         if next == ']' as c_int {
             if unsafe { *p.add(2) } as c_int != NUL {
-                unsafe { semsg_c!(gettext(E_TRAILING_CHAR_AFTER_RSB), kw, p.add(2)) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (kw, arg1) = unsafe { (c_str(kw), c_str(p.add(2))) };
+                semsg!("E890: Trailing char after ']': {kw}]{arg1}");
                 return None;
             }
             // Step over the `]`: it and the NUL after it are exactly the

@@ -61,9 +61,8 @@ use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::main::{
     KeyTyped, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
-    e_cannot_have_more_than_nr_diff_anchors, e_diff_anchors_with_hidden_windows,
-    e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir, e_problem_creating_internal_diff,
-    need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr,
+    e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
+    e_problem_creating_internal_diff, need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr,
 };
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
