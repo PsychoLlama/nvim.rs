@@ -48,7 +48,6 @@ use crate::message::{emsg_ptr, str2special_save};
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
-use crate::semsg_c;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
@@ -127,7 +126,6 @@ pub(crate) const REMAP_YES: c_int = 0;
 pub(crate) const REPTERM_DO_LT: c_int = 2;
 
 pub(crate) static E_NOTSUBMENU: &CStr = c"E327: Part of menu-item path is not sub-menu";
-pub(crate) static E_NOMENU: &CStr = c"E329: No menu \"%s\"";
 
 /// The translated text of one of the shared `e_*` message constants. The
 /// `_c` message macros want a `printf` format string, which a
@@ -159,10 +157,8 @@ pub(crate) fn emsg_shared(msg: &'static CStr) {
 /// UTF-8 -- so these stay on vim's own `printf`, which copies them through,
 /// rather than moving to a `format_args!` literal that would have to lose
 /// the bytes it cannot decode.
-pub(crate) fn semsg_name(fmt: *const c_char, name: *const c_char) {
-    // SAFETY: `fmt` is a `'static` format with a single `%s`, and `name` is
-    // a NUL-terminated string that outlives the call.
-    unsafe { semsg_c!(fmt, name) };
+pub(crate) fn semsg_name(message: String) {
+    crate::message_fmt::emsg_text(message);
 }
 
 /// While non-zero no menu may be added or removed, so that the listing

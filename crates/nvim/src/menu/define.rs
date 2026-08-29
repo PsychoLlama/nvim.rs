@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -19,7 +20,7 @@ use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::getdigits_int;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
-use crate::main::{e_invarg2, e_trailing_arg, p_cpo, sys_menu};
+use crate::main::{p_cpo, sys_menu};
 use crate::memory::xcalloc;
 use crate::types::{exarg_T, vimmenu_T};
 use crate::ui::ui_call_update_menu;
@@ -107,7 +108,8 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
 
     let menu_path = arg;
     if menu_path.byte(0) == b'.' {
-        semsg_name(message(e_invarg2), menu_path.raw());
+        let path = menu_path.as_cstr().to_string_lossy();
+        semsg_name(tr!("E475: Invalid argument: {path}"));
         return;
     }
 
@@ -121,7 +123,8 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
         return;
     }
     if !map_to.is_empty() && (unmenu || enable != Enable::Unchanged) {
-        semsg_name(message(e_trailing_arg), map_to.raw());
+        let rest = map_to.as_cstr().to_string_lossy();
+        semsg_name(tr!("E488: Trailing characters: {rest}"));
         return;
     }
 

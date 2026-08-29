@@ -44,7 +44,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -215,8 +214,6 @@ pub fn buf_get_changedtick(buf: Buf) -> varnumber_T {
     // the only variant this union is ever given here.
     unsafe { buf.changedtick_di.di_tv.vval.v_number }
 }
-static e_attempt_to_delete_buffer_that_is_in_use_str: &::core::ffi::CStr =
-    c"E937: Attempt to delete a buffer that is in use: %s";
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 
@@ -523,12 +520,6 @@ pub(crate) fn set_pcmark() {
 pub(crate) fn is_changed(mut buf: Buf) -> bool {
     // SAFETY: a live buffer.
     buf_is_changed(buf)
-}
-
-/// `semsg(fmt, n)`, for the three errors that name a buffer number.
-pub(crate) fn err_num<T: crate::message_fmt::CArg>(fmt: *mut c_char, n: T) {
-    // SAFETY: a translated format taking one number, and the number.
-    let _: bool = unsafe { semsg_c!(fmt, n) };
 }
 
 /// `do_ecmd()`: edit `fname` (or buffer `fnum`) in `win`.

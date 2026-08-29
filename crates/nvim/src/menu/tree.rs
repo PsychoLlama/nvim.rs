@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -74,7 +75,8 @@ pub(crate) fn menu_enable_recurse(
     }
 
     if !every && !found {
-        semsg_name(message_str(E_NOMENU), name.raw());
+        let shown = name.as_cstr().to_string_lossy();
+        semsg_name(tr!("E329: No menu \"{shown}\""));
         return false;
     }
     true
@@ -136,7 +138,8 @@ pub(crate) fn remove_menu(menup: Link, name: CText, modes: c_int, silent: bool) 
     if named {
         let Some(mut node) = found else {
             if !silent {
-                semsg_name(message_str(E_NOMENU), name.raw());
+                let shown = name.as_cstr().to_string_lossy();
+                semsg_name(tr!("E329: No menu \"{shown}\""));
             }
             return false;
         };
@@ -319,7 +322,8 @@ fn find_menu(menu: Option<Menu>, path_name: &CStr, modes: c_int) -> Option<Menu>
             break;
         }
         let Some(node) = matched else {
-            semsg_name(message_str(E_NOMENU), name.raw());
+            let shown = name.as_cstr().to_string_lossy();
+            semsg_name(tr!("E329: No menu \"{shown}\""));
             return None;
         };
         // Found a match; search its sub-menu.

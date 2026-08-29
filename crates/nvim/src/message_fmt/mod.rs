@@ -273,6 +273,13 @@ pub(crate) fn report_emsg(message: impl FnOnce() -> String) -> bool {
     emsg(&to_message(message(), SEMSG_ERRBUF_LEN))
 }
 
+/// Report an already-formatted message as an error: [`semsg!`] for a caller
+/// that built the text somewhere else, typically because two call sites share
+/// the reporting but not the message.
+pub(crate) fn emsg_text(text: String) -> bool {
+    report_emsg(|| text)
+}
+
 /// `semsg_multiline()`: [`report_emsg`] keeping embedded newlines, reported
 /// under the `ext_messages` kind `kind`.
 #[doc(hidden)]

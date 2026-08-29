@@ -18,7 +18,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memline::MlFlags;
-use core::ffi::{c_char, c_int};
+use crate::message_fmt::c_str;
+use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
@@ -43,7 +44,7 @@ use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, se
 use crate::memline::ml_close;
 use crate::normal::visual_active;
 use crate::pos::MAXLNUM;
-use crate::semsg_c;
+use crate::semsg;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
@@ -112,12 +113,6 @@ fn remember_last_cursor(mut win: Win) {
 fn forget_file(mut win: Win, fnum: c_int) {
     // SAFETY: a live window.
     unsafe { mark_forget_file(win.raw(), fnum) };
-}
-
-fn semsg_name(fmt: *mut c_char, name: *const c_char) {
-    // SAFETY: a translated format taking one string, and a name that is
-    // NUL-terminated or a literal.
-    let _: bool = unsafe { semsg_c!(fmt, name) };
 }
 
 fn detach_updates(mut buf: Buf) {
@@ -356,13 +351,14 @@ pub(crate) fn can_unload_buffer(mut buf: Buf) -> bool {
         } else {
             buf.b_fname
         };
-        let fmt = tr_raw(e_attempt_to_delete_buffer_that_is_in_use_str.as_ptr());
+        // SAFETY: a buffer's own name, NUL-terminated.
+        let name = unsafe { c_str(fname) };
         let name = if fname.is_null() {
-            c"[No Name]".as_ptr()
+            "[No Name]".into()
         } else {
-            fname.cast_const()
+            name.to_string()
         };
-        semsg_name(fmt, name);
+        semsg!("E937: Attempt to delete a buffer that is in use: {name}");
     }
     can_unload
 }

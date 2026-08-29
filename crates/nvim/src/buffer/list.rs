@@ -33,12 +33,12 @@ use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
 use crate::main::{
-    curbuf, e_buffer_nr_not_found, e_noalt, emsg_silent, firstbuf, in_assert_fails, jop_flags,
-    lastbuf, p_sol, swb_flags,
+    curbuf, e_noalt, emsg_silent, firstbuf, in_assert_fails, jop_flags, lastbuf, p_sol, swb_flags,
 };
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg_ptr, msg_delay};
+use crate::message_fmt::c_str;
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::optionstr::clear_string_option;
@@ -47,7 +47,7 @@ use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     AdditionalData, Callback, FAIL, FileID, OK, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
     event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T,
@@ -100,20 +100,6 @@ fn tr_raw(msg: *const c_char) -> *mut c_char {
 fn err(msg: *mut c_char) {
     // SAFETY: a NUL-terminated message.
     unsafe { emsg_ptr(msg) };
-}
-
-/// `semsg(fmt, n)`, for the error that names a buffer number.
-fn err_num(fmt: *mut c_char, n: c_int) {
-    // SAFETY: a translated format taking one number, and the number.
-    let _: bool = unsafe { semsg_c!(fmt, n) };
-}
-
-/// `semsg(fmt, pattern)`, for the two errors that quote the pattern.
-fn err_pat(fmt: &CStr, pattern: *const c_char) {
-    let fmt = tr(fmt);
-    // SAFETY: a translated format taking one string, and the pattern the
-    // caller promised is NUL-terminated.
-    let _: bool = unsafe { semsg_c!(fmt, pattern) };
 }
 
 fn free(p: *mut c_char) {
@@ -622,8 +608,7 @@ pub unsafe fn buflist_getfile(
         if options & GETF_ALT as c_int != 0 && n == 0 {
             err(tr_raw(e_noalt.as_ptr()));
         } else {
-            let fmt = tr_raw(e_buffer_nr_not_found.as_ptr());
-            err_num(fmt, n);
+            semsg!("E92: Buffer {n} not found");
         }
         return FAIL;
     };
@@ -802,9 +787,13 @@ pub unsafe fn buflist_findpat(
     };
 
     if matched == -2 {
-        err_pat(c"E93: More than one match for %s", pattern);
+        // SAFETY: the caller's NUL-terminated pattern.
+        let pattern = unsafe { c_str(pattern) };
+        semsg!("E93: More than one match for {pattern}");
     } else if matched < 0 {
-        err_pat(c"E94: No matching buffer for %s", pattern);
+        // SAFETY: the caller's NUL-terminated pattern.
+        let pattern = unsafe { c_str(pattern) };
+        semsg!("E94: No matching buffer for {pattern}");
     }
     matched
 }

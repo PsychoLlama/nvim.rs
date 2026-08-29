@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -20,8 +21,7 @@ use crate::cursor::{check_cursor, gchar_cursor};
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
 use crate::main::{
-    State, VIsual_reselect, curbuf, current_sctx, curwin, e_invarg2, ex_normal_busy, p_sel,
-    restart_edit,
+    State, VIsual_reselect, curbuf, current_sctx, curwin, ex_normal_busy, p_sel, restart_edit,
 };
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
@@ -105,10 +105,8 @@ fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
             // MENU_INDEX_TIP cannot happen.
             _ => c"Normal",
         };
-        semsg_name(
-            message_str(c"E335: Menu not defined for %s mode"),
-            mode.as_ptr(),
-        );
+        let mode = mode.to_string_lossy();
+        semsg_name(tr!("E335: Menu not defined for {mode} mode"));
     }
 }
 
@@ -216,7 +214,8 @@ fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
     }
 
     if menu.is_none() && !reported {
-        semsg_name(message_str(c"E334: Menu not found: %s"), path_name.as_ptr());
+        let path = path_name.to_string_lossy();
+        semsg_name(tr!("E334: Menu not found: {path}"));
     }
     menu
 }
@@ -242,7 +241,8 @@ pub(crate) unsafe fn ex_emenu(eap: *mut exarg_T) {
             b'i' => MENU_INDEX_INSERT,
             b'c' => MENU_INDEX_CMDLINE,
             _ => {
-                semsg_name(message(e_invarg2), arg.raw());
+                let arg = arg.as_cstr().to_string_lossy();
+                semsg_name(tr!("E475: Invalid argument: {arg}"));
                 return;
             }
         };

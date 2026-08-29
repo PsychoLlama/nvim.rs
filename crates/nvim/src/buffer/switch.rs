@@ -18,8 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 use std::ffi::CString;
@@ -32,14 +31,14 @@ use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
-    au_new_curbuf, cmdline_row, curbuf, e_cannot_switch_to_a_closing_buffer,
-    e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, e_nobufnr, e_trailing_arg,
+    au_new_curbuf, cmdline_row, curbuf, e_cannot_switch_to_a_closing_buffer, e_trailing_arg,
     got_int, jop_flags, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
     swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
 use crate::message::msg_puts;
+use crate::message_fmt::c_str;
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
@@ -147,15 +146,16 @@ fn put_message(msg: &CStr) {
     // SAFETY: a NUL-terminated literal.
     unsafe { msg_puts(msg.as_ptr()) };
 }
-fn err_nobufnr<T: crate::message_fmt::CArg>(n: T) {
-    err_num(tr_raw(e_nobufnr.as_ptr()), n);
+fn err_nobufnr(n: int64_t) {
+    semsg!("E86: Buffer {n} does not exist");
 }
 
 /// `smsg(0, NGETTEXT(one, many, n), n)`: the "N buffers deleted" report.
 fn report_count(one: &'static CStr, many: &'static CStr, n: c_int) {
-    let fmt = ngettext(one, many, n as c_ulong);
-    // SAFETY: a translated format taking one number.
-    let _: c_int = unsafe { smsg_c!(0 as c_int, fmt.as_ptr(), n) };
+    let plural = ngettext(one, many, n as c_ulong)
+        .to_string_lossy()
+        .replace("%d", &n.to_string());
+    let _: bool = crate::message_fmt::report_msg(0, || plural);
 }
 
 /// A translated message, as the owned error this family answers with.
@@ -501,7 +501,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
         && buf.b_flags.has(BufFlags::DUMMY)
     {
         // disallow navigating to the dummy buffer
-        err_nobufnr(count);
+        err_nobufnr(count.into());
         return FAIL;
     }
 
@@ -796,8 +796,8 @@ fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<c_int> {
                 return Some(FAIL);
             }
         } else {
-            let fmt = e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
-            err_num(tr_raw(fmt.as_ptr()), buf.handle as c_int);
+            let nr = buf.handle as c_int;
+            semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
             return Some(FAIL);
         }
     }
@@ -808,7 +808,7 @@ fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<c_int> {
                 return Some(FAIL);
             }
         } else {
-            err_fname(c"E89: %s will be killed (add ! to override)", buf);
+            err_fname(buf);
             return Some(FAIL);
         }
     }
@@ -952,10 +952,10 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 }
 
 /// `semsg(fmt, buf->b_fname)`.
-fn err_fname(fmt: &CStr, mut buf: Buf) {
-    let (fmt, name) = (tr(fmt), buf.b_fname);
-    // SAFETY: a translated format taking one string, and a buffer's own name.
-    let _: bool = unsafe { semsg_c!(fmt, name) };
+fn err_fname(mut buf: Buf) {
+    // SAFETY: a buffer's own name, NUL-terminated.
+    let name = unsafe { c_str(buf.b_fname) };
+    semsg!("E89: {name} will be killed (add ! to override)");
 }
 
 /// [`do_buffer_ext`] with just the `forceit` flag.

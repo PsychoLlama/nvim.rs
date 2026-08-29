@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -36,8 +37,7 @@ use crate::indent::inindent;
 use crate::main::{
     State, VIsual_reselect, curbuf, curwin, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
-    e_no_write_since_last_change_add_bang_to_override,
-    e_no_write_since_last_change_for_buffer_nr_add_bang_to_override, last_chdir_reason, msg_silent,
+    e_no_write_since_last_change_add_bang_to_override, last_chdir_reason, msg_silent,
     need_fileinfo, p_acd, starting,
 };
 use crate::r#move::{WinValid, scroll_cursor_halfway};
@@ -468,8 +468,8 @@ pub fn no_write_message_buf(mut buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {
-        let fmt = e_no_write_since_last_change_for_buffer_nr_add_bang_to_override;
-        err_num(tr_raw(fmt.as_ptr()), buf.handle as c_int);
+        let nr = buf.handle as c_int;
+        semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
     }
 }
 
