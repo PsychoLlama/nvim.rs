@@ -40,6 +40,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::emsg;
+use crate::message_fmt::msg_cstr;
 use crate::mouse::setmouse;
 
 use crate::options::{
@@ -796,7 +797,7 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     if is_tty_option(name) {
         return None;
     }
-    let name = name.to_string_lossy();
+    let name = msg_cstr(name);
     Some(CString::new(tr!("E355: Unknown option: {name}")).unwrap_or_default())
 }
 

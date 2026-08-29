@@ -8,7 +8,7 @@
   "c_int_returns": 1822,
   "ok_fail": 1481,
   "error_out_params": 364,
-  "semsg_c": 344,
+  "semsg_c": 46,
   "raw_cstr": 5613,
   "libc_strings": 1442,
   "const_c_int": 908,

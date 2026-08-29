@@ -24,6 +24,7 @@ use crate::message::{
     msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
     msg_puts_title,
 };
+use crate::message_fmt::msg_cstr;
 use crate::types::{dict_T, list_T, varnumber_T};
 
 /// Enable or disable the (sub)menus `name` reaches, recursively.
@@ -75,7 +76,7 @@ pub(crate) fn menu_enable_recurse(
     }
 
     if !every && !found {
-        let shown = name.as_cstr().to_string_lossy();
+        let shown = msg_cstr(name.as_cstr());
         semsg_name(tr!("E329: No menu \"{shown}\""));
         return false;
     }
@@ -138,7 +139,7 @@ pub(crate) fn remove_menu(menup: Link, name: CText, modes: c_int, silent: bool) 
     if named {
         let Some(mut node) = found else {
             if !silent {
-                let shown = name.as_cstr().to_string_lossy();
+                let shown = msg_cstr(name.as_cstr());
                 semsg_name(tr!("E329: No menu \"{shown}\""));
             }
             return false;
@@ -322,7 +323,7 @@ fn find_menu(menu: Option<Menu>, path_name: &CStr, modes: c_int) -> Option<Menu>
             break;
         }
         let Some(node) = matched else {
-            let shown = name.as_cstr().to_string_lossy();
+            let shown = msg_cstr(name.as_cstr());
             semsg_name(tr!("E329: No menu \"{shown}\""));
             return None;
         };

@@ -3685,6 +3685,7 @@ static const int EOW = 16;
 static const int EPERM = 1;
 static const int ERANGE = 34;
 static const int ESC = 27;
+static const int ESCAPE_BASE = 63232;
 static const int ESTACK_NONE = 0;
 static const int ESTACK_SCRIPT = 3;
 static const int ESTACK_SFILE = 1;

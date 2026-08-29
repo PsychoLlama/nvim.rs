@@ -310,8 +310,18 @@ plus these whole-tree metrics, which are not per-file:
                       ok_fail         `return OK`/`return FAIL` and `== `/
                         `!= OK`/`FAIL` — the values those returns carry.
                       error_out_params  `*mut Error`, api/'s out-parameter.
-                      semsg_c         `semsg_c!`, `semsg_multiline_c!` and
-                        `emsg(gettext(` — the format-unchecked message calls.
+                      semsg_c         `semsg_c!`, `semsg_multiline_c!`,
+                        `tr_c!` and `tr_plural!` — message *templates* that
+                        are data rather than literals, so `format_args!`
+                        cannot check them. The `_c` macros are gone; the two
+                        `tr_*` forms are what replaced them where the template
+                        is genuinely chosen at runtime, and they are the
+                        remaining debt. `emsg(gettext(` used to be counted
+                        here and no longer is: with the message constants
+                        `&CStr` and every conversion-carrying one inlined at
+                        its call site, not one of the 344 remaining
+                        `emsg(gettext(X))` carries a `printf` conversion —
+                        the spelling is a translated *message*, not a format.
                       raw_cstr        `*mut c_char` + `*const c_char`, both,
                         because constness is not what is being retired.
                       libc_strings    the eleven `str*`/`mem*` calls. Word-
@@ -679,9 +689,10 @@ VOCABULARY = {
     # do not match; `>= OK` is not a status-code test.
     "ok_fail": re.compile(r"\breturn\s+(?:OK|FAIL)\b|[=!]=\s*(?:OK|FAIL)\b"),
     "error_out_params": re.compile(r"\*mut\s+Error\b"),
-    # `\b` before `emsg` keeps `semsg(gettext(` out (it has its own needle in
-    # `semsg_c!`); `\s*` covers rustfmt breaking the argument onto a new line.
-    "semsg_c": re.compile(r"\bsemsg_(?:multiline_)?c!|\bemsg\(\s*gettext\("),
+    # The `_c` macros no longer exist; keeping them in the needle is what
+    # makes bringing one back visible. `tr_c!`/`tr_plural!` are the escape
+    # hatch that replaced them: a message whose template arrives at runtime.
+    "semsg_c": re.compile(r"\bsemsg_(?:multiline_)?c!|\btr_(?:c|plural)!"),
     "raw_cstr": re.compile(r"\*(?:mut|const)\s+c_char\b"),
     "libc_strings": re.compile(
         r"\b(?:str(?:len|cmp|ncmp|cpy|cat|chr|str)"
@@ -1636,7 +1647,7 @@ WHOLE_TREE_LABEL = {
     "c_int_returns": "`-> c_int` status-code returns",
     "ok_fail": "OK/FAIL returns and comparisons",
     "error_out_params": "`*mut Error` out-parameters",
-    "semsg_c": "format-unchecked message calls",
+    "semsg_c": "message templates that are data, not literals",
     "raw_cstr": "raw `c_char` pointer types",
     "libc_strings": "libc str*/mem* calls",
     "const_c_int": "`pub const NAME: c_int` constants",
@@ -2125,9 +2136,10 @@ SELF_TEST_VOCABULARY = [
             "crates/nvim/src/a.rs": "fn f() {\n"
             "    semsg_c!(x);\n"
             "    semsg_multiline_c!(y);\n"
-            "    emsg(gettext(z));\n"
-            "    emsg(\n        gettext(w),\n    );\n"
-            "    semsg(gettext(v));\n"
+            "    tr_c!(z, a);\n"
+            "    tr_plural!(w, b);\n"
+            "    emsg(gettext(v));\n"
+            '    semsg!("E1: {a}");\n'
             "    emsg(other);\n}\n"
         },
         {"semsg_c": 4},

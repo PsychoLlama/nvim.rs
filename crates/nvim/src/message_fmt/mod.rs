@@ -53,6 +53,7 @@ use crate::message::{
 use crate::os::cshim::{gettext, gettext_template};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 use core::fmt;
+use core::fmt::Write as _;
 use std::ffi::CString;
 
 mod template;
@@ -97,9 +98,51 @@ impl fmt::Display for CDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             None => f.write_str("[NULL]"),
-            Some(s) => fmt::Display::fmt(&s.to_string_lossy(), f),
+            Some(s) => write_bytes(f, s.to_bytes()),
         }
     }
+}
+
+/// Write `bytes` into a Rust message, keeping the bytes that are not UTF-8.
+///
+/// The messages this tree formats quote file names, patterns and document
+/// text, none of which is guaranteed to be UTF-8, and vim's `printf` copied
+/// whatever bytes it was given. A `fmt::Formatter` only takes `&str`, so a
+/// byte that is not UTF-8 goes through as a private-use character
+/// (`U+F700 + byte`) that [`to_message`] turns back into the byte on the way
+/// out. Nothing else in the tree uses that block, and a message that really
+/// held one would only be rendering it as itself.
+///
+/// A precision truncates to that many *bytes*, which is what `%.*s` means.
+fn write_bytes(f: &mut fmt::Formatter<'_>, bytes: &[u8]) -> fmt::Result {
+    let mut rest = match f.precision() {
+        Some(p) => &bytes[..bytes.len().min(p)],
+        None => bytes,
+    };
+    loop {
+        match core::str::from_utf8(rest) {
+            Ok(text) => return f.write_str(text),
+            Err(bad) => {
+                let (good, tail) = rest.split_at(bad.valid_up_to());
+                f.write_str(core::str::from_utf8(good).unwrap_or(""))?;
+                let len = bad.error_len().unwrap_or(tail.len()).max(1);
+                for &byte in &tail[..len] {
+                    let escaped = char::from_u32(ESCAPE_BASE + u32::from(byte));
+                    f.write_char(escaped.unwrap_or(char::REPLACEMENT_CHARACTER))?;
+                }
+                rest = &tail[len..];
+            }
+        }
+    }
+}
+
+/// The private-use block [`write_bytes`] escapes a raw byte into.
+const ESCAPE_BASE: u32 = 0xf700;
+
+/// A `&CStr` as a message argument, keeping bytes that are not UTF-8 --
+/// [`c_str`] for a caller that already has the borrow.
+pub(crate) fn msg_cstr(text: &CStr) -> CDisplay<'_> {
+    CDisplay(Some(text))
 }
 
 /// A pointer [`c_str`] takes: the two spellings of a C string the tree holds.
@@ -148,7 +191,7 @@ pub(crate) struct BytesDisplay<'a>(&'a [u8]);
 
 impl fmt::Display for BytesDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&String::from_utf8_lossy(self.0), f)
+        write_bytes(f, self.0)
     }
 }
 
@@ -247,18 +290,26 @@ pub(crate) const fn check_template(template: &str) {
 ///
 /// `cap` is that buffer's size, terminator included. An interior NUL from an
 /// argument ends the message there, as it did in the C caller.
-fn to_message(mut text: String, cap: usize) -> CString {
-    if let Some(nul) = text.find('\0') {
-        text.truncate(nul);
-    }
-    if text.len() >= cap {
-        let mut cut = cap - 1;
-        while cut > 0 && !text.is_char_boundary(cut) {
-            cut -= 1;
+fn to_message(text: String, cap: usize) -> CString {
+    let mut bytes = Vec::with_capacity(text.len());
+    for ch in text.chars() {
+        // A byte [`write_bytes`] could not put through a `&str`.
+        match u32::from(ch)
+            .checked_sub(ESCAPE_BASE)
+            .and_then(|byte| u8::try_from(byte).ok())
+        {
+            Some(byte) => bytes.push(byte),
+            None => {
+                let mut buf = [0u8; 4];
+                bytes.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+            }
         }
-        text.truncate(cut);
     }
-    CString::new(text).unwrap_or_default()
+    if let Some(nul) = bytes.iter().position(|&b| b == 0) {
+        bytes.truncate(nul);
+    }
+    bytes.truncate(cap - 1);
+    CString::new(bytes).unwrap_or_default()
 }
 
 /// `semsg()`: format and report an error. Skipped, unformatted, when errors
@@ -611,6 +662,25 @@ mod tests {
         );
         let name = "x";
         assert_eq!(crate::tr!("E480: No match: {name}"), "E480: No match: x");
+    }
+
+    #[test]
+    fn bytes_that_are_not_utf8_survive_the_round_trip() {
+        // A file name vim would quote verbatim. `format_args!` can only carry
+        // a `&str`, so the byte goes through as a private-use character and
+        // comes back out of `to_message` as itself.
+        let name = super::msg_bytes(b"caf\xe9.txt");
+        let text = crate::tr!("E484: Can't open file {name}");
+        assert_eq!(
+            to_message(text, 1025).to_bytes(),
+            b"E484: Can't open file caf\xe9.txt"
+        );
+        // A byte that is not UTF-8 in the middle of text that is.
+        let mixed = super::msg_bytes("\u{2026}\u{c2}".as_bytes());
+        assert_eq!(
+            to_message(crate::tr!("{mixed}"), 1025).to_bytes(),
+            "\u{2026}\u{c2}".as_bytes()
+        );
     }
 
     #[test]

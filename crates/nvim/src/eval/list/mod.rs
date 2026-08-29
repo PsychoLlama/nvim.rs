@@ -60,7 +60,7 @@ use crate::main::e_listdictblobarg;
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::message_fmt::emsg_text;
+use crate::message_fmt::{emsg_text, msg_cstr};
 use crate::os::cshim::gettext;
 use crate::strings::reverse_text;
 use crate::tr_c;
@@ -768,7 +768,7 @@ pub(crate) fn err(msg: &'static CStr) {
 pub(crate) fn err_str(msg: &'static CStr, what: &CStr) {
     // The message is translated, the name is not -- upstream's
     // `semsg(_(msg), what)`.
-    emsg_text(tr_c!(msg, what.to_string_lossy()));
+    emsg_text(tr_c!(msg, msg_cstr(what)));
 }
 
 /// Report `msg` -- a shared error text with one `%ld` -- naming `n`.

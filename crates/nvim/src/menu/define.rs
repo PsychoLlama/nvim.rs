@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::msg_cstr;
 use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -108,7 +109,7 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
 
     let menu_path = arg;
     if menu_path.byte(0) == b'.' {
-        let path = menu_path.as_cstr().to_string_lossy();
+        let path = msg_cstr(menu_path.as_cstr());
         semsg_name(tr!("E475: Invalid argument: {path}"));
         return;
     }
@@ -123,7 +124,7 @@ fn do_menu(mut arg: CText, modes: c_int, mut noremap: c_int, unmenu: bool, range
         return;
     }
     if !map_to.is_empty() && (unmenu || enable != Enable::Unchanged) {
-        let rest = map_to.as_cstr().to_string_lossy();
+        let rest = msg_cstr(map_to.as_cstr());
         semsg_name(tr!("E488: Trailing characters: {rest}"));
         return;
     }

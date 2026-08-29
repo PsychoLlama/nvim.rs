@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
 use crate::tr_c;
@@ -148,7 +148,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
                 "".into()
             }
         };
-        let name = fname.to_string_lossy();
+        let name = msg_cstr(&fname);
         let info = note(kShaDaWantInfo as c_uint, c" info");
         let marks = note(kShaDaWantMarks as c_uint, c" marks");
         let oldfiles = note(kShaDaGetOldfiles as c_uint, c" oldfiles");

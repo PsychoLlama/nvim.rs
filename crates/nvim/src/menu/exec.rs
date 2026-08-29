@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::msg_cstr;
 use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -214,7 +215,7 @@ fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
     }
 
     if menu.is_none() && !reported {
-        let path = path_name.to_string_lossy();
+        let path = msg_cstr(path_name);
         semsg_name(tr!("E334: Menu not found: {path}"));
     }
     menu
@@ -241,7 +242,7 @@ pub(crate) unsafe fn ex_emenu(eap: *mut exarg_T) {
             b'i' => MENU_INDEX_INSERT,
             b'c' => MENU_INDEX_CMDLINE,
             _ => {
-                let arg = arg.as_cstr().to_string_lossy();
+                let arg = msg_cstr(arg.as_cstr());
                 semsg_name(tr!("E475: Invalid argument: {arg}"));
                 return;
             }
