@@ -19,6 +19,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::log::logmsg_c;
+use crate::message_fmt::c_str;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
@@ -395,7 +396,7 @@ pub fn iemsg(s: &CStr) {
 /// # Safety
 /// `where_0` must be a valid C string.
 pub unsafe fn internal_error(where_0: *const c_char) {
-    unsafe { crate::siemsg_c!(gettext(e_intern2), where_0) };
+    unsafe { crate::siemsg!("E685: Internal error: {}", c_str(where_0)) };
 }
 
 /// Report `text` as a multiline error of `ext_messages` kind `kind`, keeping

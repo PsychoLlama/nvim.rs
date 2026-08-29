@@ -302,7 +302,9 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
     }
 
     if rest.is_null() {
-        unsafe { semsg_c!(gettext(e_invarg2), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
     } else {
         unsafe { (*eap).nextcmd = check_nextcmd(rest) };
     }

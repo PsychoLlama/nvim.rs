@@ -8,7 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -20,9 +21,7 @@ use crate::event::rstream::{rstream_init, rstream_init_fd, rstream_start};
 use crate::event::socket::{socket_connect, socket_watcher_accept};
 use crate::event::wstream::{wstream_init, wstream_init_fd};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    e_invarg2, e_jobspawn, embedded_mode, exiting, headless_mode, ui_client_channel_id,
-};
+use crate::main::{embedded_mode, exiting, headless_mode, ui_client_channel_id};
 use crate::memory::{xfree, xstrdup};
 use crate::msgpack_rpc::channel::rpc_start;
 use crate::msgpack_rpc::server::server_owns_pipe_address;
@@ -46,7 +45,7 @@ use super::reader::{
 };
 use super::{
     channel_alloc, channel_create_event, channel_decref, channel_destroy_early, channel_internal,
-    channel_proc, close_cb, main_loop_ptr, translated,
+    channel_proc, close_cb, main_loop_ptr,
 };
 
 /// Whether stdio has already been claimed. Only one channel may own it.
@@ -89,7 +88,8 @@ pub unsafe fn channel_job_start(
     unsafe { (*chan).on_exit = on_exit };
 
     if pty && detach {
-        unsafe { semsg_c!(translated(e_invarg2), PTY_DETACHED.as_ptr()) };
+        let why = PTY_DETACHED.to_string_lossy();
+        semsg!("E475: Invalid argument: {why}");
         unsafe { shell_free_argv(argv) };
         if !env.is_null() {
             unsafe { tv_dict_free(env) };
@@ -140,7 +140,9 @@ pub unsafe fn channel_job_start(
     let cmd = unsafe { xstrdup(proc_get_exepath(proc)) };
     let status = unsafe { proc_spawn(proc, has_in, has_out, has_err) };
     if status != 0 {
-        unsafe { semsg_c!(translated(e_jobspawn), uv_strerror(status), cmd) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (arg0, cmd) = unsafe { (c_str(uv_strerror(status)), c_str(cmd)) };
+        semsg!("E903: Process failed to start: {arg0}: \"{cmd}\"");
     }
     unsafe { xfree(cmd.cast()) };
     if !unsafe { (*proc).env }.is_null() {

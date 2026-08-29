@@ -11,16 +11,15 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::charset::backslash_halve;
 use crate::fileio::vim_tempname;
-use crate::main::{
-    Rows, cmdline_row, e_cant_read_file_str, e_notmp, e_wildexpand, sandbox, secure,
-};
+use crate::main::{Rows, cmdline_row, e_notmp, e_wildexpand, sandbox, secure};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
 use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
-use crate::semsg_c;
+use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{FAIL, OK, READBIN};
 use core::ops::Range;
@@ -569,7 +568,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
         fclose(fd);
         os_remove(tempname);
         if readlen as usize != len {
-            semsg_c!(gettext(e_cant_read_file_str), tempname);
+            semsg!("E485: Can't read file {}", c_str(tempname));
             xfree(tempname.cast());
             return Read::Failed;
         }

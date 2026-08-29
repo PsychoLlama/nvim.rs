@@ -19,11 +19,10 @@ use crate::eval::typval::{
     tv_check_for_number_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::window::find_win_by_nr_or_id;
-use crate::main::{dollar_vcol, e_invalid_line_number_nr, p_ss};
+use crate::main::{dollar_vcol, p_ss};
 use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
-use crate::os::cshim::gettext;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     EvalFuncData, FAIL, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T,
     win_T,
@@ -345,9 +344,7 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         coladd: 0,
     };
     if pos.lnum > wp.buffer().line_count() {
-        // SAFETY: a NUL-terminated format string and the one argument it
-        // names. Not `semsg!`: this is vim's own `printf`.
-        unsafe { semsg_c!(gettext(e_invalid_line_number_nr), pos.lnum,) };
+        semsg!("E966: Invalid line number: {}", pos.lnum);
         return;
     }
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);

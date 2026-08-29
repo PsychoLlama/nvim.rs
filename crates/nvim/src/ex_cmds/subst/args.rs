@@ -20,19 +20,17 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
 use crate::ex_cmds::{FAIL, INT_MAX, kSubIgnoreCase, kSubMatchCase};
 use crate::ex_docmd::check_nextcmd;
-use crate::main::{
-    e_backslash, e_invcmd, e_modifiable, e_nopresub, e_trailing_arg, e_val_too_large_len,
-    e_zerocount,
-};
+use crate::main::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::option::magic_isset;
 use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::MAXCOL;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde, skip_regexp_ex};
 use crate::search::{SEARCH_HIS, search_regcomp};
-use crate::semsg_c;
+use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, CMD_tilde, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
@@ -265,13 +263,8 @@ unsafe fn read_count(eap: *mut exarg_T, cmd: &mut *mut c_char) -> bool {
     // Upstream writes `i >= INT_MAX`, which for a `c_int` is `==`.
     if i == INT_MAX {
         // SAFETY: `count_arg` is the digits just read, `cmd` their end.
-        unsafe {
-            semsg_c!(
-                gettext(e_val_too_large_len),
-                (*cmd).offset_from(count_arg) as c_int,
-                count_arg,
-            )
-        };
+        let count_arg = unsafe { c_str_len(count_arg, (*cmd).offset_from(count_arg) as usize) };
+        semsg!("E1510: Value too large: {count_arg}");
         return false;
     }
     // SAFETY: caller's contract; the current buffer is live.
@@ -343,7 +336,9 @@ pub(super) unsafe fn parse_sub(
         // Not end-of-line or comment.
         unsafe { (*eap).nextcmd = check_nextcmd(cmd) };
         if unsafe { (*eap).nextcmd.is_null() } {
-            unsafe { semsg_c!(gettext(e_trailing_arg), cmd) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let cmd = unsafe { c_str(cmd) };
+            semsg!("E488: Trailing characters: {cmd}");
             return None;
         }
     }

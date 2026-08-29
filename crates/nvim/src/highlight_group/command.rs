@@ -20,9 +20,8 @@ use crate::eval::vars::do_unlet;
 use crate::ex_docmd::ends_excmd;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, e_invarg2, got_int,
-    need_highlight_changed, normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors,
-    updating_screen,
+    cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, got_int, need_highlight_changed,
+    normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors, updating_screen,
 };
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
@@ -35,8 +34,7 @@ use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
     ATTR_NAMES, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
-    e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str,
-    e_missing_argument_str, e_missing_equal_sign_str_2, e_unexpected_equal_sign_str, group,
+    e_group_has_settings_highlight_link_ignored, e_highlight_group_name_not_found_str, group,
     highlight_attr_set_all, highlight_clear, highlight_list_one, highlight_num_groups,
     hl_has_settings, init_highlight, kColorIdxNone, kOptValTypeString, lookup_color, name_to_color,
     restore_cterm_colors, set_hl_attr, syn_check_group, syn_name2id_len, with_group,
@@ -355,7 +353,9 @@ impl KeyLoop {
         while !line.at_end() {
             let key_at = line.at;
             if line.peek() == b'=' {
-                unsafe { semsg_c!(gettext(e_unexpected_equal_sign_str), line.ptr(key_at),) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                semsg!("E415: Unexpected equal sign: {arg0}");
                 break;
             }
 
@@ -382,7 +382,9 @@ impl KeyLoop {
             }
 
             if line.peek() != b'=' {
-                unsafe { semsg_c!(gettext(e_missing_equal_sign_str_2), line.ptr(key_at),) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                semsg!("E416: Missing equal sign: {arg0}");
                 break;
             }
             line.at += 1;
@@ -395,7 +397,9 @@ impl KeyLoop {
                 match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
                     Some(at) => arg_at + at,
                     None => {
-                        unsafe { semsg_c!(gettext(e_invarg2), line.ptr(key_at)) };
+                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                        let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                        semsg!("E475: Invalid argument: {arg0}");
                         break;
                     }
                 }
@@ -408,7 +412,9 @@ impl KeyLoop {
             };
             line.at = end;
             if end == arg_at {
-                unsafe { semsg_c!(gettext(e_missing_argument_str), line.ptr(key_at)) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(line.ptr(key_at)) };
+                semsg!("E417: Missing argument: {arg0}");
                 break;
             }
             if end - arg_at > 511 {

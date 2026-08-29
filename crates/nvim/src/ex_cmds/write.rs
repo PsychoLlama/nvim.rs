@@ -38,8 +38,8 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
 use crate::main::{
-    curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_isadir2, e_readonly, emsg_silent,
-    exiting, getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
+    curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting,
+    getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
@@ -51,7 +51,6 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
     ShmFlag, exarg_T, int32_t, int64_t, linenr_T,
@@ -507,7 +506,9 @@ pub unsafe fn check_overwrite(
     if unsafe { (*eap).forceit } == 0 && unsafe { (*eap).append } == 0 {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
-            unsafe { semsg_c!(gettext(e_isadir2), ffname,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let ffname = unsafe { c_str(ffname) };
+            semsg!("E17: \"{ffname}\" is a directory");
             return FAIL;
         }
         if !confirming() {

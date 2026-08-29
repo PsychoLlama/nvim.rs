@@ -20,7 +20,7 @@
 
 use super::{
     FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
-    e_invarg2, e_noprevre, kExtmarkNOOP, kExtmarkUndo,
+    e_noprevre, kExtmarkNOOP, kExtmarkUndo,
 };
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -34,11 +34,12 @@ use crate::mark::mark_adjust;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, msgmore};
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
@@ -320,7 +321,8 @@ unsafe fn parse_sort_flags(
                 }
                 if is_alpha(byte) || !regmatch.regprog.is_null() {
                     // SAFETY: as above.
-                    unsafe { semsg_c!(gettext(e_invarg2), arg.add(at)) };
+                    let arg0 = unsafe { c_str(arg.add(at)) };
+                    semsg!("E475: Invalid argument: {arg0}");
                     return false;
                 }
                 // SAFETY: as above.
@@ -767,7 +769,8 @@ unsafe fn parse_uniq_flags(
                 }
                 if is_alpha(byte) || !regmatch.regprog.is_null() {
                     // SAFETY: as above.
-                    unsafe { semsg_c!(gettext(e_invarg2), arg.add(at)) };
+                    let arg0 = unsafe { c_str(arg.add(at)) };
+                    semsg!("E475: Invalid argument: {arg0}");
                     return false;
                 }
                 // SAFETY: as above.

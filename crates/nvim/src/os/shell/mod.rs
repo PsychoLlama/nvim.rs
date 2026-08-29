@@ -22,8 +22,8 @@ pub mod expand;
 pub mod system;
 mod throttle;
 
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
+use crate::smsg;
 pub use expand::os_expand_wildcards;
 pub use system::os_system;
 
@@ -36,15 +36,15 @@ use crate::fileio::vim_tempname;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
 use crate::main::{
-    State, curbuf, curwin, do_profiling, e_cannot_read_from_str_2, e_cant_read_file_str, e_notmp,
-    e_shellempty, emsg_silent, main_loop, no_check_timestamps, p_sh, p_shcf, p_sxe, p_sxq,
-    p_verbose,
+    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop,
+    no_check_timestamps, p_sh, p_shcf, p_sxe, p_sxq, p_verbose,
 };
 use crate::memline::ml_append;
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
 use crate::message::{
     emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
 };
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_remove};
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};
@@ -279,10 +279,10 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
     unsafe {
         if p_verbose.get() > 3 {
             verbose_enter();
-            smsg_c!(
+            smsg!(
                 0,
-                gettext(c"Executing command: \"%s\"").as_ptr(),
-                if cmd.is_null() { p_sh.get() } else { cmd },
+                "Executing command: \"{}\"",
+                c_str(if cmd.is_null() { p_sh.get() } else { cmd })
             );
             msg_putchar(NL);
             verbose_leave();
@@ -364,7 +364,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         // Not being able to seek means the file cannot be read.
         let fd = os_fopen(tempname, READBIN.as_ptr());
         if fd.is_null() || fseek(fd, 0, SEEK_END) == -1 {
-            semsg_c!(gettext(e_cannot_read_from_str_2), tempname,);
+            semsg!("E282: Cannot read from \"{}\"", c_str(tempname));
             if !fd.is_null() {
                 fclose(fd);
             }
@@ -372,7 +372,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         }
         let len_l = ftell(fd);
         if len_l == -1 || fseek(fd, 0, SEEK_SET) == -1 {
-            semsg_c!(gettext(e_cannot_read_from_str_2), tempname,);
+            semsg!("E282: Cannot read from \"{}\"", c_str(tempname));
             fclose(fd);
             return ptr::null_mut();
         }
@@ -383,7 +383,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         fclose(fd);
         os_remove(tempname);
         if read as usize != len {
-            semsg_c!(gettext(e_cant_read_file_str), tempname);
+            semsg!("E485: Can't read file {}", c_str(tempname));
             xfree(buffer.cast());
             return ptr::null_mut();
         }

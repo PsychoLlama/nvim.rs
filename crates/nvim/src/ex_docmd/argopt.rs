@@ -27,8 +27,7 @@ use crate::ex_docmd::{
     dollar_command, quitmore,
 };
 use crate::main::{
-    arg_had_last, curtab, e_invarg2, e_invargval, e_invrange, e_isadir2, e_mkdir, lastused_tabpage,
-    p_confirm,
+    arg_had_last, curtab, e_invarg2, e_invargval, e_invrange, lastused_tabpage, p_confirm,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
@@ -448,7 +447,9 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
-        unsafe { semsg_c!(gettext(e_mkdir.as_ptr()), name, uv_strerror(ret),) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (name, arg1) = unsafe { (c_str(name), c_str(uv_strerror(ret))) };
+        semsg!("E739: Cannot create directory {name}: {arg1}");
         return FAIL;
     }
     OK
@@ -460,7 +461,9 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
 /// command's `!`.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     if unsafe { os_isdir(fname) } {
-        unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E17: \"{fname}\" is a directory");
         return ptr::null_mut();
     }
     if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {

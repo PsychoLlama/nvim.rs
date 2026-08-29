@@ -20,7 +20,6 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::smsg;
 use crate::types::FAIL;
 use core::ptr;
@@ -259,7 +258,9 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
         } else if let Some(v) = after(c"priority=") {
             prio = unsafe { atoi(v) };
         } else {
-            unsafe { semsg_c!(gettext(e_invarg2), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E475: Invalid argument: {arg}");
             return;
         }
 
@@ -481,7 +482,9 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if unsafe { *skipwhite(p) } != 0 {
-                unsafe { semsg_c!(gettext(e_trailing_arg), p) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let p = unsafe { c_str(p) };
+                semsg!("E488: Trailing characters: {p}");
             }
             break;
         } else {
@@ -492,7 +495,9 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
     }
 
     if !filename.is_null() && out.buf.is_null() {
-        unsafe { semsg_c!(gettext(e_invalid_buffer_name_str), filename,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let filename = unsafe { c_str(filename) };
+        semsg!("E158: Invalid buffer name: {filename}");
         return None;
     }
 

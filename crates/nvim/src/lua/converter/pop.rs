@@ -9,8 +9,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
-use core::ffi::{CStr, c_int, c_void};
+use crate::semsg;
+use core::ffi::{c_int, c_void};
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_object};
 use crate::api::private::helpers::{
@@ -24,16 +24,12 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
-use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
     kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, key_value_pair, lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
-
-/// Refused when the Lua stack will not grow far enough to walk the table.
-const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";
 
 /// Classify the table on top of the stack.
 ///
@@ -53,7 +49,8 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
         let mut other_keys_num: size_t = 0;
         let mut ret = LuaTableProps::NIL;
         if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-            semsg_c!(gettext(E1502_GROW_STACK), lua_gettop(lstate) + 2);
+            let need = lua_gettop(lstate) + 2;
+            semsg!("E1502: Lua failed to grow stack to {need}");
             ret.type_0 = kObjectTypeNil;
             return ret;
         }

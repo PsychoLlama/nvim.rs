@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -24,12 +24,13 @@ use crate::eval::typval::{
     tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::garray::{ga_append, ga_clear, ga_grow, ga_init};
-use crate::main::{e_invarg, e_invarg2};
+use crate::main::e_invarg;
 use crate::mbyte::{
     mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
@@ -370,7 +371,9 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
         unsafe { (*rettv).vval.v_string = ga.ga_data as *mut c_char };
         return;
     }
-    unsafe { semsg_c!(gettext(e_invarg2), fromstr) };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let fromstr = unsafe { c_str(fromstr) };
+    semsg!("E475: Invalid argument: {fromstr}");
     unsafe { ga_clear(&raw mut ga) };
 }
 
@@ -406,7 +409,9 @@ pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
                 return;
             }
             if !(0..=2).contains(&dir) {
-                unsafe { semsg_c!(gettext(e_invarg2), numbuf.string(argvars.add(2)),) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(numbuf.string(argvars.add(2))) };
+                semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
         }

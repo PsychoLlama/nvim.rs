@@ -15,8 +15,9 @@
 
 use crate::cstr;
 use crate::log::logmsg_c;
+use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg_c;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 
@@ -241,7 +242,9 @@ pub unsafe fn readdir_core(
 
     let mut dir = Directory::default();
     if !unsafe { os_scandir(&raw mut dir, path) } {
-        unsafe { smsg_c!(0, gettext(e_notopen).as_ptr(), path) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let path = unsafe { c_str(path) };
+        smsg!(0, "E484: Can't open file {path}");
         return FAIL;
     }
 

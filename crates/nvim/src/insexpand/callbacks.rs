@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::guard::Lock;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
@@ -693,7 +693,7 @@ pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
         cpt_sources().set_index(idx + 1);
         return OK;
     }
-    unsafe { semsg_c!(gettext(e_list_index_out_of_range_nr), idx,) };
+    semsg!("E684: List index out of range: {}", idx);
     FAIL
 }
 

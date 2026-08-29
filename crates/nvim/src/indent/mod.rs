@@ -16,7 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -26,10 +26,11 @@ use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg_c};
-use crate::main::{State, curbuf, curwin, e_invarg2, e_positive, saved_cursor};
+use crate::main::{State, curbuf, curwin, e_positive, saved_cursor};
 use crate::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
@@ -137,7 +138,9 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
             return false;
         }
         Err(tabstop::ParseError::Malformed(at) | tabstop::ParseError::OutOfRange(at)) => {
-            unsafe { semsg_c!(gettext(e_invarg2), var.add(at)) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(var.add(at)) };
+            semsg!("E475: Invalid argument: {arg0}");
             return false;
         }
     };

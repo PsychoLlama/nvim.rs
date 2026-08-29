@@ -17,7 +17,7 @@ use crate::message::msg_ptr;
 use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{FAIL, IOSIZE, OK, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
@@ -772,15 +772,9 @@ impl DoTag {
         // Only when about to try the next match: otherwise E429 below
         // reports it.
         if !nofile_fname.get().is_null() && self.error_cur_match != self.cur_match {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"File \"%s\" does not exist").as_ptr(),
-                    nofile_fname.get(),
-                )
-            };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let arg0 = unsafe { c_str(nofile_fname.get()) };
+            smsg!(0, "File \"{arg0}\" does not exist");
         }
 
         let entry = unsafe { *matches.get().offset(self.cur_match as isize) };

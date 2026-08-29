@@ -10,7 +10,8 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{BackslashEscape, ExpandContext, FAIL, OK};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -372,7 +373,9 @@ unsafe fn expand_one_start(
     }
     if xp.xp_numfiles == 0 {
         if !options.has(WildOpts::SILENT) {
-            unsafe { semsg_c!(gettext(e_nomatch2), str) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(str) };
+            semsg!("E480: No match: {arg0}");
         }
         return ptr::null_mut();
     }

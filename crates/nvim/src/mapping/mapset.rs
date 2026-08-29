@@ -8,7 +8,8 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{FAIL, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -80,7 +81,8 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let mode = unsafe { get_map_mode_string(which, is_abbr) };
     if mode == 0 {
         // SAFETY: a static format whose one conversion is `which`.
-        unsafe { semsg_c!(gettext(E_ILLEGAL_MAP_MODE_STRING_STR), which) };
+        let which = unsafe { c_str(which) };
+        semsg!("E1276: Illegal map mode string: '{which}'");
         return;
     }
 

@@ -69,9 +69,6 @@ pub(crate) const e_highlight_group_name_not_found_str: &CStr =
     c"E411: Highlight group not found: %s";
 pub(crate) const e_group_has_settings_highlight_link_ignored: &CStr =
     c"E414: Group has settings, highlight link ignored";
-pub(crate) const e_unexpected_equal_sign_str: &CStr = c"E415: Unexpected equal sign: %s";
-pub(crate) const e_missing_equal_sign_str_2: &CStr = c"E416: Missing equal sign: %s";
-pub(crate) const e_missing_argument_str: &CStr = c"E417: Missing argument: %s";
 
 /// The names `term=`/`cterm=`/`gui=` accept, and the attribute bit each one
 /// means. `reverse` and `inverse` are the same bit; the `NONE` sentinel ends

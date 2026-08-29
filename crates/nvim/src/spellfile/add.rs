@@ -36,7 +36,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
-use crate::main::{curbuf, curwin, e_bufloaded, e_notopen, e_notset};
+use crate::main::{curbuf, curwin, e_bufloaded, e_notset};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
@@ -173,7 +173,9 @@ pub unsafe fn spell_add_word(
         opened = !fd.is_null();
 
         if fd.is_null() {
-            unsafe { semsg_c!(gettext(e_notopen), fname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            semsg!("E484: Can't open file {fname}");
         } else {
             let format = if what == SPELL_ADD_BAD as SpellAddType {
                 c"%.*s/!\n".as_ptr()

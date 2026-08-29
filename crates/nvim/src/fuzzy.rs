@@ -26,7 +26,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -40,11 +41,10 @@ use crate::eval::typval::{
 };
 use crate::garray::{ga_grow, ga_init};
 use crate::insexpand::{ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start};
-use crate::main::{curbuf, e_invarg2, e_invargNval, e_invargval, e_listarg, p_ws};
+use crate::main::{curbuf, p_ws};
 use crate::mbyte::{mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
-use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
@@ -833,11 +833,6 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
     }
 }
 
-/// The translated text of one of the shared `e_*` message strings.
-fn message(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
-}
-
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
 unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
@@ -851,12 +846,16 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
         } else {
             c"matchfuzzy()".as_ptr()
         };
-        unsafe { semsg_c!(message(e_listarg), who) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let who = unsafe { c_str(who) };
+        semsg!("E686: Argument of {who} must be a List");
         return;
     }
     let pat = unsafe { &*argvars.add(1) };
     if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
-        unsafe { semsg_c!(message(e_invarg2), numbuf.string(pat)) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(numbuf.string(pat)) };
+        semsg!("E475: Invalid argument: {arg0}");
         return;
     }
 
@@ -883,18 +882,20 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
                 || unsafe { *(*di).di_tv.vval.v_string } == 0
             {
                 let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
-                unsafe { semsg_c!(message(e_invargNval), c"key".as_ptr(), got) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let got = unsafe { c_str(got) };
+                semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
             key = unsafe { numbuf3.string(&raw const (*di).di_tv) };
         } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
-            unsafe { semsg_c!(message(e_invargval), c"text_cb".as_ptr()) };
+            semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
         }
         let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
-                unsafe { semsg_c!(message(e_invargval), c"limit".as_ptr()) };
+                semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }
             limit = unsafe { tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) }

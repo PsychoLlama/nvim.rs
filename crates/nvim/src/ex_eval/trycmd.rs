@@ -55,17 +55,18 @@ use crate::eval::userfunc::do_return;
 use crate::ex_docmd::{ends_excmd, find_nextcmd};
 use crate::guard::Suppress;
 use crate::main::{
-    current_exception, did_emsg, did_throw, e_argreq, e_invarg2, e_trailing_arg, emsg_silent,
-    force_abort, got_int, msg_list, need_rethrow, p_cpo,
+    current_exception, did_emsg, did_throw, e_argreq, emsg_silent, force_abort, got_int, msg_list,
+    need_rethrow, p_cpo,
 };
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg_ptr, internal_error};
+use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
 use crate::runtime::do_finish;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, NUL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -252,7 +253,9 @@ pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
                 && unsafe { *end } != NUL as c_char
                 && ends_excmd(unsafe { *skipwhite(end.add(1)) } as c_int) == 0
             {
-                unsafe { semsg_c!(message(e_trailing_arg), end) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let end = unsafe { c_str(end) };
+                semsg!("E488: Trailing characters: {end}");
                 return;
             }
             // When debugging, show the prompt before matching: a helpful
@@ -330,7 +333,9 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
     }
     p_cpo.set(save_cpo);
     if regmatch.regprog.is_null() {
-        unsafe { semsg_c!(message(e_invarg2), pat) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let pat = unsafe { c_str(pat) };
+        semsg!("E475: Invalid argument: {pat}");
         return false;
     }
     // Save got_int and reset it: an earlier interruption must not cancel

@@ -12,7 +12,8 @@
 
 use super::*;
 use crate::buffer::BufRef;
-use crate::smsg_c;
+use crate::message_fmt::c_str;
+use crate::smsg;
 use crate::types::{FAIL, OK, OptionSetFlags};
 use crate::winlayer::{Buf, first_buffer};
 
@@ -84,13 +85,8 @@ pub unsafe fn do_doautocmd(
 
     if nothing_done && do_msg && !aborting() {
         // SAFETY: a NUL-terminated format literal and the caller's argument.
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"No matching autocommands: %s").as_ptr(),
-                arg_start,
-            )
-        };
+        let arg_start = unsafe { c_str(arg_start) };
+        smsg!(0, "No matching autocommands: {arg_start}");
     }
     if !did_something.is_null() {
         // SAFETY: a writable `bool`, by the contract above.

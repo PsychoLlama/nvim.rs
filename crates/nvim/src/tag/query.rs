@@ -8,8 +8,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -327,9 +328,9 @@ unsafe fn add_tag_field(
     if !unsafe { tv_dict_find(dict, field_name, -1) }.is_null() {
         if p_verbose.get() > 0 {
             unsafe { verbose_enter() };
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe { smsg_c!(0, gettext(c"Duplicate field name: %s").as_ptr(), field_name) };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let field_name = unsafe { c_str(field_name) };
+            smsg!(0, "Duplicate field name: {field_name}");
             unsafe { verbose_leave() };
         }
         return FAIL;

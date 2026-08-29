@@ -28,29 +28,22 @@ use crate::fileio::vim_fgets;
 use crate::main::{e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::{emsg, emsg_ptr};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path};
-use crate::semsg_c;
+use crate::semsg;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ExpandContext, FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
 };
 use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::flag::kEqualFiles;
-
-/// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
-/// out at each site: written that way, the five calls below each wrap onto
-/// four lines.
-fn translated(msg: &'static CStr) -> *const c_char {
-    // SAFETY: `msg` is a NUL-terminated literal.
-    gettext(msg).as_ptr()
-}
 
 /// `:helptags [++t] {dir}`, or `:helptags ALL` for every `doc` directory in
 /// 'runtimepath'.
@@ -86,7 +79,9 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
     // SAFETY: `xpc` was just initialised and `arg` is the command's own.
     let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
     if dirname.is_null() || !unsafe { os_isdir(dirname) } {
-        unsafe { semsg_c!(translated(c"E150: Not a directory: %s"), (*eap).arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str((*eap).arg) };
+        semsg!("E150: Not a directory: {arg}");
     } else {
         unsafe { do_helptags(dirname, add_help_tags, false) };
     }
@@ -134,7 +129,9 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
         return;
     }
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
-        unsafe { semsg_c!(translated(c"E151: No match: %s"), namebuff) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let namebuff = unsafe { c_str(namebuff) };
+        semsg!("E151: No match: {namebuff}");
         return;
     };
 
@@ -278,7 +275,9 @@ unsafe fn helptags_one(
     }
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
         if !got_int.get() {
-            unsafe { semsg_c!(translated(c"E151: No match: %s"), namebuff) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let namebuff = unsafe { c_str(namebuff) };
+            semsg!("E151: No match: {namebuff}");
         }
         return;
     };
@@ -299,7 +298,9 @@ unsafe fn helptags_one(
     let fd_tags = unsafe { os_fopen(namebuff, c"w".as_ptr()) };
     if fd_tags.is_null() {
         if !ignore_writeerr {
-            unsafe { semsg_c!(translated(c"E152: Cannot open %s for writing"), namebuff) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let namebuff = unsafe { c_str(namebuff) };
+            semsg!("E152: Cannot open {namebuff} for writing");
         }
         return;
     }
@@ -325,7 +326,9 @@ unsafe fn helptags_one(
         let path = unsafe { *files.names.offset(fi as isize) };
         let fd = unsafe { os_fopen(path, c"r".as_ptr()) };
         if fd.is_null() {
-            unsafe { semsg_c!(translated(c"E153: Unable to open %s for reading"), path) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let path = unsafe { c_str(path) };
+            semsg!("E153: Unable to open {path} for reading");
             continue;
         }
         unsafe { scan_help_file(fd, path.add(dirlen).offset(1), &mut tags) };

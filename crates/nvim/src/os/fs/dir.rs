@@ -20,14 +20,15 @@ use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
 };
-use crate::main::{e_mkdir, e_noname};
+use crate::main::e_noname;
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::path::{
     dir_of_file_exists, full_name_save, get_past_head, path_tail_with_sep, vim_ispathsep,
 };
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{Directory, int32_t, size_t};
 
 /// Whether `path` names anything at all.
@@ -168,7 +169,8 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
         let mut failed_dir: *mut c_char = ptr::null_mut();
         let r = os_mkdir_recurse(fname, mode, &raw mut failed_dir, ptr::null_mut());
         if r < 0 {
-            semsg_c!(gettext(e_mkdir), failed_dir, uv_strerror(r),);
+            let (dir, why) = (c_str(failed_dir), c_str(uv_strerror(r)));
+            semsg!("E739: Cannot create directory {dir}: {why}");
             xfree(failed_dir.cast());
         }
         *tail = c;

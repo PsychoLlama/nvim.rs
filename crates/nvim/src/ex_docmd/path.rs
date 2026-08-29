@@ -7,7 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Lock;
-use crate::semsg_c;
+use crate::semsg;
 use crate::smsg;
 use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -23,9 +23,8 @@ use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
 use crate::main::{
-    KeyTyped, curbuf, current_sctx, curtab, curwin, e_cant_find_file_str_in_path, e_failed,
-    e_invalid_return_type_from_findfunc, e_invarg, e_no_more_file_str_found_in_path, globaldir,
-    last_chdir_reason, p_cdh, p_ffu, p_verbose,
+    KeyTyped, curbuf, current_sctx, curtab, curwin, e_failed, e_invalid_return_type_from_findfunc,
+    e_invarg, globaldir, last_chdir_reason, p_cdh, p_ffu, p_verbose,
 };
 use crate::memory::xmalloc;
 
@@ -158,9 +157,13 @@ pub(crate) unsafe fn findfunc_find_file(
     let fname_list = call_findfunc(findarg, kBoolVarFalse);
     let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
-        unsafe { semsg_c!(gettext(e_cant_find_file_str_in_path.as_ptr()), findarg,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let findarg = unsafe { c_str(findarg) };
+        semsg!("E345: Can't find file \"{findarg}\" in path");
     } else if count > fname_count {
-        unsafe { semsg_c!(gettext(e_no_more_file_str_found_in_path.as_ptr()), findarg,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let findarg = unsafe { c_str(findarg) };
+        semsg!("E347: No more file \"{findarg}\" found in path");
     } else {
         let li = unsafe { tv_list_find(fname_list, count - 1) };
         if !li.is_null() && unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {

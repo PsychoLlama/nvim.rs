@@ -25,13 +25,13 @@ use crate::memory::{xfree, xstrlcpy};
 use crate::message_fmt::c_str;
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::_nl_msg_cat_cntr;
-use crate::os::cshim::{bindtextdomain, gettext, textdomain};
+use crate::os::cshim::{bindtextdomain, textdomain};
 use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{MAXPATHL, Vv, exarg_T, expand_T};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
@@ -268,11 +268,11 @@ fn report(what: c_int, whatstr: &CStr) {
         if p.is_null() || *p == 0 {
             p = c"Unknown".as_ptr().cast_mut();
         }
-        smsg_c!(
+        smsg!(
             0,
-            gettext(c"Current %slanguage: \"%s\"").as_ptr(),
-            whatstr.as_ptr(),
-            p.cast_const(),
+            "Current {}language: \"{}\"",
+            c_str(whatstr.as_ptr()),
+            c_str(p.cast_const())
         );
     }
 }

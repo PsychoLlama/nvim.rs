@@ -58,11 +58,12 @@ use crate::eval::{
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    did_emsg, did_endif, did_throw, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_invexpr2,
-    e_str_not_inside_function, e_while, emsg_silent, force_abort, got_int, trylevel,
+    did_emsg, did_endif, did_throw, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while,
+    emsg_silent, force_abort, got_int, trylevel,
 };
 use crate::memory::xfree;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{
     CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, OK, VAR_UNKNOWN, VarLock, cstack_T,
     eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
@@ -379,7 +380,9 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
         && unsafe { *(*eap).arg } != b'"' as c_char
         && ends_excmd(unsafe { *(*eap).arg } as c_int) != 0
     {
-        unsafe { semsg_c!(message(e_invexpr2), (*eap).arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str((*eap).arg) };
+        semsg!("E15: Invalid expression: \"{arg}\"");
     } else {
         result = unsafe { eval_to_bool((*eap).arg, &raw mut error, eap, skip, false) };
     }
@@ -794,7 +797,7 @@ pub(crate) unsafe fn rewind_conditionals(
 /// Module contract.
 pub(crate) unsafe fn ex_endfunction(_eap: *mut exarg_T) {
     // SAFETY: module contract.
-    unsafe { semsg_c!(message(e_str_not_inside_function), c":endfunction".as_ptr()) };
+    semsg!("E193: {} not inside a function", ":endfunction");
 }
 
 /// Whether `p` looks like a `:while` or `:for` command.

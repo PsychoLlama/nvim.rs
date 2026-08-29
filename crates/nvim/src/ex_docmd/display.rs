@@ -4,7 +4,6 @@
 
 use crate::guard::{Allow, Saved, Suppress};
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -22,8 +21,8 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    State, cmdpreview, e_invarg2, msg_col, msg_didout, need_maketitle, need_wait_return,
-    no_hlsearch, p_hls, p_lz, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
+    State, cmdpreview, msg_col, msg_didout, need_maketitle, need_wait_return, no_hlsearch, p_hls,
+    p_lz, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
 };
 use crate::memory::xstrdup;
 
@@ -128,7 +127,9 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         }
         if byte(arg) != NUL {
             redir_reg.set(0);
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E475: Invalid argument: {arg}");
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
         close_redir();
@@ -141,7 +142,9 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
             redir_vname.set(true);
         }
     } else {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(eap.arg) };
+        semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
     if !redir_fd.get().is_null() || redir_reg.get() != 0 || redir_vname.get() {

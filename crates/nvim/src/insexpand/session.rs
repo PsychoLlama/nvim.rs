@@ -10,7 +10,8 @@
 use super::*;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{
     ExpandContext, FAIL, IOSIZE, NUL, OK, ShmFlag, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
@@ -261,16 +262,15 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
         if unsafe { *get_complete_funcname(ctrl_x_mode.get()) } as c_int == NUL {
-            unsafe {
-                semsg_c!(
-                    gettext(e_notset),
-                    if ctrl_x_mode_function() {
-                        c"completefunc".as_ptr()
-                    } else {
-                        c"omnifunc".as_ptr()
-                    },
-                )
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe {
+                c_str(if ctrl_x_mode_function() {
+                    c"completefunc".as_ptr()
+                } else {
+                    c"omnifunc".as_ptr()
+                })
             };
+            semsg!("E764: Option '{arg0}' is not set");
             return FAIL;
         }
         cb = unsafe { get_insert_callback(ctrl_x_mode.get()) };

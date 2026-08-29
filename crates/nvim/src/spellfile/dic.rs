@@ -33,7 +33,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -43,7 +42,7 @@ use crate::fileio::vim_fgets;
 use crate::hashtab::{
     hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lookup, hash_removed,
 };
-use crate::main::{e_notopen, got_int, msg_col, msg_didout, p_verbose};
+use crate::main::{got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
@@ -84,7 +83,9 @@ pub(super) unsafe fn spell_read_dic(
     // below is sized for what is written into it.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
         return FAIL;
     }
 

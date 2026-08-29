@@ -27,13 +27,13 @@
 
 use crate::semsg;
 use crate::semsg_c;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{get2c, get3c, get4c, get8ctime, read_string};
 use crate::garray::{ga_clear, ga_grow, ga_init};
-use crate::main::{curwin, e_notopen, got_int, p_verbose};
+use crate::main::{curwin, got_int, p_verbose};
 use crate::memline::ml_append_buf;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
@@ -198,17 +198,23 @@ unsafe fn load_spl(
     // SAFETY: as the caller's contract.
     if fd.is_null() {
         if !silent {
-            unsafe { semsg_c!(gettext(e_notopen), fname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            semsg!("E484: Can't open file {fname}");
         } else if p_verbose.get() > 2 as OptInt {
             unsafe { verbose_enter() };
-            unsafe { smsg_c!(0, e_notopen.as_ptr(), fname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            smsg!(0, "E484: Can't open file {fname}");
             unsafe { verbose_leave() };
         }
         return false;
     }
     if p_verbose.get() > 2 as OptInt {
         unsafe { verbose_enter() };
-        unsafe { smsg_c!(0, gettext(c"Reading spell file \"%s\"").as_ptr(), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        smsg!(0, "Reading spell file \"{fname}\"");
         unsafe { verbose_leave() };
     }
 

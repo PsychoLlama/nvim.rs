@@ -26,9 +26,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
+use crate::smsg;
 
 use crate::types::{FAIL, MAXPATHL, OK};
 use core::ffi::{c_char, c_int, c_void};
@@ -158,13 +159,9 @@ pub(crate) unsafe fn do_in_cached_path(
     if p_verbose.get() > 10 && !name.is_null() {
         // SAFETY: `name` is NUL-terminated.
         unsafe { verbose_enter() };
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Searching for \"%s\" in runtime path").as_ptr(),
-                name,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let name = unsafe { c_str(name) };
+        smsg!(0, "Searching for \"{name}\" in runtime path");
         unsafe { verbose_leave() };
     }
 
@@ -217,16 +214,17 @@ pub(crate) unsafe fn do_in_cached_path(
     if !did_one && !name.is_null() {
         // SAFETY: `name` is the caller's NUL-terminated pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe { semsg_c!(gettext(e_dirnotf), c"runtime path".as_ptr(), name,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!(
+                "E919: Directory not found in '{}': \"{name}\"",
+                "runtime path"
+            );
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"not found in runtime path: \"%s\"").as_ptr(),
-                    name,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            smsg!(0, "not found in runtime path: \"{name}\"");
             unsafe { verbose_leave() };
         }
     }

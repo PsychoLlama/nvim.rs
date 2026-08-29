@@ -8,7 +8,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int};
 
@@ -59,7 +60,9 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         )
     };
     if error != 0 {
-        unsafe { semsg_c!(gettext(e_notopen_2), name, uv_strerror(error),) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (name, arg1) = unsafe { (c_str(name), c_str(uv_strerror(error))) };
+        semsg!("E484: Can't open file {name}: {arg1}");
         curscript.set(curscript.get() - 1);
         return;
     }

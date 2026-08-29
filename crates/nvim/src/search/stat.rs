@@ -11,9 +11,10 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::message_fmt::c_str;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, NUL, VAR_LIST, VAR_UNKNOWN};
 use crate::winlayer::{Buf, BufId, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -400,14 +401,15 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_LIST {
                 // SAFETY: reporting a static, translated message.
-                unsafe { semsg_c!(gettext(e_invarg2), c"pos".as_ptr()) };
+                semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
             let list = unsafe { (*di).di_tv.vval.v_list };
             if unsafe { tv_list_len(list) } != 3 {
                 let form = c"List format should be [lnum, col, off]".as_ptr();
                 // SAFETY: reporting a static, translated message.
-                unsafe { semsg_c!(gettext(e_invarg2), form) };
+                let form = unsafe { c_str(form) };
+                semsg!("E475: Invalid argument: {form}");
                 return;
             }
             let found = unsafe { list_number(list, 0, pos.lnum) };

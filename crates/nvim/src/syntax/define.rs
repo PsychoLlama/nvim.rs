@@ -11,7 +11,6 @@
 use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
@@ -109,7 +108,9 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL }
     };
     if failed {
-        unsafe { semsg_c!(gettext(e_notopen), (*eap).arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str((*eap).arg) };
+        semsg!("E484: Can't open file {arg}");
     }
 
     cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
@@ -235,7 +236,9 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
         unsafe { free_synpat(&item) };
         unsafe { free_opt_lists(&opt) };
         if rest.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E475: Invalid argument: {arg}");
         }
     }
 }
@@ -423,7 +426,9 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
             let arg = unsafe { c_str(arg) };
             semsg!("E399: Not enough arguments: syntax region {arg}");
         } else if rest.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E475: Invalid argument: {arg}");
         }
     }
 }

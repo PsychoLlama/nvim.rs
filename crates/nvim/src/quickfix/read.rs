@@ -15,7 +15,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{CONV_NONE, IOSIZE, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -136,7 +137,9 @@ impl Reader {
                 unsafe { os_fopen(efile, c"r".as_ptr()) }
             };
             if fd.is_null() {
-                unsafe { semsg_c!(gettext(e_openerrf), efile) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let efile = unsafe { c_str(efile) };
+                semsg!("E40: Can't open errorfile {efile}");
                 // Dropping tears the conversion down again.
                 return None;
             }

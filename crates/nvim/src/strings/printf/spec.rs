@@ -12,6 +12,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use crate::siemsg_c;
 use core::ffi::{
@@ -34,14 +36,10 @@ use crate::types::{VAR_UNKNOWN, size_t, typval_T};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BadFormat;
 
-const E_CANNOT_MIX: &CStr = c"E1500: Cannot mix positional and non-positional arguments: %s";
-const E_FMT_ARG_UNUSED: &CStr = c"E1501: format argument %d unused in $-style format: %s";
 const E_FIELD_WIDTH_REUSED: &CStr =
     c"E1502: Positional argument %d used as field width reused as different type: %s/%s";
-const E_POS_OUT_OF_BOUNDS: &CStr = c"E1503: Positional argument %d out of bounds: %s";
 const E_POS_TYPE_INCONSISTENT: &CStr =
     c"E1504: Positional argument %d type used inconsistently: %s/%s";
-const E_INVALID_FORMAT_SPECIFIER: &CStr = c"E1505: Invalid format specifier: %s";
 const E_APTYPES_IS_NULL: &CStr =
     c"E1507: Internal error: ap_types or ap_types[idx] is NULL: %d: %s";
 
@@ -164,7 +162,9 @@ unsafe fn adjust_types(
     spec: *const c_char,
 ) -> Result<(), BadFormat> {
     if arg <= 0 {
-        unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER), spec) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let spec = unsafe { c_str(spec) };
+        semsg!("E1505: Invalid format specifier: {spec}");
         return Err(BadFormat);
     }
 
@@ -296,14 +296,18 @@ unsafe fn scan_fmt_types(
     macro_rules! check_pos_arg {
         () => {
             if any_pos && any_arg {
-                unsafe { semsg_c!(gettext(E_CANNOT_MIX), fmt) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(fmt) };
+                semsg!("E1500: Cannot mix positional and non-positional arguments: {arg0}");
                 return Err(BadFormat);
             }
         };
     }
     macro_rules! invalid_specifier {
         () => {{
-            unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER), fmt) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(fmt) };
+            semsg!("E1505: Invalid format specifier: {arg0}");
             return Err(BadFormat);
         }};
     }
@@ -428,7 +432,9 @@ unsafe fn scan_fmt_types(
             }
         } else if pos_arg != -1 {
             // A position on something that is not a conversion.
-            unsafe { semsg_c!(gettext(E_CANNOT_MIX), fmt) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(fmt) };
+            semsg!("E1500: Cannot mix positional and non-positional arguments: {arg0}");
             return Err(BadFormat);
         }
 
@@ -441,11 +447,21 @@ unsafe fn scan_fmt_types(
     // typed, and must have an argument behind it.
     for arg_idx in 0..*num_posarg {
         if unsafe { (*(*ap_types).offset(arg_idx as isize)).is_null() } {
-            unsafe { semsg_c!(gettext(E_FMT_ARG_UNUSED), arg_idx + 1, fmt) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg1 = unsafe { c_str(fmt) };
+            semsg!(
+                "E1501: format argument {} unused in $-style format: {arg1}",
+                arg_idx + 1
+            );
             return Err(BadFormat);
         }
         if !tvs.is_null() && unsafe { (*tvs.offset(arg_idx as isize)).v_type } == VAR_UNKNOWN {
-            unsafe { semsg_c!(gettext(E_POS_OUT_OF_BOUNDS), arg_idx + 1, fmt) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg1 = unsafe { c_str(fmt) };
+            semsg!(
+                "E1503: Positional argument {} out of bounds: {arg1}",
+                arg_idx + 1
+            );
             return Err(BadFormat);
         }
     }

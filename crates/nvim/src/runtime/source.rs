@@ -12,7 +12,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::smsg;
 use crate::smsg_c;
 
 use crate::ex_docmd::DoCmdOpts;
@@ -55,7 +57,9 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
             || unsafe { (*(*eap).cstack).cs_idx } >= 0;
         unsafe { openscript(fname, busy) };
     } else if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
     }
 }
 
@@ -832,9 +836,13 @@ unsafe fn source_bracket(
         let resumed = sourcing_name();
         // SAFETY: both messages take a NUL-terminated name.
         unsafe { verbose_enter() };
-        unsafe { smsg_c!(0, gettext(c"finished sourcing %s").as_ptr(), req.fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(req.fname) };
+        smsg!(0, "finished sourcing {fname}");
         if !resumed.is_null() {
-            unsafe { smsg_c!(0, gettext(c"continuing in %s").as_ptr(), resumed) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let resumed = unsafe { c_str(resumed) };
+            smsg!(0, "continuing in {resumed}");
         }
         unsafe { verbose_leave() };
     }

@@ -30,7 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use crate::smsg;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -38,7 +38,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::charset::skipdigits;
 use crate::fileio::vim_fgets;
 use crate::hashtab::{hash_add, hash_find, hash_init, hash_removed};
-use crate::main::{e_notopen, got_int, p_enc};
+use crate::main::{got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
@@ -278,7 +278,9 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
     // bound `vim_fgets` is given.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
         return core::ptr::null_mut();
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
@@ -792,7 +794,9 @@ unsafe fn finish_aff(
         } else if unsafe { (*spin).si_sal.ga_len } > 0 {
             // SAL rules and a SOFO pair are two ways to do the same
             // thing; taking both would be ambiguous.
-            unsafe { smsg_c!(0, gettext(c"Both SAL and SOFO lines in %s").as_ptr(), fname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            smsg!(0, "Both SAL and SOFO lines in {fname}");
         } else {
             unsafe { aff_check_string((*spin).si_sofofr, st.sofofrom, c"SOFOFROM") };
             unsafe { aff_check_string((*spin).si_sofoto, st.sofoto, c"SOFOTO") };

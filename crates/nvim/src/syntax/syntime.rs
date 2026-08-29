@@ -6,7 +6,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
@@ -20,7 +21,9 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
         b"clear" => unsafe { syntime_clear() },
         b"report" => unsafe { syntime_report() },
         _ => {
-            unsafe { semsg_c!(gettext(e_invarg2), (*eap).arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str((*eap).arg) };
+            semsg!("E475: Invalid argument: {arg}");
         }
     }
 }

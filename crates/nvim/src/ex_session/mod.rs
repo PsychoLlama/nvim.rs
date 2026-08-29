@@ -51,13 +51,14 @@ use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    curbuf, curtab, curwin, e_noname, e_notopen, e_prev_dir, e_write, globaldir, no_hlsearch,
-    p_acd, p_hls, p_vdir, ssop_flags, vop_flags,
+    curbuf, curtab, curwin, e_noname, e_prev_dir, e_write, globaldir, no_hlsearch, p_acd, p_hls,
+    p_vdir, ssop_flags, vop_flags,
 };
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::option::makeset;
 use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
@@ -68,7 +69,7 @@ use crate::os::env::home_replace_save;
 use crate::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OptionSetFlags,
     Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
@@ -376,7 +377,9 @@ pub(crate) unsafe fn ex_loadview(eap: *mut exarg_T) {
         return;
     }
     if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
     }
     unsafe { xfree(fname.cast::<c_void>()) };
 }

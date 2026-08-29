@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_int};
 
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
@@ -39,8 +39,6 @@ use crate::types::{
 };
 use ::libc::abort;
 
-/// Refused when the Lua stack will not grow far enough for the next value.
-const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";
 /// Refused for a table that is neither a list nor a dictionary.
 const E5100_MIXED_KEYS: &CStr = c"E5100: Cannot convert given Lua table: table should contain \
                                  either only integer keys or only string keys";
@@ -106,7 +104,8 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
         stack.push(TVPopStackItem::leaf(ret_tv));
         while ret && !stack.is_empty() {
             if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                semsg_c!(gettext(E1502_GROW_STACK), lua_gettop(lstate) + 3);
+                let need = lua_gettop(lstate) + 3;
+                semsg!("E1502: Lua failed to grow stack to {need}");
                 ret = false;
                 break;
             }

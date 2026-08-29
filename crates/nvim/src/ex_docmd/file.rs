@@ -4,7 +4,7 @@
 
 use crate::guard::Allow;
 use crate::memline::MlFlags;
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -29,15 +29,15 @@ use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
 
 use crate::getchar::stuff_readbuf;
 use crate::main::{
-    curbuf, curwin, e_notopen, e_trailing_arg, ex_no_reprint, exmode_active, global_busy,
-    msg_scroll, need_wait_return, p_awa, p_shada, pending_exmode_active, readonlymode,
-    recoverymode,
+    curbuf, curwin, e_trailing_arg, ex_no_reprint, exmode_active, global_busy, msg_scroll,
+    need_wait_return, p_awa, p_shada, pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::mark::setpcmark;
 
 use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 
 use crate::normal::normal_enter;
 use crate::option::{cpo_has, get_findfunc};
@@ -508,7 +508,9 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 
     if read != OK {
         if !aborting() {
-            unsafe { semsg_c!(gettext(e_notopen.as_ptr()), eap.arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E484: Can't open file {arg}");
         }
         return;
     }

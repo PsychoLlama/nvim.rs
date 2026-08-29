@@ -18,9 +18,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
+use crate::smsg;
 
 use crate::types::{ExpandContext, FAIL, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -306,7 +307,9 @@ pub(crate) unsafe fn expand_name_patterns(
         if p_verbose.get() > 10 {
             // SAFETY: `buf` now holds the NUL-terminated candidate.
             unsafe { verbose_enter() };
-            unsafe { smsg_c!(0, gettext(c"Searching for \"%s\"").as_ptr(), buf) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let buf = unsafe { c_str(buf) };
+            smsg!(0, "Searching for \"{buf}\"");
             unsafe { verbose_leave() };
         }
         let mut pats = [buf];
@@ -326,24 +329,16 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
     // SAFETY: the caller's NUL-terminated strings, formatted by `vim_snprintf`.
     unsafe { verbose_enter() };
     if unsafe { *prefix } != 0 {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Searching for \"%s\" under \"%s\" in \"%s\"").as_ptr(),
-                name,
-                prefix,
-                path,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (name, prefix, path) = unsafe { (c_str(name), c_str(prefix), c_str(path)) };
+        smsg!(
+            0,
+            "Searching for \"{name}\" under \"{prefix}\" in \"{path}\""
+        );
     } else {
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Searching for \"%s\" in \"%s\"").as_ptr(),
-                name,
-                path
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (name, path) = unsafe { (c_str(name), c_str(path)) };
+        smsg!(0, "Searching for \"{name}\" in \"{path}\"");
     }
     unsafe { verbose_leave() };
 }
@@ -443,17 +438,14 @@ pub unsafe fn do_in_path(
         };
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe { semsg_c!(gettext(e_dirnotf), basepath.as_ptr(), name,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
+            semsg!("E919: Directory not found in '{basepath}': \"{name}\"");
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"not found in '%s': \"%s\"").as_ptr(),
-                    basepath.as_ptr(),
-                    name,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
+            smsg!(0, "not found in '{basepath}': \"{name}\"");
             unsafe { verbose_leave() };
         }
     }

@@ -13,8 +13,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::semsg_c;
+use crate::smsg;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
@@ -365,13 +367,9 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
 
     if p_verbose.get() > 1 {
         unsafe { verbose_enter() };
-        unsafe {
-            smsg_c!(
-                0,
-                gettext(c"Writing ShaDa file \"%s\"").as_ptr(),
-                fname.as_ptr(),
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname.as_ptr()) };
+        smsg!(0, "Writing ShaDa file \"{fname}\"");
         unsafe { verbose_leave() };
     }
 

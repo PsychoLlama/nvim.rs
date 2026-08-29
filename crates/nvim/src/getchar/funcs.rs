@@ -10,7 +10,8 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{FAIL, NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use crate::winlayer::windows;
 use core::ffi::{c_char, c_int};
@@ -72,7 +73,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
             opts.allow_number = unsafe { tv_dict_get_bool(d, c"number".as_ptr(), 1) } != 0;
         } else if unsafe { tv_dict_has_key(d, c"number".as_ptr()) } {
             // getcharstr() never answers a number, so asking is an error.
-            unsafe { semsg_c!(gettext(e_invarg2), c"number".as_ptr(),) };
+            semsg!("E475: Invalid argument: {}", "number");
         }
 
         opts.simplify = unsafe { tv_dict_get_bool(d, c"simplify".as_ptr(), 1) } != 0;
@@ -86,7 +87,9 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
             } else if unsafe { strcmp(cursor, c"msg".as_ptr()) } == 0 {
                 CursorFlag::Msg
             } else {
-                unsafe { semsg_c!(gettext(e_invargNval), c"cursor".as_ptr(), cursor,) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let cursor = unsafe { c_str(cursor) };
+                semsg!("E475: Invalid value for argument {}: {cursor}", "cursor");
                 CursorFlag::Default
             };
         }

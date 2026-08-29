@@ -31,10 +31,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps,
-    e_cant_read_file_str, e_noprev, e_notmp, global_busy, got_int, info_message, msg_col,
-    msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, p_report, p_sh, p_shq,
-    p_srr, p_stmp, p_warn, silent_mode,
+    Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps, e_noprev, e_notmp,
+    global_busy, got_int, info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent,
+    need_check_timestamps, p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -54,7 +53,6 @@ use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, exarg_T, linenr_T};
@@ -461,7 +459,9 @@ unsafe fn do_filter(
                     if !aborting() {
                         // SAFETY: message state; one `%s` for one string.
                         unsafe { msg_putchar('\n' as c_int) };
-                        unsafe { semsg_c!(gettext(e_cant_read_file_str), TempFile::name(&otmp),) };
+                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                        let arg0 = unsafe { c_str(TempFile::name(&otmp)) };
+                        semsg!("E485: Can't read file {arg0}");
                     }
                     break 'error;
                 }

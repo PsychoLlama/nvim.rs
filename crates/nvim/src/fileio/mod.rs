@@ -28,13 +28,12 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    State, allbuf_lock, autocmd_busy, curbuf, did_check_timestamps, e_interr, e_notopen,
-    emsg_silent, ex_no_reprint, exiting, exmode_active, global_busy, got_int, in_assert_fails,
-    keep_msg, msg_col, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign,
-    msg_silent, need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps,
-    no_wait_return, p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode,
-    recoverymode, redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action,
-    vim_ignored,
+    State, allbuf_lock, autocmd_busy, curbuf, did_check_timestamps, e_interr, emsg_silent,
+    ex_no_reprint, exiting, exmode_active, global_busy, got_int, in_assert_fails, keep_msg,
+    msg_col, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
+    need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
+    p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
+    redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,

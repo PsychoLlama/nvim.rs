@@ -13,7 +13,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_iswhite;
@@ -34,13 +33,14 @@ use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
 use crate::main::{
-    called_emsg, curwin, e_dictreq, e_invalwindow, e_invarg2, e_invcmd, e_listarg, e_listreq,
-    e_trailing_arg, got_int, p_rdt, search_first_line, search_hl_has_cursor_lnum, search_last_line,
+    called_emsg, curwin, e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg, got_int,
+    p_rdt, search_first_line, search_hl_has_cursor_lnum, search_last_line,
 };
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
@@ -136,7 +136,9 @@ unsafe fn match_add(
     if !pat.is_null() {
         regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
         if regprog.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2), pat) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let pat = unsafe { c_str(pat) };
+            semsg!("E475: Invalid argument: {pat}");
             return -1;
         }
     }
@@ -453,7 +455,9 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
         if unsafe { *p } == 0 {
             // There must be two arguments.
             unsafe { xfree(g.cast()) };
-            unsafe { semsg_c!(gettext(e_invarg2), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E475: Invalid argument: {arg}");
             return;
         }
         // `*p` is the pattern's delimiter, whatever character it is.
@@ -469,7 +473,9 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
             if unsafe { *end } != unsafe { *p } {
                 // The closing delimiter is missing.
                 unsafe { xfree(g.cast()) };
-                unsafe { semsg_c!(gettext(e_invarg2), p) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let p = unsafe { c_str(p) };
+                semsg!("E475: Invalid argument: {p}");
                 return;
             }
             // Terminate the pattern in place for the compile, then put

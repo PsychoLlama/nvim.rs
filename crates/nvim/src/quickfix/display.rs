@@ -13,7 +13,8 @@
 
 use super::*;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{CMD_colder, CMD_lolder, IOSIZE};
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
@@ -205,9 +206,9 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
     if unsafe { get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) } == 0
         || unsafe { *arg } != 0
     {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the
-        // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_trailing_arg), arg) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E488: Trailing characters: {arg}");
         return;
     }
     let qfl = qf_current_list(qi);

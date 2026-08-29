@@ -62,10 +62,10 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, curbuf, e_nobufnr, e_noinstext, e_nolastcmd, e_noprevre,
-    e_resulting_text_too_long, got_int, last_cmdline, msg_ext_skip_flush, must_redraw,
-    new_last_cmdline, p_ch, p_report, p_sel, pending_end_reg_executing, redir_reg, reg_executing,
-    reg_recorded, reg_recording, restart_edit,
+    Columns, State, curbuf, e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long,
+    got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline, p_ch, p_report,
+    p_sel, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording,
+    restart_edit,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{

@@ -27,7 +27,8 @@ use crate::guard::Suppress;
 use crate::main::{got_int, lines_left, msg_no_more};
 use crate::memory::{xfree, xrealloc, xstrlcpy};
 use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
-use crate::msg_schedule_semsg_c;
+use crate::message_fmt::c_str;
+use crate::msg_schedule_semsg;
 use crate::os::cshim::gettext;
 use crate::types::{LibuvProc, MAXPATHL, MultiQueue, Proc, RStream, Stream, WBuffer};
 use crate::ui::{ui_busy_start, ui_busy_stop};
@@ -243,9 +244,9 @@ unsafe fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, status: c_int)
         if status != 0 {
             // Happens when input is sent to a backgrounded shell command:
             // `:call system("cat - &", "foo")`. #3529 #5241
-            msg_schedule_semsg_c!(
-                gettext(c"E5677: Error writing input to shell-command: %s").as_ptr(),
-                uv_err_name(status),
+            msg_schedule_semsg!(
+                "E5677: Error writing input to shell-command: {}",
+                c_str(uv_err_name(status))
             );
         }
         stream_may_close(stream);

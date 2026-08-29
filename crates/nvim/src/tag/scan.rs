@@ -18,7 +18,7 @@ use crate::options::{
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{CONV_NONE, FAIL, NUL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -493,15 +493,9 @@ impl FindTags {
         }
         if p_verbose.get() >= 5 {
             unsafe { verbose_enter() };
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe {
-                smsg_c!(
-                    0,
-                    gettext(c"Searching tags file %s").as_ptr(),
-                    self.tag_fname.as_ptr(),
-                )
-            };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+            smsg!(0, "Searching tags file {tag_fname}");
             unsafe { verbose_leave() };
         }
         self.did_open = true;

@@ -47,7 +47,7 @@ use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
     Columns, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
     cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, curbuf, curwin, did_emsg, did_wait_return,
-    do_redraw, e_intern2, e_invarg, e_notopen, embedded_mode, emsg_assert_fails_context,
+    do_redraw, e_invarg, e_notopen, embedded_mode, emsg_assert_fails_context,
     emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display,
     emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting, exmode_active, full_screen,
     global_busy, got_int, headless_mode, hl_attr_active, in_assert_fails, info_message, keep_msg,

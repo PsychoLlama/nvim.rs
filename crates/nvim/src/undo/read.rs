@@ -11,6 +11,7 @@
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::semsg_c;
+use crate::smsg;
 use crate::smsg_c;
 use crate::winlayer::Buf;
 use std::collections::HashSet;
@@ -52,9 +53,9 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
 
     // Always under 'verbose', even when the user named the file.
     verbosely(true, || {
-        // SAFETY: the message macros expand to a `vim_snprintf` over
-        // the format literal above and the editor's message buffers.
-        unsafe { smsg_c!(0, gettext(c"Reading undo file: %s").as_ptr(), file_name) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+        let file_name = unsafe { c_str(file_name) };
+        smsg!(0, "Reading undo file: {file_name}");
     });
     let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
     if fp.is_null() {

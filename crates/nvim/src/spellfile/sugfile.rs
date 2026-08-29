@@ -31,16 +31,17 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::fileio::{put_bytes, put_time};
 use crate::garray::{ga_clear, ga_grow, ga_init};
-use crate::main::{e_notopen, e_write, got_int};
+use crate::main::{e_write, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
@@ -363,7 +364,9 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
     // both built by now.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
         return;
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();

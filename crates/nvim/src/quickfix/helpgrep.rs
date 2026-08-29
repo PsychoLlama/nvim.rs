@@ -8,10 +8,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::optionstr::{empty_option, is_empty_option};
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OK, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -284,9 +285,9 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     if !qfl_is_empty(qf_current_list(qi)) {
         qf_goto(qi, 0, 0, false as c_int);
     } else {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the
-        // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_nomatch2), eap.arg) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+        let arg = unsafe { c_str(eap.arg) };
+        semsg!("E480: No match: {arg}");
     }
 
     qf_busy_end();

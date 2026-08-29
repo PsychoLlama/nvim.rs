@@ -11,7 +11,8 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::eval::typval::NumBuf;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{ExpandContext, FAIL, OK, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -85,13 +86,17 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         xpc.xp_context = unsafe { cmdcomplete_str_to_type(type_0) };
         match xpc.xp_context {
             ExpandContext::Nothing => {
-                unsafe { semsg_c!(gettext(e_invarg2), type_0) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg0 = unsafe { c_str(type_0) };
+                semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
             ExpandContext::UserDefined => {
                 // Must be "custom,funcname" pattern.
                 if unsafe { strncmp(type_0, c"custom,".as_ptr(), 7) } != 0 {
-                    unsafe { semsg_c!(gettext(e_invarg2), type_0) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let arg0 = unsafe { c_str(type_0) };
+                    semsg!("E475: Invalid argument: {arg0}");
                     return;
                 }
                 xpc.xp_arg = unsafe { type_0.add(7) } as *mut c_char;
@@ -99,7 +104,9 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             ExpandContext::UserList => {
                 // Must be "customlist,funcname" pattern.
                 if unsafe { strncmp(type_0, c"customlist,".as_ptr(), 11) } != 0 {
-                    unsafe { semsg_c!(gettext(e_invarg2), type_0) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let arg0 = unsafe { c_str(type_0) };
+                    semsg!("E475: Invalid argument: {arg0}");
                     return;
                 }
                 xpc.xp_arg = unsafe { type_0.add(11) } as *mut c_char;

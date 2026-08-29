@@ -33,14 +33,14 @@ use crate::fold::has_any_folding;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::main::{
-    curbuf, curwin, e_interr, e_patnotf2, global_busy, got_int, p_ch, p_cwh, p_icm, sub_nlines,
-    sub_nsubs,
+    curbuf, curwin, e_interr, global_busy, got_int, p_ch, p_cwh, p_icm, sub_nlines, sub_nsubs,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get, ml_get_len};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg};
+use crate::message_fmt::c_str;
 use crate::r#move::changed_window_setting;
 use crate::option::set_option_direct;
 use crate::options::kOptInccommand;
@@ -50,7 +50,7 @@ use crate::pos::MAXCOL;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{vim_regexec_multi, vim_regfree};
 use crate::search::get_search_pat;
-use crate::semsg_c;
+use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
@@ -663,9 +663,9 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 msg(c"", 0 as c_int);
             }
         } else if subflags.with(|flags| flags.do_error) {
-            // Nothing found.
-            // SAFETY: the search pattern is a live C string.
-            unsafe { semsg_c!(gettext(e_patnotf2), get_search_pat(),) };
+            // Nothing found. // SAFETY: the search pattern is a live C string.
+            let arg0 = unsafe { c_str(get_search_pat()) };
+            semsg!("E486: Pattern not found: {arg0}");
         }
     }
 

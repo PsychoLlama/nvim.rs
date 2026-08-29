@@ -109,7 +109,8 @@ unsafe fn write_undo_file(
     // Always under 'verbose', even when the user named the file.
     verbosely(true, || {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe { smsg_c!(0, gettext(c"Writing undo file: %s").as_ptr(), file_name) };
+        let file_name = unsafe { c_str(file_name) };
+        smsg!(0, "Writing undo file: {file_name}");
     });
     // SAFETY: the descriptor just opened on that path, and a live buffer.
     unsafe { match_group(fd, file_name, perm, buf) };

@@ -31,14 +31,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::fileio::{put_bytes, put_time};
 use crate::hashtab::hash_removed;
-use crate::main::{e_notopen, e_write};
+use crate::main::e_write;
 use crate::mbyte::utf_char2bytes;
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
@@ -136,7 +137,9 @@ pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char)
     // arena-allocated and NUL-terminated, or from the word trees.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
         return FAIL;
     }
     let mut w = SplWriter { fd, ok: true };

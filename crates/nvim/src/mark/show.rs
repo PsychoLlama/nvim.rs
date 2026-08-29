@@ -20,7 +20,7 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, e_argreq, e_invarg, e_invarg2, got_int};
+use crate::main::{Columns, e_argreq, e_invarg, got_int};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
@@ -32,7 +32,6 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -259,7 +258,8 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             // NUL-terminated argument.
             if !unsafe { delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) } {
                 // SAFETY: as above.
-                unsafe { semsg_c!(gettext(e_invarg2), rest) };
+                let rest = unsafe { c_str(rest) };
+                semsg!("E475: Invalid argument: {rest}");
                 return;
             }
             i += 1;
@@ -279,7 +279,8 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             };
             if !same_class || end < from {
                 // SAFETY: `rest` points inside the NUL-terminated argument.
-                unsafe { semsg_c!(gettext(e_invarg2), rest) };
+                let rest = unsafe { c_str(rest) };
+                semsg!("E475: Invalid argument: {rest}");
                 return;
             }
             i += 2;

@@ -3,7 +3,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memline::MlFlags;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -34,11 +35,10 @@ use crate::getchar::{
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
 use crate::main::{
-    State, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invarg2, e_invrange, e_secure,
-    e_trailing_arg, e_undobang_cannot_redo_or_move_branch, ex_no_reprint, ex_normal_busy,
-    exec_from_reg, finish_op, force_restart_edit, got_int, magic_overruled, main_loop, msg_didout,
-    msg_scroll, opcount, p_mmd, pending_end_reg_executing, reg_executing, restart_edit,
-    stop_insert_mode, virtual_op,
+    State, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invrange, e_secure,
+    e_undobang_cannot_redo_or_move_branch, ex_no_reprint, ex_normal_busy, exec_from_reg, finish_op,
+    force_restart_edit, got_int, magic_overruled, main_loop, msg_didout, msg_scroll, opcount,
+    p_mmd, pending_end_reg_executing, reg_executing, restart_edit, stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
 
@@ -186,7 +186,9 @@ pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E475: Invalid argument: {arg}");
             return;
         }
     }
@@ -557,7 +559,9 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
         }
     }
     if byte(p) != NUL {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), eap.arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(eap.arg) };
+        semsg!("E475: Invalid argument: {arg}");
         return;
     }
     undo_time(
@@ -580,7 +584,9 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
         return;
     }
     if byte_at(eap.arg, 1) != NUL {
-        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), eap.arg,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(eap.arg) };
+        semsg!("E488: Trailing characters: {arg}");
         return;
     }
     // The mark is set at the first non-blank of the addressed line, so

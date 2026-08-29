@@ -17,12 +17,12 @@ use crate::charset::getdigits_int;
 use crate::eval::typval::{NumBuf, tv_list_unref};
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::vim_fgets;
-use crate::main::{e_notopen, got_int, p_sps};
+use crate::main::{got_int, p_sps};
+use crate::message_fmt::c_str;
 use crate::option::copy_option_part;
-use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
-use crate::semsg_c;
+use crate::semsg;
 use crate::spell::{captype, make_case_word};
 use crate::spellsuggest::collect::{add_suggestion, check_suggestions, cleanup_suggestions};
 use crate::strings::vim_strchr;
@@ -159,9 +159,9 @@ pub(super) unsafe fn spell_suggest_file(mut su: Sug, fname: *mut c_char) {
     // inside it before it is used.
     let fd: *mut FILE = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the
-        // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_notopen), fname) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E484: Can't open file {fname}");
         return;
     }
 

@@ -42,11 +42,11 @@ use crate::insexpand::{
 };
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, curbuf,
-    curwin, dollar_vcol, e_interr, e_invarg2, e_nopresub, e_noprevre, e_patnotf2, fdo_flags,
-    g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled,
-    msg_silent, no_hlsearch, no_smartcase, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri,
-    p_scs, p_sel, p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol, search_match_lines,
-    searchcmdlen, top_bot_msg,
+    curwin, dollar_vcol, e_interr, e_nopresub, e_noprevre, e_patnotf2, fdo_flags, g_do_tagpreview,
+    got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent,
+    no_hlsearch, no_smartcase, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri, p_scs, p_sel,
+    p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol, search_match_lines, searchcmdlen,
+    top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{

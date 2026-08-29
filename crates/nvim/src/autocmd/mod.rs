@@ -33,7 +33,7 @@ use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin,
     deferred_events, did_cursorhold, did_emsg, do_profiling, e_argreq,
-    e_cannot_define_autocommands_for_all_events, e_duparg2, globaldir, got_int, last_cursormoved,
+    e_cannot_define_autocommands_for_all_events, globaldir, got_int, last_cursormoved,
     last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, p_acd, p_ei, p_verbose,
     prevwin, reg_recording, secure, starting,
 };

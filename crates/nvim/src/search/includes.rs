@@ -13,8 +13,9 @@
 use super::*;
 use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
+use crate::message_fmt::c_str;
 use crate::regexp::RE_MAGIC;
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -454,7 +455,8 @@ unsafe fn handle_include(
     } else if p_verbose.get() >= 5 {
         unsafe { verbose_enter() };
         // SAFETY: a static, translated message and a NUL-terminated name.
-        unsafe { smsg_c!(0, gettext(c"Searching included file %s").as_ptr(), name) };
+        let name = unsafe { c_str(name) };
+        smsg!(0, "Searching included file {name}");
         unsafe { verbose_leave() };
     }
 }

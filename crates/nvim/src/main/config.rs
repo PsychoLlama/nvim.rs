@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use crate::winlayer::{Live, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -19,9 +21,8 @@ use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, PATHSEP, SID_CARG, SID_CMDARG,
-    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, e_cannot_read_from_str_2, e_conflicting_configs,
-    exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T, msg_scroll, p_exrc, silent_mode,
-    time_msg_at,
+    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, e_cannot_read_from_str_2, exmode_active, kEqualFiles,
+    kXDGConfigDirs, mparm_T, msg_scroll, p_exrc, silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::os::cshim::{gettext, stderr};
@@ -210,7 +211,9 @@ unsafe fn source_init_pair(
     {
         // Both present: the Lua one won, and the user should know.
         if unsafe { os_path_exists(init_vim) } {
-            unsafe { semsg_c!(e_conflicting_configs.as_ptr(), init_lua, init_vim,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (init_lua, init_vim) = unsafe { (c_str(init_lua), c_str(init_vim)) };
+            semsg!("E5422: Conflicting configs: \"{init_lua}\" \"{init_vim}\"");
         }
         return Some(p_exrc.get() != 0);
     }

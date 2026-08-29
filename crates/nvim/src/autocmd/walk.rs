@@ -17,7 +17,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::smsg_c;
+use crate::message_fmt::c_str;
+use crate::smsg;
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating
 /// the execution-stack entry when the pattern changes.
@@ -91,7 +92,8 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             if p_verbose.get() >= 8 {
                 unsafe { verbose_enter() };
                 // SAFETY: `namep` is the NUL-terminated name just built.
-                unsafe { smsg_c!(0, gettext(c"Executing %s").as_ptr(), namep) };
+                let namep = unsafe { c_str(namep) };
+                smsg!(0, "Executing {namep}");
                 unsafe { verbose_leave() };
             }
 
@@ -235,7 +237,9 @@ pub unsafe fn getnextac(
         // NUL-terminated string this owns and frees below.
         unsafe { verbose_enter_scroll() };
         let handler_str = unsafe { aucmd_handler_to_string(ac) };
-        unsafe { smsg_c!(0, gettext(c"autocommand %s").as_ptr(), handler_str) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let shown = unsafe { c_str(handler_str) };
+        smsg!(0, "autocommand {shown}");
         // Don't overwrite this either.
         unsafe { msg_puts(c"\n".as_ptr()) };
         unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };

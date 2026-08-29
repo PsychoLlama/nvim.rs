@@ -7,7 +7,7 @@ use crate::cstr;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::main::{e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
+use crate::main::{e_exists, e_invarg, got_int, p_msm, p_verbose};
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
@@ -679,7 +679,9 @@ unsafe fn output_is_writable(
     } else if !over_write && unsafe { os_path_exists(wfname) } {
         emsg(gettext(e_exists));
     } else if unsafe { os_isdir(wfname) } {
-        unsafe { semsg_c!(gettext(e_isadir2), wfname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let wfname = unsafe { c_str(wfname) };
+        semsg!("E17: \"{wfname}\" is a directory");
     } else {
         return true;
     }

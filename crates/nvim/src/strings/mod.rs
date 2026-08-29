@@ -2,11 +2,10 @@
 
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
-use crate::main::e_using_number_as_bool_nr;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
-use crate::os::cshim::{gettext, strchr, strncmp, strstr};
-use crate::semsg_c;
+use crate::os::cshim::{strchr, strncmp, strstr};
+use crate::semsg;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
 use ::libc::{qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -46,7 +45,7 @@ pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
         return None;
     }
     if !(0..=1).contains(&value) {
-        unsafe { semsg_c!(gettext(e_using_number_as_bool_nr), value,) };
+        semsg!("E1023: Using a Number as a Bool: {}", value);
         return None;
     }
     Some(value != 0)

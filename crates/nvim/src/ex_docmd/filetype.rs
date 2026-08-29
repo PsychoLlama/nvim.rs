@@ -4,7 +4,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::semsg_multiline_c;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -22,7 +21,7 @@ use crate::ex_docmd::{
     kOptValTypeString, kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
-use crate::main::{cmdmod, e_curdir, e_invarg2, p_rtp, secure};
+use crate::main::{cmdmod, e_curdir, p_rtp, secure};
 
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
@@ -132,7 +131,9 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
             filetype_detect.set(Some(false));
         }
     } else {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
     }
 }
 

@@ -34,8 +34,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
 use crate::main::{
-    cmdmod, e_curdir, e_interr, e_invarg, e_invarg2, e_noprevre, e_sandbox, g_do_tagpreview,
-    got_int, msg_scroll, quit_more, sandbox, secure,
+    cmdmod, e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox, g_do_tagpreview, got_int,
+    msg_scroll, quit_more, sandbox, secure,
 };
 use crate::memory::xfree;
 use crate::message::{

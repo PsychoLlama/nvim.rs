@@ -509,7 +509,6 @@ pub static e_leadtab_requires_tab: &CStr =
 pub static e_invalid_format_string_single_percent_s: &CStr =
     c"E1577: Invalid format string, only one \"%s\" is allowed";
 pub static e_cannot_read_from_str_2: &CStr = c"E282: Cannot read from \"%s\"";
-pub(crate) static e_conflicting_configs: &CStr = c"E5422: Conflicting configs: \"%s\" \"%s\"";
 pub static e_unknown_option2: &CStr = c"E355: Unknown option: %s";
 pub static top_bot_msg: &CStr = c"search hit TOP, continuing at BOTTOM";
 pub static bot_top_msg: &CStr = c"search hit BOTTOM, continuing at TOP";

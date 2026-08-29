@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -564,7 +564,7 @@ pub unsafe fn write_reg_contents_ex(
                 let num = atoi(str);
                 let buf = find_buf(num);
                 if buf.is_none() {
-                    semsg_c!(gettext(e_nobufnr), int64_t::from(num),);
+                    semsg!("E86: Buffer {} does not exist", int64_t::from(num));
                 }
                 buf
             } else {

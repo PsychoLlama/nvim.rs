@@ -10,7 +10,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::smsg_c;
+use crate::message_fmt::c_str;
+use crate::smsg;
 use crate::winlayer::Buf;
 
 /// Mark one autocommand deleted: free everything it owns and null its
@@ -138,16 +139,13 @@ pub unsafe fn aubuflocal_remove(buf: Buf) {
                 unsafe { aucmd_del(ac) };
                 if p_verbose.get() >= 6 {
                     unsafe { verbose_enter() };
-                    // SAFETY: the message macros expand to a `vim_snprintf` over the
-                    // format literal above and the editor's message buffers.
-                    unsafe {
-                        smsg_c!(
-                            0,
-                            gettext(c"auto-removing autocommand: %s <buffer=%d>").as_ptr(),
-                            event_nr2name(event),
-                            buf.handle,
-                        )
-                    };
+                    // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+                    let arg0 = unsafe { c_str(event_nr2name(event)) };
+                    smsg!(
+                        0,
+                        "auto-removing autocommand: {arg0} <buffer={}>",
+                        buf.handle
+                    );
                     unsafe { verbose_leave() };
                 }
             }

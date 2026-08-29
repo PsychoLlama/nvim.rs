@@ -18,9 +18,10 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
+use crate::message_fmt::c_str;
 use crate::regexp::RE_MAGIC;
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
+use crate::smsg;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
     CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
@@ -496,9 +497,9 @@ unsafe fn process_files(
                 };
             }
         } else if !got_int.get() {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe { smsg_c!(0, gettext(c"Cannot open file \"%s\"").as_ptr(), fname) };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let fname = unsafe { c_str(fname) };
+            smsg!(0, "Cannot open file \"{fname}\"");
         }
         fi += 1;
     }
@@ -679,9 +680,9 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     }
 
     if qfl_is_empty(qf_current_list(qi)) {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the
-        // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_nomatch2), search.spat) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+        let spat = unsafe { c_str(search.spat) };
+        semsg!("E480: No match: {spat}");
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
         unsafe { jump_to_match(qi.raw(), eap.forceit, &mut out) };
     }

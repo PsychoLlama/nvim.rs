@@ -11,7 +11,6 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{FAIL, MB_MAXCHAR, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// How many `posN` keys a saved position match can carry.
@@ -377,7 +376,7 @@ pub(crate) unsafe fn f_matchaddpos(
         return;
     }
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg), c"matchaddpos()".as_ptr(),) };
+        semsg!("E686: Argument of {} must be a List", "matchaddpos()");
         return;
     }
     let l = unsafe { (*argvars.offset(1)).vval.v_list };

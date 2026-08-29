@@ -9,8 +9,8 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -639,12 +639,10 @@ pub unsafe fn set_errorlist(
     }
 
     if !list.is_null() && unsafe { tv_list_len(list) } != 0 && !what.is_null() {
-        unsafe {
-            semsg_c!(
-                gettext(e_invarg2),
-                gettext(c"cannot have both a list and a \"what\" argument").as_ptr(),
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 =
+            unsafe { c_str(gettext(c"cannot have both a list and a \"what\" argument").as_ptr()) };
+        semsg!("E475: Invalid argument: {arg0}");
         return Err(QfError::BadValue);
     }
 

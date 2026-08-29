@@ -17,7 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{FC_LUAREF, nlua_create_typed_table};
@@ -29,16 +29,10 @@ use crate::lua::ffi::{
     lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
 };
 use crate::main::nlua_global_refs;
-use crate::os::cshim::gettext;
 use crate::types::{
     LuaRef, blob_T, dict_T, float_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
     typval_T,
 };
-
-/// Refused when the Lua stack will not grow far enough for the next container.
-const E5102_GROW_STACK: &CStr = c"E5102: Lua failed to grow stack to %i";
-/// The same refusal from [`nlua_push_typval`] itself, before the walk starts.
-const E1502_GROW_STACK: &CStr = c"E1502: Lua failed to grow stack to %i";
 
 /// How many Lua slots opening a container needs: its table, the key or index
 /// it is about to set, and the value that will land on top of them.
@@ -103,7 +97,7 @@ impl LuaSink {
         unsafe {
             let wanted = lua_gettop(self.lstate) + CONTAINER_SLOTS;
             if lua_checkstack(self.lstate, wanted) == 0 {
-                semsg_c!(gettext(E5102_GROW_STACK), wanted);
+                semsg!("E5102: Lua failed to grow stack to {}", wanted);
                 return Flow::Fail;
             }
         }
@@ -308,7 +302,7 @@ pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut typval_T, flags:
         if lua_checkstack(lstate, initial_size + 2) == 0 {
             // Upstream reports the size it would have needed for a container,
             // not the two slots it just asked for.
-            semsg_c!(gettext(E1502_GROW_STACK), initial_size + 4);
+            semsg!("E1502: Lua failed to grow stack to {}", initial_size + 4);
             return false;
         }
         let mut sink = LuaSink {

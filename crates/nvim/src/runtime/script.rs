@@ -16,7 +16,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;
@@ -362,13 +363,8 @@ unsafe fn script_query(
         }
         if sid <= 0 {
             // SAFETY: as above; the message borrows the item's string form.
-            unsafe {
-                semsg_c!(
-                    gettext(e_invargNval),
-                    c"sid".as_ptr(),
-                    numbuf.string(&raw mut (*sid_di).di_tv),
-                )
-            };
+            let arg1 = unsafe { c_str(numbuf.string(&raw mut (*sid_di).di_tv)) };
+            semsg!("E475: Invalid value for argument {}: {arg1}", "sid");
             return ScriptQuery::Rejected;
         }
         return ScriptQuery::Sid(sid);

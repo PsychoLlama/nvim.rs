@@ -613,9 +613,9 @@ unsafe fn arg_autocmd_flag_get(
         && ascii_iswhite(unsafe { *(*cmd_ptr).offset(len as isize) } as ::core::ffi::c_int)
     {
         if unsafe { *flag } {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the
-            // format literal above and the editor's message buffers.
-            unsafe { semsg_c!(gettext(e_duparg2), pattern.as_ptr(),) };
+            // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+            let pattern = unsafe { c_str(pattern.as_ptr()) };
+            semsg!("E983: Duplicate argument: {pattern}");
             return true;
         }
         unsafe { *flag = true };

@@ -9,7 +9,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -68,7 +67,9 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(e_nogroup), arg) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let arg = unsafe { c_str(arg) };
+                    semsg!("E28: No such highlight group name: {arg}");
                 } else {
                     unsafe { syn_list_one(id, false, true) };
                 }
