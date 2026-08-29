@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.08.29-f6c6cf531e]
+
 ### Changed
 
 - Reworked how the editor holds the objects an editing session is made of:
@@ -591,7 +593,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.26-a99ef8068b...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.29-f6c6cf531e...HEAD
+[2026.08.29-f6c6cf531e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.26-a99ef8068b...2026.08.29-f6c6cf531e
 [2026.08.26-a99ef8068b]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.23-529b135d5d...2026.08.26-a99ef8068b
 [2026.08.23-529b135d5d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.21-c764fbe67d...2026.08.23-529b135d5d
 [2026.08.21-c764fbe67d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.20-6fa6afd7b2...2026.08.21-c764fbe67d
