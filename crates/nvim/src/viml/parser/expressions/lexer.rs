@@ -41,7 +41,7 @@ const OPT_SCOPES: [ExprOptScope; 2] = [kExprOptScopeGlobal, kExprOptScopeLocal];
 /// A `CStr` is NUL-terminated by construction and `gettext` only reads through
 /// it, so this is the whole of the obligation.
 fn translate(msg: &'static CStr) -> *const c_char {
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// How many bytes the first character of `line` occupies, composing marks

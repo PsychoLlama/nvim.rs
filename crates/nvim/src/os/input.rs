@@ -824,7 +824,7 @@ fn read_error_exit() -> ! {
             // The normal way out for `nvim -es`.
             getout(0);
         }
-        preserve_exit(gettext(c"Nvim: Error reading input, exiting...\n".as_ptr()))
+        preserve_exit(gettext(c"Nvim: Error reading input, exiting...\n").as_ptr())
     }
 }
 

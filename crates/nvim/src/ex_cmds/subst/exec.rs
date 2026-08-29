@@ -637,8 +637,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
                 && subflags.with(|flags| flags.do_ask)
                 && p_ch.get() > 0 as OptInt
             {
-                // SAFETY: message state.
-                unsafe { msg(c"".as_ptr(), 0 as c_int) };
+                msg(c"", 0 as c_int);
             }
         } else {
             global_need_beginline.set(true);
@@ -657,19 +656,16 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     } else if global_busy.get() == 0 {
         if got_int.get() {
             // Interrupted.
-            // SAFETY: a live message string.
-            unsafe { emsg(gettext(e_interr.as_ptr())) };
+            emsg(gettext(e_interr));
         } else if st.got_match {
             // Did find something, but nothing was substituted.
-            // SAFETY: message state.
             if p_ch.get() > 0 as OptInt && !ui_has(kUIMessages) {
-                // SAFETY: message state.
-                unsafe { msg(c"".as_ptr(), 0 as c_int) };
+                msg(c"", 0 as c_int);
             }
         } else if subflags.with(|flags| flags.do_error) {
             // Nothing found.
             // SAFETY: the search pattern is a live C string.
-            unsafe { semsg_c!(gettext(e_patnotf2.as_ptr()), get_search_pat(),) };
+            unsafe { semsg_c!(gettext(e_patnotf2), get_search_pat(),) };
         }
     }
 

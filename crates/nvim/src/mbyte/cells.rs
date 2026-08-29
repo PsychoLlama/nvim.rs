@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 use crate::types::NUL;
 use core::cmp::Ordering;
@@ -265,7 +266,7 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
     if unsafe { (*argvars).v_type } as c_uint != VAR_LIST as c_uint
         || unsafe { (*argvars).vval.v_list }.is_null()
     {
-        unsafe { emsg(gettext(e_listreq.as_ptr())) };
+        emsg(gettext(e_listreq));
         return;
     }
     let __v = unsafe { parse_cell_widths((*argvars).vval.v_list) };
@@ -278,7 +279,7 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
     // The new widths must not conflict with 'listchars' or 'fillchars'.
     let error = unsafe { check_chars_options() };
     if !error.is_null() {
-        unsafe { emsg(gettext(error)) };
+        unsafe { emsg(gettext_ptr(error)) };
         CELL_WIDTHS.with_mut(|t| *t = saved);
         return;
     }
@@ -305,7 +306,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
         if unsafe { (*li_tv).v_type } as c_uint != VAR_LIST as c_uint
             || unsafe { (*li_tv).vval.v_list }.is_null()
         {
-            unsafe { semsg_c!(gettext(c"E1109: List item %d is not a List".as_ptr()), item) };
+            unsafe { semsg_c!(gettext(c"E1109: List item %d is not a List"), item) };
             return None;
         }
         rows.push(unsafe { parse_cell_width_row((*li_tv).vval.v_list, item) }?);
@@ -321,7 +322,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
         if rows[i].first <= rows[i - 1].last {
             unsafe {
                 semsg_c!(
-                    gettext(c"E1113: Overlapping ranges for 0x%lx".as_ptr()),
+                    gettext(c"E1113: Overlapping ranges for 0x%lx"),
                     rows[i].first as size_t,
                 )
             };
@@ -351,24 +352,15 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
         let n = unsafe { (*tv).vval.v_number };
         match seen {
             0 if n < 0x80 => {
-                unsafe {
-                    emsg(gettext(
-                        c"E1114: Only values of 0x80 and higher supported".as_ptr(),
-                    ))
-                };
+                emsg(gettext(c"E1114: Only values of 0x80 and higher supported"));
                 return None;
             }
             1 if n < numbers[0] => {
-                unsafe { semsg_c!(gettext(c"E1111: List item %d range invalid".as_ptr()), item) };
+                unsafe { semsg_c!(gettext(c"E1111: List item %d range invalid"), item) };
                 return None;
             }
             2 if !(1..=2).contains(&n) => {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E1112: List item %d cell width invalid".as_ptr()),
-                        item,
-                    )
-                };
+                unsafe { semsg_c!(gettext(c"E1112: List item %d cell width invalid"), item,) };
                 return None;
             }
             _ => {}
@@ -384,7 +376,7 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
     if seen != 3 {
         unsafe {
             semsg_c!(
-                gettext(c"E1110: List item %d does not contain 3 numbers".as_ptr()),
+                gettext(c"E1110: List item %d does not contain 3 numbers"),
                 item,
             )
         };

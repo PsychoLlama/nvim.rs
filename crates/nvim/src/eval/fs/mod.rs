@@ -131,9 +131,8 @@ pub(crate) fn ret_string(rettv: &mut typval_T, s: *mut c_char) {
 }
 
 /// Report `msg`, translated.
-pub(crate) fn err(msg: &CStr) {
-    // SAFETY: `msg` is NUL-terminated, which is all `gettext` and `emsg` ask.
-    unsafe { emsg(gettext(msg.as_ptr())) };
+pub(crate) fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// The List a builtin is answering.

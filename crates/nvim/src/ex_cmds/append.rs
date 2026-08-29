@@ -324,8 +324,7 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
 
     if at < text.len() {
         if !text[at].is_ascii_digit() {
-            // SAFETY: a static message.
-            unsafe { emsg(gettext(c"E144: Non-numeric argument to :z".as_ptr())) };
+            emsg(gettext(c"E144: Non-numeric argument to :z"));
             return;
         }
         // SAFETY: `at` indexes the argument's own bytes.

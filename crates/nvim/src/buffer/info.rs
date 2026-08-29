@@ -39,7 +39,7 @@ use crate::message::{
 use crate::r#move::validate_virtcol;
 use crate::option::shortmess;
 use crate::options::{kOptIconstring, kOptTitlestring};
-use crate::os::cshim::{gettext, ngettext};
+use crate::os::cshim::{gettext_ptr, ngettext};
 use crate::os::env::home_replace;
 use crate::os::input::line_breakcheck;
 use crate::path::path_tail;
@@ -70,13 +70,14 @@ fn tr(msg: &CStr) -> *mut c_char {
 /// `_()` over a pointer, for the messages `main.rs` holds as byte arrays.
 fn tr_raw(msg: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext(msg) }
+    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
 }
 
 /// `NGETTEXT`: the singular or plural form, by `n`.
-fn tr_n(one: &CStr, many: &CStr, n: linenr_T) -> *mut c_char {
-    // SAFETY: two NUL-terminated literals.
-    unsafe { ngettext(one.as_ptr(), many.as_ptr(), n as ::core::ffi::c_ulong) }
+fn tr_n(one: &'static CStr, many: &'static CStr, n: linenr_T) -> *mut c_char {
+    ngettext(one, many, n as ::core::ffi::c_ulong)
+        .as_ptr()
+        .cast_mut()
 }
 
 fn current_buf() -> Buf {
@@ -466,8 +467,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         unsafe { msg_start() };
         let n = msg_scroll.get();
         msg_scroll.set(1);
-        // SAFETY: a NUL-terminated message.
-        unsafe { msg(out.as_ptr(), 0) };
+        msg(out.as_cstr(), 0);
         msg_scroll.set(n);
     } else {
         // SAFETY: a NUL-terminated message; the answer is the kept copy.
@@ -516,8 +516,9 @@ impl Msg {
         (self.buf[self.len..].as_mut_ptr().cast::<c_char>(), room)
     }
 
-    fn as_ptr(&self) -> *const c_char {
-        self.buf.as_ptr().cast::<c_char>()
+    /// The message written so far, as the string it is.
+    fn as_cstr(&self) -> &CStr {
+        crate::cstr::in_bytes(&self.buf)
     }
 
     fn as_mut_ptr(&mut self) -> *mut c_char {

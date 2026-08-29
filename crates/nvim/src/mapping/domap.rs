@@ -10,6 +10,7 @@
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Ea};
@@ -539,7 +540,7 @@ pub(crate) unsafe fn buf_do_map(
                         c"No mapping found".as_ptr()
                     };
                     // SAFETY: a static NUL-terminated message.
-                    unsafe { msg(gettext(text), 0) };
+                    unsafe { msg(gettext_ptr(text), 0) };
                 }
                 break 'theend; // listing finished
             }
@@ -639,8 +640,7 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
     let local = unsafe { strcmp(arg, c"<buffer>".as_ptr()) } == 0;
     // SAFETY: as above.
     if !local && unsafe { c_int::from(*arg) } != NUL {
-        // SAFETY: `e_invarg` is a static NUL-terminated message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     // SAFETY: the caller's promise — `cmdp` is a live command name — and
@@ -703,8 +703,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
     // SAFETY: `arg` is the command's own NUL-terminated argument, and
     // `parsed_args` is this frame's struct.
     if unsafe { str_to_mapargs(eap.arg, is_unmap, parsed) } != 0 {
-        // SAFETY: a static NUL-terminated message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) }; // invalid arguments
+        emsg(gettext(e_invarg)); // invalid arguments
     } else {
         let lhs = (&raw mut parsed_args.lhs).cast::<c_char>();
         // SAFETY: as above; `curbuf` is live.
@@ -714,21 +713,17 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
         unsafe {
             match answer {
                 1 => {
-                    emsg(gettext(e_invarg.as_ptr()));
+                    emsg(gettext(e_invarg));
                 }
                 2 => {
-                    emsg(gettext(if isabbrev {
-                        e_noabbr.as_ptr()
-                    } else {
-                        e_nomap.as_ptr()
-                    }));
+                    emsg(gettext(if isabbrev { e_noabbr } else { e_nomap }));
                 }
                 5 => {
                     semsg_c!(
                         gettext(if isabbrev {
-                            E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
+                            E_ABBREVIATION_ALREADY_EXISTS_FOR_STR
                         } else {
-                            E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
+                            E_MAPPING_ALREADY_EXISTS_FOR_STR
                         }),
                         lhs,
                     );
@@ -736,9 +731,9 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
                 6 => {
                     semsg_c!(
                         gettext(if isabbrev {
-                            E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
+                            E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR
                         } else {
-                            E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
+                            E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR
                         }),
                         lhs,
                     );

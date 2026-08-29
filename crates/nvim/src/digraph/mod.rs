@@ -285,13 +285,13 @@ fn outtrans(bytes: &[u8], hl_id: c_int) {
     unsafe { msg_outtrans(buf.as_ptr() as *const c_char, hl_id, false) };
 }
 
-fn digraph_header(name: &[u8]) {
+fn digraph_header(name: &'static [u8]) {
     if msg_col.get() > 0 {
         newline();
     }
-    // SAFETY: `name` is NUL-terminated and outlives the call; gettext hands
-    // back a valid C string.
-    unsafe { msg_outtrans(gettext(name.as_ptr() as *const c_char), HLF_CM, false) };
+    let header = gettext(crate::cstr::in_bytes(name));
+    // SAFETY: a NUL-terminated translation, which outlives the call.
+    unsafe { msg_outtrans(header.as_ptr(), HLF_CM, false) };
     newline();
 }
 

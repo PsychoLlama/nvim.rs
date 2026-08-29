@@ -46,7 +46,7 @@ use crate::memline::makeswapname;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::option::{copy_option_part, cpo_has, shortmess};
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg_c;
@@ -155,7 +155,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
             || unsafe { (*eap).line2 } > 0
             || unsafe { (*eap).addr_count } > 1)
     {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 
@@ -217,7 +217,7 @@ unsafe fn check_writable(fname: *const c_char) -> c_int {
     if unsafe { os_nodetype(fname) } == NODE_OTHER {
         unsafe {
             semsg_c!(
-                gettext(c"E503: \"%s\" is not a file or writable device".as_ptr()),
+                gettext(c"E503: \"%s\" is not a file or writable device"),
                 fname,
             )
         };
@@ -261,8 +261,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
     // SAFETY: `ffname` is the command's NUL-terminated argument.
     let other = if unsafe { *ffname } as c_int == NUL {
         if unsafe { (*eap).cmdidx } == CMD_saveas {
-            // SAFETY: a live message string.
-            unsafe { emsg(gettext(e_argreq.as_ptr())) };
+            emsg(gettext(e_argreq));
             return FAIL;
         }
         false
@@ -294,8 +293,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> c_int {
         if let Some(alt_buf) = alt_buf
             && !alt_buf.b_ml.ml_mfp.is_null()
         {
-            // SAFETY: a live message string.
-            unsafe { emsg(gettext(e_bufloaded.as_ptr())) };
+            emsg(gettext(e_bufloaded));
             return FAIL;
         }
     }
@@ -398,14 +396,14 @@ unsafe fn confirm_partial_write(eap: *mut exarg_T) -> bool {
         return true;
     }
     if !confirming() {
-        unsafe { emsg(gettext(c"E140: Use ! to write partial buffer".as_ptr())) };
+        emsg(gettext(c"E140: Use ! to write partial buffer"));
         return false;
     }
     if unsafe {
         vim_dialog_yesno(
             VIM_QUESTION as c_int,
             ptr::null_mut(),
-            gettext(c"Write partial file?".as_ptr()),
+            gettext(c"Write partial file?").as_ptr().cast_mut(),
             2,
         )
     } != VIM_YES as c_int
@@ -510,17 +508,21 @@ pub unsafe fn check_overwrite(
     if unsafe { (*eap).forceit } == 0 && unsafe { (*eap).append } == 0 {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
-            unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), ffname,) };
+            unsafe { semsg_c!(gettext(e_isadir2), ffname,) };
             return FAIL;
         }
         if !confirming() {
-            // SAFETY: a live message string.
-            unsafe { emsg(gettext(e_exists.as_ptr())) };
+            emsg(gettext(e_exists));
             return FAIL;
         }
         // SAFETY: one `%s` for `fname`.
         if !unsafe {
-            dialog_yesno_about(gettext(c"Overwrite existing file \"%s\"?".as_ptr()), fname)
+            dialog_yesno_about(
+                gettext(c"Overwrite existing file \"%s\"?")
+                    .as_ptr()
+                    .cast_mut(),
+                fname,
+            )
         } {
             return FAIL;
         }
@@ -549,7 +551,7 @@ pub unsafe fn check_overwrite(
         // SAFETY: one `%s` for one string.
         unsafe {
             semsg_c!(
-                gettext(c"E768: Swap file exists: %s (:silent! overrides)".as_ptr()),
+                gettext(c"E768: Swap file exists: %s (:silent! overrides)"),
                 swapname.0,
             )
         };
@@ -558,7 +560,9 @@ pub unsafe fn check_overwrite(
     // SAFETY: one `%s` for `swapname`.
     if !unsafe {
         dialog_yesno_about(
-            gettext(c"Swap file \"%s\" exists, overwrite anyway?".as_ptr()),
+            gettext(c"Swap file \"%s\" exists, overwrite anyway?")
+                .as_ptr()
+                .cast_mut(),
             swapname.0,
         )
     } {
@@ -704,7 +708,7 @@ unsafe fn write_one_buffer(
         // SAFETY: one `%ld` for one number.
         unsafe {
             semsg_c!(
-                gettext(c"E141: No file name for buffer %ld".as_ptr()),
+                gettext(c"E141: No file name for buffer %ld"),
                 buf.handle as int64_t,
             )
         };
@@ -742,12 +746,9 @@ unsafe fn not_writing() -> bool {
     if p_write.get() != 0 {
         return false;
     }
-    // SAFETY: a literal.
-    unsafe {
-        emsg(gettext(
-            c"E142: File not written: Writing is disabled by 'write' option".as_ptr(),
-        ))
-    };
+    emsg(gettext(
+        c"E142: File not written: Writing is disabled by 'write' option",
+    ));
     true
 }
 
@@ -775,11 +776,11 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: Buf) -> bool {
     if !confirming() || name.is_null() {
         // SAFETY: live message strings; one `%s` for one string.
         if is_ro {
-            unsafe { emsg(gettext(e_readonly.as_ptr())) };
+            emsg(gettext(e_readonly));
         } else {
             unsafe {
                 semsg_c!(
-                    gettext(c"E505: \"%s\" is read-only (add ! to override)".as_ptr()),
+                    gettext(c"E505: \"%s\" is read-only (add ! to override)"),
                     name,
                 )
             };
@@ -794,7 +795,7 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: Buf) -> bool {
             .as_ptr()
     };
     // SAFETY: one `%s` for `name`.
-    if !unsafe { dialog_yesno_about(gettext(prompt), name) } {
+    if !unsafe { dialog_yesno_about(gettext_ptr(prompt).as_ptr().cast_mut(), name) } {
         return true;
     }
     // Set forceit, to force the writing of a readonly file.

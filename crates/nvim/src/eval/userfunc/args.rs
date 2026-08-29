@@ -14,6 +14,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::Walk;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL, OK};
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.
@@ -39,7 +40,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
         || (len == 8 && unsafe { strncmp(arg, c"lastline".as_ptr(), 8) } == 0);
     if arg == p.raw() || unsafe { *arg as u8 }.is_ascii_digit() || named {
         if !skip {
-            unsafe { semsg_c!(gettext(c"E125: Illegal argument: %s".as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(c"E125: Illegal argument: %s"), arg) };
         }
         return arg;
     }
@@ -53,7 +54,7 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
         for &earlier in ga_strings(unsafe { &*newargs }) {
             if unsafe { strcmp(earlier, arg_copy) } == 0 {
                 let dup = c"E853: Duplicate argument name: %s".as_ptr();
-                unsafe { semsg_c!(gettext(dup), arg_copy) };
+                unsafe { semsg_c!(gettext_ptr(dup), arg_copy) };
                 unsafe { xfree(arg_copy as *mut c_void) };
                 // Upstream leaves the name NUL-terminated here; the
                 // caller stops on `p == arg` either way.
@@ -143,7 +144,7 @@ pub(crate) unsafe fn get_function_args(
                     }
                 } else if any_default {
                     let fmt = c"E989: Non-default argument follows default argument";
-                    unsafe { emsg(gettext(fmt.as_ptr())) };
+                    emsg(gettext(fmt));
                     mustend = true;
                 }
                 let comma_after_white = ascii_iswhite(c_int::from(p.byte()))
@@ -151,7 +152,7 @@ pub(crate) unsafe fn get_function_args(
                 if comma_after_white {
                     if !skip {
                         let (fmt, at) = (E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr(), p.raw());
-                        unsafe { semsg_c!(gettext(fmt), c",".as_ptr(), at) };
+                        unsafe { semsg_c!(gettext_ptr(fmt), c",".as_ptr(), at) };
                         break 'parse false;
                     }
                     p = unsafe { Walk::new(skipwhite(p.raw())) };
@@ -166,7 +167,7 @@ pub(crate) unsafe fn get_function_args(
             if mustend && p.chr() != endchar {
                 if !skip {
                     let at = unsafe { *argp };
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), at) };
+                    unsafe { semsg_c!(gettext(e_invarg2), at) };
                 }
                 break;
             }

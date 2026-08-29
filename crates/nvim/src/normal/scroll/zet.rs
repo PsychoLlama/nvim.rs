@@ -274,7 +274,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 unsafe { delete_fold(win.raw(), 1, cur_buf().b_ml.ml_line_count, 1, false) };
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
-                unsafe { emsg(gettext(msg.as_ptr())) };
+                emsg(gettext(msg));
             }
         }
         // `zn`/`zN`/`zi`: 'foldenable' off, on, toggled.

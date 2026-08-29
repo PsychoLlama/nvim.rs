@@ -38,7 +38,7 @@ use crate::charset::getdigits_int;
 use crate::hashtab::{hash_add, hash_clear, hash_find, hash_removed};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::{gettext, gettext_ptr, memmove};
 use crate::strings::vim_strchr;
 use crate::types::{NUL, hashitem_T, size_t, uint8_t};
 use ::libc::{strcat, strcpy, strlen};
@@ -106,11 +106,11 @@ pub(super) unsafe fn affitem2flag(
         } else {
             c"Illegal flag in %s line %d: %s"
         };
-        unsafe { smsg_c!(0, gettext(msg.as_ptr()), fname, lnum, item) };
+        unsafe { smsg_c!(0, gettext(msg).as_ptr(), fname, lnum, item) };
     }
     // Anything left over means the item was more than one flag.
     if unsafe { *p } as c_int != NUL {
-        unsafe { smsg_c!(0, gettext(e_affname.get()), fname, lnum, item) };
+        unsafe { smsg_c!(0, gettext_ptr(e_affname.get()), fname, lnum, item) };
         return 0;
     }
     res

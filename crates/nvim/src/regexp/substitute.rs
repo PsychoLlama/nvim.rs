@@ -149,8 +149,7 @@ impl Out {
         if self.copy
             && self.at.wrapping_offset(n) > self.dest.wrapping_offset(self.destlen as isize)
         {
-            // SAFETY: a static, NUL-terminated message.
-            unsafe { iemsg(E_NOT_ENOUGH_SPACE.as_ptr()) };
+            iemsg(E_NOT_ENOUGH_SPACE);
             return false;
         }
         true
@@ -274,7 +273,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         }
         // Text longer than MAXCOL causes trouble further downstream.
         if tmpsublen > MAXCOL as usize {
-            unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
+            emsg(gettext(e_resulting_text_too_long));
             error = true;
             break;
         }
@@ -380,17 +379,15 @@ unsafe fn vim_regsub_both(
     destlen: c_int,
     flags: c_int,
 ) -> c_int {
-    // SAFETY: `source` and `dest` are the caller's, and `rex` describes a
-    // match that is still live — see [`vim_regsub`].
     if (source.is_null() && expr.is_null()) || dest.is_null() {
-        unsafe { emsg(gettext(e_null.as_ptr())) };
+        emsg(gettext(e_null));
         return 0;
     }
     if prog_magic_wrong(rex) != 0 {
         return 0;
     }
     if NESTING.get() == MAX_REGSUB_NESTING {
-        unsafe { emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP.as_ptr())) };
+        emsg(gettext(E_SUBSTITUTE_NESTING_TOO_DEEP));
         return 0;
     }
 
@@ -779,7 +776,7 @@ unsafe fn copy_capture(
         if unsafe { *s } == NUL as c_char {
             // The line is shorter than it was when the match ran.
             if out.copy {
-                unsafe { iemsg(gettext(e_re_damg.as_ptr())) };
+                iemsg(gettext(e_re_damg));
             }
             return Outcome::Damaged;
         }

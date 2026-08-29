@@ -329,7 +329,7 @@ unsafe fn add_tag_field(
             unsafe { verbose_enter() };
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
-            unsafe { smsg_c!(0, gettext(c"Duplicate field name: %s".as_ptr()), field_name) };
+            unsafe { smsg_c!(0, gettext(c"Duplicate field name: %s").as_ptr(), field_name) };
             unsafe { verbose_leave() };
         }
         return FAIL;

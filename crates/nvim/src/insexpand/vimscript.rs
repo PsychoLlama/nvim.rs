@@ -314,11 +314,7 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
 /// The `complete()` function; a `VimLFunc` row in the builtin table.
 pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     if State.get() & MODE_INSERT == 0 {
-        unsafe {
-            emsg(gettext(
-                c"E785: complete() can only be used in Insert mode".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E785: complete() can only be used in Insert mode"));
         return;
     }
 
@@ -330,7 +326,7 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
     }
 
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
     } else {
         let startcol = unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as colnr_T;
         if startcol > 0 {
@@ -514,7 +510,7 @@ pub unsafe fn f_complete_info(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let mut what_list: *mut list_T = ptr::null_mut();
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
         if unsafe { (*argvars).v_type } != VAR_LIST {
-            unsafe { emsg(gettext(e_listreq.as_ptr())) };
+            emsg(gettext(e_listreq));
             return;
         }
         what_list = unsafe { (*argvars).vval.v_list };

@@ -49,11 +49,11 @@ pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
         } else {
             c"syntax conceal off"
         };
-        unsafe { msg(state.as_ptr(), 0) };
+        msg(state, 0);
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"on", c"off"]) } {
         cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
     }
 }
 
@@ -70,11 +70,11 @@ pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
         } else {
             c"syntax case match"
         };
-        unsafe { msg(state.as_ptr(), 0) };
+        msg(state, 0);
     } else if let Some(i) = unsafe { word_index(arg, next, &[c"match", c"ignore"]) } {
         cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
     }
 }
 
@@ -87,9 +87,9 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
     if unsafe { *arg } as c_int == NUL {
         // A block whose foldlevel is neither of the two reports nothing.
         if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
-            unsafe { msg(c"syntax foldlevel start".as_ptr(), 0) };
+            msg(c"syntax foldlevel start", 0);
         } else if cur_syn_block().b_syn_foldlevel == SYNFLD_MINIMUM {
-            unsafe { msg(c"syntax foldlevel minimum".as_ptr(), 0) };
+            msg(c"syntax foldlevel minimum", 0);
         }
         return;
     }
@@ -99,7 +99,7 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
         Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
         Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
-            unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
             return;
         }
     }
@@ -107,7 +107,7 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
     // Unlike the other mode commands, this one diagnoses trailing text.
     let arg = unsafe { skipwhite(arg_end) };
     if unsafe { *arg } as c_int != NUL {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
     }
 }
 
@@ -124,7 +124,7 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
             SYNSPL_NOTOP => c"syntax spell notoplevel",
             _ => c"syntax spell default",
         };
-        unsafe { msg(state.as_ptr(), 0) };
+        msg(state, 0);
     } else if let Some(i) =
         unsafe { word_index(arg, next, &[c"toplevel", c"notoplevel", c"default"]) }
     {
@@ -134,7 +134,7 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
             _ => SYNSPL_DEFAULT,
         };
     } else {
-        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(E_ILLEGAL_ARG), arg) };
         return;
     }
 
@@ -158,7 +158,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
             unsafe { msg_puts(c"syntax iskeyword ".as_ptr()) };
             unsafe { msg_outtrans(cur_syn_block().b_syn_isk, 0, false) };
         } else {
-            unsafe { msg_outtrans(gettext(c"syntax iskeyword not set".as_ptr()), 0, false) };
+            unsafe { msg_outtrans(gettext(c"syntax iskeyword not set").as_ptr(), 0, false) };
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
         let chartab: *mut [uint8_t; 32] = syn_field!(cur_syn_block(), b_syn_chartab);
@@ -310,7 +310,7 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
         None => {
             unsafe {
                 semsg_c!(
-                    gettext(c"E410: Invalid :syntax subcommand: %s".as_ptr()),
+                    gettext(c"E410: Invalid :syntax subcommand: %s"),
                     subcmd_name,
                 )
             };

@@ -218,7 +218,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio
     if !internal {
         fd = unsafe { os_fopen((*dout).dout_fname, c"r".as_ptr()) };
         if fd.is_null() {
-            unsafe { emsg(gettext(c"E98: Cannot read diff output".as_ptr())) };
+            emsg(gettext(c"E98: Cannot read diff output"));
             return;
         }
     }

@@ -55,8 +55,8 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     // SAFETY: `buf` is `IOSIZE` chars long, and the question is the one
     // `%s` the format takes.
     let prompt = unsafe {
-        let fmt = gettext(c"%s (y/n)?".as_ptr());
-        snprintf(buf.as_mut_ptr(), IOSIZE as usize, fmt, str);
+        let fmt = gettext(c"%s (y/n)?");
+        snprintf(buf.as_mut_ptr(), IOSIZE as usize, fmt.as_ptr(), str);
         xstrdup(buf.as_ptr())
     };
 
@@ -229,15 +229,13 @@ pub(crate) unsafe fn prompt_for_input(
     let prompt = if !prompt.is_null() {
         prompt
     } else if !mouse_used.is_null() {
-        // SAFETY: a NUL-terminated literal.
-        unsafe {
-            gettext(
-                c"Type number and <Enter> or click with the mouse (q or empty cancels): ".as_ptr(),
-            )
-        }
+        gettext(c"Type number and <Enter> or click with the mouse (q or empty cancels): ")
+            .as_ptr()
+            .cast_mut()
     } else {
-        // SAFETY: a NUL-terminated literal.
-        unsafe { gettext(c"Type number and <Enter> (q or empty cancels): ".as_ptr()) }
+        gettext(c"Type number and <Enter> (q or empty cancels): ")
+            .as_ptr()
+            .cast_mut()
     };
 
     cmdline_row.set(msg_row.get());

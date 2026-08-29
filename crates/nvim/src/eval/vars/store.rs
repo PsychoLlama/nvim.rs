@@ -19,6 +19,8 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
+use crate::message::emsg_ptr;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL};
 
 // ---------------------------------------------------------------------
@@ -36,14 +38,13 @@ use crate::types::{FAIL, NUL};
 /// what `gettext` answers is either that `static` or one of its own -- both
 /// of which outlive the report it is passed to.
 pub(crate) fn translate(msg: &'static CStr) -> *const c_char {
-    // SAFETY: a NUL-terminated `static`, as the type says.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// Report one of the editor's `static` messages, translated.
 pub(crate) fn emsg_static(msg: &'static CStr) {
     // SAFETY: [`translate`]'s answer is a live NUL-terminated string.
-    unsafe { emsg(translate(msg)) };
+    unsafe { emsg_ptr(translate(msg)) };
 }
 
 /// Clear a value this frame owns, freeing whatever it holds.
@@ -221,12 +222,12 @@ pub unsafe fn var_check_ro(flags: c_int, mut name: *const c_char, mut name_len: 
     };
 
     if name_len == TV_TRANSLATE as size_t {
-        name = unsafe { gettext(name) };
+        name = unsafe { gettext_ptr(name).as_ptr() };
         name_len = unsafe { strlen(name) };
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe { semsg_c!(gettext(error_message), name_len as c_int, name) };
+    unsafe { semsg_c!(gettext_ptr(error_message), name_len as c_int, name) };
     true
 }
 
@@ -239,7 +240,7 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
         return false;
     }
     if name_len == TV_TRANSLATE as size_t {
-        name = unsafe { gettext(name) };
+        name = unsafe { gettext_ptr(name).as_ptr() };
         name_len = unsafe { strlen(name) };
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
@@ -264,7 +265,7 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
         return false;
     }
     if name_len == TV_TRANSLATE as size_t {
-        name = unsafe { gettext(name) };
+        name = unsafe { gettext_ptr(name).as_ptr() };
         name_len = unsafe { strlen(name) };
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };

@@ -96,8 +96,8 @@ pub(crate) unsafe fn check_num_option_bounds(
         kOptLines => {
             let least = min_rows_for_all_tabpages();
             if *newval < least as OptInt && full_screen.get() {
-                let fmt = unsafe { gettext(c"E593: Need at least %d lines".as_ptr()) };
-                unsafe { vim_snprintf(errbuf, errbuflen, fmt, least) };
+                let fmt = gettext(c"E593: Need at least %d lines");
+                unsafe { vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), least) };
                 errmsg = errbuf;
                 *newval = least as OptInt;
             }
@@ -105,8 +105,8 @@ pub(crate) unsafe fn check_num_option_bounds(
         }
         kOptColumns => {
             if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
-                let fmt = unsafe { gettext(c"E594: Need at least %d columns".as_ptr()) };
-                unsafe { vim_snprintf(errbuf, errbuflen, fmt, MIN_COLUMNS as c_int) };
+                let fmt = gettext(c"E594: Need at least %d columns");
+                unsafe { vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), MIN_COLUMNS as c_int) };
                 errmsg = errbuf;
                 *newval = MIN_COLUMNS as OptInt;
             }
@@ -246,18 +246,18 @@ pub(crate) unsafe fn validate_option_value(
     if newval.type_0 == kOptValTypeNil {
         // A global value has no "unset" state to fall back to.
         if opt_flags == OptionSetFlags::GLOBAL {
-            return unsafe { gettext(c"Cannot unset global option value".as_ptr()) };
+            return gettext(c"Cannot unset global option value").as_ptr();
         }
         *newval = optval_copy(get_option_unset_value(opt_idx));
         ptr::null()
     } else if !option_has_type(opt_idx, newval.type_0) {
         let rep = optval_to_cstr(*newval);
         let fmt = c"Invalid value for option '%s': expected %s, got %s %s";
-        let fmt = unsafe { gettext(fmt.as_ptr()) };
+        let fmt = gettext(fmt);
         let want = optval_type_name(opt.type_0).as_ptr();
         let got = optval_type_name(newval.type_0).as_ptr();
         let (name, size) = (opt.fullname, IOSIZE as size_t);
-        unsafe { snprintf(errbuf, size, fmt, name, want, got, rep) };
+        unsafe { snprintf(errbuf, size, fmt.as_ptr(), name, want, got, rep) };
         unsafe { xfree(rep.cast::<c_void>()) };
         errbuf
     } else if newval.type_0 == kOptValTypeNumber {

@@ -54,7 +54,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     }
 
     if unsafe { (*argvars).v_type } != VAR_STRING {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     let pattern = unsafe { numbuf2.string(argvars) };
@@ -85,13 +85,13 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         xpc.xp_context = unsafe { cmdcomplete_str_to_type(type_0) };
         match xpc.xp_context {
             ExpandContext::Nothing => {
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), type_0) };
+                unsafe { semsg_c!(gettext(e_invarg2), type_0) };
                 return;
             }
             ExpandContext::UserDefined => {
                 // Must be "custom,funcname" pattern.
                 if unsafe { strncmp(type_0, c"custom,".as_ptr(), 7) } != 0 {
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), type_0) };
+                    unsafe { semsg_c!(gettext(e_invarg2), type_0) };
                     return;
                 }
                 xpc.xp_arg = unsafe { type_0.add(7) } as *mut c_char;
@@ -99,7 +99,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             ExpandContext::UserList => {
                 // Must be "customlist,funcname" pattern.
                 if unsafe { strncmp(type_0, c"customlist,".as_ptr(), 11) } != 0 {
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), type_0) };
+                    unsafe { semsg_c!(gettext(e_invarg2), type_0) };
                     return;
                 }
                 xpc.xp_arg = unsafe { type_0.add(11) } as *mut c_char;

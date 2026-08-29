@@ -389,8 +389,7 @@ pub unsafe fn save_funccal(entry: *mut funccal_entry_T) {
 pub unsafe fn restore_funccal() {
     let top = funccal_stack.get();
     if top.is_null() {
-        // SAFETY: a literal message.
-        unsafe { iemsg(c"INTERNAL: restore_funccal()".as_ptr()) };
+        iemsg(c"INTERNAL: restore_funccal()");
         return;
     }
     // SAFETY: `save_funccal`'s caller promised the entry outlives this, and

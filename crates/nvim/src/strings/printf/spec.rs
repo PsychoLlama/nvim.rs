@@ -150,7 +150,7 @@ pub(crate) unsafe fn format_typeof(spec: *const c_char) -> ArgType {
 
 /// The translated name of `spec`'s class, for an error message.
 unsafe fn format_typename(spec: *const c_char) -> *const c_char {
-    unsafe { gettext(format_typeof(spec).name().as_ptr()) }
+    unsafe { gettext(format_typeof(spec).name()).as_ptr() }
 }
 
 /// Record that positional argument `arg` (one-based) is used at the type
@@ -163,7 +163,7 @@ unsafe fn adjust_types(
     spec: *const c_char,
 ) -> Result<(), BadFormat> {
     if arg <= 0 {
-        unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), spec) };
+        unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER), spec) };
         return Err(BadFormat);
     }
 
@@ -196,14 +196,14 @@ unsafe fn adjust_types(
                 spec
             };
             if unsafe { *other as u8 } != b'*' && !matches!(unsafe { *other as u8 }, b'd' | b'i') {
-                let msg = unsafe { gettext(E_FIELD_WIDTH_REUSED.as_ptr()) };
+                let msg = gettext(E_FIELD_WIDTH_REUSED);
                 let was = unsafe { format_typename(seen) };
                 let now = unsafe { format_typename(spec) };
                 unsafe { semsg_c!(msg, arg, was, now) };
                 return Err(BadFormat);
             }
         } else if unsafe { format_typeof(spec) } != unsafe { format_typeof(seen) } {
-            let msg = unsafe { gettext(E_POS_TYPE_INCONSISTENT.as_ptr()) };
+            let msg = gettext(E_POS_TYPE_INCONSISTENT);
             let now = unsafe { format_typename(spec) };
             let was = unsafe { format_typename(seen) };
             unsafe { semsg_c!(msg, arg, now, was) };
@@ -221,7 +221,7 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
     while ascii_isdigit(unsafe { *p as c_int }) {
         p = unsafe { p.add(1) };
     }
-    let msg = unsafe { gettext(e_val_too_large_len.as_ptr()) };
+    let msg = gettext(e_val_too_large_len);
     let digits = unsafe { p.offset_from(pstart) } as c_int;
     unsafe { semsg_c!(msg, digits, pstart) };
 }
@@ -295,14 +295,14 @@ unsafe fn scan_fmt_types(
     macro_rules! check_pos_arg {
         () => {
             if any_pos && any_arg {
-                unsafe { semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt) };
+                unsafe { semsg_c!(gettext(E_CANNOT_MIX), fmt) };
                 return Err(BadFormat);
             }
         };
     }
     macro_rules! invalid_specifier {
         () => {{
-            unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER.as_ptr()), fmt) };
+            unsafe { semsg_c!(gettext(E_INVALID_FORMAT_SPECIFIER), fmt) };
             return Err(BadFormat);
         }};
     }
@@ -427,7 +427,7 @@ unsafe fn scan_fmt_types(
             }
         } else if pos_arg != -1 {
             // A position on something that is not a conversion.
-            unsafe { semsg_c!(gettext(E_CANNOT_MIX.as_ptr()), fmt) };
+            unsafe { semsg_c!(gettext(E_CANNOT_MIX), fmt) };
             return Err(BadFormat);
         }
 
@@ -440,11 +440,11 @@ unsafe fn scan_fmt_types(
     // typed, and must have an argument behind it.
     for arg_idx in 0..*num_posarg {
         if unsafe { (*(*ap_types).offset(arg_idx as isize)).is_null() } {
-            unsafe { semsg_c!(gettext(E_FMT_ARG_UNUSED.as_ptr()), arg_idx + 1, fmt) };
+            unsafe { semsg_c!(gettext(E_FMT_ARG_UNUSED), arg_idx + 1, fmt) };
             return Err(BadFormat);
         }
         if !tvs.is_null() && unsafe { (*tvs.offset(arg_idx as isize)).v_type } == VAR_UNKNOWN {
-            unsafe { semsg_c!(gettext(E_POS_OUT_OF_BOUNDS.as_ptr()), arg_idx + 1, fmt) };
+            unsafe { semsg_c!(gettext(E_POS_OUT_OF_BOUNDS), arg_idx + 1, fmt) };
             return Err(BadFormat);
         }
     }

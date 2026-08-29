@@ -151,7 +151,7 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
         got_int.set(false);
         let mut discard = false;
         if lua_pcall(lstate, 2, 1, 0) != 0 {
-            nlua_error(lstate, gettext(c"vim.on_key() callbacks: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"vim.on_key() callbacks: %.*s").as_ptr());
         } else {
             if lua_type(lstate, -1) == LUA_TBOOLEAN {
                 discard = lua_toboolean(lstate, -1) != 0;

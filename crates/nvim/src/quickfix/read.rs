@@ -136,7 +136,7 @@ impl Reader {
                 unsafe { os_fopen(efile, c"r".as_ptr()) }
             };
             if fd.is_null() {
-                unsafe { semsg_c!(gettext(e_openerrf.as_ptr()), efile) };
+                unsafe { semsg_c!(gettext(e_openerrf), efile) };
                 // Dropping tears the conversion down again.
                 return None;
             }
@@ -577,7 +577,7 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
     }
 
     if reader.had_error() {
-        unsafe { emsg(gettext(e_readerrf.as_ptr())) };
+        emsg(gettext(e_readerrf));
         return false;
     }
     if unsafe { (*qfl).qf_index } == 0 {

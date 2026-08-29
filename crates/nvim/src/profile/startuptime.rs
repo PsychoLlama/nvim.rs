@@ -127,7 +127,7 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     time_fd.set(unsafe { fopen(fname, c"a".as_ptr()) });
     if time_fd.get().is_null() {
         // SAFETY: the message is a NUL-terminated global with one %s.
-        unsafe { fprintf(stderr, gettext(e_notopen.as_ptr()), fname) };
+        unsafe { fprintf(stderr, gettext(e_notopen).as_ptr(), fname) };
         return;
     }
     // SAFETY: `xmalloc` returns `BUFSIZE + 1` owned bytes, which is exactly

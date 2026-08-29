@@ -175,7 +175,7 @@ pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
                 let id =
                     unsafe { syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(c"E391: No such syntax cluster: %s".as_ptr()), arg) };
+                    unsafe { semsg_c!(gettext(c"E391: No such syntax cluster: %s"), arg) };
                     break;
                 }
                 // A cluster cannot be deleted without changing the ids of
@@ -186,7 +186,7 @@ pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(e_nogroup.as_ptr()), arg) };
+                    unsafe { semsg_c!(gettext(e_nogroup), arg) };
                     break;
                 }
                 unsafe { syn_clear_one(id, syncing != 0) };

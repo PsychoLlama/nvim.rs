@@ -103,7 +103,7 @@ impl LuaSink {
         unsafe {
             let wanted = lua_gettop(self.lstate) + CONTAINER_SLOTS;
             if lua_checkstack(self.lstate, wanted) == 0 {
-                semsg_c!(gettext(E5102_GROW_STACK.as_ptr()), wanted);
+                semsg_c!(gettext(E5102_GROW_STACK), wanted);
                 return Flow::Fail;
             }
         }
@@ -308,7 +308,7 @@ pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut typval_T, flags:
         if lua_checkstack(lstate, initial_size + 2) == 0 {
             // Upstream reports the size it would have needed for a container,
             // not the two slots it just asked for.
-            semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), initial_size + 4);
+            semsg_c!(gettext(E1502_GROW_STACK), initial_size + 4);
             return false;
         }
         let mut sink = LuaSink {

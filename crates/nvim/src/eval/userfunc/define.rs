@@ -20,7 +20,7 @@ use crate::types::{FAIL, NUL, OK, Refcount};
 /// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.
 pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
     if prev_ht_changed != func_table().changed() {
-        unsafe { emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED.as_ptr())) };
+        emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED));
         return 1;
     }
     0
@@ -160,7 +160,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         // an exception.
         if !aborting() {
             if !fudi.fd_newkey.is_null() {
-                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), fudi.fd_newkey,) };
+                unsafe { semsg_c!(gettext(e_dictkey), fudi.fd_newkey,) };
             }
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
@@ -183,7 +183,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         p = unsafe { skipwhite(p) };
         if unsafe { *p } != b'(' as c_char {
             if ea.skip == 0 {
-                unsafe { semsg_c!(gettext(c"E124: Missing '(': %s".as_ptr()), ea.arg) };
+                unsafe { semsg_c!(gettext(c"E124: Missing '(': %s"), ea.arg) };
                 break 'ret_free;
             }
             // Attempt to carry on by skipping some text.
@@ -235,7 +235,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
             }
             // Disallow using the g: dict.
             if !fudi.fd_dict.is_null() && unsafe { (*fudi.fd_dict).dv_scope } == VAR_DEF_SCOPE {
-                unsafe { emsg(gettext(c"E862: Cannot use g: here".as_ptr())) };
+                emsg(gettext(c"E862: Cannot use g: here"));
                 break 'ret_free;
             }
         }
@@ -293,14 +293,14 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         && ea.skip == 0
                         && did_emsg.get() == 0
                     {
-                        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
+                        unsafe { semsg_c!(gettext(e_trailing_arg), p) };
                     }
 
                     if KeyTyped.get() {
                         // Check whether the function already exists.
                         if ea.skip == 0 && ea.forceit == 0 {
                             if !fudi.fd_dict.is_null() && fudi.fd_newkey.is_null() {
-                                unsafe { emsg(gettext(E_FUNCDICT.as_ptr())) };
+                                emsg(gettext(E_FUNCDICT));
                             } else if !name.is_null() && !unsafe { find_func(name) }.is_null() {
                                 unsafe { emsg_funcname(E_FUNCEXTS.as_ptr(), name) };
                             }
@@ -380,7 +380,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     } else {
                         fp = ptr::null_mut();
                         if fudi.fd_newkey.is_null() && ea.forceit == 0 {
-                            unsafe { emsg(gettext(E_FUNCDICT.as_ptr())) };
+                            emsg(gettext(E_FUNCDICT));
                             break 'erret;
                         }
                         let locked = if fudi.fd_di.is_null() {
@@ -434,7 +434,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             if j == FAIL {
                                 let mismatch =
                                     c"E746: Function name does not match script file name: %s";
-                                unsafe { semsg_c!(gettext(mismatch.as_ptr()), name) };
+                                unsafe { semsg_c!(gettext(mismatch), name) };
                                 break 'erret;
                             }
                         }

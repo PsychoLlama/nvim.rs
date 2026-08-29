@@ -100,17 +100,9 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
     }
 
     if oap.line_count as OptInt > p_report.get() {
-        unsafe {
-            smsg_c!(
-                0,
-                ngettext(
-                    c"%ld line changed".as_ptr(),
-                    c"%ld lines changed".as_ptr(),
-                    oap.line_count as ::core::ffi::c_ulong,
-                ),
-                oap.line_count as int64_t,
-            )
-        };
+        let n = oap.line_count as ::core::ffi::c_ulong;
+        let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);
+        unsafe { smsg_c!(0, fmt.as_ptr(), oap.line_count as int64_t) };
     }
 }
 

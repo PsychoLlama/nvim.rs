@@ -49,8 +49,7 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
     // SAFETY: `data` points into a NUL-terminated buffer line.
     let len = unsafe { utfc_ptr2len(data) } as usize;
     if len == 0 {
-        // SAFETY: a literal.
-        unsafe { msg(c"NUL".as_ptr(), 0) };
+        msg(c"NUL", 0);
         return;
     }
 
@@ -147,7 +146,7 @@ unsafe fn describe_byte(
         vim_snprintf(
             line.as_mut_ptr(),
             IOSIZE as usize,
-            gettext(fmt.as_ptr()),
+            gettext(fmt).as_ptr(),
             transchar(c).as_ptr(),
             nonprint.as_ptr(),
             empty.as_ptr(),
@@ -209,7 +208,7 @@ unsafe fn describe_char(
         vim_snprintf(
             line.as_mut_ptr().add(used),
             IOSIZE as usize - used,
-            gettext(fmt.as_ptr()),
+            gettext(fmt).as_ptr(),
             c,
             c,
             c,

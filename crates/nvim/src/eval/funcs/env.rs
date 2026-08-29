@@ -22,7 +22,7 @@ use crate::main::{e_invarg2, p_verbose, p_wic};
 use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::message::emsg;
+use crate::message::{emsg, emsg_ptr};
 use crate::os::cshim::{gettext, strchr};
 use crate::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
@@ -123,7 +123,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         let result = unsafe { eval_vars(src, s, used, nul, msg, nul, false) };
         drop(no_emsg);
         if !quiet && !errormsg.is_null() {
-            unsafe { emsg(errormsg) };
+            unsafe { emsg_ptr(errormsg) };
         }
         if rettv.v_type == VAR_LIST {
             list_alloc_ret(rettv, isize::from(!result.is_null()));
@@ -201,7 +201,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         && let Some(msg) = &errormsg
         && !msg.is_empty()
     {
-        unsafe { emsg(msg.as_ptr()) };
+        emsg(msg);
     }
     rettv.vval.v_string = cmdstr;
 }
@@ -243,7 +243,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         return;
     }
     if unsafe { strlen(mode_str) } != 9 {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), mode_str) };
+        unsafe { semsg_c!(gettext(e_invarg2), mode_str) };
         return;
     }
     let mut mode: c_int = 0;
@@ -315,7 +315,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         _ => {
             // The name is arbitrary user bytes, so this keeps the
             // variadic call.
-            unsafe { semsg_c!(gettext(c"E6100: \"%s\" is not a valid stdpath".as_ptr()), p) };
+            unsafe { semsg_c!(gettext(c"E6100: \"%s\" is not a valid stdpath"), p) };
             return;
         }
     };

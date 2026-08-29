@@ -83,8 +83,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
 pub(crate) fn exchange(prenum: c_int) {
     let mut cur = cur_win();
     if cur.w_floating {
-        // SAFETY: a static message.
-        unsafe { emsg(e_floatexchange.as_ptr()) };
+        emsg(e_floatexchange);
         return;
     }
     // SAFETY: beeps; reads no argument of ours.
@@ -170,8 +169,7 @@ pub(crate) fn exchange(prenum: c_int) {
 /// downwards.
 pub(crate) fn rotate(upwards: bool, count: c_int) {
     if cur_win().w_floating {
-        // SAFETY: a static message.
-        unsafe { emsg(e_floatexchange.as_ptr()) };
+        emsg(e_floatexchange);
         return;
     }
     if count <= 0 || is_only_window(cur_win(), None) {
@@ -310,8 +308,7 @@ fn move_after(win1: Win, win2: Win) {
     }
     if win2.w_next != Some(win1.id()) {
         if win1.frame().fr_parent != win2.frame().fr_parent {
-            // SAFETY: a static message.
-            unsafe { iemsg(c"INTERNAL: trying to move a window into another frame".as_ptr()) };
+            iemsg(c"INTERNAL: trying to move a window into another frame");
             return;
         }
         // The last window has no separator or status line: exchange the chrome

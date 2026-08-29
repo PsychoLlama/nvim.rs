@@ -178,8 +178,7 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
             };
             let Some(&(_, letters)) = MODE_COMMANDS.iter().find(|(mode, _)| *mode == mp.m_mode)
             else {
-                // SAFETY: a static NUL-terminated message.
-                unsafe { iemsg(gettext(c"E228: makemap: Illegal mode".as_ptr())) };
+                iemsg(gettext(c"E228: makemap: Illegal mode"));
                 return Some(FAIL);
             };
 

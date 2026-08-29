@@ -235,7 +235,7 @@ pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             return;
         }
         if pos < 0 {
-            unsafe { emsg(gettext(e_positive.as_ptr())) };
+            emsg(gettext(e_positive));
             return;
         }
     }

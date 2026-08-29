@@ -176,8 +176,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
                 // SAFETY: nothing here holds a borrow of editor state.
                 beep_flush();
                 if first {
-                    // SAFETY: a NUL-terminated literal.
-                    unsafe { msg(gettext(c"Already at oldest change".as_ptr()), 0) };
+                    msg(gettext(c"Already at oldest change"), 0);
                     return;
                 }
                 break;
@@ -190,8 +189,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
                 // SAFETY: nothing here holds a borrow of editor state.
                 beep_flush();
                 if first {
-                    // SAFETY: a NUL-terminated literal.
-                    unsafe { msg(gettext(c"Already at newest change".as_ptr()), 0) };
+                    msg(gettext(c"Already at newest change"), 0);
                     return;
                 }
                 break;
@@ -284,19 +282,15 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         with_visual_anchor(|visual| check_pos(buf, visual));
     }
 
-    // SAFETY: NUL-terminated literals, and `what` is one of this module's
-    // own.
-    let fmt = unsafe { gettext(c"%ld %s; %s #%ld  %s".as_ptr()) };
+    let fmt = gettext(c"%ld %s; %s #%ld  %s");
     let amount = int64_t::from(count).abs();
-    // SAFETY: as above.
-    let what = unsafe { gettext(what.as_ptr()) };
+    let what = gettext(what);
     let which = if did_undo { c"before" } else { c"after" };
-    // SAFETY: as above.
-    let side = unsafe { gettext(which.as_ptr()) };
+    let side = gettext(which);
     let seq = target.map_or(0, |uhp| int64_t::from(uhp.uh_seq));
     // SAFETY: a format string and the arguments it names, and `when` is
     // NUL-terminated.
-    unsafe { smsg_keep_c!(0, fmt, amount, what, side, seq, when.as_mut_ptr()) };
+    unsafe { smsg_keep_c!(0, fmt.as_ptr(), amount, what, side, seq, when.as_mut_ptr()) };
 }
 
 #[cfg(test)]

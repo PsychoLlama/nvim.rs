@@ -18,6 +18,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_void};
@@ -42,7 +43,7 @@ fn remove_and_free(path: *mut c_char) {
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
 fn emsg_gettext(msg: *const c_char) {
     // SAFETY: a static message string, and the editor exists.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 /// `:diffpatch {file}`: apply a patch to a copy of the current buffer and

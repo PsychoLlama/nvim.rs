@@ -287,13 +287,13 @@ pub fn set_pressedreturn(val: bool) {
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `msg()` as checked code.
 fn msg(s: *const c_char, hl_id: c_int) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::msg(s, hl_id) }
+    unsafe { crate::message::msg_ptr(s, hl_id) }
 }
 
 /// `redraw_all_later()` as checked code.

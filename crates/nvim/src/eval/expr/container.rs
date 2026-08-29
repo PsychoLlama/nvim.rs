@@ -15,7 +15,7 @@ use crate::eval::typval::{
 };
 use crate::eval::{Cur, EVAL_EVALUATE, NOTDONE, Tv, e_list_end, eval1};
 use crate::memory::xmemdupz;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
     FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
     ptrdiff_t, size_t, typval_T, typval_vval_union,
@@ -83,12 +83,12 @@ pub(crate) unsafe fn eval_list(
                 continue;
             }
             let at = cur.get();
-            unsafe { semsg_c!(gettext(c"E696: Missing comma in List: %s".as_ptr()), at) };
+            unsafe { semsg_c!(gettext(c"E696: Missing comma in List: %s"), at) };
             break 'items false;
         }
         if cur.byte() != b']' {
             let at = cur.get();
-            unsafe { semsg_c!(gettext(e_list_end.as_ptr()), at) };
+            unsafe { semsg_c!(gettext(e_list_end), at) };
             break 'items false;
         }
         cur.skip(1);
@@ -190,12 +190,7 @@ pub(crate) unsafe fn eval_dict(
             }
             if cur.byte() != b':' {
                 let at = cur.get();
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E720: Missing colon in Dictionary: %s".as_ptr()),
-                        at
-                    )
-                };
+                unsafe { semsg_c!(gettext(c"E720: Missing colon in Dictionary: %s"), at) };
                 unsafe { tv_clear(&raw mut tvkey) };
                 break 'items false;
             }
@@ -218,10 +213,7 @@ pub(crate) unsafe fn eval_dict(
             if evaluate {
                 if !unsafe { tv_dict_find(dict, key, -1 as ptrdiff_t) }.is_null() {
                     unsafe {
-                        semsg_c!(
-                            gettext(c"E721: Duplicate key in Dictionary: \"%s\"".as_ptr()),
-                            key,
-                        )
+                        semsg_c!(gettext(c"E721: Duplicate key in Dictionary: \"%s\""), key,)
                     };
                     unsafe { tv_clear(&raw mut tvkey) };
                     unsafe { tv_clear(&raw mut tv) };
@@ -249,18 +241,13 @@ pub(crate) unsafe fn eval_dict(
                 continue;
             }
             let at = cur.get();
-            unsafe {
-                semsg_c!(
-                    gettext(c"E722: Missing comma in Dictionary: %s".as_ptr()),
-                    at
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E722: Missing comma in Dictionary: %s"), at) };
             break 'items false;
         }
         if cur.byte() != b'}' {
             let at = cur.get();
             let fmt = c"E723: Missing end of Dictionary '}': %s".as_ptr();
-            unsafe { semsg_c!(gettext(fmt), at) };
+            unsafe { semsg_c!(gettext_ptr(fmt), at) };
             break 'items false;
         }
         cur.skip(1);

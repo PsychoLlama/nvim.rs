@@ -723,12 +723,11 @@ fn ruler_position(win: Win, virtcol: colnr_T, buffer: &mut [c_char]) -> c_int {
     };
     // l10n: leave as-is unless a space after the comma is preferred
     // l10n: do not add any row/column label, due to the limited space
-    // SAFETY: a message catalogue lookup of a literal.
-    let fmt = unsafe { gettext(c"%ld,".as_ptr()) };
+    let fmt = gettext(c"%ld,");
     let (out, room) = (buffer.as_mut_ptr(), RULER_BUF_LEN as size_t);
     // SAFETY: `buffer` is `RULER_BUF_LEN` bytes of the caller's frame, and
     // the format takes exactly the one integer.
-    let mut len = unsafe { vim_snprintf(out, room, fmt, lnum) };
+    let mut len = unsafe { vim_snprintf(out, room, fmt.as_ptr(), lnum) };
     let (at, room) = (
         &mut buffer[len as usize..],
         (RULER_BUF_LEN as size_t).wrapping_sub(len as size_t),

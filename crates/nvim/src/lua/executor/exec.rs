@@ -142,7 +142,7 @@ pub unsafe fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut typval_
         lua_pushstring(lstate, (*xp).xp_line);
         lua_pushinteger(lstate, (*xp).xp_col as lua_Integer);
         if nlua_pcall(lstate, 3, 1) != 0 {
-            nlua_error(lstate, gettext(c"E5108: Lua function: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5108: Lua function: %.*s").as_ptr());
             return;
         }
         nlua_pop_typval(lstate, ret_tv);
@@ -177,12 +177,12 @@ pub(crate) unsafe fn nlua_typval_exec(
         }
         let lstate = get_global_lstate();
         if luaL_loadbuffer(lstate, lcmd, lcmd_len, name) != 0 {
-            nlua_error(lstate, gettext(c"E5107: Lua: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5107: Lua: %.*s").as_ptr());
             return;
         }
         push_typval_args(lstate, args, argcount, special);
         if nlua_pcall(lstate, argcount, if ret_tv.is_null() { 0 } else { 1 }) != 0 {
-            nlua_error(lstate, gettext(c"E5108: Lua: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5108: Lua: %.*s").as_ptr());
             return;
         }
         if !ret_tv.is_null() {
@@ -255,7 +255,7 @@ pub unsafe fn typval_exec_lua_callable(
         nlua_pushref(lstate, lua_cb);
         push_typval_args(lstate, argvars, argcount, false);
         if nlua_pcall(lstate, argcount, 1) != 0 {
-            nlua_error(lstate, gettext(c"Lua callback: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
             return FCERR_OTHER as c_int;
         }
         nlua_pop_typval(lstate, rettv);
@@ -370,7 +370,7 @@ pub unsafe fn nlua_call_ref_ctx(
         } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {
             if err.is_null() {
                 // Nobody to report to: show it instead.
-                nlua_error(lstate, gettext(c"Lua callback: %.*s".as_ptr()));
+                nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
             } else {
                 set_lua_error(err, kErrorTypeException, lstate);
             }

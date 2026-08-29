@@ -245,18 +245,16 @@ pub fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn undo_allowed(buf: Buf) -> bool {
-    // SAFETY: three NUL-terminated message literals, and `expr_map_locked`
-    // only reads the editor's own mapping state.
     if buf.b_p_ma == 0 {
-        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
+        emsg(gettext(e_modifiable));
         return false;
     }
     if sandbox.get() != 0 {
-        unsafe { emsg(gettext(e_sandbox.as_ptr())) };
+        emsg(gettext(e_sandbox));
         return false;
     }
     if textlock.get() != 0 || expr_map_locked() {
-        unsafe { emsg(gettext(e_textlock.as_ptr())) };
+        emsg(gettext(e_textlock));
         return false;
     }
     true
@@ -320,8 +318,7 @@ pub fn u_savecommon(
             unsafe { change_warning(buf, 0) };
         }
         if bot > b.line_count() + 1 {
-            // SAFETY: a NUL-terminated message literal.
-            unsafe { emsg(gettext(c"E881: Line count changed unexpectedly".as_ptr())) };
+            emsg(gettext(c"E881: Line count changed unexpectedly"));
             return FAIL;
         }
     }
@@ -620,10 +617,11 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
                 buf,
                 buflen,
                 ngettext(
-                    c"%ld second ago".as_ptr(),
-                    c"%ld seconds ago".as_ptr(),
+                    c"%ld second ago",
+                    c"%ld seconds ago",
                     c_ulong::from(seconds as uint32_t),
-                ),
+                )
+                .as_ptr(),
                 seconds,
             )
         };
@@ -671,12 +669,7 @@ pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
         return;
     }
     if b.b_u_curhead.is_some() {
-        // SAFETY: a NUL-terminated literal.
-        unsafe {
-            emsg(gettext(
-                c"E790: undojoin is not allowed after undo".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E790: undojoin is not allowed after undo"));
         return;
     }
     if !b.b_u_synced || get_undolevel(b) < 0 {

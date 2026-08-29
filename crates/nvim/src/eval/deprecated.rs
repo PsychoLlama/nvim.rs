@@ -31,7 +31,7 @@ use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2};
 use crate::memory::{xmalloc, xstrdup};
-use crate::message::emsg;
+use crate::message::emsg_ptr;
 use crate::os::cshim::gettext;
 use crate::semsg_c;
 use crate::types::channel::kChannelStdinPipe;
@@ -144,7 +144,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
                 let msg = c"E5010: List item %d of the second argument is not a string";
                 // SAFETY: the message is a NUL-terminated literal whose
                 // format takes one `int`.
-                unsafe { semsg_c!(gettext(msg.as_ptr()), i as c_int) };
+                unsafe { semsg_c!(gettext(msg), i as c_int) };
                 return;
             }
         }
@@ -238,7 +238,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
         ret.vval.v_number = closed as varnumber_T;
         if !closed {
             // SAFETY: the failed close named its reason.
-            unsafe { emsg(error) };
+            unsafe { emsg_ptr(error) };
         }
     }
 }
@@ -283,7 +283,7 @@ pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eva
     if argv[1].v_type != VAR_DICT {
         // Wrong argument types.
         // SAFETY: `e_invarg2` takes one string.
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
         return;
     }
 

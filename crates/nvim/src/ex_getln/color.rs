@@ -10,6 +10,7 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
+use crate::os::cshim::gettext_ptr;
 use crate::smsg_c;
 use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kErrorTypeNone};
 
@@ -278,7 +279,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         if tv.v_type != VAR_LIST {
             print_errmsg!(
                 c"%s".as_ptr(),
-                gettext(c"E5400: Callback should return list".as_ptr())
+                gettext(c"E5400: Callback should return list")
             );
             break 'body Label::Error;
         }
@@ -291,13 +292,13 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         let mut li: *const listitem_T = unsafe { (*tv.vval.v_list).lv_first };
         while !li.is_null() {
             if unsafe { (*li).li_tv.v_type } != VAR_LIST {
-                print_errmsg!(gettext(c"E5401: List item %i is not a List".as_ptr()), i);
+                print_errmsg!(gettext(c"E5401: List item %i is not a List").as_ptr(), i);
                 break 'body Label::Error;
             }
             let l: *const list_T = unsafe { (*li).li_tv.vval.v_list };
             if unsafe { tv_list_len(l) } != 3 {
                 print_errmsg!(
-                    gettext(c"E5402: List item %i has incorrect length: %d /= 3".as_ptr()),
+                    gettext(c"E5402: List item %i has incorrect length: %d /= 3").as_ptr(),
                     i,
                     tv_list_len(l)
                 );
@@ -311,7 +312,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                 break 'body Label::Error;
             } else if !(prev_end <= start && start < colored_ccline.len() as varnumber_T) {
                 print_errmsg!(
-                    gettext(c"E5403: Chunk %i start %ld not in range [%ld, %i)".as_ptr()),
+                    gettext(c"E5403: Chunk %i start %ld not in range [%ld, %i)").as_ptr(),
                     i,
                     start,
                     prev_end,
@@ -323,7 +324,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                 == 0
             {
                 print_errmsg!(
-                    gettext(c"E5405: Chunk %i start %ld splits multibyte character".as_ptr()),
+                    gettext(c"E5405: Chunk %i start %ld splits multibyte character").as_ptr(),
                     i,
                     start
                 );
@@ -350,7 +351,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                 break 'body Label::Error;
             } else if !(start < end && end <= colored_ccline.len() as varnumber_T) {
                 print_errmsg!(
-                    gettext(c"E5404: Chunk %i end %ld not in range (%ld, %i]".as_ptr()),
+                    gettext(c"E5404: Chunk %i end %ld not in range (%ld, %i]").as_ptr(),
                     i,
                     end,
                     start,
@@ -363,7 +364,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                     == 0
             {
                 print_errmsg!(
-                    gettext(c"E5406: Chunk %i end %ld splits multibyte character".as_ptr()),
+                    gettext(c"E5406: Chunk %i end %ld splits multibyte character").as_ptr(),
                     i,
                     end
                 );
@@ -402,7 +403,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     // color_cmdline_error:
     if matches!(outcome, Label::Error) {
         if err.type_0 != kErrorTypeNone {
-            print_errmsg!(gettext(err_errmsg), err.msg);
+            print_errmsg!(gettext_ptr(err_errmsg), err.msg);
             unsafe { api_clear_error(&raw mut err) };
         }
         debug_assert!(printed_errmsg);

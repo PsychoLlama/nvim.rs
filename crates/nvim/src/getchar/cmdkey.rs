@@ -55,7 +55,7 @@ pub unsafe fn getcmdkeycmd(
         if unsafe { vgetorpeek(false) } == NUL {
             // An incomplete <Cmd> is an error: there is not much the user
             // could do from this state.
-            unsafe { emsg(gettext(e_cmd_mapping_must_end_with_cr.as_ptr())) };
+            emsg(gettext(e_cmd_mapping_must_end_with_cr));
             aborted = true;
             break;
         }
@@ -80,13 +80,7 @@ pub unsafe fn getcmdkeycmd(
             aborted = true;
         } else if c1 == K_COMMAND {
             // A nicer error message for this special case.
-            unsafe {
-                emsg(gettext(
-                    e_cmd_mapping_must_end_with_cr_before_second_cmd
-                        .as_ptr()
-                        .cast(),
-                ))
-            };
+            emsg(gettext(e_cmd_mapping_must_end_with_cr_before_second_cmd));
             aborted = true;
         } else if c1 == K_SNR {
             unsafe { ga_concat_len(&raw mut line_ga, c"<SNR>".as_ptr(), 5) };

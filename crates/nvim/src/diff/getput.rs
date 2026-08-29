@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 use crate::types::{ExArgt, FAIL, NUL, OK};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
@@ -17,7 +18,7 @@ use core::ffi::{c_char, c_int, c_uint};
 /// `emsg(gettext(msg))`, the pair every error here is reported through.
 fn emsg_gettext(msg: *const c_char) {
     // SAFETY: a static message string, and the editor exists.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 /// Whether `:diffput` may write into `buf` -- or the command is not
@@ -168,7 +169,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         };
         let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
-            unsafe { semsg_c!(gettext(c"E102: Can't find buffer \"%s\"".as_ptr()), eap.arg) };
+            unsafe { semsg_c!(gettext(c"E102: Can't find buffer \"%s\""), eap.arg) };
             return;
         };
         if buf.raw() == curbuf.get() {
@@ -177,12 +178,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         idx_other = diff_slot(buf, tp);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E103: Buffer \"%s\" is not in diff mode".as_ptr()),
-                    eap.arg,
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E103: Buffer \"%s\" is not in diff mode"), eap.arg,) };
             return;
         }
     }

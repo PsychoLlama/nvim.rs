@@ -270,7 +270,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
     let mut prev_lnum: linenr_T = 0;
 
     if repl_from.get().is_null() || repl_to.get().is_null() {
-        unsafe { emsg(gettext(c"E752: No previous spell replacement".as_ptr())) };
+        emsg(gettext(c"E752: No previous spell replacement"));
         return;
     }
     let repl_from_len = unsafe { strlen(repl_from.get()) };
@@ -338,7 +338,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
     unsafe { xfree(frompat as *mut c_void) };
 
     if sub_nsubs.get() == 0 {
-        unsafe { semsg_c!(gettext(c"E753: Not found: %s".as_ptr()), repl_from.get()) };
+        unsafe { semsg_c!(gettext(c"E753: Not found: %s"), repl_from.get()) };
     } else {
         unsafe { do_sub_msg(false) };
     }

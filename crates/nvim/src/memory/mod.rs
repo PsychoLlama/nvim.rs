@@ -84,7 +84,7 @@ unsafe fn do_outofmem_msg(size: usize) {
     let fmt = c"E342: Out of memory!  (allocating %lu bytes)";
     // SAFETY: `gettext` answers a NUL-terminated string, and `%lu` spends
     // exactly the `c_ulong` that follows it.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), size) };
+    unsafe { semsg_c!(gettext(fmt), size) };
 }
 
 /// The four calls below are the whole of this module's contact with the
@@ -271,7 +271,7 @@ pub unsafe fn xmallocz(size: usize) -> *mut c_void {
     unsafe {
         if total_size < size {
             let too_big = c"Nvim: Data too large to fit into virtual memory space\n";
-            preserve_exit(gettext(too_big.as_ptr()));
+            preserve_exit(gettext(too_big).as_ptr());
         }
         let ret = xmalloc(total_size);
         *ret.cast::<u8>().add(size) = 0;

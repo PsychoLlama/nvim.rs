@@ -436,7 +436,7 @@ const NEWS_TEMPLATE: &CStr = c"type  :help news<Enter>     for v%s.%s notes ";
 /// nvim never unloads, so the result outlives every caller here.
 fn translate(msg: &'static CStr) -> &'static CStr {
     // SAFETY: `msg` is NUL-terminated, and so is anything gettext returns.
-    unsafe { CStr::from_ptr(gettext(msg.as_ptr())) }
+    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }
 }
 
 /// [`NEWS_TEMPLATE`], translated and filled in.

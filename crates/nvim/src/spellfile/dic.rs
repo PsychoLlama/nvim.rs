@@ -81,7 +81,7 @@ pub(super) unsafe fn spell_read_dic(
     // below is sized for what is written into it.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen), fname) };
         return FAIL;
     }
 
@@ -101,7 +101,7 @@ pub(super) unsafe fn spell_read_dic(
     if unsafe { vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) }
         || !ascii_isdigit(unsafe { *skipwhite(line.as_mut_ptr()) } as c_int)
     {
-        unsafe { semsg_c!(gettext(c"E760: No word count in %s".as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(c"E760: No word count in %s"), fname) };
     }
 
     let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
@@ -134,9 +134,8 @@ pub(super) unsafe fn spell_read_dic(
             let conv = unsafe { &raw mut (*spin).si_conv };
             pc = unsafe { string_convert(conv, line.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
-                let fmt =
-                    unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
-                unsafe { smsg_c!(0, fmt, fname, lnum, line.as_mut_ptr()) };
+                let fmt = gettext(c"Conversion failure for word in %s line %d: %s");
+                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line.as_mut_ptr()) };
                 continue;
             }
             pc
@@ -174,9 +173,9 @@ pub(super) unsafe fn spell_read_dic(
             if os_time() > last_msg_time {
                 last_msg_time = os_time();
                 let (buf, room) = (message.as_mut_ptr(), size_of_val(&message));
-                let fmt = unsafe { gettext(c"line %6d, word %6d - %s".as_ptr()) };
+                let fmt = gettext(c"line %6d, word %6d - %s");
                 let count = unsafe { (*spin).si_foldwcount + (*spin).si_keepwcount };
-                unsafe { vim_snprintf(buf, room, fmt, lnum, count, w) };
+                unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
                 unsafe { msg_start() };
                 unsafe { msg_outtrans_long(message.as_mut_ptr(), 0) };
                 unsafe { msg_clr_eos() };
@@ -205,11 +204,11 @@ pub(super) unsafe fn spell_read_dic(
             // Report every duplicate when 'verbose' is on, otherwise
             // just the first, plus a count at the end.
             if p_verbose.get() > 0 {
-                let fmt = unsafe { gettext(c"Duplicate word in %s line %d: %s".as_ptr()) };
-                unsafe { smsg_c!(0, fmt, fname, lnum, dw) };
+                let fmt = gettext(c"Duplicate word in %s line %d: %s");
+                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, dw) };
             } else if duplicate == 0 {
-                let fmt = unsafe { gettext(c"First duplicate word in %s line %d: %s".as_ptr()) };
-                unsafe { smsg_c!(0, fmt, fname, lnum, dw) };
+                let fmt = gettext(c"First duplicate word in %s line %d: %s");
+                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, dw) };
             }
             duplicate += 1;
         }
@@ -273,13 +272,12 @@ pub(super) unsafe fn spell_read_dic(
     }
 
     if duplicate > 0 {
-        let fmt = unsafe { gettext(c"%d duplicate word(s) in %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, duplicate, fname) };
+        let fmt = gettext(c"%d duplicate word(s) in %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), duplicate, fname) };
     }
     if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
-        let fmt =
-            unsafe { gettext(c"Ignored %d word(s) with non-ASCII characters in %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, non_ascii, fname) };
+        let fmt = gettext(c"Ignored %d word(s) with non-ASCII characters in %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), non_ascii, fname) };
     }
     unsafe { hash_clear(&raw mut ht) };
     unsafe { fclose(fd) };

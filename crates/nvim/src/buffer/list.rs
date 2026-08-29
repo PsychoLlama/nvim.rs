@@ -38,11 +38,11 @@ use crate::main::{
 };
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xfree, xstrdup};
-use crate::message::{emsg, msg_delay};
+use crate::message::{emsg_ptr, msg_delay};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::optionstr::clear_string_option;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
@@ -94,12 +94,12 @@ fn tr(msg: &CStr) -> *mut c_char {
 /// arrays.
 fn tr_raw(msg: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext(msg) }
+    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
 }
 
 fn err(msg: *mut c_char) {
     // SAFETY: a NUL-terminated message.
-    unsafe { emsg(msg) };
+    unsafe { emsg_ptr(msg) };
 }
 
 /// `semsg(fmt, n)`, for the error that names a buffer number.

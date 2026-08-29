@@ -298,11 +298,11 @@ pub(crate) unsafe fn nv_pcmark(cap: *mut cmdarg_T) {
     } else if ca.cmdchar == 'g' as c_int {
         // Three different reasons the change list had nothing.
         if cur_buf().b_changelistlen == 0 {
-            unsafe { emsg(gettext(e_changelist_is_empty.as_ptr())) };
+            emsg(gettext(e_changelist_is_empty));
         } else if ca.count1 < 0 {
-            unsafe { emsg(gettext(c"E662: At start of changelist".as_ptr())) };
+            emsg(gettext(c"E662: At start of changelist"));
         } else {
-            unsafe { emsg(gettext(c"E663: At end of changelist".as_ptr())) };
+            emsg(gettext(c"E663: At end of changelist"));
         }
     } else {
         clear_op_beep(ca.op());

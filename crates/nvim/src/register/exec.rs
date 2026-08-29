@@ -189,8 +189,7 @@ pub unsafe fn do_record(c: c_int) -> c_int {
         unsafe { showmode() };
     } else {
         // Clear the "recording @a" message.
-        // SAFETY: an empty NUL-terminated literal.
-        unsafe { msg(c"".as_ptr(), 0) };
+        msg(c"", 0);
     }
     if p.is_null() {
         return FAIL;
@@ -382,8 +381,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
     if regname == '@' as c_int {
         // `@@` repeats the last `@`.
         if execreg_lastc.get() == NUL {
-            // SAFETY: a NUL-terminated literal, translated in place.
-            unsafe { emsg(gettext(c"E748: No previously used register".as_ptr())) };
+            emsg(gettext(c"E748: No previously used register"));
             return FAIL;
         }
         regname = execreg_lastc.get();
@@ -407,8 +405,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // The last command line, re-run. Control characters have to be
         // escaped with CTRL-V or the typeahead buffer would act on them.
         if last_cmdline.get().is_null() {
-            // SAFETY: `e_nolastcmd` is a NUL-terminated static message.
-            unsafe { emsg(gettext(e_nolastcmd.as_ptr())) };
+            emsg(gettext(e_nolastcmd));
             return FAIL;
         }
         // SAFETY: `new_last_cmdline` owns whatever it holds, and is cleared
@@ -461,8 +458,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // copy of the last inserted text.
         let p = unsafe { get_last_insert_save() };
         if p.is_null() {
-            // SAFETY: `e_noinstext` is a NUL-terminated static message.
-            unsafe { emsg(gettext(e_noinstext.as_ptr())) };
+            emsg(gettext(e_noinstext));
             return FAIL;
         }
         // SAFETY: as above -- `p` is NUL-terminated and ours to free.

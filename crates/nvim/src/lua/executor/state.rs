@@ -124,7 +124,7 @@ pub unsafe fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
         if lstate.is_null() {
             fprintf(
                 stderr,
-                gettext(c"E970: Failed to initialize Lua interpreter\n".as_ptr()),
+                gettext(c"E970: Failed to initialize Lua interpreter\n").as_ptr(),
             );
             os_exit(1);
         }
@@ -132,7 +132,7 @@ pub unsafe fn nlua_init(argv: *mut *mut c_char, argc: c_int, lua_arg0: c_int) {
         if !nlua_state_init(lstate) {
             fprintf(
                 stderr,
-                gettext(c"E970: Failed to initialize builtin Lua modules\n".as_ptr()),
+                gettext(c"E970: Failed to initialize builtin Lua modules\n").as_ptr(),
             );
             os_exit(1);
         }

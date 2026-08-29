@@ -180,9 +180,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
         if nofile_err {
-            let fmt = unsafe {
-                gettext(c"E676: No matching autocommands for buftype=%s buffer".as_ptr())
-            };
+            let fmt = gettext(c"E676: No matching autocommands for buftype=%s buffer");
             let buftype = cur_buf().b_p_bt;
             unsafe { semsg_c!(fmt, buftype) };
         }
@@ -218,10 +216,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             return PreWrite::Finished(OK);
         }
         if !aborting() {
-            let why = unsafe {
-                gettext(c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr())
-            };
-            unsafe { emsg(why) };
+            let why = gettext(c"E203: Autocommands deleted or unloaded buffer to be written");
+            emsg(why);
         }
         return PreWrite::Finished(FAIL);
     }
@@ -240,10 +236,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             if *end < start {
                 no_wait_return.set(no_wait_return.get() - 1);
                 msg_scroll.set(msg_save);
-                let why = unsafe {
-                    gettext(c"E204: Autocommand changed number of lines in unexpected way".as_ptr())
-                };
-                unsafe { emsg(why) };
+                let why = gettext(c"E204: Autocommand changed number of lines in unexpected way");
+                emsg(why);
                 return PreWrite::Finished(FAIL);
             }
         }

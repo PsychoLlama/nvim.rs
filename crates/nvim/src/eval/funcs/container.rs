@@ -115,7 +115,7 @@ fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
     // SAFETY throughout: the tag checked here says which union member is
     // live, and the List it names outlives the call.
     if args.ty(0) != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"flatten()".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_listarg), c"flatten()".as_ptr(),) };
         return;
     }
     let maxdepth = if !args.has(1) {
@@ -128,7 +128,7 @@ fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
         }
         if depth < 0 {
             let msg = c"E900: maxdepth must be non-negative number";
-            unsafe { emsg(gettext(msg.as_ptr())) };
+            emsg(gettext(msg));
             return;
         }
         depth
@@ -179,7 +179,7 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
             ptr::null_mut()
         }
         _ => {
-            unsafe { semsg_c!(gettext(e_listdictblobarg.as_ptr()), c"get()".as_ptr(),) };
+            unsafe { semsg_c!(gettext(e_listdictblobarg), c"get()".as_ptr(),) };
             ptr::null_mut()
         }
     };
@@ -316,7 +316,7 @@ fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
         _ => {
             // Kept on the variadic message call: `what` is arbitrary
             // user bytes and a Rust format string can only carry UTF-8.
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+            unsafe { semsg_c!(gettext(e_invarg2), what) };
         }
     }
     false
@@ -360,7 +360,7 @@ pub unsafe fn f_index(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         VAR_BLOB => index_blob(args, rettv),
         VAR_LIST => index_list(args, rettv),
         _ => {
-            unsafe { emsg(gettext(e_listblobreq.as_ptr())) };
+            emsg(gettext(e_listblobreq));
         }
     }
 }
@@ -595,7 +595,7 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
         _ => {
-            unsafe { emsg(gettext(c"E701: Invalid type for len()".as_ptr())) };
+            emsg(gettext(c"E701: Invalid type for len()"));
             return;
         }
     };

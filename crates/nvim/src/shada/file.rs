@@ -19,6 +19,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use super::*;
+use crate::os::cshim::gettext;
 use crate::types::{FAIL, MAXPATHL, NUL, OK};
 
 /// Report `E136`/`E137`/`E138`/`E886` about the ShaDa file itself, naming
@@ -26,17 +27,17 @@ use crate::types::{FAIL, MAXPATHL, NUL, OK};
 ///
 /// The messages here all end in one variadic call; writing it once keeps
 /// the unchecked part of reporting to these two functions.
-fn shada_file_error(fmt: &CStr, what: *const c_char) {
+fn shada_file_error(fmt: &'static CStr, what: *const c_char) {
     // SAFETY: `fmt` is a static format string whose one conversion is the
     // `%s` that `what` — a NUL-terminated name — is passed for.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), what) };
+    unsafe { semsg_c!(gettext(fmt), what) };
 }
 
 /// As [`shada_file_error`], for the messages that name two things: a file
 /// and either a second file or a libuv message.
-fn shada_file_error2(fmt: &CStr, what: *const c_char, why: *const c_char) {
+fn shada_file_error2(fmt: &'static CStr, what: *const c_char, why: *const c_char) {
     // SAFETY: as `shada_file_error`, for two `%s` conversions.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), what, why) };
+    unsafe { semsg_c!(gettext(fmt), what, why) };
 }
 
 /// Whether the reader has nothing more to give.
@@ -139,22 +140,22 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
         unsafe { verbose_enter() };
         let note = |wanted: c_uint, text: &'static CStr| {
             if flags as c_uint & wanted != 0 {
-                unsafe { gettext(text.as_ptr()) }
+                gettext(text).as_ptr()
             } else {
                 c"".as_ptr()
             }
         };
-        let fmt = unsafe { gettext(c"Reading ShaDa file \"%s\"%s%s%s%s".as_ptr()) };
+        let fmt = gettext(c"Reading ShaDa file \"%s\"%s%s%s%s");
         let name = fname.as_ptr();
         let info = note(kShaDaWantInfo as c_uint, c" info");
         let marks = note(kShaDaWantMarks as c_uint, c" marks");
         let oldfiles = note(kShaDaGetOldfiles as c_uint, c" oldfiles");
         let failed = if of_ret != 0 {
-            unsafe { gettext(c" FAILED".as_ptr()) }
+            gettext(c" FAILED").as_ptr()
         } else {
             c"".as_ptr()
         };
-        unsafe { smsg_c!(0, fmt, name, info, marks, oldfiles, failed) };
+        unsafe { smsg_c!(0, fmt.as_ptr(), name, info, marks, oldfiles, failed) };
         unsafe { verbose_leave() };
     }
 
@@ -366,7 +367,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
         unsafe {
             smsg_c!(
                 0,
-                gettext(c"Writing ShaDa file \"%s\"".as_ptr()),
+                gettext(c"Writing ShaDa file \"%s\"").as_ptr(),
                 fname.as_ptr(),
             )
         };

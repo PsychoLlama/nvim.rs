@@ -56,9 +56,7 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
 #[inline(always)]
 pub(crate) fn get_deleted_augroup() -> *const ::core::ffi::c_char {
     if deleted_augroup.get().is_null() {
-        // SAFETY: `gettext` is given a static C string literal and answers
-        // the catalogue's own copy, which outlives every caller.
-        deleted_augroup.set(unsafe { gettext(c"--Deleted--".as_ptr()) });
+        deleted_augroup.set(gettext(c"--Deleted--").as_ptr());
     }
     deleted_augroup.get()
 }
@@ -108,12 +106,10 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
     if group == AUGROUP_ERROR {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(c"E367: No such group: \"%s\"".as_ptr()), name) };
+        unsafe { semsg_c!(gettext(c"E367: No such group: \"%s\""), name) };
         return;
     } else if group == current_augroup.get() {
-        // SAFETY: `gettext` is given a static literal and `emsg` reads the
-        // catalogue's copy of it.
-        unsafe { emsg(gettext(c"E936: Cannot delete the current group".as_ptr())) };
+        emsg(gettext(c"E936: Cannot delete the current group"));
         return;
     }
 
@@ -131,11 +127,9 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
             // pattern is null.
             if !ap.is_null() && unsafe { (*ap).group } == group {
                 if stupid_legacy_mode {
-                    // SAFETY: `gettext` is given a static literal.
-                    let warning =
-                        unsafe { gettext(c"W19: Deleting augroup that is still in use".as_ptr()) };
+                    let warning = gettext(c"W19: Deleting augroup that is still in use");
                     // SAFETY: `warning` is the catalogue's own string.
-                    unsafe { give_warning(warning, true, true) };
+                    unsafe { give_warning(warning.as_ptr(), true, true) };
                     // Re-point the *name* at the deleted-group id and
                     // give up the old id, leaving the autocommands on it.
                     // SAFETY: `name` is the caller's string, borrowed for
@@ -224,8 +218,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
     // against a literal are both in bounds, and it stays live throughout.
     if del_group {
         if unsafe { *arg } == 0 {
-            // SAFETY: `e_argreq` is a static message string.
-            unsafe { emsg(gettext(e_argreq.as_ptr())) };
+            emsg(gettext(e_argreq));
         } else {
             // SAFETY: `arg` is the caller's string.
             unsafe { augroup_del(arg, true) };

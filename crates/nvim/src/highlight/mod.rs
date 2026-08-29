@@ -330,8 +330,7 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
         // compute a fresh one. Twice round means we are really out.
         if REBUILDING.get() || retried {
             let msg = c"E424: Too many different highlighting attributes in use";
-            // SAFETY: the caller's editor state.
-            unsafe { emsg(gettext(msg.as_ptr())) };
+            emsg(gettext(msg));
             return 0;
         }
         REBUILDING.set(true);

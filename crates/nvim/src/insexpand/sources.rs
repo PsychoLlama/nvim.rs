@@ -221,12 +221,11 @@ pub(crate) unsafe fn ins_compl_files(
         let fp = unsafe { os_fopen(file, c"r".as_ptr()) }; // open dictionary file
         let quiet = shortmess(ShmFlag::COMPLETIONSCAN);
         if flags != DICT_EXACT && !quiet && !compl_autocomplete.get() {
-            // SAFETY: a static NUL-terminated format.
-            let fmt = unsafe { gettext(c"Scanning dictionary: %s".as_ptr()) };
+            let fmt = gettext(c"Scanning dictionary: %s");
             let (out, size) = (progress.as_mut_ptr(), IOSIZE as size_t);
             // SAFETY: `out` addresses all `size` bytes and `file` is a
             // NUL-terminated name.
-            unsafe { vim_snprintf(out, size, fmt, file) };
+            unsafe { vim_snprintf(out, size, fmt.as_ptr(), file) };
             // SAFETY: `vim_snprintf` NUL-terminated `out`.
             unsafe { scan_progress(out) };
         }

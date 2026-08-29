@@ -151,7 +151,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     }
     if list == (ListDo::Quickfix { location: true }) && !forceit {
         // ":ldo" would have to leave the location list's own window.
-        unsafe { emsg(E_WINFIXBUF.as_ptr()) };
+        emsg(E_WINFIXBUF);
         return false;
     }
     if win_valid(prevwin.get()) && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0 {
@@ -163,7 +163,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
         if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
             // Autocommands set 'winfixbuf', or sent us to another window
             // that has it set, or the split failed. Give up.
-            unsafe { emsg(E_WINFIXBUF.as_ptr()) };
+            emsg(E_WINFIXBUF);
             return false;
         }
     }

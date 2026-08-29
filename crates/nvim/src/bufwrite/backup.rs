@@ -20,6 +20,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
+use crate::message::msg_ptr;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
 
@@ -74,7 +75,7 @@ unsafe fn check_mtime(buf: *mut buf_T, file_info: *mut FileInfo) -> bool {
     msg_silent.set(0); // must give this prompt
     // Not emsg(): that would flush the buffers.
     let warning = translate(c"WARNING: The file has been changed since reading it!!!").as_ptr();
-    unsafe { msg(warning, HLF_E) };
+    unsafe { msg_ptr(warning, HLF_E) };
     if unsafe { ask_yesno(translate(c"Do you really want to write to it").as_ptr()) }
         == 'n' as c_int
     {
@@ -533,7 +534,7 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
     // Copying may take a while; if we were interrupted, let the user
     // know the message arrived.
     if got_int.get() {
-        unsafe { msg(gettext(e_interr.as_ptr()), 0) };
+        msg(gettext(e_interr), 0);
         unsafe { ui_flush() };
     }
     unsafe { os_copy(backup.path, fname, UV_FS_COPYFILE_FICLONE) == 0 }
@@ -553,7 +554,7 @@ pub(crate) unsafe fn apply_patchmode(
     let org = unsafe { modname(fname, p_pm.get(), false) };
     if !backup.path.is_null() {
         if org.is_null() {
-            unsafe { emsg(translate(c"E205: Patchmode: can't save original file").as_ptr()) };
+            emsg(translate(c"E205: Patchmode: can't save original file"));
         } else if !unsafe { os_path_exists(org) } {
             unsafe { vim_rename(backup.path, org) };
             unsafe { xfree(backup.path.cast()) }; // don't delete the file
@@ -574,7 +575,7 @@ pub(crate) unsafe fn apply_patchmode(
         };
         if empty_fd < 0 {
             let why = translate(c"E206: Patchmode: can't touch empty original file").as_ptr();
-            unsafe { emsg(why) };
+            unsafe { emsg_ptr(why) };
         } else {
             unsafe { close(empty_fd) };
         }

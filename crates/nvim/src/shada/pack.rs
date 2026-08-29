@@ -269,7 +269,7 @@ unsafe fn pack_variable(
     {
         unsafe {
             semsg_c!(
-                gettext(c"E574: Failed to write variable %s".as_ptr()),
+                gettext(c"E574: Failed to write variable %s"),
                 global_var.name,
             )
         };

@@ -14,6 +14,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::msgpack_rpc::unpacker::MPACK_OK;
 
 use super::*;
+use crate::os::cshim::gettext;
 use crate::types::VAR_TYPE_BLOB;
 
 /// Report `E575` for an entry at byte `pos` the file states wrongly.
@@ -22,18 +23,18 @@ use crate::types::VAR_TYPE_BLOB;
 /// alone, or the position and the keyset's own complaint — so the variadic
 /// call they all end in is written once, here, rather than at each of the
 /// two dozen places that raise one.
-fn malformed_entry(fmt: &CStr, pos: uint64_t) {
+fn malformed_entry(fmt: &'static CStr, pos: uint64_t) {
     // SAFETY: `fmt` is a static format string whose one conversion is the
     // `%lu` that `pos` is passed for.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), pos) };
+    unsafe { semsg_c!(gettext(fmt), pos) };
 }
 
 /// As [`malformed_entry`], for the messages whose `%s` carries the reason
 /// `unpack_keydict` left behind.
-fn malformed_entry_because(fmt: &CStr, pos: uint64_t, why: *const c_char) {
+fn malformed_entry_because(fmt: &'static CStr, pos: uint64_t, why: *const c_char) {
     // SAFETY: as `malformed_entry`; `why` is that call's NUL-terminated
     // message, which outlives this one.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), pos, why) };
+    unsafe { semsg_c!(gettext(fmt), pos, why) };
 }
 
 /// Parse the payload of an entry whose type this Nvim knows.
@@ -503,7 +504,7 @@ unsafe fn parse_buffer_list(
             None
         };
         if let Some(complaint) = complaint {
-            unsafe { semsg_c!(gettext(complaint.as_ptr()), pos) };
+            unsafe { semsg_c!(gettext(complaint), pos) };
             return Err(Malformed);
         }
     }

@@ -284,10 +284,10 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     }
     p_more.set(0); // don't want to see this message when scrolling back
     if got_int.get() {
-        unsafe { msg_puts(gettext(c"Interrupt: ".as_ptr())) };
+        unsafe { msg_puts(gettext(c"Interrupt: ").as_ptr()) };
     }
-    let prompt = unsafe { gettext(c"Press ENTER or type command to continue".as_ptr()) };
-    unsafe { msg_puts_hl(prompt, HLF_R, false) };
+    let prompt = gettext(c"Press ENTER or type command to continue");
+    unsafe { msg_puts_hl(prompt.as_ptr(), HLF_R, false) };
     if unsafe { msg_use_printf() } == 0 {
         unsafe { msg_clr_eos() };
     }
@@ -524,11 +524,11 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
 pub(crate) unsafe fn msg_moremsg(full: bool) {
     let attr = unsafe { hl_combine_attr(hl_attr(HLF_MSG as c_int), hl_attr(HLF_M as c_int)) };
     unsafe { grid_line_start(msg_grid_view(), Rows.get() - 1) };
-    let mut len = unsafe { grid_line_puts(0, gettext(c"-- More --".as_ptr()), -1, attr) };
+    let mut len = unsafe { grid_line_puts(0, gettext(c"-- More --").as_ptr(), -1, attr) };
     if full {
         let keys = c" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit ";
-        let help = unsafe { gettext(keys.as_ptr()) };
-        len += unsafe { grid_line_puts(len, help, -1, attr) };
+        let help = gettext(keys);
+        len += unsafe { grid_line_puts(len, help.as_ptr(), -1, attr) };
     }
     unsafe { grid_line_cursor_goto(len) };
     unsafe { grid_line_flush() };

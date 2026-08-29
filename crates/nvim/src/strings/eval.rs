@@ -65,7 +65,7 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     if given(unsafe { &*argvars.add(1) }) {
         base = unsafe { tv_get_number(argvars.add(1)) as c_int };
         if !matches!(base, 2 | 8 | 10 | 16) {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
             return;
         }
         if given(unsafe { &*argvars.add(2) }) && unsafe { tv_get_bool(argvars.add(2)) } != 0 {
@@ -370,7 +370,7 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
         unsafe { (*rettv).vval.v_string = ga.ga_data as *mut c_char };
         return;
     }
-    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), fromstr) };
+    unsafe { semsg_c!(gettext(e_invarg2), fromstr) };
     unsafe { ga_clear(&raw mut ga) };
 }
 
@@ -406,7 +406,7 @@ pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
                 return;
             }
             if !(0..=2).contains(&dir) {
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), numbuf.string(argvars.add(2)),) };
+                unsafe { semsg_c!(gettext(e_invarg2), numbuf.string(argvars.add(2)),) };
                 return;
             }
         }

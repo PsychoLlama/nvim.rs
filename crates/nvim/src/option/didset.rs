@@ -173,8 +173,8 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
     if unsafe { strcmp(p_enc.get(), c"utf-8".as_ptr()) } != 0 {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         unsafe { msg_source(HLF_W) };
-        unsafe { msg(gettext(warning.as_ptr()), HLF_W) };
-        unsafe { set_vim_var_string(Vv::Warningmsg, gettext(warning.as_ptr()), -1 as ptrdiff_t) };
+        msg(gettext(warning), HLF_W);
+        unsafe { set_vim_var_string(Vv::Warningmsg, gettext(warning).as_ptr(), -1 as ptrdiff_t) };
     }
     p_deco.set(1);
     unsafe { answer_err(args, set_option_value(kOptKeymap, keymap, local)) }

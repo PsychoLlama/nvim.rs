@@ -160,7 +160,7 @@ unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
     let mut at = wc_part;
     while unsafe { *at } != 0 {
         if tail.len() + 5 >= MAXPATHL as usize {
-            unsafe { emsg(gettext(c"E854: Path too long for completion".as_ptr())) };
+            emsg(gettext(c"E854: Path too long for completion"));
             break;
         }
         if !(unsafe { *at } == b'*' as c_char && unsafe { *at.add(1) } == b'*' as c_char) {
@@ -186,10 +186,7 @@ unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
         if unsafe { *at } != 0 && !vim_ispathsep(unsafe { *at } as c_int) {
             unsafe {
                 semsg_c!(
-                gettext(
-                    c"E343: Invalid path: '**[number]' must be at the end of the path or be followed by '%s'."
-                        .as_ptr(),
-                ),
+                gettext(c"E343: Invalid path: '**[number]' must be at the end of the path or be followed by '%s'."),
                 c"/".as_ptr(),
             )
             };
@@ -212,7 +209,7 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     let start_dir = ctx.start_dir.as_ref().expect("set above");
     // Create an absolute path.
     if start_dir.len() + ctx.fix_path.len() + 3 >= MAXPATHL as usize {
-        unsafe { emsg(gettext(c"E854: Path too long for completion".as_ptr())) };
+        emsg(gettext(c"E854: Path too long for completion"));
         return Err(());
     }
 

@@ -617,9 +617,8 @@ impl Jump {
                 // 'ignorecase' was already set and the match turned up
                 // once case was folded.
                 if matches!(found, Found::Guessing) || save_p_ic == 0 {
-                    let s2 =
-                        unsafe { gettext(c"E435: Couldn't find tag, just guessing!".as_ptr()) };
-                    unsafe { msg(s2, 0) };
+                    let s2 = gettext(c"E435: Couldn't find tag, just guessing!");
+                    msg(s2, 0);
                     if msg_scrolled.get() == 0 && msg_silent.get() == 0 {
                         unsafe { msg_delay(1010, true) };
                     }

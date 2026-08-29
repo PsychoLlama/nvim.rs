@@ -179,16 +179,15 @@ unsafe fn compare_container(
     same_type: bool,
     identical: impl FnOnce() -> bool,
     equal: impl FnOnce() -> bool,
-    wrong_type: &CStr,
-    wrong_op: &CStr,
+    wrong_type: &'static CStr,
+    wrong_op: &'static CStr,
 ) -> Option<varnumber_T> {
     if op == EXPR_IS || op == EXPR_ISNOT {
         let same = same_type && identical();
         Some(varnumber_T::from(same == (op == EXPR_IS)))
     } else if !same_type || (op != EXPR_EQUAL && op != EXPR_NEQUAL) {
         let message = if !same_type { wrong_type } else { wrong_op };
-        // SAFETY: a message constant is a NUL-terminated literal.
-        unsafe { emsg(gettext(message.as_ptr())) };
+        emsg(gettext(message));
         unsafe { tv_clear(typ1) };
         None
     } else {
@@ -267,7 +266,7 @@ pub(crate) unsafe fn typval_compare(
         }
     } else if tv_is_func(unsafe { *typ1 }) || tv_is_func(unsafe { *typ2 }) {
         if op != EXPR_EQUAL && op != EXPR_NEQUAL && !type_is {
-            unsafe { emsg(gettext(c"E694: Invalid operation for Funcrefs".as_ptr())) };
+            emsg(gettext(c"E694: Invalid operation for Funcrefs"));
             unsafe { tv_clear(typ1) };
             return FAIL;
         }

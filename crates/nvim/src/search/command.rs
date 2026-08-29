@@ -131,7 +131,7 @@ unsafe fn pattern_to_search(
     }
     let subst = substitute_pattern();
     if subst.pat.is_null() {
-        unsafe { emsg(gettext(e_noprevre.as_ptr())) };
+        emsg(gettext(e_noprevre));
         return None;
     }
     Some((subst.pat, subst.patlen))
@@ -675,7 +675,7 @@ pub unsafe fn do_search(
             cmd.dirc = unsafe { *cmd.pat } as u8 as c_int;
             cmd.delim = cmd.dirc;
             if cmd.dirc != '?' as c_int && cmd.dirc != '/' as c_int {
-                unsafe { emsg(gettext(c"E386: Expected '?' or '/'  after ';'".as_ptr())) };
+                emsg(gettext(c"E386: Expected '?' or '/'  after ';'"));
                 break 'end false;
             }
             cmd.pat = unsafe { cmd.pat.offset(1) };

@@ -27,7 +27,7 @@ use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::fileio::vim_fgets;
 use crate::main::{e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
-use crate::message::emsg;
+use crate::message::{emsg, emsg_ptr};
 use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
@@ -47,9 +47,9 @@ use super::flag::kEqualFiles;
 /// `msg`, translated.  A helper rather than `gettext(..).as_ptr()` spelled
 /// out at each site: written that way, the five calls below each wrap onto
 /// four lines.
-fn translated(msg: &CStr) -> *const c_char {
+fn translated(msg: &'static CStr) -> *const c_char {
     // SAFETY: `msg` is a NUL-terminated literal.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// `:helptags [++t] {dir}`, or `:helptags ALL` for every `doc` directory in
@@ -130,7 +130,7 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
     let too_long = !unsafe { add_pathsep(namebuff) }
         || unsafe { xstrlcat(namebuff, c"**".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize;
     if too_long {
-        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        emsg(gettext(e_fnametoolong));
         return;
     }
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
@@ -273,7 +273,7 @@ unsafe fn helptags_one(
         || unsafe { xstrlcat(namebuff, c"/**/*".as_ptr(), MAXPATHL as usize) } >= MAXPATHL as usize
         || unsafe { xstrlcat(namebuff, ext, MAXPATHL as usize) } >= MAXPATHL as usize;
     if too_long {
-        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        emsg(gettext(e_fnametoolong));
         return;
     }
     let Some(files) = (unsafe { expand_help_files(namebuff) }) else {
@@ -292,7 +292,7 @@ unsafe fn helptags_one(
     let too_long = !unsafe { add_pathsep(namebuff) }
         || unsafe { xstrlcat(namebuff, tagfname, MAXPATHL as usize) } >= MAXPATHL as usize;
     if too_long {
-        unsafe { emsg(gettext(e_fnametoolong.as_ptr())) };
+        emsg(gettext(e_fnametoolong));
         // Upstream leaks `files` here; the `Wildcards` drop frees it.
         return;
     }
@@ -467,7 +467,7 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
             let (tag, rest) = (pair[1], unsafe { p2.offset(1) });
             let cap = MAXPATHL as size_t;
             unsafe { vim_snprintf(namebuff, cap, fmt, tag, dir, rest) };
-            unsafe { emsg(namebuff) };
+            unsafe { emsg_ptr(namebuff) };
             unsafe { *p2 = b'\t' as c_char };
             break;
         }

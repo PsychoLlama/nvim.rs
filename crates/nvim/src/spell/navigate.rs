@@ -286,7 +286,7 @@ pub unsafe fn spell_move_to(
                 lnum = unsafe { (*(*wp).w_buffer).b_ml.ml_line_count };
                 wrapped = true;
                 if !shortmess(ShmFlag::SEARCH) {
-                    unsafe { give_warning(gettext(top_bot_msg.as_ptr()), true, false) };
+                    unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
                 }
             }
             capcol = -1;
@@ -301,7 +301,7 @@ pub unsafe fn spell_move_to(
                 lnum = 1;
                 wrapped = true;
                 if !shortmess(ShmFlag::SEARCH) {
-                    unsafe { give_warning(gettext(bot_top_msg.as_ptr()), true, false) };
+                    unsafe { give_warning(gettext(bot_top_msg).as_ptr(), true, false) };
                 }
             }
 

@@ -497,7 +497,7 @@ unsafe fn process_files(
         } else if !got_int.get() {
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
-            unsafe { smsg_c!(0, gettext(c"Cannot open file \"%s\"".as_ptr()), fname) };
+            unsafe { smsg_c!(0, gettext(c"Cannot open file \"%s\"").as_ptr(), fname) };
         }
         fi += 1;
     }
@@ -680,7 +680,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     if qfl_is_empty(qf_current_list(qi)) {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_nomatch2.as_ptr()), search.spat) };
+        unsafe { semsg_c!(gettext(e_nomatch2), search.spat) };
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
         unsafe { jump_to_match(qi.raw(), eap.forceit, &mut out) };
     }

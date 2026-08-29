@@ -29,7 +29,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::main::{current_sctx, e_invarg2, p_fs};
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fileio::{file_close, file_flush, file_open, file_write};
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
@@ -167,20 +167,19 @@ fn list_of(tv: &typval_T) -> *const list_T {
 fn err1(fmt: *const c_char, a: *const c_char) {
     // SAFETY: `fmt` is a NUL-terminated format taking one string, and `a` is
     // a NUL-terminated string.
-    unsafe { semsg_c!(gettext(fmt), a) };
+    unsafe { semsg_c!(gettext_ptr(fmt), a) };
 }
 
 /// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
 fn err2(fmt: *const c_char, a: *const c_char, b: *const c_char) {
     // SAFETY: `fmt` is a NUL-terminated format taking two strings, and both
     // are NUL-terminated.
-    unsafe { semsg_c!(gettext(fmt), a, b) };
+    unsafe { semsg_c!(gettext_ptr(fmt), a, b) };
 }
 
 /// Report `msg`, translated.
-fn err(msg: &CStr) {
-    // SAFETY: `msg` is NUL-terminated, which is all `gettext` and `emsg` ask.
-    unsafe { emsg(gettext(msg.as_ptr())) };
+fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// libuv's name for the error code `error`.
@@ -352,9 +351,8 @@ fn writable(args: Args<'_>) -> bool {
         return true;
     }
     let what = c"writefile() first argument must be a List or a Blob";
-    // SAFETY: a NUL-terminated literal, which is all `gettext` reads.
-    let what = unsafe { gettext(what.as_ptr()) };
-    err1(e_invarg2.as_ptr(), what);
+    let what = gettext(what);
+    err1(e_invarg2.as_ptr(), what.as_ptr());
     false
 }
 

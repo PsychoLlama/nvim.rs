@@ -36,8 +36,7 @@ pub(crate) fn u_get_headentry(buf: Buf) -> *mut u_entry_T {
     match newhead.filter(|uh| !uh.uh_entry.is_null()) {
         Some(uh) => uh.uh_entry,
         None => {
-            // SAFETY: a NUL-terminated literal.
-            unsafe { iemsg(gettext(c"E439: Undo list corrupt".as_ptr())) };
+            iemsg(gettext(c"E439: Undo list corrupt"));
             ptr::null_mut()
         }
     }
@@ -61,8 +60,7 @@ pub(crate) fn u_getbot(mut buf: Buf) {
         let extra: linenr_T = buf.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
         unsafe { (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra };
         if unsafe { (*uep).ue_bot } < 1 || unsafe { (*uep).ue_bot } > buf.b_ml.ml_line_count {
-            // SAFETY: a NUL-terminated literal.
-            unsafe { iemsg(gettext(c"E440: Undo line missing".as_ptr())) };
+            iemsg(gettext(c"E440: Undo line missing"));
             unsafe { (*uep).ue_bot = (*uep).ue_top + 1 };
         }
         newhead.uh_getbot_entry = ptr::null_mut();

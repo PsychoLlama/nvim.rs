@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message::emsg_ptr;
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, OK};
 
@@ -310,7 +311,7 @@ pub unsafe fn tv_dict_get_callback(
     }
     if !tv_is_func(unsafe { (*di).di_tv }) && unsafe { (*di).di_tv.v_type } != VAR_STRING {
         let msg = tr(c"E6000: Argument is not a function or function name");
-        unsafe { emsg(msg) };
+        unsafe { emsg_ptr(msg) };
         return false;
     }
 

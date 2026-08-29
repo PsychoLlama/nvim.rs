@@ -40,8 +40,8 @@ use crate::mark::mark_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{
-    MSG_BUF_LEN, emsg, message_filtered, msg, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
-    msg_prt_line, msg_putchar, msg_puts, msg_puts_hl, msg_start, msgmore, set_keep_msg,
+    MSG_BUF_LEN, emsg, message_filtered, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
+    msg_prt_line, msg_ptr, msg_putchar, msg_puts, msg_puts_hl, msg_start, msgmore, set_keep_msg,
     wait_return,
 };
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
@@ -86,8 +86,7 @@ unsafe fn xmalloc_cstr(bytes: &[u8]) -> *mut c_char {
 /// Main thread, message state ready.
 unsafe fn prevcmd_is_set() -> bool {
     if prevcmd.get().is_null() {
-        // SAFETY: `e_noprev` is a NUL-terminated message.
-        unsafe { emsg(gettext(e_noprev.as_ptr())) };
+        emsg(gettext(e_noprev));
         return false;
     }
     true
@@ -357,8 +356,7 @@ unsafe fn do_filter(
             no_tempname = otmp.is_none();
         }
         if no_tempname {
-            // SAFETY: a live message string.
-            unsafe { emsg(gettext(e_notmp.as_ptr())) };
+            emsg(gettext(e_notmp));
         }
     }
 
@@ -393,7 +391,7 @@ unsafe fn do_filter(
                 // SAFETY: one `%s` for one string. Will call wait_return().
                 unsafe {
                     semsg_c!(
-                        gettext(c"E482: Can't create file %s".as_ptr()),
+                        gettext(c"E482: Can't create file %s"),
                         TempFile::name(&itmp),
                     )
                 };
@@ -465,12 +463,7 @@ unsafe fn do_filter(
                     if !aborting() {
                         // SAFETY: message state; one `%s` for one string.
                         unsafe { msg_putchar('\n' as c_int) };
-                        unsafe {
-                            semsg_c!(
-                                gettext(e_cant_read_file_str.as_ptr()),
-                                TempFile::name(&otmp),
-                            )
-                        };
+                        unsafe { semsg_c!(gettext(e_cant_read_file_str), TempFile::name(&otmp),) };
                     }
                     break 'error;
                 }
@@ -576,12 +569,9 @@ unsafe fn do_filter(
         // did, which would take the counter below where it started; the
         // guard releases once.
         drop(no_prompt.take());
-        // SAFETY: a literal.
-        unsafe {
-            emsg(gettext(
-                c"E135: *Filter* Autocommands must not change current buffer".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E135: *Filter* Autocommands must not change current buffer",
+        ));
     } else if cmdmod_has(CmdModFlags::LOCKMARKS) {
         // SAFETY: `curbuf` is live and the marks came from it.
         cur_buf().b_op_start = orig_start;
@@ -601,11 +591,11 @@ fn report_filtered(linecount: linenr_T) {
         vim_snprintf(
             buf,
             MSG_BUF_LEN as usize,
-            gettext(c"%ld lines filtered".as_ptr()),
+            gettext(c"%ld lines filtered").as_ptr(),
             linecount as i64,
         )
     };
-    if unsafe { msg(buf, 0) } && msg_scroll.get() == 0 {
+    if unsafe { msg_ptr(buf, 0) } && msg_scroll.get() == 0 {
         // save message to display it after redraw
         unsafe { set_keep_msg(buf, 0) };
     }
@@ -635,7 +625,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
         && buffers().any(buf_is_changed)
     {
         // SAFETY: a live message string.
-        unsafe { msg_puts(gettext(c"[No write since last change]\n".as_ptr())) };
+        unsafe { msg_puts(gettext(c"[No write since last change]\n").as_ptr()) };
     }
 
     ui_cursor_goto(msg_row.get(), msg_col.get());

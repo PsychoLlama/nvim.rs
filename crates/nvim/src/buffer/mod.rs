@@ -59,10 +59,10 @@ use crate::main::{curbuf, curwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::xfree;
-use crate::message::emsg;
+use crate::message::emsg_ptr;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, CdCause, ExtmarkOp, MarkAdjustMode, MarkTree, MetaIndex, OptValType,
@@ -364,7 +364,7 @@ pub(crate) fn tr(msg: &CStr) -> *mut c_char {
 /// arrays.
 pub(crate) fn tr_raw(msg: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext(msg) }
+    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
 }
 
 /// `emsg(_(msg))`.
@@ -375,7 +375,7 @@ pub(crate) fn err(msg: &CStr) {
 /// `emsg()` over an already translated message.
 pub(crate) fn err_raw(msg: *mut c_char) {
     // SAFETY: a NUL-terminated message.
-    unsafe { emsg(msg) };
+    unsafe { emsg_ptr(msg) };
 }
 
 /// The current buffer. Null only between `open_buffer()` freeing the last one

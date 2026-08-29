@@ -446,7 +446,7 @@ unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut Sp
         }
         let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
-            unsafe { iemsg(tr(c"E317: Pointer block id wrong 3")) };
+            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong 3")) };
             unsafe { mf_put(mfp, hp, false, false) };
             return false;
         }
@@ -522,7 +522,7 @@ unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut Sp
     }
 
     // Fallen off the bottom of the stack.
-    unsafe { iemsg(tr(c"E318: Updated too many blocks?")) };
+    unsafe { iemsg_ptr(tr(c"E318: Updated too many blocks?")) };
     b.b_ml.stack_clear(); // invalidate the stack
     true
 }
@@ -677,7 +677,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
     // If the file becomes empty the last line is replaced by an empty one.
     if b.b_ml.ml_line_count == 1 {
         if flags & ML_DEL_MESSAGE != 0 {
-            unsafe { set_keep_msg(gettext(no_lines_msg.as_ptr()), 0) };
+            unsafe { set_keep_msg(gettext(no_lines_msg).as_ptr(), 0) };
         }
         let i = unsafe { ml_replace_buf(buf, 1, c"".as_ptr().cast_mut(), true, false) };
         unsafe { (*buf).b_ml.ml_flags |= MlFlags::EMPTY };
@@ -797,7 +797,7 @@ unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr
         }
         let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
-            unsafe { iemsg(tr(c"E317: Pointer block id wrong 4")) };
+            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong 4")) };
             unsafe { mf_put(mfp, hp, false, false) };
             b.b_ml.stack_clear();
             return false;

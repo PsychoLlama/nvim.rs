@@ -151,11 +151,10 @@ fn err_nobufnr<T>(n: T) {
 }
 
 /// `smsg(0, NGETTEXT(one, many, n), n)`: the "N buffers deleted" report.
-fn report_count(one: &CStr, many: &CStr, n: c_int) {
-    // SAFETY: two NUL-terminated formats, chosen by the count.
-    let fmt = unsafe { ngettext(one.as_ptr(), many.as_ptr(), n as c_ulong) };
+fn report_count(one: &'static CStr, many: &'static CStr, n: c_int) {
+    let fmt = ngettext(one, many, n as c_ulong);
     // SAFETY: a translated format taking one number.
-    let _: c_int = unsafe { smsg_c!(0 as c_int, fmt, n) };
+    let _: c_int = unsafe { smsg_c!(0 as c_int, fmt.as_ptr(), n) };
 }
 
 /// A translated message, as the owned error this family answers with.

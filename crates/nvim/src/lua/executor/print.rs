@@ -150,11 +150,11 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
         // at the Lua caller instead.
         ga_clear(&raw mut msg_ga);
         let buff = xmalloc(IOSIZE as size_t).cast::<c_char>();
-        let fmt = gettext(c"E5114: Converting print argument #%i: %.*s".as_ptr());
+        let fmt = gettext(c"E5114: Converting print argument #%i: %.*s");
         let len = vim_snprintf(
             buff,
             IOSIZE as size_t,
-            fmt,
+            fmt.as_ptr(),
             curargidx,
             errmsg_len as c_int,
             errmsg,
@@ -275,12 +275,12 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
             {
                 nlua_error(
                     lstate,
-                    gettext(c"E5115: Loading Lua debug string: %.*s".as_ptr()),
+                    gettext(c"E5115: Loading Lua debug string: %.*s").as_ptr(),
                 );
             } else if nlua_pcall(lstate, 0, 0) != 0 {
                 nlua_error(
                     lstate,
-                    gettext(c"E5116: Calling Lua debug string: %.*s".as_ptr()),
+                    gettext(c"E5116: Calling Lua debug string: %.*s").as_ptr(),
                 );
             }
             tv_clear(&raw mut input);

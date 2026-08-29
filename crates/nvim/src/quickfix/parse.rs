@@ -543,7 +543,7 @@ unsafe fn push_pop_dir(prefix: u8, fields: &mut Fields, qfl: *mut qf_list_T) -> 
     // SAFETY: the caller's list is live; the name buffer is NUL-terminated.
     if prefix == b'D' {
         if !fields.has_name() {
-            unsafe { emsg(gettext(c"E379: Missing or empty directory name".as_ptr())) };
+            emsg(gettext(c"E379: Missing or empty directory name"));
             return Status::Fail;
         }
         unsafe {

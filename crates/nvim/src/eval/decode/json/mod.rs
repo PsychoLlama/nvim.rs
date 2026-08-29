@@ -108,7 +108,7 @@ pub unsafe fn json_decode_string(
         p += 1;
     }
     if p == buf_len {
-        unsafe { emsg(gettext(E474_BLANK_STRING.as_ptr())) };
+        emsg(gettext(E474_BLANK_STRING));
         return FAIL;
     }
 

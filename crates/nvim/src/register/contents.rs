@@ -493,13 +493,9 @@ pub unsafe fn write_reg_contents_lst(
         let s = if first.is_null() {
             c"".as_ptr().cast_mut()
         } else if !(unsafe { *strings.add(1) }).is_null() {
-            // SAFETY: a NUL-terminated message literal.
-            unsafe {
-                emsg(gettext(
-                    e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines
-                        .as_ptr(),
-                ))
-            };
+            emsg(gettext(
+                e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines,
+            ));
             return;
         } else {
             first
@@ -568,7 +564,7 @@ pub unsafe fn write_reg_contents_ex(
                 let num = atoi(str);
                 let buf = find_buf(num);
                 if buf.is_none() {
-                    semsg_c!(gettext(e_nobufnr.as_ptr()), int64_t::from(num),);
+                    semsg_c!(gettext(e_nobufnr), int64_t::from(num),);
                 }
                 buf
             } else {

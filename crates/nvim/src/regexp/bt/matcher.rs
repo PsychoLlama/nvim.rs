@@ -178,7 +178,7 @@ unsafe fn walk(
             if scan.is_null() {
                 // Should not happen. Providing a message and failing is
                 // better than a crash.
-                unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
+                iemsg(gettext(e_re_corr));
             }
             return status == RA_MATCH;
         }
@@ -310,7 +310,7 @@ fn push_frame(
         _ => {
             // Should not happen: the compiler emitted something the
             // matcher does not know.
-            unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
+            iemsg(gettext(e_re_corr));
             RA_FAIL
         }
     }

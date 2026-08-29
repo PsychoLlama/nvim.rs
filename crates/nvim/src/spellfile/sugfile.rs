@@ -101,8 +101,9 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
     spell_message(spin, c"Performing soundfolding...");
     let mut fname: *mut c_char = core::ptr::null_mut();
     if unsafe { sug_filltree(spin, slang) } != FAIL && unsafe { sug_maketable(spin) } != FAIL {
-        let fmt = unsafe { gettext(c"Number of words after soundfolding: %ld".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, (*spin.si_spellbuf).b_ml.ml_line_count as i64) };
+        let fmt = gettext(c"Number of words after soundfolding: %ld");
+        let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
+        unsafe { smsg_c!(0, fmt.as_ptr(), done) };
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
         unsafe { wordtree_compress(spin, foldroot, c"case-folded") };
@@ -220,8 +221,8 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
         }
     }
 
-    let fmt = unsafe { gettext(c"Total number of words: %d".as_ptr()) };
-    unsafe { smsg_c!(0, fmt, words_done) };
+    let fmt = gettext(c"Total number of words: %d");
+    unsafe { smsg_c!(0, fmt.as_ptr(), words_done) };
     OK
 }
 
@@ -361,14 +362,14 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
     // both built by now.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen), fname) };
         return;
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
     if unsafe { fwrite(VIMSUGMAGIC.as_ptr().cast(), VIMSUGMAGICL as size_t, 1, fd) } != 1 {
-        unsafe { emsg(gettext(e_write.as_ptr())) };
+        emsg(gettext(e_write));
         unsafe { fclose(fd) };
         return;
     }
@@ -396,7 +397,7 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
         // The stored terminator goes out with the line.
         let len = unsafe { ml_get_buf_len(spin.si_spellbuf, lnum) } + 1;
         if unsafe { fwrite(line.cast(), len as size_t, 1, fd) } == 0 {
-            unsafe { emsg(gettext(e_write.as_ptr())) };
+            emsg(gettext(e_write));
             failed = true;
             break;
         }
@@ -405,7 +406,7 @@ unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
 
     if !failed {
         if unsafe { putc(0, fd) } == EOF {
-            unsafe { emsg(gettext(e_write.as_ptr())) };
+            emsg(gettext(e_write));
         }
         let used = spin.si_memtot;
         spell_message_fmt(

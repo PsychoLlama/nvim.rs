@@ -387,8 +387,7 @@ impl KeyBufferRef {
         // SAFETY: the caller's obligation, forwarded.
         if !self.0.with_mut(|buf| unsafe { buf.add(s, slen) }) {
             // Outside the borrow: `iemsg` reaches the message machinery.
-            // SAFETY: a static string.
-            unsafe { iemsg(gettext(c"E222: Add to read buffer".as_ptr())) };
+            iemsg(gettext(c"E222: Add to read buffer"));
         }
     }
 

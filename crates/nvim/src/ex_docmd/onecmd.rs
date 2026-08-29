@@ -391,7 +391,7 @@ pub(crate) unsafe fn do_one_cmd(
                         errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
                         break 'doend;
                     }
-                    if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap".as_ptr())) }
+                    if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap").as_ptr()) }
                         != 'y' as c_int
                     {
                         break 'doend;
@@ -589,7 +589,7 @@ pub(crate) unsafe fn do_one_cmd(
         } else {
             msg
         };
-        unsafe { emsg(msg.as_ptr()) };
+        emsg(&msg);
     }
     unsafe {
         do_errthrow(

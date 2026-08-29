@@ -32,9 +32,9 @@ use crate::main::{
 };
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
-use crate::message::emsg;
+use crate::message::{emsg, emsg_ptr};
 use crate::r#move::win_col_off;
-use crate::os::cshim::{gettext, snprintf, strncmp};
+use crate::os::cshim::{gettext, gettext_ptr, snprintf, strncmp};
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
@@ -78,8 +78,7 @@ const NO_CALLBACK: Callback = Callback {
 /// was not a Number at all -- in which case the error is already out.
 fn job_id(arg: &typval_T) -> Option<uint64_t> {
     if arg.v_type != VAR_NUMBER {
-        // SAFETY: `e_invarg` is a live NUL-terminated buffer.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return None;
     }
     // SAFETY: the type tag names the union member.
@@ -119,7 +118,7 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // All three arguments are checked together, so a bad width reports
     // the same message a bad job id does.
     if args.ty(0) != VAR_NUMBER || args.ty(1) != VAR_NUMBER || args.ty(2) != VAR_NUMBER {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     let data = unsafe { find_job(args.get(0).vval.v_number as uint64_t, true) };
@@ -127,7 +126,7 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         return;
     }
     if unsafe { (*channel_proc(data)).type_0 } != kProcTypePty {
-        unsafe { emsg(gettext(e_channotpty.as_ptr())) };
+        emsg(gettext(e_channotpty));
         return;
     }
     // SAFETY: the tags checked above say both arguments are Numbers, and
@@ -165,7 +164,7 @@ pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // Reported as a success even when closing the RPC half complained.
     rettv.vval.v_number = 1;
     if !error.is_null() {
-        unsafe { emsg(error) };
+        unsafe { emsg_ptr(error) };
     }
 }
 
@@ -180,7 +179,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         return;
     }
     if args.ty(0) != VAR_LIST || (args.ty(1) != VAR_NUMBER && args.has(1)) {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 
@@ -424,7 +423,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     if args.ty(1) != VAR_DICT && args.has(1) {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
         bail!();
     }
 
@@ -457,7 +456,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             if unsafe { strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) } == 0 {
                 stdin_mode = kChannelStdinNull;
             } else if unsafe { strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } != 0 {
-                unsafe { semsg_c!(gettext(e_invargNval.as_ptr()), c"stdin".as_ptr(), s,) };
+                unsafe { semsg_c!(gettext(e_invargNval), c"stdin".as_ptr(), s,) };
             }
         }
 
@@ -466,12 +465,12 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         let job_term = unsafe { tv_dict_find(job_opts, c"term".as_ptr(), 4) };
         if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type } != VAR_BOOL {
             let what = c"'term' must be Boolean".as_ptr();
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+            unsafe { semsg_c!(gettext(e_invarg2), what) };
             bail!();
         }
         if pty && rpc {
             let what = c"job cannot have both 'pty' and 'rpc' options set".as_ptr();
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+            unsafe { semsg_c!(gettext(e_invarg2), what) };
             bail!();
         }
 
@@ -480,14 +479,14 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             cwd = new_cwd;
             if !unsafe { os_isdir(cwd) } {
                 let what = c"expected valid directory".as_ptr();
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+                unsafe { semsg_c!(gettext(e_invarg2), what) };
                 bail!();
             }
         }
 
         job_env = unsafe { tv_dict_find(job_opts, c"env".as_ptr(), 3) };
         if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type } != VAR_DICT {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"env".as_ptr()) };
+            unsafe { semsg_c!(gettext(e_invarg2), c"env".as_ptr()) };
             bail!();
         }
 
@@ -513,14 +512,14 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         }
         if unsafe { (*curbuf.get()).b_changed } != 0 {
             let msg = c"jobstart(...,{term=true}) requires unmodified buffer";
-            unsafe { emsg(gettext(msg.as_ptr())) };
+            emsg(gettext(msg));
             bail!();
         }
         if !unsafe { (*curbuf.get()).terminal }.is_null() {
             if unsafe { terminal_running((*curbuf.get()).terminal) } {
                 let fmt = c"Terminal already connected to buffer %d".as_ptr();
                 let handle = unsafe { (*curbuf.get()).handle };
-                unsafe { semsg_c!(gettext(fmt), handle) };
+                unsafe { semsg_c!(gettext_ptr(fmt), handle) };
                 bail!();
             }
             buf_close_terminal(unsafe { Buf::current() });

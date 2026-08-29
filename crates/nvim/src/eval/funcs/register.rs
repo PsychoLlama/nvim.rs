@@ -276,7 +276,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             if unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) } == FAIL
                 || unsafe { *p.add(1) } != NUL as c_char
             {
-                unsafe { semsg_c!(gettext(e_invargval.as_ptr()), c"value".as_ptr(),) };
+                unsafe { semsg_c!(gettext(e_invargval), c"value".as_ptr(),) };
                 return;
             }
         }
@@ -299,7 +299,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         // A dict value already carried the type; a third argument on
         // top of it is one argument too many.
         if yank_type != kMTUnknown {
-            unsafe { semsg_c!(gettext(e_toomanyarg.as_ptr()), c"setreg".as_ptr(),) };
+            unsafe { semsg_c!(gettext(e_toomanyarg), c"setreg".as_ptr(),) };
             return;
         }
         let opts = arg_string_chk(&mut numbuf4, args.get(2));

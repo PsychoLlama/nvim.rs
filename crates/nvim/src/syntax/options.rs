@@ -176,7 +176,7 @@ pub(crate) unsafe fn get_syn_options(
         match f.arg {
             OptArg::Contains => {
                 if !opt.has_cont_list {
-                    unsafe { emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE.as_ptr())) };
+                    emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE));
                     return ::core::ptr::null_mut();
                 }
                 if unsafe { get_id_list(&mut arg, 8, &mut opt.cont_list, skip != 0) } == FAIL {
@@ -199,7 +199,7 @@ pub(crate) unsafe fn get_syn_options(
                 *conceal_char = unsafe { utf_ptr2char(arg.add(6)) };
                 arg = unsafe { arg.add(utfc_ptr2len(arg.add(6)) as usize - 1) };
                 if !unsafe { vim_isprintc(*conceal_char) } {
-                    unsafe { emsg(gettext(E_INVALID_CCHAR_VALUE.as_ptr())) };
+                    emsg(gettext(E_INVALID_CCHAR_VALUE));
                     return ::core::ptr::null_mut();
                 }
                 arg = unsafe { skipwhite(arg.add(7)) };
@@ -229,7 +229,7 @@ pub(crate) unsafe fn get_syn_options(
 /// Answers what follows it, or NULL after reporting an error.
 unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_char {
     if opt.sync_idx.is_null() {
-        unsafe { emsg(gettext(c"E393: group[t]here not accepted here".as_ptr())) };
+        emsg(gettext(c"E393: group[t]here not accepted here"));
         return ::core::ptr::null_mut();
     }
     let gname_start = arg;
@@ -258,12 +258,7 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
             }
         };
         if !found {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E394: Didn't find region item for %s".as_ptr()),
-                    gname,
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E394: Didn't find region item for %s"), gname,) };
             unsafe { xfree(gname as *mut c_void) };
             return ::core::ptr::null_mut();
         }
@@ -340,7 +335,7 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 
     let mut p = unsafe { skipwhite(arg.offset(keylen as isize)) };
     if unsafe { *p } as c_int != '=' as c_int {
-        unsafe { semsg_c!(gettext(c"E405: Missing equal sign: %s".as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(c"E405: Missing equal sign: %s"), arg) };
         return IdListPass {
             ids,
             end: p,
@@ -349,7 +344,7 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
     }
     p = unsafe { skipwhite(p.add(1)) };
     if ends_excmd(unsafe { *p } as c_int) != 0 {
-        unsafe { semsg_c!(gettext(c"E406: Empty argument: %s".as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(c"E406: Empty argument: %s"), arg) };
         return IdListPass {
             ids,
             end: p,
@@ -422,16 +417,11 @@ unsafe fn parse_id_name(
         // Only `contains=` and `containedin=` accept these, which is what
         // upstream tests by the keyword's first letter.
         if !(unsafe { *arg } as u8).eq_ignore_ascii_case(&b'C') {
-            unsafe { semsg_c!(gettext(c"E407: %s not allowed here".as_ptr()), plain) };
+            unsafe { semsg_c!(gettext(c"E407: %s not allowed here"), plain) };
             return Err(());
         }
         if !ids.is_empty() {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E408: %s must be first in contains list".as_ptr()),
-                    plain,
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E408: %s must be first in contains list"), plain,) };
             return Err(());
         }
         let base = match text[0] {
@@ -448,7 +438,7 @@ unsafe fn parse_id_name(
         }
         let id = unsafe { syn_check_cluster(plain.add(1), text_len as c_int - 1) };
         return if id == 0 {
-            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p) };
+            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
             Err(())
         } else {
             Ok(Some(id))
@@ -458,7 +448,7 @@ unsafe fn parse_id_name(
     if unsafe { strpbrk(plain, c"\\.*^$~[".as_ptr()) }.is_null() {
         let id = unsafe { syn_check_group(plain, text_len as size_t) };
         return if id == 0 {
-            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p) };
+            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
             Err(())
         } else {
             Ok(Some(id))
@@ -490,7 +480,7 @@ unsafe fn parse_id_name(
     }
     unsafe { vim_regfree(regmatch.regprog) };
     if !matched {
-        unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s".as_ptr()), p) };
+        unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
         return Err(());
     }
     Ok(None)

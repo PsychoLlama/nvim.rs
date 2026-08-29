@@ -15,6 +15,7 @@
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
+use crate::os::cshim::gettext;
 use crate::types::{FAIL, MAXPATHL, NUL, OK};
 
 /// Why a swap file yielded no block zero.
@@ -124,7 +125,7 @@ pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: upd_block0_T) {
 
     let b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
     if !ml_check_b0_id(unsafe { &*b0p }) {
-        unsafe { iemsg(tr(c"E304: ml_upd_block0(): Didn't get block 0??")) };
+        unsafe { iemsg_ptr(tr(c"E304: ml_upd_block0(): Didn't get block 0??")) };
     } else if what == UB_FNAME {
         unsafe { set_b0_fname(b0p, buf) };
     } else {
@@ -264,7 +265,7 @@ pub(crate) fn swapfile_proc_running(b0: &ZeroBlock, swap_fname: *const c_char) -
 /// if they can be read and make sense, an `error` key saying why not if they
 /// cannot.
 pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
-    let error = |text: &CStr| unsafe { dict_add_str(d, c"error", text.as_ptr(), -1) };
+    let error = |text: &'static CStr| unsafe { dict_add_str(d, c"error", text.as_ptr(), -1) };
     match unsafe { ZeroBlock::read(fname) } {
         Err(NoBlock::CannotOpen) => error(c"Cannot open file"),
         Err(NoBlock::CannotRead) => error(c"Cannot read file"),
@@ -402,8 +403,8 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
 /// Append a translated message. Upstream hands it to `kv_printf` as the
 /// format string, so a `%` in a translation is a directive there too;
 /// preserved.
-pub(crate) unsafe fn kv_puts(msg: *mut StringBuilder, text: &CStr) {
-    unsafe { kv_do_printf(msg, gettext(text.as_ptr())) };
+pub(crate) unsafe fn kv_puts(msg: *mut StringBuilder, text: &'static CStr) {
+    unsafe { kv_do_printf(msg, gettext(text).as_ptr()) };
 }
 
 /// Whether this swap file can be deleted without losing anything: it is

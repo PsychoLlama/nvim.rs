@@ -163,8 +163,7 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
         // SAFETY: a static chunk, no arguments, and our own error slot.
         allocated_arg = unsafe { resolve_tag_at_cursor() };
         if allocated_arg.is_null() {
-            // SAFETY: a NUL-terminated message constant.
-            unsafe { emsg(gettext(e_noident.as_ptr())) };
+            emsg(gettext(e_noident));
             return;
         }
         arg = allocated_arg;
@@ -197,9 +196,9 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
         // SAFETY: `lang` and `arg` are NUL-terminated; both carry bytes, so
         // they go through vim's own printf rather than `format_args!`.
         if lang.is_null() {
-            unsafe { semsg_c!(gettext(c"E149: No help for %s".as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(c"E149: No help for %s"), arg) };
         } else {
-            unsafe { semsg_c!(gettext(c"E661: No '%s' help for %s".as_ptr()), lang, arg) };
+            unsafe { semsg_c!(gettext(c"E661: No '%s' help for %s"), lang, arg) };
         }
         if n != FAIL {
             unsafe { free_wild(num_matches, matches) };

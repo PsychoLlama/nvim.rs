@@ -36,7 +36,7 @@ static BUSY: GlobalCell<bool> = GlobalCell::new(false);
 /// both of which live as long as the process.
 macro_rules! translate {
     ($msg:literal $(,)?) => {
-        unsafe { CStr::from_ptr(gettext($msg.as_ptr())) }
+        unsafe { CStr::from_ptr(gettext($msg).as_ptr()) }
     };
 }
 
@@ -252,7 +252,7 @@ unsafe fn file_changed_shell(buf: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     if !bufref.valid() {
         let msg = c"E246: FileChangedShell autocommand deleted buffer".as_ptr();
         // SAFETY: a static message string.
-        unsafe { emsg(gettext(msg)) };
+        unsafe { emsg(gettext_ptr(msg)) };
     }
     match unsafe { CStr::from_ptr(get_vim_var_str(Vv::FcsChoice)) }.to_bytes() {
         b"reload" if reason != Reason::Deleted => Fcs::Reload(Reload::Text),
@@ -291,13 +291,12 @@ fn warn_changed(buf: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reloa
 
     if can_reload {
         append(c"\n%s");
-        let title = c"Warning".as_ptr();
-        let buttons = c"&OK\n&Load File\nLoad File &and Options".as_ptr();
         let text = tbuf.as_ptr();
         let warn = VIM_WARNING as c_int;
+        let title = gettext(c"Warning").as_ptr();
+        let buttons = gettext(c"&OK\n&Load File\nLoad File &and Options").as_ptr();
         // SAFETY: `tbuf` is this frame's NUL-terminated message, and the
-        // title and buttons are static strings.
-        let (title, buttons) = unsafe { (gettext(title), gettext(buttons)) };
+        // title and buttons are translations of static strings.
         let answer =
             unsafe { do_dialog(warn, title, text, buttons, 1, ptr::null(), true as c_int) };
         return (
@@ -312,7 +311,7 @@ fn warn_changed(buf: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reloa
 
     if State.get() > MODE_NORMAL_BUSY || State.get() & MODE_CMDLINE != 0 || ALREADY_WARNED.get() {
         append(c"; %s");
-        unsafe { emsg(tbuf.as_ptr()) };
+        emsg(crate::cstr::in_chars(&tbuf));
         return (Reload::No, true);
     }
 
@@ -582,7 +581,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
             let fname = buf.b_fname;
             // SAFETY: a static format string with one `%s`, and the buffer's
             // own file name.
-            unsafe { semsg_c!(gettext(fmt), fname) };
+            unsafe { semsg_c!(gettext_ptr(fmt), fname) };
             saved = FAIL;
         }
     }
@@ -601,7 +600,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
                 let fname = buf.b_fname;
                 // SAFETY: a static format string with one `%s`, and the
                 // buffer's own file name.
-                unsafe { semsg_c!(gettext(fmt), fname) };
+                unsafe { semsg_c!(gettext_ptr(fmt), fname) };
             }
             if !savebuf.is_null() && bufref.valid() && buf.raw() == curbuf.get() {
                 // Put the text back from the save buffer. First delete any

@@ -33,7 +33,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
 use crate::main::{Columns, Rows, cmdwin_win, e_cmdwin, p_ch, p_ls, prevwin};
 use crate::memory::{xfree, xstrdup};
-use crate::message::emsg;
+use crate::message::emsg_ptr;
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::textpos2screenpos;
 use crate::option::{parse_winhl_opt, set_option_direct_for};
@@ -332,7 +332,7 @@ fn clear_error(err: &mut Error) {
 }
 fn report_error(err: &Error) {
     // SAFETY: a set error's message is a string the API allocated.
-    unsafe { emsg(err.msg) };
+    unsafe { emsg_ptr(err.msg) };
 }
 fn suppress_autocmds() {
     // SAFETY: `block_autocmds` touches only the global block counter.

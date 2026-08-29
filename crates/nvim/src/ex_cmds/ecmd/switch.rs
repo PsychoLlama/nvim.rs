@@ -152,7 +152,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         {
             unsafe { (*cur_win().w_buffer).b_nwindows -= 1 };
         }
-        unsafe { emsg(gettext(e_cannot_switch_to_a_closing_buffer.as_ptr())) };
+        emsg(gettext(e_cannot_switch_to_a_closing_buffer));
         return Switch::Abandon;
     }
 
@@ -390,7 +390,7 @@ pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
     // SAFETY: caller's contract; one `%s` for one string.
     unsafe {
         semsg_c!(
-            gettext(c"E143: Autocommands unexpectedly deleted new buffer %s".as_ptr()),
+            gettext(c"E143: Autocommands unexpectedly deleted new buffer %s"),
             if name.is_null() {
                 c"".as_ptr()
             } else {

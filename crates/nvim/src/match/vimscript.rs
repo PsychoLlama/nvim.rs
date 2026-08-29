@@ -62,7 +62,7 @@ unsafe fn matchadd_dict_arg(
 ) -> c_int {
     // SAFETY: the caller's typval and out-parameters.
     if unsafe { (*tv).v_type } != VAR_DICT {
-        unsafe { emsg(gettext(e_dictreq.as_ptr())) };
+        emsg(gettext(e_dictreq));
         return FAIL;
     }
     let dict = unsafe { (*tv).vval.v_dict };
@@ -77,7 +77,7 @@ unsafe fn matchadd_dict_arg(
         return OK;
     }
     let Some(found) = (unsafe { find_win_by_nr_or_id(&raw mut (*di).di_tv) }) else {
-        unsafe { emsg(gettext(e_invalwindow.as_ptr())) };
+        emsg(gettext(e_invalwindow));
         return FAIL;
     };
     unsafe { *win = found.raw() };
@@ -177,7 +177,7 @@ pub(crate) unsafe fn f_setmatches(
 
     unsafe { (*rettv).vval.v_number = -1 };
     if unsafe { (*argvars).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(e_listreq.as_ptr())) };
+        emsg(gettext(e_listreq));
         return;
     }
     if win.is_null() {
@@ -193,9 +193,7 @@ pub(crate) unsafe fn f_setmatches(
         if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict }.is_null() {
             unsafe {
                 semsg_c!(
-                    gettext(
-                        c"E474: List item %d is either not a dictionary or an empty one".as_ptr(),
-                    ),
+                    gettext(c"E474: List item %d is either not a dictionary or an empty one"),
                     li_idx,
                 )
             };
@@ -209,7 +207,7 @@ pub(crate) unsafe fn f_setmatches(
         if !ok {
             unsafe {
                 semsg_c!(
-                    gettext(c"E474: List item %d is missing one of the required keys".as_ptr()),
+                    gettext(c"E474: List item %d is missing one of the required keys"),
                     li_idx,
                 )
             };
@@ -352,12 +350,7 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
         return;
     };
     if (1..=3).contains(&id) {
-        unsafe {
-            semsg_c!(
-                gettext(c"E798: ID is reserved for \":match\": %d".as_ptr()),
-                id,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E798: ID is reserved for \":match\": %d"), id,) };
         return;
     }
 
@@ -387,7 +380,7 @@ pub(crate) unsafe fn f_matchaddpos(
         return;
     }
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"matchaddpos()".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_listarg), c"matchaddpos()".as_ptr(),) };
         return;
     }
     let l = unsafe { (*argvars.offset(1)).vval.v_list };
@@ -401,12 +394,7 @@ pub(crate) unsafe fn f_matchaddpos(
     };
     // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
     if id == 1 || id == 2 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E798: ID is reserved for \"match\": %d".as_ptr()),
-                id,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E798: ID is reserved for \"match\": %d"), id,) };
         return;
     }
 

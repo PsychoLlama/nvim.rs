@@ -200,11 +200,9 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> cmdidx_T {
         };
     }
     if command_count != CMD_SIZE as c_int {
-        unsafe {
-            iemsg(gettext(
-                c"E943: Command table needs to be updated, run 'make'".as_ptr(),
-            ))
-        };
+        iemsg(gettext(
+            c"E943: Command table needs to be updated, run 'make'",
+        ));
         unsafe { getout(1) };
     }
     let c2 = if len == 1 {

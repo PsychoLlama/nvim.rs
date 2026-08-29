@@ -152,13 +152,13 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) } == FAIL
     {
         if !expr_start.is_null() && !aborting() {
-            unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), expr_start) };
+            unsafe { semsg_c!(gettext(e_invexpr2), expr_start) };
         }
         need_clr_eos.set(false);
         rettv.v_type = VAR_NUMBER;
         rettv.vval.v_number = 0;
     } else if unsafe { *s } as c_int != NUL {
-        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), s) };
+        unsafe { semsg_c!(gettext(e_trailing_arg), s) };
     }
 }
 
@@ -402,7 +402,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         } else {
             s as *const c_char
         };
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
     if !trans_name.0.is_null()
@@ -412,7 +412,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             !unsafe { translated_function_exists(trans_name.0) }
         }
     {
-        unsafe { semsg_c!(gettext(c"E700: Unknown function: %s".as_ptr()), s) };
+        unsafe { semsg_c!(gettext(c"E700: Unknown function: %s"), s) };
         return;
     }
 
@@ -454,7 +454,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         if arg_idx > 0 {
             if args.ty(arg_idx as usize) != VAR_LIST {
                 let msg = c"E923: Second argument of function() must be a list or a dict";
-                unsafe { emsg(gettext(msg.as_ptr())) };
+                emsg(gettext(msg));
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
@@ -602,7 +602,7 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     };
     match result {
         None => {
-            unsafe { semsg_c!(gettext(e_libcall.as_ptr()), funcname) };
+            unsafe { semsg_c!(gettext(e_libcall), funcname) };
         }
         Some(LibcallResult::Str(s)) => {
             rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);

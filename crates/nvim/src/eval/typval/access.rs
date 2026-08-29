@@ -229,8 +229,7 @@ impl Li {
 /// so the NUL `gettext` looks for is part of the type.
 #[inline(always)]
 pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char {
-    // SAFETY: `gettext` only reads the NUL-terminated string it is handed.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// The unlocked scalars and container handles, spelled once.

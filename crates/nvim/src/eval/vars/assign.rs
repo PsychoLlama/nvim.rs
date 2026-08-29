@@ -16,6 +16,7 @@ use core::ptr;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval};
+use crate::os::cshim::gettext_owned;
 use crate::types::{FAIL, NUL, OK, OptionSetFlags};
 
 /// The compound assignment operators, as they appear before the `=`.
@@ -552,7 +553,7 @@ unsafe fn ex_let_option(
         let err = unsafe { set_option_value_handle_tty(arg, opt_idx, newval, opt_flags) };
         arg_end = p;
         if let Some(err) = err {
-            unsafe { emsg(gettext(err.as_ptr())) };
+            emsg(&gettext_owned(&err));
         }
     }
 

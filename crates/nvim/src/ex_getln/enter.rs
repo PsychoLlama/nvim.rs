@@ -13,6 +13,7 @@ use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::drawscreen::windows_in_curtab;
 use crate::getchar::typeahead;
 use crate::guard::Allow;
+use crate::message::emsg_ptr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
     kErrorTypeNone,
@@ -251,7 +252,7 @@ pub(crate) unsafe fn command_line_enter(
     if cmdline_level.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
         // out. (C's `goto theend`.)
-        unsafe { emsg(gettext(e_command_too_recursive.as_ptr())) };
+        emsg(gettext(e_command_too_recursive));
     } else {
         unsafe { expand_init(s.xpc()) };
         cc.xpc = s.xpc();
@@ -487,7 +488,7 @@ pub(crate) unsafe fn command_line_enter(
             if !ui_has(kUIMessages) {
                 unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
             }
-            unsafe { emsg(err.msg) };
+            unsafe { emsg_ptr(err.msg) };
             did_emsg.set(0);
             unsafe { api_clear_error(&raw mut err) };
         }
@@ -604,7 +605,7 @@ pub(crate) unsafe fn abandon_cmdline() {
     }
     // Avoid overwriting a key prompt.
     if !Cc::current().one_key {
-        unsafe { msg(c"".as_ptr(), 0) };
+        msg(c"", 0);
         redraw_cmdline.set(true);
     }
 }

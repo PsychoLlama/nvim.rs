@@ -64,7 +64,7 @@ use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::main::{curbuf, current_sctx, p_cpo};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::runtime::sourcing_lnum;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
@@ -420,7 +420,7 @@ pub(crate) unsafe fn uc_add_command(
             // SAFETY: `name` is the caller's; this call owns the other five.
             unsafe {
                 semsg_c!(
-                    gettext(c"E174: Command already exists: add ! to replace it: %s".as_ptr()),
+                    gettext(c"E174: Command already exists: add ! to replace it: %s"),
                     name,
                 )
             };
@@ -572,8 +572,7 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
 
     let name = p;
     if name_end.is_null() {
-        // SAFETY: module contract; this call owns `compl_arg`.
-        unsafe { emsg(gettext(c"E182: Invalid command name".as_ptr())) };
+        emsg(gettext(c"E182: Invalid command name"));
         unsafe { xfree(compl_arg.cast()) };
         return;
     }
@@ -622,9 +621,8 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
         return;
     };
 
-    // SAFETY: module contract; nothing above took `compl_arg`.
     if let Some(message) = complaint {
-        unsafe { emsg(gettext(message.as_ptr())) };
+        emsg(gettext(message));
     }
     unsafe { xfree(compl_arg.cast()) };
 }
@@ -733,7 +731,7 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
         };
         // SAFETY: module contract; the one `%s` spends `arg`.
         unsafe {
-            let fmt = gettext(untranslated);
+            let fmt = gettext_ptr(untranslated);
             semsg_c!(fmt, arg)
         };
         return;

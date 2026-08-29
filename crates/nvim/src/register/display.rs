@@ -174,7 +174,7 @@ pub unsafe fn ex_display(eap: *mut exarg_T) {
     // SAFETY (both): main thread, printing NUL-terminated literals.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     msg_ext_skip_flush.set(true);
-    unsafe { msg_puts_title(gettext(c"\nType Name Content".as_ptr())) };
+    unsafe { msg_puts_title(gettext(c"\nType Name Content").as_ptr()) };
 
     // -1 is the unnamed register, which aliases whichever slot was
     // written last.

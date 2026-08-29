@@ -422,11 +422,8 @@ fn had_endbrace_seen(parno: c_int) {
 ///
 /// `expr` must be a NUL-terminated pattern.
 pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
-    // SAFETY: `expr` is a NUL-terminated pattern. `r` is this function's own
-    // allocation, sized by the pass that runs before anything is written into
-    // it, and is either handed to the caller or freed here.
     if expr.is_null() {
-        unsafe { iemsg(gettext(e_null.as_ptr())) };
+        iemsg(gettext(e_null));
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }

@@ -473,12 +473,10 @@ pub(crate) unsafe fn syn_regexec(
     }
     if timed_out != 0 && !unsafe { (*(*syn_win.get()).w_s).b_syn_slow } {
         unsafe { (*(*syn_win.get()).w_s).b_syn_slow = true };
-        unsafe {
-            msg(
-                gettext(c"'redrawtime' exceeded, syntax highlighting disabled".as_ptr()),
-                0,
-            )
-        };
+        msg(
+            gettext(c"'redrawtime' exceeded, syntax highlighting disabled"),
+            0,
+        );
     }
 
     if r > 0 {

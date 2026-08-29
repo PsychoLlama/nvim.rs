@@ -12,6 +12,7 @@ use crate::buffer::{BufRef, current_buf};
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{CmdModFlags, FAIL, NUL, OK, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
@@ -30,7 +31,7 @@ pub unsafe fn text_locked() -> bool {
 /// Report a command that is not allowed while the cmdline window is open or
 /// the command line is being edited another way.
 pub unsafe fn text_locked_msg() {
-    unsafe { emsg(gettext(get_text_locked_msg())) };
+    unsafe { emsg(gettext_ptr(get_text_locked_msg())) };
 }
 
 /// The message [`text_locked_msg`] gives: which of the two locks is on.
@@ -55,7 +56,7 @@ pub unsafe fn text_or_buf_locked() -> bool {
 /// either is set.
 pub unsafe fn curbuf_locked() -> bool {
     if cur_buf().b_ro_locked > 0 {
-        unsafe { emsg(gettext(e_cannot_edit_other_buf.as_ptr())) };
+        emsg(gettext(e_cannot_edit_other_buf));
         return true;
     }
     unsafe { allbuf_locked() }
@@ -64,11 +65,9 @@ pub unsafe fn curbuf_locked() -> bool {
 /// Check `allbuf_lock`; report and answer true if it is set.
 pub unsafe fn allbuf_locked() -> bool {
     if allbuf_lock.get() > 0 {
-        unsafe {
-            emsg(gettext(
-                c"E811: Not allowed to change buffer information now".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E811: Not allowed to change buffer information now",
+        ));
         return true;
     }
     false
@@ -313,11 +312,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
         cmdwin_result.set(Ctrl_C);
-        unsafe {
-            emsg(gettext(
-                e_active_window_or_buffer_changed_or_deleted.as_ptr(),
-            ))
-        };
+        emsg(gettext(e_active_window_or_buffer_changed_or_deleted));
     } else {
         // Autocmds may abort script processing.
         if aborting() && cmdwin_result.get() != K_IGNORE {

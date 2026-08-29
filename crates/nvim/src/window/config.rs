@@ -30,7 +30,7 @@ use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
 use crate::main::{Columns, Rows, float_anchor_str, p_acd, p_ch};
 use crate::r#move::textpos2screenpos;
-use crate::os::cshim::strncmp;
+use crate::os::cshim::{gettext_ptr, strncmp};
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
@@ -490,7 +490,7 @@ pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     let ok = unsafe { check_split_disallowed_err(wp, &raw mut err) };
     if err.type_0 as c_int != kErrorTypeNone as c_int {
         // SAFETY: the message `api_set_error` just wrote.
-        unsafe { emsg(gettext(err.msg)) };
+        unsafe { emsg(gettext_ptr(err.msg)) };
         // SAFETY: as above.
         unsafe { api_clear_error(&raw mut err) };
     }

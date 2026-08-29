@@ -376,7 +376,7 @@ pub(crate) unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
     }
     unsafe {
         if (*mfp).mf_fd >= 0 && close((*mfp).mf_fd) < 0 {
-            emsg(gettext(e_swapclose.as_ptr()));
+            emsg(gettext(e_swapclose));
         }
         if del_file && !mf_fname(mfp).is_null() {
             os_remove(mf_fname(mfp));
@@ -406,7 +406,7 @@ pub(crate) unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
         }
 
         if close((*mfp).mf_fd) < 0 {
-            emsg(gettext(e_swapclose.as_ptr()));
+            emsg(gettext(e_swapclose));
         }
         (*mfp).mf_fd = -1;
 
@@ -519,7 +519,7 @@ pub(crate) unsafe fn mf_put(mfp: *mut memfile_T, hp: *mut bhdr_T, dirty: bool, i
     unsafe {
         let mut flags = (*hp).bh_flags;
         if flags & BH_LOCKED == 0 {
-            iemsg(gettext(c"E293: Block was not locked".as_ptr()));
+            iemsg(gettext(c"E293: Block was not locked"));
         }
         flags &= !BH_LOCKED;
         if dirty {
@@ -772,7 +772,7 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> Result<(), SwapFaile
                     // up, but say so only once, until a write succeeds or
                     // the user hits a key.
                     if !did_swapwrite_msg.get() {
-                        emsg(gettext(c"E297: Write error in swap file".as_ptr()));
+                        emsg(gettext(c"E297: Write error in swap file"));
                     }
                     did_swapwrite_msg.set(true);
                     return Err(SwapFailed);
@@ -921,9 +921,7 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
         let mut file_info: FileInfo = core::mem::zeroed();
         if flags & O_CREAT != 0 && os_fileinfo_link(mf_fname(mfp), &raw mut file_info) {
             (*mfp).mf_fd = -1;
-            emsg(gettext(
-                c"E300: Swap file already exists (symlink attack?)".as_ptr(),
-            ));
+            emsg(gettext(c"E300: Swap file already exists (symlink attack?)"));
         } else {
             flags |= O_NOFOLLOW;
             (*mfp).mf_flags = flags;
@@ -941,11 +939,11 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
 }
 
 /// `PERROR`: an error message with the failing call's `strerror` after it.
-unsafe fn perror_msg(message: &CStr) {
+unsafe fn perror_msg(message: &'static CStr) {
     unsafe {
         semsg_c!(
             c"%s: %s".as_ptr(),
-            gettext(message.as_ptr()),
+            gettext(message),
             strerror(*__errno_location()),
         );
     }

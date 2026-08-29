@@ -35,11 +35,11 @@ use crate::main::{
     curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox, silent_mode,
 };
 use crate::memory::{strequal, xstrlcpy};
-use crate::message::{emsg, msg_ext_set_kind, msg_putchar};
+use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
 use crate::options::{
     kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
 };
-use crate::os::cshim::{gettext, memmove, strncmp};
+use crate::os::cshim::{gettext_ptr, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
@@ -672,7 +672,8 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     let buf = report.as_mut_ptr();
     // Two past the message, leaving room for the ": " written back over
     // its terminator.
-    let at = unsafe { vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext(errmsg)) } + 2;
+    let at =
+        unsafe { vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext_ptr(errmsg)) } + 2;
     debug_assert!(end >= start);
     let arglen = unsafe { end.offset_from(start) };
     if at as isize + arglen < IOSIZE as isize {
@@ -686,7 +687,7 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     // The message is the whole report; do not make the user acknowledge
     // the half of it that has already scrolled past.
     let _no_prompt = Suppress::wait_return();
-    unsafe { emsg(buf) };
+    unsafe { emsg_ptr(buf) };
 }
 
 /// The key `arg` names, given that it is `len` bytes long and, with

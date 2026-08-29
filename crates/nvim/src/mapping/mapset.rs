@@ -56,8 +56,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
             tv_dict_get_bool(d, c"abbr".as_ptr(), -1)
         };
         if which.is_null() || abbr < 0 {
-            // SAFETY: a static NUL-terminated message.
-            unsafe { emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr())) };
+            emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
             return;
         }
         is_abbr = abbr != 0;
@@ -81,7 +80,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let mode = unsafe { get_map_mode_string(which, is_abbr) };
     if mode == 0 {
         // SAFETY: a static format whose one conversion is `which`.
-        unsafe { semsg_c!(gettext(E_ILLEGAL_MAP_MODE_STRING_STR.as_ptr()), which) };
+        unsafe { semsg_c!(gettext(E_ILLEGAL_MAP_MODE_STRING_STR), which) };
         return;
     }
 
@@ -114,7 +113,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         // SAFETY: a static NUL-terminated message, and `rhs_lua` is the
         // reference taken just above, if any.
         unsafe {
-            emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT.as_ptr()));
+            emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
             api_free_luaref(rhs_lua);
         }
         return;

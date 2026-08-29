@@ -222,7 +222,7 @@ unsafe fn compile_sort_pattern(
     // Use the last search pattern if the sort pattern is empty.
     regmatch.regprog = if end == unsafe { delim.add(1) } {
         if last_search_pat().is_null() {
-            unsafe { emsg(gettext(e_noprevre.as_ptr())) };
+            emsg(gettext(e_noprevre));
             return None;
         }
         unsafe { vim_regcomp(last_search_pat(), RE_MAGIC) }
@@ -320,7 +320,7 @@ unsafe fn parse_sort_flags(
                 }
                 if is_alpha(byte) || !regmatch.regprog.is_null() {
                     // SAFETY: as above.
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg.add(at)) };
+                    unsafe { semsg_c!(gettext(e_invarg2), arg.add(at)) };
                     return false;
                 }
                 // SAFETY: as above.
@@ -335,8 +335,7 @@ unsafe fn parse_sort_flags(
 
     SORT_ORDER.set(order);
     if formats > 1 {
-        // SAFETY: a static message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return false;
     }
     // From here on "numeric" covers every integer format.
@@ -639,7 +638,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
     unsafe { xfree(SORTBUF2.get().cast()) };
     unsafe { vim_regfree(regmatch.regprog) };
     if got_int.get() {
-        unsafe { emsg(gettext(e_interr.as_ptr())) };
+        emsg(gettext(e_interr));
     }
 }
 
@@ -768,7 +767,7 @@ unsafe fn parse_uniq_flags(
                 }
                 if is_alpha(byte) || !regmatch.regprog.is_null() {
                     // SAFETY: as above.
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg.add(at)) };
+                    unsafe { semsg_c!(gettext(e_invarg2), arg.add(at)) };
                     return false;
                 }
                 // SAFETY: as above.
@@ -913,7 +912,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
     unsafe { xfree(SORTBUF1.get().cast()) };
     unsafe { vim_regfree(regmatch.regprog) };
     if got_int.get() {
-        unsafe { emsg(gettext(e_interr.as_ptr())) };
+        emsg(gettext(e_interr));
     }
 }
 

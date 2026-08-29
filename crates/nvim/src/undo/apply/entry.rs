@@ -141,7 +141,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
             // SAFETY: as above; the entry was left untouched.
             unsafe {
                 unblock_autocmds();
-                iemsg(gettext(c"E438: u_undo: line numbers wrong".as_ptr()));
+                iemsg(gettext(c"E438: u_undo: line numbers wrong"));
                 changed(buf); // don't want UNCHANGED now
             }
             return;

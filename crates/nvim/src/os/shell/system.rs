@@ -117,7 +117,7 @@ pub(crate) unsafe fn do_os_system(
             loop_poll_events(main_loop.ptr(), 0);
             // Probably 'shell' is not executable.
             if !silent {
-                msg_puts(gettext(c"\nshell failed to start: ".as_ptr()));
+                msg_puts(gettext(c"\nshell failed to start: ").as_ptr());
                 msg_outtrans(uv_strerror(status), 0, false);
                 msg_puts(c": ".as_ptr());
                 msg_outtrans(prog.as_ptr(), 0, false);
@@ -244,7 +244,7 @@ unsafe fn shell_write_cb(stream: *mut Stream, _data: *mut c_void, status: c_int)
             // Happens when input is sent to a backgrounded shell command:
             // `:call system("cat - &", "foo")`. #3529 #5241
             msg_schedule_semsg_c!(
-                gettext(c"E5677: Error writing input to shell-command: %s".as_ptr()),
+                gettext(c"E5677: Error writing input to shell-command: %s").as_ptr(),
                 uv_err_name(status),
             );
         }

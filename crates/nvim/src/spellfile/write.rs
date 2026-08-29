@@ -136,7 +136,7 @@ pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char)
     // arena-allocated and NUL-terminated, or from the word trees.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen), fname) };
         return FAIL;
     }
     let mut w = SplWriter { fd, ok: true };
@@ -179,7 +179,7 @@ pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char)
         retval = FAIL;
     }
     if retval == FAIL {
-        unsafe { emsg(gettext(e_write.as_ptr())) };
+        emsg(gettext(e_write));
     }
     retval
 }
@@ -591,7 +591,7 @@ pub(super) unsafe fn put_node(
                 unsafe { (*child).wn_link = node };
             }
             if !fd.is_null() && unsafe { putc((*np).wn_byte as c_int, fd) } == EOF {
-                unsafe { emsg(gettext(e_write.as_ptr())) };
+                emsg(gettext(e_write));
                 return 0;
             }
         }

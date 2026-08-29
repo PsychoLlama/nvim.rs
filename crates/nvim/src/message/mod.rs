@@ -100,7 +100,7 @@ use crate::ui::{
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strcmp, strlen, strnlen};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -298,14 +298,21 @@ unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
     msg.size += 1;
 }
 
-/// Show a message. Exported for the unit specs.
+/// Show a message.
 ///
 /// Answers false when the message needed a hit-enter prompt that has not been
 /// answered yet.
+pub fn msg(s: &CStr, hl_id: c_int) -> bool {
+    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
+    unsafe { msg_keep(s.as_ptr(), hl_id, false, false) }
+}
+
+/// [`msg`] for a message still held as a raw pointer.
 ///
 /// # Safety
 /// `s` must be a valid C string.
-pub unsafe fn msg(s: *const c_char, hl_id: c_int) -> bool {
+pub(crate) unsafe fn msg_ptr(s: *const c_char, hl_id: c_int) -> bool {
+    // SAFETY: the caller's contract.
     unsafe { msg_keep(s, hl_id, false, false) }
 }
 
@@ -697,7 +704,7 @@ pub fn msg_iobuff() -> [c_char; MSG_IOBUFF_LEN] {
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
 pub unsafe fn smsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
-    unsafe { msg(buf.as_ptr(), hl_id) as c_int }
+    msg(crate::cstr::in_chars(buf), hl_id) as c_int
 }
 
 /// Show whatever was formatted into [`msg_iobuff`] and keep it displayed.
@@ -721,7 +728,7 @@ pub unsafe fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_cha
     unsafe { msg_hist_add(s, -1, hl_id) };
     let ts = unsafe { msg_may_trunc(force, s) };
     msg_hist_off.set(true);
-    let n = unsafe { msg(ts, hl_id) };
+    let n = unsafe { msg_ptr(ts, hl_id) };
     msg_hist_off.set(false);
     if n { ts } else { ptr::null_mut() }
 }
@@ -824,14 +831,14 @@ pub unsafe fn msgmore(n: c_int) {
         (c"%d line less", c"%d fewer lines")
     };
     let plural = pn as ::core::ffi::c_ulong;
-    let fmt = unsafe { ngettext(one.as_ptr(), many.as_ptr(), plural) };
+    let fmt = ngettext(one, many, plural);
     let cap = MSG_BUF_LEN as size_t;
-    unsafe { vim_snprintf(text, cap, fmt, pn) };
+    unsafe { vim_snprintf(text, cap, fmt.as_ptr(), pn) };
     if got_int.get() {
-        let note = unsafe { gettext(c" (Interrupted)".as_ptr()) };
-        unsafe { xstrlcat(text, note, MSG_BUF_LEN as size_t) };
+        let note = gettext(c" (Interrupted)");
+        unsafe { xstrlcat(text, note.as_ptr(), MSG_BUF_LEN as size_t) };
     }
-    if unsafe { msg(text, 0) } {
+    if unsafe { msg_ptr(text, 0) } {
         unsafe { set_keep_msg(text, 0) };
         keep_msg_more.set(true);
     }

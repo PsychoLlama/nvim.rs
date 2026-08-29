@@ -219,12 +219,7 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
     };
     if loc.is_null() {
         // SAFETY: `semsg` is printf-shaped and `name` outlives the call.
-        unsafe {
-            semsg_c!(
-                gettext(c"E197: Cannot set language to \"%s\"".as_ptr()),
-                name,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E197: Cannot set language to \"%s\""), name,) };
         return;
     }
     // SAFETY: `_nl_msg_cat_cntr` is GNU gettext's "the catalogue selection
@@ -272,7 +267,7 @@ fn report(what: c_int, whatstr: &CStr) {
         }
         smsg_c!(
             0,
-            gettext(c"Current %slanguage: \"%s\"".as_ptr()),
+            gettext(c"Current %slanguage: \"%s\"").as_ptr(),
             whatstr.as_ptr(),
             p.cast_const(),
         );

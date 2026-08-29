@@ -437,8 +437,7 @@ pub unsafe fn ex_history(eap: *mut exarg_T) {
         (*eap).arg
     };
     if get_hislen() == 0 {
-        // SAFETY: a static message string.
-        unsafe { msg(gettext(c"'history' option is zero".as_ptr()), 0) };
+        msg(gettext(c"'history' option is zero"), 0);
         return;
     }
     // SAFETY: an ex-command argument is NUL-terminated.

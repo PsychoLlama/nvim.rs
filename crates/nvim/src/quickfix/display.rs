@@ -207,7 +207,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
     {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(e_trailing_arg), arg) };
         return;
     }
     let qfl = qf_current_list(qi);
@@ -339,14 +339,14 @@ unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
     let qfl = qf_nth_list(qi, which);
     let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
     let size = IOSIZE as size_t;
-    let fmt = unsafe { gettext(c"%serror list %d of %d; %d errors ".as_ptr()) };
+    let fmt = gettext(c"%serror list %d of %d; %d errors ");
     let listcount = qi.qf_listcount;
     let count = qfl.qf_count;
     let len = unsafe {
         vim_snprintf_safelen(
             buf.as_mut_ptr(),
             size,
-            fmt,
+            fmt.as_ptr(),
             lead,
             which + 1,
             listcount,
@@ -364,7 +364,7 @@ unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
     let title = buf.as_mut_ptr();
     let room = Columns.get() - 1;
     unsafe { trunc_string(title, buf.as_mut_ptr(), room, IOSIZE) };
-    unsafe { msg(buf.as_ptr(), 0) };
+    msg(cstr::in_chars(&buf), 0);
 }
 
 /// `:colder`/`:cnewer`/`:lolder`/`:lnewer`: move up or down the stack.
@@ -432,7 +432,7 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
     // `qf_stack_empty` answered for the null pointer this used to hold.
     match stack.filter(|qi| !qf_is_empty(*qi)) {
         None => {
-            unsafe { msg(gettext(c"No entries".as_ptr()), 0) };
+            msg(gettext(c"No entries"), 0);
         }
         Some(qi) => {
             for i in 0..qi.qf_listcount {

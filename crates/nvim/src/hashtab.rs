@@ -370,7 +370,7 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
     if unsafe { &*hi }.is_kept() {
         let fmt = c"E685: Internal error: hash_add(): duplicate key \"%s\"";
         // SAFETY: `%s` spends the NUL-terminated key.
-        unsafe { siemsg_c!(gettext(fmt.as_ptr()), key) };
+        unsafe { siemsg_c!(gettext(fmt), key) };
         return FAIL;
     }
     unsafe { hash_add_item(ht, hi, key, hash) };

@@ -35,12 +35,12 @@ use crate::main::{
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
-use crate::message::{emsg, msg, msg_progress, msg_puts_hl, set_keep_msg};
+use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_puts_hl, set_keep_msg};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::{gettext, gettext_ptr, snprintf};
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
     os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
@@ -90,7 +90,7 @@ pub(crate) struct WriteError {
 pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
     // SAFETY: gettext returns either its own argument or a pointer into the
     // loaded message catalog. Both outlive the process.
-    unsafe { CStr::from_ptr(gettext(msg.as_ptr())) }
+    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }
 }
 
 impl WriteError {
@@ -139,7 +139,7 @@ impl WriteError {
     pub(crate) unsafe fn shared(msg: *const ::core::ffi::c_char, arg: ::core::ffi::c_int) -> Self {
         WriteError {
             num: None,
-            msg: unsafe { CStr::from_ptr(gettext(msg)) }.into(),
+            msg: unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }.into(),
             arg,
         }
     }
@@ -161,7 +161,7 @@ impl WriteError {
                 unsafe { semsg_c!(msg, uv_strerror(arg)) };
             }
             (None, _) => {
-                unsafe { emsg(msg) };
+                unsafe { emsg_ptr(msg) };
             }
         }
     }
@@ -293,14 +293,14 @@ pub unsafe fn buf_write(
     }
     if b.b_ml.ml_mfp.is_null() {
         // Can happen during startup, from a stray "w" in the vimrc.
-        unsafe { emsg(gettext(e_empty_buffer.as_ptr())) };
+        emsg(gettext(e_empty_buffer));
         return FAIL;
     }
     if check_secure() {
         return FAIL; // writing is disallowed in secure mode
     }
     if unsafe { strlen(fname) } >= MAXPATHL as size_t {
-        unsafe { emsg(gettext(e_longname.as_ptr())) }; // avoid a crash for a long name
+        emsg(gettext(e_longname)); // avoid a crash for a long name
         return FAIL;
     }
 
@@ -763,7 +763,7 @@ pub unsafe fn buf_write(
                     && !writer.conv_error
                     && unsafe { os_remove(backup.path) } != 0
                 {
-                    unsafe { emsg(translate(c"E207: Can't delete backup file").as_ptr()) };
+                    emsg(translate(c"E207: Can't delete backup file"));
                 }
                 break 'cleanup;
             }

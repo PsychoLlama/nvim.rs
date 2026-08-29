@@ -116,7 +116,7 @@ impl TypvalSink for MsgpackSink<'_> {
         _prefix: &'static CStr,
         path: &ConvPath,
     ) -> Flow {
-        unsafe { conv_error(gettext(E5004_FUNCREF.as_ptr()), path) }
+        unsafe { conv_error(gettext(E5004_FUNCREF).as_ptr(), path) }
     }
 
     unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
@@ -144,7 +144,7 @@ impl TypvalSink for MsgpackSink<'_> {
         _conv_type: ConvType,
         path: &ConvPath,
     ) -> Flow {
-        unsafe { conv_error(gettext(E5005_SELF_REFERENCE.as_ptr()), path) }
+        unsafe { conv_error(gettext(E5005_SELF_REFERENCE).as_ptr(), path) }
     }
 }
 

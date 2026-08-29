@@ -44,12 +44,7 @@ pub unsafe fn do_doautocmd(
 
     // SAFETY: still inside the caller's NUL-terminated argument.
     if unsafe { *arg } == b'*' as ::core::ffi::c_char {
-        // SAFETY: a NUL-terminated message literal.
-        unsafe {
-            emsg(gettext(
-                c"E217: Can't execute autocommands for ALL events".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E217: Can't execute autocommands for ALL events"));
         return FAIL;
     }
 
@@ -92,7 +87,7 @@ pub unsafe fn do_doautocmd(
         unsafe {
             smsg_c!(
                 0,
-                gettext(c"No matching autocommands: %s".as_ptr()),
+                gettext(c"No matching autocommands: %s").as_ptr(),
                 arg_start,
             )
         };

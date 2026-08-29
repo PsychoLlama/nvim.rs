@@ -19,23 +19,24 @@ use crate::msgpack_rpc::unpacker::{MPACK_EOF, MPACK_OK};
 use crate::types::FieldHashfn;
 
 use super::*;
+use crate::os::cshim::gettext;
 
 /// Report `E576`/`E886` about the file, naming a byte offset or a length.
 ///
 /// Every message here ends in one variadic call; writing it once keeps the
 /// unchecked part of reporting to these two functions.
-fn shada_read_error(fmt: &CStr, at: uint64_t) {
+fn shada_read_error(fmt: &'static CStr, at: uint64_t) {
     // SAFETY: `fmt` is a static format string whose one conversion is the
     // `%lu` that `at` is passed for.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), at) };
+    unsafe { semsg_c!(gettext(fmt), at) };
 }
 
 /// As [`shada_read_error`], for the messages whose `%s` is a libuv error or
 /// a fixed reason.
-fn shada_read_error_why(fmt: &CStr, why: *const c_char) {
+fn shada_read_error_why(fmt: &'static CStr, why: *const c_char) {
     // SAFETY: as `shada_read_error`; `why` is a NUL-terminated message that
     // outlives the call.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), why) };
+    unsafe { semsg_c!(gettext(fmt), why) };
 }
 
 /// The largest entry type this Nvim knows. Anything above it is an unknown
@@ -211,7 +212,7 @@ pub(crate) unsafe fn sd_reader_skip(
         } else {
             shada_read_error_why(
                 c"E886: System error while skipping in ShaDa file: %s",
-                unsafe { gettext(c"too few bytes read".as_ptr()) },
+                gettext(c"too few bytes read").as_ptr(),
             );
         }
         return kSDReadStatusNotShaDa;
@@ -300,10 +301,8 @@ pub(crate) unsafe fn shada_check_status(
         semsg_c!(
             gettext(if status == MPACK_EOF {
                 c"E576: Failed to parse ShaDa file: incomplete msgpack string at position %lu"
-                    .as_ptr()
             } else {
                 c"E576: Failed to parse ShaDa file due to a msgpack parser error at position %lu"
-                    .as_ptr()
             }),
             initial_fpos as uint64_t,
         )

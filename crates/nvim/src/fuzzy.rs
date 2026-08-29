@@ -835,9 +835,7 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
 
 /// The translated text of one of the shared `e_*` message strings.
 fn message(msg: &'static CStr) -> *const c_char {
-    // SAFETY: gettext answers either its argument or a pointer into the
-    // loaded message catalog; both outlive the call.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.

@@ -30,7 +30,7 @@ use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
     msg_puts, msg_puts_hl, msg_puts_title,
 };
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
@@ -123,7 +123,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 let heading =
                     c"\n    Name              Args Address Complete    Definition".as_ptr();
                 // SAFETY: module contract; the heading is a static string.
-                unsafe { msg_puts_title(gettext(heading)) };
+                unsafe { msg_puts_title(gettext_ptr(heading).as_ptr()) };
             }
             found = true;
             // SAFETY: module contract.
@@ -146,8 +146,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
     }
 
     if !found {
-        // SAFETY: module contract.
-        unsafe { msg(gettext(c"No user-defined commands found".as_ptr()), 0) };
+        msg(gettext(c"No user-defined commands found"), 0);
     }
 }
 

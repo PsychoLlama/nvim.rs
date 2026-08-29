@@ -93,7 +93,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     }
     // No {choices}, or an empty one, means a single "Ok".
     if buttons.is_null() || unsafe { *buttons } as c_int == NUL {
-        buttons = unsafe { gettext(c"&Ok".as_ptr()) };
+        buttons = gettext(c"&Ok").as_ptr();
     }
     if !error {
         rettv.vval.v_number =
@@ -110,7 +110,7 @@ pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // SAFETY throughout: the frame is live.
     let pid = arg_number(args.get(0)) as c_int;
     if pid == 0 {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     unsafe { uv_kill(pid, SIGINT) };
@@ -170,7 +170,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY throughout: the frame is live and the List is held by an argument for the
     // whole call.
     if args.ty(0) != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg.as_ptr()), c"inputlist()".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_listarg), c"inputlist()".as_ptr(),) };
         return;
     }
     // Start at the bottom of the screen so the whole list is visible.
@@ -232,7 +232,7 @@ pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     } else if p_verbose.get() > 1 {
         // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
-        unsafe { verb_msg(gettext(msg.as_ptr())) };
+        unsafe { verb_msg(gettext(msg).as_ptr()) };
         unsafe { (*rettv).vval.v_number = 1 };
     }
 }

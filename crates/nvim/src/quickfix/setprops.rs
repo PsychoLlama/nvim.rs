@@ -103,7 +103,7 @@ unsafe fn qf_add_entry_from_dict(
         // Ignore the buffer number, and report it once per call.
         if !DID_BUFNR_EMSG.get() {
             DID_BUFNR_EMSG.set(true);
-            unsafe { semsg_c!(gettext(c"E92: Buffer %d not found".as_ptr()), bufnum) };
+            unsafe { semsg_c!(gettext(c"E92: Buffer %d not found"), bufnum) };
         }
         valid = false;
         bufnum = 0;
@@ -640,8 +640,8 @@ pub unsafe fn set_errorlist(
     if !list.is_null() && unsafe { tv_list_len(list) } != 0 && !what.is_null() {
         unsafe {
             semsg_c!(
-                gettext(e_invarg2.as_ptr()),
-                gettext(c"cannot have both a list and a \"what\" argument".as_ptr()),
+                gettext(e_invarg2),
+                gettext(c"cannot have both a list and a \"what\" argument"),
             )
         };
         return Err(QfError::BadValue);

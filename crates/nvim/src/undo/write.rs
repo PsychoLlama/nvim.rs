@@ -26,7 +26,7 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
-                unsafe { smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR.as_ptr()),) };
+                unsafe { smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR),) };
             });
             return;
         }
@@ -73,10 +73,9 @@ unsafe fn write_undo_file(
     }
     if buf.b_u_numhead == 0 && buf.b_u_line_ptr.is_null() {
         if p_verbose.get() > 0 {
-            // SAFETY: a NUL-terminated literal.
-            let mesg = unsafe { gettext(c"Skipping undo file write, nothing to undo".as_ptr()) };
+            let mesg = gettext(c"Skipping undo file write, nothing to undo");
             // SAFETY: as above.
-            unsafe { verb_msg(mesg) };
+            unsafe { verb_msg(mesg.as_ptr()) };
         }
         return;
     }
@@ -99,7 +98,7 @@ unsafe fn write_undo_file(
         // SAFETY: a NUL-terminated literal and path.
         unsafe {
             semsg_c!(
-                gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
+                gettext(c"E828: Cannot open undo file for writing: %s"),
                 file_name,
             )
         };
@@ -110,7 +109,7 @@ unsafe fn write_undo_file(
     // Always under 'verbose', even when the user named the file.
     verbosely(true, || {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe { smsg_c!(0, gettext(c"Writing undo file: %s".as_ptr()), file_name) };
+        unsafe { smsg_c!(0, gettext(c"Writing undo file: %s").as_ptr(), file_name) };
     });
     // SAFETY: the descriptor just opened on that path, and a live buffer.
     unsafe { match_group(fd, file_name, perm, buf) };
@@ -122,7 +121,7 @@ unsafe fn write_undo_file(
         // `fdopen` did not take over.
         unsafe {
             semsg_c!(
-                gettext(c"E828: Cannot open undo file for writing: %s".as_ptr()),
+                gettext(c"E828: Cannot open undo file for writing: %s"),
                 file_name,
             )
         };
@@ -142,12 +141,7 @@ unsafe fn write_undo_file(
     unsafe { fclose(fp) };
     if !write_ok {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe {
-            semsg_c!(
-                gettext(c"E829: Write error in undo file: %s".as_ptr()),
-                file_name,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E829: Write error in undo file: %s"), file_name,) };
     }
     if !buf.b_ffname.is_null() {
         let acl: vim_acl_T = os_get_acl(buf.b_ffname);
@@ -167,10 +161,8 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
     let fd = unsafe { os_open(file_name, O_RDONLY, 0) };
     if fd < 0 {
         verbosely(automatic, || {
-            // SAFETY: a NUL-terminated literal and path.
-            let fmt =
-                unsafe { gettext(c"Will not overwrite with undo file, cannot read: %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, file_name) };
+            let fmt = gettext(c"Will not overwrite with undo file, cannot read: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
         });
         return false;
     }
@@ -183,9 +175,8 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
         return true;
     }
     verbosely(automatic, || {
-        // SAFETY: a NUL-terminated literal and path.
-        let fmt = unsafe { gettext(c"Will not overwrite, this is not an undo file: %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, file_name) };
+        let fmt = gettext(c"Will not overwrite, this is not an undo file: %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
     });
     false
 }

@@ -162,17 +162,12 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         cur_buf().b_op_start = startpos;
     }
     if change_cnt > p_report.get() as ssize_t {
-        unsafe {
-            smsg_c!(
-                0,
-                ngettext(
-                    c"%ld lines changed".as_ptr(),
-                    c"%ld lines changed".as_ptr(),
-                    change_cnt as c_ulong,
-                ),
-                change_cnt as int64_t,
-            )
-        };
+        let fmt = ngettext(
+            c"%ld lines changed",
+            c"%ld lines changed",
+            change_cnt as c_ulong,
+        );
+        unsafe { smsg_c!(0, fmt.as_ptr(), change_cnt as int64_t) };
     }
 }
 

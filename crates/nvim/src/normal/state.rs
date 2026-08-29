@@ -45,7 +45,7 @@ use crate::main::{
     reg_recording, restart_edit, skip_redraw, time_fd,
 };
 use crate::memory::{xfree, xstrdup};
-use crate::message::{may_clear_sb_text, msg, msg_delay, wait_return};
+use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
 use crate::normal::{
     CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
     NormalState, check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap,
@@ -374,7 +374,7 @@ pub(crate) fn normal_redraw_mode_message() {
         unsafe { update_screen() };
         keep_msg.set(kmsg);
         let copy = unsafe { xstrdup(keep_msg.get()) };
-        unsafe { msg(copy, keep_msg_hl_id.get()) };
+        unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
         unsafe { xfree(copy.cast::<c_void>()) };
     }
     unsafe { setcursor() };
@@ -507,7 +507,7 @@ fn normal_redraw() {
         // message is not added to the history a second time.
         let copy = unsafe { xstrdup(keep_msg.get()) };
         msg_hist_off.set(true);
-        unsafe { msg(copy, keep_msg_hl_id.get()) };
+        unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
         msg_hist_off.set(false);
         unsafe { xfree(copy.cast::<c_void>()) };
     }

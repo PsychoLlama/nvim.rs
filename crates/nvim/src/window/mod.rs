@@ -52,9 +52,9 @@ use crate::main::{
     topframe,
 };
 use crate::memory::xfree;
-use crate::message::{emsg, msg};
+use crate::message::{emsg, emsg_ptr, msg};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType,
@@ -408,7 +408,7 @@ pub(crate) fn valid_win(win: *mut win_T) -> Option<Win> {
 /// `emsg(_(msg))`, the family's only way of reporting a failure.
 fn err(msg: *const ::core::ffi::c_char) {
     // SAFETY: every caller passes a static NUL-terminated message.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 /// Mark every window on the screen for redrawing at `redraw_type`.
@@ -426,14 +426,14 @@ fn is_only_window(win: Win, tp: Option<TabPage>) -> bool {
 /// deliberately does not translate.
 fn err_raw(msg: *const ::core::ffi::c_char) {
     // SAFETY: every caller passes a static NUL-terminated message.
-    unsafe { emsg(msg) };
+    unsafe { emsg_ptr(msg) };
 }
 
 /// "Already only one window", the answer to `:only` and CTRL-W T when there is
 /// nothing to do.
 fn only_one_message() {
     // SAFETY: a static message; zero means "no highlight attribute".
-    unsafe { msg(gettext(m_onlyone.get()), 0) };
+    unsafe { msg(gettext_ptr(m_onlyone.get()), 0) };
 }
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.

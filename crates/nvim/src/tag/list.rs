@@ -71,10 +71,10 @@ pub(crate) unsafe fn print_tag_list(
     }
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
     unsafe { msg_start() };
-    unsafe { msg_puts_hl(gettext(c"  # pri kind tag".as_ptr()), HLF_T, false) };
+    unsafe { msg_puts_hl(gettext(c"  # pri kind tag").as_ptr(), HLF_T, false) };
     unsafe { msg_clr_eos() };
     unsafe { advance_to_files(taglen) };
-    unsafe { msg_puts_hl(gettext(c"file\n".as_ptr()), HLF_T, false) };
+    unsafe { msg_puts_hl(gettext(c"file\n").as_ptr(), HLF_T, false) };
 
     'each: for i in 0..num_matches {
         if got_int.get() {

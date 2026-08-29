@@ -143,7 +143,7 @@ pub unsafe fn aubuflocal_remove(buf: Buf) {
                     unsafe {
                         smsg_c!(
                             0,
-                            gettext(c"auto-removing autocommand: %s <buffer=%d>".as_ptr()),
+                            gettext(c"auto-removing autocommand: %s <buffer=%d>").as_ptr(),
                             event_nr2name(event),
                             buf.handle,
                         )

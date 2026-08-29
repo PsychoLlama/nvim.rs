@@ -28,7 +28,7 @@ use crate::main::{
 };
 use crate::memory::xmalloc;
 
-use crate::message::msg;
+use crate::message::msg_ptr;
 
 use crate::option::{cpo_has, option_last_set};
 
@@ -370,7 +370,7 @@ pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
         };
         unsafe { smsg_c!(0, c"[%s] %s".as_ptr(), context, dir.as_mut_ptr()) };
     } else {
-        unsafe { msg(dir.as_mut_ptr(), 0) };
+        unsafe { msg_ptr(dir.as_mut_ptr(), 0) };
     }
 }
 
@@ -395,13 +395,13 @@ fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: CdScope, cause: CdCause, p
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `option_set_callback_func()` as checked code.

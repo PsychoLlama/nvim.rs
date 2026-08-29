@@ -72,7 +72,7 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
         lua_pushlstring(lstate, pat, patlen as size_t);
 
         if nlua_pcall(lstate, 1, 2) != 0 {
-            nlua_error(lstate, gettext(c"vim._expand_pat: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"vim._expand_pat: %.*s").as_ptr());
             return;
         }
 

@@ -133,9 +133,9 @@ unsafe fn finish_marks(arg: *mut c_char) {
     }
     // SAFETY: `'static` C strings, and `arg` is the caller's.
     if arg.is_null() {
-        unsafe { msg(gettext(c"No marks set".as_ptr()), 0) };
+        msg(gettext(c"No marks set"), 0);
     } else {
-        unsafe { semsg_c!(gettext(c"E283: No marks matching \"%s\"".as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(c"E283: No marks matching \"%s\""), arg) };
     }
 }
 
@@ -176,7 +176,7 @@ pub(super) unsafe fn show_one_mark(
     // `IOSIZE` bytes of live storage.
     if !unsafe { message_filtered(name) } {
         if !DID_TITLE.replace(true) {
-            unsafe { msg_puts_title(gettext(c"\nmark line  col file/text".as_ptr())) };
+            unsafe { msg_puts_title(gettext(c"\nmark line  col file/text").as_ptr()) };
         }
         unsafe { msg_putchar('\n' as c_int) };
         if !got_int.get() {
@@ -222,13 +222,11 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
     if forceit {
         // `:delmarks!` takes no argument at all; naming one is E474 rather
         // than "clear these, forcefully".
-        // SAFETY: a `'static` message.
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     if empty {
-        // SAFETY: as above.
-        unsafe { emsg(gettext(e_argreq.as_ptr())) };
+        emsg(gettext(e_argreq));
         return;
     }
 
@@ -257,7 +255,7 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             // NUL-terminated argument.
             if !unsafe { delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) } {
                 // SAFETY: as above.
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2), rest) };
                 return;
             }
             i += 1;
@@ -277,7 +275,7 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
             };
             if !same_class || end < from {
                 // SAFETY: `rest` points inside the NUL-terminated argument.
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2), rest) };
                 return;
             }
             i += 2;

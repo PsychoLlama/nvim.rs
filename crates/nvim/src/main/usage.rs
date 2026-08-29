@@ -10,7 +10,7 @@ use crate::lua::executor::nlua_init;
 use crate::main::exit::os_exit;
 use crate::main::{argv0, info_message, msg_didout};
 use crate::message::msg_putchar;
-use crate::os::cshim::{gettext, stderr};
+use crate::os::cshim::{gettext, gettext_ptr, stderr};
 use crate::os::signal::signal_stop;
 use crate::path::path_tail;
 use crate::version::list_version;
@@ -63,7 +63,7 @@ pub(crate) unsafe fn usage() {
         if line.is_empty() {
             unsafe { printf(c"\n".as_ptr()) };
         } else {
-            unsafe { printf(gettext(line.as_ptr())) };
+            unsafe { printf(gettext(line).as_ptr()) };
         }
     }
 }
@@ -92,14 +92,14 @@ pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg
     // Nothing beyond this point should be interrupted by a handler that
     // expects a running editor.
     signal_stop();
-    unsafe { fprintf(stderr, c"%s: %s".as_ptr(), prgname, gettext(msg1)) };
+    unsafe { fprintf(stderr, c"%s: %s".as_ptr(), prgname, gettext_ptr(msg1)) };
     if !msg2.is_null() {
         unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg2) };
     }
     if !msg3.is_null() {
         unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg3) };
     }
-    unsafe { fprintf(stderr, gettext(c"\nMore info with \"".as_ptr())) };
+    unsafe { fprintf(stderr, gettext(c"\nMore info with \"").as_ptr()) };
     unsafe { fprintf(stderr, c"%s -h\"\n".as_ptr(), prgname) };
 }
 

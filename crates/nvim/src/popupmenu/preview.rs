@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::guard::{Allow, Suppress};
+use crate::message::emsg_ptr;
 use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::{OK, OptionSetFlags};
@@ -134,7 +135,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
     };
     drop(unlocked);
     if let Err(mut err) = set {
-        unsafe { emsg(err.msg) };
+        unsafe { emsg_ptr(err.msg) };
         unsafe { api_clear_error(&raw mut err) };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };

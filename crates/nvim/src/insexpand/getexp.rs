@@ -237,12 +237,11 @@ pub(crate) unsafe fn process_next_cpt_value(
                 } else {
                     buf.b_sfname
                 };
-                // SAFETY: a static NUL-terminated format.
-                let fmt = unsafe { gettext(c"Scanning: %s".as_ptr()) };
+                let fmt = gettext(c"Scanning: %s");
                 let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
                 // SAFETY: `out` addresses all `size` bytes and `%s` takes a
                 // NUL-terminated string, which `name` is.
-                unsafe { vim_snprintf(out, size, fmt, name) };
+                unsafe { vim_snprintf(out, size, fmt.as_ptr(), name) };
                 // SAFETY: `vim_snprintf` NUL-terminated `out`.
                 unsafe { scan_progress(out) };
             }
@@ -287,8 +286,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 } else if flag == ']' as c_int || flag == 't' as c_int {
                     compl_type = CTRL_X_TAGS;
                     if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
-                        // SAFETY: a static NUL-terminated message.
-                        let text = unsafe { gettext(c"Scanning tags.".as_ptr()) };
+                        let text = gettext(c"Scanning tags.");
                         let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
                         // SAFETY: `out` addresses all `size` bytes.
                         unsafe { vim_snprintf(out, size, c"%s".as_ptr(), text) };

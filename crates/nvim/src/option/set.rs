@@ -47,7 +47,7 @@ use crate::options::{
     kOptUndolevels, kOptWinbar, options,
 };
 use crate::optionstr::check_illegal_path_names;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
     IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, Vv, optset_T, ptrdiff_t,
     scid_T, sctx_T, size_t, uint32_t, vimoption_T,
@@ -744,7 +744,7 @@ pub(crate) fn set_option_value(
 
     if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
         // SAFETY: a NUL-terminated message static.
-        return Some(unsafe { CStr::from_ptr(gettext(e_sandbox.as_ptr())) }.to_owned());
+        return Some(unsafe { CStr::from_ptr(gettext(e_sandbox).as_ptr()) }.to_owned());
     }
     // SAFETY: the option table is a plain array, and `errbuf` is `IOSIZE`
     // writable bytes.
@@ -796,8 +796,8 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     if is_tty_option(unsafe { CStr::from_ptr(name) }) {
         return None;
     }
-    let fmt = unsafe { gettext(e_unknown_option2.as_ptr()) };
-    unsafe { snprintf(errbuf.as_mut_ptr(), IOSIZE as size_t, fmt, name) };
+    let fmt = gettext(e_unknown_option2);
+    unsafe { snprintf(errbuf.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), name) };
     Some(cstr::in_chars(&errbuf).to_owned())
 }
 
@@ -808,8 +808,7 @@ pub(crate) fn set_option_value_give_err(
     opt_flags: OptionSetFlags,
 ) {
     if let Some(errmsg) = set_option_value(opt_idx, value, opt_flags) {
-        // SAFETY: `set_option_value` answers a NUL-terminated message.
-        unsafe { emsg(gettext(errmsg.as_ptr())) };
+        emsg(&gettext_owned(&errmsg));
     }
 }
 

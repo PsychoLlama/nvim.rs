@@ -172,7 +172,7 @@ pub(crate) unsafe fn eval_option(
     if option_end.is_null() {
         if !rettv.is_null() {
             let name = unsafe { *arg };
-            unsafe { semsg_c!(gettext(c"E112: Option name missing: %s".as_ptr()), name) };
+            unsafe { semsg_c!(gettext(c"E112: Option name missing: %s"), name) };
         }
         return FAIL;
     }
@@ -193,7 +193,7 @@ pub(crate) unsafe fn eval_option(
         // Only report it when the result is going to be used.
         if !rettv.is_null() {
             let name = unsafe { *arg };
-            unsafe { semsg_c!(gettext(c"E113: Unknown option: %s".as_ptr()), name) };
+            unsafe { semsg_c!(gettext(c"E113: Unknown option: %s"), name) };
         }
         FAIL
     } else if !rettv.is_null() {
@@ -285,7 +285,7 @@ pub(crate) unsafe fn eval_number(
                     // SAFETY: a literal message, and `blob` is this call's
                     // own, unreferenced allocation.
                     let odd = c"E973: Blob literal should have an even number of hex characters";
-                    unsafe { emsg(gettext(odd.as_ptr())) };
+                    emsg(gettext(odd));
                     unsafe { ga_clear(&raw mut (*blob).bv_ga) };
                     unsafe { xfree(blob.cast()) };
                 }
@@ -318,7 +318,7 @@ pub(crate) unsafe fn eval_number(
         unsafe { vim_str2nr(text, skip_pre, lenp, all, np, no_len, 0, true, no_ov) };
         if len == 0 {
             if evaluate {
-                unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), text) };
+                unsafe { semsg_c!(gettext(e_invexpr2), text) };
             }
             return FAIL;
         }
@@ -391,7 +391,7 @@ pub(crate) unsafe fn eval_string(
             p.step(1);
             if p.behind(1) == b'}' && p.byte() != b'}' {
                 let text = cur.get();
-                unsafe { semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), text) };
+                unsafe { semsg_c!(gettext(e_stray_closing_curly_str), text) };
                 return FAIL;
             }
             extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
@@ -401,7 +401,7 @@ pub(crate) unsafe fn eval_string(
 
     if p.byte() != b'"' && !(interpolate && p.byte() == b'{') {
         let text = cur.get();
-        unsafe { semsg_c!(gettext(c"E114: Missing quote: %s".as_ptr()), text) };
+        unsafe { semsg_c!(gettext(c"E114: Missing quote: %s"), text) };
         return FAIL;
     }
     if !evaluate {
@@ -528,8 +528,7 @@ pub(crate) unsafe fn eval_string(
                 if written != 0 {
                     end.step(written as usize);
                     if end.raw() >= buffer.wrapping_offset(len as isize) {
-                        // SAFETY: a literal message.
-                        unsafe { iemsg(c"eval_string() used more space than allocated".as_ptr()) };
+                        iemsg(c"eval_string() used more space than allocated");
                     }
                 } else {
                     handled = false;
@@ -594,7 +593,7 @@ pub(crate) unsafe fn eval_lit_string(
                 p.step(1);
                 if p.byte() != b'}' {
                     let text = cur.get();
-                    unsafe { semsg_c!(gettext(e_stray_closing_curly_str.as_ptr()), text) };
+                    unsafe { semsg_c!(gettext(e_stray_closing_curly_str), text) };
                     return FAIL;
                 }
                 reduce += 1;
@@ -605,7 +604,7 @@ pub(crate) unsafe fn eval_lit_string(
 
     if p.byte() != b'\'' && !(interpolate && p.byte() == b'{') {
         let text = cur.get();
-        unsafe { semsg_c!(gettext(c"E115: Missing quote: %s".as_ptr()), text) };
+        unsafe { semsg_c!(gettext(c"E115: Missing quote: %s"), text) };
         return FAIL;
     }
     if !evaluate {

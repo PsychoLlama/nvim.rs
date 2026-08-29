@@ -18,7 +18,7 @@ use core::ffi::{CStr, c_char, c_int};
 use crate::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::main::curwin;
 use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, fromto_T, garray_T};
@@ -98,7 +98,7 @@ pub(super) unsafe fn add_rep_entry(
     // SAFETY: the caller promises the items; the substitution is in place
     // and replaces one byte with one byte.
     if items.len() > 3 && unsafe { *items[3] } as c_int != b'#' as c_int {
-        unsafe { smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[3]) };
+        unsafe { smsg_c!(0, gettext_ptr(e_afftrailing.get()), fname, lnum, items[3]) };
     }
     // "REPSAL" has an S where "REP" has its terminator.
     let is_sal = unsafe { *items[0].add(3) } as c_int == b'S' as c_int;
@@ -139,8 +139,8 @@ pub(super) unsafe fn handle_map(
         // The first MAP line is the number of groups.
         st.found_map = true;
         if !unsafe { is_digit_byte(*items[1]) } {
-            let fmt = unsafe { gettext(c"Expected MAP count in %s line %d".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum) };
+            let fmt = gettext(c"Expected MAP count in %s line %d");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum) };
         }
         return;
     }
@@ -156,8 +156,8 @@ pub(super) unsafe fn handle_map(
             && !unsafe { vim_strchr((*spin).si_map.ga_data.cast::<c_char>(), c) }.is_null())
             || !unsafe { vim_strchr(p, c) }.is_null()
         {
-            let fmt = unsafe { gettext(c"Duplicate character in MAP in %s line %d".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum) };
+            let fmt = gettext(c"Duplicate character in MAP in %s line %d");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum) };
         }
     }
     unsafe { ga_concat(&raw mut (*spin).si_map, items[1]) };

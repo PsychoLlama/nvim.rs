@@ -16,6 +16,7 @@ use core::{ptr, slice};
 
 use super::*;
 use crate::keycodes::KE_SNR;
+use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;
 
 /// The name of the function `name` refers to.
@@ -92,7 +93,7 @@ pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
     {
         p = unsafe { concat_str(c"<SNR>".as_ptr(), name.add(3)) };
     }
-    unsafe { semsg_c!(gettext(errmsg), p) };
+    unsafe { semsg_c!(gettext_ptr(errmsg), p) };
     if !core::ptr::eq(p, name) {
         unsafe { xfree(p as *mut c_void) };
     }
@@ -316,7 +317,7 @@ unsafe fn mangle_function_name(
         {
             // It's "s:" or "<SID>".
             if current_sctx.get().sc_sid <= 0 {
-                unsafe { emsg(gettext(e_usingsid.as_ptr())) };
+                emsg(gettext(e_usingsid));
                 return ptr::null_mut();
             }
             let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
@@ -329,7 +330,7 @@ unsafe fn mangle_function_name(
     {
         unsafe {
             semsg_c!(
-                gettext(c"E128: Function name must start with a capital or \"s:\": %s".as_ptr()),
+                gettext(c"E128: Function name must start with a capital or \"s:\": %s"),
                 start,
             )
         };
@@ -348,7 +349,7 @@ unsafe fn mangle_function_name(
         if !cp.is_null() {
             unsafe {
                 semsg_c!(
-                    gettext(c"E884: Function name cannot contain a colon: %s".as_ptr()),
+                    gettext(c"E884: Function name cannot contain a colon: %s"),
                     start,
                 )
             };
@@ -425,7 +426,7 @@ pub unsafe fn trans_function_name(
     'theend: {
         if end == start {
             if !skip {
-                unsafe { emsg(gettext(c"E129: Function name required".as_ptr())) };
+                emsg(gettext(c"E129: Function name required"));
             }
             break 'theend;
         }
@@ -435,7 +436,7 @@ pub unsafe fn trans_function_name(
             // or an exception.
             if !aborting() {
                 if !end.is_null() {
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), start) };
+                    unsafe { semsg_c!(gettext(e_invarg2), start) };
                 }
             } else {
                 unsafe {
@@ -487,7 +488,7 @@ pub unsafe fn trans_function_name(
                         || lv.ll_dict.is_null()
                         || unsafe { (*fdp).fd_newkey }.is_null())
                 {
-                    unsafe { emsg(gettext(E_FUNCREF.as_ptr())) };
+                    emsg(gettext(E_FUNCREF));
                 } else {
                     unsafe { *pp = end as *mut c_char };
                 }
@@ -560,7 +561,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     }
     let sid = current_sctx.get().sc_sid;
     if !script_id_valid(sid) {
-        unsafe { emsg(gettext(e_usingsid.as_ptr())) };
+        emsg(gettext(e_usingsid));
         return ptr::null_mut();
     }
 

@@ -36,7 +36,7 @@ use crate::main::{
     lastwin, p_awa, p_confirm, p_write, topframe,
 };
 
-use crate::message::msg;
+use crate::message::msg_ptr;
 
 use crate::os::cshim::snprintf;
 
@@ -421,7 +421,7 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
         return;
     }
     if only_tab() {
-        unsafe { msg(gettext(c"Already only one tab page".as_ptr()), 0) };
+        unsafe { msg_ptr(gettext(c"Already only one tab page".as_ptr()), 0) };
         return;
     }
     if window_layout_locked(CMD_tabonly) {
@@ -686,7 +686,7 @@ fn curbuf_locked() -> bool {
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `getout()` as checked code.
@@ -698,7 +698,7 @@ fn getout(exitval: c_int) -> ! {
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `not_exiting()` as checked code.

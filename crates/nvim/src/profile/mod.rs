@@ -235,12 +235,7 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
         // SAFETY: a v: variable set to a number.
         unsafe { set_vim_var_nr(Vv::Profiling, 1 as varnumber_T) };
     } else if do_profiling.get() == PROF_NONE {
-        // SAFETY: a NUL-terminated literal.
-        unsafe {
-            emsg(gettext(
-                c"E750: First use \":profile start {fname}\"".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E750: First use \":profile start {fname}\""));
     } else if full == b"stop" {
         profile_dump();
         do_profiling.set(PROF_NONE);

@@ -81,12 +81,7 @@ pub fn diff_buf_add(buf: Buf) {
     }
     // SAFETY: the message macros expand to a `vim_snprintf` over the format
     // literal above and the editor's message buffers.
-    unsafe {
-        semsg_c!(
-            gettext(c"E96: Cannot diff more than %d buffers".as_ptr()),
-            DB_COUNT,
-        )
-    };
+    unsafe { semsg_c!(gettext(c"E96: Cannot diff more than %d buffers"), DB_COUNT,) };
 }
 
 /// Empty the current tabpage's diff.

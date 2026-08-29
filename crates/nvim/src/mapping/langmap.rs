@@ -161,8 +161,8 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                 // the format's one conversion is the rendering below it.
                 unsafe {
                     let shown = transchar(from);
-                    let fmt = gettext(missing.as_ptr());
-                    snprintf(errbuf, errlen, fmt, shown.as_ptr());
+                    let fmt = gettext(missing);
+                    snprintf(errbuf, errlen, fmt.as_ptr(), shown.as_ptr());
                 }
                 return errbuf;
             }
@@ -206,8 +206,8 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                     let extra = c"E358: 'langmap': Extra characters after semicolon: %s";
                     // SAFETY: as the `E357` message above.
                     unsafe {
-                        let fmt = gettext(extra.as_ptr());
-                        snprintf(errbuf, errlen, fmt, p);
+                        let fmt = gettext(extra);
+                        snprintf(errbuf, errlen, fmt.as_ptr(), p);
                     }
                     return errbuf;
                 }

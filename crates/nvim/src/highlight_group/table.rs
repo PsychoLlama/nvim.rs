@@ -407,8 +407,7 @@ pub(crate) fn syn_id2name(id: c_int) -> *mut c_char {
 /// thread only.
 pub(crate) unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
     if len > MAX_SYN_NAME as size_t {
-        // SAFETY: main-thread message call.
-        unsafe { emsg(gettext(e_highlight_group_name_too_long.as_ptr())) };
+        emsg(gettext(e_highlight_group_name_too_long));
         return 0;
     }
     // SAFETY: the caller's buffer, `len` bytes of it.
@@ -430,11 +429,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
         let c = c_int::from(byte);
         // SAFETY: main-thread message calls.
         if !unsafe { vim_isprintc(c) } {
-            unsafe {
-                emsg(gettext(
-                    c"E669: Unprintable character in group name".as_ptr(),
-                ))
-            };
+            emsg(gettext(c"E669: Unprintable character in group name"));
             return 0;
         }
         if !byte.is_ascii_alphabetic()
@@ -442,7 +437,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
             && !matches!(byte, b'_' | b'.' | b'@' | b'-')
         {
             unsafe { msg_source(HLF_W) };
-            unsafe { emsg(gettext(e_highlight_group_name_invalid_char.as_ptr())) };
+            emsg(gettext(e_highlight_group_name_invalid_char));
             return 0;
         }
     }
@@ -459,12 +454,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
     }
 
     if highlight_num_groups() >= MAX_HL_ID as c_int {
-        // SAFETY: main-thread message call.
-        unsafe {
-            emsg(gettext(
-                c"E849: Too many highlight and syntax groups".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E849: Too many highlight and syntax groups"));
         return 0;
     }
 

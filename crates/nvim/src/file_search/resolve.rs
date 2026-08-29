@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::path::buffer_path;
 use crate::semsg_c;
 use crate::types::MAXPATHL;
@@ -345,7 +346,7 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
             .cast::<c_char>(),
         (false, false) => e_no_more_file_str_found_in_path.as_ptr(),
     };
-    unsafe { semsg_c!(gettext(message), file_to_find) };
+    unsafe { semsg_c!(gettext_ptr(message), file_to_find) };
 }
 
 /// @param ptr  file name

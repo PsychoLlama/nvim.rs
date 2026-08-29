@@ -289,7 +289,7 @@ pub(crate) unsafe fn open_source(
                 unsafe { check_need_swap(how.newfile) };
                 // The SwapExists autocommand may mess things up.
                 if buffer_changed() {
-                    unsafe { emsg(gettext(e_auchangedbuf.get())) };
+                    unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
                     return Err(retval);
                 }
             }
@@ -357,7 +357,7 @@ pub(crate) unsafe fn open_source(
     if !buf_is_dontwrite(current_buf()) {
         unsafe { check_need_swap(how.newfile) };
         if !how.stdin && buffer_changed() {
-            unsafe { emsg(gettext(e_auchangedbuf.get())) };
+            unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
             if !how.buffer {
                 unsafe { close(fd) };
             }
@@ -465,8 +465,7 @@ pub(crate) unsafe fn open_source(
             } else {
                 c"E201: *ReadPre autocommands must not change current buffer"
             };
-            // SAFETY: a static message string.
-            unsafe { emsg(gettext(msg.as_ptr())) };
+            emsg(gettext(msg));
             cur_buf().b_p_ro = true as c_int; // must use "w!" now
             return Err(retval);
         }

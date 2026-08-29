@@ -347,7 +347,7 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     if pos.lnum > wp.buffer().line_count() {
         // SAFETY: a NUL-terminated format string and the one argument it
         // names. Not `semsg!`: this is vim's own `printf`.
-        unsafe { semsg_c!(gettext(e_invalid_line_number_nr.as_ptr()), pos.lnum,) };
+        unsafe { semsg_c!(gettext(e_invalid_line_number_nr), pos.lnum,) };
         return;
     }
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);

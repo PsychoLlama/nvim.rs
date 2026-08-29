@@ -171,8 +171,7 @@ impl Efm {
         }
 
         if formats.is_empty() {
-            // SAFETY: a literal message.
-            unsafe { emsg(gettext(c"E378: 'errorformat' contains no pattern".as_ptr())) };
+            emsg(gettext(c"E378: 'errorformat' contains no pattern"));
             return None;
         }
 
@@ -265,7 +264,7 @@ impl Format {
                 // SAFETY: a literal format string, one `int` argument.
                 unsafe {
                     semsg_c!(
-                        gettext(c"E377: Invalid %%%c in format string".as_ptr()),
+                        gettext(c"E377: Invalid %%%c in format string"),
                         c_int::from(conv),
                     )
                 };
@@ -292,7 +291,7 @@ impl Format {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
                 semsg_c!(
-                    gettext(c"E372: Too many %%%c in format string".as_ptr()),
+                    gettext(c"E372: Too many %%%c in format string"),
                     c_int::from(part[at]),
                 )
             };
@@ -308,7 +307,7 @@ impl Format {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
                 semsg_c!(
-                    gettext(c"E373: Unexpected %%%c in format string".as_ptr()),
+                    gettext(c"E373: Unexpected %%%c in format string"),
                     c_int::from(part[at]),
                 )
             };
@@ -350,7 +349,7 @@ impl Format {
             // SAFETY: a literal format string, one `int` argument.
             unsafe {
                 semsg_c!(
-                    gettext(c"E376: Invalid %%%c in format string prefix".as_ptr()),
+                    gettext(c"E376: Invalid %%%c in format string prefix"),
                     c_int::from(part[at]),
                 )
             };
@@ -371,7 +370,7 @@ fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<u
         // SAFETY: a literal format string, one `int` argument.
         unsafe {
             semsg_c!(
-                gettext(c"E375: Unsupported %%%c in format string".as_ptr()),
+                gettext(c"E375: Unsupported %%%c in format string"),
                 c_int::from(part[at]),
             )
         };
@@ -395,8 +394,7 @@ fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<u
                 }
             }
             if at == len {
-                // SAFETY: a literal message.
-                unsafe { emsg(gettext(c"E374: Missing ] in format string".as_ptr())) };
+                emsg(gettext(c"E374: Missing ] in format string"));
                 return None;
             }
         }

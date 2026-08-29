@@ -415,7 +415,7 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
     }
     if !unsafe { vim_strchr(p_debug.get(), 'e' as c_int) }.is_null() {
         unsafe { msg_source(HLF_W) };
-        unsafe { msg(gettext(c"Beep!".as_ptr()), HLF_W) };
+        msg(gettext(c"Beep!"), HLF_W);
     }
 }
 

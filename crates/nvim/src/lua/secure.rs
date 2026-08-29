@@ -81,7 +81,7 @@ unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
     // SAFETY: as above; the failure path reports and unwinds.
     if unsafe { nlua_pcall(lstate, 1, 2) } != 0 {
         unsafe {
-            nlua_error(lstate, gettext(c"vim.secure.trust: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"vim.secure.trust: %.*s").as_ptr());
             lua_settop(lstate, top);
         }
         return false;

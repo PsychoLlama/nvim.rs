@@ -231,8 +231,7 @@ fn bt_regexec_both(
                 }
             }
         }
-        // SAFETY: a static message.
-        _ => unsafe { iemsg(gettext(e_null.as_ptr())) },
+        _ => iemsg(gettext(e_null)),
     }
 
     trim_working_set();

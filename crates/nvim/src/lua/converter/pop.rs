@@ -53,7 +53,7 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
         let mut other_keys_num: size_t = 0;
         let mut ret = LuaTableProps::NIL;
         if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-            semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 2);
+            semsg_c!(gettext(E1502_GROW_STACK), lua_gettop(lstate) + 2);
             ret.type_0 = kObjectTypeNil;
             return ret;
         }

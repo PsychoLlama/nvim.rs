@@ -278,7 +278,7 @@ pub unsafe fn channel_from_stdio(
     };
     if let Some(msg) = refusal {
         // SAFETY: the caller's writable out-parameter.
-        unsafe { *error = gettext(msg.as_ptr()) };
+        unsafe { *error = gettext(msg).as_ptr() };
         return 0;
     }
     did_stdio.set(true);

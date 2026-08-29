@@ -40,7 +40,9 @@ use crate::options::{
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
 use crate::optionstr::{check_buf_options, free_string_option};
-use crate::os::cshim::{bind_textdomain_codeset, gettext, memmove, snprintf, strncasecmp, strncmp};
+use crate::os::cshim::{
+    bind_textdomain_codeset, gettext_ptr, memmove, snprintf, strncasecmp, strncmp,
+};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
@@ -241,7 +243,7 @@ fn set_init_expand_env() {
         let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
         let expansion = (!translated).then(|| unsafe { option_expand(opt_idx, ptr::null()) });
         let expanded = match &expansion {
-            None => unsafe { gettext(*option_var(opt_idx).string_var()) },
+            None => unsafe { gettext_ptr(*option_var(opt_idx).string_var()) }.as_ptr(),
             Some(Some(expanded)) => expanded.as_ptr(),
             Some(None) => continue,
         };

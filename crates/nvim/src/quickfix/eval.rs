@@ -160,7 +160,7 @@ unsafe fn get_qf_loc_list(
         return;
     }
     if unsafe { (*what_arg).v_type } != VAR_DICT {
-        unsafe { emsg(gettext(e_dictreq.as_ptr())) };
+        emsg(gettext(e_dictreq));
         return;
     }
     let d = unsafe { (*what_arg).vval.v_dict };
@@ -211,11 +211,11 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
 
     let list_arg = args;
     if unsafe { (*list_arg).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(e_listreq.as_ptr())) };
+        emsg(gettext(e_listreq));
         return;
     }
     if RECURSIVE.get() != 0 {
-        unsafe { emsg(gettext(e_au_recursive.as_ptr())) };
+        emsg(gettext(e_au_recursive));
         return;
     }
 
@@ -226,7 +226,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
     let action_arg = unsafe { args.add(1) };
     if unsafe { (*action_arg).v_type } != VAR_UNKNOWN {
         if unsafe { (*action_arg).v_type } != VAR_STRING {
-            unsafe { emsg(gettext(e_string_required.as_ptr())) };
+            emsg(gettext(e_string_required));
             return;
         }
         // Never null: the value is a string, which is what
@@ -234,7 +234,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
         let act = unsafe { numbuf.string_chk(action_arg) };
         let known = matches!(unsafe { *act } as u8, b'a' | b'r' | b'u' | b' ' | b'f');
         if !known || unsafe { *act.add(1) } as c_int != NUL {
-            unsafe { semsg_c!(gettext(c"E927: Invalid action: '%s'".as_ptr()), act) };
+            unsafe { semsg_c!(gettext(c"E927: Invalid action: '%s'"), act) };
             return;
         }
         action = unsafe { *act };
@@ -250,7 +250,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
         {
             what = unsafe { (*what_arg).vval.v_dict };
         } else if unsafe { (*what_arg).v_type } != VAR_UNKNOWN {
-            unsafe { emsg(gettext(e_dictreq.as_ptr())) };
+            emsg(gettext(e_dictreq));
             return;
         }
     }

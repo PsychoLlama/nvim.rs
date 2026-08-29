@@ -40,7 +40,7 @@ use crate::garray::{Gap, ga_clear, ga_concat, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg_c;
 use crate::strings::vim_snprintf;
 use crate::types::{
@@ -80,8 +80,7 @@ pub(crate) static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false
 /// `_()`: the translation of a message, which is always a literal here.
 #[inline(always)]
 fn tr(msg: &'static CStr) -> *const c_char {
-    // SAFETY: `gettext` only reads the NUL-terminated string it is handed.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// A fresh byte `garray_T` grown 80 at a time: every text encoder's output.
@@ -350,7 +349,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     unsafe {
         semsg_c!(
             msg,
-            gettext(path.objname),
+            gettext_ptr(path.objname),
             if path.stack.is_empty() {
                 tr(c"itself")
             } else {

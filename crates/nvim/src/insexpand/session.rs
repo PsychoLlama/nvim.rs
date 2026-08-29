@@ -263,7 +263,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         if unsafe { *get_complete_funcname(ctrl_x_mode.get()) } as c_int == NUL {
             unsafe {
                 semsg_c!(
-                    gettext(e_notset.as_ptr()),
+                    gettext(e_notset),
                     if ctrl_x_mode_function() {
                         c"completefunc".as_ptr()
                     } else {
@@ -293,7 +293,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     check_cursor(unsafe { Win::current() }); // make sure the position is valid, just in case
     validate_cursor(unsafe { Win::current() });
     if !equalpos(cur_win().w_cursor, pos) {
-        unsafe { emsg(gettext(E_COMPLDEL.as_ptr())) };
+        emsg(gettext(E_COMPLDEL));
         return FAIL;
     }
 
@@ -509,7 +509,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
 
     if compl_status_adding() {
         if !shortmess(ShmFlag::COMPLETIONMENU) {
-            edit_submode_pre.set(unsafe { gettext(c" Adding".as_ptr()) });
+            edit_submode_pre.set(gettext(c" Adding").as_ptr().cast_mut());
         }
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
@@ -562,7 +562,7 @@ pub(crate) unsafe fn ins_compl_start() -> c_int {
     // called before line = ml_get(), or when this address is no longer
     // needed. -- Acevedo.
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
-        edit_submode_extra.set(unsafe { gettext(c"-- Searching...".as_ptr()) });
+        edit_submode_extra.set(gettext(c"-- Searching...").as_ptr().cast_mut());
         edit_submode_highl.set(HLF_COUNT);
         unsafe { showmode() };
         edit_submode_extra.set(ptr::null_mut());

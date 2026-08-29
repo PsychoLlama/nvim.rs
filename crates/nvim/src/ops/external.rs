@@ -145,7 +145,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
     let orig_end: pos_T = cur_buf().b_op_end;
 
     if unsafe { *p_opfunc.get() } as c_int == NUL {
-        unsafe { emsg(gettext(c"E774: 'operatorfunc' is empty".as_ptr())) };
+        emsg(gettext(c"E774: 'operatorfunc' is empty"));
         return;
     }
 

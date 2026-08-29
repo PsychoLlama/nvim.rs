@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message::emsg_ptr;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
 
@@ -194,7 +195,7 @@ pub unsafe fn tv_blob_set_range(
 ) -> ::core::ffi::c_int {
     if n2 - n1 + 1 != varnumber_T::from(unsafe { tv_blob_len((*src).vval.v_blob) }) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
-        unsafe { emsg(msg) };
+        unsafe { emsg_ptr(msg) };
         return FAIL;
     }
     let mut il = n1 as ::core::ffi::c_int;

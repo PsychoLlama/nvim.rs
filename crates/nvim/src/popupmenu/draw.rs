@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::grid::linebuf;
+use crate::message::emsg_ptr;
 use crate::types::{kErrorTypeNone, kFloatRelativeEditor};
 
 /// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
@@ -305,7 +306,7 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
     };
     if !unsafe { parse_winborder(&raw mut *config, p_pumborder.get(), &raw mut err) } {
         if err.type_0 != kErrorTypeNone {
-            unsafe { emsg(err.msg) };
+            unsafe { emsg_ptr(err.msg) };
         }
         unsafe { api_clear_error(&raw mut err) };
         return None;

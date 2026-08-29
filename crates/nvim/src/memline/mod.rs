@@ -45,9 +45,9 @@ use crate::memfile::{
 };
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstrdup, xstrlcpy};
 use crate::message::{
-    do_dialog, emsg, iemsg, msg, msg_end, msg_ext_set_kind, msg_home_replace, msg_multiline,
-    msg_outnum, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg_reset_scroll, msg_start,
-    set_keep_msg, verb_msg,
+    do_dialog, emsg_ptr, iemsg_ptr, msg, msg_end, msg_ext_set_kind, msg_home_replace,
+    msg_multiline, msg_outnum, msg_outtrans, msg_ptr, msg_putchar, msg_puts, msg_puts_hl,
+    msg_reset_scroll, msg_start, set_keep_msg, verb_msg,
 };
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
@@ -246,9 +246,9 @@ pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 /// `gettext` asks only for a live NUL-terminated string, which is what a
 /// `CStr` is; paying that once here is what keeps the forty-odd
 /// `msg_puts(gettext(c"..."))` in this family out of an `unsafe` region.
-fn tr(text: &::core::ffi::CStr) -> *mut ::core::ffi::c_char {
+fn tr(text: &'static ::core::ffi::CStr) -> *mut ::core::ffi::c_char {
     // SAFETY: a `CStr` is NUL-terminated by construction.
-    unsafe { gettext(text.as_ptr()) }
+    gettext(text).as_ptr().cast_mut()
 }
 
 /// One translated static message on the report, in `hl_id`.
@@ -258,27 +258,27 @@ fn tr(text: &::core::ffi::CStr) -> *mut ::core::ffi::c_char {
 /// forty-odd reports `recover.rs` and `swapname.rs` print need not each be
 /// an `unsafe` region -- and most of them went vertical, one line per
 /// argument, because the argument list did not fit.
-fn note(text: &::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
+fn note(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
     // SAFETY: `tr` answers a live NUL-terminated string.
     unsafe { msg_puts_hl(tr(text), hl_id, true) };
 }
 
 /// [`note`], appended to the message being built.
-fn say(text: &::core::ffi::CStr) {
+fn say(text: &'static ::core::ffi::CStr) {
     // SAFETY: as [`note`].
     unsafe { msg_puts(tr(text)) };
 }
 
 /// [`note`], as an error.
-fn complain(text: &::core::ffi::CStr) {
+fn complain(text: &'static ::core::ffi::CStr) {
     // SAFETY: as [`note`].
-    unsafe { emsg(tr(text)) };
+    unsafe { emsg_ptr(tr(text)) };
 }
 
 /// [`note`], as a message of its own.
-fn tell(text: &::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
+fn tell(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
     // SAFETY: as [`note`].
-    unsafe { msg(tr(text), hl_id) };
+    unsafe { msg_ptr(tr(text), hl_id) };
 }
 
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
@@ -344,7 +344,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
     // Block zero: the header that says what the rest of the file means.
     *hp = unsafe { mf_new(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 0 {
-        unsafe { iemsg(tr(c"E298: Didn't get block nr 0?")) };
+        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 0?")) };
         return false;
     }
     let b0p = unsafe { (**hp).bh_data } as *mut ZeroBlock;
@@ -405,7 +405,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
     *hp = unsafe { ml_new_ptr(mfp) };
     debug_assert!(!(*hp).is_null());
     if unsafe { (**hp).bh_bnum } != 1 {
-        unsafe { iemsg(tr(c"E298: Didn't get block nr 1?")) };
+        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 1?")) };
         return false;
     }
     let mut pp = unsafe { Pb::new((**hp).bh_data.cast()) };
@@ -422,7 +422,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
     // Block two: the first data block, holding one empty line.
     *hp = unsafe { ml_new_data(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 2 {
-        unsafe { iemsg(tr(c"E298: Didn't get block nr 2?")) };
+        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 2?")) };
         return false;
     }
     let mut dp = unsafe { Db::new((**hp).bh_data.cast()) };

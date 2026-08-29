@@ -106,7 +106,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
         stack.push(TVPopStackItem::leaf(ret_tv));
         while ret && !stack.is_empty() {
             if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                semsg_c!(gettext(E1502_GROW_STACK.as_ptr()), lua_gettop(lstate) + 3);
+                semsg_c!(gettext(E1502_GROW_STACK), lua_gettop(lstate) + 3);
                 ret = false;
                 break;
             }
@@ -281,7 +281,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
                                 (*cur.tv).vval.v_float = table_props.val;
                             }
                             kObjectTypeNil => {
-                                emsg(gettext(E5100_MIXED_KEYS.as_ptr()));
+                                emsg(gettext(E5100_MIXED_KEYS));
                                 ret = false;
                             }
                             _ => abort(),
@@ -303,12 +303,12 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
                             (*cur.tv).v_type = VAR_SPECIAL;
                             (*cur.tv).vval.v_special = kSpecialVarNull;
                         } else {
-                            emsg(gettext(E5101_BAD_TYPE.as_ptr()));
+                            emsg(gettext(E5101_BAD_TYPE));
                             ret = false;
                         }
                     }
                     _ => {
-                        emsg(gettext(E5101_BAD_TYPE.as_ptr()));
+                        emsg(gettext(E5101_BAD_TYPE));
                         ret = false;
                     }
                 }

@@ -407,8 +407,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     // SAFETY: the caller promised a live record or null.
     if !unsafe { mark_check(fm, &mut errormsg) } {
         if let Some(msg) = &errormsg {
-            // SAFETY: `mark_check`'s message, owned by this frame.
-            unsafe { emsg(msg.as_ptr()) };
+            emsg(msg);
         }
         return kMarkMoveFailed;
     }
@@ -430,8 +429,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
         // SAFETY: `curbuf` is live and the record is the static.
         if !unsafe { mark_check_line_bounds(Buf::current().raw(), fm, &mut errormsg) } {
             if let Some(msg) = &errormsg {
-                // SAFETY: as above.
-                unsafe { emsg(msg.as_ptr()) };
+                emsg(msg);
             }
             return res | kMarkMoveFailed;
         }

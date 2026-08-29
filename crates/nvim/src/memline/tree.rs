@@ -487,7 +487,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         // to be; `mf_get` holds it for as long as `dp` is used.
         let pp = unsafe { Pb::new(dp.raw().cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
-            unsafe { iemsg(tr(c"E317: Pointer block id wrong")) };
+            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong")) };
             unsafe { mf_put(mfp, hp, false, false) };
             break;
         }
@@ -624,7 +624,7 @@ pub(crate) unsafe fn ml_lineadd_depth(buf: *mut buf_T, count: c_int, depth: usiz
         let pp = unsafe { Pb::new((*hp).bh_data.cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
             unsafe { mf_put(mfp, hp, false, false) };
-            unsafe { iemsg(tr(c"E317: Pointer block id wrong 2")) };
+            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong 2")) };
             break;
         }
         // SAFETY: the stack entry's index is the one this walk took.

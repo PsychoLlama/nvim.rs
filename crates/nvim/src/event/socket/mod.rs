@@ -525,9 +525,9 @@ pub unsafe fn socket_connect(
     let mut addr_req: uv_getaddrinfo_t = unsafe { mem::zeroed() };
     let mut addr: *mut c_char = ptr::null_mut();
     let mut success = false;
-    let fail = move |msg: &CStr| {
+    let fail = move |msg: &'static CStr| {
         // SAFETY: the caller's slot, and `gettext` answers a static string.
-        unsafe { *error = gettext(msg.as_ptr()) };
+        unsafe { *error = gettext(msg).as_ptr() };
     };
 
     'settled: {

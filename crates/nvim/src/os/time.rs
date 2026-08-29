@@ -207,11 +207,11 @@ pub fn os_ctime_r(clock: time_t, result: &mut [c_char], add_newline: bool) -> *m
             || strftime(
                 out,
                 len - 1,
-                gettext(c"%a %b %d %H:%M:%S %Y".as_ptr()),
+                gettext(c"%a %b %d %H:%M:%S %Y").as_ptr(),
                 &raw mut local,
             ) == 0
         {
-            xstrlcpy(out, gettext(c"(Invalid)".as_ptr()), len - 1);
+            xstrlcpy(out, gettext(c"(Invalid)").as_ptr(), len - 1);
         }
         if add_newline {
             xstrlcat(out, c"\n".as_ptr(), len);

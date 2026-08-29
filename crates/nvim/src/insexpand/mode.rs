@@ -13,6 +13,7 @@ use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
+use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
@@ -175,7 +176,7 @@ pub unsafe fn check_compl_option(dict_opt: bool) -> bool {
         c"'thesaurus' option is empty".as_ptr()
     };
     // SAFETY: a static NUL-terminated message.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
     if emsg_silent.get() == 0 && !in_assert_fails.get() {
         // SAFETY: the editor exists and this runs on its own thread.
         unsafe {
@@ -484,8 +485,8 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
                     c" (replace) Scroll (^E/^Y)".as_ptr()
                 };
                 // SAFETY: a static NUL-terminated message.
-                let scroll = unsafe { gettext(scroll) };
-                edit_submode.set(scroll);
+                let scroll = unsafe { gettext_ptr(scroll) };
+                edit_submode.set(scroll.as_ptr().cast_mut());
                 edit_submode_pre.set(ptr::null_mut());
                 redraw_mode.set(true);
                 break 'chord;

@@ -18,7 +18,7 @@ use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn
 use crate::lua::executor::nlua_exec;
 use crate::main::{curbuf, curwin, got_int, msg_didout, msg_silent};
 use crate::memory::{xmalloc, xrealloc};
-use crate::message::{emsg, msg, msg_end};
+use crate::message::msg_end;
 use crate::option::{
     find_option, get_option_value_for, get_vimoption, object_as_optval, option_has_scope,
     optval_as_object, set_option_value_for,

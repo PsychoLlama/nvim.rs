@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::types::event_T;
 use crate::types::{FAIL, OK, Refcount};
 use crate::winlayer::{Buf, Ea, Live, Win, windows};
@@ -117,7 +118,7 @@ impl QfStack {
 /// `msg` must be NUL-terminated, which every caller's static message is.
 pub(crate) fn qf_emsg(msg: *const c_char) {
     // SAFETY: a NUL-terminated static message, per the contract above.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 /// Fire `QuickFixCmdPre`/`QuickFixCmdPost` for a quickfix command, and say

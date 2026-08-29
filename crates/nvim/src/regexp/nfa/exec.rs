@@ -200,7 +200,7 @@ fn nfa_regexec_both(
 
     let mut retval = 0;
     if prog.is_null() || line.is_null() {
-        unsafe { iemsg(gettext(e_null.as_ptr())) };
+        iemsg(gettext(e_null));
     } else {
         // The pattern's own `\c`/`\C`/`\Z` override what the caller asked
         // for.

@@ -131,12 +131,12 @@ unsafe fn qf_jump_edit_buffer(
     // For a location list, the window it belongs to may be gone.
     if qfl_type == QFLT_LOCATION && win_by_id(prev_winid).is_none() && cur_win().w_llist != qi.raw()
     {
-        unsafe { emsg(gettext(c"E924: Current window was closed".as_ptr())) };
+        emsg(gettext(c"E924: Current window was closed"));
         *opened_window = false;
         return Jumped::Aborted;
     }
     if qfl_type == QFLT_QUICKFIX && !qflist_valid(None, save_qfid) {
-        unsafe { emsg(gettext(E_QUICKFIX_LIST_CHANGED.as_ptr())) };
+        emsg(gettext(E_QUICKFIX_LIST_CHANGED));
         return Jumped::Aborted;
     }
     if !unsafe { list_still_current(qi.raw(), qfl, qf_ptr.raw(), old_curlist, old_changedtick) } {
@@ -289,12 +289,12 @@ unsafe fn qf_jump_print_msg(
         }
     }
     let dirc = IOSIZE as size_t;
-    let search_delim = unsafe { gettext(c"(%d of %d)%s%s: ".as_ptr()) };
+    let search_delim = gettext(c"(%d of %d)%s%s: ");
     let patlen = qf_current_list(qi).qf_count;
     let count = if qf_ptr.qf_cleared != 0 {
-        unsafe { gettext(c" (line deleted)".as_ptr()) }
+        gettext(c" (line deleted)")
     } else {
-        c"".as_ptr()
+        c""
     };
     let types = qf_types(qf_ptr.qf_type as c_int, qf_ptr.qf_nr);
     let options = types.as_ptr();
@@ -302,7 +302,7 @@ unsafe fn qf_jump_print_msg(
         vim_snprintf_safelen(
             head.as_mut_ptr(),
             dirc,
-            search_delim,
+            search_delim.as_ptr(),
             qf_index,
             patlen,
             count,

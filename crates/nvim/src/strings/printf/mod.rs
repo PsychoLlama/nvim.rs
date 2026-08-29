@@ -48,7 +48,7 @@ const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 unsafe fn next_arg(tvs: *mut typval_T, idxp: &mut c_int) -> Option<*mut typval_T> {
     let tv = unsafe { tvs.offset(*idxp as isize - 1) };
     if !given(unsafe { &*tv }) {
-        unsafe { emsg(gettext(E_INSUFFICIENT_ARGS.as_ptr())) };
+        emsg(gettext(E_INSUFFICIENT_ARGS));
         return None;
     }
     *idxp += 1;
@@ -112,7 +112,7 @@ pub(crate) unsafe fn tv_float(tvs: *mut typval_T, idxp: &mut c_int) -> float_T {
         VAR_FLOAT => unsafe { (*tv).vval.v_float },
         VAR_NUMBER => unsafe { (*tv).vval.v_number as float_T },
         _ => {
-            unsafe { emsg(gettext(E_EXPECTED_FLOAT.as_ptr())) };
+            emsg(gettext(E_EXPECTED_FLOAT));
             0.0
         }
     }

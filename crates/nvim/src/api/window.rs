@@ -26,7 +26,7 @@ use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_c
 use crate::message::emsg;
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
@@ -312,7 +312,7 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
     api_try(&mut err, |_| {
         if is_aucmd {
             // SAFETY: `e_autocmd_close` is a static message.
-            unsafe { emsg(gettext(refused)) };
+            unsafe { emsg(gettext_ptr(refused)) };
         } else if same_tab {
             // SAFETY: `w` is live; closing runs autocommands, which `api_try`
             // catches.

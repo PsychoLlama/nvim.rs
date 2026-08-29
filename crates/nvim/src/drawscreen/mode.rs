@@ -15,6 +15,7 @@ use core::ffi::CStr;
 
 use super::*;
 use crate::normal::{visual_active, visual_mode, visual_select};
+use crate::os::cshim::gettext;
 use crate::types::{MAXPATHL, NUL, ShmFlag, Vv};
 
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
@@ -86,8 +87,9 @@ pub unsafe fn showmode() -> c_int {
         let save_lines_left = lines_left.get();
         lines_left.set(0);
 
-        let put = |s: &CStr| unsafe { msg_puts_hl(s.as_ptr(), hl_id, false) };
-        let put_translated = |s: &CStr| unsafe { msg_puts_hl(gettext(s.as_ptr()), hl_id, false) };
+        let put = |s: &'static CStr| unsafe { msg_puts_hl(s.as_ptr(), hl_id, false) };
+        let put_translated =
+            |s: &'static CStr| unsafe { msg_puts_hl(gettext(s).as_ptr(), hl_id, false) };
 
         if do_mode {
             put(c"--");
@@ -288,7 +290,7 @@ pub(crate) unsafe fn recording_mode(hl_id: c_int) {
     if shortmess(ShmFlag::RECORDING) {
         return;
     }
-    unsafe { msg_puts_hl(gettext(c"recording".as_ptr()), hl_id, false) };
+    unsafe { msg_puts_hl(gettext(c"recording").as_ptr(), hl_id, false) };
     // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
     // which is exactly three bytes and the terminator.
     let suffix = [b' ', b'@', reg_recording.get() as u8, 0];

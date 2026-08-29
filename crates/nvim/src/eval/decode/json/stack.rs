@@ -92,11 +92,11 @@ impl<'a> Decoder<'a> {
     ///
     /// The bytes go out as they came in — an invalid UTF-8 sequence is quoted
     /// verbatim, which is what several of these messages are about.
-    pub(crate) fn emsg_rest(&self, fmt: &CStr, at: usize) {
+    pub(crate) fn emsg_rest(&self, fmt: &'static CStr, at: usize) {
         let rest = &self.buf[at..];
         // SAFETY: `rest` outlives the call and `semsg` copies what it keeps;
         // `%.*s` reads at most the length given.
-        let msg = unsafe { gettext(fmt.as_ptr()) };
+        let msg = gettext(fmt);
         let (len, at) = (rest.len() as c_int, rest.as_ptr() as *const c_char);
         unsafe { semsg_c!(msg, len, at) };
     }
@@ -160,7 +160,7 @@ impl<'a> Decoder<'a> {
             if unsafe { tv_list_len(last.container.vval.v_list) } != 0 && !obj.didcomma {
                 unsafe {
                     semsg_c!(
-                        gettext(E474_COMMA_BEFORE_LIST_ITEM.as_ptr()),
+                        gettext(E474_COMMA_BEFORE_LIST_ITEM),
                         self.buf[val_location..].as_ptr() as *const c_char,
                     )
                 };
@@ -178,7 +178,7 @@ impl<'a> Decoder<'a> {
             if !obj.didcolon {
                 unsafe {
                     semsg_c!(
-                        gettext(E474_COLON_BEFORE_DICT_VALUE.as_ptr()),
+                        gettext(E474_COLON_BEFORE_DICT_VALUE),
                         self.buf[val_location..].as_ptr() as *const c_char,
                     )
                 };
@@ -211,7 +211,7 @@ impl<'a> Decoder<'a> {
         if !obj.is_special_string && obj.val.v_type != VAR_STRING {
             unsafe {
                 semsg_c!(
-                    gettext(E474_STRING_KEY.as_ptr()),
+                    gettext(E474_STRING_KEY),
                     self.buf[*at..].as_ptr() as *const c_char,
                 )
             };
@@ -224,7 +224,7 @@ impl<'a> Decoder<'a> {
         {
             unsafe {
                 semsg_c!(
-                    gettext(E474_COMMA_BEFORE_DICT_KEY.as_ptr()),
+                    gettext(E474_COMMA_BEFORE_DICT_KEY),
                     self.buf[val_location..].as_ptr() as *const c_char,
                 )
             };

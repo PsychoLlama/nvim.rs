@@ -15,6 +15,7 @@ use super::*;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
+use crate::os::cshim::gettext;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{mem, ptr, slice};
@@ -34,14 +35,13 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
     };
     if named && !eap.is_null() && addr_count > 0 {
         // A range only makes sense when the lines come from a buffer.
-        // SAFETY: a static message.
-        unsafe { emsg(gettext(e_norange.as_ptr())) };
+        emsg(gettext(e_norange));
         return;
     }
     // SAFETY: as above; every callee below takes the command or the name.
     if !eap.is_null() && !named {
         if forceit {
-            unsafe { emsg(gettext(e_argreq.as_ptr())) };
+            emsg(gettext(e_argreq));
         } else {
             unsafe { cmd_source_buffer(eap, false) };
         }
@@ -53,7 +53,7 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
             || unsafe { (*(*eap).cstack).cs_idx } >= 0;
         unsafe { openscript(fname, busy) };
     } else if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen), fname) };
     }
 }
 
@@ -415,8 +415,8 @@ unsafe fn source_name(
             if !os_isdir(name) {
                 return Ok(name);
             }
-            let fmt = gettext(c"Cannot source a directory: \"%s\"".as_ptr());
-            smsg_c!(0, fmt, req.fname);
+            let fmt = gettext(c"Cannot source a directory: \"%s\"");
+            smsg_c!(0, fmt.as_ptr(), req.fname);
             xfree(name.cast());
             Err(FAIL)
         },
@@ -483,15 +483,15 @@ unsafe fn open_script(cookie: &mut source_cookie_T, fname_exp: *mut c_char, chec
 ///
 /// # Safety
 /// Both formats take a `%s` for `fname`, and `numbered` a leading `%ld`.
-unsafe fn verbose_source_msg(plain: &CStr, numbered: &CStr, fname: *const c_char) {
+unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fname: *const c_char) {
     let name = sourcing_name();
     let lnum = sourcing_lnum() as int64_t;
     // SAFETY: the caller's contract on the two formats.
     unsafe { verbose_enter() };
     if name.is_null() {
-        unsafe { smsg_c!(0, gettext(plain.as_ptr()), fname) };
+        unsafe { smsg_c!(0, gettext(plain).as_ptr(), fname) };
     } else {
-        unsafe { smsg_c!(0, gettext(numbered.as_ptr()), lnum, fname) };
+        unsafe { smsg_c!(0, gettext(numbered).as_ptr(), lnum, fname) };
     }
     unsafe { verbose_leave() };
 }
@@ -823,16 +823,16 @@ unsafe fn source_bracket(
         unsafe { profile_script_stop(wait_start) };
     }
     if got_int.get() {
-        unsafe { emsg(gettext(e_interr.as_ptr())) };
+        emsg(gettext(e_interr));
     }
     estack_pop();
     if p_verbose.get() > 1 {
         let resumed = sourcing_name();
         // SAFETY: both messages take a NUL-terminated name.
         unsafe { verbose_enter() };
-        unsafe { smsg_c!(0, gettext(c"finished sourcing %s".as_ptr()), req.fname) };
+        unsafe { smsg_c!(0, gettext(c"finished sourcing %s").as_ptr(), req.fname) };
         if !resumed.is_null() {
-            unsafe { smsg_c!(0, gettext(c"continuing in %s".as_ptr()), resumed) };
+            unsafe { smsg_c!(0, gettext(c"continuing in %s").as_ptr(), resumed) };
         }
         unsafe { verbose_leave() };
     }

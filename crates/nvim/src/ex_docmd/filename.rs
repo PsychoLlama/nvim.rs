@@ -39,7 +39,7 @@ use crate::main::{
 };
 use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
 
-use crate::message::{emsg, msg_make};
+use crate::message::{emsg_ptr, msg_make};
 use crate::normal::find_ident_under_cursor;
 
 use crate::os::env::{expand_env_esc, expand_env_save};
@@ -728,7 +728,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
         };
         if !errormsg.is_null() {
             if unsafe { *errormsg } != 0 {
-                unsafe { emsg(errormsg) };
+                unsafe { emsg_ptr(errormsg) };
             }
             xfree(result as *mut c_void);
             return ptr::null_mut();
@@ -766,7 +766,7 @@ fn cur_buf() -> Buf {
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `memmove()` as checked code.

@@ -462,7 +462,7 @@ pub(crate) fn seen_endbrace(refnum: c_int) -> bool {
         }
         p = unsafe { p.add(1) };
     }
-    unsafe { emsg(gettext(c"E65: Illegal back reference".as_ptr())) };
+    emsg(gettext(c"E65: Illegal back reference"));
     rc_did_emsg.set(true);
     false
 }

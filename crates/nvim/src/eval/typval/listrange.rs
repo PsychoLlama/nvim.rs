@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message::emsg_ptr;
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, OK};
 
@@ -121,7 +122,7 @@ pub unsafe fn tv_list_assign_range(
 
     if !src_li.is_null() {
         let msg = tr(c"E710: List value has more items than target");
-        unsafe { emsg(msg) };
+        unsafe { emsg_ptr(msg) };
         return FAIL;
     }
     let short = if empty_idx2 {
@@ -130,7 +131,7 @@ pub unsafe fn tv_list_assign_range(
         idx != idx2
     };
     if short {
-        unsafe { emsg(gettext(c"E711: List value has not enough items".as_ptr())) };
+        emsg(gettext(c"E711: List value has not enough items"));
         return FAIL;
     }
     OK
@@ -362,7 +363,7 @@ pub unsafe fn tv_list_join(
 pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars).v_type } != VAR_LIST {
-        unsafe { emsg(gettext(e_listreq.as_ptr())) };
+        emsg(gettext(e_listreq));
         return;
     }
     let sep = if unsafe { (*argvars.add(1)).v_type } == VAR_UNKNOWN {
@@ -392,7 +393,7 @@ pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
     if args.v_type != VAR_LIST {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     let l = args.list();

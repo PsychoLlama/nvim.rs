@@ -153,7 +153,7 @@ pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
     // replacement, owned by the substitute code.
     let sub = reg_prev_sub.get().cast::<uint8_t>();
     if sub.is_null() {
-        unsafe { emsg(gettext(e_nopresub.as_ptr())) };
+        emsg(gettext(e_nopresub));
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }

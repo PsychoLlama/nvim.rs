@@ -89,8 +89,7 @@ pub(crate) unsafe fn adjust_clipboard_name(
         if warn {
             CLIPBOARD.with_mut(|st| st.didwarn = true);
             // Do not use emsg here: it may interrupt other logic.
-            // SAFETY: a NUL-terminated literal.
-            unsafe { msg(MSG_NO_CLIP.as_ptr(), 0) };
+            msg(MSG_NO_CLIP, 0);
         }
         return core::ptr::null_mut();
     }
@@ -270,7 +269,7 @@ pub(crate) unsafe fn get_clipboard(
     unsafe { (*reg).additional_data = core::ptr::null_mut() };
     unsafe { (*reg).timestamp = 0 };
     if errmsg {
-        unsafe { emsg(c"clipboard: provider returned invalid data".as_ptr()) };
+        emsg(c"clipboard: provider returned invalid data");
     }
     *target = reg;
     false

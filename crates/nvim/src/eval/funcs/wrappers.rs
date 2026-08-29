@@ -33,7 +33,7 @@ use crate::main::{
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::optionstr::empty_option;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::{gettext, gettext_ptr, strncmp};
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
@@ -208,7 +208,7 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
     } else {
         e_toofewarg.as_ptr()
     };
-    unsafe { semsg_c!(gettext(message), (*fdef).name) };
+    unsafe { semsg_c!(gettext_ptr(message), (*fdef).name) };
     -1
 }
 
@@ -413,7 +413,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
         _ => {
             let msg = c"E808: Number or Float required";
-            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg.as_ptr())) };
+            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg)) };
             return false;
         }
     }
@@ -557,7 +557,7 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     drop(no_emsg);
     if buf.is_null() {
         let what = unsafe { numbuf.string(arg) };
-        unsafe { semsg_c!(gettext(c"E158: Invalid buffer name: %s".as_ptr()), what) };
+        unsafe { semsg_c!(gettext(c"E158: Invalid buffer name: %s"), what) };
     }
     buf
 }
@@ -574,7 +574,7 @@ pub unsafe fn get_optional_window(argvars: *mut typval_T, idx: c_int) -> *mut wi
     }
     let win = unsafe { find_win_by_nr_or_id(argvars.add(idx as usize)) };
     if win.is_none() {
-        unsafe { emsg(gettext(e_invalwindow.as_ptr())) };
+        emsg(gettext(e_invalwindow));
     }
     win.map_or(ptr::null_mut(), Win::raw)
 }

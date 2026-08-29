@@ -125,7 +125,7 @@ pub(crate) fn previous_substitute() -> Parsed {
     // replacement, owned by the substitute code.
     let sub = reg_prev_sub.get();
     if sub.is_null() {
-        unsafe { emsg(gettext(e_nopresub.as_ptr())) };
+        emsg(gettext(e_nopresub));
         return Err(Rejected);
     }
     let mut p = sub;

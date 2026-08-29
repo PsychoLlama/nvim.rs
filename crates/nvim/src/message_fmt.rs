@@ -33,8 +33,8 @@
 //! the unmigrated callers until its last one migrates.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message::{emsg, emsg_not_now, msg};
-use core::ffi::{c_char, c_int};
+use crate::message::{emsg_not_now, emsg_ptr, msg_ptr};
+use core::ffi::{CStr, c_char, c_int};
 use core::fmt;
 
 /// Format `args` and report the result as an error message. The Rust-side
@@ -50,7 +50,7 @@ pub(crate) fn emsg_fmt(args: fmt::Arguments<'_>) -> bool {
     let text = to_message(args);
     // SAFETY: `text` is NUL-terminated and outlives the call; emsg copies
     // what it keeps.
-    unsafe { emsg(text.as_ptr() as *const c_char) }
+    unsafe { emsg_ptr(text.as_ptr() as *const c_char) }
 }
 
 /// Format `args` and show it as a regular message with `hl_id` highlighting.
@@ -59,7 +59,7 @@ pub(crate) fn msg_fmt(hl_id: c_int, args: fmt::Arguments<'_>) -> bool {
     let text = to_message(args);
     // SAFETY: `text` is NUL-terminated and outlives the call; msg copies
     // what it keeps.
-    unsafe { msg(text.as_ptr() as *const c_char, hl_id) }
+    unsafe { msg_ptr(text.as_ptr() as *const c_char, hl_id) }
 }
 
 /// The formatted message as a NUL-terminated buffer. An interior NUL from an
@@ -71,6 +71,42 @@ fn to_message(args: fmt::Arguments<'_>) -> String {
     }
     s.push('\0');
     s
+}
+
+/// The format string one of the `_c` macros was handed, as the pointer
+/// [`vim_snprintf`](crate::strings::vim_snprintf) takes.
+///
+/// A call site writes either `c_fmt!(gettext(c"E1: %s"))` -- a `&CStr`, which
+/// is what translation answers now -- or a raw pointer it is still carrying.
+/// Both spellings reach `vim_snprintf` the same way; the trait is only here
+/// so that one macro body accepts both while the `_c` family retires.
+pub(crate) trait CFormat {
+    /// The format string as a pointer.
+    fn format_ptr(self) -> *const c_char;
+}
+
+impl CFormat for &CStr {
+    fn format_ptr(self) -> *const c_char {
+        self.as_ptr()
+    }
+}
+
+impl CFormat for *const c_char {
+    fn format_ptr(self) -> *const c_char {
+        self
+    }
+}
+
+impl CFormat for *mut c_char {
+    fn format_ptr(self) -> *const c_char {
+        self.cast_const()
+    }
+}
+
+/// [`CFormat::format_ptr`] as a function, which is what the macros spell.
+#[doc(hidden)]
+pub(crate) fn c_format(fmt: impl CFormat) -> *const c_char {
+    fmt.format_ptr()
 }
 
 /// `semsg()` with a compile-checked format string: report a formatted error
@@ -118,7 +154,7 @@ macro_rules! smsg {
 #[macro_export]
 macro_rules! semsg_c {
     ($fmt:expr $(, $arg:expr)* $(,)?) => {{
-        let fmt = $fmt;
+        let fmt = $crate::message_fmt::c_format($fmt);
         if $crate::message::emsg_not_now() {
             $(let _ = $arg;)*
             true
@@ -150,7 +186,7 @@ macro_rules! siemsg_c {
 macro_rules! semsg_multiline_c {
     ($kind:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
         let kind = $kind;
-        let fmt = $fmt;
+        let fmt = $crate::message_fmt::c_format($fmt);
         if $crate::message::emsg_not_now() {
             $(let _ = $arg;)*
             true
@@ -176,7 +212,7 @@ macro_rules! msg_schedule_semsg_c {
         $crate::strings::vim_snprintf(
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
-            $fmt,
+            $crate::message_fmt::c_format($fmt),
             $($arg,)*
         );
         $crate::message::msg_schedule_semsg_finish(&msgbuf);
@@ -192,7 +228,7 @@ macro_rules! msg_schedule_semsg_multiline_c {
         $crate::strings::vim_snprintf(
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
-            $fmt,
+            $crate::message_fmt::c_format($fmt),
             $($arg,)*
         );
         $crate::message::msg_schedule_semsg_multiline_finish(&msgbuf);
@@ -209,7 +245,7 @@ macro_rules! swmsg_c {
         $crate::strings::vim_snprintf(
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
-            $fmt,
+            $crate::message_fmt::c_format($fmt),
             $($arg,)*
         );
         $crate::message::swmsg_finish(&msgbuf, hl);
@@ -226,7 +262,7 @@ macro_rules! smsg_c {
         $crate::strings::vim_snprintf(
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
-            $fmt,
+            $crate::message_fmt::c_format($fmt),
             $($arg,)*
         );
         $crate::message::smsg_finish(&msgbuf, hl_id)
@@ -242,7 +278,7 @@ macro_rules! smsg_keep_c {
         $crate::strings::vim_snprintf(
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
-            $fmt,
+            $crate::message_fmt::c_format($fmt),
             $($arg,)*
         );
         $crate::message::smsg_keep_finish(&msgbuf, hl_id)

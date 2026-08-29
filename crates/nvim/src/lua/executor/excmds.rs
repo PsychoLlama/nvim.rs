@@ -55,7 +55,7 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
             if (*eap).addr_count > 0 {
                 cmd_source_buffer(eap, true);
             } else {
-                emsg(gettext(e_argreq.as_ptr()));
+                emsg(gettext(e_argreq));
             }
             return;
         }
@@ -105,7 +105,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     unsafe {
         if u_save((*eap).line1 - 1, (*eap).line2 + 1) == FAIL {
-            emsg(gettext(c"cannot save undo information".as_ptr()));
+            emsg(gettext(c"cannot save undo information"));
             return;
         }
         let cmd = (*eap).arg;
@@ -135,11 +135,11 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
             xfree(lcmd.cast::<c_void>());
         }
         if loaded != 0 {
-            nlua_error(lstate, gettext(c"E5109: Lua: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5109: Lua: %.*s").as_ptr());
             return;
         }
         if nlua_pcall(lstate, 0, 1) != 0 {
-            nlua_error(lstate, gettext(c"E5110: Lua: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5110: Lua: %.*s").as_ptr());
             return;
         }
 
@@ -155,7 +155,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
             lua_pushstring(lstate, old_line);
             lua_pushnumber(lstate, l as lua_Number);
             if nlua_pcall(lstate, 2, 1) != 0 {
-                nlua_error(lstate, gettext(c"E5111: Lua: %.*s".as_ptr()));
+                nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());
                 break;
             }
             if curbuf.get() != was_curbuf || l > (*curbuf.get()).b_ml.ml_line_count {
@@ -253,11 +253,11 @@ pub unsafe fn nlua_exec_file(path: *const c_char) -> bool {
         // `loadfile`/`loadstring` answer either the chunk and nil, or nil and
         // the syntax error.
         if nlua_pcall(lstate, 1, 2) != 0 {
-            nlua_error(lstate, gettext(c"E5111: Lua: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());
             return false;
         }
         if lua_type(lstate, -2) == LUA_TNIL {
-            nlua_error(lstate, gettext(c"E5112: Lua chunk: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5112: Lua chunk: %.*s").as_ptr());
             debug_assert!(lua_isnil(lstate, -1));
             lua_pop(lstate, 1);
             return false;
@@ -265,7 +265,7 @@ pub unsafe fn nlua_exec_file(path: *const c_char) -> bool {
         debug_assert!(lua_isnil(lstate, -1));
         lua_pop(lstate, 1);
         if nlua_pcall(lstate, 0, 0) != 0 {
-            nlua_error(lstate, gettext(c"E5113: Lua chunk: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"E5113: Lua chunk: %.*s").as_ptr());
             return false;
         }
         true

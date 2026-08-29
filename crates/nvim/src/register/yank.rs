@@ -177,11 +177,10 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
     if regname == NUL {
         namebuf[0] = NUL as c_char;
     } else {
-        // SAFETY: a NUL-terminated literal, translated.
-        let fmt = unsafe { gettext(c" into \"%c".as_ptr()) };
+        let fmt = gettext(c" into \"%c");
         // SAFETY: `namebuf` is writable for the length given, and the format
         // takes exactly the one `%c` argument handed over.
-        unsafe { vim_snprintf(namebuf.as_mut_ptr(), namebuf.len(), fmt, regname) };
+        unsafe { vim_snprintf(namebuf.as_mut_ptr(), namebuf.len(), fmt.as_ptr(), regname) };
     }
 
     // The message may be the first thing that scrolls, so make sure the
@@ -196,20 +195,16 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
 
     let (one, many) = if yank_type == kMTBlockWise {
         (
-            c"block of %ld line yanked%s".as_ptr(),
-            c"block of %ld lines yanked%s".as_ptr(),
+            c"block of %ld line yanked%s",
+            c"block of %ld lines yanked%s",
         )
     } else {
-        (
-            c"%ld line yanked%s".as_ptr(),
-            c"%ld lines yanked%s".as_ptr(),
-        )
+        (c"%ld line yanked%s", c"%ld lines yanked%s")
     };
-    // SAFETY: both are NUL-terminated literals, translated.
-    let fmt = unsafe { ngettext(one, many, yanklines as c_ulong) };
+    let fmt = ngettext(one, many, yanklines as c_ulong);
     // SAFETY: whichever form `ngettext` picked takes exactly the `%ld` and
     // `%s` arguments given, and `namebuf` is NUL-terminated.
-    unsafe { smsg_c!(0, fmt, yanklines as int64_t, namebuf.as_mut_ptr()) };
+    unsafe { smsg_c!(0, fmt.as_ptr(), yanklines as int64_t, namebuf.as_mut_ptr()) };
 }
 
 /// Yank the operator's region into `reg`.

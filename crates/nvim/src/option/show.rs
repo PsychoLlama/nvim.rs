@@ -85,7 +85,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     } else {
         c"\n--- Options ---"
     };
-    unsafe { msg_puts_title(gettext(title.as_ptr())) };
+    unsafe { msg_puts_title(gettext(title).as_ptr()) };
 
     for run in 1..=2 {
         if got_int.get() {

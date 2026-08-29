@@ -69,7 +69,7 @@ pub unsafe fn tv_to_argv(
     if tv.v_type != VAR_LIST {
         let what = c"expected String or List".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return null_mut();
     }
 
@@ -101,7 +101,7 @@ pub unsafe fn tv_to_argv(
             unsafe { snprintf(buf.as_mut_ptr(), size, fmt, arg0) };
             let (what, text) = (c"cmd".as_ptr(), buf.as_mut_ptr());
             // SAFETY: the format takes two NUL-terminated strings.
-            unsafe { semsg_c!(gettext(e_invargNval.as_ptr()), what, text) };
+            unsafe { semsg_c!(gettext(e_invargNval), what, text) };
             // SAFETY: the caller's promise -- a non-null `executable`.
             unsafe { *executable = false };
         }
@@ -221,7 +221,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // SAFETY: the scroll bracket is the message area's own.
         unsafe { verbose_enter_scroll() };
         // SAFETY: the format takes the one NUL-terminated `cmdstr`.
-        unsafe { smsg_c!(0, gettext(c"Executing command: \"%s\"".as_ptr()), cmdstr) };
+        unsafe { smsg_c!(0, gettext(c"Executing command: \"%s\"").as_ptr(), cmdstr) };
         // SAFETY: the literal is NUL-terminated.
         unsafe { msg_puts(c"\n\n".as_ptr()) };
         // SAFETY: this closes the bracket opened above.
@@ -402,7 +402,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     let nr = unsafe { Tv::new(tv).vval.v_number };
     let Some(buf) = find_buf(nr as c_int) else {
         // SAFETY: the format takes one number, and `len` is the caller's.
-        unsafe { semsg_c!(gettext(e_nobufnr.as_ptr()), nr) };
+        unsafe { semsg_c!(gettext(e_nobufnr), nr) };
         // SAFETY: the caller's promise about `len`.
         unsafe { *len = -1 };
         return null_mut();

@@ -88,7 +88,7 @@ pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> 
         vim_snprintf(
             errbuf,
             errbuflen,
-            gettext(c"E539: Illegal character <%s>".as_ptr()),
+            gettext(c"E539: Illegal character <%s>").as_ptr(),
             transchar(c).as_ptr(),
         )
     };
@@ -113,7 +113,7 @@ pub(crate) unsafe fn illegal_char_after_chr(
         vim_snprintf(
             errbuf,
             errbuflen,
-            gettext(e_illegal_character_after_chr.as_ptr()),
+            gettext(e_illegal_character_after_chr).as_ptr(),
             c,
         )
     };

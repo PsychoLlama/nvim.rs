@@ -36,8 +36,7 @@ pub(super) unsafe fn fold_create_markers(wp: Win, start: pos_T, end: pos_T) {
     let buf = wp.w_buffer;
     // SAFETY: a live buffer.
     if unsafe { (*buf).b_p_ma } == 0 {
-        // SAFETY: a static message.
-        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
+        emsg(gettext(e_modifiable));
         return;
     }
     let num_changed = (1 + end.lnum - start.lnum) as int64_t;

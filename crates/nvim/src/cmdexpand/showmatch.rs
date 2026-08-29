@@ -247,10 +247,10 @@ pub unsafe fn showmatches(
         };
 
         if xp.xp_context == ExpandContext::TagsListFiles {
-            unsafe { msg_puts_hl(gettext(c"tagname".as_ptr()), HLF_T, false) };
+            unsafe { msg_puts_hl(gettext(c"tagname").as_ptr(), HLF_T, false) };
             unsafe { msg_clr_eos() };
             unsafe { msg_advance(maxlen - 3) };
-            unsafe { msg_puts_hl(gettext(c" kind file\n".as_ptr()), HLF_T, false) };
+            unsafe { msg_puts_hl(gettext(c" kind file\n").as_ptr(), HLF_T, false) };
         }
 
         // List the files line by line.

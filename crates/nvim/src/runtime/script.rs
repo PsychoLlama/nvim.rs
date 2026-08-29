@@ -157,7 +157,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
     let mut path = [0 as c_char; MAXPATHL as usize];
     if by_number {
         if !script_id_valid(unsafe { (*eap).line2 } as c_int) {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
             return;
         }
         unsafe { (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name };
@@ -197,7 +197,7 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
                 snprintf(
                     named.as_mut_ptr(),
                     IOSIZE as size_t,
-                    gettext(c"API client (channel id %lu)".as_ptr()),
+                    gettext(c"API client (channel id %lu)").as_ptr(),
                     script_ctx.sc_chan,
                 )
             };
@@ -212,7 +212,7 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
                     snprintf(
                         named.as_mut_ptr(),
                         IOSIZE as size_t,
-                        gettext(c"anonymous :source (script id %d)".as_ptr()),
+                        gettext(c"anonymous :source (script id %d)").as_ptr(),
                         script_ctx.sc_sid,
                     )
                 };
@@ -232,7 +232,7 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
         }
     };
     // SAFETY: `gettext` returns a pointer into its own catalogue.
-    unsafe { CStr::from_ptr(gettext(fixed.as_ptr())) }.to_owned()
+    unsafe { CStr::from_ptr(gettext(fixed).as_ptr()) }.to_owned()
 }
 
 /// The line number to report for a message raised under `fgetline`.
@@ -363,7 +363,7 @@ unsafe fn script_query(
             // SAFETY: as above; the message borrows the item's string form.
             unsafe {
                 semsg_c!(
-                    gettext(e_invargNval.as_ptr()),
+                    gettext(e_invargNval),
                     c"sid".as_ptr(),
                     numbuf.string(&raw mut (*sid_di).di_tv),
                 )
@@ -759,11 +759,9 @@ pub unsafe fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
 pub unsafe fn ex_scriptencoding(eap: *mut exarg_T) {
     // SAFETY: `eap` is the running command's block.
     if unsafe { sourcing_a_script(eap) } == 0 {
-        unsafe {
-            emsg(gettext(
-                c"E167: :scriptencoding used outside of a sourced file".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E167: :scriptencoding used outside of a sourced file",
+        ));
         return;
     }
     let name = if unsafe { *(*eap).arg } != NUL as c_char {
@@ -785,11 +783,7 @@ pub unsafe fn ex_finish(eap: *mut exarg_T) {
     if unsafe { sourcing_a_script(eap) } != 0 {
         unsafe { do_finish(eap, false) };
     } else {
-        unsafe {
-            emsg(gettext(
-                c"E168: :finish used outside of a sourced file".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E168: :finish used outside of a sourced file"));
     }
 }
 

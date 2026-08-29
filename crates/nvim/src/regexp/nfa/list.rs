@@ -179,12 +179,7 @@ impl ThreadList {
     fn grow(&mut self) -> bool {
         let newlen = self.slots * 3 / 2 + 50;
         if (((newlen * size_of::<nfa_thread_T>()) >> 10) as i64) >= p_mmp.get() {
-            // SAFETY: a `&CStr`'s pointer, handed to the message layer.
-            unsafe {
-                emsg(gettext(
-                    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
-                ))
-            };
+            emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }
         self.threads.reserve_exact(newlen - self.threads.len());

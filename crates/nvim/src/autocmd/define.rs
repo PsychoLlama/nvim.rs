@@ -117,7 +117,7 @@ pub unsafe fn do_autocmd(
 
     if is_showing {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        unsafe { msg_puts_title(gettext(c"\n--- Autocommands ---".as_ptr())) };
+        unsafe { msg_puts_title(gettext(c"\n--- Autocommands ---").as_ptr()) };
 
         if all_events {
             unsafe { au_show_for_all_events(group, pat) };
@@ -128,11 +128,7 @@ pub unsafe fn do_autocmd(
         }
     } else if all_events {
         if unsafe { *cmd } != 0 {
-            unsafe {
-                emsg(gettext(
-                    e_cannot_define_autocommands_for_all_events.as_ptr(),
-                ))
-            };
+            emsg(gettext(e_cannot_define_autocommands_for_all_events));
         } else {
             unsafe {
                 do_all_autocmd_events(
@@ -355,7 +351,7 @@ pub unsafe fn autocmd_register(
             // format literal above and the editor's message buffers.
             unsafe {
                 semsg_c!(
-                    gettext(c"E680: <buffer=%d>: invalid buffer number ".as_ptr()),
+                    gettext(c"E680: <buffer=%d>: invalid buffer number "),
                     buflocal_nr,
                 )
             };
@@ -575,12 +571,7 @@ pub(crate) unsafe fn arg_event_skip(
         {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E215: Illegal character after *: %s".as_ptr()),
-                    arg,
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E215: Illegal character after *: %s"), arg,) };
             return ::core::ptr::null_mut();
         }
         return unsafe { arg.add(1) };
@@ -598,9 +589,9 @@ pub(crate) unsafe fn arg_event_skip(
             unsafe {
                 semsg_c!(
                     gettext(if have_group {
-                        c"E216: No such event: %s".as_ptr()
+                        c"E216: No such event: %s"
                     } else {
-                        c"E216: No such group or event: %s".as_ptr()
+                        c"E216: No such group or event: %s"
                     }),
                     pat,
                 )
@@ -629,7 +620,7 @@ unsafe fn arg_autocmd_flag_get(
         if unsafe { *flag } {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
-            unsafe { semsg_c!(gettext(e_duparg2.as_ptr()), pattern.as_ptr(),) };
+            unsafe { semsg_c!(gettext(e_duparg2), pattern.as_ptr(),) };
             return true;
         }
         unsafe { *flag = true };

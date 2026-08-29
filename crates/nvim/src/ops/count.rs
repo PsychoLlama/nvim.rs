@@ -22,6 +22,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
+use crate::message::msg_ptr;
 use crate::normal::{VisualMode, VisualSelection, sel_exclusive, visual_selection};
 use crate::optionstr::empty_option;
 use crate::types::{IOSIZE, NUL};
@@ -129,7 +130,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
     // that; the message strings are the editor's own.
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if dict.is_null() {
-            unsafe { msg(gettext(no_lines_msg.as_ptr().cast_mut()), 0) };
+            msg(gettext(no_lines_msg), 0);
             return;
         }
     } else {
@@ -148,8 +149,8 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
         if dict.is_null() && bom_count > 0 {
             let len = unsafe { strlen(report.as_ptr()) };
             let at = unsafe { report.as_mut_ptr().add(len) };
-            let fmt = unsafe { gettext(c"(+%ld for BOM)".as_ptr()) };
-            unsafe { vim_snprintf(at, IOSIZE as size_t - len, fmt, bom_count) };
+            let fmt = gettext(c"(+%ld for BOM)");
+            unsafe { vim_snprintf(at, IOSIZE as size_t - len, fmt.as_ptr(), bom_count) };
         }
 
         if dict.is_null() {
@@ -160,7 +161,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
                 unsafe { msg_start() };
                 msg_scroll.set(1);
             }
-            unsafe { msg(report.as_mut_ptr(), 0) };
+            unsafe { msg_ptr(report.as_mut_ptr(), 0) };
             p_shm.set(saved_shm);
         }
     }
@@ -376,25 +377,12 @@ fn report_counts(
         unsafe { col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p)) };
         if same_as_bytes {
             let f = c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld";
-            unsafe {
-                vim_snprintf(
-                    out,
-                    n,
-                    gettext(f.as_ptr()),
-                    b1,
-                    b2,
-                    lnum,
-                    lines,
-                    wc,
-                    words,
-                    bc,
-                    bytes,
-                )
-            };
+            let f = gettext(f).as_ptr();
+            unsafe { vim_snprintf(out, n, f, b1, b2, lnum, lines, wc, words, bc, bytes) };
         } else {
             let f =
                 c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld";
-            let f = unsafe { gettext(f.as_ptr()) };
+            let f = gettext(f).as_ptr();
             unsafe {
                 vim_snprintf(
                     out, n, f, b1, b2, lnum, lines, wc, words, cc, chars, bc, bytes,
@@ -413,7 +401,8 @@ fn report_counts(
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
         let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
         unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, minc, maxc) };
-        unsafe { vim_snprintf(b1, n1, gettext(c"%ld Cols; ".as_ptr()), cols) };
+        let cols_fmt = gettext(c"%ld Cols; ").as_ptr();
+        unsafe { vim_snprintf(b1, n1, cols_fmt, cols) };
     } else {
         buf1[0] = NUL as c_char;
     }
@@ -421,12 +410,12 @@ fn report_counts(
     let sel_lines = int64_t::from(sel.line_count);
     if same_as_bytes {
         let f = c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes";
-        let f = unsafe { gettext(f.as_ptr()) };
+        let f = gettext(f).as_ptr();
         unsafe { vim_snprintf(out, n, f, b1, sel_lines, lines, wc, words, bc, bytes) };
     } else {
         let f =
             c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes";
-        let f = unsafe { gettext(f.as_ptr()) };
+        let f = gettext(f).as_ptr();
         unsafe {
             vim_snprintf(
                 out, n, f, b1, sel_lines, lines, wc, words, cc, chars, bc, bytes,

@@ -78,7 +78,7 @@ use crate::memory::{
     xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,
 };
 use crate::message::{
-    emsg, internal_error, msg, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
+    emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };
 use crate::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
 use crate::option::{can_bs, copy_option_part, magic_isset, option_set_callback_func, shortmess};
@@ -374,8 +374,7 @@ pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
 /// one (the three modes without a message never take these paths).
 pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
     match CTRL_X_MSGS[(mode & !CTRL_X_WANT_IDENT) as usize] {
-        // SAFETY: a `CStr` constant is a valid NUL-terminated string.
-        Some(msg) => unsafe { gettext(msg.as_ptr()) },
+        Some(msg) => gettext(msg).as_ptr().cast_mut(),
         None => ptr::null_mut(),
     }
 }

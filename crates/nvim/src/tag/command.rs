@@ -13,6 +13,7 @@
 use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
+use crate::message::msg_ptr;
 use crate::pos::MAXCOL;
 use crate::types::{FAIL, IOSIZE, OK, Vv};
 use crate::winlayer::{Buf, Win};
@@ -563,7 +564,7 @@ impl DoTag {
                 if self.verbose {
                     // SAFETY: the message macros expand to a `vim_snprintf` over
                     // the format literal above and the editor's message buffers.
-                    unsafe { semsg_c!(gettext(c"E426: Tag not found: %s".as_ptr()), name) };
+                    unsafe { semsg_c!(gettext(c"E426: Tag not found: %s"), name) };
                 }
                 g_do_tagpreview.set(0);
                 return;
@@ -774,7 +775,7 @@ impl DoTag {
             unsafe {
                 smsg_c!(
                     0,
-                    gettext(c"File \"%s\" does not exist".as_ptr()),
+                    gettext(c"File \"%s\" does not exist").as_ptr(),
                     nofile_fname.get(),
                 )
             };
@@ -812,7 +813,7 @@ impl DoTag {
             // the format literal above and the editor's message buffers.
             unsafe {
                 semsg_c!(
-                    gettext(c"E429: File \"%s\" does not exist".as_ptr()),
+                    gettext(c"E429: File \"%s\" does not exist"),
                     nofile_fname.get(),
                 )
             };
@@ -846,21 +847,21 @@ impl DoTag {
         // both writes are bounded by it.
         let buf = report.as_mut_ptr();
         let maxlen = IOSIZE as size_t;
-        let format2 = unsafe { gettext(c"tag %d of %d%s".as_ptr()) };
+        let format2 = gettext(c"tag %d of %d%s");
         let args = self.cur_match + 1;
         let arg6 = if max_num_matches.get() != MAXCOL as c_int {
-            unsafe { gettext(c" or more".as_ptr()) }
+            gettext(c" or more").as_ptr()
         } else {
             c"".as_ptr()
         };
-        unsafe { snprintf(buf, maxlen, format2, args, found, arg6) };
+        unsafe { snprintf(buf, maxlen, format2.as_ptr(), args, found, arg6) };
         if ignored_case {
-            let src = unsafe { gettext(c" Using tag with different case!".as_ptr()) };
+            let src = gettext(c" Using tag with different case!");
             let dsize = IOSIZE as size_t;
-            unsafe { xstrlcat(buf, src, dsize) };
+            unsafe { xstrlcat(buf, src.as_ptr(), dsize) };
         }
         if (found > self.prev_num_matches || self.new_tag) && found > 1 {
-            unsafe { msg(buf, if ignored_case { HLF_W } else { 0 }) };
+            unsafe { msg_ptr(buf, if ignored_case { HLF_W } else { 0 }) };
             // Don't overwrite this message.
             msg_scroll.set(1);
         } else {

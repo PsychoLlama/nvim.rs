@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::highlight_group::HLF_D;
+use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{FAIL, IOSIZE, OK, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Live, Win};
@@ -27,10 +28,8 @@ pub(crate) type Tagg = Live<taggy_T>;
 ///
 /// The argument is a [`CStr`] rather than a pointer, so nothing here is a
 /// promise: the family's error messages are all string constants.
-pub(crate) fn tag_emsg(msg: &CStr) {
-    // SAFETY: a NUL-terminated string by construction, which is the whole
-    // of what `gettext` and `emsg` ask for.
-    unsafe { emsg(gettext(msg.as_ptr())) };
+pub(crate) fn tag_emsg(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// How many entries a window's stack holds before the oldest is dropped.
@@ -234,11 +233,7 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
     let curidx = stack.curidx();
     let len = stack.len();
 
-    unsafe {
-        msg_puts_title(gettext(
-            c"\n  # TO tag         FROM line  in file/text".as_ptr(),
-        ))
-    };
+    unsafe { msg_puts_title(gettext(c"\n  # TO tag         FROM line  in file/text").as_ptr()) };
     for (i, item) in stack.entries().iter_mut().enumerate() {
         if item.tagname.is_null() {
             continue;
@@ -361,7 +356,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> c_int {
     let mut items = ptr::null_mut::<list_T>();
     if let Some(di) = unsafe { find(d, c"items") } {
         if unsafe { (*di).di_tv.v_type } != VAR_LIST {
-            unsafe { emsg(gettext(e_listreq.as_ptr())) };
+            emsg(gettext(e_listreq));
             return FAIL;
         }
         items = unsafe { (*di).di_tv.vval.v_list };

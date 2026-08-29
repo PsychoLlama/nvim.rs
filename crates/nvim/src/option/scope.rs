@@ -539,7 +539,7 @@ pub(crate) unsafe fn get_varp_from(opt_idx: OptIndex, buf: *mut buf_T, win: *mut
         kOptKeymap => (buf_var!(buf, b_p_keymap), Unset::Never),
 
         _ => {
-            unsafe { iemsg(gettext(c"E356: get_varp ERROR".as_ptr())) };
+            iemsg(gettext(c"E356: get_varp ERROR"));
             // Upstream falls through to 'wrapmargin' rather than
             // returning null; every caller dereferences the result.
             (buf_var!(buf, b_p_wm), Unset::Never)

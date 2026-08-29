@@ -409,7 +409,7 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         // SAFETY: argument 0 is a live typval and both are locals.
         let read = unsafe { list2fpos(args.ptr(0), out, ptr::null_mut(), want, charcol) };
         if read == FAIL {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
             return;
         }
         if curswant >= 0 {
@@ -426,7 +426,7 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
             // arbitrary user bytes. Note that this reports and then
             // carries on to the range check below.
             let what = arg_string(&mut numbuf, args.get(0));
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+            unsafe { semsg_c!(gettext(e_invarg2), what) };
         } else if lnum == 0 {
             lnum = unsafe { (*curwin.get()).w_cursor.lnum };
         }
@@ -441,7 +441,7 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         };
         (lnum, col, coladd)
     } else {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     };
 
@@ -513,7 +513,7 @@ fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
             }
         }
         _ => {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
         }
     }
 }

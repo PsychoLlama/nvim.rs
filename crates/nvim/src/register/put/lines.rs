@@ -64,8 +64,7 @@ impl Put {
                 lnum = end_lnum;
             }
         } else if self.count > c_int::MAX / yanklen {
-            // SAFETY: a NUL-terminated message literal.
-            unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
+            emsg(gettext(e_resulting_text_too_long));
         } else {
             totlen = (self.count as size_t).wrapping_mul(yanklen as size_t);
             loop {

@@ -27,8 +27,8 @@ use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_noti
 use crate::ex_docmd::cmdmod_has;
 use crate::main::{cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
 use crate::memline::ml_get_buf;
-use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::message::emsg_ptr;
+use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
     CmdModFlags, VAR_NUMBER, VarLock, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,
@@ -43,7 +43,7 @@ use crate::winlayer::Buf;
 fn tr_raw(msg: *const c_char) -> *mut c_char {
     // SAFETY: every caller passes a NUL-terminated literal or one of the two
     // quickfix titles, which `qf_init` sets from the catalogue at startup.
-    unsafe { gettext(msg) }
+    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
 }
 
 /// `_()`.
@@ -157,7 +157,7 @@ fn is_dontwrite(buf: Buf) -> bool {
 pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
     if buf.is_some_and(is_dontwrite) {
         // SAFETY: a translated message literal.
-        unsafe { emsg(tr(c"E382: Cannot write, 'buftype' option is set")) };
+        unsafe { emsg_ptr(tr(c"E382: Cannot write, 'buftype' option is set")) };
         return true;
     }
     false

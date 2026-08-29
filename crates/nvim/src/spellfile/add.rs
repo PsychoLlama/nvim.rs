@@ -39,7 +39,7 @@ use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
@@ -76,7 +76,7 @@ pub unsafe fn spell_add_word(
     // `smsg_c!` runs autocommands, so the path it reports is this frame's.
     let mut shown = [0 as c_char; MAXPATHL as usize];
     if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
-        unsafe { emsg(gettext(e_illegal_character_in_word.get())) };
+        unsafe { emsg(gettext_ptr(e_illegal_character_in_word.get())) };
         return;
     }
 
@@ -102,7 +102,7 @@ pub unsafe fn spell_add_word(
             new_spf = true;
         }
         if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
-            let fmt = unsafe { gettext(e_notset.as_ptr()) };
+            let fmt = gettext(e_notset);
             unsafe { semsg_c!(fmt, c"spellfile".as_ptr()) };
             return;
         }
@@ -117,8 +117,7 @@ pub unsafe fn spell_add_word(
                 break;
             }
             if unsafe { *spf } == 0 {
-                let fmt =
-                    unsafe { gettext(c"E765: 'spellfile' does not have %d entries".as_ptr()) };
+                let fmt = gettext(c"E765: 'spellfile' does not have %d entries");
                 unsafe { semsg_c!(fmt, idx) };
                 unsafe { xfree(fnamebuf as *mut c_void) };
                 return;
@@ -134,7 +133,7 @@ pub unsafe fn spell_add_word(
             buf = core::ptr::null_mut();
         }
         if !buf.is_null() && buf_is_changed(unsafe { Buf::new(buf) }) {
-            unsafe { emsg(gettext(e_bufloaded.as_ptr())) };
+            emsg(gettext(e_bufloaded));
             unsafe { xfree(fnamebuf as *mut c_void) };
             return;
         }
@@ -171,7 +170,7 @@ pub unsafe fn spell_add_word(
         opened = !fd.is_null();
 
         if fd.is_null() {
-            unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+            unsafe { semsg_c!(gettext(e_notopen), fname) };
         } else {
             let format = if what == SPELL_ADD_BAD as SpellAddType {
                 c"%.*s/!\n".as_ptr()
@@ -185,8 +184,8 @@ pub unsafe fn spell_add_word(
 
             let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
             unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
-            let fmt = unsafe { gettext(c"Word '%.*s' added to %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
+            let fmt = gettext(c"Word '%.*s' added to %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), len, word, shown.as_ptr()) };
         }
     }
 
@@ -250,12 +249,12 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
             if undo {
                 let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
                 unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
-                let fmt = unsafe { gettext(c"Word '%.*s' removed from %s".as_ptr()) };
-                unsafe { smsg_c!(0, fmt, len, word, shown.as_ptr()) };
+                let fmt = gettext(c"Word '%.*s' removed from %s");
+                unsafe { smsg_c!(0, fmt.as_ptr(), len, word, shown.as_ptr()) };
             }
         }
         if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {
-            let fmt = unsafe { gettext(c"Seek error in spellfile".as_ptr()) };
+            let fmt = gettext(c"Seek error in spellfile");
             unsafe { semsg_c!(c"%s: %s".as_ptr(), fmt, strerror(*__errno_location())) };
             break;
         }

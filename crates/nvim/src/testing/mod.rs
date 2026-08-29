@@ -662,7 +662,7 @@ pub(crate) unsafe fn f_test_garbagecollect_now(
 ) {
     // SAFETY: called from the evaluator on the main thread.
     if unsafe { get_vim_var_nr(Vv::Testing) } == 0 {
-        unsafe { emsg(gettext(E_TEST_GARBAGECOLLECT_NOW.as_ptr())) };
+        emsg(gettext(E_TEST_GARBAGECOLLECT_NOW));
     } else {
         unsafe { garbage_collect(true) };
     }

@@ -74,7 +74,7 @@ use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
 use crate::options::kOptInvalid;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::path::path_tail;
 use crate::sign::describe_sign_text;
@@ -290,7 +290,7 @@ impl Env {
         };
         // SAFETY: both globals hold a NUL-terminated message, and `gettext`
         // answers one for it.
-        text.extend_from_slice(unsafe { CStr::from_ptr(gettext(msg)) }.to_bytes());
+        text.extend_from_slice(unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }.to_bytes());
     }
 
     /// `%m`/`%M`: whether the buffer has unsaved changes.
@@ -468,10 +468,10 @@ pub(super) fn syntax_id(name: &[u8]) -> c_int {
 }
 
 /// A translated message, as bytes.
-pub(super) fn tr(msg: &CStr) -> &'static [u8] {
+pub(super) fn tr(msg: &'static CStr) -> &'static [u8] {
     // SAFETY: `gettext` answers either its argument or a string owned by the
     // message catalogue; both outlive the expansion.
-    unsafe { CStr::from_ptr(gettext(msg.as_ptr())) }.to_bytes()
+    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }.to_bytes()
 }
 
 /// `toupper()` in the current locale, which is what `%Y` upper-cases with.

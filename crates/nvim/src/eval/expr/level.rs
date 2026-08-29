@@ -35,7 +35,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{called_emsg, did_emsg, e_invexpr2, e_trailing_arg, p_ic};
 use crate::memory::{strnequal, xfree};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
@@ -222,7 +222,7 @@ pub unsafe fn eval0(
             };
             // SAFETY: both messages take one NUL-terminated string, and
             // `p` and `arg` are tails of the expression.
-            unsafe { semsg_c!(gettext(fmt), subject) };
+            unsafe { semsg_c!(gettext_ptr(fmt), subject) };
         }
         if !eap.is_null() && !p.is_null() {
             // SAFETY: `p` is inside the expression; `eap` is not null.
@@ -367,8 +367,7 @@ pub(crate) unsafe fn eval1(
 
     if !op_falsy {
         if cur.byte() != b':' {
-            // SAFETY: a literal message, and `rettv` is the caller's.
-            unsafe { emsg(gettext(c"E109: Missing ':' after '?'".as_ptr())) };
+            emsg(gettext(c"E109: Missing ':' after '?'"));
             if evaluate && result {
                 unsafe { tv_clear(rettv) };
             }
@@ -694,7 +693,7 @@ pub(crate) unsafe fn eval7(
 
     if RECURSE.get() == MAX_RECURSE {
         let at = cur.get();
-        unsafe { semsg_c!(gettext(e_expression_too_recursive_str.as_ptr()), at) };
+        unsafe { semsg_c!(gettext(e_expression_too_recursive_str), at) };
         return FAIL;
     }
     RECURSE.set(RECURSE.get() + 1);
@@ -749,7 +748,7 @@ pub(crate) unsafe fn eval7(
             if cur.byte() == b')' {
                 cur.bump(1);
             } else if ret == OK {
-                unsafe { emsg(gettext(c"E110: Missing ')'".as_ptr())) };
+                emsg(gettext(c"E110: Missing ')'"));
                 unsafe { tv_clear(rettv) };
                 ret = FAIL;
             }

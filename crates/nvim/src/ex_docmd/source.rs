@@ -37,7 +37,7 @@ use crate::main::{
 };
 
 use crate::message::{
-    emsg_multiline, msg, msg_clr_eos, msg_puts, msg_scroll_flush, verbose_enter_scroll,
+    emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,
     verbose_leave_scroll,
 };
 
@@ -128,7 +128,7 @@ pub unsafe fn do_exmode() {
     let redraw_off = Suppress::redraw();
     let no_prompt = Suppress::wait_return();
     unsafe {
-        msg(
+        msg_ptr(
             gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr()),
             0,
         )
@@ -438,13 +438,13 @@ fn cur_win() -> Win {
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `v_exception()` as checked code.

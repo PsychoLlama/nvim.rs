@@ -557,7 +557,7 @@ unsafe fn mkspell(
         let mut error = unsafe { read_inputs(&mut spin, innames, incount, fname, &mut afile) };
         if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
             let text = c"Warning: both compounding and NOBREAK specified";
-            unsafe { msg(gettext(text.as_ptr()), 0) };
+            msg(gettext(text), 0);
         }
         if !error && !got_int.get() {
             spell_message(&spin, MSG_COMPRESSING);
@@ -668,20 +668,16 @@ unsafe fn output_is_writable(
 ) -> bool {
     // SAFETY: the caller promises the path.
     if incount <= 0 {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
     } else if !unsafe { vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int) }.is_null() {
-        unsafe {
-            emsg(gettext(
-                c"E751: Output file name must not have region name".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E751: Output file name must not have region name"));
     } else if incount > MAXREGIONS as ::core::ffi::c_int {
-        let fmt = unsafe { gettext(c"E754: Only up to %d regions supported".as_ptr()) };
+        let fmt = gettext(c"E754: Only up to %d regions supported");
         unsafe { semsg_c!(fmt, MAXREGIONS as ::core::ffi::c_int) };
     } else if !over_write && unsafe { os_path_exists(wfname) } {
-        unsafe { emsg(gettext(e_exists.as_ptr())) };
+        emsg(gettext(e_exists));
     } else if unsafe { os_isdir(wfname) } {
-        unsafe { semsg_c!(gettext(e_isadir2.as_ptr()), wfname) };
+        unsafe { semsg_c!(gettext(e_isadir2), wfname) };
     } else {
         return true;
     }
@@ -712,7 +708,7 @@ unsafe fn read_region_names(
         if unsafe { strlen(path_tail(name)) } < 5
             || unsafe { *name.add(len - 3) } != b'_' as ::core::ffi::c_char
         {
-            unsafe { semsg_c!(gettext(c"E755: Invalid region in %s".as_ptr()), name) };
+            unsafe { semsg_c!(gettext(c"E755: Invalid region in %s"), name) };
             return false;
         }
         spin.si_region_name[i * 2] = to_lower_ascii(unsafe { *name.add(len - 2) });
@@ -783,7 +779,7 @@ fn spell_message(spin: &spellinfo_T, text: &CStr) {
     if quiet {
         unsafe { verbose_enter() };
     }
-    unsafe { msg(text.as_ptr(), 0) };
+    msg(text, 0);
     unsafe { ui_flush() };
     if quiet {
         unsafe { verbose_leave() };
@@ -853,12 +849,7 @@ fn set_spell_finish(new_st: &spelltab_T) -> ::core::ffi::c_int {
         })
     });
     if !agrees {
-        // SAFETY: a static message.
-        unsafe {
-            emsg(gettext(
-                c"E763: Word characters differ between spell files".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E763: Word characters differ between spell files"));
         return FAIL;
     }
     OK

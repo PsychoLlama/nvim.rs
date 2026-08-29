@@ -304,7 +304,7 @@ pub(crate) unsafe fn expand_name_patterns(
         if p_verbose.get() > 10 {
             // SAFETY: `buf` now holds the NUL-terminated candidate.
             unsafe { verbose_enter() };
-            unsafe { smsg_c!(0, gettext(c"Searching for \"%s\"".as_ptr()), buf) };
+            unsafe { smsg_c!(0, gettext(c"Searching for \"%s\"").as_ptr(), buf) };
             unsafe { verbose_leave() };
         }
         let mut pats = [buf];
@@ -327,7 +327,7 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
         unsafe {
             smsg_c!(
                 0,
-                gettext(c"Searching for \"%s\" under \"%s\" in \"%s\"".as_ptr()),
+                gettext(c"Searching for \"%s\" under \"%s\" in \"%s\"").as_ptr(),
                 name,
                 prefix,
                 path,
@@ -337,7 +337,7 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
         unsafe {
             smsg_c!(
                 0,
-                gettext(c"Searching for \"%s\" in \"%s\"".as_ptr()),
+                gettext(c"Searching for \"%s\" in \"%s\"").as_ptr(),
                 name,
                 path
             )
@@ -441,13 +441,13 @@ pub unsafe fn do_in_path(
         };
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe { semsg_c!(gettext(e_dirnotf.as_ptr()), basepath.as_ptr(), name,) };
+            unsafe { semsg_c!(gettext(e_dirnotf), basepath.as_ptr(), name,) };
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
             unsafe {
                 smsg_c!(
                     0,
-                    gettext(c"not found in '%s': \"%s\"".as_ptr()),
+                    gettext(c"not found in '%s': \"%s\"").as_ptr(),
                     basepath.as_ptr(),
                     name,
                 )

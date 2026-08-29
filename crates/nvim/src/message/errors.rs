@@ -19,7 +19,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::log::logmsg_c;
-use core::ffi::{c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
 /// The script/function the last error was reported from.
@@ -73,10 +73,10 @@ unsafe fn get_emsg_source() -> *mut c_char {
     } else {
         tofree
     };
-    let p = unsafe { gettext(c"Error in %s:".as_ptr()) };
-    let buf_len = unsafe { strlen(sname) } + unsafe { strlen(p) } + 1;
+    let p = gettext(c"Error in %s:");
+    let buf_len = unsafe { strlen(sname) } + p.count_bytes() + 1;
     let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf(buf, buf_len, p, sname) };
+    unsafe { snprintf(buf, buf_len, p.as_ptr(), sname) };
     unsafe { xfree(tofree.cast()) };
     buf
 }
@@ -95,10 +95,10 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
     {
         return ptr::null_mut();
     }
-    let p = unsafe { gettext(c"line %4d:".as_ptr()) };
-    let buf_len = 20 + unsafe { strlen(p) };
+    let p = gettext(c"line %4d:");
+    let buf_len = 20 + p.count_bytes();
     let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf(buf, buf_len, p, sourcing_top().es_lnum) };
+    unsafe { snprintf(buf, buf_len, p.as_ptr(), sourcing_top().es_lnum) };
     buf
 }
 
@@ -117,12 +117,12 @@ pub unsafe fn msg_source(hl_id: c_int) {
     let p = unsafe { get_emsg_source() };
     if !p.is_null() {
         msg_scroll.set(1);
-        unsafe { msg(p, hl_id) };
+        unsafe { msg_ptr(p, hl_id) };
         unsafe { xfree(p.cast()) };
     }
     let p = unsafe { get_emsg_lnum() };
     if !p.is_null() {
-        unsafe { msg(p, HLF_N) };
+        unsafe { msg_ptr(p, HLF_N) };
         unsafe { xfree(p.cast()) };
         last_sourcing_lnum.set(sourcing_top().es_lnum as c_int);
     }
@@ -290,11 +290,18 @@ pub unsafe fn emsg_multiline(
     rv
 }
 
-/// Show an error message. Exported for the unit specs.
+/// Show an error message.
+pub fn emsg(s: &CStr) -> bool {
+    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
+    unsafe { emsg_multiline(s.as_ptr(), c"emsg".as_ptr(), HLF_E, false) }
+}
+
+/// [`emsg`] for a message still held as a raw pointer.
 ///
 /// # Safety
 /// `s` must be a valid C string.
-pub unsafe extern "C" fn emsg(s: *const c_char) -> bool {
+pub(crate) unsafe fn emsg_ptr(s: *const c_char) -> bool {
+    // SAFETY: the caller's contract.
     unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, false) }
 }
 
@@ -306,7 +313,7 @@ pub unsafe fn emsg_invreg(name: c_int) {
     // SAFETY: a character code, rendered into this frame's own buffer, and
     // a one-string format.
     let display = unsafe { transchar_buf(ptr::null(), name) };
-    let fmt = unsafe { gettext(c"E354: Invalid register name: '%s'".as_ptr()) };
+    let fmt = gettext(c"E354: Invalid register name: '%s'");
     unsafe { crate::semsg_c!(fmt, display.as_ptr()) };
 }
 
@@ -342,7 +349,7 @@ pub fn semsg_multiline_errbuf() -> [c_char; SEMSG_MULTILINE_ERRBUF_LEN] {
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
 pub unsafe fn semsg_report(buf: &[c_char; SEMSG_ERRBUF_LEN]) -> bool {
-    unsafe { emsg(buf.as_ptr()) }
+    emsg(crate::cstr::in_chars(buf))
 }
 
 /// Report what was formatted into `buf` as a multiline error of kind
@@ -359,15 +366,28 @@ pub unsafe fn semsg_multiline_report(
     unsafe { emsg_multiline(buf.as_ptr(), kind, HLF_E, true) }
 }
 
-/// An internal error: same as [`emsg`], but skipped when errors are off.
+/// [`iemsg`] for a message still held as a raw pointer.
 ///
 /// # Safety
 /// `s` must be a valid C string.
-pub unsafe fn iemsg(s: *const c_char) {
+pub(crate) unsafe fn iemsg_ptr(s: *const c_char) {
+    // SAFETY: reads message-state globals on the main thread, as every
+    // message call does.
     if unsafe { emsg_not_now() } {
         return;
     }
-    unsafe { emsg(s) };
+    // SAFETY: the caller's contract.
+    unsafe { emsg_ptr(s) };
+}
+
+/// An internal error: same as [`emsg`], but skipped when errors are off.
+pub fn iemsg(s: &CStr) {
+    // SAFETY: reads message-state globals on the main thread, as every
+    // message call does.
+    if unsafe { emsg_not_now() } {
+        return;
+    }
+    emsg(s);
 }
 
 /// "E5555: API call: <where>", for a reached-the-unreachable case.
@@ -375,7 +395,7 @@ pub unsafe fn iemsg(s: *const c_char) {
 /// # Safety
 /// `where_0` must be a valid C string.
 pub unsafe fn internal_error(where_0: *const c_char) {
-    unsafe { crate::siemsg_c!(gettext(e_intern2.as_ptr()), where_0) };
+    unsafe { crate::siemsg_c!(gettext(e_intern2), where_0) };
 }
 
 /// Deferred-event handler for [`msg_schedule_semsg`].
@@ -384,7 +404,7 @@ pub unsafe fn internal_error(where_0: *const c_char) {
 /// `argv[0]` must be an allocated C string this call takes ownership of.
 pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
     let s: *mut c_char = unsafe { (*argv).cast() };
-    unsafe { emsg(s) };
+    unsafe { emsg_ptr(s) };
     unsafe { xfree(s.cast()) };
 }
 
@@ -446,7 +466,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     if msg_ext_kind.get().is_null() {
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
     }
-    if unsafe { msg(message, keep_msg_hl_id.get()) } && msg_scrolled.get() == 0 {
+    if unsafe { msg_ptr(message, keep_msg_hl_id.get()) } && msg_scrolled.get() == 0 {
         unsafe { set_keep_msg(message, keep_msg_hl_id.get()) };
     }
     msg_didout.set(false); // overwrite this message

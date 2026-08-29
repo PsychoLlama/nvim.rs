@@ -408,15 +408,17 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
     }
     if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && !cur_buf().b_fname.is_null() {
         let mut buff: [c_char; 1000] = [0; 1000];
+        let fmt = ngettext(
+            c"%d more file to edit.  Quit anyway?",
+            c"%d more files to edit.  Quit anyway?",
+            n as c_ulong,
+        )
+        .as_ptr();
         unsafe {
             vim_snprintf(
                 &raw mut buff as *mut c_char,
                 DIALOG_MSG_SIZE as size_t,
-                ngettext(
-                    c"%d more file to edit.  Quit anyway?".as_ptr(),
-                    c"%d more files to edit.  Quit anyway?".as_ptr(),
-                    n as c_ulong,
-                ),
+                fmt,
                 n,
             )
         };
@@ -430,16 +432,12 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
         };
         return if answer == VIM_YES as c_int { OK } else { FAIL };
     }
-    unsafe {
-        semsg_c!(
-            ngettext(
-                c"E173: %d more file to edit".as_ptr(),
-                c"E173: %d more files to edit".as_ptr(),
-                n as c_ulong,
-            ),
-            n,
-        )
-    };
+    let fmt = ngettext(
+        c"E173: %d more file to edit",
+        c"E173: %d more files to edit",
+        n as c_ulong,
+    );
+    unsafe { semsg_c!(fmt, n) };
     quitmore.set(2);
     FAIL
 }
@@ -538,7 +536,7 @@ fn expand_generic(
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `skip_cmd_arg()` as checked code.

@@ -90,29 +90,23 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
             c"<".as_ptr()
         };
         let lines = oap.line_count as c_ulong;
-        // SAFETY: `report` is `IOSIZE` bytes, and the format's `%ld %s %d`
-        // match the three arguments handed after it.
-        let single = unsafe {
-            ngettext(
-                c"%ld line %sed %d time".as_ptr(),
-                c"%ld line %sed %d times".as_ptr(),
-                amount as c_ulong,
-            )
-        };
-        let plural = unsafe {
-            ngettext(
-                c"%ld lines %sed %d time".as_ptr(),
-                c"%ld lines %sed %d times".as_ptr(),
-                amount as c_ulong,
-            )
-        };
-        let fmt = unsafe { ngettext(single, plural, lines) };
+        let single = ngettext(
+            c"%ld line %sed %d time",
+            c"%ld line %sed %d times",
+            amount as c_ulong,
+        );
+        let plural = ngettext(
+            c"%ld lines %sed %d time",
+            c"%ld lines %sed %d times",
+            amount as c_ulong,
+        );
+        let fmt = ngettext(single, plural, lines);
         let out = report.as_mut_ptr();
         unsafe {
             vim_snprintf(
                 out,
                 IOSIZE as size_t,
-                fmt,
+                fmt.as_ptr(),
                 oap.line_count as int64_t,
                 op,
                 amount,

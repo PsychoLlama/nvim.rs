@@ -652,7 +652,7 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
 pub(crate) unsafe fn check_fname() -> c_int {
     // SAFETY: module contract.
     if unsafe { (*curbuf.get()).b_ffname }.is_null() {
-        unsafe { emsg(gettext(c"E32: No file name".as_ptr())) };
+        emsg(gettext(c"E32: No file name"));
         return FAIL;
     }
     OK
@@ -684,12 +684,10 @@ pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
     if curbuf.get() != old_curbuf {
         // SAFETY: module contract.
         unsafe { msg_source(HLF_W) };
-        unsafe {
-            msg(
-                c"Warning: Entered other buffer unexpectedly (check autocommands)".as_ptr(),
-                0,
-            )
-        };
+        msg(
+            c"Warning: Entered other buffer unexpectedly (check autocommands)",
+            0,
+        );
     }
     retval
 }
@@ -747,7 +745,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     pattern.extend_from_slice(unsafe { CStr::from_ptr((*eap).arg) }.to_bytes());
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) } == FAIL {
-        let unsupported = unsafe { gettext(c"E666: Compiler not supported: %s".as_ptr()) };
+        let unsupported = gettext(c"E666: Compiler not supported: %s");
         unsafe { semsg_c!(unsupported, (*eap).arg) };
     }
 

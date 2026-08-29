@@ -20,7 +20,7 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
         b"clear" => unsafe { syntime_clear() },
         b"report" => unsafe { syntime_report() },
         _ => {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), (*eap).arg) };
+            unsafe { semsg_c!(gettext(e_invarg2), (*eap).arg) };
         }
     }
 }
@@ -36,7 +36,7 @@ pub(crate) unsafe fn syn_clear_time(st: &mut syn_time_T) {
 /// `:syntime clear` — forget the timings of every pattern in this window.
 unsafe fn syntime_clear() {
     if !unsafe { syntax_present(curwin.get()) } {
-        unsafe { msg(gettext(MSG_NO_ITEMS.as_ptr()), 0) };
+        msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
     for idx in 0..cur_pattern_count() {
@@ -80,7 +80,7 @@ unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -
 /// `:syntime report` — the timing table, slowest pattern last.
 unsafe fn syntime_report() {
     if !unsafe { syntax_present(curwin.get()) } {
-        unsafe { msg(gettext(MSG_NO_ITEMS.as_ptr()), 0) };
+        msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
 
@@ -120,10 +120,12 @@ unsafe fn syntime_report() {
     }
 
     unsafe {
-        msg_puts_title(gettext(
-            c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN"
-                .as_ptr(),
-        ))
+        msg_puts_title(
+            gettext(
+                c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN",
+            )
+            .as_ptr(),
+        )
     };
     unsafe { msg_puts(c"\n".as_ptr()) };
     for entry in &entries {

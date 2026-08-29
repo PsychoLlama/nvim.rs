@@ -168,7 +168,7 @@ unsafe fn syn_add_cluster(name: *mut c_char) -> c_int {
 
     let len = unsafe { (*clusters).ga_len };
     if len >= MAX_CLUSTER_ID {
-        unsafe { emsg(gettext(c"E848: Too many syntax clusters".as_ptr())) };
+        emsg(gettext(c"E848: Too many syntax clusters"));
         unsafe { xfree(name as *mut c_void) };
         return 0;
     }
@@ -243,7 +243,7 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
             let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
             if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) } == FAIL
             {
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), rest) };
+                unsafe { semsg_c!(gettext(e_invarg2), rest) };
                 break;
             }
             // SAFETY: `scl_id` is a live cluster index; the address comes off
@@ -260,9 +260,9 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
     }
 
     if !got_clstr {
-        unsafe { emsg(gettext(c"E400: No cluster specified".as_ptr())) };
+        emsg(gettext(c"E400: No cluster specified"));
     }
     if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) == 0 {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(e_invarg2), arg) };
     }
 }

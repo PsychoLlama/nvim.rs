@@ -204,13 +204,11 @@ pub(super) fn buf_autocmd(event: event_T, buf: Buf) -> bool {
 pub fn check_secure() -> bool {
     if secure.get() != 0 {
         secure.set(2);
-        // SAFETY: a live message string.
-        unsafe { emsg(gettext(e_curdir.as_ptr())) };
+        emsg(gettext(e_curdir));
         return true;
     }
     if sandbox.get() != 0 {
-        // SAFETY: as above.
-        unsafe { emsg(gettext(e_sandbox.as_ptr())) };
+        emsg(gettext(e_sandbox));
         return true;
     }
     false
@@ -317,7 +315,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
     let mut l: *mut list_T = unsafe { get_vim_var_list(Vv::Oldfiles) };
     let mut nr: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if l.is_null() {
-        unsafe { msg(gettext(c"No old files".as_ptr()), 0 as ::core::ffi::c_int) };
+        msg(gettext(c"No old files"), 0 as ::core::ffi::c_int);
         return;
     }
     unsafe { msg_start() };

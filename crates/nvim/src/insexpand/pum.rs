@@ -10,6 +10,8 @@
 
 use super::*;
 use crate::guard::{Allow, Lock};
+use crate::message::msg_ptr;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
 use crate::winlayer::Win;
 
@@ -237,11 +239,11 @@ unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
     // SAFETY: `msg` addresses all 81 bytes, and both formats take `int`s.
     unsafe {
         if total > 0 {
-            let fmt = gettext(c"match %d of %d".as_ptr());
-            vim_snprintf(msg, size, fmt, number, total);
+            let fmt = gettext(c"match %d of %d");
+            vim_snprintf(msg, size, fmt.as_ptr(), number, total);
         } else {
-            let fmt = gettext(c"match %d".as_ptr());
-            vim_snprintf(msg, size, fmt, number);
+            let fmt = gettext(c"match %d");
+            vim_snprintf(msg, size, fmt.as_ptr(), number);
         }
     }
     msg
@@ -625,11 +627,9 @@ pub unsafe fn compl_match_curr_select(selected: c_int) -> bool {
 /// left to whatever room the status line leaves.
 pub(crate) unsafe fn ins_compl_show_filename() {
     let mut line = [0 as c_char; IOSIZE as usize];
-    // SAFETY: a static NUL-terminated message, and its translation is one
-    // too.
-    let lead = unsafe { gettext(c"match in file".as_ptr()) };
+    let lead = gettext(c"match in file");
     // SAFETY: as above.
-    let mut space = sc_col.get() - unsafe { vim_strsize(lead) } - 2;
+    let mut space = sc_col.get() - unsafe { vim_strsize(lead.as_ptr()) } - 2;
     if space <= 0 {
         return;
     }
@@ -679,7 +679,7 @@ pub(crate) unsafe fn ins_compl_show_filename() {
             ellipsis,
             s,
         );
-        msg(buf, 0);
+        msg_ptr(buf, 0);
     }
     msg_hist_off.set(false);
     redraw_cmdline.set(false);
@@ -719,23 +719,20 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
             e_patnotf.as_ptr()
         };
         // SAFETY: both are static NUL-terminated messages.
-        edit_submode_extra.set(unsafe { gettext(text) });
+        edit_submode_extra.set(unsafe { gettext_ptr(text).as_ptr().cast_mut() });
         edit_submode_highl.set(HLF_E);
     }
 
     if edit_submode_extra.get().is_null() {
         let mut curr = curr_match().expect("a running completion has a current match");
         if curr.is_original() {
-            // SAFETY: a static NUL-terminated message.
-            edit_submode_extra.set(unsafe { gettext(c"Back at original".as_ptr()) });
+            edit_submode_extra.set(gettext(c"Back at original").as_ptr().cast_mut());
             edit_submode_highl.set(HLF_W);
         } else if compl_cont_status.get() & CONT_S_IPOS != 0 {
-            // SAFETY: as above.
-            edit_submode_extra.set(unsafe { gettext(c"Word from other line".as_ptr()) });
+            edit_submode_extra.set(gettext(c"Word from other line").as_ptr().cast_mut());
             edit_submode_highl.set(HLF_COUNT);
         } else if curr.cp_next == curr.cp_prev {
-            // SAFETY: as above.
-            edit_submode_extra.set(unsafe { gettext(c"The only match".as_ptr()) });
+            edit_submode_extra.set(gettext(c"The only match").as_ptr().cast_mut());
             edit_submode_highl.set(HLF_COUNT);
             curr.cp_number = 1;
         } else {
@@ -776,7 +773,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
         // message set above or by the caller.
         unsafe {
             msg_ext_set_kind(c"completion".as_ptr());
-            msg(extra, attr);
+            msg_ptr(extra, attr);
         }
         msg_hist_off.set(false);
     }

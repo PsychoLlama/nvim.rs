@@ -701,8 +701,7 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
 
     // Don't allow inserting in the sandbox, or while textlock is set.
     if sandbox.get() != 0 {
-        // SAFETY: a static message, and `emsg` only needs a live editor.
-        unsafe { emsg(gettext(e_sandbox.as_ptr())) };
+        emsg(gettext(e_sandbox));
         return false;
     }
     if textlock.get() != 0
@@ -711,8 +710,7 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
         || pum_visible()
         || expr_map_locked()
     {
-        // SAFETY: a static message, and `emsg` only needs a live editor.
-        unsafe { emsg(gettext(e_textlock.as_ptr())) };
+        emsg(gettext(e_textlock));
         return false;
     }
 

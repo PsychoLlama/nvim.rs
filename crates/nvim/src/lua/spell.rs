@@ -57,7 +57,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     if unsafe { *(*(*win).w_s).b_p_spl } == 0 {
         // SAFETY: as above; `e_no_spell` is a `static` message.
         unsafe {
-            emsg(gettext(e_no_spell.as_ptr()));
+            emsg(gettext(e_no_spell));
             (*win).w_onebuf_opt.wo_spell = wo_spell_save;
         }
         return 0;

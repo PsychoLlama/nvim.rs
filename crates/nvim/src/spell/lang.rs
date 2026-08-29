@@ -151,9 +151,9 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
         } else {
             let text = c"Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\"";
-            let fmt = unsafe { gettext(text.as_ptr()) };
+            let fmt = gettext(text);
             let enc = unsafe { spell_enc() };
-            unsafe { smsg_c!(0, fmt, lang, enc, lang) };
+            unsafe { smsg_c!(0, fmt.as_ptr(), lang, enc, lang) };
         }
     } else if !sl.sl_slang.is_null() {
         // At least one file loaded; now take all the additions.
@@ -363,9 +363,8 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                         } else {
                             // Probably a mistake; warn but accept the
                             // words anyway.
-                            let fmt =
-                                unsafe { gettext(c"Warning: region %s not supported".as_ptr()) };
-                            unsafe { smsg_c!(0, fmt, region) };
+                            let fmt = gettext(c"Warning: region %s not supported");
+                            unsafe { smsg_c!(0, fmt.as_ptr(), region) };
                         }
                     } else {
                         region_mask = 1 << c;

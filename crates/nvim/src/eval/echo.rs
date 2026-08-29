@@ -26,8 +26,8 @@ use crate::main::{
 };
 use crate::memory::xfree;
 use crate::message::{
-    emsg_multiline, msg, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind, msg_multiline,
-    msg_outnum, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
+    emsg_multiline, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind, msg_multiline,
+    msg_outnum, msg_ptr, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
     verbose_leave,
 };
 use crate::os::cshim::gettext;
@@ -107,7 +107,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
             {
                 // SAFETY: the format takes one string, and `start` is a
                 // NUL-terminated tail of the command line.
-                unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), start) };
+                unsafe { semsg_c!(gettext(e_invexpr2), start) };
             }
             need_clr_eos.set(false);
             break;
@@ -253,7 +253,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };
             let text = ga.ga_data as *const c_char;
             // SAFETY: the array holds the NUL-terminated message built above.
-            unsafe { msg(text, echo_hl_id.get()) };
+            unsafe { msg_ptr(text, echo_hl_id.get()) };
         } else if eap.cmdidx == CMD_echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
@@ -339,18 +339,18 @@ pub unsafe fn last_set_msg(script_ctx: sctx_T) {
     msg_ext_skip_verbose.set(true);
     unsafe { verbose_enter() };
     // SAFETY: the text is a NUL-terminated literal.
-    unsafe { msg_puts(gettext(c"\n\tLast set from ".as_ptr())) };
+    unsafe { msg_puts(gettext(c"\n\tLast set from ").as_ptr()) };
     // SAFETY: the `CString` `p` outlives the call.
     unsafe { msg_puts(p.as_ptr()) };
     if script_ctx.sc_lnum > 0 as linenr_T {
         // SAFETY: `line_msg` is a shared NUL-terminated message.
-        unsafe { msg_puts(gettext(line_msg.as_ptr())) };
+        unsafe { msg_puts(gettext(line_msg).as_ptr()) };
         // SAFETY: the number is rendered into the message area.
         unsafe { msg_outnum(script_ctx.sc_lnum as c_int) };
     // SAFETY: the caller's promise about `script_ctx`.
     } else if unsafe { script_is_lua(script_ctx.sc_sid) } {
         // SAFETY: the hint is a NUL-terminated literal.
-        unsafe { msg_puts(gettext(c" (run Nvim with -V1 for more details)".as_ptr())) };
+        unsafe { msg_puts(gettext(c" (run Nvim with -V1 for more details)").as_ptr()) };
     }
     unsafe { verbose_leave() };
 }

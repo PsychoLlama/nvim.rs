@@ -55,7 +55,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         let mut group_name_end = ::core::ptr::null_mut::<c_char>();
         let rest = unsafe { get_group_name(arg, &mut group_name_end) };
         if rest.is_null() {
-            unsafe { emsg(gettext(c"E397: Filename required".as_ptr())) };
+            emsg(gettext(c"E397: Filename required"));
             return;
         }
         sgl_id = unsafe { syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int) };
@@ -79,14 +79,14 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         let mut errormsg = None;
         if unsafe { expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) } == FAIL {
             if let Some(msg) = &errormsg {
-                unsafe { emsg(msg.as_ptr()) };
+                emsg(msg);
             }
             return;
         }
     }
 
     if running_syn_inc_tag.get() >= MAX_SYN_INC_TAG {
-        unsafe { emsg(gettext(c"E847: Too many syntax includes".as_ptr())) };
+        emsg(gettext(c"E847: Too many syntax includes"));
         return;
     }
 
@@ -107,7 +107,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL }
     };
     if failed {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), (*eap).arg) };
+        unsafe { semsg_c!(gettext(e_notopen), (*eap).arg) };
     }
 
     cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
@@ -233,7 +233,7 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
         unsafe { free_synpat(&item) };
         unsafe { free_opt_lists(&opt) };
         if rest.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2), arg) };
         }
     }
 }
@@ -315,7 +315,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
         rest = unsafe { skipwhite(key_end) };
         if unsafe { *rest } as c_int != '=' as c_int {
             rest = ::core::ptr::null_mut();
-            unsafe { semsg_c!(gettext(c"E398: Missing '=': %s".as_ptr()), (*eap).arg) };
+            unsafe { semsg_c!(gettext(c"E398: Missing '=': %s"), (*eap).arg) };
             break;
         }
         rest = unsafe { skipwhite(rest.add(1)) };
@@ -417,12 +417,12 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
         if args.not_enough {
             unsafe {
                 semsg_c!(
-                    gettext(c"E399: Not enough arguments: syntax region %s".as_ptr()),
+                    gettext(c"E399: Not enough arguments: syntax region %s"),
                     arg,
                 )
             };
         } else if rest.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2), arg) };
         }
     }
 }
@@ -485,12 +485,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
     let mut end = unsafe { skip_regexp(arg.add(1), *arg as c_int, 1) };
     if unsafe { *end } as c_int != unsafe { *arg } as c_int {
-        unsafe {
-            semsg_c!(
-                gettext(c"E401: Pattern delimiter not found: %s".as_ptr()),
-                arg,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E401: Pattern delimiter not found: %s"), arg,) };
         return ::core::ptr::null_mut();
     }
 
@@ -509,7 +504,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
     let end = unsafe { read_pattern_offsets(ci, end.add(1)) };
     if ends_excmd(unsafe { *end } as c_int) == 0 && !ascii_iswhite(unsafe { *end } as c_int) {
-        unsafe { semsg_c!(gettext(c"E402: Garbage after pattern: %s".as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(c"E402: Garbage after pattern: %s"), arg) };
         return ::core::ptr::null_mut();
     }
     unsafe { skipwhite(end) }

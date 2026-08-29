@@ -337,6 +337,6 @@ pub(crate) unsafe fn f_assert_fails(
 
     unsafe { finish_assert_fails(save_trylevel, tofree, no_prompt) };
     if let Some(msg) = wrong_arg_msg {
-        unsafe { emsg(gettext(msg.as_ptr())) };
+        emsg(gettext(msg));
     }
 }

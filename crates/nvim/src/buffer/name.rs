@@ -22,8 +22,8 @@ use crate::main::e_noalt;
 use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
 use crate::memory::{xfree, xstrdup};
-use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::message::emsg_ptr;
+use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
 use crate::types::{CmdModFlags, FAIL, FileID, OK, linenr_T};
@@ -41,12 +41,12 @@ fn tr(msg: &CStr) -> *mut c_char {
 /// arrays.
 fn tr_raw(msg: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext(msg) }
+    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
 }
 
 fn err(msg: *mut c_char) {
     // SAFETY: a NUL-terminated message.
-    unsafe { emsg(msg) };
+    unsafe { emsg_ptr(msg) };
 }
 
 /// `XFREE_CLEAR`.

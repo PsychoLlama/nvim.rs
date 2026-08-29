@@ -280,7 +280,7 @@ pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
     unsafe { qsort(ptrs.cast(), len as size_t, itemsize, cmp) };
 
     if sort_info.item_compare_func_err {
-        unsafe { emsg(gettext(c"E702: Sort compare function failed".as_ptr())) };
+        emsg(gettext(c"E702: Sort compare function failed"));
     } else {
         // Clear the list and append the items in the sorted order.
         unsafe { (*l).lv_first = ::core::ptr::null_mut() };
@@ -332,7 +332,7 @@ pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
             unsafe { (*li).li_next }
         };
         if sort_info.item_compare_func_err {
-            unsafe { emsg(gettext(c"E882: Uniq compare function failed".as_ptr())) };
+            emsg(gettext(c"E882: Uniq compare function failed"));
             break;
         }
     }
@@ -385,7 +385,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
             let name = unsafe { how.string(argvars.add(1)) };
             sort_info.item_compare_func = name;
         } else if nr != 0 {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
             return FAIL;
         }
 

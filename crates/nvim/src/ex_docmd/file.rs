@@ -287,7 +287,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
         && eap.cmdidx as c_int == CMD_edit as c_int
         && byte(eap.arg) == NUL
     {
-        unsafe { emsg(c"cannot :edit a prompt buffer".as_ptr()) };
+        emsg(c"cannot :edit a prompt buffer");
         return;
     }
     unsafe { do_exedit(eap.raw(), ptr::null_mut()) };
@@ -676,7 +676,7 @@ fn find_file_in_path(
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `goto_buffer()` as checked code.
@@ -694,7 +694,7 @@ fn mf_fname(mfp: *const memfile_T) -> *const c_char {
 /// `msg()` as checked code.
 fn msg(s: *const c_char, hl_id: c_int) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::msg(s, hl_id) }
+    unsafe { crate::message::msg_ptr(s, hl_id) }
 }
 
 /// `readfile()` as checked code.

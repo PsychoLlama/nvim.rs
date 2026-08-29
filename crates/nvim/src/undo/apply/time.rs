@@ -341,7 +341,7 @@ fn undo_search(
         if absolute {
             // SAFETY: a NUL-terminated literal and an integer.
             unsafe {
-                let fmt = gettext(c"E830: Undo number %ld not found".as_ptr());
+                let fmt = gettext(c"E830: Undo number %ld not found");
                 semsg_c!(fmt, step as int64_t);
             }
             return None;
@@ -352,8 +352,7 @@ fn undo_search(
             } else {
                 c"Already at newest change"
             };
-            // SAFETY: a NUL-terminated literal.
-            unsafe { msg(gettext(text.as_ptr()), 0) };
+            msg(gettext(text), 0);
             return None;
         }
         // Aim at the nearest header instead, by sequence number; and when we

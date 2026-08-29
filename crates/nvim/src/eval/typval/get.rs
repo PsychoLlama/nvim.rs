@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 use crate::types::NUL;
 
@@ -44,7 +45,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
         VAR_BOOL => return varnumber_T::from(val.boolean() == kBoolVarTrue),
         VAR_SPECIAL => return 0,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
-            unsafe { emsg(gettext(num_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
         }
         VAR_UNKNOWN => {
             unsafe { semsg_c!(tr(e_intern2), c"tv_get_number(UNKNOWN)".as_ptr(),) };
@@ -122,7 +123,7 @@ pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
         }
         _ => return 0.0,
     };
-    unsafe { emsg(gettext(message.as_ptr())) };
+    emsg(gettext(message));
     0.0
 }
 
@@ -166,7 +167,7 @@ pub unsafe fn tv_get_string_buf_chk(
             buf
         }
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext(str_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type as usize])) };
             ::core::ptr::null()
         }
         _ => unsafe { abort() },

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 
 /// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
@@ -123,7 +124,7 @@ pub unsafe fn tv_item_lock(
     static recurse: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if recurse.get() >= DICT_MAXNEST {
-        unsafe { emsg(gettext(e_variable_nested_too_deep_for_unlock.as_ptr())) };
+        emsg(gettext(e_variable_nested_too_deep_for_unlock));
         return;
     }
     if deep == 0 {
@@ -236,16 +237,19 @@ pub unsafe fn value_check_lock(
         (VarLock::Fixed, false) => e_cannot_change_value_of_str.as_ptr(),
     };
 
+    // SAFETY: `error_message` is one of the NUL-terminated statics chosen
+    // just above.
+    let error_message = unsafe { gettext_ptr(error_message) };
     if name.is_null() {
-        unsafe { emsg(gettext(error_message)) };
+        emsg(error_message);
     } else {
         if name_len == TV_TRANSLATE as size_t {
-            name = unsafe { gettext(name) };
+            name = unsafe { gettext_ptr(name) }.as_ptr();
             name_len = unsafe { strlen(name) };
         } else if name_len == TV_CSTRING as size_t {
             name_len = unsafe { strlen(name) };
         }
-        unsafe { semsg_c!(gettext(error_message), name_len as ::core::ffi::c_int, name) };
+        unsafe { semsg_c!(error_message, name_len as ::core::ffi::c_int, name) };
     }
 
     true

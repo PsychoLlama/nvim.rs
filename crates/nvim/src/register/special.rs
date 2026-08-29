@@ -150,8 +150,7 @@ pub unsafe fn get_spec_reg(
         // `":` -- the last command line.
         c if c == ':' as c_int => {
             if last_cmdline.get().is_null() && errmsg {
-                // SAFETY: `e_nolastcmd` is a NUL-terminated message literal.
-                unsafe { emsg(gettext(e_nolastcmd.as_ptr())) };
+                emsg(gettext(e_nolastcmd));
             }
             value = last_cmdline.get();
             true
@@ -159,8 +158,7 @@ pub unsafe fn get_spec_reg(
         // `"/` -- the last search pattern.
         c if c == '/' as c_int => {
             if last_search_pat().is_null() && errmsg {
-                // SAFETY: `e_noprevre` is a NUL-terminated message literal.
-                unsafe { emsg(gettext(e_noprevre.as_ptr())) };
+                emsg(gettext(e_noprevre));
             }
             value = last_search_pat();
             true
@@ -171,8 +169,7 @@ pub unsafe fn get_spec_reg(
             value = unsafe { get_last_insert_save() };
             owned = true;
             if value.is_null() && errmsg {
-                // SAFETY: `e_noinstext` is a NUL-terminated message literal.
-                unsafe { emsg(gettext(e_noinstext.as_ptr())) };
+                emsg(gettext(e_noinstext));
             }
             true
         }

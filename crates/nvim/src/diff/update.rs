@@ -15,6 +15,7 @@
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
+use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL, OK};
 use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::{c_char, c_int};
@@ -396,7 +397,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 if ok != OK {
                     let msg = e_failed_to_find_all_diff_anchors.as_ptr();
                     // SAFETY: a static message string.
-                    unsafe { emsg(gettext(msg)) };
+                    unsafe { emsg(gettext_ptr(msg)) };
                     num_anchors = 0;
                     anchors = [[0; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
                     break;

@@ -343,9 +343,7 @@ pub(crate) unsafe fn readfile(
                             advance_fenc = true;
                             if fd < 0 {
                                 // Re-opening the original file failed!
-                                let msg = c"E202: Conversion made file unreadable!".as_ptr();
-                                // SAFETY: a static message string.
-                                unsafe { emsg(gettext(msg)) };
+                                emsg(gettext(c"E202: Conversion made file unreadable!"));
                                 error = true;
                                 break 'retry;
                             }
@@ -828,7 +826,8 @@ pub(crate) unsafe fn readfile(
 
             if got_int.get() {
                 if !how.dummy {
-                    unsafe { filemess(Buf::current(), sfname, gettext(e_interr.as_ptr())) };
+                    let interr = gettext(e_interr).as_ptr().cast_mut();
+                    unsafe { filemess(Buf::current(), sfname, interr) };
                     if how.newfile {
                         cur_buf().b_p_ro = true as c_int; // must use "w!" now
                     }

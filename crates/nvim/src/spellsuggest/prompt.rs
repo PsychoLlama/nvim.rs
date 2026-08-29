@@ -111,7 +111,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
     if unsafe { *(*cur_win().w_s).b_p_spl } as c_int == NUL {
-        unsafe { emsg(gettext(e_no_spell.as_ptr())) };
+        emsg(gettext(e_no_spell));
         return;
     }
 
@@ -145,14 +145,12 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     let mut selected = count;
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
     if sug.su_ga.ga_len <= 0 {
-        unsafe { msg(gettext(c"No suggestions".as_ptr()), 0) };
+        msg(gettext(c"No suggestions"), 0);
     } else if count > 0 {
         if count > sug.su_ga.ga_len {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the
-            // format literal above and the editor's message buffers.
-            let fmt = unsafe { gettext(c"Only %ld suggestions".as_ptr()) };
+            let fmt = gettext(c"Only %ld suggestions");
             let found = sug.su_ga.ga_len as int64_t;
-            unsafe { smsg_c!(0, fmt, found) };
+            unsafe { smsg_c!(0, fmt.as_ptr(), found) };
         }
     } else {
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };
@@ -251,12 +249,13 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
     msg_row.set(Rows.get() - 1); // for when 'cmdheight' > 1
     lines_left.set(Rows.get()); // avoid the more-prompt
 
-    let mut fmt = unsafe { gettext(c"Change \"%.*s\" to:".as_ptr()) };
-    if cmdmsg_rl.get() && unsafe { strncmp(fmt, c"Change".as_ptr(), 6) } == 0 {
+    let mut fmt = gettext(c"Change \"%.*s\" to:");
+    if cmdmsg_rl.get() && unsafe { strncmp(fmt.as_ptr(), c"Change".as_ptr(), 6) } == 0 {
         // And now the rabbit from the high hat: avoid showing the
         // untranslated message right-to-left.
-        fmt = c":ot \"%.*s\" egnahC".as_ptr().cast_mut();
+        fmt = c":ot \"%.*s\" egnahC";
     }
+    let fmt = fmt.as_ptr();
     unsafe { vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr) };
     unsafe { msg_puts(out) };
     unsafe { msg_clr_eos() };
@@ -332,8 +331,8 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
 
     // The word may replace more than the bad word does.
     if badlen < stp.st_orglen {
-        let fmt = unsafe { gettext(c" < \"%.*s\"".as_ptr()) };
-        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.st_orglen, badptr) };
+        let fmt = gettext(c" < \"%.*s\"");
+        unsafe { vim_snprintf(out, IOSIZE as usize, fmt.as_ptr(), stp.st_orglen, badptr) };
         unsafe { msg_puts(out) };
     }
 

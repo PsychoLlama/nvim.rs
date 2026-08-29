@@ -226,12 +226,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
             }
         }
         t if t == CmdAddr::NoRange || t == CmdAddr::Unsigned || t == CmdAddr::Quickfix => {
-            unsafe {
-                iemsg(gettext(
-                c"INTERNAL: Cannot use ExArgt::DFLALL with CmdAddr::NoRange, CmdAddr::Unsigned or CmdAddr::Quickfix"
-                    .as_ptr(),
-            ))
-            };
+            iemsg(gettext(c"INTERNAL: Cannot use ExArgt::DFLALL with CmdAddr::NoRange, CmdAddr::Unsigned or CmdAddr::Quickfix"));
         }
         _ => {}
     }

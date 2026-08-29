@@ -222,8 +222,7 @@ impl Put {
         if yanklen + spaces != 0
             && self.count > (c_int::MAX - (land.startspaces + land.endspaces)) / (yanklen + spaces)
         {
-            // SAFETY: a NUL-terminated message literal.
-            unsafe { emsg(gettext(e_resulting_text_too_long.as_ptr())) };
+            emsg(gettext(e_resulting_text_too_long));
             return false;
         }
         *totlen = (self.count as size_t)

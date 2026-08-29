@@ -335,12 +335,7 @@ impl RegStack {
         // does not fit in one is over any limit there could be.
         let kbytes = i64::try_from(self.bytes >> 10).unwrap_or(i64::MAX);
         if kbytes >= p_mmp.get() {
-            // SAFETY: a `&CStr`'s pointer, handed to the message layer.
-            unsafe {
-                emsg(gettext(
-                    E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN.as_ptr(),
-                ))
-            };
+            emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }
         self.bytes += bytes;

@@ -79,22 +79,19 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             }
 
             let name = event_nr2name(unsafe { (*apc).event });
-            // SAFETY: `gettext` answers a NUL-terminated translation, and
-            // `namep` is allocated to hold the format, both names and the
-            // pattern -- which is what `snprintf` is told it may write.
-            let s = unsafe { gettext(c"%s Autocommands for \"%s\"".as_ptr()) };
+            let s = gettext(c"%s Autocommands for \"%s\"");
             let sourcing_name_len = unsafe {
-                strlen(s)
+                s.count_bytes()
                     .wrapping_add(strlen(name))
                     .wrapping_add((*ap).patlen as size_t)
                     .wrapping_add(1)
             };
             let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
-            unsafe { snprintf(namep, sourcing_name_len, s, name, (*ap).pat) };
+            unsafe { snprintf(namep, sourcing_name_len, s.as_ptr(), name, (*ap).pat) };
             if p_verbose.get() >= 8 {
                 unsafe { verbose_enter() };
                 // SAFETY: `namep` is the NUL-terminated name just built.
-                unsafe { smsg_c!(0, gettext(c"Executing %s".as_ptr()), namep) };
+                unsafe { smsg_c!(0, gettext(c"Executing %s").as_ptr(), namep) };
                 unsafe { verbose_leave() };
             }
 
@@ -238,7 +235,7 @@ pub unsafe fn getnextac(
         // NUL-terminated string this owns and frees below.
         unsafe { verbose_enter_scroll() };
         let handler_str = unsafe { aucmd_handler_to_string(ac) };
-        unsafe { smsg_c!(0, gettext(c"autocommand %s".as_ptr()), handler_str) };
+        unsafe { smsg_c!(0, gettext(c"autocommand %s").as_ptr(), handler_str) };
         // Don't overwrite this either.
         unsafe { msg_puts(c"\n".as_ptr()) };
         unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };

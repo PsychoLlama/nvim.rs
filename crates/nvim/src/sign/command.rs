@@ -39,7 +39,7 @@ macro_rules! msg_buf {
         // SAFETY: the buffer is exactly the length passed, and the format
         // string and arguments are the caller's. Every expansion is inside
         // the caller's own `unsafe` block, so this carries none of its own.
-        unsafe { vim_snprintf(buf.as_mut_ptr(), MSG_BUF_LEN as size_t, gettext($fmt) $(, $arg)*) };
+        unsafe { vim_snprintf(buf.as_mut_ptr(), MSG_BUF_LEN as size_t, gettext($fmt).as_ptr() $(, $arg)*) };
         buf
     }};
 }
@@ -52,7 +52,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *const c_char) {
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
     // SAFETY: a static title.
-    unsafe { msg_puts_title(gettext(c"\n--- Signs ---".as_ptr())) };
+    unsafe { msg_puts_title(gettext(c"\n--- Signs ---").as_ptr()) };
 
     // SAFETY: the caller's promise -- `rbuf` is null or live.
     let mut cur = match unsafe { Buf::from_raw(rbuf) } {
@@ -69,7 +69,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *const c_char) {
             unsafe { msg_putchar('\n' as c_int) };
             // A live buffer's name is a NUL-terminated string, and the
             // formatting happens inside `msg_buf!`'s own region.
-            let lbuf = msg_buf!(c"Signs for %s:".as_ptr(), cbuf.b_fname);
+            let lbuf = msg_buf!(c"Signs for %s:", cbuf.b_fname);
             // SAFETY: `lbuf` is this frame's NUL-terminated buffer.
             unsafe { msg_puts_hl(lbuf.as_ptr(), HLF_D, false) };
         }
@@ -109,18 +109,18 @@ unsafe fn report_signs(signs: &[MTKey]) {
         let namebuf = if sh.sign_name.is_null() {
             [0; MSG_BUF_LEN as usize]
         } else {
-            msg_buf!(c"  name=%s".as_ptr(), sign_get_name(sh.raw()))
+            msg_buf!(c"  name=%s", sign_get_name(sh.raw()))
         };
         let groupbuf = if mark.ns == 0 {
             [0; MSG_BUF_LEN as usize]
         } else {
             msg_buf!(
-                c"  group=%s".as_ptr(),
+                c"  group=%s",
                 describe_ns(mark.ns.cast_signed(), c"".as_ptr()),
             )
         };
         let lbuf = msg_buf!(
-            c"    line=%d  id=%u%s%s  priority=%d".as_ptr(),
+            c"    line=%d  id=%u%s%s  priority=%d",
             mark.pos.row + 1,
             mark.id,
             groupbuf.as_ptr(),
@@ -169,7 +169,7 @@ pub(crate) unsafe fn sign_list_defined(sp: Sign) {
     if !sp.sn_icon.is_null() {
         unsafe { msg_puts(c" icon=".as_ptr()) };
         unsafe { msg_outtrans(sp.sn_icon, 0, false) };
-        unsafe { msg_puts(gettext(c" (not supported)".as_ptr())) };
+        unsafe { msg_puts(gettext(c" (not supported)").as_ptr()) };
     }
     if sp.sn_text[0] != 0 {
         unsafe { msg_puts(c" text=".as_ptr()) };
@@ -178,7 +178,7 @@ pub(crate) unsafe fn sign_list_defined(sp: Sign) {
         unsafe { msg_outtrans(buf.as_ptr(), 0, false) };
     }
     if sp.sn_priority > 0 {
-        let lbuf = msg_buf!(c" priority=%d".as_ptr(), sp.sn_priority);
+        let lbuf = msg_buf!(c" priority=%d", sp.sn_priority);
         unsafe { msg_puts(lbuf.as_ptr()) };
     }
     let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
@@ -203,7 +203,7 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
         Some(sp) => unsafe { sign_list_defined(sp) },
         None => {
             // SAFETY: the caller's name, and a format the message takes.
-            unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name) };
+            unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s"), name) };
         }
     }
 }
@@ -254,7 +254,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
         } else if let Some(v) = after(c"priority=") {
             prio = unsafe { atoi(v) };
         } else {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2), arg) };
             return;
         }
 
@@ -288,14 +288,14 @@ unsafe fn sign_place_cmd(
         // The listing forms: `:sign place [group=X] [file=Y|buffer=N]`.
         // A `line=` or a `name=` means a placement was intended.
         if lnum >= 0 || !name.is_null() || empty_group {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
         } else {
             unsafe { sign_list_placed(buf, group) };
         }
         return;
     }
     if name.is_null() || buf.is_null() || empty_group {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     let mut uid = id.cast_unsigned();
@@ -320,7 +320,7 @@ unsafe fn sign_unplace_cmd(
 ) {
     // SAFETY: the caller's buffer, name and group.
     if lnum >= 0 || !name.is_null() || (!group.is_null() && unsafe { *group } == 0) {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 
@@ -333,7 +333,7 @@ unsafe fn sign_unplace_cmd(
     };
 
     if unsafe { sign_unplace(buf, id.max(0), group, lnum) } == FAIL && lnum > 0 {
-        unsafe { emsg(gettext(c"E159: Missing sign number".as_ptr())) };
+        emsg(gettext(c"E159: Missing sign number"));
     }
 }
 
@@ -349,16 +349,15 @@ unsafe fn sign_jump_cmd(
     id: c_int,
     group: *const c_char,
 ) {
-    // SAFETY: the caller's buffer, name and group.
     if name.is_null() && group.is_null() && id == -1 {
-        unsafe { emsg(gettext(e_argreq.as_ptr())) };
+        emsg(gettext(e_argreq));
         return;
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
     if buf.is_null() || (!group.is_null() && unsafe { *group } == 0) || lnum >= 0 || !name.is_null()
     {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     unsafe { sign_jump(id, group, buf) };
@@ -437,7 +436,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
         } else if cmd == SIGNCMD_UNPLACE && unsafe { *arg } == STAR {
             // `:sign unplace *`: every sign, and not with an id too.
             if out.id != -1 {
-                unsafe { emsg(gettext(e_invarg.as_ptr())) };
+                emsg(gettext(e_invarg));
                 return None;
             }
             out.id = -2;
@@ -477,18 +476,18 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if unsafe { *skipwhite(p) } != 0 {
-                unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
+                unsafe { semsg_c!(gettext(e_trailing_arg), p) };
             }
             break;
         } else {
-            unsafe { emsg(gettext(e_invarg.as_ptr())) };
+            emsg(gettext(e_invarg));
             return None;
         }
         arg = unsafe { skipwhite(arg) };
     }
 
     if !filename.is_null() && out.buf.is_null() {
-        unsafe { semsg_c!(gettext(e_invalid_buffer_name_str.as_ptr()), filename,) };
+        unsafe { semsg_c!(gettext(e_invalid_buffer_name_str), filename,) };
         return None;
     }
 
@@ -511,7 +510,7 @@ pub(crate) unsafe fn ex_sign(eap: *mut exarg_T) {
     let p = unsafe { skiptowhite(arg) };
     let idx = unsafe { sign_cmd_idx(arg, p) };
     if idx == SIGNCMD_LAST {
-        unsafe { semsg_c!(gettext(c"E160: Unknown sign command: %s".as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(c"E160: Unknown sign command: %s"), arg) };
         return;
     }
     arg = unsafe { skipwhite(p) };
@@ -541,7 +540,7 @@ pub(crate) unsafe fn ex_sign(eap: *mut exarg_T) {
         return;
     }
     if unsafe { *arg } == 0 {
-        unsafe { emsg(gettext(c"E156: Missing sign name".as_ptr())) };
+        emsg(gettext(c"E156: Missing sign name"));
         return;
     }
 

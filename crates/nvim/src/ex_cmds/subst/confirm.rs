@@ -224,9 +224,8 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         snprintf(
             iobuff,
             IOSIZE as size_t,
-            gettext(
-                c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)".as_ptr(),
-            ),
+            gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)")
+                .as_ptr(),
             st.sub,
         );
         let prompt = xstrdup(iobuff);

@@ -41,12 +41,7 @@ use core::ptr;
 /// short of its first line.
 pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int {
     if dest >= line1 && dest < line2 {
-        // SAFETY: a literal.
-        unsafe {
-            emsg(gettext(
-                c"E134: Cannot move a range of lines into itself".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E134: Cannot move a range of lines into itself"));
         return FAIL;
     }
 
@@ -183,11 +178,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         unsafe {
             smsg_c!(
                 0,
-                ngettext(
-                    c"%ld line moved".as_ptr(),
-                    c"%ld lines moved".as_ptr(),
-                    num_lines as c_ulong,
-                ),
+                ngettext(c"%ld line moved", c"%ld lines moved", num_lines as c_ulong,).as_ptr(),
                 num_lines as int64_t,
             )
         };

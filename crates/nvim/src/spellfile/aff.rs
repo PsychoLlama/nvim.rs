@@ -275,7 +275,7 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
     // bound `vim_fgets` is given.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
     if fd.is_null() {
-        unsafe { semsg_c!(gettext(e_notopen.as_ptr()), fname) };
+        unsafe { semsg_c!(gettext(e_notopen), fname) };
         return core::ptr::null_mut();
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
@@ -336,9 +336,8 @@ pub(super) unsafe fn spell_read_aff(spin: *mut spellinfo_T, fname: *mut c_char) 
                 )
             };
             if pc.is_null() {
-                let fmt =
-                    unsafe { gettext(c"Conversion failure for word in %s line %d: %s".as_ptr()) };
-                unsafe { smsg_c!(0, fmt, fname, lnum, rline.as_mut_ptr()) };
+                let fmt = gettext(c"Conversion failure for word in %s line %d: %s");
+                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, rline.as_mut_ptr()) };
                 continue;
             }
             pc
@@ -427,8 +426,8 @@ unsafe fn handle_line(
             && unsafe { convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) }
                 == FAIL
         {
-            let fmt = unsafe { gettext(c"Conversion in %s not supported: from %s to %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, (*aff).af_enc, p_enc.get()) };
+            let fmt = gettext(c"Conversion in %s not supported: from %s to %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, (*aff).af_enc, p_enc.get()) };
         }
         unsafe { (*spin).si_conv.vc_fail = true };
         return true;
@@ -468,7 +467,7 @@ unsafe fn handle_line(
         if let Some(warning) = field.warn_after_pfx()
             && unsafe { (*aff).af_pref.ht_used } > 0
         {
-            unsafe { smsg_c!(0, gettext(warning.as_ptr()), fname, lnum) };
+            unsafe { smsg_c!(0, gettext(warning).as_ptr(), fname, lnum) };
         }
         return true;
     }
@@ -485,8 +484,8 @@ unsafe fn handle_line(
 
     if unsafe { is_aff_rule(items, c"COMPOUNDRULES", 2) } {
         if unsafe { atoi(items[1]) } == 0 {
-            let fmt = unsafe { gettext(c"Wrong COMPOUNDRULES value in %s line %d: %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+            let fmt = gettext(c"Wrong COMPOUNDRULES value in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
         return true;
     }
@@ -524,7 +523,7 @@ unsafe fn handle_line(
         }
         *slot = unsafe { atoi(items[1]) };
         if *slot == 0 {
-            unsafe { smsg_c!(0, gettext(complaint.as_ptr()), fname, lnum, items[1]) };
+            unsafe { smsg_c!(0, gettext(complaint).as_ptr(), fname, lnum, items[1]) };
         }
         return true;
     }
@@ -540,9 +539,8 @@ unsafe fn handle_line(
     // pattern pair.
     if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) } {
         if unsafe { atoi(items[1]) } == 0 {
-            let fmt =
-                unsafe { gettext(c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+            let fmt = gettext(c"Wrong CHECKCOMPOUNDPATTERN value in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
         return true;
     }
@@ -604,8 +602,8 @@ unsafe fn handle_line(
     // The two-item form of REP/REPSAL is the count line.
     if unsafe { is_aff_rule(items, c"REP", 2) } || unsafe { is_aff_rule(items, c"REPSAL", 2) } {
         if !unsafe { is_digit_byte(*items[1]) } {
-            let fmt = unsafe { gettext(c"Expected REP(SAL) count in %s line %d".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum) };
+            let fmt = gettext(c"Expected REP(SAL) count in %s line %d");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum) };
         }
         return true;
     }
@@ -649,8 +647,8 @@ unsafe fn handle_line(
         return true;
     }
 
-    let fmt = unsafe { gettext(c"Unrecognized or duplicate item in %s line %d: %s".as_ptr()) };
-    unsafe { smsg_c!(0, fmt, fname, lnum, items[0]) };
+    let fmt = gettext(c"Unrecognized or duplicate item in %s line %d: %s");
+    unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[0]) };
     true
 }
 
@@ -687,8 +685,8 @@ unsafe fn handle_flag_type(
     } else if unsafe { strcmp(items[1], c"caplong".as_ptr()) } == 0 {
         unsafe { (*aff).af_flagtype = AFT_CAPLONG };
     } else {
-        let fmt = unsafe { gettext(c"Invalid value for FLAG in %s line %d: %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+        let fmt = gettext(c"Invalid value for FLAG in %s line %d: %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
     }
     // Anything already read used the old spelling, so it would be
     // interpreted wrongly.
@@ -703,8 +701,8 @@ unsafe fn handle_flag_type(
         || unsafe { (*aff).af_suff.ht_used } > 0
         || unsafe { (*aff).af_pref.ht_used } > 0;
     if used {
-        let fmt = unsafe { gettext(c"FLAG after using flags in %s line %d: %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+        let fmt = gettext(c"FLAG after using flags in %s line %d: %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
     }
 }
 
@@ -743,7 +741,7 @@ unsafe fn finish_aff(
     }
     if st.compsylmax != 0 {
         if st.syllable.is_null() {
-            let fmt = unsafe { gettext(c"COMPOUNDSYLMAX used without SYLLABLE".as_ptr()) };
+            let fmt = gettext(c"COMPOUNDSYLMAX used without SYLLABLE");
             unsafe { smsg_c!(0, c"%s".as_ptr(), fmt) };
         }
         unsafe { aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
@@ -769,7 +767,7 @@ unsafe fn finish_aff(
         } else {
             c"Too many postponed prefixes and/or compound flags"
         };
-        unsafe { msg(gettext(complaint.as_ptr()), 0) };
+        msg(gettext(complaint), 0);
     }
 
     if !st.syllable.is_null() {
@@ -779,17 +777,17 @@ unsafe fn finish_aff(
 
     if !st.sofofrom.is_null() || !st.sofoto.is_null() {
         if st.sofofrom.is_null() || st.sofoto.is_null() {
-            let fmt = unsafe { gettext(c"Missing SOFO%s line in %s".as_ptr()) };
+            let fmt = gettext(c"Missing SOFO%s line in %s");
             let which = if st.sofofrom.is_null() {
                 c"FROM".as_ptr()
             } else {
                 c"TO".as_ptr()
             };
-            unsafe { smsg_c!(0, fmt, which, fname) };
+            unsafe { smsg_c!(0, fmt.as_ptr(), which, fname) };
         } else if unsafe { (*spin).si_sal.ga_len } > 0 {
             // SAL rules and a SOFO pair are two ways to do the same
             // thing; taking both would be ambiguous.
-            unsafe { smsg_c!(0, gettext(c"Both SAL and SOFO lines in %s".as_ptr()), fname) };
+            unsafe { smsg_c!(0, gettext(c"Both SAL and SOFO lines in %s").as_ptr(), fname) };
         } else {
             unsafe { aff_check_string((*spin).si_sofofr, st.sofofrom, c"SOFOFROM") };
             unsafe { aff_check_string((*spin).si_sofoto, st.sofoto, c"SOFOTO") };
@@ -807,10 +805,8 @@ unsafe fn finish_aff(
 /// Warn when two `.aff` files of one run disagree about a number.
 unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
     if spinval != 0 && spinval != affval {
-        // SAFETY: the format and the name are both static strings.
-        let fmt =
-            unsafe { gettext(c"%s value differs from what is used in another .aff file".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, name.as_ptr()) };
+        let fmt = gettext(c"%s value differs from what is used in another .aff file");
+        unsafe { smsg_c!(0, fmt.as_ptr(), name.as_ptr()) };
     }
 }
 
@@ -822,9 +818,8 @@ unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
 unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CStr) {
     // SAFETY: the caller promises the strings.
     if !spinval.is_null() && unsafe { strcmp(spinval, affval) } != 0 {
-        let fmt =
-            unsafe { gettext(c"%s value differs from what is used in another .aff file".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, name.as_ptr()) };
+        let fmt = gettext(c"%s value differs from what is used in another .aff file");
+        unsafe { smsg_c!(0, fmt.as_ptr(), name.as_ptr()) };
     }
 }
 

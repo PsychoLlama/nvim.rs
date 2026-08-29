@@ -84,7 +84,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
         xfree(name as *mut c_void);
     } else {
         if byte(p_sh.get()) == NUL {
-            unsafe { emsg(gettext(e_shellempty.as_ptr())) };
+            emsg(gettext(e_shellempty));
             return;
         }
         // No argument: run 'shell', as a *list* so that the shell's own

@@ -186,8 +186,7 @@ pub unsafe fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
         val = vec![0u8; max_vallen as size_t + 1];
     }
     if let Some(errmsg) = errmsg {
-        // SAFETY: the message is a NUL-terminated constant.
-        unsafe { emsg(gettext(errmsg.as_ptr())) };
+        emsg(gettext(errmsg));
     }
 }
 

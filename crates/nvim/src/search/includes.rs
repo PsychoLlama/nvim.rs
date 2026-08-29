@@ -412,7 +412,7 @@ unsafe fn handle_include(
                 // Don't display if 'q' was typed at the
                 // "--more--" message.
                 unsafe { msg_home_replace(name.as_ptr()) };
-                unsafe { msg_puts(gettext(c" (includes previously listed match)".as_ptr())) };
+                unsafe { msg_puts(gettext(c" (includes previously listed match)").as_ptr()) };
                 walk.prev_fname = ptr::null_mut();
             }
         }
@@ -447,14 +447,14 @@ unsafe fn handle_include(
         // SAFETY: formatting a NUL-terminated file name into a buffer of
         // `IOSIZE` bytes, whose size is passed with it.
         unsafe {
-            let fmt = gettext(c"Scanning included file: %s".as_ptr());
-            vim_snprintf(out, room, fmt, name)
+            let fmt = gettext(c"Scanning included file: %s");
+            vim_snprintf(out, room, fmt.as_ptr(), name)
         };
         unsafe { msg_trunc(progress.as_mut_ptr(), true, HLF_R) };
     } else if p_verbose.get() >= 5 {
         unsafe { verbose_enter() };
         // SAFETY: a static, translated message and a NUL-terminated name.
-        unsafe { smsg_c!(0, gettext(c"Searching included file %s".as_ptr()), name) };
+        unsafe { smsg_c!(0, gettext(c"Searching included file %s").as_ptr(), name) };
         unsafe { verbose_leave() };
     }
 }
@@ -475,11 +475,11 @@ unsafe fn show_include_name(
         unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
     } else {
         unsafe { gotocmdline(true) }; // cursor at the status line
-        unsafe { msg_puts_title(gettext(c"--- Included files ".as_ptr())) };
+        unsafe { msg_puts_title(gettext(c"--- Included files ").as_ptr()) };
         if action != ACTION_SHOW_ALL {
-            unsafe { msg_puts_title(gettext(c"not found ".as_ptr())) };
+            unsafe { msg_puts_title(gettext(c"not found ").as_ptr()) };
         }
-        unsafe { msg_puts_title(gettext(c"in path ---\n".as_ptr())) };
+        unsafe { msg_puts_title(gettext(c"in path ---\n").as_ptr()) };
     }
     walk.did_show = true;
 
@@ -555,9 +555,9 @@ unsafe fn show_include_name(
 
     if new_fname.is_none() && action == ACTION_SHOW_ALL {
         if already_searched {
-            unsafe { msg_puts(gettext(c"  (Already listed)".as_ptr())) };
+            unsafe { msg_puts(gettext(c"  (Already listed)").as_ptr()) };
         } else {
-            unsafe { msg_puts(gettext(c"  NOT FOUND".as_ptr())) };
+            unsafe { msg_puts(gettext(c"  NOT FOUND").as_ptr()) };
         }
     }
 }
@@ -725,7 +725,7 @@ unsafe fn goto_match(
     walk.found = true;
     let mut curwin_save: *mut win_T = ptr::null_mut();
     if walk.files.depth() == -1 && walk.lnum == cur_win().w_cursor.lnum && tagpreview == 0 {
-        unsafe { emsg(gettext(c"E387: Match is on current line".as_ptr())) };
+        emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {
         let did_show = walk.did_show;
         let line = walk.line;
@@ -915,18 +915,18 @@ pub unsafe fn find_pattern_in_path(
     if kind == CHECK_PATH {
         if !walk.did_show {
             if action != ACTION_SHOW_ALL {
-                unsafe { msg(gettext(c"All included files were found".as_ptr()), 0) };
+                msg(gettext(c"All included files were found"), 0);
             } else {
-                unsafe { msg(gettext(c"No included files".as_ptr()), 0) };
+                msg(gettext(c"No included files"), 0);
             }
         }
     } else if !walk.found && action != ACTION_EXPAND && !silent {
         if got_int.get() || ins_compl_interrupted() {
-            unsafe { emsg(gettext(e_interr.as_ptr())) };
+            emsg(gettext(e_interr));
         } else if kind == FIND_DEFINE {
-            unsafe { emsg(gettext(c"E388: Couldn't find definition".as_ptr())) };
+            emsg(gettext(c"E388: Couldn't find definition"));
         } else {
-            unsafe { emsg(gettext(c"E389: Couldn't find pattern".as_ptr())) };
+            emsg(gettext(c"E389: Couldn't find pattern"));
         }
     }
     if action == ACTION_SHOW || action == ACTION_SHOW_ALL {

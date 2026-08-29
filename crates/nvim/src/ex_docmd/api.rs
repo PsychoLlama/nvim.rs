@@ -339,7 +339,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
     let mut ea = unsafe { Ea::new(eap) };
     let mut retv: c_int = 0;
     if do_cmdline_start() == FAIL {
-        unsafe { emsg(gettext(e_command_too_recursive.as_ptr())) };
+        emsg(gettext(e_command_too_recursive).as_ptr());
         return retv;
     }
 
@@ -450,7 +450,7 @@ fn buflist_findpat(
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `ex_msg()` as checked code.

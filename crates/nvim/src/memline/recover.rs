@@ -660,16 +660,16 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
     if error != 0 {
         let no_prompt = Suppress::wait_return();
         unsafe { msg_ext_set_kind(c"emsg".as_ptr()) };
-        unsafe { msg(c">>>>>>>>>>>>>\n".as_ptr(), 0) };
+        msg(c">>>>>>>>>>>>>\n", 0);
         unsafe {
-            emsg(tr(
+            emsg_ptr(tr(
                 c"E312: Errors detected while recovering; look for lines starting with ???",
             ))
         };
         drop(no_prompt);
         unsafe { msg_putchar('\n' as c_int) };
         tell(c"See \":help E312\" for more information.", 0);
-        unsafe { msg(c"\n>>>>>>>>>>>>>".as_ptr(), 0) };
+        msg(c"\n>>>>>>>>>>>>>", 0);
         return;
     }
 

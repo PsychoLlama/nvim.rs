@@ -112,7 +112,7 @@ pub unsafe fn func_call(
         let items = unsafe { (*args).vval.v_list.as_ref() };
         for item in tv_list_iter(items) {
             if argc == MAX_FUNC_ARGS - bound {
-                unsafe { emsg(gettext(c"E699: Too many arguments".as_ptr())) };
+                emsg(gettext(c"E699: Too many arguments"));
                 break 'skip_call;
             }
             // Copy each argument, so that `v_lock` can be set to

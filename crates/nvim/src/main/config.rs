@@ -52,7 +52,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
     cur_win().w_cursor.lnum = 0;
     estack_push(
         ETYPE_ARGS,
-        unsafe { gettext(c"pre-vimrc command line".as_ptr()) },
+        gettext(c"pre-vimrc command line").as_ptr().cast_mut(),
         0,
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as scid_T));
@@ -307,7 +307,7 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
         if !named_none
             && unsafe { do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) } != OK
         {
-            let fmt = unsafe { gettext(e_cannot_read_from_str_2.as_ptr()) };
+            let fmt = gettext(e_cannot_read_from_str_2);
             unsafe { semsg_c!(fmt, vimrc) };
         }
     } else if !silent_mode.get() {

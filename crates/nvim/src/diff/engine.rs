@@ -82,9 +82,9 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
         return OK;
     }
     if io_error {
-        unsafe { emsg(gettext(c"E810: Cannot read or write temp files".as_ptr())) };
+        emsg(gettext(c"E810: Cannot read or write temp files"));
     }
-    unsafe { emsg(gettext(c"E97: Cannot create diffs".as_ptr())) };
+    emsg(gettext(c"E97: Cannot create diffs"));
     diff_a_works.set(None);
     FAIL
 }
@@ -149,7 +149,7 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> c_int {
             )
         } < 0
     {
-        unsafe { emsg(gettext(e_problem_creating_internal_diff.as_ptr())) };
+        emsg(gettext(e_problem_creating_internal_diff));
         return FAIL;
     }
     OK

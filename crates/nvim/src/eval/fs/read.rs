@@ -453,10 +453,10 @@ fn dupz(line: &[c_char]) -> *mut c_char {
 // ---------------------------------------------------------------------
 
 /// Report the one-`%s` message `fmt`, translated, about the path `p`.
-fn err_path(fmt: &CStr, p: *const c_char) {
+fn err_path(fmt: &'static CStr, p: *const c_char) {
     // SAFETY: `fmt` is a NUL-terminated format taking one string, and `p` is
     // a NUL-terminated string.
-    unsafe { semsg_c!(gettext(fmt.as_ptr()), p) };
+    unsafe { semsg_c!(gettext(fmt), p) };
 }
 
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and
@@ -512,9 +512,11 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
     }
     let empty = fname.to_bytes().is_empty();
     let Some(fd) = (if empty { None } else { File::open(fname) }) else {
-        // SAFETY: a NUL-terminated literal, which is all `gettext` reads.
-        let what = unsafe { gettext(c"<empty>".as_ptr()) };
-        err_path(e_notopen, if empty { what } else { fname.as_ptr() });
+        let what = gettext(c"<empty>");
+        err_path(
+            e_notopen,
+            if empty { what.as_ptr() } else { fname.as_ptr() },
+        );
         return;
     };
 

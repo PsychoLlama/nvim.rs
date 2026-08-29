@@ -47,7 +47,7 @@ use crate::main::{cmp_flags, curbuf, curwin, e_listreq, fenc_default, p_ambw, p_
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
-use crate::message::{emsg, msg};
+use crate::message::{emsg, msg, msg_ptr};
 use crate::r#move::changed_window_setting_all;
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::check_chars_options;
@@ -121,7 +121,7 @@ pub unsafe fn show_utf8() {
     let line = get_cursor_pos_ptr();
     let len = unsafe { utfc_ptr2len(line) };
     if len == 0 {
-        unsafe { msg(c"NUL".as_ptr(), 0) };
+        msg(c"NUL", 0);
         return;
     }
 
@@ -158,7 +158,7 @@ pub unsafe fn show_utf8() {
             break;
         }
     }
-    unsafe { msg(out, 0) };
+    unsafe { msg_ptr(out, 0) };
 }
 
 /// `8g8`: move the cursor to the next byte that is not valid UTF-8.

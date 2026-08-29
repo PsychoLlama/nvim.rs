@@ -426,7 +426,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     // The depth check catches `:map x y` plus `:map y x`.
     unsafe { *mapdepth += 1 };
     if unsafe { *mapdepth } >= p_mmd.get() as c_int {
-        unsafe { emsg(gettext(e_recursive_mapping.as_ptr())) };
+        emsg(gettext(e_recursive_mapping));
         if State.get() & MODE_CMDLINE != 0 {
             unsafe { redrawcmdline() };
         } else {

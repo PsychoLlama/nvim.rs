@@ -66,7 +66,7 @@ unsafe extern "C" fn nlua_schedule_event(argv: *mut *mut c_void) {
         let _unlocked_expr_map = Allow::expr_map_when(ns_id > 0);
         let _unlocked_text = Allow::text_changes_when(ns_id > 0);
         if nlua_pcall(lstate, 0, 0) != 0 {
-            nlua_error(lstate, gettext(c"vim.schedule callback: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"vim.schedule callback: %.*s").as_ptr());
             ui_remove_cb(ns_id, true);
         }
     }

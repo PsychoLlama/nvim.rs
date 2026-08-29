@@ -252,10 +252,10 @@ impl Scan {
         // SAFETY: `argv[-1]` is the option and `argv[0]` its argument, both
         // in range by the time this is reachable.
         let into = complaint.as_mut_ptr();
-        let fmt = unsafe { gettext(c"Attempt to open script file again: \"%s %s\"\n".as_ptr()) };
+        let fmt = gettext(c"Attempt to open script file again: \"%s %s\"\n");
         let option = unsafe { *self.argv.offset(-1) };
         let word = unsafe { *self.argv };
-        unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, option, word) };
+        unsafe { vim_snprintf(into, IOSIZE as size_t, fmt.as_ptr(), option, word) };
         unsafe { fprintf(stderr, c"%s".as_ptr(), complaint.as_ptr()) };
         unsafe { os_exit(2) }
     }
@@ -272,7 +272,7 @@ impl Scan {
             let data = api_metadata_raw();
             let written = unsafe { os_write(STDOUT_FILENO, data.data(), data.len(), false) };
             if written < 0 as ptrdiff_t {
-                let fmt = unsafe { gettext(c"E5420: Failed to write to file: %s".as_ptr()) };
+                let fmt = gettext(c"E5420: Failed to write to file: %s");
                 let why = unsafe { uv_strerror(written as c_int) };
                 unsafe { semsg_c!(fmt, why) };
             }
@@ -664,8 +664,8 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
     }
 
     if embedded_mode.get() && (silent_mode.get() || !unsafe { (*parmp).luaf }.is_null()) {
-        let msg = unsafe { gettext(c"--embed conflicts with -es/-Es/-l".as_ptr()) };
-        unsafe { mainerr(msg, ptr::null(), ptr::null()) };
+        let msg = gettext(c"--embed conflicts with -es/-Es/-l");
+        unsafe { mainerr(msg.as_ptr(), ptr::null(), ptr::null()) };
     }
 
     // The first `+cmd`/`-c` becomes `v:swapcommand`, so the ATTENTION

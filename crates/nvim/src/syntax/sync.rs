@@ -495,7 +495,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
 
     unsafe { xfree(key as *mut ::core::ffi::c_void) };
     if illegal {
-        unsafe { semsg_c!(gettext(c"E404: Illegal arguments: %s".as_ptr()), arg_start) };
+        unsafe { semsg_c!(gettext(c"E404: Illegal arguments: %s"), arg_start) };
     } else if !finished {
         unsafe { (*eap).nextcmd = check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);
@@ -531,11 +531,9 @@ unsafe fn sync_linecont(
         return Err(LineContError::Illegal); // missing pattern
     }
     if !cur_syn_block().b_syn_linecont_pat.is_null() {
-        unsafe {
-            emsg(gettext(
-                c"E403: syntax sync: line continuations pattern specified twice".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E403: syntax sync: line continuations pattern specified twice",
+        ));
         return Err(LineContError::Reported);
     }
     let arg_end = unsafe { skip_regexp(next_arg.add(1), *next_arg as c_int, 1) };

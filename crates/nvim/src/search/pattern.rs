@@ -14,6 +14,7 @@
 use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
+use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
 use crate::types::{CmdModFlags, FAIL, NUL, OK, Vv};
@@ -168,7 +169,7 @@ pub unsafe fn search_regcomp(
             } else {
                 e_noprevre.as_ptr()
             };
-            unsafe { emsg(gettext(msg)) };
+            unsafe { emsg(gettext_ptr(msg)) };
             rc_did_emsg.set(true);
             return FAIL;
         }
@@ -324,7 +325,7 @@ pub fn restore_last_search_pattern() {
         // SAFETY: a literal message.
         let msg =
             c"restore_last_search_pattern() called more often than save_last_search_pattern()";
-        unsafe { iemsg(msg.as_ptr()) };
+        iemsg(msg);
         return;
     }
     // SAFETY: the saved copy hands its allocation back. `additional_data`

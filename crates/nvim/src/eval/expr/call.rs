@@ -164,7 +164,7 @@ pub(crate) unsafe fn call_func_rettv(
             // NUL-terminated.
             funcname = unsafe { functv.vval.v_string };
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
-                unsafe { emsg(gettext(e_empty_function_name.as_ptr())) };
+                emsg(gettext(e_empty_function_name));
                 unsafe { tv_clear(&raw mut functv) };
                 return FAIL;
             }
@@ -228,10 +228,10 @@ pub(crate) unsafe fn eval_lambda(
             // SAFETY: the cursor walks a NUL-terminated expression, and
             // both messages take a literal.
             if unsafe { *skipwhite(cur.get()) } == b'(' as c_char {
-                unsafe { emsg(gettext(e_nowhitespace.as_ptr())) };
+                emsg(gettext(e_nowhitespace));
             } else {
                 let what = c"lambda".as_ptr();
-                unsafe { semsg_c!(gettext(e_missingparen.as_ptr()), what) };
+                unsafe { semsg_c!(gettext(e_missingparen), what) };
             }
         }
         unsafe { tv_clear(rettv) };
@@ -290,9 +290,9 @@ pub(crate) unsafe fn eval_method(
     if len <= 0 {
         if verbose {
             if lua_funcname.is_null() {
-                unsafe { emsg(gettext(c"E260: Missing name after ->".as_ptr())) };
+                emsg(gettext(c"E260: Missing name after ->"));
             } else {
-                unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), name) };
+                unsafe { semsg_c!(gettext(e_invexpr2), name) };
             }
         }
         ret = FAIL;
@@ -319,7 +319,7 @@ pub(crate) unsafe fn eval_method(
             } else if unsafe { *skipwhite(cur.get()) } as c_int != NUL {
                 if verbose {
                     let at = cur.get();
-                    unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), at) };
+                    unsafe { semsg_c!(gettext(e_trailing_arg), at) };
                 }
                 ret = FAIL;
             } else if callee.v_type == VAR_FUNC && !unsafe { callee.vval.v_string }.is_null() {
@@ -334,7 +334,7 @@ pub(crate) unsafe fn eval_method(
                 let pt = unsafe { Live::new(callee.vval.v_partial) };
                 if pt.pt_argc > 0 || !pt.pt_dict.is_null() {
                     if verbose {
-                        unsafe { emsg(gettext(e_cannot_use_partial_here.as_ptr())) };
+                        emsg(gettext(e_cannot_use_partial_here));
                     }
                     ret = FAIL;
                 } else {
@@ -351,7 +351,7 @@ pub(crate) unsafe fn eval_method(
                 }
             } else {
                 if verbose {
-                    unsafe { semsg_c!(gettext(e_not_callable_type_str.as_ptr()), name) };
+                    unsafe { semsg_c!(gettext(e_not_callable_type_str), name) };
                 }
                 ret = FAIL;
             }
@@ -363,12 +363,12 @@ pub(crate) unsafe fn eval_method(
             let basep = &raw mut base;
             if cur.byte() != b'(' {
                 if verbose {
-                    unsafe { semsg_c!(gettext(e_missingparen.as_ptr()), name) };
+                    unsafe { semsg_c!(gettext(e_missingparen), name) };
                 }
                 ret = FAIL;
             } else if ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int) {
                 if verbose {
-                    unsafe { emsg(gettext(e_nowhitespace.as_ptr())) };
+                    emsg(gettext(e_nowhitespace));
                 }
                 ret = FAIL;
             } else if !lua_funcname.is_null() {

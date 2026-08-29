@@ -70,8 +70,7 @@ pub unsafe fn ex_undolist(_eap: *mut exarg_T) {
     // SAFETY: a NUL-terminated literal.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     if rows.is_empty() {
-        // SAFETY: a NUL-terminated literal.
-        unsafe { msg(gettext(c"Nothing to undo".as_ptr()), 0) };
+        msg(gettext(c"Nothing to undo"), 0);
         return;
     }
     let mut rows = rows;
@@ -79,10 +78,9 @@ pub unsafe fn ex_undolist(_eap: *mut exarg_T) {
     rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
     // SAFETY: the editor's own message state.
     unsafe { msg_start() };
-    // SAFETY: a NUL-terminated literal.
-    let heading = unsafe { gettext(c"number changes  when               saved".as_ptr()) };
+    let heading = gettext(c"number changes  when               saved");
     // SAFETY: the string `gettext` just answered, NUL-terminated.
-    unsafe { msg_puts_hl(heading, HLF_T, false) };
+    unsafe { msg_puts_hl(heading.as_ptr(), HLF_T, false) };
     for row in &rows {
         if got_int.get() {
             break;

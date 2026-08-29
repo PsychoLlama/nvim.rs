@@ -499,8 +499,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
             if regname != 0 {
                 name = display.as_ptr();
             }
-            // SAFETY: a NUL-terminated message literal, translated.
-            let fmt = unsafe { gettext(c"E353: Nothing in register %s".as_ptr()) };
+            let fmt = gettext(c"E353: Nothing in register %s");
             // SAFETY: the format takes the single `%s` given, and `name` is
             // NUL-terminated.
             unsafe { semsg_c!(fmt, name) };

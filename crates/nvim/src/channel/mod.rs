@@ -44,7 +44,7 @@ use crate::main::{channels, e_invchan, e_invstream, e_invstreamrpc, exiting, mai
 use crate::memory::{xfree, xmemdup};
 use crate::msgpack_rpc::channel::call_stack::CallStack;
 use crate::msgpack_rpc::channel::{rpc_close, rpc_free, rpc_init};
-use crate::os::cshim::{gettext, stderr};
+use crate::os::cshim::{gettext, gettext_ptr, stderr};
 use crate::os::fs::os_write;
 use crate::os::pty_proc_unix::pty_proc_close_master;
 use crate::registry::SlotTable;
@@ -140,7 +140,7 @@ fn message(msg: &'static CStr) -> *const c_char {
 pub(super) fn translated(msg: &'static CStr) -> *const c_char {
     // SAFETY: gettext answers either its argument or a pointer into the loaded
     // message catalog; both outlive the call.
-    unsafe { gettext(message(msg)) }
+    unsafe { gettext_ptr(message(msg)).as_ptr() }
 }
 
 // ---------------------------------------------------------------------------
@@ -657,7 +657,7 @@ pub unsafe fn channel_send(
                 return n;
             }
             Ok(Sent::Queued(n)) => return n,
-            Err(msg) => unsafe { *error = gettext(msg.as_ptr()) },
+            Err(msg) => unsafe { *error = gettext(msg).as_ptr() },
         }
     }
     if data_owned {

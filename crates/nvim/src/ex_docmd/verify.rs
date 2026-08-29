@@ -166,6 +166,6 @@ pub unsafe fn verify_command(cmd: *mut c_char) {
         return;
     }
     for line in SMILE {
-        unsafe { msg(line.as_ptr(), HLF_E) };
+        msg(line, HLF_E);
     }
 }

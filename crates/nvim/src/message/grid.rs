@@ -350,14 +350,14 @@ pub(crate) unsafe fn inc_msg_scrolled() {
         let mut p = String_0::from_raw_parts(sourcing_top().es_name, 0);
         let mut tofree: *mut c_char = ptr::null_mut();
         if p.data().is_null() {
-            p = unsafe { cstr_as_string(gettext(c"Unknown".as_ptr())) };
+            p = unsafe { cstr_as_string(gettext(c"Unknown").as_ptr()) };
         } else {
             let tofreesize = unsafe { strlen(p.data()) } + 40;
             tofree = unsafe { xmalloc(tofreesize) }.cast();
-            let fmt = unsafe { gettext(c"%s line %ld".as_ptr()) };
+            let fmt = gettext(c"%s line %ld");
             let name = p.data();
             let lnum = sourcing_top().es_lnum as int64_t;
-            let len = unsafe { vim_snprintf_safelen(tofree, tofreesize, fmt, name, lnum) };
+            let len = unsafe { vim_snprintf_safelen(tofree, tofreesize, fmt.as_ptr(), name, lnum) };
             p.set_len(len);
             p.set_data(tofree);
         }

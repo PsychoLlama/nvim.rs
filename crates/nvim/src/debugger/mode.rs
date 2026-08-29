@@ -15,6 +15,7 @@
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Allow, Bump, Saved, Suppress};
+use crate::message::msg_ptr;
 use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
@@ -127,7 +128,7 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
     // and `msg` copies what it keeps.
     let sname = unsafe { estack_sfile(ESTACK_NONE) };
     if !sname.is_null() {
-        unsafe { msg(sname, 0) };
+        unsafe { msg_ptr(sname, 0) };
     }
     unsafe { xfree(sname.cast()) };
     unsafe { show_debug_line(cmd) };

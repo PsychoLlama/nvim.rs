@@ -59,7 +59,7 @@ use crate::main::{
     force_abort, got_int, msg_list, need_rethrow, p_cpo,
 };
 use crate::memory::{xfree, xmalloc};
-use crate::message::{emsg, internal_error};
+use crate::message::{emsg_ptr, internal_error};
 use crate::optionstr::empty_option;
 use crate::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
@@ -83,7 +83,7 @@ pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
     {
         unsafe { eval_to_string_skip(arg, eap, (*eap).skip != 0) }
     } else {
-        unsafe { emsg(message(e_argreq)) };
+        unsafe { emsg_ptr(message(e_argreq)) };
         ptr::null_mut()
     };
 

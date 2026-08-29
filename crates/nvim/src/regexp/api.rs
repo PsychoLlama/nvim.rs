@@ -20,7 +20,7 @@ use super::{
 use crate::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::{gettext, gettext_ptr, strncmp};
 use crate::regexp::RE_AUTO;
 use crate::types::{
     OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
@@ -68,7 +68,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
             let fmt = c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "
                 .as_ptr();
             // SAFETY: a static, NUL-terminated message.
-            unsafe { emsg(gettext(fmt)) };
+            unsafe { emsg(gettext_ptr(fmt)) };
             regexp_engine.set(AUTOMATIC_ENGINE as c_int);
         }
     }
@@ -101,7 +101,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
         if p_verbose.get() > 0 as OptInt {
             unsafe { verbose_enter() };
             let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
-            unsafe { msg_puts(gettext(note)) };
+            unsafe { msg_puts(gettext_ptr(note).as_ptr()) };
             unsafe { msg_puts(expr) };
             unsafe { verbose_leave() };
         }
@@ -144,11 +144,7 @@ unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut r
     p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {
         unsafe { verbose_enter() };
-        unsafe {
-            msg_puts(gettext(
-                c"Switching to backtracking RE engine for pattern: ".as_ptr(),
-            ))
-        };
+        unsafe { msg_puts(gettext(c"Switching to backtracking RE engine for pattern: ").as_ptr()) };
         unsafe { msg_puts(pat) };
         unsafe { verbose_leave() };
     }
@@ -178,7 +174,7 @@ unsafe fn vim_regexec_string(
     // A program cannot match against itself: `\=` calling back into the
     // same pattern would reuse the program's own state.
     if unsafe { (*(*rmp).regprog).re_in_use } {
-        unsafe { emsg(gettext(E_RECURSIVE.as_ptr())) };
+        emsg(gettext(E_RECURSIVE));
         return false;
     }
     let result = with_rex(|| {
@@ -271,7 +267,7 @@ pub unsafe fn vim_regexec_multi(
     // SAFETY: `rmp` holds a live program; `win`/`buf`/`tm`/`timed_out` are
     // the caller's and may be null where the engines allow it.
     if unsafe { (*(*rmp).regprog).re_in_use } {
-        unsafe { emsg(gettext(E_RECURSIVE.as_ptr())) };
+        emsg(gettext(E_RECURSIVE));
         return 0;
     }
     let result = with_rex(|| {

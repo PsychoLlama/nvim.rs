@@ -41,7 +41,7 @@ use crate::memory::{xfree, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
@@ -116,7 +116,7 @@ impl Ex {
 /// `_()`: the translated message.
 fn tr(msg: *const c_char) -> &'static CStr {
     // SAFETY: a NUL-terminated message, and `gettext` answers one too.
-    unsafe { CStr::from_ptr(gettext(msg)) }
+    unsafe { CStr::from_ptr(gettext_ptr(msg).as_ptr()) }
 }
 
 /// `_(msg)` as an owned Ex-command error message.
@@ -127,7 +127,7 @@ fn err_msg(msg: *const c_char) -> Option<CString> {
 /// `emsg(_(msg))`.
 fn err(msg: *const c_char) {
     // SAFETY: a NUL-terminated message.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 fn free<T>(p: *mut T) {
@@ -589,7 +589,7 @@ fn winsize(ea: Ex) {
     if !ascii_isdigit(byte(arg)) {
         let (msg, at) = (e_invarg2.as_ptr(), arg);
         // SAFETY: a message with one `%s`, and the argument for it.
-        unsafe { semsg_c!(gettext(msg), at) };
+        unsafe { semsg_c!(gettext_ptr(msg), at) };
         return;
     }
     let w = digits(&raw mut arg);

@@ -256,7 +256,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
             if !ui_has(kUIMessages) {
                 msg_putchar(NL);
             }
-            msg_puts(gettext(c"shell returned ".as_ptr()));
+            msg_puts(gettext(c"shell returned ").as_ptr());
             msg_outnum(exitcode);
         }
         exitcode
@@ -280,7 +280,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
             verbose_enter();
             smsg_c!(
                 0,
-                gettext(c"Executing command: \"%s\"".as_ptr()),
+                gettext(c"Executing command: \"%s\"").as_ptr(),
                 if cmd.is_null() { p_sh.get() } else { cmd },
             );
             msg_putchar(NL);
@@ -292,7 +292,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
         }
 
         let retval = if *p_sh.get() == NUL as c_char {
-            emsg(gettext(e_shellempty.as_ptr()));
+            emsg(gettext(e_shellempty));
             -1
         } else {
             // The command may have updated a tags file.
@@ -331,7 +331,7 @@ pub unsafe fn get_cmd_output(
         }
         let tempname = vim_tempname();
         if tempname.is_null() {
-            emsg(gettext(e_notmp.as_ptr()));
+            emsg(gettext(e_notmp));
             return ptr::null_mut();
         }
 
@@ -363,7 +363,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         // Not being able to seek means the file cannot be read.
         let fd = os_fopen(tempname, READBIN.as_ptr());
         if fd.is_null() || fseek(fd, 0, SEEK_END) == -1 {
-            semsg_c!(gettext(e_cannot_read_from_str_2.as_ptr()), tempname,);
+            semsg_c!(gettext(e_cannot_read_from_str_2), tempname,);
             if !fd.is_null() {
                 fclose(fd);
             }
@@ -371,7 +371,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         }
         let len_l = ftell(fd);
         if len_l == -1 || fseek(fd, 0, SEEK_SET) == -1 {
-            semsg_c!(gettext(e_cannot_read_from_str_2.as_ptr()), tempname,);
+            semsg_c!(gettext(e_cannot_read_from_str_2), tempname,);
             fclose(fd);
             return ptr::null_mut();
         }
@@ -382,7 +382,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         fclose(fd);
         os_remove(tempname);
         if read as usize != len {
-            semsg_c!(gettext(e_cant_read_file_str.as_ptr()), tempname);
+            semsg_c!(gettext(e_cant_read_file_str), tempname);
             xfree(buffer.cast());
             return ptr::null_mut();
         }

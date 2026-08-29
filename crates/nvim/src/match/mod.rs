@@ -104,7 +104,7 @@ unsafe fn match_add(
     if id < -1 || id == 0 {
         unsafe {
             semsg_c!(
-                gettext(c"E799: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
+                gettext(c"E799: Invalid ID: %ld (must be greater than or equal to 1)"),
                 id as int64_t,
             )
         };
@@ -117,12 +117,7 @@ unsafe fn match_add(
         let mut cur = wp.w_match_head;
         while !cur.is_null() {
             if unsafe { (*cur).mit_id } == id {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E801: ID already taken: %ld".as_ptr()),
-                        id as int64_t,
-                    )
-                };
+                unsafe { semsg_c!(gettext(c"E801: ID already taken: %ld"), id as int64_t,) };
                 return -1;
             }
             cur = unsafe { (*cur).mit_next };
@@ -142,7 +137,7 @@ unsafe fn match_add(
     if !pat.is_null() {
         regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
         if regprog.is_null() {
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), pat) };
+            unsafe { semsg_c!(gettext(e_invarg2), pat) };
             return -1;
         }
     }
@@ -256,7 +251,7 @@ unsafe fn fill_pos_array(
             if subli.is_null() {
                 unsafe {
                     semsg_c!(
-                        gettext(c"E5030: Empty list at position %d".as_ptr()),
+                        gettext(c"E5030: Empty list at position %d"),
                         tv_list_idx_of_item(pos_list, li),
                     )
                 };
@@ -313,7 +308,7 @@ unsafe fn fill_pos_array(
         } else {
             unsafe {
                 semsg_c!(
-                    gettext(c"E5031: List or number required at position %d".as_ptr()),
+                    gettext(c"E5031: List or number required at position %d"),
                     tv_list_idx_of_item(pos_list, li),
                 )
             };
@@ -348,7 +343,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
         if perr {
             unsafe {
                 semsg_c!(
-                    gettext(c"E802: Invalid ID: %ld (must be greater than or equal to 1)".as_ptr()),
+                    gettext(c"E802: Invalid ID: %ld (must be greater than or equal to 1)"),
                     id as int64_t,
                 )
             };
@@ -364,7 +359,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
     }
     if cur.is_null() {
         if perr {
-            unsafe { semsg_c!(gettext(c"E803: ID not found: %ld".as_ptr()), id as int64_t) };
+            unsafe { semsg_c!(gettext(c"E803: ID not found: %ld"), id as int64_t) };
         }
         return -1;
     }
@@ -434,7 +429,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
     if unsafe { (*eap).line2 } > 3 {
-        unsafe { emsg(e_invcmd.as_ptr()) };
+        emsg(e_invcmd);
         return;
     }
     let id = unsafe { (*eap).line2 } as c_int;
@@ -467,7 +462,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
         if unsafe { *p } == 0 {
             // There must be two arguments.
             unsafe { xfree(g.cast()) };
-            unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+            unsafe { semsg_c!(gettext(e_invarg2), arg) };
             return;
         }
         // `*p` is the pattern's delimiter, whatever character it is.
@@ -483,7 +478,7 @@ pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
             if unsafe { *end } != unsafe { *p } {
                 // The closing delimiter is missing.
                 unsafe { xfree(g.cast()) };
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), p) };
+                unsafe { semsg_c!(gettext(e_invarg2), p) };
                 return;
             }
             // Terminate the pattern in place for the compile, then put

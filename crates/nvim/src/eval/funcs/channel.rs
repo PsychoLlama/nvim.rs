@@ -29,8 +29,8 @@ use crate::main::{
     e_invarg2, e_stdiochan2, provider_call_nesting, provider_caller_scope,
 };
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
-use crate::message::emsg;
 use crate::message::on_print_cb;
+use crate::message::{emsg, emsg_ptr};
 use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
@@ -116,7 +116,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         return;
     }
     if args.ty(0) != VAR_NUMBER || (args.ty(1) != VAR_STRING && args.has(1)) {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 
@@ -129,7 +129,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         match found {
             Some(&(_, p)) => part = p,
             None => {
-                unsafe { semsg_c!(gettext(c"Invalid channel stream \"%s\"".as_ptr()), stream) };
+                unsafe { semsg_c!(gettext(c"Invalid channel stream \"%s\""), stream) };
                 return;
             }
         }
@@ -140,7 +140,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         unsafe { channel_close(args.get(0).vval.v_number as uint64_t, part, &raw mut error) }
             as varnumber_T;
     if unsafe { rettv.vval.v_number } == 0 {
-        unsafe { emsg(error) };
+        unsafe { emsg_ptr(error) };
     }
 }
 
@@ -155,7 +155,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         return;
     }
     if args.ty(0) != VAR_NUMBER || !args.has(1) {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 
@@ -186,7 +186,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let sent = unsafe { channel_send(id, input, len, true, err) };
     rettv.vval.v_number = sent as varnumber_T;
     if !error.is_null() {
-        unsafe { emsg(error) };
+        unsafe { emsg_ptr(error) };
     }
 }
 
@@ -205,12 +205,12 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // `rpcrequest()` insists on a real one.
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } < 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
     if args.ty(1) != VAR_STRING {
         let what = c"Event type must be a string".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
 
@@ -223,7 +223,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
         let what = c"Channel doesn't exist".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
     rettv.vval.v_number = 1;
@@ -310,12 +310,12 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     }
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } <= 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
     if args.ty(1) != VAR_STRING {
         let what = c"Method name must be a string".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return;
     }
 
@@ -450,7 +450,7 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let address = if !args.has(0) {
         unsafe { server_address_new(ptr::null()) }
     } else if args.ty(0) != VAR_STRING {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     } else {
         unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) }
@@ -489,7 +489,7 @@ pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         return;
     }
     if args.ty(0) != VAR_STRING {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     // Note the order: the return value is only cleared *after* the type
@@ -512,11 +512,11 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
     if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     if args.ty(2) != VAR_DICT && args.has(2) {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"expected dictionary".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
         return;
     }
 
@@ -527,7 +527,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     } else if unsafe { strcmp(mode, c"pipe".as_ptr()) } == 0 {
         false
     } else {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"invalid mode".as_ptr(),) };
+        unsafe { semsg_c!(gettext(e_invarg2), c"invalid mode".as_ptr(),) };
         return;
     };
 
@@ -550,7 +550,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut error = ptr::null::<c_char>();
     let id = unsafe { channel_connect(tcp, address, rpc, on_data, 50, &raw mut error) };
     if !error.is_null() {
-        unsafe { semsg_c!(gettext(c"connection failed: %s".as_ptr()), error) };
+        unsafe { semsg_c!(gettext(c"connection failed: %s"), error) };
     }
     rettv.vval.v_number = id as varnumber_T;
     rettv.v_type = VAR_NUMBER;
@@ -563,7 +563,7 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.
     if args.ty(0) != VAR_DICT {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
     let opts = unsafe { args.get(0).vval.v_dict };

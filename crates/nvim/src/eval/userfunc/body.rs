@@ -119,14 +119,9 @@ pub(crate) unsafe fn get_function_body(
             }
             if theline.is_null() {
                 if !skip_until.is_null() {
-                    unsafe {
-                        semsg_c!(
-                            gettext(E_MISSING_HEREDOC_END_MARKER_STR.as_ptr()),
-                            skip_until,
-                        )
-                    };
+                    unsafe { semsg_c!(gettext(E_MISSING_HEREDOC_END_MARKER_STR), skip_until,) };
                 } else {
-                    unsafe { emsg(gettext(c"E126: Missing :endfunction".as_ptr())) };
+                    emsg(gettext(c"E126: Missing :endfunction"));
                 }
                 break 'theend;
             }
@@ -204,7 +199,7 @@ pub(crate) unsafe fn get_function_body(
                         unsafe {
                             swmsg_c!(
                                 true,
-                                gettext(c"W22: Text found after :endfunction: %s".as_ptr()),
+                                gettext(c"W22: Text found after :endfunction: %s").as_ptr(),
                                 p,
                             )
                         };
@@ -247,7 +242,7 @@ pub(crate) unsafe fn get_function_body(
                     unsafe { xfree(nested as *mut c_void) };
                     if unsafe { *skipwhite(p) } == b'(' as c_char {
                         if nesting == MAX_FUNC_NESTING - 1 {
-                            unsafe { emsg(gettext(E_FUNCTION_NESTING_TOO_DEEP.as_ptr())) };
+                            emsg(gettext(E_FUNCTION_NESTING_TOO_DEEP));
                         } else {
                             nesting += 1;
                             indent += 2;

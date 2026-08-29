@@ -148,12 +148,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
     if !doclear && !dolink && line.at_end() {
         let id = unsafe { syn_name2id_len(name.as_ptr().cast(), name.len()) };
         if id == 0 {
-            unsafe {
-                semsg_c!(
-                    gettext(e_highlight_group_name_not_found_str.as_ptr()),
-                    name.as_ptr(),
-                )
-            };
+            unsafe { semsg_c!(gettext(e_highlight_group_name_not_found_str), name.as_ptr(),) };
         } else {
             unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
             unsafe { highlight_list_one(id) };
@@ -276,7 +271,7 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
     if from.is_empty() || to.is_empty() {
         unsafe {
             semsg_c!(
-                gettext(c"E412: Not enough arguments: \":highlight link %s\"".as_ptr()),
+                gettext(c"E412: Not enough arguments: \":highlight link %s\""),
                 line.ptr(from_at),
             )
         };
@@ -285,7 +280,7 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
     if !line.at_end() {
         unsafe {
             semsg_c!(
-                gettext(c"E413: Too many arguments: \":highlight link %s\"".as_ptr()),
+                gettext(c"E413: Too many arguments: \":highlight link %s\""),
                 line.ptr(from_at),
             )
         };
@@ -319,11 +314,7 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
         // Don't allow a link when the group already has highlighting,
         // unless '!' is used.
         if sourcing_name_is_null() && !dodefault {
-            unsafe {
-                emsg(gettext(
-                    e_group_has_settings_highlight_link_ignored.as_ptr(),
-                ))
-            };
+            emsg(gettext(e_group_has_settings_highlight_link_ignored));
         }
     } else if entry.link != to_id
         || entry.script_ctx.sc_sid != current_sctx.get().sc_sid
@@ -368,12 +359,7 @@ impl KeyLoop {
         while !line.at_end() {
             let key_at = line.at;
             if line.peek() == b'=' {
-                unsafe {
-                    semsg_c!(
-                        gettext(e_unexpected_equal_sign_str.as_ptr()),
-                        line.ptr(key_at),
-                    )
-                };
+                unsafe { semsg_c!(gettext(e_unexpected_equal_sign_str), line.ptr(key_at),) };
                 break;
             }
 
@@ -384,7 +370,7 @@ impl KeyLoop {
             }
             let key = line.bytes[start..line.at].to_ascii_uppercase();
             if key.len() > 63 {
-                unsafe { emsg(gettext(c"E423: Illegal argument".as_ptr())) };
+                emsg(gettext(c"E423: Illegal argument"));
                 break;
             }
             line.skip_white();
@@ -400,12 +386,7 @@ impl KeyLoop {
             }
 
             if line.peek() != b'=' {
-                unsafe {
-                    semsg_c!(
-                        gettext(e_missing_equal_sign_str_2.as_ptr()),
-                        line.ptr(key_at),
-                    )
-                };
+                unsafe { semsg_c!(gettext(e_missing_equal_sign_str_2), line.ptr(key_at),) };
                 break;
             }
             line.at += 1;
@@ -418,7 +399,7 @@ impl KeyLoop {
                 match line.bytes[arg_at..].iter().position(|&b| b == b'\'') {
                     Some(at) => arg_at + at,
                     None => {
-                        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), line.ptr(key_at)) };
+                        unsafe { semsg_c!(gettext(e_invarg2), line.ptr(key_at)) };
                         break;
                     }
                 }
@@ -431,11 +412,11 @@ impl KeyLoop {
             };
             line.at = end;
             if end == arg_at {
-                unsafe { semsg_c!(gettext(e_missing_argument_str.as_ptr()), line.ptr(key_at)) };
+                unsafe { semsg_c!(gettext(e_missing_argument_str), line.ptr(key_at)) };
                 break;
             }
             if end - arg_at > 511 {
-                unsafe { emsg(gettext(c"E423: Illegal argument".as_ptr())) };
+                emsg(gettext(c"E423: Illegal argument"));
                 break;
             }
             let arg = &line.bytes[arg_at..end];
@@ -481,7 +462,7 @@ impl KeyLoop {
                 true
             }
             _ => {
-                unsafe { semsg_c!(gettext(c"E423: Illegal argument: %s".as_ptr()), key_start) };
+                unsafe { semsg_c!(gettext(c"E423: Illegal argument: %s"), key_start) };
                 self.error = true;
                 false
             }
@@ -505,7 +486,7 @@ impl KeyLoop {
             });
             let Some(&(name, flag)) = found else {
                 // SAFETY: main-thread message call.
-                unsafe { semsg_c!(gettext(c"E418: Illegal value: %s".as_ptr()), arg.as_ptr()) };
+                unsafe { semsg_c!(gettext(c"E418: Illegal value: %s"), arg.as_ptr()) };
                 self.error = true;
                 return false;
             };
@@ -569,14 +550,14 @@ impl KeyLoop {
             parse_int(arg)
         } else if arg.eq_ignore_ascii_case(b"fg") {
             if cterm_normal_fg_color.get() == 0 {
-                unsafe { emsg(gettext(c"E419: FG color unknown".as_ptr())) };
+                emsg(gettext(c"E419: FG color unknown"));
                 self.error = true;
                 return false;
             }
             cterm_normal_fg_color.get() - 1
         } else if arg.eq_ignore_ascii_case(b"bg") {
             if cterm_normal_bg_color.get() <= 0 {
-                unsafe { emsg(gettext(c"E420: BG color unknown".as_ptr())) };
+                emsg(gettext(c"E420: BG color unknown"));
                 self.error = true;
                 return false;
             }
@@ -589,7 +570,7 @@ impl KeyLoop {
             let Some(idx) = idx else {
                 unsafe {
                     semsg_c!(
-                        gettext(c"E421: Color name or number not recognized: %s".as_ptr()),
+                        gettext(c"E421: Color name or number not recognized: %s"),
                         key_start,
                     )
                 };

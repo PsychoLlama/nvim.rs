@@ -159,7 +159,7 @@ unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
 /// one are accepted, as `last_set_msg()` writes the latter.
 unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
     let english = c" line ";
-    let localized = unsafe { CStr::from_ptr(gettext(line_msg.as_ptr())) };
+    let localized = unsafe { CStr::from_ptr(gettext(line_msg).as_ptr()) };
 
     let mut p = after_name.cast_mut();
     if unsafe { strncmp(p, english.as_ptr(), english.count_bytes()) } == 0 {
@@ -199,7 +199,7 @@ pub(crate) unsafe fn file_name_in_line(
     let ptr = unsafe { name_start(line, col, options) };
     if ptr.is_null() {
         if options.has(FileNameOpts::MESS) {
-            unsafe { emsg(gettext(c"E446: No file name under cursor".as_ptr())) };
+            emsg(gettext(c"E446: No file name under cursor"));
         }
         return ptr::null_mut();
     }
@@ -312,12 +312,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         if file_name.is_null() && options.has(FileNameOpts::MESS) {
             let c = unsafe { *ptr.add(len) };
             unsafe { *ptr.add(len) = 0 };
-            unsafe {
-                semsg_c!(
-                    gettext(c"E447: Can't find file \"%s\" in path".as_ptr()),
-                    ptr,
-                )
-            };
+            unsafe { semsg_c!(gettext(c"E447: Can't find file \"%s\" in path"), ptr,) };
             unsafe { *ptr.add(len) = c };
         }
 

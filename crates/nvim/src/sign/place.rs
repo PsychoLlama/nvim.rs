@@ -348,7 +348,7 @@ pub(crate) unsafe fn sign_place(
     // SAFETY: the caller's name.
     let Some(def) = (unsafe { sign_find(name) }) else {
         // SAFETY: as above, and a format the message takes.
-        unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s".as_ptr()), name) };
+        unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s"), name) };
         return FAIL;
     };
     let prio = match (prio, def.sn_priority) {
@@ -368,12 +368,7 @@ pub(crate) unsafe fn sign_place(
     };
     if lnum <= 0 {
         // SAFETY: the caller's name.
-        unsafe {
-            semsg_c!(
-                gettext(c"E885: Not possible to change sign %s".as_ptr()),
-                name,
-            )
-        };
+        unsafe { semsg_c!(gettext(c"E885: Not possible to change sign %s"), name,) };
         return FAIL;
     }
     OK
@@ -448,7 +443,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T)
     let lnum = unsafe { buf_findsign(buf, id, group) };
     if lnum <= 0 {
         // SAFETY: a format the message takes.
-        unsafe { semsg_c!(gettext(c"E157: Invalid sign ID: %d".as_ptr()), id) };
+        unsafe { semsg_c!(gettext(c"E157: Invalid sign ID: %d"), id) };
         return -1;
     }
     // SAFETY: the caller's buffer.
@@ -463,12 +458,9 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T)
         beginline(BeginlineOpts::WHITE);
     } else {
         if buf.b_fname.is_null() {
-            // SAFETY: a static message.
-            unsafe {
-                emsg(gettext(
-                    c"E934: Cannot jump to a buffer that does not have a name".as_ptr(),
-                ))
-            };
+            emsg(gettext(
+                c"E934: Cannot jump to a buffer that does not have a name",
+            ));
             return -1;
         }
         // SAFETY: a live buffer's name is a NUL-terminated string it owns.

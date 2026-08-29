@@ -45,8 +45,8 @@ struct JsonSink<'a> {
 }
 
 /// Raise `msg`, which carries no arguments.
-fn err(msg: &CStr) {
-    unsafe { emsg(gettext(msg.as_ptr())) };
+fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 impl JsonSink<'_> {
@@ -154,7 +154,7 @@ impl TypvalSink for JsonSink<'_> {
         _prefix: &'static CStr,
         path: &ConvPath,
     ) -> Flow {
-        unsafe { conv_error(gettext(E474_FUNCREF.as_ptr()), path) }
+        unsafe { conv_error(gettext(E474_FUNCREF).as_ptr(), path) }
     }
 
     unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {

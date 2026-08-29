@@ -266,7 +266,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
             } else {
                 c"Type  :qa  and press <Enter> to exit Nvim"
             };
-            unsafe { msg(gettext(hint.as_ptr()), 0) };
+            msg(gettext(hint), 0);
         }
         if restart_edit.get() != 0 {
             redraw_mode.set(true);

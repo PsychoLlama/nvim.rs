@@ -183,7 +183,7 @@ pub unsafe fn get_name_len(
     // SAFETY: as above.
     if len == 0 && verbose && unsafe { **arg } as c_int != NUL {
         // SAFETY: the format takes one string, which the cursor names.
-        unsafe { semsg_c!(gettext(e_invexpr2.as_ptr()), *arg) };
+        unsafe { semsg_c!(gettext(e_invexpr2), *arg) };
     }
     len
 }

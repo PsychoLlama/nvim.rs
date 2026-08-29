@@ -24,7 +24,7 @@ use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::{emsg, msg, msgmore};
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::regexp::{
     RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_ex, vim_regexec_multi, vim_regfree,
@@ -123,8 +123,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
             Some(b'&') => RE_SUBST as c_int,
             Some(b'/' | b'?') => RE_SEARCH as c_int,
             _ => {
-                // SAFETY: a live message string.
-                unsafe { emsg(gettext(e_backslash.as_ptr())) };
+                emsg(gettext(e_backslash));
                 return None;
             }
         };
@@ -137,12 +136,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
     }
 
     let Some(&delim) = bytes.first() else {
-        // SAFETY: a live message string.
-        unsafe {
-            emsg(gettext(
-                c"E148: Regular expression missing from global".as_ptr(),
-            ))
-        };
+        emsg(gettext(c"E148: Regular expression missing from global"));
         return None;
     };
     // The delimiter is handed on as a `char`, so a high byte arrives
@@ -234,12 +228,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
         let whole = unsafe { (*eap).line1 == 1 && (*eap).line2 == cur_buf().b_ml.ml_line_count };
         if !whole {
             // Will increment global_busy to break out of the loop.
-            // SAFETY: a live message string.
-            unsafe {
-                emsg(gettext(
-                    c"E147: Cannot do :global recursive with a range".as_ptr(),
-                ))
-            };
+            emsg(gettext(c"E147: Cannot do :global recursive with a range"));
             return;
         }
     }
@@ -273,8 +262,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
         )
     };
     if compiled == FAIL {
-        // SAFETY: a live message string.
-        unsafe { emsg(gettext(e_invcmd.as_ptr())) };
+        emsg(gettext(e_invcmd));
         return;
     }
 
@@ -290,8 +278,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
         let ndone = unsafe { global_mark(eap, &raw mut regmatch, kind) };
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
-            // SAFETY: a live message string.
-            unsafe { msg(gettext(e_interr.as_ptr()), 0 as c_int) };
+            msg(gettext(e_interr), 0 as c_int);
         } else if ndone == 0 as c_int {
             let fmt = if kind == b'v' {
                 c"Pattern found in every line: %s".as_ptr()
@@ -299,7 +286,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
                 c"Pattern not found: %s".as_ptr()
             };
             // SAFETY: `used_pat` is the pattern `search_regcomp` reported.
-            unsafe { smsg_c!(0 as c_int, gettext(fmt), used_pat) };
+            unsafe { smsg_c!(0 as c_int, gettext_ptr(fmt), used_pat) };
         } else {
             // SAFETY: `parsed.cmd` is a live C string.
             unsafe { global_exe(parsed.cmd) };

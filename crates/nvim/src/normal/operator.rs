@@ -266,7 +266,7 @@ pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
     // `q:`, `q/` and `q?` open the command-line window instead.
     if ca.nchar == ':' as c_int || ca.nchar == '/' as c_int || ca.nchar == '?' as c_int {
         if cmdwin_type.get() != 0 {
-            unsafe { emsg(gettext(e_cmdline_window_already_open.as_ptr())) };
+            emsg(gettext(e_cmdline_window_already_open));
             return;
         }
         stuff_readbuf_char(ca.nchar);

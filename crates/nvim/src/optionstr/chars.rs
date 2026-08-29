@@ -39,7 +39,7 @@ use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
 use crate::option::option_var;
 use crate::options::kOptListchars as kOptListcharsIdx;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
     CharsOption, NUL, OptionSetFlags, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T,
@@ -356,7 +356,7 @@ unsafe fn field_value_err(
     }
     // SAFETY: the caller's buffer and format, with the one argument it
     // takes.
-    unsafe { vim_snprintf(errbuf, errbuflen, gettext(fmt), field.as_ptr()) };
+    unsafe { vim_snprintf(errbuf, errbuflen, gettext_ptr(fmt).as_ptr(), field.as_ptr()) };
     errbuf
 }
 

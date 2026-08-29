@@ -27,7 +27,7 @@ use crate::garray::ga_append_via_ptr;
 use crate::hashtab::{hash_add, hash_find, hash_removed};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::{gettext, gettext_ptr, snprintf};
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
@@ -75,16 +75,13 @@ pub(super) unsafe fn handle_affix_header(
         // A continued block for an affix already defined.
         st.cur_aff = unsafe { affheader_T::of_key((*hi).hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
-            let fmt = unsafe {
-                gettext(
-                    c"Different combining flag in continued affix block in %s line %d: %s".as_ptr(),
-                )
-            };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+            let fmt =
+                gettext(c"Different combining flag in continued affix block in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
         if unsafe { (*st.cur_aff).ah_follows } == 0 {
-            let fmt = unsafe { gettext(c"Duplicate affix in %s line %d: %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+            let fmt = gettext(c"Duplicate affix in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
     } else {
         st.cur_aff = unsafe { (*spin).si_arena.alloc::<affheader_T>() };
@@ -107,10 +104,8 @@ pub(super) unsafe fn handle_affix_header(
             unsafe { (*aff).af_comproot },
         ];
         if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
-            let fmt = unsafe {
-                gettext( c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s" .as_ptr(), )
-            };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[1]) };
+            let fmt = gettext(c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
         unsafe { strcpy(affheader_T::key(st.cur_aff), items[1]) };
         unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
@@ -129,13 +124,15 @@ pub(super) unsafe fn handle_affix_header(
         && !unsafe { (*aff).af_ignoreextra }
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
     {
-        unsafe { smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]) };
+        // SAFETY: `e_afftrailing` holds a NUL-terminated static message.
+        let fmt = unsafe { gettext_ptr(e_afftrailing.get()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, items[lasti]) };
     }
     if unsafe { strcmp(items[2], c"Y".as_ptr()) } != 0
         && unsafe { strcmp(items[2], c"N".as_ptr()) } != 0
     {
-        let fmt = unsafe { gettext(c"Expected Y or N in %s line %d: %s".as_ptr()) };
-        unsafe { smsg_c!(0, fmt, fname, lnum, items[2]) };
+        let fmt = gettext(c"Expected Y or N in %s line %d: %s");
+        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[2]) };
     }
 
     if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 {
@@ -175,7 +172,9 @@ pub(super) unsafe fn handle_affix_entry(
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
         && (unsafe { strcmp(items[lasti], c"-".as_ptr()) } != 0 || items.len() != lasti + 1)
     {
-        unsafe { smsg_c!(0, gettext(e_afftrailing.get()), fname, lnum, items[lasti]) };
+        // SAFETY: `e_afftrailing` holds a NUL-terminated static message.
+        let fmt = unsafe { gettext_ptr(e_afftrailing.get()) };
+        unsafe { smsg_c!(0, fmt, fname, lnum, items[lasti]) };
     }
     st.aff_todo -= 1;
 
@@ -216,8 +215,8 @@ pub(super) unsafe fn handle_affix_entry(
             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT)
         };
         if unsafe { (*entry).ae_prog }.is_null() {
-            let fmt = unsafe { gettext(c"Broken condition in %s line %d: %s".as_ptr()) };
-            unsafe { smsg_c!(0, fmt, fname, lnum, items[4]) };
+            let fmt = gettext(c"Broken condition in %s line %d: %s");
+            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[4]) };
         }
     }
 

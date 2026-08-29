@@ -54,8 +54,8 @@ struct TextSink<'a, const ECHO: bool> {
 }
 
 /// Raise `msg`, which carries no arguments.
-fn err(msg: &CStr) {
-    unsafe { emsg(gettext(msg.as_ptr())) };
+fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 impl<const ECHO: bool> TextSink<'_, ECHO> {

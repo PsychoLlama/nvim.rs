@@ -60,7 +60,7 @@ use crate::main::{
 };
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, dict_T,
@@ -222,7 +222,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         let args_ht = unsafe { get_funccal_args_ht() };
         if lp.ll_dict == get_vimvar_dict() || ht == args_ht {
             // SAFETY: the format takes one NUL-terminated string.
-            unsafe { semsg_c!(gettext(e_illvar.as_ptr()), name) };
+            unsafe { semsg_c!(gettext(e_illvar), name) };
             return GLV_FAIL;
         }
         // The key does not exist. It may be added — unless something
@@ -232,7 +232,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         if after == b'[' as c_char || after == b'.' as c_char || unlet {
             if !quiet {
                 // SAFETY: the format takes one NUL-terminated string.
-                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), key) };
+                unsafe { semsg_c!(gettext(e_dictkey), key) };
             }
             return GLV_FAIL;
         }
@@ -424,7 +424,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     let fmt = e_dot_can_only_be_used_on_dictionary_str.as_ptr();
                     // SAFETY: a shared message, whose format takes one
                     // NUL-terminated string.
-                    unsafe { semsg_c!(gettext(fmt), name) };
+                    unsafe { semsg_c!(gettext_ptr(fmt), name) };
                 }
                 return null_mut();
             }
@@ -626,7 +626,7 @@ pub unsafe fn get_lval(
             && after != b'.' as c_char
         {
             // SAFETY: the format takes one NUL-terminated string.
-            unsafe { semsg_c!(gettext(e_trailing_arg.as_ptr()), p) };
+            unsafe { semsg_c!(gettext(e_trailing_arg), p) };
             return null_mut();
         }
         // SAFETY: all four cursors are into the one writable string.
@@ -636,7 +636,7 @@ pub unsafe fn get_lval(
             if !aborting() && !quiet {
                 emsg_severe.set(true);
                 // SAFETY: the format takes one NUL-terminated string.
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), name) };
+                unsafe { semsg_c!(gettext(e_invarg2), name) };
                 return null_mut();
             }
             lp.ll_name_len = 0 as size_t;
@@ -669,8 +669,7 @@ pub unsafe fn get_lval(
     if v.is_null() {
         if !quiet {
             let (n, s) = (lp.ll_name_len as c_int, lp.ll_name);
-            // SAFETY: the format takes a length and the string it bounds.
-            let fmt = unsafe { gettext(c"E121: Undefined variable: %.*s".as_ptr()) };
+            let fmt = gettext(c"E121: Undefined variable: %.*s");
             // SAFETY: as above.
             unsafe { semsg_c!(fmt, n, s) };
         }
@@ -806,7 +805,7 @@ pub unsafe fn set_var_lval(
         if !lp.ll_newkey.is_null() {
             // The key has to be added to the Dictionary first.
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
-                unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), lp.ll_newkey) };
+                unsafe { semsg_c!(gettext(e_dictkey), lp.ll_newkey) };
                 return;
             }
             // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
@@ -949,7 +948,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {
-        unsafe { semsg_c!(gettext(e_letwrong.as_ptr()), op) };
+        unsafe { semsg_c!(gettext(e_letwrong), op) };
         return false;
     }
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
@@ -976,7 +975,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
     let val = unsafe { tv_get_number_chk(rettv, &raw mut error) };
     if !error {
         if !(0..=255).contains(&val) {
-            unsafe { semsg_c!(gettext(e_invalid_value_for_blob_nr.as_ptr()), val) };
+            unsafe { semsg_c!(gettext(e_invalid_value_for_blob_nr), val) };
         } else {
             // SAFETY: `ll_blob` is the live Blob and `ll_n1` a byte of it.
             unsafe { tv_blob_set_append(lp.ll_blob, lp.ll_n1, val as uint8_t) };

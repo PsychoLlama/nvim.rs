@@ -594,7 +594,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     check_cursor(unsafe { Win::current() }); // make sure the position is valid, just in case
     validate_cursor(unsafe { Win::current() });
     if !equalpos(cur_win().w_cursor, pos) {
-        unsafe { emsg(gettext(E_COMPLDEL.as_ptr())) };
+        emsg(gettext(E_COMPLDEL));
     } else if !matchlist.is_null() {
         unsafe { ins_compl_add_list(matchlist) };
     } else if !matchdict.is_null() {
@@ -693,7 +693,7 @@ pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
         cpt_sources().set_index(idx + 1);
         return OK;
     }
-    unsafe { semsg_c!(gettext(e_list_index_out_of_range_nr.as_ptr()), idx,) };
+    unsafe { semsg_c!(gettext(e_list_index_out_of_range_nr), idx,) };
     FAIL
 }
 

@@ -350,7 +350,7 @@ pub unsafe fn tv_list_remove(
     }
     if li.is_null() {
         // Didn't find "item2" after "item".
-        unsafe { emsg(gettext(e_invrange.as_ptr())) };
+        emsg(gettext(e_invrange));
     } else {
         let tgt = unsafe { tv_list_alloc_ret(rettv, cnt as ptrdiff_t) };
         unsafe { tv_list_move_items(l, item, item2, tgt, cnt) };

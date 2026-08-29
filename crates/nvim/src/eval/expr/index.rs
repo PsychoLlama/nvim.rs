@@ -29,7 +29,7 @@ use crate::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
     EvalFuncData, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
@@ -128,7 +128,7 @@ pub(crate) unsafe fn eval_index(
 
         if cur.byte() != b']' {
             if verbose {
-                unsafe { emsg(gettext(e_missbrac.as_ptr())) };
+                emsg(gettext(e_missbrac));
             }
             // Not guarded by `empty1`: an unread `var1` is still unset.
             unsafe { tv_clear(&raw mut var1) };
@@ -169,15 +169,14 @@ pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbo
         VAR_UNKNOWN if !evaluate => return OK,
         // Reported whether or not the caller asked to be verbose.
         VAR_UNKNOWN => {
-            // SAFETY: a message constant is a NUL-terminated literal.
-            unsafe { emsg(gettext(e_cannot_index_special_variable.as_ptr())) };
+            emsg(gettext(e_cannot_index_special_variable));
             return FAIL;
         }
         _ => return OK,
     };
     if verbose {
         // SAFETY: as above.
-        unsafe { emsg(gettext(message)) };
+        unsafe { emsg(gettext_ptr(message)) };
     }
     FAIL
 }
@@ -236,7 +235,7 @@ pub(crate) unsafe fn eval_index_inner(
     if is_range {
         if rv.v_type == VAR_DICT {
             if verbose {
-                unsafe { emsg(gettext(e_cannot_slice_dictionary.as_ptr())) };
+                emsg(gettext(e_cannot_slice_dictionary));
             }
             return FAIL;
         }
@@ -323,9 +322,9 @@ pub(crate) unsafe fn eval_index_inner(
             let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
-                    unsafe { semsg_c!(gettext(e_dictkey_len.as_ptr()), keylen, key) };
+                    unsafe { semsg_c!(gettext(e_dictkey_len), keylen, key) };
                 } else {
-                    unsafe { semsg_c!(gettext(e_dictkey.as_ptr()), key) };
+                    unsafe { semsg_c!(gettext(e_dictkey), key) };
                 }
             }
             if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {

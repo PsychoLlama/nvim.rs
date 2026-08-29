@@ -27,7 +27,7 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     if !unsafe { syntax_present(curwin.get()) } {
-        unsafe { msg(gettext(MSG_NO_ITEMS.as_ptr()), 0) };
+        msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
 
@@ -36,7 +36,7 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
         return;
     }
 
-    unsafe { msg_puts_title(gettext(c"\n--- Syntax items ---".as_ptr())) };
+    unsafe { msg_puts_title(gettext(c"\n--- Syntax items ---").as_ptr()) };
     if ends_excmd(unsafe { *arg } as c_int) != 0 {
         // No argument: list every group id, then every cluster.
         let mut id = 1;
@@ -57,14 +57,14 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
                 let id =
                     unsafe { syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(c"E392: No such syntax cluster: %s".as_ptr()), arg) };
+                    unsafe { semsg_c!(gettext(c"E392: No such syntax cluster: %s"), arg) };
                 } else {
                     unsafe { syn_list_cluster(id - SYNID_CLUSTER) };
                 }
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(e_nogroup.as_ptr()), arg) };
+                    unsafe { semsg_c!(gettext(e_nogroup), arg) };
                 } else {
                     unsafe { syn_list_one(id, false, true) };
                 }
@@ -79,16 +79,16 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
 unsafe fn list_sync_items() {
     let mut block = cur_syn_block();
     if block.b_syn_sync_flags & SF_CCOMMENT != 0 {
-        unsafe { msg_puts(gettext(c"syncing on C-style comments".as_ptr())) };
+        unsafe { msg_puts(gettext(c"syncing on C-style comments").as_ptr()) };
         unsafe { syn_lines_msg() };
         unsafe { syn_match_msg() };
     } else if block.b_syn_sync_flags & SF_MATCH != 0 {
-        unsafe { msg_puts_title(gettext(c"\n--- Syntax sync items ---".as_ptr())) };
+        unsafe { msg_puts_title(gettext(c"\n--- Syntax sync items ---").as_ptr()) };
         if block.b_syn_sync_minlines > 0
             || block.b_syn_sync_maxlines > 0
             || block.b_syn_sync_linebreaks > 0
         {
-            unsafe { msg_puts(gettext(c"\nsyncing on items".as_ptr())) };
+            unsafe { msg_puts(gettext(c"\nsyncing on items").as_ptr()) };
             unsafe { syn_lines_msg() };
             unsafe { syn_match_msg() };
         }
@@ -98,14 +98,14 @@ unsafe fn list_sync_items() {
             id += 1;
         }
     } else if block.b_syn_sync_minlines == 0 {
-        unsafe { msg_puts(gettext(c"no syncing".as_ptr())) };
+        unsafe { msg_puts(gettext(c"no syncing").as_ptr()) };
     } else {
         if block.b_syn_sync_minlines == MAXLNUM as linenr_T {
-            unsafe { msg_puts(gettext(c"syncing starts at the first line".as_ptr())) };
+            unsafe { msg_puts(gettext(c"syncing starts at the first line").as_ptr()) };
         } else {
-            unsafe { msg_puts(gettext(c"syncing starts ".as_ptr())) };
+            unsafe { msg_puts(gettext(c"syncing starts ").as_ptr()) };
             unsafe { msg_outnum(block.b_syn_sync_minlines) };
-            unsafe { msg_puts(gettext(c" lines before top line".as_ptr())) };
+            unsafe { msg_puts(gettext(c" lines before top line").as_ptr()) };
         }
         unsafe { syn_match_msg() };
     }
@@ -119,30 +119,30 @@ unsafe fn syn_lines_msg() {
     }
     unsafe { msg_puts(c"; ".as_ptr()) };
     if block.b_syn_sync_minlines == MAXLNUM as linenr_T {
-        unsafe { msg_puts(gettext(c"from the first line".as_ptr())) };
+        unsafe { msg_puts(gettext(c"from the first line").as_ptr()) };
         return;
     }
     if block.b_syn_sync_minlines > 0 {
-        unsafe { msg_puts(gettext(c"minimal ".as_ptr())) };
+        unsafe { msg_puts(gettext(c"minimal ").as_ptr()) };
         unsafe { msg_outnum(block.b_syn_sync_minlines) };
         if block.b_syn_sync_maxlines != 0 {
             unsafe { msg_puts(c", ".as_ptr()) };
         }
     }
     if block.b_syn_sync_maxlines > 0 {
-        unsafe { msg_puts(gettext(c"maximal ".as_ptr())) };
+        unsafe { msg_puts(gettext(c"maximal ").as_ptr()) };
         unsafe { msg_outnum(block.b_syn_sync_maxlines) };
     }
-    unsafe { msg_puts(gettext(c" lines before top line".as_ptr())) };
+    unsafe { msg_puts(gettext(c" lines before top line").as_ptr()) };
 }
 
 /// "; match 3 line breaks".
 unsafe fn syn_match_msg() {
     let linebreaks = cur_syn_block().b_syn_sync_linebreaks;
     if linebreaks > 0 {
-        unsafe { msg_puts(gettext(c"; match ".as_ptr())) };
+        unsafe { msg_puts(gettext(c"; match ").as_ptr()) };
         unsafe { msg_outnum(linebreaks) };
-        unsafe { msg_puts(gettext(c" line breaks".as_ptr())) };
+        unsafe { msg_puts(gettext(c" line breaks").as_ptr()) };
     }
 }
 

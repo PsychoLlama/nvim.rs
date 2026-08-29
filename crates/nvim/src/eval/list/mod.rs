@@ -758,25 +758,24 @@ pub(crate) fn check_fixed(flags: c_int, what: &CStr) -> bool {
 
 /// Report `msg`, one of `main.rs`'s shared error texts, translated.
 #[inline(always)]
-pub(crate) fn err(msg: &CStr) {
-    // SAFETY: every `e_*` text is NUL-terminated.
-    unsafe { emsg(gettext(msg.as_ptr())) };
+pub(crate) fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// Report `msg` -- a shared error text with one `%s` -- naming `what`.
 #[inline(always)]
-pub(crate) fn err_str(msg: &CStr, what: &CStr) {
+pub(crate) fn err_str(msg: &'static CStr, what: &CStr) {
     // SAFETY: `msg` is a NUL-terminated single-`%s` format and `what` a
     // NUL-terminated string, which is what vim's printf reads.  The format
     // is translated, the name is not -- upstream's `semsg(_(msg), what)`.
-    let _: bool = unsafe { semsg_c!(gettext(msg.as_ptr()), what.as_ptr()) };
+    let _: bool = unsafe { semsg_c!(gettext(msg), what.as_ptr()) };
 }
 
 /// Report `msg` -- a shared error text with one `%ld` -- naming `n`.
 #[inline(always)]
-pub(crate) fn err_nr(msg: &CStr, n: int64_t) {
+pub(crate) fn err_nr(msg: &'static CStr, n: int64_t) {
     // SAFETY: as `err_str`, with a `%ld` and a 64-bit integer.
-    let _: bool = unsafe { semsg_c!(gettext(msg.as_ptr()), n) };
+    let _: bool = unsafe { semsg_c!(gettext(msg), n) };
 }
 
 /// `E1250`: what `filter()`/`map()`/`mapnew()`/`foreach()` say about an

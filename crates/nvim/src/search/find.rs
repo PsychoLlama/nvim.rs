@@ -392,7 +392,7 @@ pub unsafe fn searchit(
         if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
             unsafe {
                 semsg_c!(
-                    gettext(c"E383: Invalid search string: %s".as_ptr()),
+                    gettext(c"E383: Invalid search string: %s"),
                     get_search_pat(),
                 )
             };
@@ -613,11 +613,11 @@ pub unsafe fn searchit(
             };
             if !shortmess(ShmFlag::SEARCH) && shortmess(ShmFlag::SEARCHCOUNT) && s.opt(SEARCH_MSG) {
                 let msg = if dir == BACKWARD {
-                    top_bot_msg.as_ptr()
+                    top_bot_msg
                 } else {
-                    bot_top_msg.as_ptr()
+                    bot_top_msg
                 };
-                unsafe { give_warning(gettext(msg.cast()), true, false) };
+                unsafe { give_warning(gettext(msg).as_ptr(), true, false) };
             }
             if !extra_arg.is_null() {
                 unsafe { (*extra_arg).sa_wrapped = true as c_int };
@@ -638,14 +638,14 @@ pub unsafe fn searchit(
 
     if found == 0 {
         if got_int.get() {
-            unsafe { emsg(gettext(e_interr.as_ptr())) };
+            emsg(gettext(e_interr));
         } else if options & SEARCH_MSG == SEARCH_MSG {
             let msg = if p_ws.get() != 0 {
-                unsafe { gettext(e_patnotf2.as_ptr()) }
+                gettext(e_patnotf2)
             } else if lnum == 0 {
-                unsafe { gettext(c"E384: Search hit TOP without match for: %s".as_ptr()) }
+                gettext(c"E384: Search hit TOP without match for: %s")
             } else {
-                unsafe { gettext(c"E385: Search hit BOTTOM without match for: %s".as_ptr()) }
+                gettext(c"E385: Search hit BOTTOM without match for: %s")
             };
             unsafe { semsg_c!(msg, get_search_pat()) };
         }
@@ -711,7 +711,7 @@ pub unsafe fn search_for_exact_line(
             }
             unsafe { (*pos).lnum = buf.b_ml.ml_line_count };
             if !shortmess(ShmFlag::SEARCH) {
-                unsafe { give_warning(gettext(top_bot_msg.as_ptr()), true, false) };
+                unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
             }
         } else if unsafe { (*pos).lnum } > buf.b_ml.ml_line_count {
             unsafe { (*pos).lnum = 1 };
@@ -719,7 +719,7 @@ pub unsafe fn search_for_exact_line(
                 break;
             }
             if !shortmess(ShmFlag::SEARCH) {
-                unsafe { give_warning(gettext(bot_top_msg.as_ptr()), true, false) };
+                unsafe { give_warning(gettext(bot_top_msg).as_ptr(), true, false) };
             }
         }
         if unsafe { (*pos).lnum } == start {

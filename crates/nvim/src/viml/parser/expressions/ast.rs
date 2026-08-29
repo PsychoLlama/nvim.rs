@@ -666,10 +666,8 @@ pub(super) fn viml_pexpr_handle_bop(
         ast_stack.push(next_slot(top_children));
         ast_stack.push(next_slot(node_children(bop_node)));
         if node_type(bop_node) == kExprNodeComparison {
-            // SAFETY: a string literal is NUL-terminated and `gettext` only
-            // reads through it.
-            let msg = unsafe { gettext(c"E15: Operator is not associative: %.*s".as_ptr()) };
-            east_set_error(pstate, ast, msg, node_start(bop_node));
+            let msg = gettext(c"E15: Operator is not associative: %.*s");
+            east_set_error(pstate, ast, msg.as_ptr(), node_start(bop_node));
             ret = false;
         }
     }
@@ -682,8 +680,7 @@ pub(super) fn viml_pexpr_handle_bop(
 /// A `CStr` is NUL-terminated by construction and `gettext` only reads through
 /// it, so this is the whole of the obligation.
 pub(super) fn translate(msg: &'static CStr) -> *const c_char {
-    // SAFETY: as above.
-    unsafe { gettext(msg.as_ptr()) }
+    gettext(msg).as_ptr()
 }
 
 /// Record `msg` as the parse error, unless an earlier one already stands.

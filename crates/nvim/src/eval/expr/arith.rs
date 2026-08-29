@@ -312,8 +312,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
             }
             b'/' => f1 / f2,
             _ => {
-                // SAFETY: a literal message.
-                unsafe { emsg(gettext(c"E804: Cannot use '%' with Float".as_ptr())) };
+                emsg(gettext(c"E804: Cannot use '%' with Float"));
                 return false;
             }
         };

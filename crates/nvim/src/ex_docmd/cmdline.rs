@@ -781,7 +781,7 @@ fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `func_has_abort()` as checked code.
@@ -811,7 +811,7 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext(__msgid) }
+    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `rewind_conditionals()` as checked code.

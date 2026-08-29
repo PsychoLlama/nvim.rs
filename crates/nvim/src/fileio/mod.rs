@@ -59,7 +59,7 @@ use crate::option::{
     set_option_direct, set_options_bin, shortmess,
 };
 use crate::options::kOptFileencoding;
-use crate::os::cshim::{getc, gettext, ngettext, putc, snprintf};
+use crate::os::cshim::{getc, gettext, gettext_ptr, ngettext, putc, snprintf};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
 use crate::os::fs::{
     os_closedir, os_copy, os_dirname, os_fchown, os_file_is_writable, os_file_owned, os_fileinfo,
@@ -251,7 +251,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
     }
     if curbuf.get() != buf {
         // We are in another buffer now, don't do the renaming.
-        unsafe { emsg(gettext(e_auchangedbuf.get())) };
+        unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
         return FAIL;
     }
 
@@ -315,7 +315,7 @@ pub(crate) unsafe fn msg_add_fileformat(
     let io = report.as_mut_ptr();
     // SAFETY: `report` holds `IOSIZE` bytes and the note is a static
     // string.
-    unsafe { xstrlcat(io, gettext(note.as_ptr()), IOSIZE as size_t) };
+    unsafe { xstrlcat(io, gettext(note).as_ptr(), IOSIZE as size_t) };
     true
 }
 
@@ -337,23 +337,20 @@ pub(crate) unsafe fn msg_add_lines(
         let room = IOSIZE as size_t - len;
         // SAFETY: `io` holds `IOSIZE` bytes and `len` of them are used; the
         // three conversions match the three arguments.
-        unsafe { snprintf(io.add(len), room, gettext(fmt), space, l, b) };
+        unsafe { snprintf(io.add(len), room, gettext_ptr(fmt).as_ptr(), space, l, b) };
         return;
     }
 
-    let lines_one = c"%s%ld line, ".as_ptr();
-    let lines_many = c"%s%ld lines, ".as_ptr();
-    // SAFETY: the plural forms are static strings; `io` holds `IOSIZE` bytes
-    // and `len` of them are used.
-    let fmt = unsafe { ngettext(lines_one, lines_many, lnum as core::ffi::c_ulong) };
+    let lines_one = c"%s%ld line, ";
+    let lines_many = c"%s%ld lines, ";
+    let fmt = ngettext(lines_one, lines_many, lnum as core::ffi::c_ulong);
     let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
-    len += unsafe { snprintf(at, room, fmt, space, lnum as int64_t) } as size_t;
-    let bytes_one = c"%ld byte".as_ptr();
-    let bytes_many = c"%ld bytes".as_ptr();
-    // SAFETY: as above.
-    let fmt = unsafe { ngettext(bytes_one, bytes_many, nchars as core::ffi::c_ulong) };
+    len += unsafe { snprintf(at, room, fmt.as_ptr(), space, lnum as int64_t) } as size_t;
+    let bytes_one = c"%ld byte";
+    let bytes_many = c"%ld bytes";
+    let fmt = ngettext(bytes_one, bytes_many, nchars as core::ffi::c_ulong);
     let (at, room) = (unsafe { io.add(len) }, IOSIZE as size_t - len);
-    unsafe { snprintf(at, room, fmt, nchars as int64_t) };
+    unsafe { snprintf(at, room, fmt.as_ptr(), nchars as int64_t) };
 }
 
 /// Like `fgets()`, but a line longer than the buffer is truncated and the rest

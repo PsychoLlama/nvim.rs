@@ -194,12 +194,12 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
         }
         let next = unsafe { *p.add(1) } as c_int;
         if next == NUL {
-            unsafe { semsg_c!(gettext(c"E789: Missing ']': %s".as_ptr()), kw) };
+            unsafe { semsg_c!(gettext(c"E789: Missing ']': %s"), kw) };
             return None;
         }
         if next == ']' as c_int {
             if unsafe { *p.add(2) } as c_int != NUL {
-                unsafe { semsg_c!(gettext(E_TRAILING_CHAR_AFTER_RSB.as_ptr()), kw, p.add(2)) };
+                unsafe { semsg_c!(gettext(E_TRAILING_CHAR_AFTER_RSB), kw, p.add(2)) };
                 return None;
             }
             // Step over the `]`: it and the NUL after it are exactly the
@@ -298,7 +298,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
     }
 
     if rest.is_null() {
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), arg) };
+        unsafe { semsg_c!(gettext(e_invarg2), arg) };
     } else {
         unsafe { (*eap).nextcmd = check_nextcmd(rest) };
     }

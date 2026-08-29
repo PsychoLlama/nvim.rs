@@ -159,7 +159,7 @@ pub(crate) unsafe fn do_in_cached_path(
         unsafe {
             smsg_c!(
                 0,
-                gettext(c"Searching for \"%s\" in runtime path".as_ptr()),
+                gettext(c"Searching for \"%s\" in runtime path").as_ptr(),
                 name,
             )
         };
@@ -215,13 +215,13 @@ pub(crate) unsafe fn do_in_cached_path(
     if !did_one && !name.is_null() {
         // SAFETY: `name` is the caller's NUL-terminated pattern.
         if flags.has(RuntimeOpts::ERR) {
-            unsafe { semsg_c!(gettext(e_dirnotf.as_ptr()), c"runtime path".as_ptr(), name,) };
+            unsafe { semsg_c!(gettext(e_dirnotf), c"runtime path".as_ptr(), name,) };
         } else if p_verbose.get() > 1 {
             unsafe { verbose_enter() };
             unsafe {
                 smsg_c!(
                     0,
-                    gettext(c"not found in runtime path: \"%s\"".as_ptr()),
+                    gettext(c"not found in runtime path: \"%s\"").as_ptr(),
                     name,
                 )
             };

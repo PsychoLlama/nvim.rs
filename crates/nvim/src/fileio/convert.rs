@@ -94,7 +94,7 @@ pub(crate) unsafe fn readfile_charconvert(
     if let Some(errmsg) = errmsg {
         // Not emsg(): that breaks mappings, and the retry with another
         // type of conversion might still work.
-        unsafe { msg(errmsg.as_ptr(), 0) };
+        msg(errmsg, 0);
         if !tmpname.is_null() {
             unsafe { os_remove(tmpname) }; // delete converted file
             unsafe { xfree(tmpname.cast()) };

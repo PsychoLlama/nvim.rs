@@ -17,7 +17,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::main::p_fcl;
 use crate::message::emsg;
 use crate::r#move::changed_window_setting;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
 use core::ffi::c_int;
 use core::ptr;
@@ -219,8 +219,7 @@ pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
     } else {
         c"E351: Cannot delete fold with current 'foldmethod'"
     };
-    // SAFETY: a static message.
-    unsafe { emsg(gettext(msg.as_ptr())) };
+    emsg(gettext(msg));
     0
 }
 
@@ -638,7 +637,7 @@ fn cur_tab() -> TabPage {
 /// C's `emsg(_(e_nofold))`, which every command that found no fold gives.
 fn emsg_nofold() {
     // SAFETY: a static, translated message.
-    unsafe { emsg(gettext(e_nofold.get())) };
+    unsafe { emsg(gettext_ptr(e_nofold.get())) };
 }
 
 /// The window the editor is working in.

@@ -400,14 +400,14 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_LIST {
                 // SAFETY: reporting a static, translated message.
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), c"pos".as_ptr()) };
+                unsafe { semsg_c!(gettext(e_invarg2), c"pos".as_ptr()) };
                 return;
             }
             let list = unsafe { (*di).di_tv.vval.v_list };
             if unsafe { tv_list_len(list) } != 3 {
                 let form = c"List format should be [lnum, col, off]".as_ptr();
                 // SAFETY: reporting a static, translated message.
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), form) };
+                unsafe { semsg_c!(gettext(e_invarg2), form) };
                 return;
             }
             let found = unsafe { list_number(list, 0, pos.lnum) };

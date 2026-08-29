@@ -300,7 +300,7 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
         // the index the lookup above answered.
         let errmsg = unsafe { set_option_value_handle_tty(varname, opt_idx, value, local) };
         if let Some(errmsg) = errmsg {
-            unsafe { emsg(errmsg.as_ptr()) };
+            emsg(&errmsg);
         }
     }
     optval_free(value);

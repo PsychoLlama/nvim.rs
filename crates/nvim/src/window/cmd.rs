@@ -42,6 +42,7 @@ use crate::normal::{
     reset_VIsual_and_resel,
 };
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
+use crate::os::cshim::gettext_ptr;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
@@ -794,7 +795,7 @@ fn view_quickfix_result() {
 /// `semsg(_(fmt), n)`, for the one error that names a buffer number.
 fn err_number(fmt: *const c_char, n: c_int) {
     // SAFETY: a NUL-terminated message static.
-    let msg = unsafe { gettext(fmt) };
+    let msg = unsafe { gettext_ptr(fmt) };
     // SAFETY: a translated format taking one number, and the number.
     let _: bool = unsafe { semsg_c!(msg, n as int64_t) };
 }

@@ -75,7 +75,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
         return Ok(());
     }
     if cur_buf().b_p_ma == 0 {
-        unsafe { emsg(gettext(e_modifiable.as_ptr())) };
+        emsg(gettext(e_modifiable));
         return Err(NotDeleted::NotModifiable);
     }
     if visual_select() && oap.is_VIsual {

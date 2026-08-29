@@ -17,7 +17,7 @@ use crate::main::{called_emsg, e_listdictarg, e_reduce_of_an_empty_str_with_no_i
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -120,7 +120,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             } else {
                 c"min()".as_ptr()
             };
-            unsafe { semsg_c!(gettext(e_listdictarg.as_ptr()), what) };
+            unsafe { semsg_c!(gettext(e_listdictarg), what) };
             return;
         }
     }
@@ -221,7 +221,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
     } else {
         if unsafe { tv_list_len(l) } == 0 {
             let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext(fmt), c"List".as_ptr()) };
+            unsafe { semsg_c!(gettext_ptr(fmt), c"List".as_ptr()) };
             return;
         }
         let first = unsafe { tv_list_first(l) };
@@ -257,7 +257,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
     if !args.has(2) {
         if unsafe { *p } as c_int == NUL {
             let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext(fmt), c"String".as_ptr()) };
+            unsafe { semsg_c!(gettext_ptr(fmt), c"String".as_ptr()) };
             return;
         }
         // With no initial value the first character is it.
@@ -298,7 +298,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
             let fmt = e_reduce_of_an_empty_str_with_no_initial_value.as_ptr();
-            unsafe { semsg_c!(gettext(fmt), c"Blob".as_ptr()) };
+            unsafe { semsg_c!(gettext_ptr(fmt), c"Blob".as_ptr()) };
             return;
         }
         (number_tv(unsafe { tv_blob_get(b, 0) } as varnumber_T), 1)
@@ -321,7 +321,7 @@ pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     // SAFETY throughout: everything read below is the frame's.
     let ty = args.ty(0);
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
-        unsafe { emsg(gettext(e_string_list_or_blob_required.as_ptr())) };
+        emsg(gettext(e_string_list_or_blob_required));
         return;
     }
     // The callable is checked for emptiness here rather than by
@@ -333,7 +333,7 @@ pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         _ => arg_string(&mut numbuf, args.get(1)),
     };
     if func_name.is_null() || unsafe { *func_name } as c_int == NUL {
-        unsafe { emsg(gettext(e_missing_function_argument.as_ptr())) };
+        emsg(gettext(e_missing_function_argument));
         return;
     }
     let expr = args.ptr(1);

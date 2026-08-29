@@ -22,7 +22,7 @@ use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{CmdAddr, ExArgt, ExpandContext, NUL, size_t};
@@ -107,7 +107,7 @@ pub(crate) unsafe fn parse_addr_type_arg(
     // SAFETY: caller contract; `value` is now NUL-terminated at the word, and
     // the one `%s` spends it.
     unsafe {
-        let fmt = gettext(untranslated);
+        let fmt = gettext_ptr(untranslated);
         semsg_c!(fmt, value)
     };
     FAIL
@@ -142,7 +142,7 @@ pub(crate) unsafe fn parse_compl_arg(
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
-        unsafe { semsg_c!(gettext(c"E180: Invalid complete value: %s".as_ptr()), value,) };
+        unsafe { semsg_c!(gettext(c"E180: Invalid complete value: %s"), value,) };
         return FAIL;
     };
     *complp = expand;
@@ -160,13 +160,13 @@ pub(crate) unsafe fn parse_compl_arg(
     if !custom && arg.is_some() {
         let msg = c"E468: Completion argument only allowed for custom completion".as_ptr();
         // SAFETY: the message is a static string.
-        unsafe { emsg(gettext(msg)) };
+        unsafe { emsg(gettext_ptr(msg)) };
         return FAIL;
     }
     if custom && arg.is_none() {
         let msg = c"E467: Custom completion requires a function argument".as_ptr();
         // SAFETY: as above.
-        unsafe { emsg(gettext(msg)) };
+        unsafe { emsg(gettext_ptr(msg)) };
         return FAIL;
     }
     if let Some(arg) = arg {
@@ -207,8 +207,7 @@ enum Bad {
 /// `attr` must be writable for `len + 1` bytes.
 pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attributes) -> c_int {
     if len == 0 {
-        // SAFETY: the message is a literal.
-        unsafe { emsg(gettext(c"E175: No attribute specified".as_ptr())) };
+        emsg(gettext(c"E175: No attribute specified"));
         return FAIL;
     }
     // SAFETY: caller contract.
@@ -285,7 +284,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
         // as soon as the message has been formatted.
         let ch = unsafe { *attr.add(len) };
         unsafe { *attr.add(len) = NUL as c_char };
-        unsafe { semsg_c!(gettext(c"E181: Invalid attribute: %s".as_ptr()), attr,) };
+        unsafe { semsg_c!(gettext(c"E181: Invalid attribute: %s"), attr,) };
         unsafe { *attr.add(len) = ch };
         return FAIL;
     };
@@ -294,19 +293,19 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
     // SAFETY: every message and argument here is a literal.
     match bad {
         Bad::Nargs => {
-            unsafe { emsg(gettext(c"E176: Invalid number of arguments".as_ptr())) };
+            emsg(gettext(c"E176: Invalid number of arguments"));
         }
         Bad::TwoCount => {
-            unsafe { emsg(gettext(c"E177: Count cannot be specified twice".as_ptr())) };
+            emsg(gettext(c"E177: Count cannot be specified twice"));
         }
         Bad::InvalidCount => {
-            unsafe { emsg(gettext(c"E178: Invalid default value for count".as_ptr())) };
+            emsg(gettext(c"E178: Invalid default value for count"));
         }
         Bad::Missing(what) => {
             let untranslated = c"E179: Argument required for %s".as_ptr();
             // SAFETY: the one `%s` spends the attribute name.
             unsafe {
-                let fmt = gettext(untranslated);
+                let fmt = gettext_ptr(untranslated);
                 semsg_c!(fmt, what.as_ptr())
             };
         }

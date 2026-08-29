@@ -52,7 +52,7 @@ use crate::main::{
     p_verbose, suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
-use crate::message::{emsg, internal_error, msg_puts, verbose_enter, verbose_leave};
+use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::option::p_vfile;
 use crate::os::cshim::{snprintf, strncmp};
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
@@ -407,7 +407,7 @@ pub(super) unsafe fn throw_exception(
                 || unsafe { *v.add(3) } == b':' as c_char
                 || unsafe { *v.add(3) } == b'(' as c_char)
         {
-            unsafe { emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix".as_ptr()) };
+            emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix");
             current_exception.set(ptr::null_mut());
             return FAIL;
         }
@@ -424,7 +424,7 @@ pub(super) unsafe fn throw_exception(
     if unsafe { (*excp).value }.is_null() && should_free {
         unsafe { xfree(excp.cast()) };
         suppress_errthrow.set(true);
-        unsafe { emsg(message(e_outofmem)) };
+        unsafe { emsg_ptr(message(e_outofmem)) };
         current_exception.set(ptr::null_mut());
         return FAIL;
     }

@@ -269,7 +269,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // Everything else is one of the `RI_*` byte classes.
         _ => {
             let Some((mask, positive)) = byte_class(op) else {
-                unsafe { iemsg(gettext(e_re_corr.as_ptr())) };
+                iemsg(gettext(e_re_corr));
                 rex.set_input(scan);
                 return count as c_int;
             };

@@ -21,7 +21,7 @@ use crate::main::{
 };
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
 use crate::memory::{xfree, xrealloc, xstrdup};
-use crate::message::{MSG_BUF_LEN, emsg, messaging, msg, set_keep_msg};
+use crate::message::{MSG_BUF_LEN, emsg, messaging, msg_ptr, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
 use crate::options::kOptShortmess;
@@ -102,32 +102,29 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
         // the format strings come from the catalogue and take
         // exactly the two `int64_t` given.
         if got_int.get() {
-            unsafe { strcpy(buf, gettext(c"(Interrupted) ".as_ptr())) };
+            unsafe { strcpy(buf, gettext(c"(Interrupted) ").as_ptr()) };
         } else {
             unsafe { *buf = NUL as c_char };
         }
-        let single =
-            unsafe { ngettext(forms[0][0].as_ptr(), forms[0][1].as_ptr(), nsubs as c_ulong) };
-        let plural =
-            unsafe { ngettext(forms[1][0].as_ptr(), forms[1][1].as_ptr(), nsubs as c_ulong) };
+        let single = ngettext(forms[0][0], forms[0][1], nsubs as c_ulong);
+        let plural = ngettext(forms[1][0], forms[1][1], nsubs as c_ulong);
         unsafe {
             vim_snprintf_add(
                 buf,
                 MSG_BUF_LEN as size_t,
-                ngettext(single, plural, nlines as c_ulong),
+                ngettext(single, plural, nlines as c_ulong).as_ptr(),
                 nsubs as int64_t,
                 nlines as int64_t,
             )
         };
-        if unsafe { msg(buf, 0 as c_int) } {
+        if unsafe { msg_ptr(buf, 0 as c_int) } {
             // Save the message to display it after a redraw.
             unsafe { set_keep_msg(buf, 0 as c_int) };
         }
         return true;
     }
     if got_int.get() {
-        // SAFETY: a live message string.
-        unsafe { emsg(gettext(e_interr.as_ptr())) };
+        emsg(gettext(e_interr));
         return true;
     }
     false

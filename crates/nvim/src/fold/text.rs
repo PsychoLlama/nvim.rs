@@ -161,10 +161,10 @@ pub unsafe fn get_foldtext(
         // SAFETY: the caller's promise -- `buf` holds `FOLD_TEXT_LEN` bytes,
         // whose size is passed with it.
         unsafe {
-            let one = c"+--%3d line folded".as_ptr();
-            let many = c"+--%3d lines folded ".as_ptr();
+            let one = c"+--%3d line folded";
+            let many = c"+--%3d lines folded ";
             let fmt = ngettext(one, many, count as c_ulong);
-            vim_snprintf(buf, FOLD_TEXT_LEN as size_t, fmt, count)
+            vim_snprintf(buf, FOLD_TEXT_LEN as size_t, fmt.as_ptr(), count)
         };
         text = buf;
     }

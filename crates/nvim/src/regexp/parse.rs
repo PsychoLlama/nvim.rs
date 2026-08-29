@@ -132,7 +132,7 @@ pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -
     if unsafe { *p } as c_int != delim {
         unsafe {
             semsg_c!(
-                gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR.as_ptr()),
+                gettext(E_MISSING_DELIMITER_AFTER_SEARCH_PATTERN_STR),
                 startp,
             )
         };

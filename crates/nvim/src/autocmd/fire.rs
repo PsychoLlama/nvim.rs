@@ -256,7 +256,7 @@ pub unsafe fn apply_autocmds_group(
         // Nesting is allowed but bounded: it is easy to write an
         // endless loop.
         if nesting.get() == 10 {
-            unsafe { emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP.as_ptr())) };
+            emsg(gettext(E_AUTOCOMMAND_NESTING_TOO_DEEP));
             break 'bypass;
         }
         // `:all` and `:ball` turn these off while they shuffle windows.

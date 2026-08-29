@@ -331,7 +331,7 @@ pub unsafe fn ex_messages(eap: *mut exarg_T) {
         return;
     }
     if unsafe { *(*eap).arg } != 0 {
-        unsafe { emsg(gettext(e_invarg.as_ptr())) };
+        emsg(gettext(e_invarg));
         return;
     }
 

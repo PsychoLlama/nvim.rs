@@ -125,7 +125,7 @@ pub unsafe fn get_user_input(
 
     if unsafe { (*argvars.offset(0)).v_type } == VAR_DICT {
         if unsafe { (*argvars.offset(1)).v_type } != VAR_UNKNOWN {
-            unsafe { emsg(gettext(c"E5050: {opts} must be the only argument".as_ptr())) };
+            emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
         let dict = unsafe { (*argvars.offset(0)).vval.v_dict };

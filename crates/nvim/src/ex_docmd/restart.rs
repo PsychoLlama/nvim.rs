@@ -471,7 +471,7 @@ fn cstr_as_string(str: *const c_char) -> String_0 {
 /// `emsg()` as checked code.
 fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg(s) }
+    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `rpc_send_call()` as checked code.

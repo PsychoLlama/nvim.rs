@@ -26,7 +26,7 @@ use crate::mbyte::{
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
 use crate::optionstr::empty_option;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::{gettext, gettext_ptr, memmove};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::regexp::{
     RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
@@ -115,7 +115,7 @@ pub unsafe fn f_gettext(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     rettv.v_type = VAR_STRING;
     // SAFETY: the check above proved argument 0 is a non-empty String, so
     // the union holds a live NUL-terminated pointer.
-    rettv.vval.v_string = unsafe { xstrdup(gettext(args.get(0).vval.v_string)) };
+    rettv.vval.v_string = unsafe { xstrdup(gettext_ptr(args.get(0).vval.v_string).as_ptr()) };
 }
 
 /// `keytrans({string})` — the readable spelling of a key sequence.
@@ -149,7 +149,7 @@ pub unsafe fn f_nr2char(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     if num < 0 {
         // SAFETY throughout: a literal message.
         let msg = c"E5070: Character number must not be less than zero";
-        unsafe { emsg(gettext(msg.as_ptr())) };
+        emsg(gettext(msg));
         return;
     }
     if num > c_int::MAX as varnumber_T {
@@ -357,7 +357,7 @@ fn with_spell(body: impl FnOnce()) {
         unsafe { (*win).w_onebuf_opt.wo_spell = 1 };
     }
     if unsafe { *(*(*win).w_s).b_p_spl } == NUL as c_char {
-        unsafe { emsg(gettext(e_no_spell.as_ptr())) };
+        emsg(gettext(e_no_spell));
     } else {
         body();
     }
@@ -580,7 +580,7 @@ pub unsafe fn f_strftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     };
     let mut curtime: tm = tm_zeroed();
     if !os_localtime_r(seconds, &mut curtime) {
-        rettv.vval.v_string = unsafe { xstrdup(gettext(c"(Invalid)".as_ptr())) };
+        rettv.vval.v_string = unsafe { xstrdup(gettext(c"(Invalid)").as_ptr()) };
         return;
     }
     let mut conv: vimconv_T = CONV_NONE_INIT;

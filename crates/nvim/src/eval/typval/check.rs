@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, OK};
 
@@ -28,7 +29,7 @@ fn arg_check(
     if ok {
         return OK;
     }
-    unsafe { semsg_c!(gettext(errmsg), idx + 1) };
+    unsafe { semsg_c!(gettext_ptr(errmsg), idx + 1) };
     FAIL
 }
 
@@ -55,7 +56,7 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
         }
         _ => unsafe { abort() },
     };
-    unsafe { emsg(gettext(message.as_ptr())) };
+    emsg(gettext(message));
     false
 }
 
@@ -69,7 +70,7 @@ pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
     match unsafe { (*tv).v_type } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext(num_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
             false
         }
         _ => unsafe { abort() },
@@ -86,7 +87,7 @@ pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
     match unsafe { (*tv).v_type } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext(str_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type as usize])) };
             false
         }
         _ => unsafe { abort() },

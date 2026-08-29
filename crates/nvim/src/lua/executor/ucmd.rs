@@ -255,7 +255,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
 
         let (nargs_in, nresults) = if preview { (3, 1) } else { (1, 0) };
         if nlua_pcall(lstate, nargs_in, nresults) != 0 {
-            nlua_error(lstate, gettext(c"Lua :command callback: %.*s".as_ptr()));
+            nlua_error(lstate, gettext(c"Lua :command callback: %.*s").as_ptr());
             return 0;
         }
 

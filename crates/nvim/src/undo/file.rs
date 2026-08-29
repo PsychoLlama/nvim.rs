@@ -202,7 +202,7 @@ unsafe fn dir_is_usable(dir_name: *mut c_char, last_in_list: bool, reading: bool
     // there, and so is what `uv_strerror` hands back.
     unsafe {
         semsg_c!(
-            gettext(c"E5003: Unable to create directory \"%s\" for undo file: %s".as_ptr()),
+            gettext(c"E5003: Unable to create directory \"%s\" for undo file: %s"),
             failed_dir,
             uv_strerror(ret),
         )
@@ -220,7 +220,7 @@ pub(crate) unsafe fn corruption_error(mesg: *const c_char, file_name: *const c_c
     // SAFETY: NUL-terminated strings, by the contract above.
     unsafe {
         semsg_c!(
-            gettext(c"E825: Corrupted undo file (%s): %s".as_ptr()),
+            gettext(c"E825: Corrupted undo file (%s): %s"),
             mesg,
             file_name,
         )

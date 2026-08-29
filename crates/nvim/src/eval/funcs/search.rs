@@ -148,7 +148,7 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
                     // The message quotes the rest of the flag string
                     // from the offending letter on, not just the
                     // letter, and those are arbitrary user bytes.
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), p) };
+                    unsafe { semsg_c!(gettext(e_invarg2), p) };
                     dir = 0;
                 }
             },
@@ -221,7 +221,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
     {
         let what = arg_string(&mut numbuf2, args.get(1));
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return 0;
     }
 
@@ -403,7 +403,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     // `e` and `p` belong to search(); `n` and `s` contradict each other.
     if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
         let what = arg_string(&mut numbuf2, args.get(3));
-        unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+        unsafe { semsg_c!(gettext(e_invarg2), what) };
         return 0;
     }
 
@@ -422,14 +422,14 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
             lnum_stop = arg_number_chk(args.get(5), None) as linenr_T;
             if lnum_stop < 0 {
                 let what = arg_string(&mut numbuf3, args.get(5));
-                unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+                unsafe { semsg_c!(gettext(e_invarg2), what) };
                 return 0;
             }
             if args.has(6) {
                 time_limit = arg_number_chk(args.get(6), None) as int64_t;
                 if time_limit < 0 {
                     let what = arg_string(&mut numbuf4, args.get(6));
-                    unsafe { semsg_c!(gettext(e_invarg2.as_ptr()), what) };
+                    unsafe { semsg_c!(gettext(e_invarg2), what) };
                     return 0;
                 }
             }

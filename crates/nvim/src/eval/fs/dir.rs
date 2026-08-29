@@ -35,7 +35,7 @@ use crate::fileio::{delete_recursive, vim_copyfile, vim_rename, vim_tempname};
 use crate::main::{curtab, curwin, e_invarg, e_invargNval, e_invexpr2, e_mkdir, globaldir};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::emsg;
-use crate::os::cshim::gettext;
+use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::semsg_c;
@@ -151,21 +151,21 @@ fn string_of(tv: &typval_T) -> *mut c_char {
 /// Report the plain message `msg`, translated.
 fn err0(msg: *const c_char) {
     // SAFETY: `msg` is NUL-terminated, which is all `gettext` and `emsg` ask.
-    unsafe { emsg(gettext(msg)) };
+    unsafe { emsg(gettext_ptr(msg)) };
 }
 
 /// Report the one-`%s` message `fmt`, translated, about `a`.
 fn err1(fmt: *const c_char, a: *const c_char) {
     // SAFETY: `fmt` is a NUL-terminated format taking one string, and `a` is
     // a NUL-terminated string.
-    unsafe { semsg_c!(gettext(fmt), a) };
+    unsafe { semsg_c!(gettext_ptr(fmt), a) };
 }
 
 /// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
 fn err2(fmt: *const c_char, a: *const c_char, b: *const c_char) {
     // SAFETY: `fmt` is a NUL-terminated format taking two strings, and both
     // are NUL-terminated.
-    unsafe { semsg_c!(gettext(fmt), a, b) };
+    unsafe { semsg_c!(gettext_ptr(fmt), a, b) };
 }
 
 /// libuv's name for the error code `error`.

@@ -496,7 +496,7 @@ impl FindTags {
             unsafe {
                 smsg_c!(
                     0,
-                    gettext(c"Searching tags file %s".as_ptr()),
+                    gettext(c"Searching tags file %s").as_ptr(),
                     self.tag_fname.as_ptr(),
                 )
             };
@@ -517,7 +517,7 @@ impl FindTags {
             // the format literal above and the editor's message buffers.
             unsafe {
                 semsg_c!(
-                    gettext(c"E432: Tags file not sorted: %s".as_ptr()),
+                    gettext(c"E432: Tags file not sorted: %s"),
                     self.tag_fname.as_ptr(),
                 )
             };
@@ -598,18 +598,13 @@ impl FindTags {
                     // the format literal above and the editor's message buffers.
                     unsafe {
                         semsg_c!(
-                            gettext(c"E431: Format error in tags file \"%s\"".as_ptr()),
+                            gettext(c"E431: Format error in tags file \"%s\""),
                             self.tag_fname.as_ptr(),
                         )
                     };
                     // SAFETY: the message macros expand to a `vim_snprintf` over
                     // the format literal above and the editor's message buffers.
-                    unsafe {
-                        semsg_c!(
-                            gettext(c"Before byte %ld".as_ptr()),
-                            ftello(self.fp) as int64_t,
-                        )
-                    };
+                    unsafe { semsg_c!(gettext(c"Before byte %ld"), ftello(self.fp) as int64_t,) };
                     self.stop_searching = true;
                     return;
                 }

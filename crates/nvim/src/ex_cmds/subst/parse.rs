@@ -321,12 +321,9 @@ pub(crate) unsafe fn check_regexp_delim(c: c_int) -> c_int {
     // SAFETY: caller's contract -- the ctype table covers `-128..=255`.
     let isalpha = unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_int & _ISalpha as c_int;
     if isalpha != 0 {
-        // SAFETY: a live message string.
-        unsafe {
-            emsg(gettext(
-                c"E146: Regular expressions can't be delimited by letters".as_ptr(),
-            ))
-        };
+        emsg(gettext(
+            c"E146: Regular expressions can't be delimited by letters",
+        ));
         return FAIL;
     }
     OK

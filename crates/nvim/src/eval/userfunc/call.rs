@@ -58,7 +58,7 @@ pub unsafe fn call_user_func(
     // Don't execute the function when the call depth is getting too high.
     if depth.get() as OptInt >= p_mfd.get() {
         let deep = c"E132: Function call depth is higher than 'maxfuncdepth'";
-        unsafe { emsg(gettext(deep.as_ptr())) };
+        emsg(gettext(deep));
         rv.v_type = VAR_NUMBER;
         rv.vval.v_number = -1;
         return;
@@ -267,7 +267,7 @@ pub unsafe fn call_user_func(
             let called = sourcing_entry().es_name;
             // SAFETY: the message texts are literals and `es_name` is the
             // NUL-terminated name of the innermost exec-stack entry.
-            unsafe { smsg_c!(0, gettext(c"calling %s".as_ptr()), called) };
+            unsafe { smsg_c!(0, gettext(c"calling %s").as_ptr(), called) };
             if p_verbose.get() >= 14 {
                 unsafe { msg_puts(c"(".as_ptr()) };
                 for i in 0..argcount {
@@ -389,11 +389,11 @@ pub unsafe fn call_user_func(
             // and the message texts are literals.
             let ret = unsafe { Tv::new(frame.fc_rettv) };
             if aborting() {
-                unsafe { smsg_c!(0, gettext(c"%s aborted".as_ptr()), name) };
+                unsafe { smsg_c!(0, gettext(c"%s aborted").as_ptr(), name) };
             } else if ret.v_type == VAR_NUMBER {
                 // SAFETY: the tag says the union holds a Number.
                 let n = unsafe { ret.vval.v_number };
-                unsafe { smsg_c!(0, gettext(c"%s returning #%ld".as_ptr()), name, n) };
+                unsafe { smsg_c!(0, gettext(c"%s returning #%ld").as_ptr(), name, n) };
             } else {
                 // Do not want errors such as E724 here.
                 let tofree = {
@@ -410,7 +410,7 @@ pub unsafe fn call_user_func(
                         unsafe { trunc_string(s, into, MSG_BUF_CLEN, MSG_BUF_LEN) };
                         s = buf.as_mut_ptr();
                     }
-                    unsafe { smsg_c!(0, gettext(c"%s returning %s".as_ptr()), name, s) };
+                    unsafe { smsg_c!(0, gettext(c"%s returning %s").as_ptr(), name, s) };
                     unsafe { xfree(tofree as *mut c_void) };
                 }
             }
@@ -428,7 +428,7 @@ pub unsafe fn call_user_func(
         verbose_report(|| {
             let name = sourcing_entry().es_name;
             // SAFETY: a literal text and the exec-stack entry's own name.
-            unsafe { smsg_c!(0, gettext(c"continuing in %s".as_ptr()), name) };
+            unsafe { smsg_c!(0, gettext(c"continuing in %s").as_ptr(), name) };
         });
     }
 
@@ -501,7 +501,7 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
     match error {
         FCERR_UNKNOWN => {
             if found_var {
-                unsafe { semsg_c!(gettext(e_not_callable_type_str.as_ptr()), name,) };
+                unsafe { semsg_c!(gettext(e_not_callable_type_str), name,) };
             } else {
                 unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
             }
@@ -513,10 +513,10 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
             unsafe { emsg_funcname(c"E933: Function was deleted: %s".as_ptr(), name) };
         }
         FCERR_TOOMANY => {
-            unsafe { emsg_funcname(gettext(e_toomanyarg.as_ptr()), name) };
+            unsafe { emsg_funcname(gettext(e_toomanyarg).as_ptr(), name) };
         }
         FCERR_TOOFEW => {
-            unsafe { emsg_funcname(gettext(e_toofewarg.as_ptr()), name) };
+            unsafe { emsg_funcname(gettext(e_toofewarg).as_ptr(), name) };
         }
         FCERR_SCRIPT => {
             let fmt = c"E120: Using <SID> not in a script context: %s";

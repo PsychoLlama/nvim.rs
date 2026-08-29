@@ -522,7 +522,7 @@ pub unsafe fn file_pat_to_reg_pat(
         } else {
             c"E220: Missing }.".as_ptr()
         };
-        unsafe { emsg(gettext(unbalanced)) };
+        unsafe { emsg(gettext_ptr(unbalanced)) };
         return ptr::null_mut();
     }
     unsafe { xmemdupz(reg.as_ptr().cast::<c_void>(), reg.len()) }.cast()

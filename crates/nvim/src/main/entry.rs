@@ -365,8 +365,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         };
         scriptout.set(unsafe { os_fopen(params.scriptout, mode) });
         if scriptout.get().is_null() {
-            let fmt = unsafe { gettext(c"Cannot open for script output: \"".as_ptr()) };
-            unsafe { fprintf(stderr, fmt) };
+            let fmt = gettext(c"Cannot open for script output: \"");
+            unsafe { fprintf(stderr, fmt.as_ptr()) };
             unsafe { fprintf(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
             unsafe { os_exit(2) };
         }
