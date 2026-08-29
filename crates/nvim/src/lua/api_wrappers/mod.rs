@@ -417,7 +417,7 @@ unsafe fn run(
         // SAFETY: as above; the query has no side effects.
         let refused = deferred.filter(|_| !unsafe { nlua_is_deferred_safe() });
         if let Some(name) = refused {
-            let (fmt, name) = ((&raw const e_fast_api_disabled).cast(), name.as_ptr());
+            let (fmt, name) = (e_fast_api_disabled.as_ptr(), name.as_ptr());
             // SAFETY: as above; both strings are static and NUL-terminated,
             // and nothing is left to release.
             return unsafe { luaL_error(lstate, fmt, name) };
@@ -525,7 +525,7 @@ fn expr_map_locked_error(err: &mut Error) {
     let fmt = c"%s".as_ptr();
     // SAFETY: `err` is live and `e_textlock` is a static NUL-terminated
     // message, which is what `%s` takes.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, &raw const e_textlock) };
+    unsafe { api_set_error(err, kErrorTypeException, fmt, e_textlock.as_ptr()) };
 }
 
 // The keysets the bindings name, each tied to its own generated table

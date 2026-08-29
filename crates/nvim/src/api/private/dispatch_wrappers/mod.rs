@@ -391,7 +391,7 @@ fn expr_map_locked_error(error: &mut Error) {
     let fmt = c"%s".as_ptr();
     // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
     // message, which is what `%s` takes.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, &raw const e_textlock) };
+    unsafe { api_set_error(error, kErrorTypeException, fmt, e_textlock.as_ptr()) };
 }
 
 /// Hands the error an API function answered with to the dispatcher, which
