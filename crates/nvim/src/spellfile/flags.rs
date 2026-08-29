@@ -30,7 +30,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::smsg_c;
+use crate::message_fmt::c_str;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
@@ -38,14 +39,14 @@ use crate::charset::getdigits_int;
 use crate::hashtab::{hash_add, hash_clear, hash_find, hash_removed};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
-use crate::os::cshim::{gettext, gettext_ptr, memmove};
+use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, hashitem_T, size_t, uint8_t};
 use ::libc::{strcat, strcpy, strlen};
 
 use super::{
     AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, ZERO_FLAG, affentry_T, afffile_T, affheader_T,
-    compitem_T, e_affname, spellinfo_T, vim_regfree,
+    compitem_T, spellinfo_T, vim_regfree,
 };
 
 /// Decode one flag and advance `pp` past it. Returns 0 when there is none.
@@ -101,16 +102,19 @@ pub(super) unsafe fn affitem2flag(
     let mut p = item;
     let res = unsafe { get_affitem(flagtype, &raw mut p) };
     if res == 0 {
-        let msg = if flagtype == AFT_NUM {
-            c"Flag is not a number in %s line %d: %s"
+        // SAFETY: the affix file's name and the offending item.
+        let (file, shown) = unsafe { (c_str(fname), c_str(item)) };
+        if flagtype == AFT_NUM {
+            smsg!(0, "Flag is not a number in {file} line {lnum}: {shown}");
         } else {
-            c"Illegal flag in %s line %d: %s"
-        };
-        unsafe { smsg_c!(0, gettext(msg).as_ptr(), fname, lnum, item) };
+            smsg!(0, "Illegal flag in {file} line {lnum}: {shown}");
+        }
     }
     // Anything left over means the item was more than one flag.
     if unsafe { *p } as c_int != NUL {
-        unsafe { smsg_c!(0, gettext_ptr(e_affname.get()), fname, lnum, item) };
+        // SAFETY: as above.
+        let (file, shown) = unsafe { (c_str(fname), c_str(item)) };
+        smsg!(0, "Affix name too long in {file} line {lnum}: {shown}");
         return 0;
     }
     res

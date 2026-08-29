@@ -6,7 +6,7 @@ use crate::strings::vim_snprintf;
 use std::ffi::CString;
 
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use crate::winlayer::{Buf, Ea, Live, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
@@ -32,7 +32,7 @@ use crate::main::{
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
@@ -438,7 +438,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
         c"E173: %d more files to edit",
         n as c_ulong,
     );
-    unsafe { semsg_c!(fmt, n) };
+    emsg_text(tr_plural!(fmt, n));
     quitmore.set(2);
     FAIL
 }

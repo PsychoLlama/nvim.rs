@@ -289,15 +289,9 @@ pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
 static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E758: Truncated spell file".as_ptr());
-static e_error_while_reading_sug_file_str: &::core::ffi::CStr =
-    c"E782: Error while reading .sug file: %s";
 static e_duplicate_char_in_map_entry: &::core::ffi::CStr = c"E783: Duplicate char in MAP entry";
 static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
-static e_afftrailing: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(c"Trailing text in %s line %d: %s".as_ptr());
-static e_affname: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(c"Affix name too long in %s line %d: %s".as_ptr());
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

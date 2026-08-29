@@ -50,7 +50,7 @@ use crate::message::{
     MSG_IOBUFF_LEN, SEMSG_ERRBUF_LEN, SEMSG_MULTILINE_ERRBUF_LEN, emsg, emsg_multiline_text,
     emsg_not_now, msg, msg_keep_text, msg_schedule_semsg_text, swmsg_text,
 };
-use crate::os::cshim::gettext_template;
+use crate::os::cshim::{gettext, gettext_template};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 use core::fmt;
 use std::ffi::CString;
@@ -271,6 +271,29 @@ pub(crate) fn report_emsg(message: impl FnOnce() -> String) -> bool {
         return true;
     }
     emsg(&to_message(message(), SEMSG_ERRBUF_LEN))
+}
+
+/// Render a message whose *template* is data rather than a literal, through
+/// the same interpreter a translated message takes.
+///
+/// The compile-checked macros cannot serve a caller whose format is chosen at
+/// runtime: `ngettext`'s plural form, which only the catalogue knows, or a
+/// shared `e_*` constant behind a helper two dozen call sites reach. Those
+/// render here. The *template* is unchecked, as it must be -- but the
+/// arguments are [`TrArg`]s, so the class of bug the variadic macros carried
+/// is gone either way: nothing here can read a machine word at the wrong
+/// width, and a template asking for a conversion its argument is not gets the
+/// argument's own rendering.
+///
+/// `template` is translated first, so a call site passes the msgid.
+pub(crate) fn tr_template(template: &'static CStr, args: &[TrArg<'_>]) -> String {
+    render_template_c(gettext(template), args)
+}
+
+/// [`tr_template`] for a template that is *already* translated -- what
+/// `ngettext` answers, whose plural form the caller must not look up twice.
+pub(crate) fn render_template_c(template: &CStr, args: &[TrArg<'_>]) -> String {
+    template::render_template(&template.to_string_lossy(), args)
 }
 
 /// Report an already-formatted message as an error: [`semsg!`] for a caller
@@ -742,6 +765,32 @@ macro_rules! smsg_keep_c {
         );
         $crate::message::smsg_keep_finish(&msgbuf, hl_id)
     }};
+}
+
+/// [`tr_template`] with its arguments spelled inline.
+///
+/// The escape hatch from the checked family, for a format that is data. Every
+/// use is a place where the message text lives somewhere the compiler cannot
+/// see it, and each one carries a note saying where.
+#[macro_export]
+macro_rules! tr_c {
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::message_fmt::tr_template(
+            $fmt,
+            &[$($crate::message_fmt::TrArg::of(&$arg)),*],
+        )
+    };
+}
+
+/// [`tr_c!`] for a template `ngettext` already translated.
+#[macro_export]
+macro_rules! tr_plural {
+    ($fmt:expr $(, $arg:expr)* $(,)?) => {
+        $crate::message_fmt::render_template_c(
+            $fmt,
+            &[$($crate::message_fmt::TrArg::of(&$arg)),*],
+        )
+    };
 }
 
 #[cfg(test)]

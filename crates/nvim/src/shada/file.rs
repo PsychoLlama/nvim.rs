@@ -13,10 +13,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
-use crate::semsg_c;
 use crate::smsg;
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
@@ -30,16 +30,17 @@ use crate::types::{FAIL, MAXPATHL, NUL, OK};
 /// The messages here all end in one variadic call; writing it once keeps
 /// the unchecked part of reporting to these two functions.
 fn shada_file_error(fmt: &'static CStr, what: *const c_char) {
-    // SAFETY: `fmt` is a static format string whose one conversion is the
-    // `%s` that `what` — a NUL-terminated name — is passed for.
-    unsafe { semsg_c!(gettext(fmt), what) };
+    // SAFETY: `what` is a NUL-terminated name.
+    let what = unsafe { c_str(what) };
+    emsg_text(tr_c!(fmt, what));
 }
 
 /// As [`shada_file_error`], for the messages that name two things: a file
 /// and either a second file or a libuv message.
 fn shada_file_error2(fmt: &'static CStr, what: *const c_char, why: *const c_char) {
-    // SAFETY: as `shada_file_error`, for two `%s` conversions.
-    unsafe { semsg_c!(gettext(fmt), what, why) };
+    // SAFETY: as `shada_file_error`, for a second NUL-terminated string.
+    let (what, why) = unsafe { (c_str(what), c_str(why)) };
+    emsg_text(tr_c!(fmt, what, why));
 }
 
 /// Whether the reader has nothing more to give.

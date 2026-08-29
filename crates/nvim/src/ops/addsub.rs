@@ -26,7 +26,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdmod_has;
-use crate::smsg_c;
+use crate::message_fmt::report_msg;
+use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -167,7 +168,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
             c"%ld lines changed",
             change_cnt as c_ulong,
         );
-        unsafe { smsg_c!(0, fmt.as_ptr(), change_cnt as int64_t) };
+        let _: bool = report_msg(0, || tr_plural!(fmt, change_cnt as int64_t));
     }
 }
 

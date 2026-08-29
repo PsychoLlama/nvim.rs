@@ -16,7 +16,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdmod_has;
-use crate::smsg_c;
+use crate::message_fmt::report_msg;
+use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -102,7 +103,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
     if oap.line_count as OptInt > p_report.get() {
         let n = oap.line_count as ::core::ffi::c_ulong;
         let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);
-        unsafe { smsg_c!(0, fmt.as_ptr(), oap.line_count as int64_t) };
+        let _: bool = report_msg(0, || tr_plural!(fmt, oap.line_count as int64_t));
     }
 }
 

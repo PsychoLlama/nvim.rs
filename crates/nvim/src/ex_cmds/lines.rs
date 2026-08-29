@@ -21,10 +21,11 @@ use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
 use crate::memory::xfree;
 use crate::message::{emsg, msgmore};
+use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
-use crate::smsg_c;
 use crate::strings::xstrnsave;
+use crate::tr_plural;
 use crate::types::{OK, OptInt, bcount_t, int64_t, linenr_T, size_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
@@ -174,14 +175,8 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     }
 
     if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
-        // SAFETY: one `%ld` and one `int64_t` for it.
-        unsafe {
-            smsg_c!(
-                0,
-                ngettext(c"%ld line moved", c"%ld lines moved", num_lines as c_ulong,).as_ptr(),
-                num_lines as int64_t,
-            )
-        };
+        let moved = ngettext(c"%ld line moved", c"%ld lines moved", num_lines as c_ulong);
+        let _: bool = report_msg(0, || tr_plural!(moved, num_lines as int64_t));
     }
 
     // SAFETY: `curbuf` is live and the byte extents were measured before the

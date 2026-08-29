@@ -37,17 +37,17 @@ use crate::main::{
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+use crate::message_fmt::emsg_text;
 use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
     reset_VIsual_and_resel,
 };
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
-use crate::os::cshim::gettext_ptr;
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
-use crate::semsg_c;
 use crate::strings::vim_snprintf;
+use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, NUL, OK, WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
 use crate::ui::ui_has;
@@ -360,7 +360,7 @@ fn split_alternate(prenum: c_int) {
         if prenum == 0 {
             err(e_noalt.as_ptr());
         } else {
-            err_number(e_buffer_nr_not_found.as_ptr(), prenum);
+            err_number(e_buffer_nr_not_found, prenum);
         }
         return;
     }
@@ -793,11 +793,8 @@ fn view_quickfix_result() {
 }
 
 /// `semsg(_(fmt), n)`, for the one error that names a buffer number.
-fn err_number(fmt: *const c_char, n: c_int) {
-    // SAFETY: a NUL-terminated message static.
-    let msg = unsafe { gettext_ptr(fmt) };
-    // SAFETY: a translated format taking one number, and the number.
-    let _: bool = unsafe { semsg_c!(msg, n as int64_t) };
+fn err_number(fmt: &'static CStr, n: c_int) {
+    emsg_text(tr_c!(fmt, int64_t::from(n)));
 }
 
 /// `xstrlcpy(buf, s, sizeof(buf))`, answering the length it wanted.

@@ -64,12 +64,12 @@ use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::main::{curbuf, current_sctx, p_cpo};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
-use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::message_fmt::{c_str, emsg_text};
+use crate::os::cshim::gettext;
 use crate::runtime::sourcing_lnum;
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::xstrnsave;
+use crate::tr_c;
 use crate::types::{
     CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, LuaRef, OK, buf_T, exarg_T,
     expand_T, int64_t, size_t, ucmd_T,
@@ -723,15 +723,13 @@ pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
 
     let Some(table) = found else {
         let untranslated = if buffer_only {
-            c"E1237: No such user-defined command in current buffer: %s".as_ptr()
+            c"E1237: No such user-defined command in current buffer: %s"
         } else {
-            c"E184: No such user-defined command: %s".as_ptr()
+            c"E184: No such user-defined command: %s"
         };
-        // SAFETY: module contract; the one `%s` spends `arg`.
-        unsafe {
-            let fmt = gettext_ptr(untranslated);
-            semsg_c!(fmt, arg)
-        };
+        // SAFETY: module contract -- `arg` is NUL-terminated.
+        let arg = unsafe { c_str(arg) };
+        emsg_text(tr_c!(untranslated, arg));
         return;
     };
 

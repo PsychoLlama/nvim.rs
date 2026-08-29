@@ -32,7 +32,7 @@
 
 use crate::semsg;
 use crate::smsg;
-use crate::smsg_c;
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::charset::skipdigits;
@@ -42,7 +42,7 @@ use crate::main::{got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, report_msg};
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
@@ -482,7 +482,9 @@ unsafe fn handle_line(
         if let Some(warning) = field.warn_after_pfx()
             && unsafe { (*aff).af_pref.ht_used } > 0
         {
-            unsafe { smsg_c!(0, gettext(warning).as_ptr(), fname, lnum) };
+            // SAFETY: the affix file's own name, NUL-terminated.
+            let fname = unsafe { c_str(fname) };
+            let _: bool = report_msg(0, || tr_c!(warning, fname, lnum));
         }
         return true;
     }
@@ -543,7 +545,9 @@ unsafe fn handle_line(
         }
         *slot = unsafe { atoi(items[1]) };
         if *slot == 0 {
-            unsafe { smsg_c!(0, gettext(complaint).as_ptr(), fname, lnum, items[1]) };
+            // SAFETY: the affix file's name and the item, NUL-terminated.
+            let (fname, item) = unsafe { (c_str(fname), c_str(items[1])) };
+            let _: bool = report_msg(0, || tr_c!(complaint, fname, lnum, item));
         }
         return true;
     }

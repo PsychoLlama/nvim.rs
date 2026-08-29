@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
+use crate::tr_plural;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 use std::ffi::CString;
@@ -38,7 +39,7 @@ use crate::main::{
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
 use crate::message::msg_puts;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, report_msg};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;
@@ -152,10 +153,8 @@ fn err_nobufnr(n: int64_t) {
 
 /// `smsg(0, NGETTEXT(one, many, n), n)`: the "N buffers deleted" report.
 fn report_count(one: &'static CStr, many: &'static CStr, n: c_int) {
-    let plural = ngettext(one, many, n as c_ulong)
-        .to_string_lossy()
-        .replace("%d", &n.to_string());
-    let _: bool = crate::message_fmt::report_msg(0, || plural);
+    let plural = ngettext(one, many, n as c_ulong);
+    let _: bool = report_msg(0, || tr_plural!(plural, n));
 }
 
 /// A translated message, as the owned error this family answers with.

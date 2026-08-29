@@ -22,14 +22,13 @@
 
 use crate::message_fmt::c_str;
 use crate::smsg;
-use crate::smsg_c;
 use core::ffi::{c_char, c_int};
 
 use crate::garray::ga_append_via_ptr;
 use crate::hashtab::{hash_add, hash_find, hash_removed};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
-use crate::os::cshim::{gettext, gettext_ptr, snprintf};
+use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
@@ -40,7 +39,7 @@ use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
     AH_KEY_LEN, MAXLINELEN, PFX_FLAGS, WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP, affentry_T,
-    afffile_T, affheader_T, e_afftrailing, spellinfo_T, vim_regcomp, vim_regfree,
+    afffile_T, affheader_T, spellinfo_T, vim_regcomp, vim_regfree,
 };
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
@@ -77,9 +76,12 @@ pub(super) unsafe fn handle_affix_header(
         // A continued block for an affix already defined.
         st.cur_aff = unsafe { affheader_T::of_key((*hi).hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
-            let fmt =
-                gettext(c"Different combining flag in continued affix block in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
+            // SAFETY: the affix file's name and the item, NUL-terminated.
+            let (file, item) = unsafe { (c_str(fname), c_str(items[1])) };
+            smsg!(
+                0,
+                "Different combining flag in continued affix block in {file} line {lnum}: {item}"
+            );
         }
         if unsafe { (*st.cur_aff).ah_follows } == 0 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -132,9 +134,9 @@ pub(super) unsafe fn handle_affix_header(
         && !unsafe { (*aff).af_ignoreextra }
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
     {
-        // SAFETY: `e_afftrailing` holds a NUL-terminated static message.
-        let fmt = unsafe { gettext_ptr(e_afftrailing.get()) };
-        unsafe { smsg_c!(0, fmt, fname, lnum, items[lasti]) };
+        // SAFETY: the affix file's name and the trailing item.
+        let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
+        smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     if unsafe { strcmp(items[2], c"Y".as_ptr()) } != 0
         && unsafe { strcmp(items[2], c"N".as_ptr()) } != 0
@@ -181,9 +183,9 @@ pub(super) unsafe fn handle_affix_entry(
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
         && (unsafe { strcmp(items[lasti], c"-".as_ptr()) } != 0 || items.len() != lasti + 1)
     {
-        // SAFETY: `e_afftrailing` holds a NUL-terminated static message.
-        let fmt = unsafe { gettext_ptr(e_afftrailing.get()) };
-        unsafe { smsg_c!(0, fmt, fname, lnum, items[lasti]) };
+        // SAFETY: the affix file's name and the trailing item.
+        let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
+        smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     st.aff_todo -= 1;
 

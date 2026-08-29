@@ -15,7 +15,8 @@
 
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Lock;
-use crate::smsg_c;
+use crate::message_fmt::{c_str, report_msg};
+use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -202,9 +203,9 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
         (c"%ld line yanked%s", c"%ld lines yanked%s")
     };
     let fmt = ngettext(one, many, yanklines as c_ulong);
-    // SAFETY: whichever form `ngettext` picked takes exactly the `%ld` and
-    // `%s` arguments given, and `namebuf` is NUL-terminated.
-    unsafe { smsg_c!(0, fmt.as_ptr(), yanklines as int64_t, namebuf.as_mut_ptr()) };
+    // SAFETY: `namebuf` is this frame's, NUL-terminated by the writes above.
+    let name = unsafe { c_str(namebuf.as_mut_ptr()) };
+    let _: bool = report_msg(0, || tr_plural!(fmt, yanklines as int64_t, name));
 }
 
 /// Yank the operator's region into `reg`.

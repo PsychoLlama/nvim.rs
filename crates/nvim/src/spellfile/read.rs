@@ -26,7 +26,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -511,12 +510,9 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
     if unsafe { read_sug_body(fd, slang) } {
         return;
     }
-    let text = super::e_error_while_reading_sug_file_str
-        .as_ptr()
-        .cast::<c_char>();
-    let fmt = unsafe { gettext_ptr(text) };
-    let fname = unsafe { (*slang).sl_fname };
-    unsafe { semsg_c!(fmt, fname) };
+    // SAFETY: the loaded language's own file name.
+    let fname = unsafe { c_str((*slang).sl_fname) };
+    semsg!("E782: Error while reading .sug file: {fname}");
     unsafe { slang_clear_sug(slang) };
 }
 

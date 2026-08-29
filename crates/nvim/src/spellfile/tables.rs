@@ -14,20 +14,18 @@
 
 use crate::message_fmt::c_str;
 use crate::smsg;
-use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::main::curwin;
 use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
-use crate::os::cshim::gettext_ptr;
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, fromto_T, garray_T};
 use ::libc::{strcat, strcmp, strcpy, strlen};
 
 use super::aff::{AffState, is_digit_byte};
-use super::{MAXWLEN, e_afftrailing, spellinfo_T};
+use super::{MAXWLEN, spellinfo_T};
 
 /// Append `KEYWORD value` to the text `:spellinfo` shows.
 ///
@@ -100,7 +98,9 @@ pub(super) unsafe fn add_rep_entry(
     // SAFETY: the caller promises the items; the substitution is in place
     // and replaces one byte with one byte.
     if items.len() > 3 && unsafe { *items[3] } as c_int != b'#' as c_int {
-        unsafe { smsg_c!(0, gettext_ptr(e_afftrailing.get()), fname, lnum, items[3]) };
+        // SAFETY: the affix file's name and the trailing item.
+        let (file, item) = unsafe { (c_str(fname), c_str(items[3])) };
+        smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     // "REPSAL" has an S where "REP" has its terminator.
     let is_sal = unsafe { *items[0].add(3) } as c_int == b'S' as c_int;

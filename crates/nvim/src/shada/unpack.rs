@@ -12,7 +12,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::{c_str, emsg_text};
+use crate::semsg;
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::msgpack_rpc::unpacker::{MPACK_EOF, MPACK_OK};
@@ -26,17 +28,15 @@ use crate::os::cshim::gettext;
 /// Every message here ends in one variadic call; writing it once keeps the
 /// unchecked part of reporting to these two functions.
 fn shada_read_error(fmt: &'static CStr, at: uint64_t) {
-    // SAFETY: `fmt` is a static format string whose one conversion is the
-    // `%lu` that `at` is passed for.
-    unsafe { semsg_c!(gettext(fmt), at) };
+    emsg_text(tr_c!(fmt, at));
 }
 
 /// As [`shada_read_error`], for the messages whose `%s` is a libuv error or
 /// a fixed reason.
 fn shada_read_error_why(fmt: &'static CStr, why: *const c_char) {
-    // SAFETY: as `shada_read_error`; `why` is a NUL-terminated message that
-    // outlives the call.
-    unsafe { semsg_c!(gettext(fmt), why) };
+    // SAFETY: `why` is a NUL-terminated libuv message or a fixed reason.
+    let why = unsafe { c_str(why) };
+    emsg_text(tr_c!(fmt, why));
 }
 
 /// The largest entry type this Nvim knows. Anything above it is an unknown
@@ -297,16 +297,12 @@ pub(crate) unsafe fn shada_check_status(
         }
         return kSDReadStatusSuccess;
     }
-    unsafe {
-        semsg_c!(
-            gettext(if status == MPACK_EOF {
-                c"E576: Failed to parse ShaDa file: incomplete msgpack string at position %lu"
-            } else {
-                c"E576: Failed to parse ShaDa file due to a msgpack parser error at position %lu"
-            }),
-            initial_fpos as uint64_t,
-        )
-    };
+    let at = initial_fpos as uint64_t;
+    if status == MPACK_EOF {
+        semsg!("E576: Failed to parse ShaDa file: incomplete msgpack string at position {at}");
+    } else {
+        semsg!("E576: Failed to parse ShaDa file due to a msgpack parser error at position {at}");
+    }
     kSDReadStatusNotShaDa
 }
 

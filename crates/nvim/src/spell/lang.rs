@@ -30,7 +30,6 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
-use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::autocmd::{EVENT_SPELLFILEMISSING, apply_autocmds};
@@ -44,7 +43,7 @@ use crate::main::{curbuf, curwin, e_invarg, p_enc, starting};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::option::{copy_option_part, valid_name};
-use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
+use crate::os::cshim::{memmove, snprintf, strncmp};
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
@@ -152,10 +151,12 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             unsafe { snprintf(buf, room, fmt, lang) };
             unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
         } else {
-            let text = c"Warning: Cannot find word list \"%s.%s.spl\" or \"%s.ascii.spl\"";
-            let fmt = gettext(text);
-            let enc = unsafe { spell_enc() };
-            unsafe { smsg_c!(0, fmt.as_ptr(), lang, enc, lang) };
+            // SAFETY: the language name and the encoding are NUL-terminated.
+            let (lang, enc) = unsafe { (c_str(lang), c_str(spell_enc())) };
+            smsg!(
+                0,
+                "Warning: Cannot find word list \"{lang}.{enc}.spl\" or \"{lang}.ascii.spl\""
+            );
         }
     } else if !sl.sl_slang.is_null() {
         // At least one file loaded; now take all the additions.

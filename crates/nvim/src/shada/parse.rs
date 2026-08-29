@@ -8,13 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
+use crate::message_fmt::{c_str, emsg_text};
 use crate::msgpack_rpc::unpacker::MPACK_OK;
 
 use super::*;
-use crate::os::cshim::gettext;
 use crate::types::VAR_TYPE_BLOB;
 
 /// Report `E575` for an entry at byte `pos` the file states wrongly.
@@ -24,17 +24,15 @@ use crate::types::VAR_TYPE_BLOB;
 /// call they all end in is written once, here, rather than at each of the
 /// two dozen places that raise one.
 fn malformed_entry(fmt: &'static CStr, pos: uint64_t) {
-    // SAFETY: `fmt` is a static format string whose one conversion is the
-    // `%lu` that `pos` is passed for.
-    unsafe { semsg_c!(gettext(fmt), pos) };
+    emsg_text(tr_c!(fmt, pos));
 }
 
 /// As [`malformed_entry`], for the messages whose `%s` carries the reason
 /// `unpack_keydict` left behind.
 fn malformed_entry_because(fmt: &'static CStr, pos: uint64_t, why: *const c_char) {
-    // SAFETY: as `malformed_entry`; `why` is that call's NUL-terminated
-    // message, which outlives this one.
-    unsafe { semsg_c!(gettext(fmt), pos, why) };
+    // SAFETY: `why` is `unpack_keydict`'s NUL-terminated message.
+    let why = unsafe { c_str(why) };
+    emsg_text(tr_c!(fmt, pos, why));
 }
 
 /// Parse the payload of an entry whose type this Nvim knows.
@@ -504,7 +502,7 @@ unsafe fn parse_buffer_list(
             None
         };
         if let Some(complaint) = complaint {
-            unsafe { semsg_c!(gettext(complaint), pos) };
+            emsg_text(tr_c!(complaint, pos));
             return Err(Malformed);
         }
     }

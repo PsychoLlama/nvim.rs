@@ -25,7 +25,6 @@ use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{CmdAddr, ExArgt, ExpandContext, NUL, size_t};
 use core::ffi::{CStr, c_char, c_int};
@@ -105,13 +104,9 @@ pub(crate) unsafe fn parse_addr_type_arg(
         i += 1;
     }
     unsafe { *value.add(i) = NUL as c_char };
-    let untranslated = c"E180: Invalid address type value: %s".as_ptr();
-    // SAFETY: caller contract; `value` is now NUL-terminated at the word, and
-    // the one `%s` spends it.
-    unsafe {
-        let fmt = gettext_ptr(untranslated);
-        semsg_c!(fmt, value)
-    };
+    // SAFETY: `value` is now NUL-terminated at the word.
+    let shown = unsafe { c_str(value) };
+    semsg!("E180: Invalid address type value: {shown}");
     FAIL
 }
 
@@ -307,12 +302,8 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             emsg(gettext(c"E178: Invalid default value for count"));
         }
         Bad::Missing(what) => {
-            let untranslated = c"E179: Argument required for %s".as_ptr();
-            // SAFETY: the one `%s` spends the attribute name.
-            unsafe {
-                let fmt = gettext_ptr(untranslated);
-                semsg_c!(fmt, what.as_ptr())
-            };
+            let what = what.to_string_lossy();
+            semsg!("E179: Argument required for {what}");
         }
         Bad::Reported => {}
     }
