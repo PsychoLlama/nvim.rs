@@ -12,10 +12,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
 use crate::smsg;
-use crate::smsg_c;
+use crate::tr_c;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
@@ -493,10 +493,12 @@ unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fnam
     let lnum = sourcing_lnum() as int64_t;
     // SAFETY: the caller's contract on the two formats.
     unsafe { verbose_enter() };
+    // SAFETY: the caller's NUL-terminated file name.
+    let fname = unsafe { c_str(fname) };
     if name.is_null() {
-        unsafe { smsg_c!(0, gettext(plain).as_ptr(), fname) };
+        let _: bool = report_msg(0, || tr_c!(plain, fname));
     } else {
-        unsafe { smsg_c!(0, gettext(numbered).as_ptr(), lnum, fname) };
+        let _: bool = report_msg(0, || tr_c!(numbered, lnum, fname));
     }
     unsafe { verbose_leave() };
 }

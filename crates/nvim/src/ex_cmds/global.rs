@@ -22,15 +22,16 @@ use crate::main::{
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
 use crate::message::{emsg, msg, msgmore};
+use crate::message_fmt::c_str;
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::regexp::{
     RE_BOTH, RE_LAST, RE_SEARCH, RE_SUBST, skip_regexp_ex, vim_regexec_multi, vim_regfree,
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
 use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
@@ -280,13 +281,13 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
         if got_int.get() {
             msg(gettext(e_interr), 0 as c_int);
         } else if ndone == 0 as c_int {
-            let fmt = if kind == b'v' {
-                c"Pattern found in every line: %s".as_ptr()
-            } else {
-                c"Pattern not found: %s".as_ptr()
-            };
             // SAFETY: `used_pat` is the pattern `search_regcomp` reported.
-            unsafe { smsg_c!(0 as c_int, gettext_ptr(fmt), used_pat) };
+            let pat = unsafe { c_str(used_pat) };
+            if kind == b'v' {
+                smsg!(0, "Pattern found in every line: {pat}");
+            } else {
+                smsg!(0, "Pattern not found: {pat}");
+            }
         } else {
             // SAFETY: `parsed.cmd` is a live C string.
             unsafe { global_exe(parsed.cmd) };

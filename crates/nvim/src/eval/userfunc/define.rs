@@ -10,7 +10,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -440,9 +439,11 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                 unsafe { xfree(scriptname as *mut c_void) };
                             }
                             if j == FAIL {
-                                let mismatch =
-                                    c"E746: Function name does not match script file name: %s";
-                                unsafe { semsg_c!(gettext(mismatch), name) };
+                                // SAFETY: the function name being defined.
+                                let shown = unsafe { c_str(name) };
+                                semsg!(
+                                    "E746: Function name does not match script file name: {shown}"
+                                );
                                 break 'erret;
                             }
                         }

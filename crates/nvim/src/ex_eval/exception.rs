@@ -53,11 +53,12 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
+use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;
-use crate::os::cshim::{snprintf, strncmp};
+use crate::os::cshim::{gettext_ptr, snprintf, strncmp};
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
-use crate::smsg_c;
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
+use crate::tr_plural;
 use crate::types::{
     FAIL, IOSIZE, NUL, OK, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t,
     list_T, msglist_T, ptrdiff_t,
@@ -474,7 +475,10 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
         // Always scroll up, don't overwrite.
         msg_scroll.set(1);
     }
-    unsafe { smsg_c!(0, mesg.as_ptr(), value) };
+    // SAFETY: the caller's NUL-terminated value, and `mesg`, which outlives
+    // the message it is translated for.
+    let (template, value) = unsafe { (gettext_ptr(mesg.as_ptr()), c_str(value)) };
+    let _: bool = report_msg(0, || tr_plural!(template, value));
     // Don't overwrite this either.
     unsafe { msg_puts(c"\n".as_ptr()) };
     if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
@@ -716,7 +720,10 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
     let no_prompt = Suppress::wait_return();
     // Always scroll up, don't overwrite.
     msg_scroll.set(1);
-    unsafe { smsg_c!(0, mesg, s) };
+    // SAFETY: `mesg` is a NUL-terminated format -- a literal, or the one
+    // this frame just built -- and `s` the NUL-terminated text it names.
+    let (template, text) = unsafe { (gettext_ptr(mesg), c_str(s)) };
+    let _: bool = report_msg(0, || tr_plural!(template, text));
     // Don't overwrite this either.
     unsafe { msg_puts(c"\n".as_ptr()) };
     cmdline_row.set(msg_row.get());

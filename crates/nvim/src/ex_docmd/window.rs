@@ -8,7 +8,7 @@
 //! transpiled inside an `unsafe` block.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -39,6 +39,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
+use crate::message_fmt::c_str;
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
 use crate::os::cshim::gettext_ptr;
@@ -587,9 +588,9 @@ pub(crate) unsafe fn ex_winsize(eap: *mut exarg_T) {
 fn winsize(ea: Ex) {
     let mut arg = ea.arg;
     if !ascii_isdigit(byte(arg)) {
-        let (msg, at) = (e_invarg2.as_ptr(), arg);
-        // SAFETY: a message with one `%s`, and the argument for it.
-        unsafe { semsg_c!(gettext_ptr(msg), at) };
+        // SAFETY: the command's NUL-terminated argument.
+        let at = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {at}");
         return;
     }
     let w = digits(&raw mut arg);

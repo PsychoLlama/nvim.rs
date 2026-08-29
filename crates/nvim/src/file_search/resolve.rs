@@ -10,9 +10,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::os::cshim::gettext_ptr;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::path::buffer_path;
-use crate::semsg_c;
+use crate::tr_c;
 use crate::types::MAXPATHL;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
@@ -339,14 +339,14 @@ unsafe fn find_along_option(
 /// a first call has not found it at all, a repeat call has run out.
 unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_char) {
     let message = match (first, find_what == FINDFILE_DIR as c_int) {
-        (true, true) => e_cant_find_directory_str_in_cdpath.as_ptr(),
-        (true, false) => e_cant_find_file_str_in_path.as_ptr(),
-        (false, true) => e_no_more_directory_str_found_in_cdpath
-            .as_ptr()
-            .cast::<c_char>(),
-        (false, false) => e_no_more_file_str_found_in_path.as_ptr(),
+        (true, true) => e_cant_find_directory_str_in_cdpath,
+        (true, false) => e_cant_find_file_str_in_path,
+        (false, true) => e_no_more_directory_str_found_in_cdpath,
+        (false, false) => e_no_more_file_str_found_in_path,
     };
-    unsafe { semsg_c!(gettext_ptr(message), file_to_find) };
+    // SAFETY: the caller's NUL-terminated name.
+    let file_to_find = unsafe { c_str(file_to_find) };
+    emsg_text(tr_c!(message, file_to_find));
 }
 
 /// @param ptr  file name

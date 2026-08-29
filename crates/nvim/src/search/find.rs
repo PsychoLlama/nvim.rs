@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_SEARCH;
@@ -18,7 +18,7 @@ use crate::search::{
     SEARCH_START,
 };
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use crate::types::{CpoFlag, FAIL, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -646,7 +646,9 @@ pub unsafe fn searchit(
             } else {
                 gettext(c"E385: Search hit BOTTOM without match for: %s")
             };
-            unsafe { semsg_c!(msg, get_search_pat()) };
+            // SAFETY: the pattern the search reported, NUL-terminated.
+            let pat = unsafe { c_str(get_search_pat()) };
+            emsg_text(tr_plural!(msg, pat));
         }
         return FAIL;
     }
