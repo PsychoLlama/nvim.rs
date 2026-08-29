@@ -20,15 +20,15 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::input::prompt_for_input;
 use crate::main::{
-    Rows, cmdline_row, cmdline_star, e_invarg, e_listarg, got_int, lines_left, mouse_row, msg_row,
-    msg_scroll, p_verbose,
+    Rows, cmdline_row, cmdline_star, e_invarg, got_int, lines_left, mouse_row, msg_row, msg_scroll,
+    p_verbose,
 };
 use crate::memory::xstrdup;
 use crate::message::{
     do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
 };
 use crate::os::cshim::gettext;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, listitem_T, tasave_T, typval_T, varnumber_T,
@@ -170,7 +170,8 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY throughout: the frame is live and the List is held by an argument for the
     // whole call.
     if args.ty(0) != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg), c"inputlist()".as_ptr(),) };
+        let arg0 = "inputlist()";
+        semsg!("E686: Argument of {arg0} must be a List");
         return;
     }
     // Start at the bottom of the screen so the whole list is visible.

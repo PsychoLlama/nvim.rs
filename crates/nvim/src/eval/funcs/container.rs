@@ -20,11 +20,12 @@ use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
 use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
-use crate::main::{called_emsg, did_emsg, e_invarg2, e_listarg, e_listblobreq, e_listdictblobarg};
+use crate::main::{called_emsg, did_emsg, e_listblobreq};
 use crate::memory::xstrdup;
 use crate::message::{emsg, internal_error};
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     BoolVarValue, EvalFuncData, FAIL, NUL, Refcount, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
@@ -115,7 +116,8 @@ fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
     // SAFETY throughout: the tag checked here says which union member is
     // live, and the List it names outlives the call.
     if args.ty(0) != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg), c"flatten()".as_ptr(),) };
+        let arg0 = "flatten()";
+        semsg!("E686: Argument of {arg0} must be a List");
         return;
     }
     let maxdepth = if !args.has(1) {
@@ -179,7 +181,8 @@ pub unsafe fn f_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
             ptr::null_mut()
         }
         _ => {
-            unsafe { semsg_c!(gettext(e_listdictblobarg), c"get()".as_ptr(),) };
+            let arg0 = "get()";
+            semsg!("E896: Argument of {arg0} must be a List, Dictionary or Blob");
             ptr::null_mut()
         }
     };
@@ -316,7 +319,9 @@ fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
         _ => {
             // Kept on the variadic message call: `what` is arbitrary
             // user bytes and a Rust format string can only carry UTF-8.
-            unsafe { semsg_c!(gettext(e_invarg2), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E475: Invalid argument: {what}");
         }
     }
     false

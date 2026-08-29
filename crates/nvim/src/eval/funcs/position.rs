@@ -15,11 +15,12 @@ use crate::eval::typval::{
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
-use crate::main::{curbuf, curwin, e_invarg, e_invarg2, p_spk, skip_update_topline};
+use crate::main::{curbuf, curwin, e_invarg, p_spk, skip_update_topline};
 use crate::mark::setmark_pos;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::r#move::{WinValid, update_curswant};
 use crate::os::cshim::gettext;
 use crate::plines::{getvvcol, win_chartabsize};
@@ -28,7 +29,7 @@ use crate::search::{
     BACKWARD, FORWARD, last_csearch, last_csearch_forward, last_csearch_until,
     set_csearch_direction, set_csearch_until, set_last_csearch,
 };
-use crate::semsg_c;
+use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T,
@@ -426,7 +427,9 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
             // arbitrary user bytes. Note that this reports and then
             // carries on to the range check below.
             let what = arg_string(&mut numbuf, args.get(0));
-            unsafe { semsg_c!(gettext(e_invarg2), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E475: Invalid argument: {what}");
         } else if lnum == 0 {
             lnum = unsafe { (*curwin.get()).w_cursor.lnum };
         }

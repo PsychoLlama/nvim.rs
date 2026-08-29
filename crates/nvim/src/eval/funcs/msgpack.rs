@@ -15,11 +15,10 @@ use crate::eval::encode::{
 use crate::eval::typval::{
     NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_first, tv_list_len,
 };
-use crate::main::{e_listarg, e_listblobarg};
 use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
-use crate::os::cshim::{gettext, gettext_ptr, memmove};
+use crate::os::cshim::{gettext_ptr, memmove};
 use crate::semsg;
 use crate::semsg_c;
 use crate::types::{
@@ -101,7 +100,8 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
     if args.ty(0) != VAR_LIST {
-        unsafe { semsg_c!(gettext(e_listarg), c"msgpackdump()".as_ptr(),) };
+        let arg0 = "msgpackdump()";
+        semsg!("E686: Argument of {arg0} must be a List");
         return;
     }
     let mut packer = packer_string_buffer();
@@ -247,7 +247,8 @@ pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // SAFETY throughout: the argument and the freshly allocated result list are both
     // live for the call.
     if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
-        unsafe { semsg_c!(gettext(e_listblobarg), c"msgpackparse()".as_ptr(),) };
+        let arg0 = "msgpackparse()";
+        semsg!("E899: Argument of {arg0} must be a List or Blob");
         return;
     }
     let ret_list = list_alloc_ret(rettv, kListLenMayKnow as isize);

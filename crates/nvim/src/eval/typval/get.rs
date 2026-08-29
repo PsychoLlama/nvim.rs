@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::NUL;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
@@ -48,7 +48,8 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
         }
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(tr(e_intern2), c"tv_get_number(UNKNOWN)".as_ptr(),) };
+            let arg0 = "tv_get_number(UNKNOWN)";
+            semsg!("E685: Internal error: {arg0}");
         }
         _ => {}
     }
@@ -118,7 +119,8 @@ pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
         VAR_SPECIAL => c"E907: Using a special value as a Float",
         VAR_BLOB => c"E975: Using a Blob as a Float",
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(tr(e_intern2), c"tv_get_float(UNKNOWN)".as_ptr(),) };
+            let arg0 = "tv_get_float(UNKNOWN)";
+            semsg!("E685: Internal error: {arg0}");
             return 0.0;
         }
         _ => return 0.0,

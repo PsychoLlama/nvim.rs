@@ -162,7 +162,9 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         // an exception.
         if !aborting() {
             if !fudi.fd_newkey.is_null() {
-                unsafe { semsg_c!(gettext(e_dictkey), fudi.fd_newkey,) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let fd_newkey = unsafe { c_str(fudi.fd_newkey) };
+                semsg!("E716: Key not present in Dictionary: \"{fd_newkey}\"");
             }
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
@@ -297,7 +299,9 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         && ea.skip == 0
                         && did_emsg.get() == 0
                     {
-                        unsafe { semsg_c!(gettext(e_trailing_arg), p) };
+                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                        let p = unsafe { c_str(p) };
+                        semsg!("E488: Trailing characters: {p}");
                     }
 
                     if KeyTyped.get() {

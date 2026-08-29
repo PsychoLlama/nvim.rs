@@ -13,11 +13,13 @@ use crate::eval::typval::{
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::hashtab::hash_removed;
-use crate::main::{called_emsg, e_listdictarg, e_reduce_of_an_empty_str_with_no_initial_value};
+use crate::main::{called_emsg, e_reduce_of_an_empty_str_with_no_initial_value};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -120,7 +122,9 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             } else {
                 c"min()".as_ptr()
             };
-            unsafe { semsg_c!(gettext(e_listdictarg), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E712: Argument of {what} must be a List or Dictionary");
             return;
         }
     }

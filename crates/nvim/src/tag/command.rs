@@ -564,9 +564,9 @@ impl DoTag {
 
             if num_matches.get() <= 0 {
                 if self.verbose {
-                    // SAFETY: the message macros expand to a `vim_snprintf` over
-                    // the format literal above and the editor's message buffers.
-                    unsafe { semsg!("E426: Tag not found: {}", c_str(name)) };
+                    // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+                    let name = unsafe { c_str(name) };
+                    semsg!("E426: Tag not found: {name}");
                 }
                 g_do_tagpreview.set(0);
                 return;
@@ -811,14 +811,9 @@ impl DoTag {
                 && (max_num_matches.get() != MAXCOL as c_int
                     || self.cur_match < num_matches.get() - 1));
         if !more {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe {
-                semsg!(
-                    "E429: File \"{}\" does not exist",
-                    c_str(nofile_fname.get())
-                )
-            };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let arg0 = unsafe { c_str(nofile_fname.get()) };
+            semsg!("E429: File \"{arg0}\" does not exist");
             return false;
         }
         self.error_cur_match = self.cur_match;

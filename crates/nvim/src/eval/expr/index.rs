@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use crate::winlayer::Live;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{null, null_mut};
@@ -25,10 +25,11 @@ use crate::eval::{
     e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
-use crate::main::{e_dictkey, e_dictkey_len, e_using_float_as_string};
+use crate::main::e_using_float_as_string;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
     EvalFuncData, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
@@ -322,9 +323,13 @@ pub(crate) unsafe fn eval_index_inner(
             let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
-                    unsafe { semsg_c!(gettext(e_dictkey_len), keylen, key) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let key = unsafe { c_str_len(key, keylen as usize) };
+                    semsg!("E716: Key not present in Dictionary: \"{key}\"");
                 } else {
-                    unsafe { semsg_c!(gettext(e_dictkey), key) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let key = unsafe { c_str(key) };
+                    semsg!("E716: Key not present in Dictionary: \"{key}\"");
                 }
             }
             if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {

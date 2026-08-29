@@ -27,9 +27,7 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::main::{
-    curbuf, curwin, e_api_error, e_invalwindow, e_toofewarg, e_toomanyarg, p_cpo, p_magic,
-};
+use crate::main::{curbuf, curwin, e_invalwindow, e_toofewarg, e_toomanyarg, p_cpo, p_magic};
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
@@ -37,7 +35,7 @@ use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, gettext_ptr, strncmp};
 use crate::semsg;
 use crate::semsg_c;
-use crate::semsg_multiline_c;
+use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
@@ -478,7 +476,9 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
     // SAFETY: `args` is the Array built above and both are locals.
     let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, out) };
     if err.type_0 != kErrorTypeNone {
-        unsafe { semsg_multiline_c!(c"emsg".as_ptr(), e_api_error.as_ptr(), err.msg,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let msg = unsafe { c_str(err.msg) };
+        semsg_multiline!(c"emsg", "E5555: API call: {msg}");
     } else {
         unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true, &raw mut err) };
     }

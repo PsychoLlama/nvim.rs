@@ -515,14 +515,9 @@ impl FindTags {
             unsafe { convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut()) };
         }
         if margs.sort_error {
-            // SAFETY: the message macros expand to a `vim_snprintf` over
-            // the format literal above and the editor's message buffers.
-            unsafe {
-                semsg!(
-                    "E432: Tags file not sorted: {}",
-                    c_str(self.tag_fname.as_ptr())
-                )
-            };
+            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+            let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+            semsg!("E432: Tags file not sorted: {tag_fname}");
         }
 
         // Stop searching once enough tags have been found.
@@ -596,14 +591,9 @@ impl FindTags {
                 TagMatch::Next => continue,
                 TagMatch::Stop => break,
                 TagMatch::Fail => {
-                    // SAFETY: the message macros expand to a `vim_snprintf` over
-                    // the format literal above and the editor's message buffers.
-                    unsafe {
-                        semsg!(
-                            "E431: Format error in tags file \"{}\"",
-                            c_str(self.tag_fname.as_ptr())
-                        )
-                    };
+                    // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+                    let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+                    semsg!("E431: Format error in tags file \"{tag_fname}\"");
                     // SAFETY: `self.fp` is the tag file this scan holds open.
                     let at = unsafe { ftello(self.fp) } as int64_t;
                     semsg!("Before byte {at}");

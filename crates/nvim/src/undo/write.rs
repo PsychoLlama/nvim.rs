@@ -29,7 +29,8 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
-                unsafe { smsg!(0, "{}", c_str(gettext(NO_UNDODIR).as_ptr())) };
+                let arg0 = unsafe { c_str(gettext(NO_UNDODIR).as_ptr()) };
+                smsg!(0, "{arg0}");
             });
             return;
         }
@@ -99,12 +100,8 @@ unsafe fn write_undo_file(
     let fd = unsafe { os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm) };
     if fd < 0 {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe {
-            semsg!(
-                "E828: Cannot open undo file for writing: {}",
-                c_str(file_name)
-            )
-        };
+        let file_name = unsafe { c_str(file_name) };
+        semsg!("E828: Cannot open undo file for writing: {file_name}");
         return;
     }
     // SAFETY: a NUL-terminated path, by the contract above.
@@ -120,14 +117,10 @@ unsafe fn write_undo_file(
     // SAFETY: our own descriptor, and a NUL-terminated mode.
     let fp: *mut FILE = unsafe { fdopen(fd, c"w".as_ptr()) };
     if fp.is_null() {
-        // SAFETY: a NUL-terminated literal and path, and a descriptor that
-        // `fdopen` did not take over.
-        unsafe {
-            semsg!(
-                "E828: Cannot open undo file for writing: {}",
-                c_str(file_name)
-            )
-        };
+        // SAFETY: a NUL-terminated path, and a descriptor that `fdopen` did
+        // not take over.
+        let shown = unsafe { c_str(file_name) };
+        semsg!("E828: Cannot open undo file for writing: {shown}");
         unsafe { close(fd) };
         unsafe { os_remove(file_name) };
         return;
@@ -144,7 +137,8 @@ unsafe fn write_undo_file(
     unsafe { fclose(fp) };
     if !write_ok {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe { semsg!("E829: Write error in undo file: {}", c_str(file_name)) };
+        let file_name = unsafe { c_str(file_name) };
+        semsg!("E829: Write error in undo file: {file_name}");
     }
     if !buf.b_ffname.is_null() {
         let acl: vim_acl_T = os_get_acl(buf.b_ffname);

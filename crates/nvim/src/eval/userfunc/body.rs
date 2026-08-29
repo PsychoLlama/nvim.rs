@@ -8,8 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
-use crate::swmsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::swmsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -120,7 +121,9 @@ pub(crate) unsafe fn get_function_body(
             }
             if theline.is_null() {
                 if !skip_until.is_null() {
-                    unsafe { semsg_c!(gettext(E_MISSING_HEREDOC_END_MARKER_STR), skip_until,) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let skip_until = unsafe { c_str(skip_until) };
+                    semsg!("E1145: Missing heredoc end marker: {skip_until}");
                 } else {
                     emsg(gettext(c"E126: Missing :endfunction"));
                 }
@@ -197,13 +200,9 @@ pub(crate) unsafe fn get_function_body(
                     {
                         nextcmd = line_arg;
                     } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose.get() > 0 {
-                        unsafe {
-                            swmsg_c!(
-                                true,
-                                gettext(c"W22: Text found after :endfunction: %s").as_ptr(),
-                                p,
-                            )
-                        };
+                        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                        let p = unsafe { c_str(p) };
+                        swmsg!(true, "W22: Text found after :endfunction: {p}");
                     }
                     if !nextcmd.is_null() {
                         // Another command follows.  If the line came from

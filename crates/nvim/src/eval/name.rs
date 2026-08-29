@@ -7,7 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_isdigit;
@@ -18,11 +19,9 @@ use crate::eval::{
     AUTOLOAD_CHAR, FNE_CHECK_START, FNE_INCL_BR, KS_EXTRA, eval_to_string, namespace_char,
 };
 use crate::keycodes::{K_SPECIAL, KE_SNR};
-use crate::main::e_invexpr2;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
-use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, Vv, partial_T, size_t, typval_T, uint8_t,
@@ -183,7 +182,8 @@ pub unsafe fn get_name_len(
     // SAFETY: as above.
     if len == 0 && verbose && unsafe { **arg } as c_int != NUL {
         // SAFETY: the format takes one string, which the cursor names.
-        unsafe { semsg_c!(gettext(e_invexpr2), *arg) };
+        let arg0 = unsafe { c_str(*arg) };
+        semsg!("E15: Invalid expression: \"{arg0}\"");
     }
     len
 }

@@ -3,7 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
-use crate::semsg_c;
+use crate::semsg;
 use crate::winlayer::Ea;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -21,8 +21,8 @@ use crate::ex_eval::aborting;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::highlight_group::{HLF_E, syn_name2id};
 use crate::main::{
-    called_emsg, did_emsg, e_invexpr2, force_abort, got_int, line_msg, msg_didout,
-    msg_ext_skip_verbose, need_clr_eos,
+    called_emsg, did_emsg, force_abort, got_int, line_msg, msg_didout, msg_ext_skip_verbose,
+    need_clr_eos,
 };
 use crate::memory::xfree;
 use crate::message::{
@@ -30,6 +30,7 @@ use crate::message::{
     msg_outnum, msg_ptr, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
     verbose_leave,
 };
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
@@ -105,9 +106,9 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
                 && did_emsg.get() == did_emsg_before
                 && called_emsg.get() == called_emsg_before
             {
-                // SAFETY: the format takes one string, and `start` is a
-                // NUL-terminated tail of the command line.
-                unsafe { semsg_c!(gettext(e_invexpr2), start) };
+                // SAFETY: the format takes one string, and `start` is a // NUL-terminated tail of the command line.
+                let start = unsafe { c_str(start) };
+                semsg!("E15: Invalid expression: \"{start}\"");
             }
             need_clr_eos.set(false);
             break;

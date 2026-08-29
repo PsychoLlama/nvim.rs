@@ -201,13 +201,8 @@ unsafe fn dir_is_usable(dir_name: *mut c_char, last_in_list: bool, reading: bool
     }
     // SAFETY: `failed_dir` is the NUL-terminated name `os_mkdir_recurse` left
     // there, and so is what `uv_strerror` hands back.
-    unsafe {
-        semsg!(
-            "E5003: Unable to create directory \"{}\" for undo file: {}",
-            c_str(failed_dir),
-            c_str(uv_strerror(ret))
-        )
-    };
+    let (shown, why) = unsafe { (c_str(failed_dir), c_str(uv_strerror(ret))) };
+    semsg!("E5003: Unable to create directory \"{shown}\" for undo file: {why}");
     unsafe { xfree(failed_dir.cast()) };
     false
 }
@@ -219,13 +214,8 @@ unsafe fn dir_is_usable(dir_name: *mut c_char, last_in_list: bool, reading: bool
 /// Both arguments are NUL-terminated.
 pub(crate) unsafe fn corruption_error(mesg: *const c_char, file_name: *const c_char) {
     // SAFETY: NUL-terminated strings, by the contract above.
-    unsafe {
-        semsg!(
-            "E825: Corrupted undo file ({}): {}",
-            c_str(mesg),
-            c_str(file_name)
-        )
-    };
+    let (mesg, file_name) = unsafe { (c_str(mesg), c_str(file_name)) };
+    semsg!("E825: Corrupted undo file ({mesg}): {file_name}");
 }
 
 /// Frees a header that never reached a buffer's store, and its entries.

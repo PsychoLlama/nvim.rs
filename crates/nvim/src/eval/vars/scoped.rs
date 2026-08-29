@@ -8,7 +8,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -196,13 +197,14 @@ pub(crate) unsafe fn tv_to_optval(
             }
             if idx == 0 || unsafe { *s.add(idx) } != NUL as c_char {
                 err = true;
-                unsafe {
-                    semsg_c!(
-                        translate(c"E521: Number required: &%s = '%s'"),
-                        option,
-                        if s.is_null() { c"".as_ptr() } else { s },
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (option, arg1) = unsafe {
+                    (
+                        c_str(option),
+                        c_str(if s.is_null() { c"".as_ptr() } else { s }),
                     )
                 };
+                semsg!("E521: Number required: &{option} = '{arg1}'");
             }
         }
         if option_has_num {
@@ -289,7 +291,9 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
 unsafe fn set_option_from_tv(varname: *const c_char, varp: *mut typval_T) {
     let opt_idx = find_option(unsafe { CStr::from_ptr(varname) });
     if opt_idx == kOptInvalid {
-        unsafe { semsg_c!(translate(e_unknown_option2), varname,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let varname = unsafe { c_str(varname) };
+        semsg!("E355: Unknown option: {varname}");
         return;
     }
     let mut error = false;

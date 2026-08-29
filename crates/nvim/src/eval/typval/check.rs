@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{FAIL, NUL, OK};
 
@@ -51,7 +52,8 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
         VAR_BOOL => c"E5299: Expected a Number or a String, Boolean found",
         VAR_SPECIAL => c"E5300: Expected a Number or a String",
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(tr(e_intern2), c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),) };
+            let arg0 = "tv_check_str_or_nr(UNKNOWN)";
+            semsg!("E685: Internal error: {arg0}");
             return false;
         }
         _ => unsafe { abort() },

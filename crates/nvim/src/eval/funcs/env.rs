@@ -18,13 +18,13 @@ use crate::eval::typval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
 use crate::guard::Suppress;
-use crate::main::{e_invarg2, p_verbose, p_wic};
+use crate::main::{p_verbose, p_wic};
 use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, strchr};
+use crate::os::cshim::strchr;
 use crate::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
     vim_setenv_ext, vim_unsetenv_ext,
@@ -33,7 +33,6 @@ use crate::os::fs::os_setperm;
 use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, FAIL, NUL, OK, OptInt, VAR_DICT,
     VAR_LIST, VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse,
@@ -245,7 +244,9 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         return;
     }
     if unsafe { strlen(mode_str) } != 9 {
-        unsafe { semsg_c!(gettext(e_invarg2), mode_str) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let mode_str = unsafe { c_str(mode_str) };
+        semsg!("E475: Invalid argument: {mode_str}");
         return;
     }
     let mut mode: c_int = 0;
@@ -317,7 +318,9 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         _ => {
             // The name is arbitrary user bytes, so this keeps the
             // variadic call.
-            unsafe { semsg!("E6100: \"{}\" is not a valid stdpath", c_str(p)) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let p = unsafe { c_str(p) };
+            semsg!("E6100: \"{p}\" is not a valid stdpath");
             return;
         }
     };

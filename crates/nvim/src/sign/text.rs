@@ -146,7 +146,8 @@ pub(crate) unsafe fn init_sign_text(
     if s != endp || cells > width_limit {
         if from_define {
             // SAFETY: the caller's text, and a format the message takes.
-            unsafe { semsg!("E239: Invalid sign text: {}", c_str(text)) };
+            let text = unsafe { c_str(text) };
+            semsg!("E239: Invalid sign text: {text}");
         }
         return FAIL;
     }

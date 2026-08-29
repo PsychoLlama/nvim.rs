@@ -10,9 +10,10 @@ use crate::eval::typval::{
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::ex_cmds::check_secure;
-use crate::main::{e_dictkey, e_invarg2, e_trailing_arg};
+use crate::main::{e_invarg2, e_trailing_arg};
 use crate::memory::xmalloc;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::message_fmt::c_str;
+use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::semsg_c;
 use crate::strings::vim_vsnprintf_typval;
@@ -141,7 +142,9 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         } else if lv.ll_range {
             semsg!("E786: Range not allowed");
         } else if !lv.ll_newkey.is_null() {
-            unsafe { semsg_c!(gettext(e_dictkey), lv.ll_newkey) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let ll_newkey = unsafe { c_str(lv.ll_newkey) };
+            semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
             rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as varnumber_T;
         } else {

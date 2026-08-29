@@ -11,7 +11,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::{Lock, Suppress};
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -39,11 +40,10 @@ use crate::eval::{
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
 use crate::hashtab::hash_init;
-use crate::main::{called_emsg, current_sctx, did_emsg, e_invexpr2};
+use crate::main::{called_emsg, current_sctx, did_emsg};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
-use crate::os::cshim::gettext;
 use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST,
@@ -237,7 +237,9 @@ pub(crate) unsafe fn eval1_emsg(
         && did_emsg.get() == did_emsg_before
         && called_emsg.get() == called_emsg_before
     {
-        unsafe { semsg_c!(gettext(e_invexpr2), start) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let start = unsafe { c_str(start) };
+        semsg!("E15: Invalid expression: \"{start}\"");
     }
     unsafe { clear_evalarg(&raw mut evalarg, eap) };
     ret
@@ -340,7 +342,9 @@ pub(crate) unsafe fn eval_expr_string(expr: *const typval_T, rettv: *mut typval_
     }
     if unsafe { *skipwhite(s) } as c_int != NUL {
         unsafe { tv_clear(rettv) };
-        unsafe { semsg_c!(gettext(e_invexpr2), s) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let s = unsafe { c_str(s) };
+        semsg!("E15: Invalid expression: \"{s}\"");
         return FAIL;
     }
     OK

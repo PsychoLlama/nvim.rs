@@ -6,7 +6,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -36,7 +37,9 @@ pub unsafe fn eval_one_expr_in_str(
     let block_start = unsafe { skipwhite(p.add(1)) };
     let mut block_end = block_start;
     if unsafe { *block_start } == NUL as c_char {
-        unsafe { semsg_c!(translate(e_missing_close_curly_str), p,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let p = unsafe { c_str(p) };
+        semsg!("E1279: Missing '}}': {p}");
         return ptr::null_mut();
     }
     if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) } == FAIL {
@@ -44,7 +47,9 @@ pub unsafe fn eval_one_expr_in_str(
     }
     block_end = unsafe { skipwhite(block_end) };
     if unsafe { *block_end } != b'}' as c_char {
-        unsafe { semsg_c!(translate(e_missing_close_curly_str), p,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let p = unsafe { c_str(p) };
+        semsg!("E1279: Missing '}}': {p}");
         return ptr::null_mut();
     }
     if evaluate {
@@ -95,7 +100,9 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(1) };
             escaped_brace = true;
         } else if here == b'}' {
-            unsafe { semsg_c!(translate(e_stray_closing_curly_str), str,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(str) };
+            semsg!("E1278: Stray '}}' without a matching '{{': {arg0}");
             unsafe { ga_clear(&raw mut ga) };
             return ptr::null_mut();
         }
@@ -210,7 +217,9 @@ pub unsafe fn heredoc_get(
         let p = unsafe { skiptowhite(marker) };
         let after = unsafe { *skipwhite(p) };
         if after != NUL as c_char && after != COMMENT_CHAR {
-            unsafe { semsg_c!(translate(e_trailing_arg), p) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let p = unsafe { c_str(p) };
+            semsg!("E488: Trailing characters: {p}");
             return ptr::null_mut();
         }
         unsafe { *p = NUL as c_char };
@@ -238,7 +247,9 @@ pub unsafe fn heredoc_get(
         if heredoc_in_string {
             if unsafe { *line_arg } == NUL as c_char {
                 if !script_get {
-                    unsafe { semsg_c!(translate(e_missing_end_marker_str), marker) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let marker = unsafe { c_str(marker) };
+                    semsg!("E990: Missing end marker '{marker}'");
                 }
                 break;
             }
@@ -258,7 +269,9 @@ pub unsafe fn heredoc_get(
             theline = unsafe { getline(NUL as c_int, ea.cookie, 0, false) };
             if theline.is_null() {
                 if !script_get {
-                    unsafe { semsg_c!(translate(e_missing_end_marker_str), marker) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let marker = unsafe { c_str(marker) };
+                    semsg!("E990: Missing end marker '{marker}'");
                 }
                 break;
             }

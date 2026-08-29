@@ -11,7 +11,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
 
@@ -26,7 +25,6 @@ use crate::eval::{
 use crate::eval::{Cur, Tv};
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
 use crate::keycodes::{find_special_key, trans_special};
-use crate::main::{e_invexpr2, e_stray_closing_curly_str};
 use crate::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
@@ -324,7 +322,9 @@ pub(crate) unsafe fn eval_number(
         unsafe { vim_str2nr(text, skip_pre, lenp, all, np, no_len, 0, true, no_ov) };
         if len == 0 {
             if evaluate {
-                unsafe { semsg_c!(gettext(e_invexpr2), text) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let text = unsafe { c_str(text) };
+                semsg!("E15: Invalid expression: \"{text}\"");
             }
             return FAIL;
         }
@@ -397,7 +397,9 @@ pub(crate) unsafe fn eval_string(
             p.step(1);
             if p.behind(1) == b'}' && p.byte() != b'}' {
                 let text = cur.get();
-                unsafe { semsg_c!(gettext(e_stray_closing_curly_str), text) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let text = unsafe { c_str(text) };
+                semsg!("E1278: Stray '}}' without a matching '{{': {text}");
                 return FAIL;
             }
             extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
@@ -601,7 +603,9 @@ pub(crate) unsafe fn eval_lit_string(
                 p.step(1);
                 if p.byte() != b'}' {
                     let text = cur.get();
-                    unsafe { semsg_c!(gettext(e_stray_closing_curly_str), text) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let text = unsafe { c_str(text) };
+                    semsg!("E1278: Stray '}}' without a matching '{{': {text}");
                     return FAIL;
                 }
                 reduce += 1;

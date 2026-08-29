@@ -171,7 +171,9 @@ pub(crate) unsafe fn get_function_args(
             if mustend && p.chr() != endchar {
                 if !skip {
                     let at = unsafe { *argp };
-                    unsafe { semsg_c!(gettext(e_invarg2), at) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let at = unsafe { c_str(at) };
+                    semsg!("E475: Invalid argument: {at}");
                 }
                 break;
             }

@@ -282,7 +282,9 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.
-        unsafe { semsg!("E5009: Invalid $VIMRUNTIME: {}", c_str(vimruntime)) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let vimruntime = unsafe { c_str(vimruntime) };
+        semsg!("E5009: Invalid $VIMRUNTIME: {vimruntime}");
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }

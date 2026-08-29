@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -20,6 +21,7 @@ use core::ptr;
 
 use super::*;
 use crate::message::emsg_ptr;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL};
 
@@ -88,7 +90,9 @@ pub unsafe fn set_var_const(
     let watched = unsafe { tv_dict_is_watched(dict) };
 
     if ht.is_null() || unsafe { *varname } == NUL as c_char {
-        unsafe { semsg_c!(translate(e_illvar), name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let name = unsafe { c_str(name) };
+        semsg!("E461: Illegal variable name: {name}");
         return;
     }
     // `varname` is `name` itself or `name + 2`, so this cannot go
@@ -149,7 +153,9 @@ pub unsafe fn set_var_const(
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if ht == get_vimvar_ht() || ht == unsafe { get_funccal_args_ht() } {
-            unsafe { semsg_c!(translate(e_illvar), name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E461: Illegal variable name: {name}");
             return;
         }
         if !unsafe { valid_varname(varname) } {
@@ -245,13 +251,9 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe {
-        semsg_c!(
-            translate(c"E1122: Variable is locked: %.*s"),
-            name_len as c_int,
-            name,
-        )
-    };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let name = unsafe { c_str_len(name, name_len) };
+    semsg!("E1122: Variable is locked: {name}");
     true
 }
 
@@ -270,13 +272,9 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe {
-        semsg_c!(
-            translate(e_cannot_delete_variable_str),
-            name_len as c_int,
-            name,
-        )
-    };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let name = unsafe { c_str_len(name, name_len) };
+    semsg!("E795: Cannot delete variable {name}");
     true
 }
 
@@ -335,7 +333,9 @@ pub unsafe fn valid_varname(varname: *const c_char) -> bool {
             && (p == varname || !ascii_isdigit(c_int::from(c)))
             && c != AUTOLOAD_CHAR as c_char
         {
-            unsafe { semsg_c!(translate(e_illvar), varname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let varname = unsafe { c_str(varname) };
+            semsg!("E461: Illegal variable name: {varname}");
             return false;
         }
         p = unsafe { p.add(1) };

@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, OK};
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
@@ -316,7 +316,7 @@ pub unsafe fn tv_list_remove(
     }
     let item = unsafe { tv_list_find(l, idx as ::core::ffi::c_int) };
     if item.is_null() {
-        unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), idx,) };
+        semsg!("E684: List index out of range: {}", idx);
         return;
     }
 
@@ -335,7 +335,7 @@ pub unsafe fn tv_list_remove(
     }
     let item2 = unsafe { tv_list_find(l, end as ::core::ffi::c_int) };
     if item2.is_null() {
-        unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), end,) };
+        semsg!("E684: List index out of range: {}", end);
         return;
     }
 
@@ -508,7 +508,7 @@ pub unsafe fn tv_list_find_str(
 ) -> *const ::core::ffi::c_char {
     let li = unsafe { tv_list_find(l, n) };
     if li.is_null() {
-        unsafe { semsg_c!(tr(e_list_index_out_of_range_nr), n as int64_t,) };
+        semsg!("E684: List index out of range: {}", n as int64_t);
         return ::core::ptr::null();
     }
     unsafe { numbuf.string(&raw const (*li).li_tv) }

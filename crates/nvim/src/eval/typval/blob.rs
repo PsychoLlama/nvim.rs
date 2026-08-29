@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::message::emsg_ptr;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{FAIL, OK};
 
@@ -126,7 +127,7 @@ pub(crate) unsafe fn tv_blob_index(
         idx += varnumber_T::from(len);
     }
     if idx >= varnumber_T::from(len) || idx < 0 {
-        unsafe { semsg_c!(tr(e_blobidx), idx,) };
+        semsg!("E979: Blob index out of range: {}", idx);
         return FAIL;
     }
 
@@ -163,7 +164,7 @@ pub unsafe fn tv_blob_check_index(
 ) -> ::core::ffi::c_int {
     if n1 < 0 || n1 > varnumber_T::from(bloblen) {
         if !quiet {
-            unsafe { semsg_c!(tr(e_blobidx), n1,) };
+            semsg!("E979: Blob index out of range: {}", n1);
         }
         return FAIL;
     }
@@ -179,7 +180,7 @@ pub unsafe fn tv_blob_check_range(
 ) -> ::core::ffi::c_int {
     if n2 < 0 || n2 >= varnumber_T::from(bloblen) || n2 < n1 {
         if !quiet {
-            unsafe { semsg_c!(tr(e_blobidx), n2,) };
+            semsg!("E979: Blob index out of range: {}", n2);
         }
         return FAIL;
     }
@@ -251,7 +252,7 @@ pub unsafe fn tv_blob_remove(
         idx += len;
     }
     if idx < 0 || idx >= len {
-        unsafe { semsg_c!(tr(e_blobidx), idx,) };
+        semsg!("E979: Blob index out of range: {}", idx);
         return;
     }
     // SAFETY: past the range check `len` is at least 1, which a NULL blob
@@ -279,7 +280,7 @@ pub unsafe fn tv_blob_remove(
         end += len;
     }
     if end >= len || idx > end {
-        unsafe { semsg_c!(tr(e_blobidx), end,) };
+        semsg!("E979: Blob index out of range: {}", end);
         return;
     }
 

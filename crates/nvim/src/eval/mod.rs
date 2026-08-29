@@ -167,7 +167,6 @@ pub const DICT_MAXNEST: c_int = 100 as c_int;
 /// format string for `semsg` or a plain one for `emsg`; both want a
 /// NUL-terminated pointer, which is what `as_ptr()` gives.
 pub(crate) const e_missbrac: &CStr = c"E111: Missing ']'";
-pub(crate) const e_list_end: &CStr = c"E697: Missing end of List ']': %s";
 pub(crate) const e_cannot_slice_dictionary: &CStr = c"E719: Cannot slice a Dictionary";
 pub(crate) const e_cannot_index_special_variable: &CStr = c"E909: Cannot index a special variable";
 pub(crate) const e_nowhitespace: &CStr = c"E274: No white space allowed before parenthesis";
@@ -175,7 +174,6 @@ pub(crate) const e_cannot_index_a_funcref: &CStr = c"E695: Cannot index a Funcre
 pub(crate) const e_variable_nested_too_deep_for_making_copy: &CStr =
     c"E698: Variable nested too deep for making a copy";
 pub(crate) const e_string_list_or_blob_required: &CStr = c"E1098: String, List or Blob required";
-pub(crate) const e_expression_too_recursive_str: &CStr = c"E1169: Expression too recursive: %s";
 pub(crate) const e_dot_can_only_be_used_on_dictionary_str: &CStr =
     c"E1203: Dot can only be used on a dictionary: %s";
 pub(crate) const e_empty_function_name: &CStr = c"E1192: Empty function name";

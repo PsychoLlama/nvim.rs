@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
 use crate::semsg_c;
 use crate::winlayer::{Ea, Live};
 use core::ffi::{c_char, c_int};
@@ -24,10 +25,10 @@ use crate::eval::typval::{tv_check_num, tv_check_str, tv_clear, tv_get_number_ch
 use crate::eval::userfunc::{call_simple_func, call_simple_luafunc, get_lambda_tv};
 use crate::eval::vars::{check_vars, eval_variable, get_vim_var_partial};
 use crate::eval::{
-    EVAL_EVALUATE, EXPR_UNKNOWN, NOTDONE, Tv, comparison_at, e_expression_too_recursive_str,
-    eval_dict, eval_env_var, eval_func, eval_interp_string, eval_list, eval_lit_dict,
-    eval_lit_string, eval_number, eval_option, eval_string, get_name_len, handle_subscript,
-    kGRegExprSrc, skip_luafunc_name, to_name_end, typval_compare,
+    EVAL_EVALUATE, EXPR_UNKNOWN, NOTDONE, Tv, comparison_at, eval_dict, eval_env_var, eval_func,
+    eval_interp_string, eval_list, eval_lit_dict, eval_lit_string, eval_number, eval_option,
+    eval_string, get_name_len, handle_subscript, kGRegExprSrc, skip_luafunc_name, to_name_end,
+    typval_compare,
 };
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
@@ -35,6 +36,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{called_emsg, did_emsg, e_invexpr2, e_trailing_arg, p_ic};
 use crate::memory::{strnequal, xfree};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
@@ -693,7 +695,9 @@ pub(crate) unsafe fn eval7(
 
     if RECURSE.get() == MAX_RECURSE {
         let at = cur.get();
-        unsafe { semsg_c!(gettext(e_expression_too_recursive_str), at) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let at = unsafe { c_str(at) };
+        semsg!("E1169: Expression too recursive: {at}");
         return FAIL;
     }
     RECURSE.set(RECURSE.get() + 1);

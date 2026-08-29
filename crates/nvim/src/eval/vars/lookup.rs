@@ -8,7 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str_len;
+use crate::semsg;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -151,7 +152,9 @@ pub unsafe fn eval_variable(
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
         if !rettv.is_null() && verbose {
-            unsafe { semsg_c!(translate(c"E121: Undefined variable: %.*s"), len, name,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str_len(name, len as usize) };
+            semsg!("E121: Undefined variable: {name}");
         }
         return FAIL;
     }

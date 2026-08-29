@@ -564,9 +564,9 @@ pub(crate) unsafe fn arg_event_skip(
         if unsafe { *arg.add(1) } != 0
             && !ascii_iswhite(unsafe { *arg.add(1) } as ::core::ffi::c_int)
         {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the
-            // format literal above and the editor's message buffers.
-            unsafe { semsg!("E215: Illegal character after *: {}", c_str(arg)) };
+            // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E215: Illegal character after *: {arg}");
             return ::core::ptr::null_mut();
         }
         return unsafe { arg.add(1) };

@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
+use crate::semsg;
 use crate::semsg_c;
 
 /// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
@@ -102,7 +103,8 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
         }
         VAR_UNKNOWN => {
-            unsafe { semsg_c!(tr(e_intern2), c"tv_copy(UNKNOWN)".as_ptr(),) };
+            let arg0 = "tv_copy(UNKNOWN)";
+            semsg!("E685: Internal error: {arg0}");
         }
         _ => {}
     }

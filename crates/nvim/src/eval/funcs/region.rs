@@ -14,20 +14,18 @@ use crate::eval::typval::{
     tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
-use crate::main::{
-    curbuf, curwin, e_buffer_is_not_loaded, e_invalid_column_number_nr, e_invalid_line_number_nr,
-    e_invargNval, p_sel, virtual_op,
-};
+use crate::main::{curbuf, curwin, e_buffer_is_not_loaded, p_sel, virtual_op};
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
 use crate::memory::xmalloc;
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
 use crate::os::cshim::{gettext, memmove};
 use crate::plines::getvvcol;
 use crate::pos::{MAXCOL, equalpos, lt};
-use crate::semsg_c;
+use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
     EvalFuncData, FAIL, MotionType, NUL, OK, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
@@ -239,7 +237,9 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // over `spec` and leaves `p` on the terminator when it consumed the
     // whole width.
     let bad = || {
-        unsafe { semsg_c!(gettext(e_invargNval), c"type".as_ptr(), spec,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (arg0, spec) = unsafe { (c_str(c"type".as_ptr()), c_str(spec)) };
+        semsg!("E475: Invalid value for argument {arg0}: {spec}");
         None
     };
     match unsafe { CStr::from_ptr(spec) }.to_bytes() {
@@ -271,14 +271,14 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
     if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {
-        unsafe { semsg_c!(gettext(e_invalid_line_number_nr), p.lnum,) };
+        semsg!("E966: Invalid line number: {}", p.lnum);
         return None;
     }
     let len = unsafe { ml_get_buf_len(buf, p.lnum) };
     if p.col == MAXCOL as colnr_T {
         p.col = len + 1;
     } else if p.col < 1 || p.col > len + 1 {
-        unsafe { semsg_c!(gettext(e_invalid_column_number_nr), p.col,) };
+        semsg!("E964: Invalid column number: {}", p.col);
         return None;
     }
     Some(())

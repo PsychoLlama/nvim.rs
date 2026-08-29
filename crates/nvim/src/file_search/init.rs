@@ -11,7 +11,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::message_fmt::c_str;
 use crate::option::cpo_has;
 use crate::semsg;
 use crate::types::{CpoFlag, FAIL, MAXPATHL};
@@ -185,8 +184,7 @@ unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
 
         at = errpt;
         if unsafe { *at } != 0 && !vim_ispathsep(unsafe { *at } as c_int) {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(c"/".as_ptr()) };
+            let arg0 = "/";
             semsg!(
                 "E343: Invalid path: '**[number]' must be at the end of the path or be followed by '{arg0}'."
             );

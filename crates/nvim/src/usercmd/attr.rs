@@ -144,7 +144,8 @@ pub(crate) unsafe fn parse_compl_arg(
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
-        unsafe { semsg!("E180: Invalid complete value: {}", c_str(value)) };
+        let value = unsafe { c_str(value) };
+        semsg!("E180: Invalid complete value: {value}");
         return FAIL;
     };
     *complp = expand;

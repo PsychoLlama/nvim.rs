@@ -15,9 +15,9 @@ use crate::eval::typval::{
     tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
     tv_list_append_owned_tv, tv_list_free, tv_list_set_ret,
 };
-use crate::eval::{Cur, EVAL_EVALUATE, NOTDONE, Tv, e_list_end, eval1};
+use crate::eval::{Cur, EVAL_EVALUATE, NOTDONE, Tv, eval1};
 use crate::memory::xmemdupz;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext_ptr;
 use crate::types::{
     FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
     ptrdiff_t, size_t, typval_T, typval_vval_union,
@@ -92,7 +92,9 @@ pub(crate) unsafe fn eval_list(
         }
         if cur.byte() != b']' {
             let at = cur.get();
-            unsafe { semsg_c!(gettext(e_list_end), at) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let at = unsafe { c_str(at) };
+            semsg!("E697: Missing end of List ']': {at}");
             break 'items false;
         }
         cur.skip(1);

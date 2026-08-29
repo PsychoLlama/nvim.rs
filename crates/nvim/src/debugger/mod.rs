@@ -371,7 +371,8 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
     };
     if malformed {
         // SAFETY: caller contract.
-        unsafe { semsg!("E475: Invalid argument: {}", c_str(arg)) };
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
         return FAIL;
     }
 
@@ -557,7 +558,8 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
 
     let Some(todel) = todel else {
         // SAFETY: `arg` is NUL-terminated.
-        unsafe { semsg!("E161: Breakpoint not found: {}", c_str(arg)) };
+        let arg = unsafe { c_str(arg) };
+        semsg!("E161: Breakpoint not found: {arg}");
         return;
     };
 

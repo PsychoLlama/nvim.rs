@@ -548,12 +548,8 @@ pub unsafe fn check_overwrite(
     }
     if !confirming() {
         // SAFETY: one `%s` for one string.
-        unsafe {
-            semsg!(
-                "E768: Swap file exists: {} (:silent! overrides)",
-                c_str(swapname.0)
-            )
-        };
+        let arg0 = unsafe { c_str(swapname.0) };
+        semsg!("E768: Swap file exists: {arg0} (:silent! overrides)");
         return FAIL;
     }
     // SAFETY: one `%s` for `swapname`.

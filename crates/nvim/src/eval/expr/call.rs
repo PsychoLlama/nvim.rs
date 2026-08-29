@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use crate::winlayer::{Live, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{null, null_mut};
@@ -26,9 +26,9 @@ use crate::eval::{
     e_nowhitespace, eval7, get_name_len, is_luafunc, skip_luafunc_name,
 };
 use crate::ex_eval::aborting;
-use crate::main::{e_invexpr2, e_missingparen, e_not_callable_type_str, e_trailing_arg};
 use crate::memory::{strnequal, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -231,7 +231,9 @@ pub(crate) unsafe fn eval_lambda(
                 emsg(gettext(e_nowhitespace));
             } else {
                 let what = c"lambda".as_ptr();
-                unsafe { semsg_c!(gettext(e_missingparen), what) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let what = unsafe { c_str(what) };
+                semsg!("E107: Missing parentheses: {what}");
             }
         }
         unsafe { tv_clear(rettv) };
@@ -292,7 +294,9 @@ pub(crate) unsafe fn eval_method(
             if lua_funcname.is_null() {
                 emsg(gettext(c"E260: Missing name after ->"));
             } else {
-                unsafe { semsg_c!(gettext(e_invexpr2), name) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let name = unsafe { c_str(name) };
+                semsg!("E15: Invalid expression: \"{name}\"");
             }
         }
         ret = FAIL;
@@ -319,7 +323,9 @@ pub(crate) unsafe fn eval_method(
             } else if unsafe { *skipwhite(cur.get()) } as c_int != NUL {
                 if verbose {
                     let at = cur.get();
-                    unsafe { semsg_c!(gettext(e_trailing_arg), at) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let at = unsafe { c_str(at) };
+                    semsg!("E488: Trailing characters: {at}");
                 }
                 ret = FAIL;
             } else if callee.v_type == VAR_FUNC && !unsafe { callee.vval.v_string }.is_null() {
@@ -351,7 +357,9 @@ pub(crate) unsafe fn eval_method(
                 }
             } else {
                 if verbose {
-                    unsafe { semsg_c!(gettext(e_not_callable_type_str), name) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let name = unsafe { c_str(name) };
+                    semsg!("E1085: Not a callable type: {name}");
                 }
                 ret = FAIL;
             }
@@ -363,7 +371,9 @@ pub(crate) unsafe fn eval_method(
             let basep = &raw mut base;
             if cur.byte() != b'(' {
                 if verbose {
-                    unsafe { semsg_c!(gettext(e_missingparen), name) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let name = unsafe { c_str(name) };
+                    semsg!("E107: Missing parentheses: {name}");
                 }
                 ret = FAIL;
             } else if ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int) {

@@ -168,7 +168,8 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 /// `sp` must be a live sign definition.
 pub(crate) unsafe fn sign_list_defined(sp: Sign) {
     // SAFETY: a definition's name, icon and cells are its own.
-    unsafe { smsg!(0, "sign {}", c_str(sp.sn_name)) };
+    let sn_name = unsafe { c_str(sp.sn_name) };
+    smsg!(0, "sign {sn_name}");
     if !sp.sn_icon.is_null() {
         unsafe { msg_puts(c" icon=".as_ptr()) };
         unsafe { msg_outtrans(sp.sn_icon, 0, false) };
@@ -206,7 +207,8 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
         Some(sp) => unsafe { sign_list_defined(sp) },
         None => {
             // SAFETY: the caller's name, and a format the message takes.
-            unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
+            let name = unsafe { c_str(name) };
+            semsg!("E155: Unknown sign: {name}");
         }
     }
 }

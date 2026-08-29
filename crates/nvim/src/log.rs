@@ -293,7 +293,8 @@ pub(crate) unsafe fn logmsg_begin(
                 func_name
             };
             // SAFETY: the caller's strings, formatted with matching verbs.
-            unsafe { msg_schedule_semsg!("E5430: {}:{}: recursive log!", c_str(who), line_num) };
+            let who = unsafe { c_str(who) };
+            msg_schedule_semsg!("E5430: {who}:{}: recursive log!", line_num);
         }
         g_stats.with_mut(|s| s.log_skip += 1);
         log_unlock();

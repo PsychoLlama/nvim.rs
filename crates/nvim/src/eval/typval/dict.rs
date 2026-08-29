@@ -10,7 +10,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{CONV_NONE, FAIL, NUL, OK, Refcount};
 
 /// The dictionary already has an entry under that key — or, in a scope
@@ -112,7 +113,8 @@ pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
     if unsafe { (*hi).is_kept() } {
         unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
     } else {
-        unsafe { semsg_c!(tr(e_intern2), c"tv_dict_item_remove()".as_ptr(),) };
+        let arg0 = "tv_dict_item_remove()";
+        semsg!("E685: Internal error: {arg0}");
     }
     unsafe { tv_dict_item_free(item) };
 }
@@ -528,7 +530,9 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
                 }
             }
         } else if action == b'e' {
-            unsafe { semsg_c!(tr(c"E737: Key already exists: %s"), di2_key) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let di2_key = unsafe { c_str(di2_key) };
+            semsg!("E737: Key already exists: {di2_key}");
             break;
         } else if action == b'f' && di2 != di1 {
             if unsafe { value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len) } || {
@@ -713,7 +717,8 @@ pub unsafe fn tv_dict_remove(
 ) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        unsafe { semsg_c!(tr(e_toomanyarg), c"remove()".as_ptr(),) };
+        let arg0 = "remove()";
+        semsg!("E118: Too many arguments for function: {arg0}");
         return;
     }
 
@@ -728,7 +733,9 @@ pub unsafe fn tv_dict_remove(
     }
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
-        unsafe { semsg_c!(tr(e_dictkey), key,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let key = unsafe { c_str(key) };
+        semsg!("E716: Key not present in Dictionary: \"{key}\"");
         return;
     }
     // SAFETY: the item the lookup just found in `d`.

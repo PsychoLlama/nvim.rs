@@ -29,10 +29,11 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
-use crate::main::{e_api_spawn_failed, e_invarg, e_invarg2};
+use crate::main::{e_api_spawn_failed, e_invarg};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::emsg_ptr;
 use crate::os::cshim::gettext;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
@@ -281,9 +282,8 @@ pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eva
     }
 
     if argv[1].v_type != VAR_DICT {
-        // Wrong argument types.
-        // SAFETY: `e_invarg2` takes one string.
-        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
+        // Wrong argument types. // SAFETY: `e_invarg2` takes one string.
+        semsg!("E475: Invalid argument: {}", "expected dictionary");
         return;
     }
 

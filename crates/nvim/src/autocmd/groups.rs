@@ -105,9 +105,9 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
     // SAFETY: `name` is the caller's NUL-terminated string.
     let group = unsafe { augroup_find(name) };
     if group == AUGROUP_ERROR {
-        // SAFETY: the message macros expand to a `vim_snprintf` over the
-        // format literal above and the editor's message buffers.
-        unsafe { semsg!("E367: No such group: \"{}\"", c_str(name)) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
+        let name = unsafe { c_str(name) };
+        semsg!("E367: No such group: \"{name}\"");
         return;
     } else if group == current_augroup.get() {
         emsg(gettext(c"E936: Cannot delete the current group"));

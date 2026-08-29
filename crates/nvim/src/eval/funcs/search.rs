@@ -14,21 +14,21 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{NumBuf, tv_get_string_buf_chk, tv_list_append_number};
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
-use crate::main::{curwin, e_invarg2, p_cpo, p_ws};
+use crate::main::{curwin, p_cpo, p_ws};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
+use crate::message_fmt::c_str;
 use crate::normal::find_decl;
 use crate::option::{kOptValTypeString, set_option_value_give_err};
 use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
-use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
 use crate::regexp::RE_SEARCH;
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_END, SEARCH_KEEP, SEARCH_START, searchit,
 };
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, OptionSetFlags, VAR_UNKNOWN, int64_t,
     linenr_T, pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
@@ -148,7 +148,9 @@ unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
                     // The message quotes the rest of the flag string
                     // from the offending letter on, not just the
                     // letter, and those are arbitrary user bytes.
-                    unsafe { semsg_c!(gettext(e_invarg2), p) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let p = unsafe { c_str(p) };
+                    semsg!("E475: Invalid argument: {p}");
                     dir = 0;
                 }
             },
@@ -221,7 +223,9 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
     {
         let what = arg_string(&mut numbuf2, args.get(1));
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return 0;
     }
 
@@ -403,7 +407,9 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     // `e` and `p` belong to search(); `n` and `s` contradict each other.
     if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
         let what = arg_string(&mut numbuf2, args.get(3));
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return 0;
     }
 
@@ -422,14 +428,18 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
             lnum_stop = arg_number_chk(args.get(5), None) as linenr_T;
             if lnum_stop < 0 {
                 let what = arg_string(&mut numbuf3, args.get(5));
-                unsafe { semsg_c!(gettext(e_invarg2), what) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let what = unsafe { c_str(what) };
+                semsg!("E475: Invalid argument: {what}");
                 return 0;
             }
             if args.has(6) {
                 time_limit = arg_number_chk(args.get(6), None) as int64_t;
                 if time_limit < 0 {
                     let what = arg_string(&mut numbuf4, args.get(6));
-                    unsafe { semsg_c!(gettext(e_invarg2), what) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let what = unsafe { c_str(what) };
+                    semsg!("E475: Invalid argument: {what}");
                     return 0;
                 }
             }

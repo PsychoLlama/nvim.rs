@@ -7,7 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -93,9 +94,13 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     {
         unsafe { clear_lval(redir_lval.get()) };
         if trailing.is_some_and(|c| c != NUL as c_char) {
-            unsafe { semsg_c!(translate(e_trailing_arg), endp) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let endp = unsafe { c_str(endp) };
+            semsg!("E488: Trailing characters: {endp}");
         } else {
-            unsafe { semsg_c!(translate(e_invarg2), name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E475: Invalid argument: {name}");
         }
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());

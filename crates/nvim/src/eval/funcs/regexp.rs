@@ -15,17 +15,16 @@ use crate::eval::typval::{
     tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_find, tv_list_first,
     tv_list_item_remove, tv_list_uidx,
 };
-use crate::main::{
-    did_emsg, e_buffer_is_not_loaded, e_invalid_buffer_name_str, e_invargval, p_cpo, p_ic,
-};
+use crate::main::{did_emsg, e_buffer_is_not_loaded, p_cpo, p_ic};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmemdupz};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{
     EvalFuncData, FAIL, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
     kListLenUnknown, linenr_T, list_T, listitem_T, regmatch_T, regprog_T, typval_T, varnumber_T,
@@ -408,7 +407,9 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
             let what = arg_string(&mut numbuf, args.get(0));
-            unsafe { semsg_c!(gettext(e_invalid_buffer_name_str), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E158: Invalid buffer name: {what}");
         }
         return;
     }
@@ -425,7 +426,8 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         return;
     }
     if slnum < 1 {
-        unsafe { semsg_c!(gettext(e_invargval), c"lnum".as_ptr(),) };
+        let arg0 = "lnum";
+        semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
     let mut elnum: linenr_T = unsafe { tv_get_lnum_buf(args.ptr(3), buf) };
@@ -433,7 +435,8 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         return;
     }
     if elnum < 1 || elnum < slnum {
-        unsafe { semsg_c!(gettext(e_invargval), c"end_lnum".as_ptr(),) };
+        let arg0 = "end_lnum";
+        semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
     elnum = elnum.min(unsafe { (*buf).b_ml.ml_line_count });
@@ -474,7 +477,8 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
         return Some(false);
     }
     if unsafe { (*di).di_tv.v_type } != VAR_BOOL {
-        unsafe { semsg_c!(gettext(e_invargval), c"submatches".as_ptr(),) };
+        let arg0 = "submatches";
+        semsg!("E475: Invalid value for argument {arg0}");
         return None;
     }
     Some(unsafe { tv_get_bool(&raw mut (*di).di_tv) } != 0)

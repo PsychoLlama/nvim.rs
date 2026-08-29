@@ -10,12 +10,10 @@ use crate::eval::string2float;
 use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_find, tv_list_len};
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
-use crate::main::e_invarg2;
-use crate::os::cshim::gettext;
+use crate::message_fmt::c_str;
 use crate::os::env::os_get_pid;
 use crate::os::time::os_hrtime;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{EvalFuncData, VAR_FLOAT, VAR_LIST, VAR_NUMBER, float_T, typval_T, varnumber_T};
 use core::ffi::{c_char, c_double, c_int, c_void};
 use core::ptr;
@@ -290,7 +288,9 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             // SAFETY throughout: `args.ptr(0)` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
             let what = arg_string(&mut numbuf, args.get(0));
-            unsafe { semsg_c!(gettext(e_invarg2), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E475: Invalid argument: {what}");
             rettv.v_type = VAR_NUMBER;
             rettv.vval.v_number = -1;
             return;

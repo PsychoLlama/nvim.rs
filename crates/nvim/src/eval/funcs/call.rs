@@ -29,9 +29,8 @@ use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
 use crate::main::{
-    capture_ga, e_invarg2, e_invexpr2, e_libcall, e_toomanyarg, e_trailing_arg,
-    e_unknown_function_str, emsg_noredir, emsg_silent, garbage_collect_at_exit, msg_col,
-    need_clr_eos, redir_off, want_garbage_collect,
+    capture_ga, e_toomanyarg, e_unknown_function_str, emsg_noredir, emsg_silent,
+    garbage_collect_at_exit, msg_col, need_clr_eos, redir_off, want_garbage_collect,
 };
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
@@ -40,7 +39,6 @@ use crate::os::cshim::{gettext, strncmp};
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, FAIL, NUL, OK, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
@@ -154,13 +152,17 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) } == FAIL
     {
         if !expr_start.is_null() && !aborting() {
-            unsafe { semsg_c!(gettext(e_invexpr2), expr_start) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let expr_start = unsafe { c_str(expr_start) };
+            semsg!("E15: Invalid expression: \"{expr_start}\"");
         }
         need_clr_eos.set(false);
         rettv.v_type = VAR_NUMBER;
         rettv.vval.v_number = 0;
     } else if unsafe { *s } as c_int != NUL {
-        unsafe { semsg_c!(gettext(e_trailing_arg), s) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let s = unsafe { c_str(s) };
+        semsg!("E488: Trailing characters: {s}");
     }
 }
 
@@ -404,7 +406,9 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         } else {
             s as *const c_char
         };
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
     if !trans_name.0.is_null()
@@ -606,7 +610,9 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     };
     match result {
         None => {
-            unsafe { semsg_c!(gettext(e_libcall), funcname) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let funcname = unsafe { c_str(funcname) };
+            semsg!("E364: Library call failed for \"{funcname}()\"");
         }
         Some(LibcallResult::Str(s)) => {
             rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);

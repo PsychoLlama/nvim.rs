@@ -3,6 +3,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
@@ -26,9 +28,8 @@ use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx,
-    e_fast_api_disabled, e_invarg, e_invchan, e_invchanjob, got_int, p_lpl, provider_call_nesting,
-    provider_caller_scope,
+    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
+    e_invchan, e_invchanjob, got_int, p_lpl, provider_call_nesting, provider_caller_scope,
 };
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
@@ -319,7 +320,8 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
     if throw_if_fast && !unsafe { nlua_is_deferred_safe() } {
         let what = c"Vimscript function".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
-        unsafe { semsg_c!(e_fast_api_disabled.as_ptr(), what) };
+        let what = unsafe { c_str(what) };
+        semsg!("E5560: {what} must not be called in a fast event context");
         return false;
     }
 

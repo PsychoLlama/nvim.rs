@@ -170,7 +170,8 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         };
         let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
-            unsafe { semsg!("E102: Can't find buffer \"{}\"", c_str(eap.arg)) };
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E102: Can't find buffer \"{arg}\"");
             return;
         };
         if buf.raw() == curbuf.get() {
@@ -179,7 +180,8 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         idx_other = diff_slot(buf, tp);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
-            unsafe { semsg!("E103: Buffer \"{}\" is not in diff mode", c_str(eap.arg)) };
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E103: Buffer \"{arg}\" is not in diff mode");
             return;
         }
     }

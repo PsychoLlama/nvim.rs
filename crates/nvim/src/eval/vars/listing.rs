@@ -7,7 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -138,7 +139,9 @@ pub(crate) unsafe fn list_arg_vars(
             let c = c_int::from(unsafe { *arg });
             if !ascii_iswhite(c) && ends_excmd(c) == 0 {
                 emsg_severe.set(true);
-                unsafe { semsg_c!(translate(e_trailing_arg), arg) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg = unsafe { c_str(arg) };
+                semsg!("E488: Trailing characters: {arg}");
                 break;
             }
             arg = unsafe { skipwhite(arg) };
@@ -154,7 +157,9 @@ pub(crate) unsafe fn list_arg_vars(
             if len <= 0 {
                 if len < 0 && !aborting() {
                     emsg_severe.set(true);
-                    unsafe { semsg_c!(translate(e_invarg2), arg) };
+                    // SAFETY: `arg` is the NUL-terminated rest of the line.
+                    let shown = unsafe { c_str(arg) };
+                    semsg!("E475: Invalid argument: {shown}");
                     unsafe { xfree(tofree.cast()) };
                     return arg;
                 }
@@ -198,7 +203,8 @@ pub(crate) unsafe fn list_arg_vars(
                     Some(lister) => unsafe { lister(first) },
                     None => {
                         // SAFETY: `name` is the caller's NUL-terminated name.
-                        unsafe { semsg_c!(translate(c"E738: Can't list variables for %s"), name) };
+                        let name = unsafe { c_str(name) };
+                        semsg!("E738: Can't list variables for {name}");
                     }
                 }
             } else {

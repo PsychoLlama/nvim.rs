@@ -432,7 +432,9 @@ pub unsafe fn trans_function_name(
             // or an exception.
             if !aborting() {
                 if !end.is_null() {
-                    unsafe { semsg_c!(gettext(e_invarg2), start) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let start = unsafe { c_str(start) };
+                    semsg!("E475: Invalid argument: {start}");
                 }
             } else {
                 unsafe {
@@ -463,7 +465,8 @@ pub unsafe fn trans_function_name(
                 {
                     len = unsafe { check_luafunc_name(end.add(1), true) };
                     if len == 0 {
-                        unsafe { semsg_c!(e_invexpr2.as_ptr(), c"v:lua".as_ptr()) };
+                        let arg0 = "v:lua";
+                        semsg!("E15: Invalid expression: \"{arg0}\"");
                         break 'theend;
                     }
                     name = unsafe { xmallocz(len as size_t) } as *mut c_char;

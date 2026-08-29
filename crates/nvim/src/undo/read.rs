@@ -121,9 +121,9 @@ unsafe fn read_undo_file(
     if unsafe { fread(magic.as_mut_ptr().cast(), magic.len(), 1, fp) } != 1
         || magic != UF_START_MAGIC
     {
-        // SAFETY: the message macros expand to a `vim_snprintf` over
-        // the format literal above and the editor's message buffers.
-        unsafe { semsg!("E823: Not an undo file: {}", c_str(file_name)) };
+        // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
+        let file_name = unsafe { c_str(file_name) };
+        semsg!("E823: Not an undo file: {file_name}");
         return;
     }
     if unsafe { get2c(fp) } != UF_VERSION {

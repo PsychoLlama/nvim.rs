@@ -391,7 +391,8 @@ unsafe fn do_filter(
             drop(no_prompt.take());
             if !aborting() {
                 // SAFETY: one `%s` for one string. Will call wait_return().
-                unsafe { semsg!("E482: Can't create file {}", c_str(TempFile::name(&itmp))) };
+                let arg0 = unsafe { c_str(TempFile::name(&itmp)) };
+                semsg!("E482: Can't create file {arg0}");
             }
             break 'filterend;
         }

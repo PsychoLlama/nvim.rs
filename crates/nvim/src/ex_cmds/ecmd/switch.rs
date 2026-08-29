@@ -389,16 +389,14 @@ fn au_new_curbuf_valid() -> bool {
 /// `name` must be our own allocation, or NULL; it is freed here.
 pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
     // SAFETY: caller's contract; one `%s` for one string.
-    unsafe {
-        semsg!(
-            "E143: Autocommands unexpectedly deleted new buffer {}",
-            c_str(if name.is_null() {
-                c"".as_ptr()
-            } else {
-                name as *const c_char
-            })
-        )
+    let arg0 = unsafe {
+        c_str(if name.is_null() {
+            c"".as_ptr()
+        } else {
+            name as *const c_char
+        })
     };
+    semsg!("E143: Autocommands unexpectedly deleted new buffer {arg0}");
     unsafe { xfree(name.cast()) };
     au_new_curbuf.with_mut(|r| {
         r.br_buf = ptr::null_mut();

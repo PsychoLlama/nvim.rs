@@ -27,12 +27,11 @@ use crate::event::multiqueue::{
 use crate::event::proc::{proc_is_stopped, proc_stop, proc_wait};
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
-use crate::main::{
-    curbuf, curwin, e_channotpty, e_invarg, e_invarg2, e_invargNval, main_loop, p_tgc,
-};
+use crate::main::{curbuf, curwin, e_channotpty, e_invarg, main_loop, p_tgc};
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
 use crate::message::{emsg, emsg_ptr};
+use crate::message_fmt::c_str;
 use crate::r#move::win_col_off;
 use crate::os::cshim::{gettext, gettext_ptr, snprintf, strncmp};
 use crate::os::env::{home_replace, os_getenv};
@@ -41,6 +40,7 @@ use crate::os::pty_proc_unix::pty_proc_resize;
 use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
+use crate::semsg;
 use crate::semsg_c;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
@@ -423,7 +423,8 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     if args.ty(1) != VAR_DICT && args.has(1) {
-        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
+        let arg0 = "expected dictionary";
+        semsg!("E475: Invalid argument: {arg0}");
         bail!();
     }
 
@@ -456,7 +457,9 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             if unsafe { strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) } == 0 {
                 stdin_mode = kChannelStdinNull;
             } else if unsafe { strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } != 0 {
-                unsafe { semsg_c!(gettext(e_invargNval), c"stdin".as_ptr(), s,) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (arg0, s) = unsafe { (c_str(c"stdin".as_ptr()), c_str(s)) };
+                semsg!("E475: Invalid value for argument {arg0}: {s}");
             }
         }
 
@@ -465,12 +468,16 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         let job_term = unsafe { tv_dict_find(job_opts, c"term".as_ptr(), 4) };
         if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type } != VAR_BOOL {
             let what = c"'term' must be Boolean".as_ptr();
-            unsafe { semsg_c!(gettext(e_invarg2), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E475: Invalid argument: {what}");
             bail!();
         }
         if pty && rpc {
             let what = c"job cannot have both 'pty' and 'rpc' options set".as_ptr();
-            unsafe { semsg_c!(gettext(e_invarg2), what) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let what = unsafe { c_str(what) };
+            semsg!("E475: Invalid argument: {what}");
             bail!();
         }
 
@@ -479,14 +486,17 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             cwd = new_cwd;
             if !unsafe { os_isdir(cwd) } {
                 let what = c"expected valid directory".as_ptr();
-                unsafe { semsg_c!(gettext(e_invarg2), what) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let what = unsafe { c_str(what) };
+                semsg!("E475: Invalid argument: {what}");
                 bail!();
             }
         }
 
         job_env = unsafe { tv_dict_find(job_opts, c"env".as_ptr(), 3) };
         if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type } != VAR_DICT {
-            unsafe { semsg_c!(gettext(e_invarg2), c"env".as_ptr()) };
+            let arg0 = "env";
+            semsg!("E475: Invalid argument: {arg0}");
             bail!();
         }
 

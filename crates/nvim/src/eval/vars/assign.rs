@@ -9,7 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -320,7 +321,9 @@ pub unsafe fn skip_var_list(
         let s = unsafe { skip_var_one(p) };
         if s == p {
             if !silent {
-                unsafe { semsg_c!(translate(e_invarg2), p) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let p = unsafe { c_str(p) };
+                semsg!("E475: Invalid argument: {p}");
             }
             return ptr::null();
         }
@@ -339,7 +342,9 @@ pub unsafe fn skip_var_list(
             b',' => {}
             _ => {
                 if !silent {
-                    unsafe { semsg_c!(translate(e_invarg2), p) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let p = unsafe { c_str(p) };
+                    semsg!("E475: Invalid argument: {p}");
                 }
                 return ptr::null();
             }
@@ -396,9 +401,13 @@ unsafe fn ex_let_env(
     let name = arg;
     let len = unsafe { get_env_len(&raw mut arg as *mut *const c_char) };
     if len == 0 {
-        unsafe { semsg_c!(translate(e_invarg2), name.sub(1)) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(name.sub(1)) };
+        semsg!("E475: Invalid argument: {arg0}");
     } else if is_arithmetic(opch) {
-        unsafe { semsg_c!(translate(e_letwrong), op) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let op = unsafe { c_str(op) };
+        semsg!("E734: Wrong variable type for {op}=");
     } else if !unsafe { ends_target(endchars, arg) } {
         emsg_static(e_letunexp);
     } else if !check_secure() {
@@ -485,13 +494,17 @@ unsafe fn ex_let_option(
 
     'theend: {
         if curval.type_0 == kOptValTypeNil {
-            unsafe { semsg_c!(translate(e_unknown_option2), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E355: Unknown option: {arg}");
             break 'theend;
         }
         let compound = opch.is_some_and(|c| c != b'=');
         let is_string = curval.type_0 == kOptValTypeString;
         if compound && opch.is_some_and(|c| (c == b'.') != is_string) {
-            unsafe { semsg_c!(translate(e_letwrong), op) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let op = unsafe { c_str(op) };
+            semsg!("E734: Wrong variable type for {op}=");
             break 'theend;
         }
 
@@ -599,7 +612,9 @@ unsafe fn ex_let_register(
     // SAFETY: `arg` points at the `@` of a NUL-terminated name.
     arg = unsafe { arg.add(1) };
     if is_arithmetic(opch) {
-        unsafe { semsg_c!(translate(e_letwrong), op) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let op = unsafe { c_str(op) };
+        semsg!("E734: Wrong variable type for {op}=");
         return arg_end;
     }
     // SAFETY: the register name is one byte, so the byte past it is inside
@@ -668,7 +683,9 @@ unsafe fn ex_let_one(
         return unsafe { target(arg, tv, is_const, endchars, op) };
     }
     if !eval_isnamec1(c_int::from(sigil.cast_signed())) && sigil != b'{' {
-        unsafe { semsg_c!(translate(e_invarg2), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
         return ptr::null_mut();
     }
 

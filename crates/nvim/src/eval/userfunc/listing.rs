@@ -10,7 +10,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -99,7 +98,9 @@ pub(crate) unsafe fn list_one_function(
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
-        unsafe { semsg_c!(gettext(e_trailing_arg), p) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let p = unsafe { c_str(p) };
+        semsg!("E488: Trailing characters: {p}");
         return ptr::null_mut();
     }
     ea.nextcmd = unsafe { check_nextcmd(p) };
@@ -286,7 +287,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     }
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
         unsafe { xfree(name as *mut c_void) };
-        unsafe { semsg_c!(gettext(e_trailing_arg), p) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let p = unsafe { c_str(p) };
+        semsg!("E488: Trailing characters: {p}");
         return;
     }
     ea.nextcmd = unsafe { check_nextcmd(p) };
@@ -297,7 +300,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     if (unsafe { *name } as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
         // Numbered function.
         if ea.skip == 0 {
-            unsafe { semsg_c!(gettext(e_invarg2), ea.arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(ea.arg) };
+            semsg!("E475: Invalid argument: {arg}");
         }
         unsafe { xfree(name as *mut c_void) };
         return;
@@ -314,7 +319,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
 
     if fp.is_null() {
         if ea.forceit == 0 {
-            unsafe { semsg_c!(gettext(E_NOFUNC), ea.arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(ea.arg) };
+            semsg!("E130: Unknown function: {arg}");
         }
         return;
     }

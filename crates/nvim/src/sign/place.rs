@@ -350,7 +350,8 @@ pub(crate) unsafe fn sign_place(
     // SAFETY: the caller's name.
     let Some(def) = (unsafe { sign_find(name) }) else {
         // SAFETY: as above, and a format the message takes.
-        unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
+        let name = unsafe { c_str(name) };
+        semsg!("E155: Unknown sign: {name}");
         return FAIL;
     };
     let prio = match (prio, def.sn_priority) {
@@ -370,7 +371,8 @@ pub(crate) unsafe fn sign_place(
     };
     if lnum <= 0 {
         // SAFETY: the caller's name.
-        unsafe { semsg!("E885: Not possible to change sign {}", c_str(name)) };
+        let name = unsafe { c_str(name) };
+        semsg!("E885: Not possible to change sign {name}");
         return FAIL;
     }
     OK

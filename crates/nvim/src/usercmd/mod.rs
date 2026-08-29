@@ -420,12 +420,8 @@ pub(crate) unsafe fn uc_add_command(
                 || existing.sc_seq == current_sctx.get().sc_seq)
         {
             // SAFETY: `name` is the caller's; this call owns the other five.
-            unsafe {
-                semsg!(
-                    "E174: Command already exists: add ! to replace it: {}",
-                    c_str(name)
-                )
-            };
+            let name = unsafe { c_str(name) };
+            semsg!("E174: Command already exists: add ! to replace it: {name}");
             unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };
             return FAIL;
         }

@@ -23,6 +23,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
@@ -54,10 +56,7 @@ use crate::eval::{
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::main::{
-    e_cannot_mod, e_dictkey, e_illvar, e_invalid_value_for_blob_nr, e_invarg2, e_letwrong,
-    e_listreq, e_trailing_arg, emsg_severe,
-};
+use crate::main::{e_cannot_mod, e_invalid_value_for_blob_nr, e_listreq, emsg_severe};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::os::cshim::{gettext, gettext_ptr};
@@ -210,7 +209,8 @@ pub(crate) unsafe fn get_lval_dict_item(
     if lua_key {
         let what = c"v:['lua']".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
-        unsafe { semsg_c!(e_illvar.as_ptr(), what) };
+        let what = unsafe { c_str(what) };
+        semsg!("E461: Illegal variable name: {what}");
         return GLV_FAIL;
     }
 
@@ -222,7 +222,8 @@ pub(crate) unsafe fn get_lval_dict_item(
         let args_ht = unsafe { get_funccal_args_ht() };
         if lp.ll_dict == get_vimvar_dict() || ht == args_ht {
             // SAFETY: the format takes one NUL-terminated string.
-            unsafe { semsg_c!(gettext(e_illvar), name) };
+            let name = unsafe { c_str(name) };
+            semsg!("E461: Illegal variable name: {name}");
             return GLV_FAIL;
         }
         // The key does not exist. It may be added — unless something
@@ -232,7 +233,8 @@ pub(crate) unsafe fn get_lval_dict_item(
         if after == b'[' as c_char || after == b'.' as c_char || unlet {
             if !quiet {
                 // SAFETY: the format takes one NUL-terminated string.
-                unsafe { semsg_c!(gettext(e_dictkey), key) };
+                let key = unsafe { c_str(key) };
+                semsg!("E716: Key not present in Dictionary: \"{key}\"");
             }
             return GLV_FAIL;
         }
@@ -626,7 +628,8 @@ pub unsafe fn get_lval(
             && after != b'.' as c_char
         {
             // SAFETY: the format takes one NUL-terminated string.
-            unsafe { semsg_c!(gettext(e_trailing_arg), p) };
+            let p = unsafe { c_str(p) };
+            semsg!("E488: Trailing characters: {p}");
             return null_mut();
         }
         // SAFETY: all four cursors are into the one writable string.
@@ -636,7 +639,8 @@ pub unsafe fn get_lval(
             if !aborting() && !quiet {
                 emsg_severe.set(true);
                 // SAFETY: the format takes one NUL-terminated string.
-                unsafe { semsg_c!(gettext(e_invarg2), name) };
+                let name = unsafe { c_str(name) };
+                semsg!("E475: Invalid argument: {name}");
                 return null_mut();
             }
             lp.ll_name_len = 0 as size_t;
@@ -805,7 +809,9 @@ pub unsafe fn set_var_lval(
         if !lp.ll_newkey.is_null() {
             // The key has to be added to the Dictionary first.
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
-                unsafe { semsg_c!(gettext(e_dictkey), lp.ll_newkey) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let ll_newkey = unsafe { c_str(lp.ll_newkey) };
+                semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
                 return;
             }
             // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
@@ -948,7 +954,9 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {
-        unsafe { semsg_c!(gettext(e_letwrong), op) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let op = unsafe { c_str(op) };
+        semsg!("E734: Wrong variable type for {op}=");
         return false;
     }
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.

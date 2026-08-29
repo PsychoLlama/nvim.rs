@@ -11,8 +11,9 @@
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Lock, Suppress};
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -266,9 +267,9 @@ pub unsafe fn call_user_func(
     if p_verbose.get() >= 12 {
         verbose_report(|| {
             let called = sourcing_entry().es_name;
-            // SAFETY: the message texts are literals and `es_name` is the
-            // NUL-terminated name of the innermost exec-stack entry.
-            unsafe { smsg_c!(0, gettext(c"calling %s").as_ptr(), called) };
+            // SAFETY: the message texts are literals and `es_name` is the // NUL-terminated name of the innermost exec-stack entry.
+            let called = unsafe { c_str(called) };
+            smsg!(0, "calling {called}");
             if p_verbose.get() >= 14 {
                 unsafe { msg_puts(c"(".as_ptr()) };
                 for i in 0..argcount {
@@ -390,11 +391,15 @@ pub unsafe fn call_user_func(
             // and the message texts are literals.
             let ret = unsafe { Tv::new(frame.fc_rettv) };
             if aborting() {
-                unsafe { smsg_c!(0, gettext(c"%s aborted").as_ptr(), name) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let name = unsafe { c_str(name) };
+                smsg!(0, "{name} aborted");
             } else if ret.v_type == VAR_NUMBER {
                 // SAFETY: the tag says the union holds a Number.
                 let n = unsafe { ret.vval.v_number };
-                unsafe { smsg_c!(0, gettext(c"%s returning #%ld").as_ptr(), name, n) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let name = unsafe { c_str(name) };
+                smsg!(0, "{name} returning #{}", n);
             } else {
                 // Do not want errors such as E724 here.
                 let tofree = {
@@ -411,7 +416,9 @@ pub unsafe fn call_user_func(
                         unsafe { trunc_string(s, into, MSG_BUF_CLEN, MSG_BUF_LEN) };
                         s = buf.as_mut_ptr();
                     }
-                    unsafe { smsg_c!(0, gettext(c"%s returning %s").as_ptr(), name, s) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                    let (name, s) = unsafe { (c_str(name), c_str(s)) };
+                    smsg!(0, "{name} returning {s}");
                     unsafe { xfree(tofree as *mut c_void) };
                 }
             }
@@ -429,7 +436,8 @@ pub unsafe fn call_user_func(
         verbose_report(|| {
             let name = sourcing_entry().es_name;
             // SAFETY: a literal text and the exec-stack entry's own name.
-            unsafe { smsg_c!(0, gettext(c"continuing in %s").as_ptr(), name) };
+            let name = unsafe { c_str(name) };
+            smsg!(0, "continuing in {name}");
         });
     }
 
@@ -502,7 +510,9 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
     match error {
         FCERR_UNKNOWN => {
             if found_var {
-                unsafe { semsg_c!(gettext(e_not_callable_type_str), name,) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let name = unsafe { c_str(name) };
+                semsg!("E1085: Not a callable type: {name}");
             } else {
                 unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
             }

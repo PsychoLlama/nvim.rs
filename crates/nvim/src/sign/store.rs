@@ -363,7 +363,8 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
     });
     let Some(entry) = entry else {
         // SAFETY: the caller's name, and a format the message takes.
-        unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
+        let name = unsafe { c_str(name) };
+        semsg!("E155: Unknown sign: {name}");
         return FAIL;
     };
     // SAFETY: the icon is this module's own `xstrdup`.

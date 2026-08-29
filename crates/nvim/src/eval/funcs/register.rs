@@ -15,14 +15,13 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::keycodes::Ctrl_V;
-use crate::main::{e_invargval, e_toomanyarg, reg_executing, reg_recorded, reg_recording};
+use crate::main::{reg_executing, reg_recorded, reg_recording};
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::os::cshim::gettext;
 use crate::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_register_name, get_unname_register,
     get_yank_register, op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
 };
-use crate::semsg_c;
+use crate::semsg;
 use crate::strings::vim_snprintf;
 use crate::types::{
     BoolVarValue, EvalFuncData, FAIL, MotionType, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
@@ -276,7 +275,8 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             if unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) } == FAIL
                 || unsafe { *p.add(1) } != NUL as c_char
             {
-                unsafe { semsg_c!(gettext(e_invargval), c"value".as_ptr(),) };
+                let arg0 = "value";
+                semsg!("E475: Invalid value for argument {arg0}");
                 return;
             }
         }
@@ -299,7 +299,8 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         // A dict value already carried the type; a third argument on
         // top of it is one argument too many.
         if yank_type != kMTUnknown {
-            unsafe { semsg_c!(gettext(e_toomanyarg), c"setreg".as_ptr(),) };
+            let arg0 = "setreg";
+            semsg!("E118: Too many arguments for function: {arg0}");
             return;
         }
         let opts = arg_string_chk(&mut numbuf4, args.get(2));

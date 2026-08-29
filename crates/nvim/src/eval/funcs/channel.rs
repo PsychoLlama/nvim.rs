@@ -26,7 +26,7 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::nlua_exec;
 use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
-    e_invarg2, e_stdiochan2, provider_call_nesting, provider_caller_scope,
+    provider_call_nesting, provider_caller_scope,
 };
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::on_print_cb;
@@ -210,12 +210,16 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // `rpcrequest()` insists on a real one.
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } < 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
     if args.ty(1) != VAR_STRING {
         let what = c"Event type must be a string".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
 
@@ -228,7 +232,9 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
         let what = c"Channel doesn't exist".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
     rettv.vval.v_number = 1;
@@ -315,12 +321,16 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     }
     if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } <= 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
     if args.ty(1) != VAR_STRING {
         let what = c"Method name must be a string".as_ptr();
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return;
     }
 
@@ -521,7 +531,8 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         return;
     }
     if args.ty(2) != VAR_DICT && args.has(2) {
-        unsafe { semsg_c!(gettext(e_invarg2), c"expected dictionary".as_ptr(),) };
+        let arg0 = "expected dictionary";
+        semsg!("E475: Invalid argument: {arg0}");
         return;
     }
 
@@ -532,7 +543,8 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     } else if unsafe { strcmp(mode, c"pipe".as_ptr()) } == 0 {
         false
     } else {
-        unsafe { semsg_c!(gettext(e_invarg2), c"invalid mode".as_ptr(),) };
+        let arg0 = "invalid mode";
+        semsg!("E475: Invalid argument: {arg0}");
         return;
     };
 
@@ -591,7 +603,9 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut error = ptr::null::<c_char>();
     let id = unsafe { channel_from_stdio(rpc, on_stdin, &raw mut error) };
     if id == 0 {
-        unsafe { semsg_c!(e_stdiochan2.as_ptr(), error) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let error = unsafe { c_str(error) };
+        semsg!("E905: Couldn't open stdio channel: {error}");
     }
     rettv.vval.v_number = id as varnumber_T;
     rettv.v_type = VAR_NUMBER;

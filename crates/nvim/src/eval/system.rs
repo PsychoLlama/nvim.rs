@@ -9,8 +9,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::semsg;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::{null, null_mut};
@@ -25,11 +25,12 @@ use crate::eval::vars::emsg_static;
 use crate::eval::vars::set_vim_var_nr;
 use crate::eval::{NL, PROF_YES, Tv};
 use crate::ex_cmds::check_secure;
-use crate::main::{do_profiling, e_invarg, e_invarg2, e_invargNval, e_nobufnr, p_verbose};
+use crate::main::{do_profiling, e_invarg, p_verbose};
 use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{msg_puts, verbose_enter_scroll, verbose_leave_scroll};
-use crate::os::cshim::{gettext, snprintf};
+use crate::message_fmt::c_str;
+use crate::os::cshim::snprintf;
 use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
@@ -70,7 +71,8 @@ pub unsafe fn tv_to_argv(
     if tv.v_type != VAR_LIST {
         let what = c"expected String or List".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
-        unsafe { semsg_c!(gettext(e_invarg2), what) };
+        let what = unsafe { c_str(what) };
+        semsg!("E475: Invalid argument: {what}");
         return null_mut();
     }
 
@@ -102,7 +104,8 @@ pub unsafe fn tv_to_argv(
             unsafe { snprintf(buf.as_mut_ptr(), size, fmt, arg0) };
             let (what, text) = (c"cmd".as_ptr(), buf.as_mut_ptr());
             // SAFETY: the format takes two NUL-terminated strings.
-            unsafe { semsg_c!(gettext(e_invargNval), what, text) };
+            let (what, text) = unsafe { (c_str(what), c_str(text)) };
+            semsg!("E475: Invalid value for argument {what}: {text}");
             // SAFETY: the caller's promise -- a non-null `executable`.
             unsafe { *executable = false };
         }
@@ -222,7 +225,8 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // SAFETY: the scroll bracket is the message area's own.
         unsafe { verbose_enter_scroll() };
         // SAFETY: the format takes the one NUL-terminated `cmdstr`.
-        unsafe { smsg_c!(0, gettext(c"Executing command: \"%s\"").as_ptr(), cmdstr) };
+        let shown = unsafe { c_str(cmdstr) };
+        smsg!(0, "Executing command: \"{shown}\"");
         // SAFETY: the literal is NUL-terminated.
         unsafe { msg_puts(c"\n\n".as_ptr()) };
         // SAFETY: this closes the bracket opened above.
@@ -402,8 +406,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     // union's live member.
     let nr = unsafe { Tv::new(tv).vval.v_number };
     let Some(buf) = find_buf(nr as c_int) else {
-        // SAFETY: the format takes one number, and `len` is the caller's.
-        unsafe { semsg_c!(gettext(e_nobufnr), nr) };
+        semsg!("E86: Buffer {} does not exist", nr);
         // SAFETY: the caller's promise about `len`.
         unsafe { *len = -1 };
         return null_mut();

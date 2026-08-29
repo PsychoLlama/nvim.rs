@@ -221,7 +221,8 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
     };
     if loc.is_null() {
         // SAFETY: `semsg` is printf-shaped and `name` outlives the call.
-        unsafe { semsg!("E197: Cannot set language to \"{}\"", c_str(name)) };
+        let name = unsafe { c_str(name) };
+        semsg!("E197: Cannot set language to \"{name}\"");
         return;
     }
     // SAFETY: `_nl_msg_cat_cntr` is GNU gettext's "the catalogue selection
