@@ -285,6 +285,85 @@ plus these whole-tree metrics, which are not per-file:
                     a new file included, so unchecked code appearing inside
                     the perimeter is a violation exactly as it is outside.
 
+  the C vocabulary  what is left outside the perimeter is no longer blanket
+                    `unsafe` — it is *C vocabulary*: integer status codes
+                    where `Result` belongs, raw `c_char` strings, manual
+                    allocation and pointer walks, integer constants and
+                    unions where enums belong, and the transpiler's own type
+                    names. Sixteen whole-tree counts measure the dialects, one
+                    per idiom being retired. They are whole-tree and not
+                    per-file on purpose: none of these is a per-file problem —
+                    one signature changed in one file retires call sites in
+                    forty, and a per-file row would book the helper that
+                    absorbs them as a regression.
+
+                    They are deliberately plain greps over the masked source.
+                    Over-counting a little is fine (`.add(` on a `Vec` index
+                    is not pointer arithmetic, and is counted anyway); what is
+                    not fine is a needle a *rewrite* can make grow, so where
+                    the idiom and its replacement look alike the needle is
+                    narrowed, and the narrowing is written down here.
+
+                      c_int_returns   `-> c_int` — the C status-code return.
+                        Function-pointer types count too: apigen's tables
+                        declare them and they retire with their callees.
+                      ok_fail         `return OK`/`return FAIL` and `== `/
+                        `!= OK`/`FAIL` — the values those returns carry.
+                      error_out_params  `*mut Error`, api/'s out-parameter.
+                      semsg_c         `semsg_c!`, `semsg_multiline_c!` and
+                        `emsg(gettext(` — the format-unchecked message calls.
+                      raw_cstr        `*mut c_char` + `*const c_char`, both,
+                        because constness is not what is being retired.
+                      libc_strings    the eleven `str*`/`mem*` calls. Word-
+                        bounded, so the tree's own `xstrlcpy`/`vim_strchr`
+                        wrappers are *not* counted: they are where the libc
+                        call is meant to end up until the slice ops replace
+                        them, and counting them would penalise the interim.
+                      const_c_int     `pub const NAME: c_int`/`c_uint` — the
+                        integer constant families that want to be enums.
+                      unions          `union` declarations.
+                      repr_c_outside_perimeter  `#[repr(C)]` in files off the
+                        PERIMETER list. Inside it the layout is a foreign
+                        ABI's and stays; outside it is transpiler residue
+                        that only the on-disk codecs and the typval residue
+                        will keep.
+                      derive_copy     `#[derive(.. Copy ..)]` on a *braced*
+                        `struct`/`union` — an aggregate with named fields.
+                        Enums are excluded because an enum is Copy-worthy by
+                        construction and phase 25 *creates* them by the
+                        dozen; tuple and unit structs are excluded because
+                        that is the shape of a handle (`WinId`, `BufId`, a
+                        `flag_set!` newtype), whose `Copy` is the point. What
+                        is left is exactly the class the migration is
+                        retiring: a struct that owns something and is copied
+                        anyway.
+                      manual_alloc    `xmalloc`/`xmallocz`/`xcalloc`/
+                        `xrealloc`/`xfree`.
+                      garray_sites    `ga_grow`/`ga_init`/`ga_clear`/
+                        `ga_concat`/`ga_append` — `garray_T`'s five load-
+                        bearing entry points, not its whole surface.
+                      ptr_arith       `.offset`/`.add`/`.sub`/
+                        `.wrapping_add`/`.wrapping_sub`/`.offset_from`.
+                      t_suffix_types  *distinct* names ending in `_T` that
+                        some `struct`/`enum`/`union`/`type` item declares —
+                        a set over the whole tree, so moving a type between
+                        files is free and only deleting or renaming one
+                        counts. `type` aliases are in deliberately:
+                        `linenr_T`, `colnr_T` and their kin are aliases, and
+                        they are the bulk of phase 27's rename.
+                      raw_win_buf_sigs  `*mut win_T`/`*mut buf_T`/
+                        `*mut tabpage_T` inside a `fn` *signature* — the span
+                        from the `fn` keyword through the return type, so a
+                        parameter rustfmt wrapped onto its own line still
+                        counts and a local variable of that type does not.
+                      curwin_raw      `curwin`/`curbuf`/`curtab` `.get()`
+                        reads outside `winlayer`, which is the module whose
+                        job it is to turn those globals into handles. The
+                        same outside-a-home shape as
+                        `unsafe_lines_outside_perimeter`: the reads inside
+                        the home are the implementation, the ones outside are
+                        the debt.
+
   files_without_forbid_unsafe  the number of source files not carrying
                     #![forbid(unsafe_code)]. The shrink-only trick inverted:
                     fully safe modules take the attribute — which makes
@@ -579,6 +658,65 @@ PERIMETER = {
     "that hands out the address of a `.swp` page",
 }
 
+# `curwin`/`curbuf`/`curtab`'s home: the module whose job is to turn the raw
+# current-object globals into handles. Same entry form as PERIMETER's.
+WINLAYER = {
+    "crates/nvim/src/winlayer.rs": "the handles themselves",
+    "crates/nvim/src/winlayer/": "the same, split out by family",
+}
+
+# The C-vocabulary dimensions: whole-tree needle counts, one per dialect the
+# migration is retiring. See "the C vocabulary" in the doc block for what each
+# measures and, where the idiom and its replacement look alike, why the needle
+# is drawn where it is. Everything here is matched against the *masked*
+# source, so prose and string literals naming an idiom cost nothing.
+VOCABULARY = {
+    # `\s*` rather than a literal space: rustfmt wraps a long signature's
+    # `-> c_int` onto its own line. `\b` so `c_int_ish` is not a match, and no
+    # trailing anchor so `{`, `;`, `,` and end-of-line all count.
+    "c_int_returns": re.compile(r"->\s*c_int\b"),
+    # The comparisons are written `[=!]=` rather than `==|!=` so that `>=`/`<=`
+    # do not match; `>= OK` is not a status-code test.
+    "ok_fail": re.compile(r"\breturn\s+(?:OK|FAIL)\b|[=!]=\s*(?:OK|FAIL)\b"),
+    "error_out_params": re.compile(r"\*mut\s+Error\b"),
+    # `\b` before `emsg` keeps `semsg(gettext(` out (it has its own needle in
+    # `semsg_c!`); `\s*` covers rustfmt breaking the argument onto a new line.
+    "semsg_c": re.compile(r"\bsemsg_(?:multiline_)?c!|\bemsg\(\s*gettext\("),
+    "raw_cstr": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+    "libc_strings": re.compile(
+        r"\b(?:str(?:len|cmp|ncmp|cpy|cat|chr|str)"
+        r"|mem(?:cpy|move|set|cmp))\("
+    ),
+    "const_c_int": re.compile(r"\bpub const [A-Z_][A-Z0-9_]*: c_u?int\b"),
+    "unions": re.compile(r"\bunion\s+[A-Za-z_]"),
+    # A derive list holds no `)`, so `[^)]*` cannot run past the attribute.
+    # The item must be a *braced* struct/union: see the doc block for why an
+    # enum, a tuple struct and a unit struct are all excluded.
+    "derive_copy": re.compile(
+        r"#\[derive\([^)]*\bCopy\b[^)]*\)\]\s*(?:#\[[^\]]*\]\s*)*"
+        r"(?:pub(?:\s*\([^)]*\))?\s+)?(?:struct|union)\s+[A-Za-z_][A-Za-z0-9_]*"
+        r"\s*(?:<[^{;]*>)?\s*(?:where[^{;]*)?\{"
+    ),
+    "manual_alloc": re.compile(r"\bx(?:mallocz|malloc|calloc|realloc|free)\("),
+    "garray_sites": re.compile(r"\bga_(?:grow|init|clear|concat|append)\("),
+    "ptr_arith": re.compile(
+        r"\.(?:offset_from|offset|add|sub|wrapping_add|wrapping_sub)\("
+    ),
+}
+# The same, but counted only in files *outside* a home — the shape
+# `unsafe_lines_outside_perimeter` established. name -> (needle, home).
+VOCABULARY_OUTSIDE = {
+    "repr_c_outside_perimeter": (re.compile(r"#\[repr\(\s*C\s*[,)]"), PERIMETER),
+    "curwin_raw": (re.compile(r"\bcur(?:win|buf|tab)\s*\.\s*get\(\)"), WINLAYER),
+}
+# Declarations of a `_T` type, counted as a *set* of names over the whole
+# tree: `type` aliases included, because `linenr_T` and its kin are aliases.
+T_SUFFIX_DECL = re.compile(
+    r"\b(?:struct|enum|union|type)\s+([A-Za-z_][A-Za-z0-9_]*_T)\b"
+)
+# The raw graph pointers, counted inside `fn` signature spans only.
+RAW_WIN_BUF = re.compile(r"\*mut\s+(?:win_T|buf_T|tabpage_T)\b")
+
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 # A module's claim to have finished its casts. `.` spans newlines so the list
@@ -769,8 +907,15 @@ def balanced(text, start, opens, closes):
     return i
 
 
-def fn_returns(masked, out):
-    """name -> the set of return types every `fn` of that name declares."""
+def fn_signatures(masked):
+    """(name, the whole signature's text, the declared return type) per `fn`.
+
+    Only *definitions*: a `fn` type (a function pointer) and a trait bound
+    have no parameter list after the name and are skipped. The signature runs
+    from the `fn` keyword through the return type, so a parameter rustfmt
+    wrapped onto its own line is inside it and a local of the same type is
+    not. The return type is `"()"` when none is written.
+    """
     for match in FN_NAME.finditer(masked):
         i = match.end()
         while i < len(masked) and masked[i].isspace():
@@ -782,10 +927,11 @@ def fn_returns(masked, out):
         if i >= len(masked) or masked[i] != "(":
             continue  # not a definition: a `fn` type, or a trait bound
         i = balanced(masked, i, "(", ")")
+        params = i
         while i < len(masked) and masked[i].isspace():
             i += 1
         if masked[i : i + 2] != "->":
-            out.setdefault(match.group(1), set()).add("()")
+            yield match.group(1), masked[match.start() : params], "()"
             continue
         i += 2
         end, depth = i, 0
@@ -798,7 +944,13 @@ def fn_returns(masked, out):
             elif depth == 0 and (char in "{;" or masked[end : end + 6] == "where "):
                 break
             end += 1
-        out.setdefault(match.group(1), set()).add(masked[i:end].strip())
+        yield match.group(1), masked[match.start() : end], masked[i:end].strip()
+
+
+def fn_returns(masked, out):
+    """name -> the set of return types every `fn` of that name declares."""
+    for name, _, returns in fn_signatures(masked):
+        out.setdefault(name, set()).add(returns)
 
 
 def is_place(ty, deref_mut):
@@ -1305,9 +1457,14 @@ def in_perimeter_entry(file, entry):
     return file.startswith(entry) if entry.endswith("/") else file == entry
 
 
+def in_home(file, home):
+    """Whether any entry of a module list claims this repo-relative path."""
+    return any(in_perimeter_entry(file, entry) for entry in home)
+
+
 def in_perimeter(file):
     """Whether a repo-relative path is on the unsafe perimeter."""
-    return any(in_perimeter_entry(file, entry) for entry in PERIMETER)
+    return in_home(file, PERIMETER)
 
 
 def perimeter_lines(stats):
@@ -1342,6 +1499,25 @@ def check_perimeter(stats):
         )
 
 
+def vocabulary(tree):
+    """The C-vocabulary counts. See "the C vocabulary" in the doc block."""
+    counts = dict.fromkeys((*VOCABULARY, *VOCABULARY_OUTSIDE), 0)
+    for file, masked in tree.items():
+        for name, needle in VOCABULARY.items():
+            counts[name] += len(needle.findall(masked))
+        for name, (needle, home) in VOCABULARY_OUTSIDE.items():
+            if not in_home(file, home):
+                counts[name] += len(needle.findall(masked))
+    names = set()
+    signatures = 0
+    for masked in tree.values():
+        names.update(T_SUFFIX_DECL.findall(masked))
+        signatures += sum(
+            len(RAW_WIN_BUF.findall(sig)) for _, sig, _ in fn_signatures(masked)
+        )
+    return {**counts, "t_suffix_types": len(names), "raw_win_buf_sigs": signatures}
+
+
 def whole_tree(stats, tree):
     """The name-keyed whole-tree counts. See the doc block."""
     return {
@@ -1350,6 +1526,7 @@ def whole_tree(stats, tree):
         "cell_copy_owner": sum(
             len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
         ),
+        **vocabulary(tree),
     }
 
 
@@ -1434,15 +1611,10 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
                 f"    {json.dumps(file)}: {json.dumps(kept, sort_keys=True)}"
             )
     body = ",\n".join(entries)
+    head = "".join(f'  "{name}": {ledger_counts[name]},\n' for name in WHOLE_TREE_LABEL)
     return (
         "{\n"
-        f'  "internal_exports": {ledger_counts["internal_exports"]},\n'
-        f'  "test_reached_pub": {ledger_counts["test_reached_pub"]},\n'
-        f'  "cell_ptr_keepers": {ledger_counts["cell_ptr_keepers"]},\n'
-        f'  "cell_ptr_accessors": {ledger_counts["cell_ptr_accessors"]},\n'
-        f'  "cell_copy_owner": {ledger_counts["cell_copy_owner"]},\n'
-        f'  "unsafe_lines_outside_perimeter": '
-        f"{ledger_counts['unsafe_lines_outside_perimeter']},\n"
+        f"{head}"
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
@@ -1451,7 +1623,8 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
     )
 
 
-# The whole-tree counts, and how a violation of each reads.
+# The whole-tree counts, and how a violation of each reads. The order here is
+# the order they are written to metrics/ratchet.json.
 WHOLE_TREE_LABEL = {
     "internal_exports": "abi-ledger internal exports",
     "test_reached_pub": "test-reached pub items",
@@ -1459,7 +1632,31 @@ WHOLE_TREE_LABEL = {
     "cell_ptr_accessors": "one-per-cell acquire-once cell_ptr sites",
     "cell_copy_owner": "get() copies of a Copy global owning a pointer",
     "unsafe_lines_outside_perimeter": "unchecked lines outside the unsafe perimeter",
+    # The C vocabulary, in the order the phases retire it.
+    "c_int_returns": "`-> c_int` status-code returns",
+    "ok_fail": "OK/FAIL returns and comparisons",
+    "error_out_params": "`*mut Error` out-parameters",
+    "semsg_c": "format-unchecked message calls",
+    "raw_cstr": "raw `c_char` pointer types",
+    "libc_strings": "libc str*/mem* calls",
+    "const_c_int": "`pub const NAME: c_int` constants",
+    "unions": "union declarations",
+    "repr_c_outside_perimeter": "`#[repr(C)]` outside the unsafe perimeter",
+    "derive_copy": "Copy derives on braced aggregates",
+    "manual_alloc": "xmalloc/xfree-family calls",
+    "garray_sites": "garray_T call sites",
+    "ptr_arith": "pointer-arithmetic method calls",
+    "t_suffix_types": "distinct `_T` type declarations",
+    "raw_win_buf_sigs": "raw win/buf/tabpage pointers in fn signatures",
+    "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
 }
+# The C-vocabulary subset of the above, for the run's summary line.
+VOCABULARY_KEYS = (
+    *VOCABULARY,
+    *VOCABULARY_OUTSIDE,
+    "t_suffix_types",
+    "raw_win_buf_sigs",
+)
 
 
 def violations(stats, counts, without_forbid, without_deny, without_casts, baseline):
@@ -1515,6 +1712,7 @@ def summary(stats, counts, without_forbid, without_deny, without_casts):
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
     ]
+    parts += [f"{counts[name]} {name}" for name in VOCABULARY_KEYS]
     return ", ".join(parts)
 
 
@@ -1887,6 +2085,157 @@ SELF_TEST_PERIMETER_CHECK = [
 ]
 
 
+# The C vocabulary, case by case: ({repo-relative path: source}, {metric:
+# expected}). Only the named metrics are asserted, so a case may say `-> c_int`
+# without also stating what `c_int_returns` makes of it. Each case pins the
+# variants the needle has to see (a wrapped signature, both constnesses, every
+# spelling of a comparison) and the near-misses it must not (`xfree_clear`,
+# `p.addr()`, `semsg(gettext(`, a tuple struct's `Copy`).
+SELF_TEST_VOCABULARY = [
+    (
+        {
+            "crates/nvim/src/a.rs": "fn a() -> c_int {\n}\n"
+            "fn b() -> c_int;\n"
+            "type F = fn() -> c_int;\n"
+            "fn c(\n    x: u8,\n) -> c_int\n{\n}\n"
+            "fn d() -> c_int_ish {\n}\n"
+        },
+        {"c_int_returns": 4},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() -> c_int {\n"
+            "    if x == OK { return FAIL; }\n"
+            "    if y != FAIL { return OK; }\n"
+            "    if z >= OK { }\n"
+            "    OK\n}\n"
+        },
+        {"ok_fail": 4},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(err: *mut Error) {\n}\n"
+            "fn g(err: &mut Error) {\n}\n"
+            "fn h(err: *mut ErrorType) {\n}\n"
+        },
+        {"error_out_params": 1},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    semsg_c!(x);\n"
+            "    semsg_multiline_c!(y);\n"
+            "    emsg(gettext(z));\n"
+            "    emsg(\n        gettext(w),\n    );\n"
+            "    semsg(gettext(v));\n"
+            "    emsg(other);\n}\n"
+        },
+        {"semsg_c": 4},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(a: *mut c_char, b: *const c_char) "
+            "-> *mut c_char {\n"
+            "    let c: *mut c_uchar = q;\n}\n"
+        },
+        {"raw_cstr": 3},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    strlen(a);\n    xstrlcpy(b);\n    vim_strchr(c);\n"
+            "    memcpy(d);\n    libc::strcmp(e);\n}\n"
+        },
+        {"libc_strings": 3},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "pub const A_B: c_int = 1;\n"
+            "pub const C: c_uint = 2;\n"
+            "const D: c_int = 3;\n"
+            "pub const E: usize = 4;\n"
+        },
+        {"const_c_int": 2},
+    ),
+    (
+        {"crates/nvim/src/a.rs": "pub union U {\n}\nunion V {\n}\nstruct W;\n"},
+        {"unions": 2},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "#[derive(Clone, Copy)]\n#[repr(C)]\n"
+            "pub struct A {\n    x: c_int,\n}\n"
+            "#[derive(Copy, Clone)]\npub enum B {\n    X,\n}\n"
+            "#[derive(Clone, Copy)]\nstruct C(u8);\n"
+            "#[derive(Clone)]\nstruct D {\n    x: u8,\n}\n"
+            "#[derive(Copy, Clone)]\npub union E {\n    x: u8,\n}\n"
+            "#[repr(C, packed)]\nstruct G {\n    x: u8,\n}\n",
+            # Inside the perimeter the layout is a foreign ABI's, so neither
+            # `#[repr(C)]` here is debt.
+            "crates/nvim/src/os/b.rs": "#[repr(C)]\nstruct H {\n    x: u8,\n}\n",
+        },
+        {"derive_copy": 2, "repr_c_outside_perimeter": 2},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    xmalloc(1);\n    xmallocz(2);\n    xcalloc(3, 4);\n"
+            "    xrealloc(p, 5);\n    xfree(p);\n"
+            "    xstrdup(q);\n    xfree_clear(r);\n}\n"
+        },
+        {"manual_alloc": 5},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    ga_init(a);\n    ga_grow(b, 1);\n    ga_clear(c);\n"
+            "    ga_concat(d, e);\n    ga_append(f, g);\n"
+            "    ga_clear_strings(h);\n    ga_concat_len(i, j, k);\n}\n"
+        },
+        {"garray_sites": 5},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    p.offset(1);\n    p.add(2);\n    p.sub(3);\n"
+            "    p.wrapping_add(4);\n    p.wrapping_sub(5);\n"
+            "    p.offset_from(q);\n    p.addr();\n}\n"
+        },
+        {"ptr_arith": 6},
+    ),
+    (
+        # A name is counted once however many files declare or mention it.
+        {
+            "crates/nvim/src/a.rs": "pub struct buf_T {\n    x: u8,\n}\n"
+            "pub type linenr_T = c_long;\n"
+            "fn f(b: *mut buf_T) {\n}\n",
+            "crates/nvim/src/b.rs": "pub type linenr_T = c_long;\n"
+            "pub enum foo_T {\n    X,\n}\n"
+            "fn g(l: linenr_T) {\n}\n",
+        },
+        {"t_suffix_types": 3},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut win_T,\n"
+            "    buf: *mut buf_T,\n) -> *mut tabpage_T {\n"
+            "    let x: *mut win_T = q;\n}\n"
+            "type Cb = fn(*mut win_T);\n"
+        },
+        {"raw_win_buf_sigs": 3},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n    curwin.get();\n"
+            "    curbuf.get();\n    curtab.get();\n    curwin.with(|w| w);\n}\n",
+            "crates/nvim/src/winlayer.rs": "fn g() {\n    curwin.get();\n}\n",
+            "crates/nvim/src/winlayer/win.rs": "fn h() {\n    curbuf.get();\n}\n",
+        },
+        {"curwin_raw": 3},
+    ),
+]
+
+
 def self_test():
     for source, expected in SELF_TEST:
         got = unsafe_lines(mask(source), False)
@@ -1974,6 +2323,12 @@ def self_test():
         assert got == expected, (
             f"borrowed_derefs={got}, want {expected}, for {source!r}"
         )
+    for sources, expected in SELF_TEST_VOCABULARY:
+        got = vocabulary({f: mask(text) for f, text in sources.items()})
+        for name, want in expected.items():
+            assert got[name] == want, (
+                f"{name}={got[name]}, want {want}, for {sources!r}"
+            )
     for file, expected in SELF_TEST_PERIMETER:
         got = in_perimeter(file)
         assert got == expected, f"in_perimeter={got}, want {expected}, for {file!r}"
