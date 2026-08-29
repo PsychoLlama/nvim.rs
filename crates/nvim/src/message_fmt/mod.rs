@@ -180,18 +180,23 @@ pub(crate) unsafe fn c_str<'a>(p: impl CPtr) -> CDisplay<'a> {
 /// `p` points at `len` readable bytes.
 pub(crate) unsafe fn c_str_len<'a>(p: *const c_char, len: usize) -> BytesDisplay<'a> {
     if p.is_null() {
-        return BytesDisplay(b"");
+        return BytesDisplay(None);
     }
+    let bytes = p.cast::<u8>();
     // SAFETY: the caller's contract; `c_char` and `u8` share a layout.
-    BytesDisplay(unsafe { core::slice::from_raw_parts(p.cast::<u8>(), len) })
+    BytesDisplay(Some(unsafe { core::slice::from_raw_parts(bytes, len) }))
 }
 
-/// Bytes as a message argument, rendered like [`CDisplay`].
-pub(crate) struct BytesDisplay<'a>(&'a [u8]);
+/// Bytes as a message argument, rendered like [`CDisplay`]. `None` is a null
+/// pointer, which vim's printf writes as `[NULL]` whatever the precision.
+pub(crate) struct BytesDisplay<'a>(Option<&'a [u8]>);
 
 impl fmt::Display for BytesDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_bytes(f, self.0)
+        match self.0 {
+            None => f.write_str("[NULL]"),
+            Some(bytes) => write_bytes(f, bytes),
+        }
     }
 }
 
@@ -214,7 +219,7 @@ impl fmt::Display for AddrDisplay {
 
 /// `bytes` as a message argument. The safe sibling of [`c_str_len`].
 pub(crate) fn msg_bytes(bytes: &[u8]) -> BytesDisplay<'_> {
-    BytesDisplay(bytes)
+    BytesDisplay(Some(bytes))
 }
 
 // ---------------------------------------------------------------------------

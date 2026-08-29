@@ -639,7 +639,7 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
         if kind == DBG_EXPR {
             // SAFETY: `bp` is a live breakpoint of the editor's own.
             let (nr, name) = unsafe { ((*bp).dbg_nr, c_str((*bp).dbg_name)) };
-            smsg!(0, "{nr:3} expr {name}");
+            smsg!(0, "{nr:3}  expr {name}");
         } else {
             let (label, shown) = if kind == DBG_FUNC {
                 (c"func".as_ptr(), unsafe { (*bp).dbg_name })
@@ -650,7 +650,7 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
             // strings are NUL-terminated.
             let (nr, lnum) = unsafe { ((*bp).dbg_nr, (*bp).dbg_lnum as int64_t) };
             let (label, shown) = unsafe { (c_str(label), c_str(shown)) };
-            smsg!(0, "{nr:3} {label} {shown} line {lnum}");
+            smsg!(0, "{nr:3}  {label} {shown}  line {lnum}");
         }
     }
 }

@@ -164,7 +164,7 @@ unsafe fn report_filetype_state() {
             c_str(state(filetype_indent.get() == Some(true))),
         )
     };
-    smsg!(0, "filetype detection:{arg0} plugin:{arg1} indent:{arg2}");
+    smsg!(0, "filetype detection:{arg0}  plugin:{arg1}  indent:{arg2}");
 }
 
 /// Turn the filetype plugin and indent scripts on, unless they were
