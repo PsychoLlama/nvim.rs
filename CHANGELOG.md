@@ -7,6 +7,13 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reworked how the editor holds the text of its own messages: the shared
+  message constants, the translation lookup and the `emsg`/`msg` entry
+  points now carry a string rather than a pointer to one. Every message
+  reads exactly as before.
+
 ## [2026.08.29-f6c6cf531e]
 
 ### Changed
