@@ -16,11 +16,11 @@ use crate::eval::typval::{
     NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_first, tv_list_len,
 };
 use crate::memory::{alloc_block, free_block, strequal, xfree};
+use crate::message_fmt::c_str_len;
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
-use crate::os::cshim::{gettext_ptr, memmove};
+use crate::os::cshim::memmove;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
     blob_T, kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
@@ -71,10 +71,9 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         s
     };
     if unsafe { json_decode_string(s, len, rettv) } == FAIL {
-        // The text that failed to parse is arbitrary user bytes, so the
-        // message keeps the variadic call and its `%.*s`.
-        let fmt = c"E474: Failed to parse %.*s".as_ptr();
-        unsafe { semsg_c!(gettext_ptr(fmt), len as c_int, s) };
+        // SAFETY: `s` is the caller's string and `len` its length.
+        let s = unsafe { c_str_len(s, len) };
+        semsg!("E474: Failed to parse {s}");
         rettv.v_type = VAR_NUMBER;
         rettv.vval.v_number = 0;
     }

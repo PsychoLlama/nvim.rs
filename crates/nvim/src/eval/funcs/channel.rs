@@ -39,8 +39,7 @@ use crate::msgpack_rpc::server::{
 use crate::os::cshim::gettext;
 use crate::runtime::exestack;
 use crate::semsg;
-use crate::semsg_c;
-use crate::semsg_multiline_c;
+use crate::semsg_multiline;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
     String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
@@ -364,14 +363,20 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             unsafe { get_client_info(chan, c"name".as_ptr()) }
         };
         if name.is_null() {
-            let kind = c"rpc_error".as_ptr();
-            let fmt = c"Invoking '%s' on channel %lu:\n%s".as_ptr();
-            unsafe { semsg_multiline_c!(kind, fmt, method, chan_id, err.msg) };
+            // SAFETY: the method name and the API error's message are both
+            // NUL-terminated.
+            let (method, msg) = unsafe { (c_str(method), c_str(err.msg)) };
+            semsg_multiline!(
+                c"rpc_error",
+                "Invoking '{method}' on channel {chan_id}:\n{msg}"
+            );
         } else {
-            let kind = c"rpc_error".as_ptr();
-            let fmt = c"Invoking '%s' on channel %lu (%s):\n%s".as_ptr();
-            let msg = err.msg;
-            unsafe { semsg_multiline_c!(kind, fmt, method, chan_id, name, msg) };
+            // SAFETY: as above, plus the client name the channel answered.
+            let (method, name, msg) = unsafe { (c_str(method), c_str(name), c_str(err.msg)) };
+            semsg_multiline!(
+                c"rpc_error",
+                "Invoking '{method}' on channel {chan_id} ({name}):\n{msg}"
+            );
         }
     } else {
         unsafe { object_to_vim(result, rettv, &raw mut err) };
@@ -480,8 +485,9 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             // SAFETY: `uv_strerror` answers a `'static` message for any code.
             unsafe { uv_strerror(result) }
         };
-        let fmt = c"Failed to start server: %s".as_ptr();
-        unsafe { semsg_c!(fmt, why) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let why = unsafe { c_str(why) };
+        semsg!("Failed to start server: {why}");
         return;
     }
 

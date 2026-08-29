@@ -14,7 +14,8 @@
 
 use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{c_char, c_int};
 
 use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, event_T};
@@ -180,9 +181,10 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
         if nofile_err {
-            let fmt = gettext(c"E676: No matching autocommands for buftype=%s buffer");
             let buftype = cur_buf().b_p_bt;
-            unsafe { semsg_c!(fmt, buftype) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let buftype = unsafe { c_str(buftype) };
+            semsg!("E676: No matching autocommands for buftype={buftype} buffer");
         }
         if nofile_err || aborting() {
             // An aborting error, interrupt or exception in the

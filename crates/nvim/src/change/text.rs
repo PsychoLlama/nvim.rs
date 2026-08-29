@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memline::MlFlags;
-use crate::siemsg_c;
+use crate::siemsg;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -310,9 +310,10 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
         return OK;
     }
     if count < 1 {
-        let fmt = c"E292: Invalid count for del_bytes(): %ld".as_ptr();
-        // SAFETY: a static format string with one `%ld`.
-        unsafe { siemsg_c!(fmt, int64_t::from(count)) };
+        siemsg!(
+            "E292: Invalid count for del_bytes(): {}",
+            int64_t::from(count)
+        );
         return FAIL;
     }
 

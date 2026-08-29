@@ -12,13 +12,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::smsg;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::main::curwin;
 use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext_ptr;
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, fromto_T, garray_T};
@@ -139,8 +141,9 @@ pub(super) unsafe fn handle_map(
         // The first MAP line is the number of groups.
         st.found_map = true;
         if !unsafe { is_digit_byte(*items[1]) } {
-            let fmt = gettext(c"Expected MAP count in %s line %d");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            smsg!(0, "Expected MAP count in {fname} line {}", lnum);
         }
         return;
     }
@@ -156,8 +159,9 @@ pub(super) unsafe fn handle_map(
             && !unsafe { vim_strchr((*spin).si_map.ga_data.cast::<c_char>(), c) }.is_null())
             || !unsafe { vim_strchr(p, c) }.is_null()
         {
-            let fmt = gettext(c"Duplicate character in MAP in %s line %d");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let fname = unsafe { c_str(fname) };
+            smsg!(0, "Duplicate character in MAP in {fname} line {}", lnum);
         }
     }
     unsafe { ga_concat(&raw mut (*spin).si_map, items[1]) };

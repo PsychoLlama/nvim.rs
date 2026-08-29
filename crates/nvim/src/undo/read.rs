@@ -10,9 +10,7 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::smsg;
-use crate::smsg_c;
 use crate::winlayer::Buf;
 use std::collections::HashSet;
 
@@ -60,8 +58,9 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
     let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
     if fp.is_null() {
         if !name.is_null() || p_verbose.get() > 0 {
-            let fmt = gettext(c"E822: Cannot open undo file for reading: %s");
-            unsafe { semsg_c!(fmt, file_name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let file_name = unsafe { c_str(file_name) };
+            semsg!("E822: Cannot open undo file for reading: {file_name}");
         }
     } else {
         unsafe { read_undo_file(fp, file_name, name.is_null(), hash) };
@@ -92,8 +91,9 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
         return true;
     }
     verbosely(true, || {
-        let fmt = gettext(c"Not reading undo file, owner differs: %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let file_name = unsafe { c_str(file_name) };
+        smsg!(0, "Not reading undo file, owner differs: {file_name}");
     });
     false
 }
@@ -128,8 +128,9 @@ unsafe fn read_undo_file(
         return;
     }
     if unsafe { get2c(fp) } != UF_VERSION {
-        let fmt = gettext(c"E824: Incompatible undo file: %s");
-        unsafe { semsg_c!(fmt, file_name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let file_name = unsafe { c_str(file_name) };
+        semsg!("E824: Incompatible undo file: {file_name}");
         return;
     }
     let mut read_hash = [0u8; UNDO_HASH_SIZE as usize];
@@ -163,8 +164,9 @@ unsafe fn read_undo_file(
         return;
     }
     if !automatic {
-        let fmt = gettext(c"Finished reading undo file %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let file_name = unsafe { c_str(file_name) };
+        smsg!(0, "Finished reading undo file {file_name}");
     }
 }
 

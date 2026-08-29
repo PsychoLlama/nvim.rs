@@ -7,7 +7,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -246,8 +247,9 @@ pub unsafe fn verbose_open() -> c_int {
         verbose_did_open.set(true);
         verbose_fd.set(unsafe { os_fopen(p_vfile.get(), c"a".as_ptr()) });
         if verbose_fd.get().is_null() {
-            let msg = gettext(e_notopen);
-            unsafe { semsg_c!(msg, p_vfile.get()) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(p_vfile.get()) };
+            semsg!("E484: Can't open file {arg0}");
             return FAIL;
         }
     }

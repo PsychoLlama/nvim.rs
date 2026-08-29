@@ -10,7 +10,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::winlayer::{Live, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -21,8 +20,8 @@ use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, PATHSEP, SID_CARG, SID_CMDARG,
-    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, e_cannot_read_from_str_2, exmode_active, kEqualFiles,
-    kXDGConfigDirs, mparm_T, msg_scroll, p_exrc, silent_mode, time_msg_at,
+    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T,
+    msg_scroll, p_exrc, silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::os::cshim::{gettext, stderr};
@@ -310,8 +309,9 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
         if !named_none
             && unsafe { do_source(vimrc, false, DOSO_NONE as c_int, ptr::null_mut()) } != OK
         {
-            let fmt = gettext(e_cannot_read_from_str_2);
-            unsafe { semsg_c!(fmt, vimrc) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let vimrc = unsafe { c_str(vimrc) };
+            semsg!("E282: Cannot read from \"{vimrc}\"");
         }
     } else if !silent_mode.get() {
         unsafe { do_system_initialization() };

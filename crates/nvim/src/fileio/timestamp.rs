@@ -12,7 +12,8 @@
 use crate::buffer::BufFlags;
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::undo::UNDO_HASH_SIZE;
 use crate::winlayer::{Buf, Win, first_buffer, tab_windows};
 use core::ffi::{c_char, c_int};
@@ -577,11 +578,10 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
             // SAFETY: the null check above guards this one.
             || move_lines(buf, unsafe { Buf::new(savebuf) }) == FAIL
         {
-            let fmt = c"E462: Could not prepare for reloading \"%s\"".as_ptr();
             let fname = buf.b_fname;
-            // SAFETY: a static format string with one `%s`, and the buffer's
-            // own file name.
-            unsafe { semsg_c!(gettext_ptr(fmt), fname) };
+            // SAFETY: a static format string with one `%s`, and the buffer's // own file name.
+            let fname = unsafe { c_str(fname) };
+            semsg!("E462: Could not prepare for reloading \"{fname}\"");
             saved = FAIL;
         }
     }
@@ -596,11 +596,10 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
         // SAFETY: a live buffer's own names, and `ea` is a local.
         if unsafe { readfile(ffname, fname, 0, 0, last, at, flags, quiet) } != OK {
             if !aborting() {
-                let fmt = c"E321: Could not reload \"%s\"".as_ptr();
                 let fname = buf.b_fname;
-                // SAFETY: a static format string with one `%s`, and the
-                // buffer's own file name.
-                unsafe { semsg_c!(gettext_ptr(fmt), fname) };
+                // SAFETY: a static format string with one `%s`, and the // buffer's own file name.
+                let fname = unsafe { c_str(fname) };
+                semsg!("E321: Could not reload \"{fname}\"");
             }
             if !savebuf.is_null() && bufref.valid() && buf.raw() == curbuf.get() {
                 // Put the text back from the save buffer. First delete any

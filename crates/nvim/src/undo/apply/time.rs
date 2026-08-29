@@ -15,7 +15,7 @@ use super::super::store::{Header, Marks, header_chain};
 use super::super::*;
 use super::{u_undo_end, u_undoredo};
 use crate::memline::MlFlags;
-use crate::semsg_c;
+use crate::semsg;
 use crate::winlayer::Buf;
 
 // ---------------------------------------------------------------------------
@@ -339,11 +339,7 @@ fn undo_search(
             });
         }
         if absolute {
-            // SAFETY: a NUL-terminated literal and an integer.
-            unsafe {
-                let fmt = gettext(c"E830: Undo number %ld not found");
-                semsg_c!(fmt, step as int64_t);
-            }
+            semsg!("E830: Undo number {} not found", step as int64_t);
             return None;
         }
         if closest.val == closest.start {

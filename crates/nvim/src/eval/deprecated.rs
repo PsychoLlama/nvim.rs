@@ -32,9 +32,7 @@ use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::emsg_ptr;
-use crate::os::cshim::gettext;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     Callback, Callback_data, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST,
@@ -142,10 +140,10 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
             // SAFETY: `arg` is one of the list's items.
             if unsafe { (*arg).li_tv.v_type } != VAR_STRING {
-                let msg = c"E5010: List item %d of the second argument is not a string";
-                // SAFETY: the message is a NUL-terminated literal whose
-                // format takes one `int`.
-                unsafe { semsg_c!(gettext(msg), i as c_int) };
+                semsg!(
+                    "E5010: List item {} of the second argument is not a string",
+                    i as c_int
+                );
                 return;
             }
         }

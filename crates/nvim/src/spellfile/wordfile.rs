@@ -10,14 +10,14 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::fileio::vim_fgets;
 use crate::main::{got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::xfree;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::strncmp;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};
@@ -80,8 +80,13 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
             let conv = unsafe { &raw mut (*spin).si_conv };
             pc = unsafe { string_convert(conv, rline.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
-                let fmt = gettext(c"Conversion failure for word in %s line %d: %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, rline.as_mut_ptr()) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, rline) = unsafe { (c_str(fname), c_str(rline.as_mut_ptr())) };
+                smsg!(
+                    0,
+                    "Conversion failure for word in {fname} line {}: {rline}",
+                    lnum
+                );
                 continue;
             }
             pc
@@ -116,15 +121,17 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
                         flags |= WF_REGION as c_int;
                         let n = (d - b'0') as c_int;
                         if n == 0 || n > unsafe { (*spin).si_region_count } {
-                            let fmt = gettext(c"Invalid region nr in %s line %d: %s");
-                            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, p) };
+                            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                            let (fname, p) = unsafe { (c_str(fname), c_str(p)) };
+                            smsg!(0, "Invalid region nr in {fname} line {}: {p}", lnum);
                             break;
                         }
                         regionmask |= 1 << (n - 1);
                     }
                     _ => {
-                        let fmt = gettext(c"Unrecognized flags in %s line %d: %s");
-                        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, p) };
+                        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                        let (fname, p) = unsafe { (c_str(fname), c_str(p)) };
+                        smsg!(0, "Unrecognized flags in {fname} line {}: {p}", lnum);
                         break;
                     }
                 }
@@ -172,32 +179,53 @@ unsafe fn read_wordfile_header(
     // only after its length has been checked against the array.
     if unsafe { strncmp(line, c"encoding=".as_ptr(), 9) } == 0 {
         if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
-            let fmt = gettext(c"Duplicate /encoding= line ignored in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line.sub(1)) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+            smsg!(
+                0,
+                "Duplicate /encoding= line ignored in {fname} line {}: {arg2}",
+                lnum
+            );
         } else if did_word {
-            let fmt = gettext(c"/encoding= line after word ignored in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line.sub(1)) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+            smsg!(
+                0,
+                "/encoding= line after word ignored in {fname} line {}: {arg2}",
+                lnum
+            );
         } else {
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
             if unsafe { (*spin).si_ascii } == 0
                 && unsafe { convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) } == FAIL
             {
-                let fmt = gettext(c"Conversion in %s not supported: from %s to %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, line, p_enc.get()) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, line, arg2) =
+                    unsafe { (c_str(fname), c_str(line), c_str(p_enc.get())) };
+                smsg!(
+                    0,
+                    "Conversion in {fname} not supported: from {line} to {arg2}"
+                );
             }
             unsafe { xfree(enc.cast()) };
             unsafe { (*spin).si_conv.vc_fail = true };
         }
     } else if unsafe { strncmp(line, c"regions=".as_ptr(), 8) } == 0 {
         if unsafe { (*spin).si_region_count } > 1 {
-            let fmt = gettext(c"Duplicate /regions= line ignored in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
+            smsg!(
+                0,
+                "Duplicate /regions= line ignored in {fname} line {}: {line}",
+                lnum
+            );
         } else {
             line = unsafe { line.add(8) };
             if unsafe { strlen(line) } > (MAXREGIONS as c_int * 2) as size_t {
-                let fmt = gettext(c"Too many regions in %s line %d: %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
+                smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
             } else {
                 unsafe { (*spin).si_region_count = strlen(line) as c_int / 2 };
                 unsafe { strcpy((&raw mut (*spin).si_region_name).cast::<c_char>(), line) };
@@ -205,7 +233,8 @@ unsafe fn read_wordfile_header(
             }
         }
     } else {
-        let fmt = gettext(c"/ line ignored in %s line %d: %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line.sub(1)) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+        smsg!(0, "/ line ignored in {fname} line {}: {arg2}", lnum);
     }
 }

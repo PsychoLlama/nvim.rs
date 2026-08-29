@@ -5,7 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::list::{op, out_of, out1_of};
-use crate::siemsg_c;
+use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
 
 use super::matcher::nfa_regmatch;
@@ -70,11 +70,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
         NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
         NFA_CLASS_FNAME => unsafe { vim_isfilec(c) },
         _ => {
-            // `siemsg`, not `semsg`: an internal-error report, dropped
-            // while messages are held back.
-            let fmt = c"E877: (NFA regexp) Invalid character class: %ld".as_ptr();
-            // SAFETY: a static format string with the one `%ld` below.
-            unsafe { siemsg_c!(fmt, cls as i64) };
+            siemsg!("E877: (NFA regexp) Invalid character class: {}", cls as i64);
             return FAIL;
         }
     };

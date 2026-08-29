@@ -16,7 +16,7 @@
 use crate::cstr;
 use crate::log::logmsg_c;
 use crate::message_fmt::c_str;
-use crate::msg_schedule_semsg_c;
+use crate::msg_schedule_semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
@@ -391,8 +391,7 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
                 );
             }
             if notfound > 1 {
-                let fmt = c"E5431: tempdir disappeared (%d times)".as_ptr();
-                unsafe { msg_schedule_semsg_c!(fmt, notfound) };
+                msg_schedule_semsg!("E5431: tempdir disappeared ({} times)", notfound);
             }
         }
         unsafe { vim_mktempdir() };

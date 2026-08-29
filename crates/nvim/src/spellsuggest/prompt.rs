@@ -51,7 +51,7 @@ use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::options::kOptBoFlagSpell;
 use crate::os::cshim::{gettext, memmove, strncmp};
 use crate::search::FORWARD;
-use crate::smsg_c;
+use crate::smsg;
 use crate::spell::{
     SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
 };
@@ -148,9 +148,8 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
         msg(gettext(c"No suggestions"), 0);
     } else if count > 0 {
         if count > sug.su_ga.ga_len {
-            let fmt = gettext(c"Only %ld suggestions");
             let found = sug.su_ga.ga_len as int64_t;
-            unsafe { smsg_c!(0, fmt.as_ptr(), found) };
+            smsg!(0, "Only {} suggestions", found);
         }
     } else {
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };

@@ -23,7 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
@@ -673,9 +673,9 @@ pub unsafe fn get_lval(
     if v.is_null() {
         if !quiet {
             let (n, s) = (lp.ll_name_len as c_int, lp.ll_name);
-            let fmt = gettext(c"E121: Undefined variable: %.*s");
             // SAFETY: as above.
-            unsafe { semsg_c!(fmt, n, s) };
+            let s = unsafe { c_str_len(s, n as usize) };
+            semsg!("E121: Undefined variable: {s}");
         }
         return null_mut();
     }

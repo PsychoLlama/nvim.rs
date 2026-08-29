@@ -314,8 +314,7 @@ pub unsafe fn emsg_invreg(name: c_int) {
     // SAFETY: a character code, rendered into this frame's own buffer, and
     // a one-string format.
     let display = unsafe { transchar_buf(ptr::null(), name) };
-    let fmt = gettext(c"E354: Invalid register name: '%s'");
-    unsafe { crate::semsg_c!(fmt, display.as_ptr()) };
+    unsafe { crate::semsg!("E354: Invalid register name: '{}'", c_str(display.as_ptr())) };
 }
 
 /// How much of an error message [`semsg_c!`](crate::semsg_c) keeps.

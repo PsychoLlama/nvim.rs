@@ -33,7 +33,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -140,8 +140,13 @@ pub(super) unsafe fn spell_read_dic(
             let conv = unsafe { &raw mut (*spin).si_conv };
             pc = unsafe { string_convert(conv, line.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
-                let fmt = gettext(c"Conversion failure for word in %s line %d: %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, line.as_mut_ptr()) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, line) = unsafe { (c_str(fname), c_str(line.as_mut_ptr())) };
+                smsg!(
+                    0,
+                    "Conversion failure for word in {fname} line {}: {line}",
+                    lnum
+                );
                 continue;
             }
             pc
@@ -210,11 +215,13 @@ pub(super) unsafe fn spell_read_dic(
             // Report every duplicate when 'verbose' is on, otherwise
             // just the first, plus a count at the end.
             if p_verbose.get() > 0 {
-                let fmt = gettext(c"Duplicate word in %s line %d: %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, dw) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, dw) = unsafe { (c_str(fname), c_str(dw)) };
+                smsg!(0, "Duplicate word in {fname} line {}: {dw}", lnum);
             } else if duplicate == 0 {
-                let fmt = gettext(c"First duplicate word in %s line %d: %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, dw) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (fname, dw) = unsafe { (c_str(fname), c_str(dw)) };
+                smsg!(0, "First duplicate word in {fname} line {}: {dw}", lnum);
             }
             duplicate += 1;
         }
@@ -278,12 +285,18 @@ pub(super) unsafe fn spell_read_dic(
     }
 
     if duplicate > 0 {
-        let fmt = gettext(c"%d duplicate word(s) in %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), duplicate, fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        smsg!(0, "{} duplicate word(s) in {fname}", duplicate);
     }
     if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
-        let fmt = gettext(c"Ignored %d word(s) with non-ASCII characters in %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), non_ascii, fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        smsg!(
+            0,
+            "Ignored {} word(s) with non-ASCII characters in {fname}",
+            non_ascii
+        );
     }
     unsafe { hash_clear(&raw mut ht) };
     unsafe { fclose(fd) };

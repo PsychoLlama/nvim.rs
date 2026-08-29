@@ -77,7 +77,6 @@ use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{
     CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, exarg_T,
     linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
@@ -747,8 +746,9 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     pattern.extend_from_slice(unsafe { CStr::from_ptr((*eap).arg) }.to_bytes());
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) } == FAIL {
-        let unsupported = gettext(c"E666: Compiler not supported: %s");
-        unsafe { semsg_c!(unsupported, (*eap).arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str((*eap).arg) };
+        semsg!("E666: Compiler not supported: {arg}");
     }
 
     unsafe { do_cmdline_cmd(c":delcommand CompilerSet".as_ptr()) };

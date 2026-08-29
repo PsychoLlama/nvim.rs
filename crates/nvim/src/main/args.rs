@@ -13,7 +13,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{size_of, size_of_val};
@@ -272,9 +273,10 @@ impl Scan {
             let data = api_metadata_raw();
             let written = unsafe { os_write(STDOUT_FILENO, data.data(), data.len(), false) };
             if written < 0 as ptrdiff_t {
-                let fmt = gettext(c"E5420: Failed to write to file: %s");
                 let why = unsafe { uv_strerror(written as c_int) };
-                unsafe { semsg_c!(fmt, why) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let why = unsafe { c_str(why) };
+                semsg!("E5420: Failed to write to file: {why}");
             }
             unsafe { os_exit(0) };
         } else if self.tail_is(c"headless") {

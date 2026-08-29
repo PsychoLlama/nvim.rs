@@ -25,12 +25,12 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::siemsg_c;
+use crate::message_fmt::c_str;
+use crate::siemsg;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::{ptr, slice};
 
 use crate::memory::{xcalloc, xfree};
-use crate::os::cshim::gettext;
 
 use crate::types::{FAIL, OK, hash_T, hashitem_T, hashtab_T};
 
@@ -368,9 +368,9 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
     let hash = unsafe { hash_hash(key) };
     let hi = unsafe { hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash) };
     if unsafe { &*hi }.is_kept() {
-        let fmt = c"E685: Internal error: hash_add(): duplicate key \"%s\"";
         // SAFETY: `%s` spends the NUL-terminated key.
-        unsafe { siemsg_c!(gettext(fmt), key) };
+        let key = unsafe { c_str(key) };
+        siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
         return FAIL;
     }
     unsafe { hash_add_item(ht, hi, key, hash) };

@@ -28,6 +28,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::message_fmt::c_str;
+use crate::smsg;
 use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -361,10 +363,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                                 region_mask = 0;
                             }
                         } else {
-                            // Probably a mistake; warn but accept the
-                            // words anyway.
-                            let fmt = gettext(c"Warning: region %s not supported");
-                            unsafe { smsg_c!(0, fmt.as_ptr(), region) };
+                            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                            let region = unsafe { c_str(region) };
+                            smsg!(0, "Warning: region {region} not supported");
                         }
                     } else {
                         region_mask = 1 << c;

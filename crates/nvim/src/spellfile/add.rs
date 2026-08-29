@@ -28,18 +28,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
-use crate::main::{curbuf, curwin, e_bufloaded, e_notset};
+use crate::main::{curbuf, curwin, e_bufloaded};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
 use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
@@ -105,8 +104,7 @@ pub unsafe fn spell_add_word(
             new_spf = true;
         }
         if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
-            let fmt = gettext(e_notset);
-            unsafe { semsg_c!(fmt, c"spellfile".as_ptr()) };
+            semsg!("E764: Option '{}' is not set", "spellfile");
             return;
         }
 
@@ -120,8 +118,7 @@ pub unsafe fn spell_add_word(
                 break;
             }
             if unsafe { *spf } == 0 {
-                let fmt = gettext(c"E765: 'spellfile' does not have %d entries");
-                unsafe { semsg_c!(fmt, idx) };
+                semsg!("E765: 'spellfile' does not have {} entries", idx);
                 unsafe { xfree(fnamebuf as *mut c_void) };
                 return;
             }
@@ -189,8 +186,9 @@ pub unsafe fn spell_add_word(
 
             let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
             unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
-            let fmt = gettext(c"Word '%.*s' added to %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), len, word, shown.as_ptr()) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (word, shown) = unsafe { (c_str_len(word, len as usize), c_str(shown.as_ptr())) };
+            smsg!(0, "Word '{word}' added to {shown}");
         }
     }
 
@@ -254,8 +252,10 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
             if undo {
                 let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
                 unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
-                let fmt = gettext(c"Word '%.*s' removed from %s");
-                unsafe { smsg_c!(0, fmt.as_ptr(), len, word, shown.as_ptr()) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (word, shown) =
+                    unsafe { (c_str_len(word, len as usize), c_str(shown.as_ptr())) };
+                smsg!(0, "Word '{word}' removed from {shown}");
             }
         }
         if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {

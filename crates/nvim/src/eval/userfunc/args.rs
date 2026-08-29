@@ -57,8 +57,9 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
         let arg_copy = unsafe { xstrdup(arg) };
         for &earlier in ga_strings(unsafe { &*newargs }) {
             if unsafe { strcmp(earlier, arg_copy) } == 0 {
-                let dup = c"E853: Duplicate argument name: %s".as_ptr();
-                unsafe { semsg_c!(gettext_ptr(dup), arg_copy) };
+                // SAFETY: `xstrdup` answered a NUL-terminated copy.
+                let shown = unsafe { c_str(arg_copy) };
+                semsg!("E853: Duplicate argument name: {shown}");
                 unsafe { xfree(arg_copy as *mut c_void) };
                 // Upstream leaves the name NUL-terminated here; the
                 // caller stops on `p == arg` either way.

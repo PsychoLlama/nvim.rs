@@ -9,7 +9,6 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
-use crate::smsg_c;
 use crate::winlayer::Buf;
 
 /// Writes `buf`'s undo tree to `name`, or to the file `'undodir'` picks for
@@ -159,8 +158,12 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
     let fd = unsafe { os_open(file_name, O_RDONLY, 0) };
     if fd < 0 {
         verbosely(automatic, || {
-            let fmt = gettext(c"Will not overwrite with undo file, cannot read: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let file_name = unsafe { c_str(file_name) };
+            smsg!(
+                0,
+                "Will not overwrite with undo file, cannot read: {file_name}"
+            );
         });
         return false;
     }
@@ -173,8 +176,12 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
         return true;
     }
     verbosely(automatic, || {
-        let fmt = gettext(c"Will not overwrite, this is not an undo file: %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), file_name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let file_name = unsafe { c_str(file_name) };
+        smsg!(
+            0,
+            "Will not overwrite, this is not an undo file: {file_name}"
+        );
     });
     false
 }

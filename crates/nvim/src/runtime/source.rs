@@ -421,8 +421,7 @@ unsafe fn source_name(
             if !os_isdir(name) {
                 return Ok(name);
             }
-            let fmt = gettext(c"Cannot source a directory: \"%s\"");
-            smsg_c!(0, fmt.as_ptr(), req.fname);
+            smsg!(0, "Cannot source a directory: \"{}\"", c_str(req.fname));
             xfree(name.cast());
             Err(FAIL)
         },

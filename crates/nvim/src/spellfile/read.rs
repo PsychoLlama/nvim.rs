@@ -242,8 +242,9 @@ unsafe fn load_spl(
             return false;
         }
         SP_OTHERERROR => {
-            let fmt = gettext(c"E5042: Failed to read spell file %s: %s");
-            unsafe { semsg_c!(fmt, fname, strerror(ferror(fd))) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg1) = unsafe { (c_str(fname), c_str(strerror(ferror(fd)))) };
+            semsg!("E5042: Failed to read spell file {fname}: {arg1}");
             return false;
         }
         _ => {}
@@ -480,26 +481,30 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
         *b = unsafe { getc(fd) } as c_char;
     }
     if unsafe { strncmp(buf.as_ptr(), VIMSUGMAGIC.as_ptr(), VIMSUGMAGICL as size_t) } != 0 {
-        let fmt = gettext(c"E778: This does not look like a .sug file: %s");
-        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let sl_fname = unsafe { c_str((*slang).sl_fname) };
+        semsg!("E778: This does not look like a .sug file: {sl_fname}");
         return;
     }
     let version = unsafe { getc(fd) };
     if version < VIMSUGVERSION {
-        let fmt = gettext(c"E779: Old .sug file, needs to be updated: %s");
-        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let sl_fname = unsafe { c_str((*slang).sl_fname) };
+        semsg!("E779: Old .sug file, needs to be updated: {sl_fname}");
         return;
     }
     if version > VIMSUGVERSION {
-        let fmt = gettext(c"E780: .sug file is for newer version of Vim: %s");
-        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let sl_fname = unsafe { c_str((*slang).sl_fname) };
+        semsg!("E780: .sug file is for newer version of Vim: {sl_fname}");
         return;
     }
     // The `.spl` stamped both files; a mismatch means the pair is
     // stale and the word numbers would point at the wrong words.
     if unsafe { get8ctime(fd) } != unsafe { (*slang).sl_sugtime } {
-        let fmt = gettext(c"E781: .sug file doesn't match .spl file: %s");
-        unsafe { semsg_c!(fmt, (*slang).sl_fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let sl_fname = unsafe { c_str((*slang).sl_fname) };
+        semsg!("E781: .sug file doesn't match .spl file: {sl_fname}");
         return;
     }
 

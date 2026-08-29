@@ -5,7 +5,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -196,9 +195,9 @@ pub unsafe fn eval_call_provider(
 ) -> typval_T {
     // SAFETY: the caller's promise -- `provider` is NUL-terminated.
     if !unsafe { eval_has_provider(provider, false) } {
-        let fmt = c"E319: No \"%s\" provider found. Run \":checkhealth vim.provider\"".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
-        unsafe { semsg_c!(fmt, provider) };
+        let provider = unsafe { c_str(provider) };
+        semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
         return typval_T {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
@@ -354,9 +353,9 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
             // SAFETY: `bp` holds the NUL-terminated function name.
             let defined = !unsafe { find_func(bp) }.is_null();
             if defined && p_lpl.get() != 0 {
-                let fmt = c"provider: %s: missing required variable g:loaded_%s_provider".as_ptr();
                 // SAFETY: the format takes two NUL-terminated strings.
-                unsafe { semsg_c!(fmt, nm, nm) };
+                let (nm2, nm) = unsafe { (c_str(nm), c_str(nm)) };
+                semsg!("provider: {nm2}: missing required variable g:loaded_{nm}_provider");
             }
             return false;
         }
@@ -370,9 +369,9 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
         // SAFETY: `bp` holds the NUL-terminated function name just built.
         if unsafe { find_func(bp) }.is_null() {
-            let fmt = c"provider: %s: g:loaded_%s_provider=2 but %s is not defined".as_ptr();
             // SAFETY: the format takes three NUL-terminated strings.
-            unsafe { semsg_c!(fmt, nm, nm, bp) };
+            let (nm2, nm, bp) = unsafe { (c_str(nm), c_str(nm), c_str(bp)) };
+            semsg!("provider: {nm2}: g:loaded_{nm}_provider=2 but {bp} is not defined");
             ok = false;
         }
     }

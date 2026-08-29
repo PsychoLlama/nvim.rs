@@ -25,7 +25,7 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::main::ui_event_ns_id;
 use crate::message_fmt::c_str;
-use crate::msg_schedule_semsg_c;
+use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{
@@ -121,9 +121,9 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     unsafe { ui_refresh() };
     if checkerr {
         let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
-        let fmt = c"Excessive errors in vim.ui_attach() callback (ns=%s)".as_ptr();
         // SAFETY: the one `%s` spends the namespace name.
-        unsafe { msg_schedule_semsg_c!(fmt, ns) };
+        let ns = unsafe { c_str(ns) };
+        msg_schedule_semsg!("Excessive errors in vim.ui_attach() callback (ns={ns})");
     }
 }
 

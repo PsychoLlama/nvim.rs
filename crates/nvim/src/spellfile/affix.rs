@@ -20,6 +20,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::smsg;
 use crate::smsg_c;
 use core::ffi::{c_char, c_int};
 
@@ -80,8 +82,9 @@ pub(super) unsafe fn handle_affix_header(
             unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
         }
         if unsafe { (*st.cur_aff).ah_follows } == 0 {
-            let fmt = gettext(c"Duplicate affix in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+            smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
         }
     } else {
         st.cur_aff = unsafe { (*spin).si_arena.alloc::<affheader_T>() };
@@ -104,8 +107,13 @@ pub(super) unsafe fn handle_affix_header(
             unsafe { (*aff).af_comproot },
         ];
         if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
-            let fmt = gettext(c"Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[1]) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+            smsg!(
+                0,
+                "Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in {fname} line {}: {arg2}",
+                lnum
+            );
         }
         unsafe { strcpy(affheader_T::key(st.cur_aff), items[1]) };
         unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
@@ -131,8 +139,9 @@ pub(super) unsafe fn handle_affix_header(
     if unsafe { strcmp(items[2], c"Y".as_ptr()) } != 0
         && unsafe { strcmp(items[2], c"N".as_ptr()) } != 0
     {
-        let fmt = gettext(c"Expected Y or N in %s line %d: %s");
-        unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[2]) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (fname, arg2) = unsafe { (c_str(fname), c_str(items[2])) };
+        smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
     }
 
     if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 {
@@ -215,8 +224,9 @@ pub(super) unsafe fn handle_affix_entry(
             (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT)
         };
         if unsafe { (*entry).ae_prog }.is_null() {
-            let fmt = gettext(c"Broken condition in %s line %d: %s");
-            unsafe { smsg_c!(0, fmt.as_ptr(), fname, lnum, items[4]) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (fname, arg2) = unsafe { (c_str(fname), c_str(items[4])) };
+            smsg!(0, "Broken condition in {fname} line {}: {arg2}", lnum);
         }
     }
 

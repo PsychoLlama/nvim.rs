@@ -16,7 +16,6 @@ use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
 use crate::semsg;
-use crate::semsg_c;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
@@ -674,8 +673,10 @@ unsafe fn output_is_writable(
     } else if !unsafe { vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int) }.is_null() {
         emsg(gettext(c"E751: Output file name must not have region name"));
     } else if incount > MAXREGIONS as ::core::ffi::c_int {
-        let fmt = gettext(c"E754: Only up to %d regions supported");
-        unsafe { semsg_c!(fmt, MAXREGIONS as ::core::ffi::c_int) };
+        semsg!(
+            "E754: Only up to {} regions supported",
+            MAXREGIONS as ::core::ffi::c_int
+        );
     } else if !over_write && unsafe { os_path_exists(wfname) } {
         emsg(gettext(e_exists));
     } else if unsafe { os_isdir(wfname) } {

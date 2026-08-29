@@ -33,7 +33,7 @@ use crate::memory::{xcalloc, xfree};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
 use crate::r#move::win_col_off;
-use crate::os::cshim::{gettext, gettext_ptr, snprintf, strncmp};
+use crate::os::cshim::{gettext, snprintf, strncmp};
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
@@ -41,7 +41,6 @@ use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
-use crate::semsg_c;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
@@ -527,9 +526,8 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         }
         if !unsafe { (*curbuf.get()).terminal }.is_null() {
             if unsafe { terminal_running((*curbuf.get()).terminal) } {
-                let fmt = c"Terminal already connected to buffer %d".as_ptr();
                 let handle = unsafe { (*curbuf.get()).handle };
-                unsafe { semsg_c!(gettext_ptr(fmt), handle) };
+                semsg!("Terminal already connected to buffer {}", handle);
                 bail!();
             }
             buf_close_terminal(unsafe { Buf::current() });

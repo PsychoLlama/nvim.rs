@@ -33,7 +33,7 @@
 
 use crate::global_cell::SharedCell;
 use crate::memory::alloc_log::AllocEvent;
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_long, c_ulong, c_void};
 use core::{ptr, slice};
 
@@ -81,10 +81,7 @@ unsafe fn do_outofmem_msg(size: usize) {
     // A `size_t` that would not fit a `%lu` is not a size any allocator was
     // ever going to serve, so saturating beats panicking on the OOM path.
     let size = c_ulong::try_from(size).unwrap_or(c_ulong::MAX);
-    let fmt = c"E342: Out of memory!  (allocating %lu bytes)";
-    // SAFETY: `gettext` answers a NUL-terminated string, and `%lu` spends
-    // exactly the `c_ulong` that follows it.
-    unsafe { semsg_c!(gettext(fmt), size) };
+    semsg!("E342: Out of memory!  (allocating {} bytes)", size);
 }
 
 /// The four calls below are the whole of this module's contact with the

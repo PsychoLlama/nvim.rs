@@ -32,7 +32,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::fileio::{put_bytes, put_time};
@@ -103,9 +103,8 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
     spell_message(spin, c"Performing soundfolding...");
     let mut fname: *mut c_char = core::ptr::null_mut();
     if unsafe { sug_filltree(spin, slang) } != FAIL && unsafe { sug_maketable(spin) } != FAIL {
-        let fmt = gettext(c"Number of words after soundfolding: %ld");
         let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
-        unsafe { smsg_c!(0, fmt.as_ptr(), done) };
+        smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
         unsafe { wordtree_compress(spin, foldroot, c"case-folded") };
@@ -223,8 +222,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
         }
     }
 
-    let fmt = gettext(c"Total number of words: %d");
-    unsafe { smsg_c!(0, fmt.as_ptr(), words_done) };
+    smsg!(0, "Total number of words: {}", words_done);
     OK
 }
 

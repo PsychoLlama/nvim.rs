@@ -17,7 +17,6 @@ use crate::message_fmt::c_str;
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::semsg_c;
 use crate::smsg;
-use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
@@ -143,22 +142,24 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
         unsafe { verbose_enter() };
         let note = |wanted: c_uint, text: &'static CStr| {
             if flags as c_uint & wanted != 0 {
-                gettext(text).as_ptr()
+                gettext(text).to_string_lossy()
             } else {
-                c"".as_ptr()
+                "".into()
             }
         };
-        let fmt = gettext(c"Reading ShaDa file \"%s\"%s%s%s%s");
-        let name = fname.as_ptr();
+        let name = fname.to_string_lossy();
         let info = note(kShaDaWantInfo as c_uint, c" info");
         let marks = note(kShaDaWantMarks as c_uint, c" marks");
         let oldfiles = note(kShaDaGetOldfiles as c_uint, c" oldfiles");
         let failed = if of_ret != 0 {
-            gettext(c" FAILED").as_ptr()
+            gettext(c" FAILED").to_string_lossy()
         } else {
-            c"".as_ptr()
+            "".into()
         };
-        unsafe { smsg_c!(0, fmt.as_ptr(), name, info, marks, oldfiles, failed) };
+        smsg!(
+            0,
+            "Reading ShaDa file \"{name}\"{info}{marks}{oldfiles}{failed}"
+        );
         unsafe { verbose_leave() };
     }
 

@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
 use crate::semsg_c;
 use crate::siemsg_c;
@@ -22,7 +22,6 @@ use core::ffi::{
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
-use crate::main::e_val_too_large_len;
 use crate::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
 use crate::os::cshim::gettext;
 use crate::types::{VAR_UNKNOWN, size_t, typval_T};
@@ -222,9 +221,10 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
     while ascii_isdigit(unsafe { *p as c_int }) {
         p = unsafe { p.add(1) };
     }
-    let msg = gettext(e_val_too_large_len);
     let digits = unsafe { p.offset_from(pstart) } as c_int;
-    unsafe { semsg_c!(msg, digits, pstart) };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let pstart = unsafe { c_str_len(pstart, digits as usize) };
+    semsg!("E1510: Value too large: {pstart}");
 }
 
 /// Read the decimal number at `*p`, advancing it past the digits.

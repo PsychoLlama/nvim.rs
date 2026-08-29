@@ -304,16 +304,18 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
         && !first.is_ascii_uppercase()
         && unsafe { vim_strchr(name, b'#' as c_int) }.is_null()
     {
-        let msg = c"E704: Funcref variable name must start with a capital: %s";
-        unsafe { semsg_c!(translate(msg), name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let name = unsafe { c_str(name) };
+        semsg!("E704: Funcref variable name must start with a capital: {name}");
         return true;
     }
     // Don't allow hiding a function. With an existing variable this may
     // be assigning another function to the same one, whose type the
     // caller checks.
     if new_var && unsafe { function_exists(name, false) } {
-        let msg = c"E705: Variable name conflicts with existing function: %s";
-        unsafe { semsg_c!(translate(msg), name) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let name = unsafe { c_str(name) };
+        semsg!("E705: Variable name conflicts with existing function: {name}");
         return true;
     }
     false

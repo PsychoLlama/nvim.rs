@@ -4,7 +4,6 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
 
@@ -17,7 +16,6 @@ use crate::eval::typval::{
 };
 use crate::eval::{Cur, EVAL_EVALUATE, NOTDONE, Tv, eval1};
 use crate::memory::xmemdupz;
-use crate::os::cshim::gettext_ptr;
 use crate::types::{
     FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
     ptrdiff_t, size_t, typval_T, typval_vval_union,
@@ -256,8 +254,9 @@ pub(crate) unsafe fn eval_dict(
         }
         if cur.byte() != b'}' {
             let at = cur.get();
-            let fmt = c"E723: Missing end of Dictionary '}': %s".as_ptr();
-            unsafe { semsg_c!(gettext_ptr(fmt), at) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let at = unsafe { c_str(at) };
+            semsg!("E723: Missing end of Dictionary '}}': {at}");
             break 'items false;
         }
         cur.skip(1);
