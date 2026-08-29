@@ -526,7 +526,7 @@ pub(crate) fn is_changed(mut buf: Buf) -> bool {
 }
 
 /// `semsg(fmt, n)`, for the three errors that name a buffer number.
-pub(crate) fn err_num<T>(fmt: *mut c_char, n: T) {
+pub(crate) fn err_num<T: crate::message_fmt::CArg>(fmt: *mut c_char, n: T) {
     // SAFETY: a translated format taking one number, and the number.
     let _: bool = unsafe { semsg_c!(fmt, n) };
 }

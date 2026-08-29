@@ -279,7 +279,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         if tv.v_type != VAR_LIST {
             print_errmsg!(
                 c"%s".as_ptr(),
-                gettext(c"E5400: Callback should return list")
+                gettext(c"E5400: Callback should return list").as_ptr()
             );
             break 'body Label::Error;
         }

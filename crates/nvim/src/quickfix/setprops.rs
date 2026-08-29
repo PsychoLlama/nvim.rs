@@ -641,7 +641,7 @@ pub unsafe fn set_errorlist(
         unsafe {
             semsg_c!(
                 gettext(e_invarg2),
-                gettext(c"cannot have both a list and a \"what\" argument"),
+                gettext(c"cannot have both a list and a \"what\" argument").as_ptr(),
             )
         };
         return Err(QfError::BadValue);

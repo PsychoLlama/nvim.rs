@@ -672,8 +672,9 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     let buf = report.as_mut_ptr();
     // Two past the message, leaving room for the ": " written back over
     // its terminator.
-    let at =
-        unsafe { vim_snprintf(buf, IOSIZE as size_t, c"%s".as_ptr(), gettext_ptr(errmsg)) } + 2;
+    // SAFETY: `errmsg` is the caller's NUL-terminated message.
+    let n = IOSIZE as size_t;
+    let at = unsafe { vim_snprintf(buf, n, c"%s".as_ptr(), gettext_ptr(errmsg).as_ptr()) } + 2;
     debug_assert!(end >= start);
     let arglen = unsafe { end.offset_from(start) };
     if at as isize + arglen < IOSIZE as isize {

@@ -26,7 +26,7 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
-                unsafe { smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR),) };
+                unsafe { smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR).as_ptr()) };
             });
             return;
         }

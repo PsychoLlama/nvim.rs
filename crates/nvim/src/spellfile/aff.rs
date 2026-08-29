@@ -742,7 +742,7 @@ unsafe fn finish_aff(
     if st.compsylmax != 0 {
         if st.syllable.is_null() {
             let fmt = gettext(c"COMPOUNDSYLMAX used without SYLLABLE");
-            unsafe { smsg_c!(0, c"%s".as_ptr(), fmt) };
+            unsafe { smsg_c!(0, c"%s".as_ptr(), fmt.as_ptr()) };
         }
         unsafe { aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
         unsafe { (*spin).si_compsylmax = st.compsylmax };

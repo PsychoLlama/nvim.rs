@@ -289,7 +289,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                         let text = gettext(c"Scanning tags.");
                         let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
                         // SAFETY: `out` addresses all `size` bytes.
-                        unsafe { vim_snprintf(out, size, c"%s".as_ptr(), text) };
+                        unsafe { vim_snprintf(out, size, c"%s".as_ptr(), text.as_ptr()) };
                         // SAFETY: `vim_snprintf` NUL-terminated `out`.
                         unsafe { scan_progress(out) };
                     }

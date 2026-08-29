@@ -377,7 +377,7 @@ macro_rules! logmsg_c {
             false
         } else {
             let payload_ok =
-                ::libc::fprintf(log_file, fmt $(, $arg)*) >= 0;
+                ::libc::fprintf(log_file, fmt $(, $crate::message_fmt::c_arg($arg))*) >= 0;
             $crate::log::logmsg_finish(log_file, eol, payload_ok)
         }
     }};

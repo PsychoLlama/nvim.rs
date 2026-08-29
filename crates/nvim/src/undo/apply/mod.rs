@@ -290,6 +290,7 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     let seq = target.map_or(0, |uhp| int64_t::from(uhp.uh_seq));
     // SAFETY: a format string and the arguments it names, and `when` is
     // NUL-terminated.
+    let (what, side) = (what.as_ptr(), side.as_ptr());
     unsafe { smsg_keep_c!(0, fmt.as_ptr(), amount, what, side, seq, when.as_mut_ptr()) };
 }
 

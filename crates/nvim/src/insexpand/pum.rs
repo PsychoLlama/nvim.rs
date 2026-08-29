@@ -675,7 +675,7 @@ pub(crate) unsafe fn ins_compl_show_filename() {
             buf,
             IOSIZE as size_t,
             c"%s %s%s".as_ptr(),
-            lead,
+            lead.as_ptr(),
             ellipsis,
             s,
         );

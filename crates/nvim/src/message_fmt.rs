@@ -34,7 +34,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::message::{emsg_not_now, emsg_ptr, msg_ptr};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
 use core::fmt;
 
 /// Format `args` and report the result as an error message. The Rust-side
@@ -109,6 +109,38 @@ pub(crate) fn c_format(fmt: impl CFormat) -> *const c_char {
     fmt.format_ptr()
 }
 
+/// The argument types vim's `printf` can read through a C variadic call.
+///
+/// A variadic passes what it is handed, byte for byte, and the compiler
+/// checks nothing against the format string. That is survivable while every
+/// message argument is a raw pointer; it is a trap now that `gettext` answers
+/// a `&CStr`, because `&CStr` is a *fat* pointer and a `%s` reading one takes
+/// the length word for the rest of the string -- a segfault, and a silent one
+/// at the call site.
+///
+/// So the `_c` macros route every value argument through [`c_arg`], and this
+/// trait is implemented for the thin scalars and pointers vim's `printf`
+/// conversions actually consume. `&CStr` is deliberately not among them: the
+/// fix at such a site is `.as_ptr()`.
+pub(crate) trait CArg {}
+
+macro_rules! c_arg_scalars {
+    ($($t:ty),* $(,)?) => { $(impl CArg for $t {})* };
+}
+
+c_arg_scalars!(c_int, c_uint, c_long, c_ulong, usize, isize, f64);
+
+impl<T> CArg for *const T {}
+impl<T> CArg for *mut T {}
+
+/// Identity, with [`CArg`]'s bound on it: the seam where a variadic message
+/// argument is type-checked. Not meant to be called directly.
+#[doc(hidden)]
+#[inline(always)]
+pub(crate) fn c_arg<T: CArg>(arg: T) -> T {
+    arg
+}
+
 /// `semsg()` with a compile-checked format string: report a formatted error
 /// message. Evaluates to `bool` like the variadic original.
 #[macro_export]
@@ -164,7 +196,7 @@ macro_rules! semsg_c {
                 errbuf.as_mut_ptr(),
                 $crate::message::SEMSG_ERRBUF_LEN,
                 fmt,
-                $($arg,)*
+                $($crate::message_fmt::c_arg($arg),)*
             );
             $crate::message::semsg_report(&errbuf)
         }
@@ -196,7 +228,7 @@ macro_rules! semsg_multiline_c {
                 errbuf.as_mut_ptr(),
                 $crate::message::SEMSG_MULTILINE_ERRBUF_LEN,
                 fmt,
-                $($arg,)*
+                $($crate::message_fmt::c_arg($arg),)*
             );
             $crate::message::semsg_multiline_report(&errbuf, kind)
         }
@@ -213,7 +245,7 @@ macro_rules! msg_schedule_semsg_c {
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $crate::message_fmt::c_format($fmt),
-            $($arg,)*
+            $($crate::message_fmt::c_arg($arg),)*
         );
         $crate::message::msg_schedule_semsg_finish(&msgbuf);
     }};
@@ -229,7 +261,7 @@ macro_rules! msg_schedule_semsg_multiline_c {
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $crate::message_fmt::c_format($fmt),
-            $($arg,)*
+            $($crate::message_fmt::c_arg($arg),)*
         );
         $crate::message::msg_schedule_semsg_multiline_finish(&msgbuf);
     }};
@@ -246,7 +278,7 @@ macro_rules! swmsg_c {
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $crate::message_fmt::c_format($fmt),
-            $($arg,)*
+            $($crate::message_fmt::c_arg($arg),)*
         );
         $crate::message::swmsg_finish(&msgbuf, hl);
     }};
@@ -263,7 +295,7 @@ macro_rules! smsg_c {
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $crate::message_fmt::c_format($fmt),
-            $($arg,)*
+            $($crate::message_fmt::c_arg($arg),)*
         );
         $crate::message::smsg_finish(&msgbuf, hl_id)
     }};
@@ -279,7 +311,7 @@ macro_rules! smsg_keep_c {
             msgbuf.as_mut_ptr(),
             $crate::message::MSG_IOBUFF_LEN,
             $crate::message_fmt::c_format($fmt),
-            $($arg,)*
+            $($crate::message_fmt::c_arg($arg),)*
         );
         $crate::message::smsg_keep_finish(&msgbuf, hl_id)
     }};

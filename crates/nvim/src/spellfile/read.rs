@@ -227,7 +227,7 @@ unsafe fn load_spl(
     match unsafe { spell_check_magic_string(fd) } {
         SP_FORMERROR | SP_TRUNCERROR => {
             let fmt = gettext(c"E757: This does not look like a spell file");
-            unsafe { semsg_c!(c"%s".as_ptr(), fmt) };
+            unsafe { semsg_c!(c"%s".as_ptr(), fmt.as_ptr()) };
             return false;
         }
         SP_OTHERERROR => {

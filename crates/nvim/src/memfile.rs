@@ -943,7 +943,7 @@ unsafe fn perror_msg(message: &'static CStr) {
     unsafe {
         semsg_c!(
             c"%s: %s".as_ptr(),
-            gettext(message),
+            gettext(message).as_ptr(),
             strerror(*__errno_location()),
         );
     }

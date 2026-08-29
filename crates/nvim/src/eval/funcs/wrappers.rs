@@ -413,7 +413,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
         _ => {
             let msg = c"E808: Number or Float required";
-            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg)) };
+            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg).as_ptr()) };
             return false;
         }
     }

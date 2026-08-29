@@ -146,7 +146,7 @@ fn put_message(msg: &CStr) {
     // SAFETY: a NUL-terminated literal.
     unsafe { msg_puts(msg.as_ptr()) };
 }
-fn err_nobufnr<T>(n: T) {
+fn err_nobufnr<T: crate::message_fmt::CArg>(n: T) {
     err_num(tr_raw(e_nobufnr.as_ptr()), n);
 }
 

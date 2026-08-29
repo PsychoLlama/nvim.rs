@@ -349,7 +349,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     unsafe {
         semsg_c!(
             msg,
-            gettext_ptr(path.objname),
+            gettext_ptr(path.objname).as_ptr(),
             if path.stack.is_empty() {
                 tr(c"itself")
             } else {

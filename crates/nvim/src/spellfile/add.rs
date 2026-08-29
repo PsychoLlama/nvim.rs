@@ -255,6 +255,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
         }
         if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {
             let fmt = gettext(c"Seek error in spellfile");
+            let fmt = fmt.as_ptr();
             unsafe { semsg_c!(c"%s: %s".as_ptr(), fmt, strerror(*__errno_location())) };
             break;
         }
