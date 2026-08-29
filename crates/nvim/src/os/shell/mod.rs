@@ -22,7 +22,8 @@ pub mod expand;
 pub mod system;
 mod throttle;
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg_c;
+use crate::smsg_c;
 pub use expand::os_expand_wildcards;
 pub use system::os_system;
 

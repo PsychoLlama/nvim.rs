@@ -107,7 +107,6 @@ use crate::types::{
     uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
-use crate::{semsg_c, smsg_c};
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.

@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -306,7 +306,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
         if unsafe { (*li_tv).v_type } as c_uint != VAR_LIST as c_uint
             || unsafe { (*li_tv).vval.v_list }.is_null()
         {
-            unsafe { semsg_c!(gettext(c"E1109: List item %d is not a List"), item) };
+            semsg!("E1109: List item {} is not a List", item);
             return None;
         }
         rows.push(unsafe { parse_cell_width_row((*li_tv).vval.v_list, item) }?);
@@ -320,12 +320,10 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
     rows.sort_by_key(|r| r.first);
     for i in 1..rows.len() {
         if rows[i].first <= rows[i - 1].last {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E1113: Overlapping ranges for 0x%lx"),
-                    rows[i].first as size_t,
-                )
-            };
+            semsg!(
+                "E1113: Overlapping ranges for 0x{:x}",
+                rows[i].first as size_t
+            );
             return None;
         }
     }
@@ -356,11 +354,11 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
                 return None;
             }
             1 if n < numbers[0] => {
-                unsafe { semsg_c!(gettext(c"E1111: List item %d range invalid"), item) };
+                semsg!("E1111: List item {} range invalid", item);
                 return None;
             }
             2 if !(1..=2).contains(&n) => {
-                unsafe { semsg_c!(gettext(c"E1112: List item %d cell width invalid"), item,) };
+                semsg!("E1112: List item {} cell width invalid", item);
                 return None;
             }
             _ => {}
@@ -374,12 +372,7 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
 
     // A fourth number, a non-number, or too few: all "not three numbers".
     if seen != 3 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E1110: List item %d does not contain 3 numbers"),
-                item,
-            )
-        };
+        semsg!("E1110: List item {} does not contain 3 numbers", item);
         return None;
     }
     Some(CellWidthRange {

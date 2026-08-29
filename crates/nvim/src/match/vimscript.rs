@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{FAIL, MB_MAXCHAR, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
@@ -191,12 +192,10 @@ pub(crate) unsafe fn f_setmatches(
     while !li.is_null() {
         let tv = unsafe { &raw mut (*li).li_tv };
         if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict }.is_null() {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E474: List item %d is either not a dictionary or an empty one"),
-                    li_idx,
-                )
-            };
+            semsg!(
+                "E474: List item {} is either not a dictionary or an empty one",
+                li_idx
+            );
             return;
         }
         let d = unsafe { (*tv).vval.v_dict };
@@ -205,12 +204,10 @@ pub(crate) unsafe fn f_setmatches(
             && !unsafe { find(d, "priority") }.is_null()
             && !unsafe { find(d, "id") }.is_null();
         if !ok {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E474: List item %d is missing one of the required keys"),
-                    li_idx,
-                )
-            };
+            semsg!(
+                "E474: List item {} is missing one of the required keys",
+                li_idx
+            );
             return;
         }
         li_idx += 1;
@@ -350,7 +347,7 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
         return;
     };
     if (1..=3).contains(&id) {
-        unsafe { semsg_c!(gettext(c"E798: ID is reserved for \":match\": %d"), id,) };
+        semsg!("E798: ID is reserved for \":match\": {}", id);
         return;
     }
 
@@ -394,7 +391,7 @@ pub(crate) unsafe fn f_matchaddpos(
     };
     // 3 is allowed: matchaddpos() is meant to stand in for `:3match`.
     if id == 1 || id == 2 {
-        unsafe { semsg_c!(gettext(c"E798: ID is reserved for \"match\": %d"), id,) };
+        semsg!("E798: ID is reserved for \"match\": {}", id);
         return;
     }
 

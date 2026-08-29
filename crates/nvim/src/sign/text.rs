@@ -15,6 +15,8 @@
 )]
 
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 /// Room for [`describe_sign_text`]'s answer: SIGN_WIDTH cells of up to
 /// `MAX_SCHAR_SIZE` bytes each, the last of which carries the NUL
@@ -144,7 +146,7 @@ pub(crate) unsafe fn init_sign_text(
     if s != endp || cells > width_limit {
         if from_define {
             // SAFETY: the caller's text, and a format the message takes.
-            unsafe { semsg_c!(gettext(c"E239: Invalid sign text: %s"), text) };
+            unsafe { semsg!("E239: Invalid sign text: {}", c_str(text)) };
         }
         return FAIL;
     }

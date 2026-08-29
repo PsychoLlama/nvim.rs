@@ -40,6 +40,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::{emsg, emsg_multiline};
+use crate::message_fmt::c_str;
 use crate::option::set_option_direct;
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::check_buf_options;
@@ -47,6 +48,8 @@ use crate::os::cshim::{gettext, strncmp};
 use crate::os::fs::os_fopen;
 use crate::path::free_wild;
 use crate::pos::MAXCOL;
+use crate::semsg;
+use crate::smsg;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
@@ -56,7 +59,6 @@ use crate::types::{
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
-use crate::{semsg_c, smsg_c};
 use ::libc::{fclose, qsort, strcasecmp, strcmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -196,9 +198,13 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
         // SAFETY: `lang` and `arg` are NUL-terminated; both carry bytes, so
         // they go through vim's own printf rather than `format_args!`.
         if lang.is_null() {
-            unsafe { semsg_c!(gettext(c"E149: No help for %s"), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E149: No help for {arg}");
         } else {
-            unsafe { semsg_c!(gettext(c"E661: No '%s' help for %s"), lang, arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (lang, arg) = unsafe { (c_str(lang), c_str(arg)) };
+            semsg!("E661: No '{lang}' help for {arg}");
         }
         if n != FAIL {
             unsafe { free_wild(num_matches, matches) };
@@ -355,7 +361,9 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // No help window yet: check that 'helpfile' can be read at all.
     let helpfd = unsafe { os_fopen(p_hf.get(), c"rb".as_ptr()) };
     if helpfd.is_null() {
-        unsafe { smsg_c!(0, c"Help file \"%s\" not found".as_ptr(), p_hf.get()) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(p_hf.get()) };
+        smsg!(0, "Help file \"{arg0}\" not found");
         return None;
     }
     unsafe { fclose(helpfd) };

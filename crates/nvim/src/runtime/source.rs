@@ -12,6 +12,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::semsg_c;
+use crate::smsg_c;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;

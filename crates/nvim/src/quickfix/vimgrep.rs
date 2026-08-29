@@ -19,12 +19,13 @@ use crate::buffer::BufFlags;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::regexp::RE_MAGIC;
+use crate::semsg_c;
+use crate::smsg_c;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
     CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
 };
 use crate::winlayer::{Buf, Win};
-use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

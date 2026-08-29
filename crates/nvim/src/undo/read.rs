@@ -8,6 +8,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::semsg_c;
+use crate::smsg_c;
 use crate::winlayer::Buf;
 use std::collections::HashSet;
 
@@ -16,7 +20,6 @@ use super::format::*;
 use super::store::header_adopt;
 use super::tree::*;
 use super::*;
-use crate::{semsg_c, smsg_c};
 
 /// Reads an undo file into the current buffer's tree.
 ///
@@ -120,7 +123,7 @@ unsafe fn read_undo_file(
     {
         // SAFETY: the message macros expand to a `vim_snprintf` over
         // the format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(c"E823: Not an undo file: %s"), file_name) };
+        unsafe { semsg!("E823: Not an undo file: {}", c_str(file_name)) };
         return;
     }
     if unsafe { get2c(fp) } != UF_VERSION {

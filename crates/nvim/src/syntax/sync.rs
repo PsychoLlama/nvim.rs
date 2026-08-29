@@ -9,8 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
 use crate::optionstr::{empty_option, is_empty_option};
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -495,7 +496,9 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
 
     unsafe { xfree(key as *mut ::core::ffi::c_void) };
     if illegal {
-        unsafe { semsg_c!(gettext(c"E404: Illegal arguments: %s"), arg_start) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg_start = unsafe { c_str(arg_start) };
+        semsg!("E404: Illegal arguments: {arg_start}");
     } else if !finished {
         unsafe { (*eap).nextcmd = check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);

@@ -15,7 +15,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::siemsg_c;
+use crate::message_fmt::msg_addr;
+use crate::siemsg;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -339,11 +340,12 @@ unsafe fn jump_target(
     removable_bufs: *mut Set_ptr_t,
 ) -> Option<*const c_char> {
     if fm.fmark.mark.lnum == 0 {
+        // SAFETY: the caller's contract -- `curwin` is the editor's own.
         unsafe {
-            siemsg_c!(
-                c"ShaDa: mark lnum zero (ji:%p, js:%p, len:%i)".as_ptr(),
-                jump_iter,
-                (&raw const (*curwin.get()).w_jumplist).cast::<c_void>(),
+            siemsg!(
+                "ShaDa: mark lnum zero (ji:{}, js:{}, len:{})",
+                msg_addr(jump_iter),
+                msg_addr(&raw const (*curwin.get()).w_jumplist),
                 (*curwin.get()).w_jumplistlen,
             )
         };

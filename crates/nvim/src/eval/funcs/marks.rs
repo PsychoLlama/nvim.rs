@@ -15,8 +15,8 @@ use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
 use crate::main::{curbuf, curwin, vim_ignored};
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
-use crate::os::cshim::gettext;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
     EvalFuncData, FAIL, NUL, OK, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
@@ -184,7 +184,9 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         match unsafe { CStr::from_ptr(actstr) }.to_bytes() {
             b"r" | b"a" | b"t" => action = unsafe { *actstr },
             _ => {
-                unsafe { semsg_c!(gettext(c"E962: Invalid action: '%s'"), actstr) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let actstr = unsafe { c_str(actstr) };
+                semsg!("E962: Invalid action: '{actstr}'");
                 return;
             }
         }

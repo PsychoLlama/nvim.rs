@@ -19,6 +19,8 @@
 
 use super::*;
 use crate::path::ExpandFlags;
+use crate::semsg_c;
+use crate::smsg_c;
 
 use crate::types::{ExpandContext, FAIL, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};

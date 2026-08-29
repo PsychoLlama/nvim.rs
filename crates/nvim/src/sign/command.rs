@@ -18,8 +18,11 @@
 )]
 
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::semsg_c;
+use crate::smsg;
 use crate::types::FAIL;
-use crate::{semsg_c, smsg_c};
 use core::ptr;
 
 /// The `"*"` group's only byte, and the leading zero a sign name may carry.
@@ -165,7 +168,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 /// `sp` must be a live sign definition.
 pub(crate) unsafe fn sign_list_defined(sp: Sign) {
     // SAFETY: a definition's name, icon and cells are its own.
-    unsafe { smsg_c!(0, c"sign %s".as_ptr(), sp.sn_name) };
+    unsafe { smsg!(0, "sign {}", c_str(sp.sn_name)) };
     if !sp.sn_icon.is_null() {
         unsafe { msg_puts(c" icon=".as_ptr()) };
         unsafe { msg_outtrans(sp.sn_icon, 0, false) };
@@ -203,7 +206,7 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
         Some(sp) => unsafe { sign_list_defined(sp) },
         None => {
             // SAFETY: the caller's name, and a format the message takes.
-            unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s"), name) };
+            unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
         }
     }
 }
@@ -510,7 +513,9 @@ pub(crate) unsafe fn ex_sign(eap: *mut exarg_T) {
     let p = unsafe { skiptowhite(arg) };
     let idx = unsafe { sign_cmd_idx(arg, p) };
     if idx == SIGNCMD_LAST {
-        unsafe { semsg_c!(gettext(c"E160: Unknown sign command: %s"), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E160: Unknown sign command: {arg}");
         return;
     }
     arg = unsafe { skipwhite(p) };

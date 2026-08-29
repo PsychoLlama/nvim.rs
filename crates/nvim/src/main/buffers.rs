@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -170,7 +170,7 @@ pub(crate) unsafe fn read_stdin() {
         let stdin_buf =
             unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
         if stdin_buf.is_null() {
-            unsafe { semsg_c!(c"Failed to create buffer for stdin".as_ptr()) };
+            semsg!("Failed to create buffer for stdin");
             return;
         }
         let initial_buf_handle: handle_T = cur_buf().handle;

@@ -2,6 +2,7 @@
 
 use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::CStr;
 use std::borrow::Cow;
@@ -36,6 +37,7 @@ use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_puts_hl, set_keep_msg};
+use crate::message_fmt::c_str;
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
@@ -150,11 +152,17 @@ impl WriteError {
         let iobuff = fname.as_ptr().cast_mut();
         match (self.num, self.arg) {
             (Some(num), 0) => {
-                unsafe { semsg_c!(c"%s: %s%s".as_ptr(), num.as_ptr(), iobuff, msg) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (num, iobuff, msg) =
+                    unsafe { (c_str(num.as_ptr()), c_str(iobuff), c_str(msg)) };
+                semsg!("{num}: {iobuff}{msg}");
             }
             (Some(num), arg) => {
                 let why = unsafe { uv_strerror(arg) };
-                unsafe { semsg_c!(c"%s: %s%s: %s".as_ptr(), num.as_ptr(), iobuff, msg, why) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+                let (num, iobuff, msg, why) =
+                    unsafe { (c_str(num.as_ptr()), c_str(iobuff), c_str(msg), c_str(why)) };
+                semsg!("{num}: {iobuff}{msg}: {why}");
             }
             // The message is deliberately its own format string here.
             (None, arg) if arg != 0 => {

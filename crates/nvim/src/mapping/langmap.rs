@@ -13,7 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::swmsg_c;
+use crate::message_fmt::c_str_len;
+use crate::swmsg;
 use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 
@@ -174,13 +175,11 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
                     // SAFETY: both `%.*s` pairs are a length and the bytes it
                     // counts, taken off the option string itself.
                     unsafe {
-                        swmsg_c!(
+                        swmsg!(
                             true,
-                            c"'langmap': Mapping from %.*s to %.*s will not work properly".as_ptr(),
-                            utf_ptr2len(from_ptr),
-                            from_ptr,
-                            utf_ptr2len(to_ptr),
-                            to_ptr,
+                            "'langmap': Mapping from {} to {} will not work properly",
+                            c_str_len(from_ptr, utf_ptr2len(from_ptr) as usize),
+                            c_str_len(to_ptr, utf_ptr2len(to_ptr) as usize)
                         );
                     }
                 }

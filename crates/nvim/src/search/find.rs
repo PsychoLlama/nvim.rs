@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_SEARCH;
@@ -16,6 +17,7 @@ use crate::search::{
     SEARCH_COL, SEARCH_END, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, SEARCH_NOOF, SEARCH_PEEK,
     SEARCH_START,
 };
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{CpoFlag, FAIL, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, Win};
@@ -390,12 +392,9 @@ pub unsafe fn searchit(
     } == FAIL
     {
         if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E383: Invalid search string: %s"),
-                    get_search_pat(),
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(get_search_pat()) };
+            semsg!("E383: Invalid search string: {arg0}");
         }
         return FAIL;
     }

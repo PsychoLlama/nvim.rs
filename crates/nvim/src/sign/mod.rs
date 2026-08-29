@@ -27,7 +27,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 use core::ops::{Deref, DerefMut};
 use core::slice;

@@ -2,9 +2,10 @@
 //! session to another process or take it back.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -334,7 +335,9 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 
     // The address was released for a server that is not going to use it.
     if server_stopped && unsafe { server_start(listen_arg) } != 0 {
-        unsafe { semsg_c!(c"couldn't resume listening on %s".as_ptr(), listen_arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let listen_arg = unsafe { c_str(listen_arg) };
+        semsg!("couldn't resume listening on {listen_arg}");
     }
 }
 

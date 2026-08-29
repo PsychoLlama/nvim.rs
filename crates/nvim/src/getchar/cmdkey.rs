@@ -9,7 +9,8 @@
 use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
-use crate::semsg_multiline_c;
+use crate::message_fmt::c_str;
+use crate::semsg_multiline;
 use crate::types::{NUL, kErrorTypeNone};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -165,7 +166,9 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         )
     };
     if err.type_0 != kErrorTypeNone {
-        unsafe { semsg_multiline_c!(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let msg = unsafe { c_str(err.msg) };
+        semsg_multiline!(c"emsg", "E5108: {msg}");
         unsafe { api_clear_error(&raw mut err) };
     }
 

@@ -9,8 +9,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext_ptr;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{ExArgt, FAIL, NUL, OK};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_uint};
@@ -169,7 +170,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         };
         let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
-            unsafe { semsg_c!(gettext(c"E102: Can't find buffer \"%s\""), eap.arg) };
+            unsafe { semsg!("E102: Can't find buffer \"{}\"", c_str(eap.arg)) };
             return;
         };
         if buf.raw() == curbuf.get() {
@@ -178,7 +179,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         idx_other = diff_slot(buf, tp);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
-            unsafe { semsg_c!(gettext(c"E103: Buffer \"%s\" is not in diff mode"), eap.arg,) };
+            unsafe { semsg!("E103: Buffer \"{}\" is not in diff mode", c_str(eap.arg)) };
             return;
         }
     }

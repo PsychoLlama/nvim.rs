@@ -9,6 +9,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
@@ -328,12 +330,9 @@ unsafe fn mangle_function_name(
     } else if flags & TFN_INT == 0
         && unsafe { builtin_function(lv.ll_name, lv.ll_name_len as c_int) }
     {
-        unsafe {
-            semsg_c!(
-                gettext(c"E128: Function name must start with a capital or \"s:\": %s"),
-                start,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let start = unsafe { c_str(start) };
+        semsg!("E128: Function name must start with a capital or \"s:\": {start}");
         return ptr::null_mut();
     }
 
@@ -347,12 +346,9 @@ unsafe fn mangle_function_name(
         // the coin flip (O-B14-12).
         let cp = unsafe { xmemrchr(lv.ll_name as *const c_void, b':', lv.ll_name_len) };
         if !cp.is_null() {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E884: Function name cannot contain a colon: %s"),
-                    start,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let start = unsafe { c_str(start) };
+            semsg!("E884: Function name cannot contain a colon: {start}");
             return ptr::null_mut();
         }
     }

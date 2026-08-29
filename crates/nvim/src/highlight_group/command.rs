@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::highlight::HlAttrFlags;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -24,6 +25,7 @@ use crate::main::{
     updating_screen,
 };
 use crate::message::{emsg, msg_ext_set_kind};
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
@@ -269,21 +271,15 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
     let from = line.word_then_space();
     let to = line.word_then_space();
     if from.is_empty() || to.is_empty() {
-        unsafe {
-            semsg_c!(
-                gettext(c"E412: Not enough arguments: \":highlight link %s\""),
-                line.ptr(from_at),
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(line.ptr(from_at)) };
+        semsg!("E412: Not enough arguments: \":highlight link {arg0}\"");
         return;
     }
     if !line.at_end() {
-        unsafe {
-            semsg_c!(
-                gettext(c"E413: Too many arguments: \":highlight link %s\""),
-                line.ptr(from_at),
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(line.ptr(from_at)) };
+        semsg!("E413: Too many arguments: \":highlight link {arg0}\"");
         return;
     }
 
@@ -462,7 +458,9 @@ impl KeyLoop {
                 true
             }
             _ => {
-                unsafe { semsg_c!(gettext(c"E423: Illegal argument: %s"), key_start) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let key_start = unsafe { c_str(key_start) };
+                semsg!("E423: Illegal argument: {key_start}");
                 self.error = true;
                 false
             }
@@ -485,8 +483,7 @@ impl KeyLoop {
                     && arg[off..off + name.len()].eq_ignore_ascii_case(name)
             });
             let Some(&(name, flag)) = found else {
-                // SAFETY: main-thread message call.
-                unsafe { semsg_c!(gettext(c"E418: Illegal value: %s"), arg.as_ptr()) };
+                semsg!("E418: Illegal value: {}", msg_bytes(arg));
                 self.error = true;
                 return false;
             };
@@ -568,12 +565,9 @@ impl KeyLoop {
                 CStr::from_bytes_with_nul(&[name.as_slice(), b"\0"].concat()).map(CStr::to_owned);
             let idx = name.ok().and_then(|name| cterm_color_index(&name));
             let Some(idx) = idx else {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E421: Color name or number not recognized: %s"),
-                        key_start,
-                    )
-                };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let key_start = unsafe { c_str(key_start) };
+                semsg!("E421: Color name or number not recognized: {key_start}");
                 self.error = true;
                 return false;
             };

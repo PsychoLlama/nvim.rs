@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::{Allow, Saved, Suppress};
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -27,6 +28,7 @@ use crate::main::{
 use crate::memory::xstrdup;
 
 use crate::message::msg_ext_set_kind;
+use crate::message_fmt::c_str;
 
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
@@ -45,12 +47,9 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
         if unsafe { load_colors(eap.arg) } == FAIL {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E185: Cannot find color scheme '%s'".as_ptr()),
-                    eap.arg,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(eap.arg) };
+            semsg!("E185: Cannot find color scheme '{arg}'");
         }
         return;
     }

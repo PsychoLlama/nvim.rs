@@ -36,9 +36,10 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::main::{g_stats, p_verbose, stdin_fd};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
+use crate::message_fmt::c_str;
 use crate::os::env::os_getenv;
 use crate::path::{append_path, gettail_dir, save_abs_path};
-use crate::smsg_c;
+use crate::smsg;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
     FAIL, FILE, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file,
@@ -242,7 +243,7 @@ pub unsafe fn os_chdir(path: *const c_char) -> c_int {
         // conversion the format string asks for.
         unsafe {
             verbose_enter();
-            smsg_c!(0, c"chdir(%s)".as_ptr(), path);
+            smsg!(0, "chdir({})", c_str(path));
             verbose_leave();
         }
     }

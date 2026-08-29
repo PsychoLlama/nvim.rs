@@ -8,7 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -161,7 +162,9 @@ pub unsafe fn get_lambda_tv(
 
         unsafe { *arg = skipwhite(*arg) };
         if unsafe { **arg } != b'}' as c_char {
-            unsafe { semsg_c!(gettext(c"E451: Expected }: %s"), *arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(*arg) };
+            semsg!("E451: Expected }}: {arg0}");
             break 'errret false;
         }
         unsafe { *arg = (*arg).add(1) };

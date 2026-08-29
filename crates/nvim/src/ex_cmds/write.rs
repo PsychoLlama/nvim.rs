@@ -45,10 +45,12 @@ use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, vim_dialog_yesno};
+use crate::message_fmt::c_str;
 use crate::option::{copy_option_part, cpo_has, shortmess};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{
     CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, MAXPATHL, NUL, OK, OptionSetFlags,
@@ -215,12 +217,9 @@ pub unsafe fn ex_write(eap: *mut exarg_T) {
 unsafe fn check_writable(fname: *const c_char) -> c_int {
     // SAFETY: caller's contract; one `%s` for one string.
     if unsafe { os_nodetype(fname) } == NODE_OTHER {
-        unsafe {
-            semsg_c!(
-                gettext(c"E503: \"%s\" is not a file or writable device"),
-                fname,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E503: \"{fname}\" is not a file or writable device");
         return FAIL;
     }
     OK
@@ -550,9 +549,9 @@ pub unsafe fn check_overwrite(
     if !confirming() {
         // SAFETY: one `%s` for one string.
         unsafe {
-            semsg_c!(
-                gettext(c"E768: Swap file exists: %s (:silent! overrides)"),
-                swapname.0,
+            semsg!(
+                "E768: Swap file exists: {} (:silent! overrides)",
+                c_str(swapname.0)
             )
         };
         return FAIL;
@@ -705,13 +704,7 @@ unsafe fn write_one_buffer(
     }
     let mut deleted = false;
     if buf.b_ffname.is_null() {
-        // SAFETY: one `%ld` for one number.
-        unsafe {
-            semsg_c!(
-                gettext(c"E141: No file name for buffer %ld"),
-                buf.handle as int64_t,
-            )
-        };
+        semsg!("E141: No file name for buffer {}", buf.handle as int64_t);
         *error += 1;
     } else if unsafe { check_readonly(&raw mut (*eap).forceit, buf) }
         || unsafe { check_overwrite(eap, buf, buf.b_fname, buf.b_ffname, false) } == FAIL
@@ -778,12 +771,9 @@ unsafe fn check_readonly(forceit: *mut c_int, buf: Buf) -> bool {
         if is_ro {
             emsg(gettext(e_readonly));
         } else {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E505: \"%s\" is read-only (add ! to override)"),
-                    name,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E505: \"{name}\" is read-only (add ! to override)");
         }
         return true;
     }

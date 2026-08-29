@@ -15,8 +15,8 @@
 
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-use crate::semsg_c;
-use core::ffi::{CStr, c_char, c_int};
+use crate::semsg;
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 /// How many `%` conversions there are. Each may appear at most once in one
@@ -261,13 +261,7 @@ impl Format {
                 // A prefix is allowed only at the start of the part.
                 i = self.analyze_prefix(part, i)?;
             } else {
-                // SAFETY: a literal format string, one `int` argument.
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E377: Invalid %%%c in format string"),
-                        c_int::from(conv),
-                    )
-                };
+                semsg!("E377: Invalid %{} in format string", char::from(conv));
                 return None;
             }
             i += 1;
@@ -288,13 +282,7 @@ impl Format {
         round: u8,
     ) -> Option<()> {
         if self.addr[idx] != 0 {
-            // SAFETY: a literal format string, one `int` argument.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E372: Too many %%%c in format string"),
-                    c_int::from(part[at]),
-                )
-            };
+            semsg!("E372: Too many %{} in format string", char::from(part[at]));
             return None;
         }
         // Only `%r` may appear under `%O`/`%P`/`%Q`, and it may appear
@@ -304,13 +292,10 @@ impl Format {
         if (idx != 0 && idx < FMT_PATTERN_R && (file_prefix || b"DX".contains(&self.prefix)))
             || (idx == FMT_PATTERN_R && !file_prefix)
         {
-            // SAFETY: a literal format string, one `int` argument.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E373: Unexpected %%%c in format string"),
-                    c_int::from(part[at]),
-                )
-            };
+            semsg!(
+                "E373: Unexpected %{} in format string",
+                char::from(part[at])
+            );
             return None;
         }
         self.addr[idx] = round + 1;
@@ -346,13 +331,10 @@ impl Format {
             self.prefix = part[at];
             Some(at)
         } else {
-            // SAFETY: a literal format string, one `int` argument.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E376: Invalid %%%c in format string prefix"),
-                    c_int::from(part[at]),
-                )
-            };
+            semsg!(
+                "E376: Invalid %{} in format string prefix",
+                char::from(part[at])
+            );
             None
         }
     }
@@ -367,13 +349,10 @@ impl Format {
 fn push_scanf(pat: &mut Vec<u8>, part: &[u8], at: usize, len: usize) -> Option<usize> {
     let mut at = at;
     if part[at] != b'[' && part[at] != b'\\' {
-        // SAFETY: a literal format string, one `int` argument.
-        unsafe {
-            semsg_c!(
-                gettext(c"E375: Unsupported %%%c in format string"),
-                c_int::from(part[at]),
-            )
-        };
+        semsg!(
+            "E375: Unsupported %{} in format string",
+            char::from(part[at])
+        );
         return None;
     }
     pat.push(part[at]);

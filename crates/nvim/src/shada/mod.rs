@@ -43,7 +43,6 @@ use crate::msgpack_rpc::unpacker::{
     push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
 };
 use crate::option::{copy_option_part, magic_isset};
-use crate::os::cshim::gettext;
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
 use crate::os::fileio::{
     FileOpenFlags, file_close, file_flush, file_open, file_open_buffer, file_read, file_skip,

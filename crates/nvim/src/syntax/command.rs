@@ -8,7 +8,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Suppress;
+use crate::message_fmt::c_str;
 use crate::optionstr::is_empty_option;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -308,12 +310,9 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
             unsafe { (sub.func)(eap, 0) };
         }
         None => {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E410: Invalid :syntax subcommand: %s"),
-                    subcmd_name,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let subcmd_name = unsafe { c_str(subcmd_name) };
+            semsg!("E410: Invalid :syntax subcommand: {subcmd_name}");
         }
     }
     unsafe { xfree(subcmd_name as *mut c_void) };

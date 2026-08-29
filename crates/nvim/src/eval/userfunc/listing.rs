@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -317,12 +319,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         return;
     }
     if unsafe { (*fp).uf_calls } > 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E131: Cannot delete function %s: It is in use"),
-                ea.arg,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(ea.arg) };
+        semsg!("E131: Cannot delete function {arg}: It is in use");
         return;
     }
     // `> 2` because deleting a function should also drop a reference, and
@@ -331,12 +330,9 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
     // of its own until the garbage collector frees it, which is why this
     // arm is reachable at all (see the docket's O-B14-13).
     if unsafe { (*fp).uf_refcount }.get() > 2 {
-        unsafe {
-            semsg_c!(
-                gettext(c"Cannot delete function %s: It is being used internally"),
-                ea.arg,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(ea.arg) };
+        semsg!("Cannot delete function {arg}: It is being used internally");
         return;
     }
 

@@ -35,9 +35,11 @@ use crate::main::{
 };
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncmp};
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
+use crate::semsg;
 use crate::semsg_c;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -412,7 +414,9 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             !unsafe { translated_function_exists(trans_name.0) }
         }
     {
-        unsafe { semsg_c!(gettext(c"E700: Unknown function: %s"), s) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let s = unsafe { c_str(s) };
+        semsg!("E700: Unknown function: {s}");
         return;
     }
 

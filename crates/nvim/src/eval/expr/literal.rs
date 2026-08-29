@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -29,6 +30,7 @@ use crate::main::{e_invexpr2, e_stray_closing_curly_str};
 use crate::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
+use crate::message_fmt::c_str;
 use crate::option::{get_option_value, get_tty_option, is_option_hidden, is_tty_option};
 use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
@@ -172,7 +174,9 @@ pub(crate) unsafe fn eval_option(
     if option_end.is_null() {
         if !rettv.is_null() {
             let name = unsafe { *arg };
-            unsafe { semsg_c!(gettext(c"E112: Option name missing: %s"), name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E112: Option name missing: {name}");
         }
         return FAIL;
     }
@@ -193,7 +197,9 @@ pub(crate) unsafe fn eval_option(
         // Only report it when the result is going to be used.
         if !rettv.is_null() {
             let name = unsafe { *arg };
-            unsafe { semsg_c!(gettext(c"E113: Unknown option: %s"), name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E113: Unknown option: {name}");
         }
         FAIL
     } else if !rettv.is_null() {
@@ -401,7 +407,9 @@ pub(crate) unsafe fn eval_string(
 
     if p.byte() != b'"' && !(interpolate && p.byte() == b'{') {
         let text = cur.get();
-        unsafe { semsg_c!(gettext(c"E114: Missing quote: %s"), text) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let text = unsafe { c_str(text) };
+        semsg!("E114: Missing quote: {text}");
         return FAIL;
     }
     if !evaluate {
@@ -604,7 +612,9 @@ pub(crate) unsafe fn eval_lit_string(
 
     if p.byte() != b'\'' && !(interpolate && p.byte() == b'{') {
         let text = cur.get();
-        unsafe { semsg_c!(gettext(c"E115: Missing quote: %s"), text) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let text = unsafe { c_str(text) };
+        semsg!("E115: Missing quote: {text}");
         return FAIL;
     }
     if !evaluate {

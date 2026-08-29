@@ -22,6 +22,7 @@ use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::main::time_fd;
 use crate::memory::{xfree, xstrlcpy};
+use crate::message_fmt::c_str;
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::_nl_msg_cat_cntr;
 use crate::os::cshim::{bindtextdomain, gettext, textdomain};
@@ -29,8 +30,9 @@ use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
+use crate::semsg;
+use crate::smsg_c;
 use crate::types::{MAXPATHL, Vv, exarg_T, expand_T};
-use crate::{semsg_c, smsg_c};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -219,7 +221,7 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
     };
     if loc.is_null() {
         // SAFETY: `semsg` is printf-shaped and `name` outlives the call.
-        unsafe { semsg_c!(gettext(c"E197: Cannot set language to \"%s\""), name,) };
+        unsafe { semsg!("E197: Cannot set language to \"{}\"", c_str(name)) };
         return;
     }
     // SAFETY: `_nl_msg_cat_cntr` is GNU gettext's "the catalogue selection

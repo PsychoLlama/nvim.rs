@@ -31,19 +31,22 @@ use crate::main::{
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::on_print_cb;
 use crate::message::{emsg, emsg_ptr};
+use crate::message_fmt::c_str;
 use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
 };
 use crate::os::cshim::gettext;
 use crate::runtime::exestack;
+use crate::semsg;
+use crate::semsg_c;
+use crate::semsg_multiline_c;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
     String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
     funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object,
     sctx_T, typval_T, uint64_t, varnumber_T,
 };
-use crate::{semsg_c, semsg_multiline_c};
 use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -129,7 +132,9 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         match found {
             Some(&(_, p)) => part = p,
             None => {
-                unsafe { semsg_c!(gettext(c"Invalid channel stream \"%s\""), stream) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let stream = unsafe { c_str(stream) };
+                semsg!("Invalid channel stream \"{stream}\"");
                 return;
             }
         }
@@ -550,7 +555,9 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut error = ptr::null::<c_char>();
     let id = unsafe { channel_connect(tcp, address, rpc, on_data, 50, &raw mut error) };
     if !error.is_null() {
-        unsafe { semsg_c!(gettext(c"connection failed: %s"), error) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let error = unsafe { c_str(error) };
+        semsg!("connection failed: {error}");
     }
     rettv.vval.v_number = id as varnumber_T;
     rettv.v_type = VAR_NUMBER;

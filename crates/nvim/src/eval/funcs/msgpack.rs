@@ -20,11 +20,12 @@ use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::os::cshim::{gettext, gettext_ptr, memmove};
+use crate::semsg;
+use crate::semsg_c;
 use crate::types::{
     EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
     blob_T, kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
-use crate::{semsg, semsg_c};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;

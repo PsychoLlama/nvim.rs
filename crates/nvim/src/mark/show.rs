@@ -27,9 +27,11 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{
     emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
 };
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::pos::lt;
+use crate::semsg;
 use crate::semsg_c;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::winlayer::{Buf, Win};
@@ -135,7 +137,9 @@ unsafe fn finish_marks(arg: *mut c_char) {
     if arg.is_null() {
         msg(gettext(c"No marks set"), 0);
     } else {
-        unsafe { semsg_c!(gettext(c"E283: No marks matching \"%s\""), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E283: No marks matching \"{arg}\"");
     }
 }
 

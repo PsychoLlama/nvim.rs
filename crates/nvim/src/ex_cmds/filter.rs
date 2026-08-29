@@ -44,6 +44,7 @@ use crate::message::{
     msg_prt_line, msg_ptr, msg_putchar, msg_puts, msg_puts_hl, msg_start, msgmore, set_keep_msg,
     wait_return,
 };
+use crate::message_fmt::c_str;
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
 use crate::os::cshim::gettext;
@@ -52,6 +53,7 @@ use crate::os::input::os_breakcheck;
 use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
+use crate::semsg;
 use crate::semsg_c;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
@@ -389,12 +391,7 @@ unsafe fn do_filter(
             drop(no_prompt.take());
             if !aborting() {
                 // SAFETY: one `%s` for one string. Will call wait_return().
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E482: Can't create file %s"),
-                        TempFile::name(&itmp),
-                    )
-                };
+                unsafe { semsg!("E482: Can't create file {}", c_str(TempFile::name(&itmp))) };
             }
             break 'filterend;
         }

@@ -46,7 +46,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
@@ -57,6 +57,7 @@ use crate::main::{did_swapwrite_msg, e_swapclose, got_int, main_loop};
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{emsg, iemsg};
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::fs::{
     os_fileinfo_blocksize, os_fileinfo_fd, os_fileinfo_link, os_fsync, os_open, os_remove,
@@ -941,10 +942,10 @@ unsafe fn mf_do_open(mfp: *mut memfile_T, fname: *mut c_char, mut flags: c_int) 
 /// `PERROR`: an error message with the failing call's `strerror` after it.
 unsafe fn perror_msg(message: &'static CStr) {
     unsafe {
-        semsg_c!(
-            c"%s: %s".as_ptr(),
-            gettext(message).as_ptr(),
-            strerror(*__errno_location()),
+        semsg!(
+            "{}: {}",
+            c_str(gettext(message).as_ptr()),
+            c_str(strerror(*__errno_location()))
         );
     }
 }

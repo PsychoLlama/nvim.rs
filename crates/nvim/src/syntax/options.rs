@@ -9,7 +9,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
@@ -258,7 +259,9 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
             }
         };
         if !found {
-            unsafe { semsg_c!(gettext(c"E394: Didn't find region item for %s"), gname,) };
+            // SAFETY: `gname` is the NUL-terminated group name read above.
+            let shown = unsafe { c_str(gname) };
+            semsg!("E394: Didn't find region item for {shown}");
             unsafe { xfree(gname as *mut c_void) };
             return ::core::ptr::null_mut();
         }
@@ -335,7 +338,9 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 
     let mut p = unsafe { skipwhite(arg.offset(keylen as isize)) };
     if unsafe { *p } as c_int != '=' as c_int {
-        unsafe { semsg_c!(gettext(c"E405: Missing equal sign: %s"), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E405: Missing equal sign: {arg}");
         return IdListPass {
             ids,
             end: p,
@@ -344,7 +349,9 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
     }
     p = unsafe { skipwhite(p.add(1)) };
     if ends_excmd(unsafe { *p } as c_int) != 0 {
-        unsafe { semsg_c!(gettext(c"E406: Empty argument: %s"), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E406: Empty argument: {arg}");
         return IdListPass {
             ids,
             end: p,
@@ -417,11 +424,15 @@ unsafe fn parse_id_name(
         // Only `contains=` and `containedin=` accept these, which is what
         // upstream tests by the keyword's first letter.
         if !(unsafe { *arg } as u8).eq_ignore_ascii_case(&b'C') {
-            unsafe { semsg_c!(gettext(c"E407: %s not allowed here"), plain) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let plain = unsafe { c_str(plain) };
+            semsg!("E407: {plain} not allowed here");
             return Err(());
         }
         if !ids.is_empty() {
-            unsafe { semsg_c!(gettext(c"E408: %s must be first in contains list"), plain,) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let plain = unsafe { c_str(plain) };
+            semsg!("E408: {plain} must be first in contains list");
             return Err(());
         }
         let base = match text[0] {
@@ -438,7 +449,9 @@ unsafe fn parse_id_name(
         }
         let id = unsafe { syn_check_cluster(plain.add(1), text_len as c_int - 1) };
         return if id == 0 {
-            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let p = unsafe { c_str(p) };
+            semsg!("E409: Unknown group name: {p}");
             Err(())
         } else {
             Ok(Some(id))
@@ -448,7 +461,9 @@ unsafe fn parse_id_name(
     if unsafe { strpbrk(plain, c"\\.*^$~[".as_ptr()) }.is_null() {
         let id = unsafe { syn_check_group(plain, text_len as size_t) };
         return if id == 0 {
-            unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let p = unsafe { c_str(p) };
+            semsg!("E409: Unknown group name: {p}");
             Err(())
         } else {
             Ok(Some(id))
@@ -480,7 +495,9 @@ unsafe fn parse_id_name(
     }
     unsafe { vim_regfree(regmatch.regprog) };
     if !matched {
-        unsafe { semsg_c!(gettext(c"E409: Unknown group name: %s"), p) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let p = unsafe { c_str(p) };
+        semsg!("E409: Unknown group name: {p}");
         return Err(());
     }
     Ok(None)

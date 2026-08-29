@@ -25,7 +25,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg;
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -35,6 +37,7 @@ use crate::main::{curwin, e_notopen, got_int, p_verbose};
 use crate::memline::ml_append_buf;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{getc, gettext, gettext_ptr, strncmp, strstr};
 use crate::os::fs::os_fopen;
 use crate::os::input::fast_breakcheck;
@@ -227,7 +230,9 @@ unsafe fn load_spl(
     match unsafe { spell_check_magic_string(fd) } {
         SP_FORMERROR | SP_TRUNCERROR => {
             let fmt = gettext(c"E757: This does not look like a spell file");
-            unsafe { semsg_c!(c"%s".as_ptr(), fmt.as_ptr()) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(fmt.as_ptr()) };
+            semsg!("{arg0}");
             return false;
         }
         SP_OTHERERROR => {

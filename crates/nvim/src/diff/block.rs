@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, OK};
 use crate::winlayer::{Buf, TabPage, Win, tabs, windows};
 use core::ffi::c_int;
@@ -79,9 +79,7 @@ pub fn diff_buf_add(buf: Buf) {
             return;
         }
     }
-    // SAFETY: the message macros expand to a `vim_snprintf` over the format
-    // literal above and the editor's message buffers.
-    unsafe { semsg_c!(gettext(c"E96: Cannot diff more than %d buffers"), DB_COUNT,) };
+    semsg!("E96: Cannot diff more than {} buffers", DB_COUNT);
 }
 
 /// Empty the current tabpage's diff.

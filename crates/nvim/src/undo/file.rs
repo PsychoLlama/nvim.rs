@@ -13,7 +13,8 @@ use core::ffi::CStr;
 use super::format::*;
 use super::tree::*;
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 /// The SHA-256 of every line of `buf`, each followed by a NUL separator.
 ///
@@ -201,10 +202,10 @@ unsafe fn dir_is_usable(dir_name: *mut c_char, last_in_list: bool, reading: bool
     // SAFETY: `failed_dir` is the NUL-terminated name `os_mkdir_recurse` left
     // there, and so is what `uv_strerror` hands back.
     unsafe {
-        semsg_c!(
-            gettext(c"E5003: Unable to create directory \"%s\" for undo file: %s"),
-            failed_dir,
-            uv_strerror(ret),
+        semsg!(
+            "E5003: Unable to create directory \"{}\" for undo file: {}",
+            c_str(failed_dir),
+            c_str(uv_strerror(ret))
         )
     };
     unsafe { xfree(failed_dir.cast()) };
@@ -219,10 +220,10 @@ unsafe fn dir_is_usable(dir_name: *mut c_char, last_in_list: bool, reading: bool
 pub(crate) unsafe fn corruption_error(mesg: *const c_char, file_name: *const c_char) {
     // SAFETY: NUL-terminated strings, by the contract above.
     unsafe {
-        semsg_c!(
-            gettext(c"E825: Corrupted undo file (%s): %s"),
-            mesg,
-            file_name,
+        semsg!(
+            "E825: Corrupted undo file ({}): {}",
+            c_str(mesg),
+            c_str(file_name)
         )
     };
 }

@@ -64,8 +64,10 @@ use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
 use crate::main::{curbuf, current_sctx, p_cpo};
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::runtime::sourcing_lnum;
+use crate::semsg;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{
@@ -419,9 +421,9 @@ pub(crate) unsafe fn uc_add_command(
         {
             // SAFETY: `name` is the caller's; this call owns the other five.
             unsafe {
-                semsg_c!(
-                    gettext(c"E174: Command already exists: add ! to replace it: %s"),
-                    name,
+                semsg!(
+                    "E174: Command already exists: add ! to replace it: {}",
+                    c_str(name)
                 )
             };
             unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };

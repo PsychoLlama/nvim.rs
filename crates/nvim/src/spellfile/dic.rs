@@ -32,7 +32,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg;
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -45,6 +47,7 @@ use crate::main::{e_notopen, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, memmove};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
@@ -101,7 +104,9 @@ pub(super) unsafe fn spell_read_dic(
     if unsafe { vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) }
         || !ascii_isdigit(unsafe { *skipwhite(line.as_mut_ptr()) } as c_int)
     {
-        unsafe { semsg_c!(gettext(c"E760: No word count in %s"), fname) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E760: No word count in {fname}");
     }
 
     let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];

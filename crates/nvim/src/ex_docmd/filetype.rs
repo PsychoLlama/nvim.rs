@@ -2,7 +2,11 @@
 //! what a buffer is. Plus `:checkhealth`, which is a Lua entry point.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, semsg_multiline_c, smsg_c};
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::semsg_c;
+use crate::semsg_multiline_c;
+use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -147,19 +151,19 @@ unsafe fn report_filetype_state() {
             c"(on)".as_ptr()
         }
     };
-    unsafe {
-        smsg_c!(
-            0,
-            c"filetype detection:%s  plugin:%s  indent:%s".as_ptr(),
-            if detecting {
+    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+    let (arg0, arg1, arg2) = unsafe {
+        (
+            c_str(if detecting {
                 c"ON".as_ptr()
             } else {
                 c"OFF".as_ptr()
-            },
-            state(filetype_plugin.get() == Some(true)),
-            state(filetype_indent.get() == Some(true)),
+            }),
+            c_str(state(filetype_plugin.get() == Some(true))),
+            c_str(state(filetype_indent.get() == Some(true))),
         )
     };
+    smsg!(0, "filetype detection:{arg0} plugin:{arg1} indent:{arg2}");
 }
 
 /// Turn the filetype plugin and indent scripts on, unless they were
@@ -278,12 +282,7 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.
-        unsafe {
-            semsg_c!(
-                gettext(c"E5009: Invalid $VIMRUNTIME: %s".as_ptr()),
-                vimruntime,
-            )
-        };
+        unsafe { semsg!("E5009: Invalid $VIMRUNTIME: {}", c_str(vimruntime)) };
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }

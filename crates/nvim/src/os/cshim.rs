@@ -436,6 +436,73 @@ pub(crate) unsafe fn gettext_ptr<'a>(msgid: *const ::core::ffi::c_char) -> &'a :
     unsafe { ::core::ffi::CStr::from_ptr(gettext_raw(msgid)) }
 }
 
+/// The translation of a Rust-side message template -- [`gettext`] for a msgid
+/// held as a `&'static str`, which is what a `tr!` literal is.
+///
+/// Answers `None` when the catalogue has no entry, which is every message in
+/// a build that ships no catalogues; the caller then keeps what
+/// `format_args!` already rendered and nothing here allocates twice.
+///
+/// The lookup is cached by the msgid's *address and length*, not its bytes:
+/// the msgid is a string literal, so that pair identifies it, and caching on
+/// it keeps the `CString` a `gettext` call needs off the path a message
+/// actually takes. Like [`INTERNED`] the cache is cleared when the catalogue
+/// epoch moves, and like it the answers are leaked rather than owned, so a
+/// reference handed out before a `:language` stays valid after one.
+pub(crate) fn gettext_template(msgid: &'static str) -> Option<&'static str> {
+    let epoch = catalogue_epoch();
+    let key = (msgid.as_ptr() as usize, msgid.len());
+    {
+        let mut cache = TEMPLATES
+            .lock()
+            .unwrap_or_else(::std::sync::PoisonError::into_inner);
+        if cache.epoch != epoch {
+            cache.epoch = epoch;
+            cache.seen.clear();
+        } else if let Some(&held) = cache.seen.get(&key) {
+            return held;
+        }
+    }
+    let answer = translate_template(msgid);
+    let mut cache = TEMPLATES
+        .lock()
+        .unwrap_or_else(::std::sync::PoisonError::into_inner);
+    if cache.epoch == epoch {
+        cache.seen.insert(key, answer);
+    }
+    answer
+}
+
+/// [`gettext_template`]'s uncached half: the catalogue lookup itself.
+///
+/// A msgid holding an interior NUL, or a catalogue answering bytes that are
+/// not UTF-8, answers `None` -- the untranslated rendering, which is always
+/// correct.
+fn translate_template(msgid: &'static str) -> Option<&'static str> {
+    let owned = ::std::ffi::CString::new(msgid).ok()?;
+    // SAFETY: `owned` is NUL-terminated and live across the call, which is
+    // all `gettext` reads; its answer is a NUL-terminated string.
+    let answer = unsafe { ::core::ffi::CStr::from_ptr(gettext_raw(owned.as_ptr())) };
+    let text = ::core::str::from_utf8(answer.to_bytes()).ok()?;
+    if text == msgid {
+        return None;
+    }
+    Some(Box::leak(text.to_owned().into_boxed_str()))
+}
+
+/// [`gettext_template`]'s cache: the catalogue epoch its answers were looked
+/// up under, and the answers, keyed by msgid address and length.
+static TEMPLATES: ::std::sync::Mutex<Templates> = ::std::sync::Mutex::new(Templates {
+    epoch: 0,
+    seen: ::std::collections::BTreeMap::new(),
+});
+
+/// [`TEMPLATES`]'s contents.
+struct Templates {
+    epoch: ::core::ffi::c_int,
+    seen: ::std::collections::BTreeMap<(usize, usize), Option<&'static str>>,
+}
+
 /// The translation of a message with a count -- C's `NGETTEXT()`. `one` is
 /// the singular msgid, `many` the plural one, and `n` selects between them by
 /// the catalogue's plural rule (English's, when there is no catalogue).

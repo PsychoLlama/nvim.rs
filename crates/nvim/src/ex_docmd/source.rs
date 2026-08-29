@@ -8,7 +8,7 @@ use crate::strings::vim_snprintf;
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
-use crate::smsg_c;
+use crate::smsg;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -40,6 +40,7 @@ use crate::message::{
     emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,
     verbose_leave_scroll,
 };
+use crate::message_fmt::c_str;
 
 use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
@@ -198,9 +199,13 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
     unsafe { verbose_enter_scroll() };
     if lnum == 0 {
-        unsafe { smsg_c!(0, gettext(c"Executing: %s".as_ptr()), cmd) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let cmd = unsafe { c_str(cmd) };
+        smsg!(0, "Executing: {cmd}");
     } else {
-        unsafe { smsg_c!(0, gettext(c"line %d: %s".as_ptr()), lnum, cmd) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let cmd = unsafe { c_str(cmd) };
+        smsg!(0, "line {}: {cmd}", lnum);
     }
     if msg_silent.get() == 0 {
         unsafe { msg_puts(c"\n".as_ptr()) };

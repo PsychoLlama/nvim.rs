@@ -3,7 +3,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memline::MlFlags;
-use crate::{semsg_c, smsg_c};
+use crate::semsg_c;
+use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -170,7 +171,7 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
         unsafe { ex_lua(eap.raw()) };
     } else {
         eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
-        unsafe { smsg_c!(0, c"%ld".as_ptr(), eap.line2 as int64_t) };
+        smsg!(0, "{}", eap.line2 as int64_t);
     }
 }
 

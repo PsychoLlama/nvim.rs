@@ -16,6 +16,8 @@
 )]
 
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 /// The `"*"` group's first byte: the "all groups" filter.
 const STAR: c_char = b'*'.cast_signed();
@@ -348,7 +350,7 @@ pub(crate) unsafe fn sign_place(
     // SAFETY: the caller's name.
     let Some(def) = (unsafe { sign_find(name) }) else {
         // SAFETY: as above, and a format the message takes.
-        unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s"), name) };
+        unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
         return FAIL;
     };
     let prio = match (prio, def.sn_priority) {
@@ -368,7 +370,7 @@ pub(crate) unsafe fn sign_place(
     };
     if lnum <= 0 {
         // SAFETY: the caller's name.
-        unsafe { semsg_c!(gettext(c"E885: Not possible to change sign %s"), name,) };
+        unsafe { semsg!("E885: Not possible to change sign {}", c_str(name)) };
         return FAIL;
     }
     OK
@@ -442,8 +444,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T)
     // SAFETY: the caller's buffer and group.
     let lnum = unsafe { buf_findsign(buf, id, group) };
     if lnum <= 0 {
-        // SAFETY: a format the message takes.
-        unsafe { semsg_c!(gettext(c"E157: Invalid sign ID: %d"), id) };
+        semsg!("E157: Invalid sign ID: {}", id);
         return -1;
     }
     // SAFETY: the caller's buffer.

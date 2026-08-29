@@ -24,11 +24,13 @@ use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::main::ui_event_ns_id;
+use crate::message_fmt::c_str;
+use crate::msg_schedule_semsg_c;
+use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{
     Arena, Array, Error, LuaRef, LuaRetMode, NS, kErrorTypeNone, kObjectTypeBoolean,
 };
-use crate::{msg_schedule_semsg_c, msg_schedule_semsg_multiline_c};
 use core::ffi::{CStr, c_char};
 
 const kRetNilBool: LuaRetMode = 1;
@@ -265,5 +267,9 @@ unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
     let here = who.as_ptr();
     // SAFETY: the format spends exactly the three C strings that follow it.
     unsafe { logmsg_c!(level, no_context, here, line, true, format, name, ns, msg) };
-    unsafe { msg_schedule_semsg_multiline_c!(format, name, ns, msg) };
+    // SAFETY: as above.
+    let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    msg_schedule_semsg_multiline!(
+        "Error in \"{shown_name}\" UI event handler (ns={shown_ns}):\n{shown_msg}"
+    );
 }

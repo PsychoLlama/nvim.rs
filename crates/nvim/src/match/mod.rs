@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
@@ -102,12 +103,10 @@ unsafe fn match_add(
         return -1;
     }
     if id < -1 || id == 0 {
-        unsafe {
-            semsg_c!(
-                gettext(c"E799: Invalid ID: %ld (must be greater than or equal to 1)"),
-                id as int64_t,
-            )
-        };
+        semsg!(
+            "E799: Invalid ID: {} (must be greater than or equal to 1)",
+            id as int64_t
+        );
         return -1;
     }
     if id == -1 {
@@ -117,7 +116,7 @@ unsafe fn match_add(
         let mut cur = wp.w_match_head;
         while !cur.is_null() {
             if unsafe { (*cur).mit_id } == id {
-                unsafe { semsg_c!(gettext(c"E801: ID already taken: %ld"), id as int64_t,) };
+                semsg!("E801: ID already taken: {}", id as int64_t);
                 return -1;
             }
             cur = unsafe { (*cur).mit_next };
@@ -249,12 +248,9 @@ unsafe fn fill_pos_array(
             let subl = unsafe { (*tv).vval.v_list };
             let mut subli = unsafe { tv_list_first(subl) };
             if subli.is_null() {
-                unsafe {
-                    semsg_c!(
-                        gettext(c"E5030: Empty list at position %d"),
-                        tv_list_idx_of_item(pos_list, li),
-                    )
-                };
+                // SAFETY: `pos_list` holds `li`, as the caller established.
+                let at = unsafe { tv_list_idx_of_item(pos_list, li) };
+                semsg!("E5030: Empty list at position {at}");
                 return None;
             }
             lnum =
@@ -306,12 +302,9 @@ unsafe fn fill_pos_array(
                 unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };
             }
         } else {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E5031: List or number required at position %d"),
-                    tv_list_idx_of_item(pos_list, li),
-                )
-            };
+            // SAFETY: `pos_list` holds `li`, as the caller established.
+            let at = unsafe { tv_list_idx_of_item(pos_list, li) };
+            semsg!("E5031: List or number required at position {at}");
             return None;
         }
 
@@ -341,12 +334,10 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 
     if id < 1 {
         if perr {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E802: Invalid ID: %ld (must be greater than or equal to 1)"),
-                    id as int64_t,
-                )
-            };
+            semsg!(
+                "E802: Invalid ID: {} (must be greater than or equal to 1)",
+                id as int64_t
+            );
         }
         return -1;
     }
@@ -359,7 +350,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
     }
     if cur.is_null() {
         if perr {
-            unsafe { semsg_c!(gettext(c"E803: ID not found: %ld"), id as int64_t) };
+            semsg!("E803: ID not found: {}", id as int64_t);
         }
         return -1;
     }

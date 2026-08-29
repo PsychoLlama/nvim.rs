@@ -27,7 +27,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg;
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::api::private::helpers::cstr_as_string;
@@ -37,6 +39,7 @@ use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
 use crate::main::{curbuf, curwin, e_bufloaded, e_notopen, e_notset};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
 use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
@@ -256,7 +259,9 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
         if unsafe { fseek(fd, fpos_next as c_long, SEEK_SET) } != 0 {
             let fmt = gettext(c"Seek error in spellfile");
             let fmt = fmt.as_ptr();
-            unsafe { semsg_c!(c"%s: %s".as_ptr(), fmt, strerror(*__errno_location())) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+            let (arg0, arg1) = unsafe { (c_str(fmt), c_str(strerror(*__errno_location()))) };
+            semsg!("{arg0}: {arg1}");
             break;
         }
     }

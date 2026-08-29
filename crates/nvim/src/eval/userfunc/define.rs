@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
@@ -183,7 +185,9 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
         p = unsafe { skipwhite(p) };
         if unsafe { *p } != b'(' as c_char {
             if ea.skip == 0 {
-                unsafe { semsg_c!(gettext(c"E124: Missing '(': %s"), ea.arg) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let arg = unsafe { c_str(ea.arg) };
+                semsg!("E124: Missing '(': {arg}");
                 break 'ret_free;
             }
             // Attempt to carry on by skipping some text.

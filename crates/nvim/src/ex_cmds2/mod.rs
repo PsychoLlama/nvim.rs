@@ -72,9 +72,11 @@ use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,
 };
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{
     CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, exarg_T,
@@ -618,9 +620,9 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
         && unsafe { channel_job_running((*buf).b_p_channel as uint64_t) }
     {
         unsafe {
-            semsg_c!(
-                c"E947: Job still running in buffer \"%s\"".as_ptr(),
-                (*buf).b_fname
+            semsg!(
+                "E947: Job still running in buffer \"{}\"",
+                c_str((*buf).b_fname)
             )
         }
     } else {
@@ -630,9 +632,9 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
             unsafe { buf_spname(buf) }
         };
         unsafe {
-            semsg_c!(
-                c"E162: No write since last change for buffer \"%s\"".as_ptr(),
-                name,
+            semsg!(
+                "E162: No write since last change for buffer \"{}\"",
+                c_str(name)
             )
         }
     };

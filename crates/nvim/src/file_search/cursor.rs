@@ -11,8 +11,9 @@
 
 use super::*;
 use crate::guard::Script;
+use crate::message_fmt::c_str;
 use crate::normal::visual_active;
-use crate::semsg_c;
+use crate::semsg;
 use crate::types::{FAIL, OptionSetFlags, Vv};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
@@ -312,7 +313,9 @@ pub(crate) unsafe fn find_file_name_in_path(
         if file_name.is_null() && options.has(FileNameOpts::MESS) {
             let c = unsafe { *ptr.add(len) };
             unsafe { *ptr.add(len) = 0 };
-            unsafe { semsg_c!(gettext(c"E447: Can't find file \"%s\" in path"), ptr,) };
+            // SAFETY: the byte past the name was just replaced by a NUL.
+            let name = unsafe { c_str(ptr) };
+            semsg!("E447: Can't find file \"{name}\" in path");
             unsafe { *ptr.add(len) = c };
         }
 

@@ -5,6 +5,7 @@ use crate::strings::vim_snprintf;
 
 use std::ffi::CString;
 
+use crate::semsg;
 use crate::semsg_c;
 use crate::winlayer::{Buf, Ea, Live, Win};
 
@@ -32,6 +33,7 @@ use crate::main::{
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
+use crate::message_fmt::c_str;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
@@ -462,22 +464,16 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
         return ptr::null_mut();
     }
     if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {
-        unsafe {
-            semsg_c!(
-                gettext(c"E189: \"%s\" exists (add ! to override)".as_ptr()),
-                fname,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E189: \"{fname}\" exists (add ! to override)");
         return ptr::null_mut();
     }
     let fd = unsafe { os_fopen(fname, mode) };
     if fd.is_null() {
-        unsafe {
-            semsg_c!(
-                gettext(c"E190: Cannot open \"%s\" for writing".as_ptr()),
-                fname,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let fname = unsafe { c_str(fname) };
+        semsg!("E190: Cannot open \"{fname}\" for writing");
     }
     fd
 }

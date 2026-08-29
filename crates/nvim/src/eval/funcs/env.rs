@@ -23,6 +23,7 @@ use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, emsg_ptr};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strchr};
 use crate::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,
@@ -31,6 +32,7 @@ use crate::os::env::{
 use crate::os::fs::os_setperm;
 use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{
     CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, FAIL, NUL, OK, OptInt, VAR_DICT,
@@ -315,7 +317,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         _ => {
             // The name is arbitrary user bytes, so this keeps the
             // variadic call.
-            unsafe { semsg_c!(gettext(c"E6100: \"%s\" is not a valid stdpath"), p) };
+            unsafe { semsg!("E6100: \"{}\" is not a valid stdpath", c_str(p)) };
             return;
         }
     };

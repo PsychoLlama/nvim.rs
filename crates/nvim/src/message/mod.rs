@@ -307,6 +307,14 @@ pub fn msg(s: &CStr, hl_id: c_int) -> bool {
     unsafe { msg_keep(s.as_ptr(), hl_id, false, false) }
 }
 
+/// [`msg`], keeping the message displayed.
+/// [`smsg_keep!`](crate::smsg_keep)'s tail.
+#[doc(hidden)]
+pub(crate) fn msg_keep_text(s: &CStr, hl_id: c_int) -> bool {
+    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
+    unsafe { msg_keep(s.as_ptr(), hl_id, true, false) }
+}
+
 /// [`msg`] for a message still held as a raw pointer.
 ///
 /// # Safety
@@ -714,7 +722,7 @@ pub unsafe fn smsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
 pub unsafe fn smsg_keep_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
-    unsafe { msg_keep(buf.as_ptr(), hl_id, true, false) as c_int }
+    msg_keep_text(crate::cstr::in_chars(buf), hl_id) as c_int
 }
 
 /// Show `s`, truncated at the head if it does not fit the message area.

@@ -32,8 +32,9 @@ use crate::highlight::hl_check_ns;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
 use crate::main::{display_tick, ns_hl_active};
+use crate::message_fmt::c_str;
 use crate::r#move::validate_botline_win;
-use crate::msg_schedule_semsg_multiline_c;
+use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
@@ -108,12 +109,14 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
     let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
     let who = c"decor_provider_error";
     let logged = c"Error in decoration provider \"%s\" (ns=%s):\n%s";
-    let shown = c"Decoration provider \"%s\" (ns=%s):\n%s".as_ptr();
-    // SAFETY: the caller's strings and the namespace name, and each format
+    // SAFETY: the caller's strings and the namespace name, and the format
     // spends exactly the three `%s` that follow it.
     unsafe { logmsg!(LOGLVL_ERR, who, 29, logged, name, ns, msg) };
     // SAFETY: as above.
-    unsafe { msg_schedule_semsg_multiline_c!(shown, name, ns, msg) };
+    let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    msg_schedule_semsg_multiline!(
+        "Decoration provider \"{shown_name}\" (ns={shown_ns}):\n{shown_msg}"
+    );
 }
 
 /// Call one provider callback and answer whether the provider is still good.

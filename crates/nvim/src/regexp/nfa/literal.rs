@@ -5,7 +5,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::siemsg_c;
+use crate::semsg;
+use crate::siemsg;
 use core::ffi::{c_char, c_int};
 
 use super::{Parsed, Rejected, cursor, postfix};
@@ -21,7 +22,6 @@ use crate::regexp::{
     NFA_WHITE, NFA_WORD, RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags,
     seen_endbrace, unmagic,
 };
-use crate::semsg;
 use crate::types::NUL;
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
@@ -80,11 +80,7 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> Parsed {
             semsg!("E877: (NFA regexp) Invalid character class: {c}");
             rc_did_emsg.set(true);
         } else {
-            // `siemsg`, not `semsg`: an internal-error report, which is
-            // dropped while messages are being held back. Unreachable in
-            // practice — the dispatch only sends class characters here.
-            // SAFETY: a NUL-terminated literal and the int its `%d` takes.
-            unsafe { siemsg_c!(c"INTERNAL: Unknown character class char: %d".as_ptr(), c) };
+            siemsg!("INTERNAL: Unknown character class char: {}", c);
         }
         return Err(Rejected);
     };

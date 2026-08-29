@@ -25,9 +25,10 @@ mod time;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::memline::MlFlags;
+use crate::message_fmt::c_str;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::option::cpo_has;
-use crate::smsg_keep_c;
+use crate::smsg_keep;
 use crate::winlayer::{Buf, windows};
 use core::ffi::CStr;
 
@@ -282,16 +283,14 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         with_visual_anchor(|visual| check_pos(buf, visual));
     }
 
-    let fmt = gettext(c"%ld %s; %s #%ld  %s");
     let amount = int64_t::from(count).abs();
-    let what = gettext(what);
+    let what = gettext(what).to_string_lossy();
     let which = if did_undo { c"before" } else { c"after" };
-    let side = gettext(which);
+    let side = gettext(which).to_string_lossy();
     let seq = target.map_or(0, |uhp| int64_t::from(uhp.uh_seq));
-    // SAFETY: a format string and the arguments it names, and `when` is
-    // NUL-terminated.
-    let (what, side) = (what.as_ptr(), side.as_ptr());
-    unsafe { smsg_keep_c!(0, fmt.as_ptr(), amount, what, side, seq, when.as_mut_ptr()) };
+    // SAFETY: `when` was filled by `undo_fmt_time`, which terminates it.
+    let when = unsafe { c_str(when.as_mut_ptr()) };
+    smsg_keep!(0, "{amount} {what}; {side} #{seq}  {when}");
 }
 
 #[cfg(test)]

@@ -27,7 +27,8 @@ use crate::event::libuv::{
 use crate::global_cell::GlobalCell;
 use crate::main::{g_min_log_level, g_stats, ui_client_channel_id};
 use crate::memory::xfree;
-use crate::msg_schedule_semsg_c;
+use crate::message_fmt::c_str;
+use crate::msg_schedule_semsg;
 use crate::os::env::{expand_env, os_get_pid, os_getenv_buf, os_setenv};
 use crate::os::fs::{os_isdir, os_mkdir_recurse};
 use crate::os::stdpaths::{get_xdg_home, stdpaths_user_state_subpath};
@@ -292,9 +293,7 @@ pub(crate) unsafe fn logmsg_begin(
                 func_name
             };
             // SAFETY: the caller's strings, formatted with matching verbs.
-            unsafe {
-                msg_schedule_semsg_c!(c"E5430: %s:%d: recursive log!".as_ptr(), who, line_num)
-            };
+            unsafe { msg_schedule_semsg!("E5430: {}:{}: recursive log!", c_str(who), line_num) };
         }
         g_stats.with_mut(|s| s.log_skip += 1);
         log_unlock();

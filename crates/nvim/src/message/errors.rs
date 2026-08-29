@@ -398,6 +398,39 @@ pub unsafe fn internal_error(where_0: *const c_char) {
     unsafe { crate::siemsg_c!(gettext(e_intern2), where_0) };
 }
 
+/// Report `text` as a multiline error of `ext_messages` kind `kind`, keeping
+/// its embedded newlines. [`semsg_multiline!`](crate::semsg_multiline)'s tail.
+#[doc(hidden)]
+pub(crate) fn emsg_multiline_text(text: &CStr, kind: &CStr) -> bool {
+    // SAFETY: both are valid C strings, which is the whole contract.
+    unsafe { emsg_multiline(text.as_ptr(), kind.as_ptr(), HLF_E, true) }
+}
+
+/// Show `text` as a warning. [`swmsg!`](crate::swmsg)'s tail.
+#[doc(hidden)]
+pub(crate) fn swmsg_text(text: &CStr, hl: bool) {
+    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
+    unsafe { give_warning(text.as_ptr(), hl, true) }
+}
+
+/// Hand `text` to the main loop as an error, `multiline` keeping its embedded
+/// newlines. [`msg_schedule_semsg!`](crate::msg_schedule_semsg)'s tail.
+#[doc(hidden)]
+pub(crate) fn msg_schedule_semsg_text(text: &CStr, multiline: bool) {
+    let handler = if multiline {
+        msg_semsg_multiline_event
+    } else {
+        msg_semsg_event
+    };
+    // SAFETY: `text` is a valid C string; the copy is owned by the event,
+    // whose handler frees it, and the main loop is live wherever a message
+    // can be scheduled.
+    unsafe {
+        let event = Event::new(Some(handler), [xstrdup(text.as_ptr()).cast::<c_void>()]);
+        loop_schedule_deferred(main_loop.ptr(), event);
+    }
+}
+
 /// Deferred-event handler for [`msg_schedule_semsg`].
 ///
 /// # Safety
@@ -416,9 +449,7 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
 /// Only that the main loop is live.
 #[doc(hidden)]
 pub unsafe fn msg_schedule_semsg_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
-    let s = unsafe { xstrdup(buf.as_ptr()) };
-    let event = Event::new(Some(msg_semsg_event), [s.cast::<c_void>()]);
-    unsafe { loop_schedule_deferred(main_loop.ptr(), event) };
+    msg_schedule_semsg_text(crate::cstr::in_chars(buf), false);
 }
 
 /// Deferred-event handler for [`msg_schedule_semsg_multiline`].
@@ -439,9 +470,7 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
 /// Only that the main loop is live.
 #[doc(hidden)]
 pub unsafe fn msg_schedule_semsg_multiline_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
-    let s = unsafe { xstrdup(buf.as_ptr()) };
-    let event = Event::new(Some(msg_semsg_multiline_event), [s.cast::<c_void>()]);
-    unsafe { loop_schedule_deferred(main_loop.ptr(), event) };
+    msg_schedule_semsg_text(crate::cstr::in_chars(buf), true);
 }
 
 /// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick
@@ -484,5 +513,5 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
 /// Only that the message state is the main thread's.
 #[doc(hidden)]
 pub unsafe fn swmsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl: bool) {
-    unsafe { give_warning(buf.as_ptr(), hl, true) }
+    swmsg_text(crate::cstr::in_chars(buf), hl);
 }

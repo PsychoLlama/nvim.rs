@@ -32,8 +32,12 @@ use crate::main::{
 };
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, gettext_ptr, strncmp};
+use crate::semsg;
+use crate::semsg_c;
+use crate::semsg_multiline_c;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
@@ -41,7 +45,6 @@ use crate::types::{
     typval_vval_union, varnumber_T, win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
-use crate::{semsg_c, semsg_multiline_c};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
@@ -413,7 +416,9 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
         VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
         _ => {
             let msg = c"E808: Number or Float required";
-            unsafe { semsg_c!(c"%s".as_ptr(), gettext(msg).as_ptr()) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(gettext(msg).as_ptr()) };
+            semsg!("{arg0}");
             return false;
         }
     }
@@ -557,7 +562,9 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
     drop(no_emsg);
     if buf.is_null() {
         let what = unsafe { numbuf.string(arg) };
-        unsafe { semsg_c!(gettext(c"E158: Invalid buffer name: %s"), what) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let what = unsafe { c_str(what) };
+        semsg!("E158: Invalid buffer name: {what}");
     }
     buf
 }

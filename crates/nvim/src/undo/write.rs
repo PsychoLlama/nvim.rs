@@ -6,8 +6,11 @@ use super::file::*;
 use super::format::*;
 use super::store::Marks;
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
+use crate::smsg;
+use crate::smsg_c;
 use crate::winlayer::Buf;
-use crate::{semsg_c, smsg_c};
 
 /// Writes `buf`'s undo tree to `name`, or to the file `'undodir'` picks for
 /// it when `name` is NULL.
@@ -26,7 +29,7 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
-                unsafe { smsg_c!(0, c"%s".as_ptr(), gettext(NO_UNDODIR).as_ptr()) };
+                unsafe { smsg!(0, "{}", c_str(gettext(NO_UNDODIR).as_ptr())) };
             });
             return;
         }
@@ -97,9 +100,9 @@ unsafe fn write_undo_file(
     if fd < 0 {
         // SAFETY: a NUL-terminated literal and path.
         unsafe {
-            semsg_c!(
-                gettext(c"E828: Cannot open undo file for writing: %s"),
-                file_name,
+            semsg!(
+                "E828: Cannot open undo file for writing: {}",
+                c_str(file_name)
             )
         };
         return;
@@ -120,9 +123,9 @@ unsafe fn write_undo_file(
         // SAFETY: a NUL-terminated literal and path, and a descriptor that
         // `fdopen` did not take over.
         unsafe {
-            semsg_c!(
-                gettext(c"E828: Cannot open undo file for writing: %s"),
-                file_name,
+            semsg!(
+                "E828: Cannot open undo file for writing: {}",
+                c_str(file_name)
             )
         };
         unsafe { close(fd) };
@@ -141,7 +144,7 @@ unsafe fn write_undo_file(
     unsafe { fclose(fp) };
     if !write_ok {
         // SAFETY: a NUL-terminated literal and path.
-        unsafe { semsg_c!(gettext(c"E829: Write error in undo file: %s"), file_name,) };
+        unsafe { semsg!("E829: Write error in undo file: {}", c_str(file_name)) };
     }
     if !buf.b_ffname.is_null() {
         let acl: vim_acl_T = os_get_acl(buf.b_ffname);

@@ -9,7 +9,8 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{
     NUL, Refcount, VAR_DICT, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     kListLenMayKnow,
@@ -234,7 +235,9 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
         let act = unsafe { numbuf.string_chk(action_arg) };
         let known = matches!(unsafe { *act } as u8, b'a' | b'r' | b'u' | b' ' | b'f');
         if !known || unsafe { *act.add(1) } as c_int != NUL {
-            unsafe { semsg_c!(gettext(c"E927: Invalid action: '%s'"), act) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let act = unsafe { c_str(act) };
+            semsg!("E927: Invalid action: '{act}'");
             return;
         }
         action = unsafe { *act };

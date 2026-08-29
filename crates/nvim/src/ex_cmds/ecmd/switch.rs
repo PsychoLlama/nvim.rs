@@ -32,9 +32,10 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
-use crate::semsg_c;
+use crate::semsg;
 use crate::terminal::terminal_running;
 use crate::types::{CmdModFlags, linenr_T, win_T};
 use crate::undo::u_sync;
@@ -389,13 +390,13 @@ fn au_new_curbuf_valid() -> bool {
 pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
     // SAFETY: caller's contract; one `%s` for one string.
     unsafe {
-        semsg_c!(
-            gettext(c"E143: Autocommands unexpectedly deleted new buffer %s"),
-            if name.is_null() {
+        semsg!(
+            "E143: Autocommands unexpectedly deleted new buffer {}",
+            c_str(if name.is_null() {
                 c"".as_ptr()
             } else {
                 name as *const c_char
-            },
+            })
         )
     };
     unsafe { xfree(name.cast()) };

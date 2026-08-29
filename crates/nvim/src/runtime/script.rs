@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::semsg_c;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;

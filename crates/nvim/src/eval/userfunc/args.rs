@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -40,7 +42,9 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
         || (len == 8 && unsafe { strncmp(arg, c"lastline".as_ptr(), 8) } == 0);
     if arg == p.raw() || unsafe { *arg as u8 }.is_ascii_digit() || named {
         if !skip {
-            unsafe { semsg_c!(gettext(c"E125: Illegal argument: %s"), arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E125: Illegal argument: {arg}");
         }
         return arg;
     }

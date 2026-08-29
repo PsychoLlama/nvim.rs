@@ -27,7 +27,7 @@ use crate::ops::clear_oparg;
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
-use crate::siemsg_c;
+use crate::siemsg;
 use crate::state::MODE_NORMAL;
 use crate::types::{Direction, cmdarg_T, oparg_T};
 
@@ -149,8 +149,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         MSCR_LEFT => K_MOUSELEFT,
         MSCR_RIGHT => K_MOUSERIGHT,
         _ => {
-            // SAFETY: a NUL-terminated format with one matching argument.
-            unsafe { siemsg_c!(c"Invalid ins_mousescroll() argument: %d".as_ptr(), dir,) };
+            siemsg!("Invalid ins_mousescroll() argument: {}", dir);
             0
         }
     };

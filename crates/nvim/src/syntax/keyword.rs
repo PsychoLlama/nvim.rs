@@ -7,6 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -194,7 +196,9 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
         }
         let next = unsafe { *p.add(1) } as c_int;
         if next == NUL {
-            unsafe { semsg_c!(gettext(c"E789: Missing ']': %s"), kw) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let kw = unsafe { c_str(kw) };
+            semsg!("E789: Missing ']': {kw}");
             return None;
         }
         if next == ']' as c_int {

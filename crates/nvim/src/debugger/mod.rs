@@ -47,18 +47,20 @@ use crate::main::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
-use crate::os::cshim::{gettext, memmove, strncmp, strstr};
+use crate::message_fmt::c_str;
+use crate::os::cshim::{memmove, strncmp, strstr};
 use crate::os::env::{expand_env_save, home_replace};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
 use crate::runtime::{estack_sfile, sourcing_lnum};
+use crate::semsg;
+use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::{
     CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, MAXPATHL, NUL, OK,
     buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
     tasave_T, typval_T, uint8_t,
 };
-use crate::{semsg, semsg_c, smsg, smsg_c};
 use ::libc::{atoi, strcmp, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -248,15 +250,13 @@ pub unsafe fn dbg_check_breakpoint(eap: *mut exarg_T) {
     } else {
         (c"".as_ptr(), name)
     };
-    unsafe {
-        smsg_c!(
-            0,
-            c"Breakpoint in \"%s%s\" line %ld".as_ptr(),
-            prefix,
-            rest,
-            debug_breakpoint_lnum.get() as int64_t,
-        )
-    };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+    let (prefix, rest) = unsafe { (c_str(prefix), c_str(rest)) };
+    smsg!(
+        0,
+        "Breakpoint in \"{prefix}{rest}\" line {}",
+        debug_breakpoint_lnum.get() as int64_t
+    );
     debug_breakpoint_name.set(ptr::null_mut());
     unsafe { do_debug((*eap).cmd) };
 }
@@ -334,7 +334,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
         } else if debugger && strncmp(arg, c"expr".as_ptr(), 4) == 0 {
             (DBG_EXPR, false)
         } else {
-            semsg_c!(gettext(c"E475: Invalid argument: %s"), arg);
+            semsg!("E475: Invalid argument: {}", c_str(arg));
             return FAIL;
         }
     };
@@ -371,7 +371,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
     };
     if malformed {
         // SAFETY: caller contract.
-        unsafe { semsg_c!(gettext(c"E475: Invalid argument: %s"), arg) };
+        unsafe { semsg!("E475: Invalid argument: {}", c_str(arg)) };
         return FAIL;
     }
 
@@ -557,7 +557,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
 
     let Some(todel) = todel else {
         // SAFETY: `arg` is NUL-terminated.
-        unsafe { semsg_c!(gettext(c"E161: Breakpoint not found: %s"), arg) };
+        unsafe { semsg!("E161: Breakpoint not found: {}", c_str(arg)) };
         return;
     };
 
@@ -635,23 +635,20 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
             };
         }
         if kind == DBG_EXPR {
-            unsafe { smsg_c!(0, c"%3d  expr %s".as_ptr(), (*bp).dbg_nr, (*bp).dbg_name) };
+            // SAFETY: `bp` is a live breakpoint of the editor's own.
+            let (nr, name) = unsafe { ((*bp).dbg_nr, c_str((*bp).dbg_name)) };
+            smsg!(0, "{nr:3} expr {name}");
         } else {
             let (label, shown) = if kind == DBG_FUNC {
                 (c"func".as_ptr(), unsafe { (*bp).dbg_name })
             } else {
                 (c"file".as_ptr(), namebuff)
             };
-            unsafe {
-                smsg_c!(
-                    0,
-                    c"%3d  %s %s  line %ld".as_ptr(),
-                    (*bp).dbg_nr,
-                    label,
-                    shown,
-                    (*bp).dbg_lnum as int64_t,
-                )
-            };
+            // SAFETY: `bp` is a live breakpoint of the editor's own, and both
+            // strings are NUL-terminated.
+            let (nr, lnum) = unsafe { ((*bp).dbg_nr, (*bp).dbg_lnum as int64_t) };
+            let (label, shown) = unsafe { (c_str(label), c_str(shown)) };
+            smsg!(0, "{nr:3} {label} {shown} line {lnum}");
         }
     }
 }

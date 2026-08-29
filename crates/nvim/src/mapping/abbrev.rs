@@ -11,7 +11,8 @@
 use super::*;
 use crate::getchar::typeahead;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
-use crate::semsg_multiline_c;
+use crate::message_fmt::c_str;
+use crate::semsg_multiline;
 use crate::types::{MB_MAXBYTES, NUL, kErrorTypeNone};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -283,7 +284,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
         if err.type_0 != kErrorTypeNone {
             // SAFETY: `err.msg` is the NUL-terminated text the call set.
             unsafe {
-                semsg_multiline_c!(c"emsg".as_ptr(), c"E5108: %s".as_ptr(), err.msg);
+                semsg_multiline!(c"emsg", "E5108: {}", c_str(err.msg));
                 api_clear_error(out);
             }
         }

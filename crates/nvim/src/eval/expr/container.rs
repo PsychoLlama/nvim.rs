@@ -2,6 +2,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
@@ -83,7 +85,9 @@ pub(crate) unsafe fn eval_list(
                 continue;
             }
             let at = cur.get();
-            unsafe { semsg_c!(gettext(c"E696: Missing comma in List: %s"), at) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let at = unsafe { c_str(at) };
+            semsg!("E696: Missing comma in List: {at}");
             break 'items false;
         }
         if cur.byte() != b']' {
@@ -190,7 +194,9 @@ pub(crate) unsafe fn eval_dict(
             }
             if cur.byte() != b':' {
                 let at = cur.get();
-                unsafe { semsg_c!(gettext(c"E720: Missing colon in Dictionary: %s"), at) };
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let at = unsafe { c_str(at) };
+                semsg!("E720: Missing colon in Dictionary: {at}");
                 unsafe { tv_clear(&raw mut tvkey) };
                 break 'items false;
             }
@@ -212,9 +218,9 @@ pub(crate) unsafe fn eval_dict(
             }
             if evaluate {
                 if !unsafe { tv_dict_find(dict, key, -1 as ptrdiff_t) }.is_null() {
-                    unsafe {
-                        semsg_c!(gettext(c"E721: Duplicate key in Dictionary: \"%s\""), key,)
-                    };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let key = unsafe { c_str(key) };
+                    semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
                     unsafe { tv_clear(&raw mut tvkey) };
                     unsafe { tv_clear(&raw mut tv) };
                     break 'items false;
@@ -241,7 +247,9 @@ pub(crate) unsafe fn eval_dict(
                 continue;
             }
             let at = cur.get();
-            unsafe { semsg_c!(gettext(c"E722: Missing comma in Dictionary: %s"), at) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let at = unsafe { c_str(at) };
+            semsg!("E722: Missing comma in Dictionary: {at}");
             break 'items false;
         }
         if cur.byte() != b'}' {

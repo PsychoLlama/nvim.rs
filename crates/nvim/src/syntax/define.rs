@@ -8,7 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -315,7 +317,9 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
         rest = unsafe { skipwhite(key_end) };
         if unsafe { *rest } as c_int != '=' as c_int {
             rest = ::core::ptr::null_mut();
-            unsafe { semsg_c!(gettext(c"E398: Missing '=': %s"), (*eap).arg) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str((*eap).arg) };
+            semsg!("E398: Missing '=': {arg}");
             break;
         }
         rest = unsafe { skipwhite(rest.add(1)) };
@@ -415,12 +419,9 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
         }
         unsafe { free_opt_lists(&args.opt) };
         if args.not_enough {
-            unsafe {
-                semsg_c!(
-                    gettext(c"E399: Not enough arguments: syntax region %s"),
-                    arg,
-                )
-            };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg = unsafe { c_str(arg) };
+            semsg!("E399: Not enough arguments: syntax region {arg}");
         } else if rest.is_null() {
             unsafe { semsg_c!(gettext(e_invarg2), arg) };
         }
@@ -485,7 +486,9 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
     let mut end = unsafe { skip_regexp(arg.add(1), *arg as c_int, 1) };
     if unsafe { *end } as c_int != unsafe { *arg } as c_int {
-        unsafe { semsg_c!(gettext(c"E401: Pattern delimiter not found: %s"), arg,) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E401: Pattern delimiter not found: {arg}");
         return ::core::ptr::null_mut();
     }
 
@@ -504,7 +507,9 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
     let end = unsafe { read_pattern_offsets(ci, end.add(1)) };
     if ends_excmd(unsafe { *end } as c_int) == 0 && !ascii_iswhite(unsafe { *end } as c_int) {
-        unsafe { semsg_c!(gettext(c"E402: Garbage after pattern: %s"), arg) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E402: Garbage after pattern: {arg}");
         return ::core::ptr::null_mut();
     }
     unsafe { skipwhite(end) }

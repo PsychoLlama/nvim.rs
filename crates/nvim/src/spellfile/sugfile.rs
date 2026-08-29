@@ -31,7 +31,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::fileio::{put_bytes, put_time};

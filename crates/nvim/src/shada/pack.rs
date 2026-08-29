@@ -12,7 +12,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::types::builders::static_cstring;
@@ -267,12 +268,9 @@ unsafe fn pack_variable(
         )
     } == FAIL
     {
-        unsafe {
-            semsg_c!(
-                gettext(c"E574: Failed to write variable %s"),
-                global_var.name,
-            )
-        };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let name = unsafe { c_str(global_var.name) };
+        semsg!("E574: Failed to write variable {name}");
         // The rest of the file is still worth writing.
         return Err(kSDWriteIgnError);
     }

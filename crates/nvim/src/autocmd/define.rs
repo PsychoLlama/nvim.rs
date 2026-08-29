@@ -11,6 +11,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{FAIL, OK, RefcountSize};
 use crate::winlayer::{Live, Win, tabs};
@@ -347,14 +349,7 @@ pub unsafe fn autocmd_register(
     if ap.is_null() {
         // A buffer-local pattern needs a buffer that exists.
         if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the
-            // format literal above and the editor's message buffers.
-            unsafe {
-                semsg_c!(
-                    gettext(c"E680: <buffer=%d>: invalid buffer number "),
-                    buflocal_nr,
-                )
-            };
+            semsg!("E680: <buffer={}>: invalid buffer number ", buflocal_nr);
             return FAIL;
         }
 
@@ -571,7 +566,7 @@ pub(crate) unsafe fn arg_event_skip(
         {
             // SAFETY: the message macros expand to a `vim_snprintf` over the
             // format literal above and the editor's message buffers.
-            unsafe { semsg_c!(gettext(c"E215: Illegal character after *: %s"), arg,) };
+            unsafe { semsg!("E215: Illegal character after *: {}", c_str(arg)) };
             return ::core::ptr::null_mut();
         }
         return unsafe { arg.add(1) };

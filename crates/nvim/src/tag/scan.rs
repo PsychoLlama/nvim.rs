@@ -11,14 +11,16 @@
 use super::*;
 use crate::file_search::Name;
 use crate::guard::Suppress;
+use crate::message_fmt::c_str;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
+use crate::semsg;
+use crate::smsg_c;
 use crate::types::{CONV_NONE, FAIL, NUL, OK};
 use crate::winlayer::Buf;
-use crate::{semsg_c, smsg_c};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::collections::HashSet;
@@ -516,9 +518,9 @@ impl FindTags {
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
             unsafe {
-                semsg_c!(
-                    gettext(c"E432: Tags file not sorted: %s"),
-                    self.tag_fname.as_ptr(),
+                semsg!(
+                    "E432: Tags file not sorted: {}",
+                    c_str(self.tag_fname.as_ptr())
                 )
             };
         }
@@ -597,14 +599,14 @@ impl FindTags {
                     // SAFETY: the message macros expand to a `vim_snprintf` over
                     // the format literal above and the editor's message buffers.
                     unsafe {
-                        semsg_c!(
-                            gettext(c"E431: Format error in tags file \"%s\""),
-                            self.tag_fname.as_ptr(),
+                        semsg!(
+                            "E431: Format error in tags file \"{}\"",
+                            c_str(self.tag_fname.as_ptr())
                         )
                     };
-                    // SAFETY: the message macros expand to a `vim_snprintf` over
-                    // the format literal above and the editor's message buffers.
-                    unsafe { semsg_c!(gettext(c"Before byte %ld"), ftello(self.fp) as int64_t,) };
+                    // SAFETY: `self.fp` is the tag file this scan holds open.
+                    let at = unsafe { ftello(self.fp) } as int64_t;
+                    semsg!("Before byte {at}");
                     self.stop_searching = true;
                     return;
                 }

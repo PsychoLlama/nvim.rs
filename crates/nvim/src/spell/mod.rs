@@ -30,7 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::change::inserted_bytes;
@@ -41,6 +41,7 @@ use crate::main::{curwin, got_int, p_ws, sub_nlines, sub_nsubs};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
@@ -338,7 +339,9 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
     unsafe { xfree(frompat as *mut c_void) };
 
     if sub_nsubs.get() == 0 {
-        unsafe { semsg_c!(gettext(c"E753: Not found: %s"), repl_from.get()) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg0 = unsafe { c_str(repl_from.get()) };
+        semsg!("E753: Not found: {arg0}");
     } else {
         unsafe { do_sub_msg(false) };
     }

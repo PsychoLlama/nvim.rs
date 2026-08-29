@@ -8,6 +8,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::semsg_c;
 use core::ffi::{c_int, c_void};
 
@@ -175,7 +177,9 @@ pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
                 let id =
                     unsafe { syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1) };
                 if id == 0 {
-                    unsafe { semsg_c!(gettext(c"E391: No such syntax cluster: %s"), arg) };
+                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                    let arg = unsafe { c_str(arg) };
+                    semsg!("E391: No such syntax cluster: {arg}");
                     break;
                 }
                 // A cluster cannot be deleted without changing the ids of

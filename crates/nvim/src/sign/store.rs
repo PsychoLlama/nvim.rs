@@ -20,6 +20,8 @@
 )]
 
 use super::*;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 /// One `:sign define` entry.
 struct SignEntry {
@@ -361,7 +363,7 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
     });
     let Some(entry) = entry else {
         // SAFETY: the caller's name, and a format the message takes.
-        unsafe { semsg_c!(gettext(c"E155: Unknown sign: %s"), name) };
+        unsafe { semsg!("E155: Unknown sign: {}", c_str(name)) };
         return FAIL;
     };
     // SAFETY: the icon is this module's own `xstrdup`.

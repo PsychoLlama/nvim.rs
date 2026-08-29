@@ -22,7 +22,9 @@ use super::{FAIL, OK, UC_BUFFER};
 use crate::ascii::ascii_iswhite;
 use crate::charset::getdigits_int;
 use crate::message::emsg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
+use crate::semsg;
 use crate::semsg_c;
 use crate::strings::xstrnsave;
 use crate::types::{CmdAddr, ExArgt, ExpandContext, NUL, size_t};
@@ -142,7 +144,7 @@ pub(crate) unsafe fn parse_compl_arg(
         .find(|&i| command_complete_name(i).is_some_and(|n| n.to_bytes() == name));
     let Some(expand) = found else {
         // SAFETY: caller contract.
-        unsafe { semsg_c!(gettext(c"E180: Invalid complete value: %s"), value,) };
+        unsafe { semsg!("E180: Invalid complete value: {}", c_str(value)) };
         return FAIL;
     };
     *complp = expand;
@@ -284,7 +286,9 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
         // as soon as the message has been formatted.
         let ch = unsafe { *attr.add(len) };
         unsafe { *attr.add(len) = NUL as c_char };
-        unsafe { semsg_c!(gettext(c"E181: Invalid attribute: %s"), attr,) };
+        // SAFETY: the byte past the attribute was just replaced by a NUL.
+        let shown = unsafe { c_str(attr) };
+        semsg!("E181: Invalid attribute: {shown}");
         unsafe { *attr.add(len) = ch };
         return FAIL;
     };

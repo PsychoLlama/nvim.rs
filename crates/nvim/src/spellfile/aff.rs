@@ -30,7 +30,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, smsg_c};
+use crate::semsg_c;
+use crate::smsg;
+use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::charset::skipdigits;
@@ -40,6 +42,7 @@ use crate::main::{e_notopen, got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
@@ -742,7 +745,9 @@ unsafe fn finish_aff(
     if st.compsylmax != 0 {
         if st.syllable.is_null() {
             let fmt = gettext(c"COMPOUNDSYLMAX used without SYLLABLE");
-            unsafe { smsg_c!(0, c"%s".as_ptr(), fmt.as_ptr()) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let arg0 = unsafe { c_str(fmt.as_ptr()) };
+            smsg!(0, "{arg0}");
         }
         unsafe { aff_check_number((*spin).si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
         unsafe { (*spin).si_compsylmax = st.compsylmax };

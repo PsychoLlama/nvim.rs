@@ -14,10 +14,12 @@ use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::message::msg_ptr;
+use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
+use crate::semsg;
+use crate::smsg_c;
 use crate::types::{FAIL, IOSIZE, OK, Vv};
 use crate::winlayer::{Buf, Win};
-use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -564,7 +566,7 @@ impl DoTag {
                 if self.verbose {
                     // SAFETY: the message macros expand to a `vim_snprintf` over
                     // the format literal above and the editor's message buffers.
-                    unsafe { semsg_c!(gettext(c"E426: Tag not found: %s"), name) };
+                    unsafe { semsg!("E426: Tag not found: {}", c_str(name)) };
                 }
                 g_do_tagpreview.set(0);
                 return;
@@ -812,9 +814,9 @@ impl DoTag {
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
             unsafe {
-                semsg_c!(
-                    gettext(c"E429: File \"%s\" does not exist"),
-                    nofile_fname.get(),
+                semsg!(
+                    "E429: File \"{}\" does not exist",
+                    c_str(nofile_fname.get())
                 )
             };
             return false;

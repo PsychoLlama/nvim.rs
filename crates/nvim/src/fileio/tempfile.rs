@@ -15,7 +15,8 @@
 
 use crate::cstr;
 use crate::log::logmsg_c;
-use crate::{msg_schedule_semsg_c, smsg_c};
+use crate::msg_schedule_semsg_c;
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 

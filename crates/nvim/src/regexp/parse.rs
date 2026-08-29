@@ -11,6 +11,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg;
+use crate::semsg_c;
 use core::ffi::{c_char, c_int};
 
 use super::{
@@ -28,7 +30,6 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::os::cshim::{gettext, memmove};
 use crate::strings::xstrnsave;
 use crate::types::{FAIL, OK};
-use crate::{semsg, semsg_c};
 use ::libc::strlen;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one

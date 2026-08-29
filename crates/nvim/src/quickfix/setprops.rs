@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::semsg;
 use crate::semsg_c;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock};
 use core::ffi::{c_char, c_int, c_uint};
@@ -103,7 +104,7 @@ unsafe fn qf_add_entry_from_dict(
         // Ignore the buffer number, and report it once per call.
         if !DID_BUFNR_EMSG.get() {
             DID_BUFNR_EMSG.set(true);
-            unsafe { semsg_c!(gettext(c"E92: Buffer %d not found"), bufnum) };
+            semsg!("E92: Buffer {} not found", bufnum);
         }
         valid = false;
         bufnum = 0;

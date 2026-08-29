@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::tr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -34,8 +35,8 @@ use crate::eval::vars::{
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    curbuf, current_sctx, curwin, e_invarg, e_sandbox, e_secure, e_unknown_option2,
-    e_unsupportedoption, sandbox, secure, starting, t_colors,
+    curbuf, current_sctx, curwin, e_invarg, e_sandbox, e_secure, e_unsupportedoption, sandbox,
+    secure, starting, t_colors,
 };
 use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::emsg;
@@ -790,15 +791,13 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     if opt_idx != kOptInvalid {
         return set_option_value(opt_idx, value, opt_flags);
     }
-    let mut errbuf = [0 as c_char; IOSIZE as usize];
-    // SAFETY: the caller's `name` is NUL-terminated, and `errbuf` is
-    // `IOSIZE` writable bytes.
-    if is_tty_option(unsafe { CStr::from_ptr(name) }) {
+    // SAFETY: the caller's `name` is NUL-terminated.
+    let name = unsafe { CStr::from_ptr(name) };
+    if is_tty_option(name) {
         return None;
     }
-    let fmt = gettext(e_unknown_option2);
-    unsafe { snprintf(errbuf.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), name) };
-    Some(cstr::in_chars(&errbuf).to_owned())
+    let name = name.to_string_lossy();
+    Some(CString::new(tr!("E355: Unknown option: {name}")).unwrap_or_default())
 }
 
 /// [`set_option_value`], reporting a rejection as an error message.

@@ -11,11 +11,12 @@ use crate::context::{
 use crate::eval::typval::tv_list_first;
 use crate::main::did_emsg;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::message_fmt::c_str;
+use crate::semsg;
 use crate::types::{
     Context, Error, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     kErrorTypeNone, kObjectTypeDict, object, object_data, typval_T, varnumber_T,
 };
-use crate::{semsg, semsg_c};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -157,7 +158,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     if err.type_0 != kErrorTypeNone {
         // The message is whatever the API layer produced, so it keeps
         // the variadic call rather than assuming UTF-8.
-        unsafe { semsg_c!(c"%s".as_ptr(), err.msg) };
+        unsafe { semsg!("{}", c_str(err.msg)) };
         unsafe { ctx_free(&raw mut tmp) };
     } else {
         unsafe { ctx_free(ctx) };

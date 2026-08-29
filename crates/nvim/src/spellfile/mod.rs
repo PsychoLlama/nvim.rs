@@ -11,9 +11,11 @@ use crate::main::{e_exists, e_invarg, e_isadir2, got_int, p_msm, p_verbose};
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
+use crate::semsg;
 use crate::semsg_c;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
@@ -708,7 +710,9 @@ unsafe fn read_region_names(
         if unsafe { strlen(path_tail(name)) } < 5
             || unsafe { *name.add(len - 3) } != b'_' as ::core::ffi::c_char
         {
-            unsafe { semsg_c!(gettext(c"E755: Invalid region in %s"), name) };
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let name = unsafe { c_str(name) };
+            semsg!("E755: Invalid region in {name}");
             return false;
         }
         spin.si_region_name[i * 2] = to_lower_ascii(unsafe { *name.add(len - 2) });

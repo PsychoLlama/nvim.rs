@@ -15,7 +15,8 @@
 use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::guard::Suppress;
-use crate::{semsg_c, smsg_c};
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;

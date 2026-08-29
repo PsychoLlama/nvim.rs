@@ -12,7 +12,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::{semsg_c, siemsg_c};
+use crate::semsg_c;
+use crate::siemsg_c;
 use core::ffi::{
     CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
 };

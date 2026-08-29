@@ -16,6 +16,9 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Allow, Bump, Saved, Suppress};
 use crate::message::msg_ptr;
+use crate::message_fmt::c_str;
+use crate::smsg;
+use crate::smsg_c;
 use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
@@ -144,9 +147,13 @@ unsafe fn show_debug_line(cmd: *mut c_char) {
     // SAFETY: caller contract; the command line is arbitrary bytes, so it
     // goes through vim's printf verbatim rather than through `format_args!`.
     if lnum != 0 {
-        unsafe { smsg_c!(0, c"line %ld: %s".as_ptr(), lnum as int64_t, cmd) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let cmd = unsafe { c_str(cmd) };
+        smsg!(0, "line {}: {cmd}", lnum as int64_t);
     } else {
-        unsafe { smsg_c!(0, c"cmd: %s".as_ptr(), cmd) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let cmd = unsafe { c_str(cmd) };
+        smsg!(0, "cmd: {cmd}");
     }
 }
 

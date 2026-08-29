@@ -7,8 +7,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::guard::Lock;
+use crate::semsg_c;
+use crate::smsg;
 use crate::winlayer::{Buf, Ea, Win};
-use crate::{semsg_c, smsg_c};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -29,6 +30,7 @@ use crate::main::{
 use crate::memory::xmalloc;
 
 use crate::message::msg_ptr;
+use crate::message_fmt::c_str;
 
 use crate::option::{cpo_has, option_last_set};
 
@@ -368,7 +370,9 @@ pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
         } else {
             c"global".as_ptr() as *mut c_char
         };
-        unsafe { smsg_c!(0, c"[%s] %s".as_ptr(), context, dir.as_mut_ptr()) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
+        let (context, dir) = unsafe { (c_str(context), c_str(dir.as_mut_ptr())) };
+        smsg!(0, "[{context}] {dir}");
     } else {
         unsafe { msg_ptr(dir.as_mut_ptr(), 0) };
     }

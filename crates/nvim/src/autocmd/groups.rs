@@ -10,7 +10,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::semsg_c;
+use crate::message_fmt::c_str;
+use crate::semsg;
 
 /// The `name -> id` half of the augroup registry, by address: every `map_*`
 /// operation the tree has takes one. It stays a khash — `:augroup` lists the
@@ -106,7 +107,7 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
     if group == AUGROUP_ERROR {
         // SAFETY: the message macros expand to a `vim_snprintf` over the
         // format literal above and the editor's message buffers.
-        unsafe { semsg_c!(gettext(c"E367: No such group: \"%s\""), name) };
+        unsafe { semsg!("E367: No such group: \"{}\"", c_str(name)) };
         return;
     } else if group == current_augroup.get() {
         emsg(gettext(c"E936: Cannot delete the current group"));

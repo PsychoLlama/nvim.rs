@@ -18,6 +18,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::semsg_c;
+use crate::smsg_c;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 use std::ffi::CString;
@@ -52,7 +54,6 @@ use crate::window::{
     win_split,
 };
 use crate::winlayer::{buffers, last_window as last_listed_window, windows};
-use crate::{semsg_c, smsg_c};
 
 use super::expand::find_buf;
 use crate::normal::visual_active;
