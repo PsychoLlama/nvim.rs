@@ -27,14 +27,13 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::main::{curbuf, curwin, e_invalwindow, e_toofewarg, e_toomanyarg, p_cpo, p_magic};
+use crate::main::{curbuf, curwin, e_invalwindow, p_cpo, p_magic};
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
-use crate::os::cshim::{gettext, gettext_ptr, strncmp};
+use crate::os::cshim::{gettext, strncmp};
 use crate::semsg;
-use crate::semsg_c;
 use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
@@ -204,12 +203,13 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
     } else {
         return unsafe { (*fdef).base_arg } as c_int;
     };
-    let message = if too_many {
-        e_toomanyarg.as_ptr()
+    // SAFETY: the builtin's own name, NUL-terminated.
+    let name = unsafe { c_str((*fdef).name) };
+    if too_many {
+        semsg!("E118: Too many arguments for function: {name}");
     } else {
-        e_toofewarg.as_ptr()
-    };
-    unsafe { semsg_c!(gettext_ptr(message), (*fdef).name) };
+        semsg!("E119: Not enough arguments for function: {name}");
+    }
     -1
 }
 

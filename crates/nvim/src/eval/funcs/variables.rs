@@ -10,12 +10,9 @@ use crate::eval::typval::{
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::ex_cmds::check_secure;
-use crate::main::{e_invarg2, e_trailing_arg};
 use crate::memory::xmalloc;
 use crate::message_fmt::c_str;
-use crate::os::cshim::gettext_ptr;
 use crate::semsg;
-use crate::semsg_c;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
     Callback, Callback_data, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING,
@@ -124,14 +121,14 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let end = unsafe { get_lval(name, nul, out, false, false, flags, start) };
     if !end.is_null() && !lv.ll_name.is_null() {
         if unsafe { *end } as c_int != NUL {
-            // Both texts interpolate the unconsumed remainder of the
-            // caller's expression, so they keep the variadic call.
-            let fmt = if lv.ll_name_len == 0 {
-                e_invarg2.as_ptr()
+            // SAFETY: `end` is the unconsumed remainder of the caller's
+            // expression, NUL-terminated.
+            let rest = unsafe { c_str(end) };
+            if lv.ll_name_len == 0 {
+                semsg!("E475: Invalid argument: {rest}");
             } else {
-                e_trailing_arg.as_ptr()
-            };
-            unsafe { semsg_c!(gettext_ptr(fmt), end) };
+                semsg!("E488: Trailing characters: {rest}");
+            }
         } else if lv.ll_tv.is_null() {
             let di = unsafe { find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true) };
             if !di.is_null() {

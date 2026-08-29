@@ -9,9 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
 use core::{ptr, slice};
@@ -95,7 +95,9 @@ pub unsafe fn emsg_funcname(errmsg: *const c_char, name: *const c_char) {
     {
         p = unsafe { concat_str(c"<SNR>".as_ptr(), name.add(3)) };
     }
-    unsafe { semsg_c!(gettext_ptr(errmsg), p) };
+    // SAFETY: `errmsg` is the caller's untranslated format and `p` the name.
+    let (errmsg, shown) = unsafe { (gettext_ptr(errmsg), c_str(p)) };
+    emsg_text(tr_plural!(errmsg, shown));
     if !core::ptr::eq(p, name) {
         unsafe { xfree(p as *mut c_void) };
     }

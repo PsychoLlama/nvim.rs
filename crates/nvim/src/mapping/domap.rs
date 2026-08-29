@@ -10,8 +10,9 @@
 use super::*;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::gettext_ptr;
-use crate::semsg_c;
+use crate::tr_c;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Ea};
 use core::ffi::{c_char, c_int};
@@ -708,9 +709,7 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
         let lhs = (&raw mut parsed_args.lhs).cast::<c_char>();
         // SAFETY: as above; `curbuf` is live.
         let answer = unsafe { buf_do_map(maptype, parsed, mode, isabbrev, cur_buf()) };
-        // SAFETY: every message below is a static format with the
-        // NUL-terminated `lhs` buffer as its only argument.
-        unsafe {
+        {
             match answer {
                 1 => {
                     emsg(gettext(e_invarg));
@@ -719,24 +718,24 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
                     emsg(gettext(if isabbrev { e_noabbr } else { e_nomap }));
                 }
                 5 => {
-                    semsg_c!(
-                        gettext(if isabbrev {
-                            E_ABBREVIATION_ALREADY_EXISTS_FOR_STR
-                        } else {
-                            E_MAPPING_ALREADY_EXISTS_FOR_STR
-                        }),
-                        lhs,
-                    );
+                    let which = if isabbrev {
+                        E_ABBREVIATION_ALREADY_EXISTS_FOR_STR
+                    } else {
+                        E_MAPPING_ALREADY_EXISTS_FOR_STR
+                    };
+                    // SAFETY: the mapping's NUL-terminated left-hand side.
+                    let lhs = unsafe { c_str(lhs) };
+                    emsg_text(tr_c!(which, lhs));
                 }
                 6 => {
-                    semsg_c!(
-                        gettext(if isabbrev {
-                            E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR
-                        } else {
-                            E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR
-                        }),
-                        lhs,
-                    );
+                    let which = if isabbrev {
+                        E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR
+                    } else {
+                        E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR
+                    };
+                    // SAFETY: the mapping's NUL-terminated left-hand side.
+                    let lhs = unsafe { c_str(lhs) };
+                    emsg_text(tr_c!(which, lhs));
                 }
                 _ => {}
             }

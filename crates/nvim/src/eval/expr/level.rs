@@ -12,7 +12,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
 use crate::winlayer::{Ea, Live};
 use core::ffi::{c_char, c_int};
 use core::ptr::{null_mut, write_bytes};
@@ -33,11 +32,11 @@ use crate::eval::{
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
-use crate::main::{called_emsg, did_emsg, e_invexpr2, e_trailing_arg, p_ic};
+use crate::main::{called_emsg, did_emsg, p_ic};
 use crate::memory::{strnequal, xfree};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
+use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
@@ -217,14 +216,13 @@ pub unsafe fn eval0(
             && did_emsg.get() == did_emsg_before
             && called_emsg.get() == called_emsg_before
         {
-            let (fmt, subject) = if end_error {
-                (e_trailing_arg.as_ptr(), p)
+            // SAFETY: `p` and `arg` are tails of the caller's expression.
+            let (rest, whole) = unsafe { (c_str(p), c_str(arg)) };
+            if end_error {
+                semsg!("E488: Trailing characters: {rest}");
             } else {
-                (e_invexpr2.as_ptr(), arg)
-            };
-            // SAFETY: both messages take one NUL-terminated string, and
-            // `p` and `arg` are tails of the expression.
-            unsafe { semsg_c!(gettext_ptr(fmt), subject) };
+                semsg!("E15: Invalid expression: \"{whole}\"");
+            }
         }
         if !eap.is_null() && !p.is_null() {
             // SAFETY: `p` is inside the expression; `eap` is not null.

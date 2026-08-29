@@ -505,13 +505,3 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     drop(no_prompt);
     msg_hist_off.set(save_msg_hist_off);
 }
-
-/// Show whatever was formatted into [`msg_iobuff`] as a warning. The second
-/// half of [`swmsg_c!`](crate::swmsg_c).
-///
-/// # Safety
-/// Only that the message state is the main thread's.
-#[doc(hidden)]
-pub unsafe fn swmsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl: bool) {
-    swmsg_text(crate::cstr::in_chars(buf), hl);
-}

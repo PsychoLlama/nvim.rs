@@ -35,10 +35,11 @@ use crate::fileio::{delete_recursive, vim_copyfile, vim_rename, vim_tempname};
 use crate::main::{curtab, curwin, e_invarg, e_invargNval, e_invexpr2, e_mkdir, globaldir};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::emsg;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, os_rmdir};
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
-use crate::semsg_c;
+use crate::tr_c;
 use crate::types::{
     CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VarLock, kCdScopeGlobal,
     kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T, typval_T,
@@ -155,17 +156,17 @@ fn err0(msg: *const c_char) {
 }
 
 /// Report the one-`%s` message `fmt`, translated, about `a`.
-fn err1(fmt: *const c_char, a: *const c_char) {
-    // SAFETY: `fmt` is a NUL-terminated format taking one string, and `a` is
-    // a NUL-terminated string.
-    unsafe { semsg_c!(gettext_ptr(fmt), a) };
+fn err1(fmt: &'static CStr, a: *const c_char) {
+    // SAFETY: `a` is a NUL-terminated string.
+    let a = unsafe { c_str(a) };
+    emsg_text(tr_c!(fmt, a));
 }
 
 /// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
-fn err2(fmt: *const c_char, a: *const c_char, b: *const c_char) {
-    // SAFETY: `fmt` is a NUL-terminated format taking two strings, and both
-    // are NUL-terminated.
-    unsafe { semsg_c!(gettext_ptr(fmt), a, b) };
+fn err2(fmt: &'static CStr, a: *const c_char, b: *const c_char) {
+    // SAFETY: both are NUL-terminated strings.
+    let (a, b) = unsafe { (c_str(a), c_str(b)) };
+    emsg_text(tr_c!(fmt, a, b));
 }
 
 /// libuv's name for the error code `error`.
@@ -301,7 +302,7 @@ pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             b"tabpage" => kCdScopeTabpage,
             b"window" => kCdScopeWindow,
             _ => {
-                err2(e_invargNval.as_ptr(), c"scope".as_ptr(), s.as_ptr());
+                err2(e_invargNval, c"scope".as_ptr(), s.as_ptr());
                 return;
             }
         };
@@ -351,7 +352,7 @@ pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         b"d" => done(unsafe { os_rmdir(name) }),
         b"rf" => varnumber_T::from(unsafe { delete_recursive(name) }),
         _ => {
-            err1(e_invexpr2.as_ptr(), flags.as_ptr());
+            err1(e_invexpr2, flags.as_ptr());
             return;
         }
     };
@@ -520,7 +521,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             // this frame's own; both answer a string in nvim's heap.
             let ret = unsafe { os_mkdir_recurse(dir, prot, &raw mut failed_dir, want) };
             if ret != 0 {
-                err2(e_mkdir.as_ptr(), failed_dir, strerror(ret));
+                err2(e_mkdir, failed_dir, strerror(ret));
                 drop(Owned(failed_dir));
                 rettv.vval.v_number = FAIL as varnumber_T;
                 return;

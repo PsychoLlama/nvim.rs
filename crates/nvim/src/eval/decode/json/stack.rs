@@ -14,16 +14,15 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::os::cshim::gettext;
 use crate::types::{FAIL, VAR_LIST, VAR_STRING, list_T, typval_T};
 use ::libc::abort;
 
@@ -91,11 +90,10 @@ impl<'a> Decoder<'a> {
     /// verbatim, which is what several of these messages are about.
     pub(crate) fn emsg_rest(&self, fmt: &'static CStr, at: usize) {
         let rest = &self.buf[at..];
-        // SAFETY: `rest` outlives the call and `semsg` copies what it keeps;
-        // `%.*s` reads at most the length given.
-        let msg = gettext(fmt);
-        let (len, at) = (rest.len() as c_int, rest.as_ptr() as *const c_char);
-        unsafe { semsg_c!(msg, len, at) };
+        // The bytes go out as they came in; `%.*s` reads at most the length
+        // given, which is `rest`'s own.
+        let (len, at) = (rest.len() as c_int, msg_bytes(rest));
+        emsg_text(tr_c!(fmt, len, at));
     }
 
     /// Upstream's `OBJ()`: a scanned value, tagged with the punctuation that

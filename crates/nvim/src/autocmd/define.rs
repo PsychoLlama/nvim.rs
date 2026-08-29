@@ -13,7 +13,6 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use crate::types::{FAIL, OK, RefcountSize};
 use crate::winlayer::{Live, Win, tabs};
 
@@ -579,18 +578,13 @@ pub(crate) unsafe fn arg_event_skip(
         && !ascii_iswhite(unsafe { *pat } as ::core::ffi::c_int)
     {
         if unsafe { event_name2nr(pat, &raw mut p) } >= NUM_EVENTS {
-            // SAFETY: the message macros expand to a `vim_snprintf` over the
-            // format literal above and the editor's message buffers.
-            unsafe {
-                semsg_c!(
-                    gettext(if have_group {
-                        c"E216: No such event: %s"
-                    } else {
-                        c"E216: No such group or event: %s"
-                    }),
-                    pat,
-                )
-            };
+            // SAFETY: `pat` is the NUL-terminated rest of the pattern.
+            let shown = unsafe { c_str(pat) };
+            if have_group {
+                semsg!("E216: No such event: {shown}");
+            } else {
+                semsg!("E216: No such group or event: {shown}");
+            }
             return ::core::ptr::null_mut();
         }
         pat = p;

@@ -8,9 +8,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::emsg_text;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use crate::types::{FAIL, NUL, OK};
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
@@ -30,7 +31,9 @@ fn arg_check(
     if ok {
         return OK;
     }
-    unsafe { semsg_c!(gettext_ptr(errmsg), idx + 1) };
+    // SAFETY: `errmsg` is one of the module's NUL-terminated statics.
+    let errmsg = unsafe { gettext_ptr(errmsg) };
+    emsg_text(tr_plural!(errmsg, idx + 1));
     FAIL
 }
 

@@ -7,7 +7,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_c;
+use crate::message_fmt::{c_str_len, emsg_text};
+use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::stack::Decoder;
@@ -18,7 +19,6 @@ use crate::eval::decode::decode_string;
 use crate::eval::string2float;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
-use crate::os::cshim::gettext;
 use crate::types::{
     NUL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarLock, typval_T, typval_vval_union, uvarnumber_T,
     varnumber_T,
@@ -323,7 +323,9 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
     if fracs.is_some() || exps.is_some() {
         let got = unsafe { string2float(text, &raw mut tv.vval.v_float) };
         if want != got {
-            unsafe { semsg_c!(gettext(E685_FLOAT), want as c_int, text, got, want) };
+            // SAFETY: `text` is readable for `want` bytes.
+            let shown = unsafe { c_str_len(text, want) };
+            emsg_text(tr_c!(E685_FLOAT, want as c_int, shown, got, want));
         }
         tv.v_type = VAR_FLOAT;
     } else {
@@ -335,7 +337,9 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         #[rustfmt::skip]
         unsafe { vim_str2nr(text, prep, &raw mut got, 0, &raw mut nr, unptr, maxlen, true, overflow) };
         if want as c_int != got {
-            unsafe { semsg_c!(gettext(E685_INTEGER), want as c_int, text, got, want,) };
+            // SAFETY: `text` is readable for `want` bytes.
+            let shown = unsafe { c_str_len(text, want) };
+            emsg_text(tr_c!(E685_INTEGER, want as c_int, shown, got, want));
         }
         tv.vval.v_number = nr;
     }

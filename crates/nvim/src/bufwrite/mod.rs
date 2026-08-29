@@ -3,7 +3,7 @@
 use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
@@ -37,7 +37,7 @@ use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_puts_hl, set_keep_msg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, emsg_text};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
@@ -166,7 +166,10 @@ impl WriteError {
             }
             // The message is deliberately its own format string here.
             (None, arg) if arg != 0 => {
-                unsafe { semsg_c!(msg, uv_strerror(arg)) };
+                // SAFETY: `msg` is this error's own format, and `uv_strerror`
+                // answers a NUL-terminated string for any code.
+                let (template, why) = unsafe { (gettext_ptr(msg), c_str(uv_strerror(arg))) };
+                emsg_text(tr_plural!(template, why));
             }
             (None, _) => {
                 unsafe { emsg_ptr(msg) };

@@ -10,13 +10,11 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
 use crate::eval::Walk;
-use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL, OK};
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.
@@ -156,8 +154,9 @@ pub(crate) unsafe fn get_function_args(
                     && unsafe { *skipwhite(p.raw()) } == b',' as c_char;
                 if comma_after_white {
                     if !skip {
-                        let (fmt, at) = (E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR.as_ptr(), p.raw());
-                        unsafe { semsg_c!(gettext_ptr(fmt), c",".as_ptr(), at) };
+                        // SAFETY: `p` walks the caller's argument list.
+                        let at = unsafe { c_str(p.raw()) };
+                        semsg!("E1068: No white space allowed before ',': {at}");
                         break 'parse false;
                     }
                     p = unsafe { Walk::new(skipwhite(p.raw())) };

@@ -4,7 +4,7 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::semsg_multiline_c;
+use crate::semsg_multiline;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -289,7 +289,9 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }
-    unsafe { semsg_multiline_c!(c"emsg".as_ptr(), err.msg) };
+    // SAFETY: the API error's own NUL-terminated message.
+    let msg = unsafe { c_str(err.msg) };
+    semsg_multiline!(c"emsg", "{msg}");
     unsafe { api_clear_error(&raw mut err) };
 }
 

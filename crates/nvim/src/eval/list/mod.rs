@@ -60,9 +60,10 @@ use crate::main::e_listdictblobarg;
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::message::emsg;
+use crate::message_fmt::emsg_text;
 use crate::os::cshim::gettext;
-use crate::semsg_c;
 use crate::strings::reverse_text;
+use crate::tr_c;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Vv,
     blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
@@ -765,17 +766,15 @@ pub(crate) fn err(msg: &'static CStr) {
 /// Report `msg` -- a shared error text with one `%s` -- naming `what`.
 #[inline(always)]
 pub(crate) fn err_str(msg: &'static CStr, what: &CStr) {
-    // SAFETY: `msg` is a NUL-terminated single-`%s` format and `what` a
-    // NUL-terminated string, which is what vim's printf reads.  The format
-    // is translated, the name is not -- upstream's `semsg(_(msg), what)`.
-    let _: bool = unsafe { semsg_c!(gettext(msg), what.as_ptr()) };
+    // The message is translated, the name is not -- upstream's
+    // `semsg(_(msg), what)`.
+    emsg_text(tr_c!(msg, what.to_string_lossy()));
 }
 
 /// Report `msg` -- a shared error text with one `%ld` -- naming `n`.
 #[inline(always)]
 pub(crate) fn err_nr(msg: &'static CStr, n: int64_t) {
-    // SAFETY: as `err_str`, with a `%ld` and a 64-bit integer.
-    let _: bool = unsafe { semsg_c!(gettext(msg), n) };
+    emsg_text(tr_c!(msg, n));
 }
 
 /// `E1250`: what `filter()`/`map()`/`mapnew()`/`foreach()` say about an

@@ -30,10 +30,11 @@ use crate::eval::typval::{
 use crate::garray::ga_grow;
 use crate::main::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::memory::{xfree, xmemdupz, xrealloc};
+use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::{gettext, memmove};
 use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
-use crate::semsg_c;
+use crate::tr_c;
 use crate::types::{
     EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VarLock, blob_T, int64_t, kListLenUnknown,
     list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
@@ -454,9 +455,9 @@ fn dupz(line: &[c_char]) -> *mut c_char {
 
 /// Report the one-`%s` message `fmt`, translated, about the path `p`.
 fn err_path(fmt: &'static CStr, p: *const c_char) {
-    // SAFETY: `fmt` is a NUL-terminated format taking one string, and `p` is
-    // a NUL-terminated string.
-    unsafe { semsg_c!(gettext(fmt), p) };
+    // SAFETY: `p` is a NUL-terminated path.
+    let p = unsafe { c_str(p) };
+    emsg_text(tr_c!(fmt, p));
 }
 
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and

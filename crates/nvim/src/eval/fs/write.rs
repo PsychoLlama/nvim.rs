@@ -29,11 +29,12 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::main::{current_sctx, e_invarg2, p_fs};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::message_fmt::{c_str, emsg_text};
+use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_flush, file_open, file_write};
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
-use crate::semsg_c;
+use crate::tr_c;
 use crate::types::{
     EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, blob_T, list_T,
     listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
@@ -164,17 +165,17 @@ fn list_of(tv: &typval_T) -> *const list_T {
 // ---------------------------------------------------------------------
 
 /// Report the one-`%s` message `fmt`, translated, about `a`.
-fn err1(fmt: *const c_char, a: *const c_char) {
-    // SAFETY: `fmt` is a NUL-terminated format taking one string, and `a` is
-    // a NUL-terminated string.
-    unsafe { semsg_c!(gettext_ptr(fmt), a) };
+fn err1(fmt: &'static CStr, a: *const c_char) {
+    // SAFETY: `a` is a NUL-terminated string.
+    let a = unsafe { c_str(a) };
+    emsg_text(tr_c!(fmt, a));
 }
 
 /// Report the two-`%s` message `fmt`, translated, about `a` and `b`.
-fn err2(fmt: *const c_char, a: *const c_char, b: *const c_char) {
-    // SAFETY: `fmt` is a NUL-terminated format taking two strings, and both
-    // are NUL-terminated.
-    unsafe { semsg_c!(gettext_ptr(fmt), a, b) };
+fn err2(fmt: &'static CStr, a: *const c_char, b: *const c_char) {
+    // SAFETY: both are NUL-terminated strings.
+    let (a, b) = unsafe { (c_str(a), c_str(b)) };
+    emsg_text(tr_c!(fmt, a, b));
 }
 
 /// Report `msg`, translated.
@@ -190,7 +191,7 @@ fn strerror(error: c_int) -> *const c_char {
 
 /// Report `E80: Error while writing: %s`.
 fn err_writing(error: c_int) {
-    err1(e_error_while_writing_str.as_ptr(), strerror(error));
+    err1(e_error_while_writing_str, strerror(error));
 }
 
 // ---------------------------------------------------------------------
@@ -352,7 +353,7 @@ fn writable(args: Args<'_>) -> bool {
     }
     let what = c"writefile() first argument must be a List or a Blob";
     let what = gettext(what);
-    err1(e_invarg2.as_ptr(), what.as_ptr());
+    err1(e_invarg2, what.as_ptr());
     false
 }
 
@@ -390,7 +391,7 @@ impl Flags {
                 _ => {
                     // The rest of the flags with `%s`, not this one with
                     // `%c`, so that a multibyte character survives.
-                    err1(c"E5060: Unknown flag: %s".as_ptr(), from(flags, i).as_ptr());
+                    err1(c"E5060: Unknown flag: %s", from(flags, i).as_ptr());
                     return None;
                 }
             }
@@ -430,7 +431,7 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         Ok(out) => out,
         Err(error) => {
             let fmt = c"E482: Can't open file %s for writing: %s";
-            err2(fmt.as_ptr(), fname.as_ptr(), strerror(error));
+            err2(fmt, fname.as_ptr(), strerror(error));
             return;
         }
     };
@@ -455,7 +456,7 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let error = out.close(flags.do_fsync);
     if error != 0 {
         let fmt = c"E80: Error when closing file %s: %s";
-        err2(fmt.as_ptr(), fname.as_ptr(), strerror(error));
+        err2(fmt, fname.as_ptr(), strerror(error));
     }
 }
 

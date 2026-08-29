@@ -10,9 +10,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::message_fmt::{c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 
 /// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
 ///
@@ -251,7 +252,13 @@ pub unsafe fn value_check_lock(
         } else if name_len == TV_CSTRING as size_t {
             name_len = unsafe { strlen(name) };
         }
-        unsafe { semsg_c!(error_message, name_len as ::core::ffi::c_int, name) };
+        // SAFETY: `name` is readable for `name_len` bytes.
+        let shown = unsafe { c_str_len(name, name_len) };
+        emsg_text(tr_plural!(
+            error_message,
+            name_len as ::core::ffi::c_int,
+            shown
+        ));
     }
 
     true

@@ -15,12 +15,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::os::uv_error::UV_ENOTSUP;
-use crate::semsg_c;
+use crate::semsg;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
 use crate::message::msg_ptr;
+use crate::message_fmt::c_str;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
 
@@ -175,10 +176,10 @@ pub(crate) unsafe fn buf_get_backup_name(
         let ret =
             unsafe { os_mkdir_recurse(iobuff, 0o755, &raw mut failed_dir, core::ptr::null_mut()) };
         if ret != 0 {
-            let fmt =
-                translate(c"E303: Unable to create directory \"%s\" for backup file: %s").as_ptr();
-            let why = unsafe { uv_strerror(ret) };
-            unsafe { semsg_c!(fmt, failed_dir, why) };
+            // SAFETY: the directory `os_mkdir_recurse` stopped at, and what
+            // libuv says about it.
+            let (dir, why) = unsafe { (c_str(failed_dir), c_str(uv_strerror(ret))) };
+            semsg!("E303: Unable to create directory \"{dir}\" for backup file: {why}");
             unsafe { xfree(failed_dir.cast()) };
         }
     }

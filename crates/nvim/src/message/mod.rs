@@ -695,36 +695,6 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
 /// [`msg_iobuff`] keep.
 pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
 
-/// Where the `smsg`/`swmsg`/`msg_schedule_semsg` macros format: a buffer
-/// belonging to the expansion, not the shared one upstream reuses. Showing
-/// a message runs the message machinery, which writes that shared buffer,
-/// so a caller assembling one there had it overwritten. Their first half;
-/// not meant to be called directly.
-#[doc(hidden)]
-pub fn msg_iobuff() -> [c_char; MSG_IOBUFF_LEN] {
-    [0; MSG_IOBUFF_LEN]
-}
-
-/// Show whatever was formatted into [`msg_iobuff`]. The second half of
-/// [`smsg_c!`](crate::smsg_c); not meant to be called directly.
-///
-/// # Safety
-/// Only that the message state is the main thread's.
-#[doc(hidden)]
-pub unsafe fn smsg_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
-    msg(crate::cstr::in_chars(buf), hl_id) as c_int
-}
-
-/// Show whatever was formatted into [`msg_iobuff`] and keep it displayed.
-/// The second half of [`smsg_keep_c!`](crate::smsg_keep_c).
-///
-/// # Safety
-/// Only that the message state is the main thread's.
-#[doc(hidden)]
-pub unsafe fn smsg_keep_finish(buf: &[c_char; MSG_IOBUFF_LEN], hl_id: c_int) -> c_int {
-    msg_keep_text(crate::cstr::in_chars(buf), hl_id) as c_int
-}
-
 /// Show `s`, truncated at the head if it does not fit the message area.
 ///
 /// Answers the string that was shown, or null if it was not.

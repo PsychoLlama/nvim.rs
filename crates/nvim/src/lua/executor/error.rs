@@ -9,7 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::semsg_multiline_c;
+use crate::message_fmt::{c_str, c_str_len, report_emsg_multiline};
+use crate::tr_c;
+use crate::tr_plural;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{in_script, kCallback, kThread, kThreadCallback, luv_err_t};
@@ -18,7 +20,7 @@ use crate::lua::ffi::{
     lua_pop, lua_remove, lua_replace, lua_tolstring, lua_type, luaL_callmeta, luaL_getmetafield,
 };
 use crate::memory::xfree;
-use crate::os::cshim::stderr;
+use crate::os::cshim::{gettext_ptr, stderr};
 use crate::types::{intptr_t, lua_State, size_t};
 use ::libc::fprintf;
 
@@ -61,7 +63,8 @@ pub unsafe fn nlua_error(lstate: *mut lua_State, msg: *const c_char) {
             fprintf(stderr, msg, len as c_int, str);
             fprintf(stderr, c"\n".as_ptr());
         } else {
-            semsg_multiline_c!(LUA_ERROR_KIND.as_ptr(), msg, len as c_int, str);
+            let (fmt, text) = (gettext_ptr(msg), c_str_len(str, len));
+            report_emsg_multiline(LUA_ERROR_KIND, || tr_plural!(fmt, len as c_int, text));
         }
         lua_pop(lstate, 1);
     }
@@ -118,7 +121,7 @@ pub(crate) unsafe extern "C" fn nlua_luv_error_event(argv: *mut *mut c_void) {
             _ => None,
         };
         if let Some(fmt) = fmt {
-            semsg_multiline_c!(LUA_ERROR_KIND.as_ptr(), fmt.as_ptr(), error);
+            report_emsg_multiline(LUA_ERROR_KIND, || tr_c!(fmt, c_str(error)));
         }
         xfree(error.cast::<c_void>());
     }

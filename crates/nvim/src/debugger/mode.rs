@@ -16,9 +16,9 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Allow, Bump, Saved, Suppress};
 use crate::message::msg_ptr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, report_msg};
 use crate::smsg;
-use crate::smsg_c;
+use crate::tr_c;
 use crate::types::{ExpandContext, NUL};
 
 /// The editor state [`do_debug`] takes over while the `>` prompt is up, and
@@ -122,7 +122,8 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
         }
         // SAFETY: `text` is the NUL-terminated string the cell owns, and the
         // message copies it before it is freed.
-        unsafe { smsg_c!(0, label.as_ptr(), text) };
+        let shown = unsafe { c_str(text) };
+        let _: bool = report_msg(0, || tr_c!(label, shown));
         unsafe { xfree(text.cast()) };
         cell.set(ptr::null_mut());
     }
@@ -479,12 +480,13 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
             if !next.is_null() {
                 unsafe { *next = NUL as c_char };
             }
-            let marker = if i == max - debug_backtrace_level.get() {
-                c"->%d %s"
+            // SAFETY: `cur` walks the NUL-terminated stack name.
+            let (at, frame) = (max - i, unsafe { c_str(cur) });
+            if i == max - debug_backtrace_level.get() {
+                smsg!(0, "->{at} {frame}");
             } else {
-                c"  %d %s"
-            };
-            unsafe { smsg_c!(0, marker.as_ptr(), max - i, cur) };
+                smsg!(0, "  {at} {frame}");
+            }
             i += 1;
             if next.is_null() {
                 break;

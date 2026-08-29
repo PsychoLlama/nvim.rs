@@ -25,7 +25,6 @@
 
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
-use crate::semsg_c;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -56,10 +55,9 @@ use crate::eval::{
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::main::{e_cannot_mod, e_invalid_value_for_blob_nr, e_listreq, emsg_severe};
+use crate::main::{e_cannot_mod, e_listreq, emsg_severe};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
-use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, dict_T,
@@ -982,7 +980,10 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
     let val = unsafe { tv_get_number_chk(rettv, &raw mut error) };
     if !error {
         if !(0..=255).contains(&val) {
-            unsafe { semsg_c!(gettext(e_invalid_value_for_blob_nr), val) };
+            // Upstream's text is `"E1239: Invalid value for blob: 0x" PRIX64`,
+            // which is missing the `%`: `val` has never reached the message.
+            let _ = val;
+            semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
             // SAFETY: `ll_blob` is the live Blob and `ll_n1` a byte of it.
             unsafe { tv_blob_set_append(lp.ll_blob, lp.ll_n1, val as uint8_t) };

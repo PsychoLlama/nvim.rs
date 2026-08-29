@@ -14,14 +14,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
-use crate::semsg_c;
+use crate::tr_plural;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
 use crate::message::emsg_ptr;
-use crate::message_fmt::{c_str, c_str_len};
+use crate::message_fmt::{c_str, c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::types::{FAIL, NUL};
 
@@ -235,7 +235,10 @@ pub unsafe fn var_check_ro(flags: c_int, mut name: *const c_char, mut name_len: 
     } else if name_len == TV_CSTRING as size_t {
         name_len = unsafe { strlen(name) };
     }
-    unsafe { semsg_c!(gettext_ptr(error_message), name_len as c_int, name) };
+    // SAFETY: `error_message` is one of the module's statics, and `name` is
+    // readable for `name_len` bytes.
+    let (error_message, shown) = unsafe { (gettext_ptr(error_message), c_str_len(name, name_len)) };
+    emsg_text(tr_plural!(error_message, name_len as c_int, shown));
     true
 }
 
