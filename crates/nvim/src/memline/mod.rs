@@ -52,7 +52,7 @@ use crate::message::{
 use crate::message_fmt::c_str;
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
-use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, memmove, strncasecmp};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_hostname, os_get_pid};
 use crate::os::fs::{
     os_fileinfo, os_fileinfo_inode, os_fileinfo_link, os_fileinfo_size, os_isdir, os_mkdir_recurse,

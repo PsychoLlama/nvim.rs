@@ -15,6 +15,7 @@ use super::{
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::api_free_object;
 use crate::buffer::{buflist_findpat, find_buf};
+use crate::cstr;
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
     NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret, tv_get_bool,
@@ -32,7 +33,7 @@ use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
@@ -329,7 +330,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             // come back with the prefix on it.
             if unsafe { *name } as c_int != NUL
                 && unsafe { *name } as u8 != b'<'
-                && unsafe { strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) } == 0
+                && unsafe { cstr::starts_with((*xp).xp_pattern, b"g:") }
             {
                 return unsafe { cat_prefix_varname('g' as c_int, name) };
             }

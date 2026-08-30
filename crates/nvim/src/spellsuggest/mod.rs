@@ -45,6 +45,7 @@ mod soundalike;
 mod sps;
 mod walk;
 
+use crate::cstr;
 use crate::winlayer::{Live, Win};
 pub(crate) use prompt::spell_suggest;
 pub(crate) use sps::spell_check_sps;
@@ -59,7 +60,6 @@ use crate::main::{curbuf, curwin, got_int, p_sps};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::option::copy_option_part;
-use crate::os::cshim::strncmp;
 use crate::os::input::os_breakcheck;
 use crate::spell::{captype, make_case_word, spell_casefold, spell_check, spell_soundfold};
 use crate::spellfile::suggest_load_files;
@@ -645,7 +645,7 @@ unsafe fn suggest_try_special(mut su: Sug) {
     let mut p = unsafe { skiptowhite(fbadword) };
     let len = unsafe { p.offset_from(fbadword) } as usize;
     p = unsafe { skipwhite(p) };
-    if unsafe { strlen(p) } as usize != len || unsafe { strncmp(fbadword, p, len) } != 0 {
+    if unsafe { strlen(p) } as usize != len || !unsafe { cstr::prefix_eq(fbadword, p, len) } {
         return;
     }
 

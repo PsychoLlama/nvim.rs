@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_N, Ctrl_P};
 use crate::types::ExpandContext;
@@ -157,7 +158,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
         return recomplete();
     }
 
-    if key == K_DOWN && unsafe { strncmp(xp.xp_pattern, UPSEG_TAIL.as_ptr(), 3) } == 0 {
+    if key == K_DOWN && unsafe { cstr::prefix_eq(xp.xp_pattern, UPSEG_TAIL.as_ptr(), 3) } {
         // In a direct ancestor: strip off one "../" to go down.  Walk
         // back to the separator that ends the "..".
         let mut found = false;
@@ -210,9 +211,9 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
 
     if !found {
         j = i;
-    } else if unsafe { strncmp(buf.offset(j as isize), UPSEG.as_ptr(), 4) } == 0 {
+    } else if unsafe { cstr::prefix_eq(buf.offset(j as isize), UPSEG.as_ptr(), 4) } {
         j += 4; // already "/../": step over it
-    } else if unsafe { strncmp(buf.offset(j as isize), UPSEG_TAIL.as_ptr(), 3) } == 0 && j == i {
+    } else if unsafe { cstr::prefix_eq(buf.offset(j as isize), UPSEG_TAIL.as_ptr(), 3) } && j == i {
         j += 3; // the pattern itself starts "../"
     } else {
         j = 0;

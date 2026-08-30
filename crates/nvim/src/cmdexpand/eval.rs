@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -93,7 +94,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             }
             ExpandContext::UserDefined => {
                 // Must be "custom,funcname" pattern.
-                if unsafe { strncmp(type_0, c"custom,".as_ptr(), 7) } != 0 {
+                if !unsafe { cstr::starts_with(type_0, b"custom,") } {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let arg0 = unsafe { c_str(type_0) };
                     semsg!("E475: Invalid argument: {arg0}");
@@ -103,7 +104,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             }
             ExpandContext::UserList => {
                 // Must be "customlist,funcname" pattern.
-                if unsafe { strncmp(type_0, c"customlist,".as_ptr(), 11) } != 0 {
+                if !unsafe { cstr::starts_with(type_0, b"customlist,") } {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let arg0 = unsafe { c_str(type_0) };
                     semsg!("E475: Invalid argument: {arg0}");

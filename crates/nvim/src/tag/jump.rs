@@ -10,6 +10,7 @@
 
 use super::Jumped;
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
@@ -95,7 +96,7 @@ pub(crate) unsafe fn test_for_static(tagp: &TagParts) -> bool {
             return false;
         }
         p = unsafe { p.add(1) };
-        if unsafe { strncmp(p, c"file:".as_ptr(), 5) } == 0 {
+        if unsafe { cstr::starts_with(p, b"file:") } {
             return true;
         }
     }
@@ -179,11 +180,11 @@ unsafe fn read_extra_fields(tagp: &mut TagParts, mut p: *mut c_char) {
         || (unsafe { *p } as c_uint).wrapping_sub('a' as c_uint) < 26
         || unsafe { utfc_ptr2len(p) } > 1
     {
-        if unsafe { strncmp(p, c"kind:".as_ptr(), 5) } == 0 {
+        if unsafe { cstr::starts_with(p, b"kind:") } {
             tagp.tagkind = unsafe { p.add(5) };
-        } else if unsafe { strncmp(p, c"user_data:".as_ptr(), 10) } == 0 {
+        } else if unsafe { cstr::starts_with(p, b"user_data:") } {
             tagp.user_data = unsafe { p.add(10) };
-        } else if unsafe { strncmp(p, c"line:".as_ptr(), 5) } == 0 {
+        } else if unsafe { cstr::starts_with(p, b"line:") } {
             tagp.tagline = unsafe { atoi(p.add(5)) } as linenr_T;
         }
         if !tagp.tagkind.is_null() && !tagp.user_data.is_null() {
@@ -301,7 +302,7 @@ pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
         p = unsafe { p.add(1) };
         first_char = unsafe { *p };
     }
-    (unsafe { strncmp(p, c";\"".as_ptr(), 2) } == 0).then_some(p)
+    (unsafe { cstr::starts_with(p, b";\"") }).then_some(p)
 }
 
 /// Jump to the tag one stored match describes.

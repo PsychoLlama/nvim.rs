@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::NUL;
 
 /// Free `watcher` and the callback and pattern it owns.
@@ -218,7 +219,7 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
     if len != 0
         && unsafe { *(*watcher).key_pattern.add(len - 1) } as ::core::ffi::c_int == '*' as i32
     {
-        return unsafe { strncmp(key, (*watcher).key_pattern, len - 1) } == 0;
+        return unsafe { cstr::prefix_eq(key, (*watcher).key_pattern, len - 1) };
     }
     unsafe { strcmp(key, (*watcher).key_pattern) == 0 }
 }

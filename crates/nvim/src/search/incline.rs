@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::highlight_group::HLF_N;
 use crate::types::{IOSIZE, NUL};
 use crate::winlayer::Buf;
@@ -31,7 +32,7 @@ pub(crate) unsafe fn match_is_code(line: *mut c_char, startp: *mut c_char) -> bo
     let mut matched = true;
     // A line starting with "# define" is not a comment line.
     if (unsafe { *line } as c_int != '#' as c_int
-        || unsafe { strncmp(skipwhite(line.offset(1)), c"define".as_ptr(), 6) } != 0)
+        || !unsafe { cstr::starts_with(skipwhite(line.offset(1)), b"define") })
         && unsafe { get_leader_len(line, ptr::null_mut(), false, true) } != 0
     {
         matched = false;
@@ -114,7 +115,7 @@ pub(crate) unsafe fn match_on_line(
         let matched = if p_ic.get() != 0 {
             unsafe { mb_strnicmp(startp, ptr, len) == 0 }
         } else {
-            unsafe { strncmp(startp, ptr, len) == 0 }
+            unsafe { cstr::prefix_eq(startp, ptr, len) }
         };
         if matched
             && !(define_matched && whole && unsafe { vim_iswordc(*startp.add(len) as u8 as c_int) })

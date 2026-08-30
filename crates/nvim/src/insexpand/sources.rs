@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -690,7 +691,7 @@ pub(crate) unsafe fn get_register_completion() {
             || if p_ic.get() != 0 {
                 unsafe { strncasecmp(s, orig.data(), orig.len()) == 0 }
             } else {
-                unsafe { strncmp(s, orig.data(), orig.len()) == 0 }
+                unsafe { cstr::prefix_eq(s, orig.data(), orig.len()) }
             }
     };
 

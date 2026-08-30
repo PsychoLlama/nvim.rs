@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int, c_long};
 
@@ -36,7 +37,6 @@ use crate::message::msgmore;
 use crate::ops::{Op, do_join};
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
-use crate::os::cshim::strncmp;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
@@ -353,7 +353,7 @@ pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
                 // one has a line comment after some text: then the
                 // paragraph does not really end.
                 if next_leader.flags.is_null()
-                    || unsafe { strncmp(next_leader.flags, c"://".as_ptr(), 3 as size_t) } != 0
+                    || !unsafe { cstr::starts_with(next_leader.flags, b"://") }
                     || unsafe { check_linecomment(get_cursor_line_ptr()) } == MAXCOL
                 {
                     is_end_par = true;

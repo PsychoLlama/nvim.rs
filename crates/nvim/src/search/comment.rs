@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 use crate::winlayer::Buf;
@@ -57,7 +58,7 @@ pub(crate) unsafe fn find_rawstring_end(
                 break;
             }
             if unsafe { *p } as c_int == ')' as c_int
-                && unsafe { strncmp(delim, p.offset(1), delim_len) } == 0
+                && unsafe { cstr::prefix_eq(delim, p.offset(1), delim_len) }
                 && unsafe { *p.offset(delim_len as isize + 1) } as c_int == '"' as c_int
             {
                 found = true;

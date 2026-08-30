@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{IOSIZE, NUL};
 use crate::winlayer::buffers;
 use crate::winlayer::{Buf, Win};
@@ -220,7 +221,7 @@ pub(crate) unsafe fn get_next_bufname_token() {
         // is a NUL-terminated string.
         let tail = unsafe { path_tail(b.b_sfname) };
         let orig = compl_orig_text().value();
-        if unsafe { strncmp(tail, orig.data(), orig.len()) } == 0 {
+        if unsafe { cstr::prefix_eq(tail, orig.data(), orig.len()) } {
             let flags = if p_ic.get() != 0 { CP_ICASE } else { 0 };
             let (no_name, no_data) = (ptr::null_mut(), ptr::null_mut());
             let (no_cptext, no_hl) = (ptr::null(), ptr::null());
@@ -322,7 +323,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
                 // SAFETY: the leader is readable for its own length and a
                 // match's text is NUL-terminated.
                 let starts_with_leader =
-                    unsafe { strncmp(ins_compl_leader(), text, ins_compl_leader_len()) } == 0;
+                    unsafe { cstr::prefix_eq(ins_compl_leader(), text, ins_compl_leader_len()) };
                 if first.is_null() && starts_with_leader {
                     first = text;
                     // SAFETY: as above.

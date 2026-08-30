@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::api::with_rex;
@@ -39,7 +40,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, iemsg};
-use crate::os::cshim::{gettext, memmove, strncmp};
+use crate::os::cshim::{gettext, memmove};
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
@@ -247,7 +248,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 
     let mut p = newsub;
     while unsafe { *p } != 0 {
-        if unsafe { strncmp(p, tilde.as_ptr(), tildelen) } != 0 {
+        if !unsafe { cstr::prefix_eq(p, tilde.as_ptr(), tildelen) } {
             if unsafe { *p } == b'\\' as c_char && unsafe { *p.offset(1) } != 0 {
                 // An escaped character cannot be a tilde.
                 p = unsafe { p.offset(1) };

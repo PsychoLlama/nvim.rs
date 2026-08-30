@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -438,7 +439,7 @@ pub unsafe fn do_execreg(
         // SAFETY: `p` is that NUL-terminated copy, so `strncmp` may read up
         // to five of its bytes, and a match is the proof that `p.add(5)` is
         // still inside it -- keep the test and the skip together.
-        let retval = if visual_active() && unsafe { strncmp(p, c"'<,'>".as_ptr(), 5) } == 0 {
+        let retval = if visual_active() && unsafe { cstr::starts_with(p, b"'<,'>") } {
             unsafe { put_in_typebuf(p.add(5), true, true, silent) }
         } else {
             unsafe { put_in_typebuf(p, true, true, silent) }

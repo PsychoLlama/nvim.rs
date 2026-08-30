@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
 use crate::winlayer::Buf;
@@ -470,7 +471,7 @@ pub(crate) unsafe fn check_map(
             let minlen = keylen.min(len);
             // SAFETY: both strings are NUL-terminated and `minlen` is no
             // longer than either.
-            let hit = unsafe { strncmp(s, keys, minlen as size_t) } == 0;
+            let hit = unsafe { cstr::prefix_eq(s, keys, minlen as size_t) };
             hit.then(|| MapMatch {
                 mp: mp.raw(),
                 local,

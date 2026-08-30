@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::types::MB_MAXCHAR;
@@ -534,19 +535,20 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         // `strncmp`s are skipped, and `mapresolve` notices.
         let starts_with_lhs = || {
             if save_m_expr {
+                let alt_len = save_alt_m_keylen as usize;
                 unsafe {
-                    strncmp(map_str, save_m_keys, keylen as usize) == 0
+                    cstr::prefix_eq(map_str, save_m_keys, keylen as usize)
                         || (!save_alt_m_keys.is_null()
-                            && strncmp(map_str, save_alt_m_keys, save_alt_m_keylen as usize) == 0)
+                            && cstr::prefix_eq(map_str, save_alt_m_keys, alt_len))
                 }
             } else {
                 // SAFETY: `m_keys` and the twin's are NUL-terminated LHSs, and
                 // `map_str` the RHS about to be inserted; the mapping is still
                 // linked here, because nothing above evaluated Vimscript.
                 unsafe {
-                    strncmp(map_str, mp.m_keys, keylen as usize) == 0
+                    cstr::prefix_eq(map_str, mp.m_keys, keylen as usize)
                         || (!alt.is_null()
-                            && strncmp(map_str, (*alt).m_keys, (*alt).m_keylen as usize) == 0)
+                            && cstr::prefix_eq(map_str, (*alt).m_keys, (*alt).m_keylen as usize))
                 }
             }
         };

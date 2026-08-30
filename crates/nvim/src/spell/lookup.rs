@@ -42,12 +42,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::message::emsg;
-use crate::os::cshim::{gettext_ptr, strncmp};
+use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
@@ -247,7 +248,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             // comparison is a shortcut for the common case where it did
             // not change anything.
             let mut p = unsafe { (*mip).mi_word };
-            if unsafe { strncmp(ptr, p, wlen as usize) } != 0 {
+            if !unsafe { cstr::prefix_eq(ptr, p, wlen as usize) } {
                 let end = unsafe { ptr.offset(wlen as isize) };
                 let mut s = ptr;
                 while s < end {
@@ -341,7 +342,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         // one, again short-cutting when folding changed
                         // nothing.
                         let mut p = unsafe { &raw mut (*mip).mi_fword } as *mut c_char;
-                        if unsafe { strncmp(ptr, p, wlen as usize) } != 0 {
+                        if !unsafe { cstr::prefix_eq(ptr, p, wlen as usize) } {
                             let end = unsafe { ptr.offset(wlen as isize) };
                             let mut s = ptr;
                             while s < end {
@@ -524,7 +525,7 @@ unsafe fn compound_part_allowed(
     if mode == FIND_COMPOUND {
         // Check the capitalisation of the part being appended.
         let mut p;
-        if unsafe { strncmp(ptr, (*mip).mi_word, (*mip).mi_compoff as usize) } != 0 {
+        if !(unsafe { cstr::prefix_eq(ptr, (*mip).mi_word, (*mip).mi_compoff as usize) }) {
             // Folding changed the length.
             p = unsafe { (*mip).mi_word };
             let end = unsafe { ptr.offset((*mip).mi_compoff as isize) };
@@ -608,11 +609,12 @@ pub unsafe fn match_checkcompoundpattern(
     let mut i = 0;
     while i + 1 < unsafe { (*gap).ga_len } {
         let second = unsafe { *pats.offset((i + 1) as isize) };
-        if unsafe { strncmp(ptr.offset(wlen as isize), second, strlen(second)) } == 0 {
+        if unsafe { cstr::starts_with(ptr.offset(wlen as isize), cstr::bytes_at(second)) } {
             let first = unsafe { *pats.offset(i as isize) };
             let len = unsafe { strlen(first) } as c_int;
+            let n = len as usize;
             if len <= wlen
-                && unsafe { strncmp(ptr.offset((wlen - len) as isize), first, len as usize) } == 0
+                && unsafe { cstr::prefix_eq(ptr.offset((wlen - len) as isize), first, n) }
             {
                 return true;
             }

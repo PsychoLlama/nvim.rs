@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::Failed;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
@@ -63,13 +64,13 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
         if *diffstyle == DiffStyle::Unknown {
             if (line[0] as u8).is_ascii_digit() {
                 *diffstyle = DiffStyle::Ed;
-            } else if unsafe { strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) } == 0 {
+            } else if unsafe { cstr::starts_with(line.as_ptr(), b"@@ ") } {
                 *diffstyle = DiffStyle::Unified;
-            } else if unsafe { strncmp(line.as_ptr(), c"--- ".as_ptr(), 4) } == 0
+            } else if unsafe { cstr::starts_with(line.as_ptr(), b"--- ") }
                 && !unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) }
-                && unsafe { strncmp(line.as_ptr(), c"+++ ".as_ptr(), 4) } == 0
+                && unsafe { cstr::starts_with(line.as_ptr(), b"+++ ") }
                 && !unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) }
-                && unsafe { strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) } == 0
+                && unsafe { cstr::starts_with(line.as_ptr(), b"@@ ") }
             {
                 // A unified diff with its file header still attached.
                 *diffstyle = DiffStyle::Unified;
@@ -83,7 +84,7 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
         } else {
             debug_assert_eq!(*diffstyle, DiffStyle::Unified);
             unsafe {
-                strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) == 0
+                cstr::starts_with(line.as_ptr(), b"@@ ")
                     && parse_diff_unified(line.as_ptr(), hunk).is_ok()
             }
         };
@@ -309,7 +310,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> Result<()
 /// number by one.
 unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
-    if unsafe { strncmp(p, c"@@ -".as_ptr(), 4) } != 0 {
+    if !unsafe { cstr::starts_with(p, b"@@ -") } {
         return Err(Failed);
     }
     p = unsafe { p.add(4) };
@@ -320,7 +321,7 @@ unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> Resu
     } else {
         1
     };
-    if unsafe { strncmp(p, c" +".as_ptr(), 2) } != 0 {
+    if !unsafe { cstr::starts_with(p, b" +") } {
         return Err(Failed);
     }
     p = unsafe { p.add(2) };

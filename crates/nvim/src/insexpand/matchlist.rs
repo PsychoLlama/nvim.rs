@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{FAIL, Failed, NUL, OK, VarLock};
 use crate::winlayer::{Live, Win};
 
@@ -162,7 +163,7 @@ pub(crate) unsafe fn ins_compl_add(
             // the byte at `len` is inside it whenever the length test let
             // the read happen.
             let same = !m.is_original()
-                && unsafe { strncmp(text, str, len as size_t) } == 0
+                && unsafe { cstr::prefix_eq(text, str, len as size_t) }
                 && (m.cp_str.len() as c_int <= len
                     || unsafe { *text.offset(len as isize) } as c_int == NUL);
             if !same {
@@ -368,7 +369,7 @@ pub(crate) unsafe fn ins_compl_equal(match_0: Cm, str: *mut c_char, len: size_t)
         return unsafe { strncasecmp(text, str, len) } == 0;
     }
     // SAFETY: as above.
-    unsafe { strncmp(text, str, len) == 0 }
+    unsafe { cstr::prefix_eq(text, str, len) }
 }
 
 /// Shorten `compl_leader` to the longest prefix it shares with `match_0`, and

@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -39,7 +40,7 @@ use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
 use crate::options::{
     kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
 };
-use crate::os::cshim::{gettext_ptr, memmove, strncmp};
+use crate::os::cshim::{gettext_ptr, memmove};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
@@ -120,7 +121,7 @@ unsafe fn get_option_prefix(argp: &mut *mut c_char) -> Prefix {
     // SAFETY: the caller's string.
     for (spelling, prefix) in [(c"no", Prefix::No), (c"inv", Prefix::Inv)] {
         let len = spelling.count_bytes();
-        if unsafe { strncmp(*argp, spelling.as_ptr(), len) } == 0 {
+        if unsafe { cstr::prefix_eq(*argp, spelling.as_ptr(), len) } {
             *argp = unsafe { argp.add(len) };
             return prefix;
         }
@@ -605,7 +606,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
     while unsafe { *arg } != NUL as c_char {
         // "all" is only the keyword when it is a whole word, and never
         // in a modeline.
-        let is_all = unsafe { strncmp(arg, c"all".as_ptr(), 3) } == 0
+        let is_all = unsafe { cstr::starts_with(arg, b"all") }
             && !(unsafe { *arg.add(3) } as u8).is_ascii_alphabetic()
             && !opt_flags.has(OptionSetFlags::MODELINE);
         if is_all {

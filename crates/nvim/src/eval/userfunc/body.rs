@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::swmsg;
@@ -80,7 +81,7 @@ pub(crate) unsafe fn get_function_body(
     let is_word = |p: *const c_char, word: &CStr| {
         let n = word.count_bytes();
         unsafe {
-            strncmp(p, word.as_ptr(), n) == 0
+            cstr::prefix_eq(p, word.as_ptr(), n)
                 && (*p.add(n) == NUL as c_char || ascii_iswhite(*p.add(n) as c_int))
         }
     };
@@ -150,7 +151,7 @@ pub(crate) unsafe fn get_function_body(
                 // * ":let {var-name} =<< [trim] {marker}" and "{marker}"
                 if heredoc_trimmed.is_null()
                     || (is_heredoc && unsafe { skipwhite(theline) } == theline)
-                    || unsafe { strncmp(theline, heredoc_trimmed, heredoc_trimmedlen) } == 0
+                    || unsafe { cstr::prefix_eq(theline, heredoc_trimmed, heredoc_trimmedlen) }
                 {
                     p = if heredoc_trimmed.is_null()
                         || (is_heredoc && unsafe { skipwhite(theline) } == theline)
@@ -220,12 +221,12 @@ pub(crate) unsafe fn get_function_body(
 
                 // Increase the indent inside "if", "while", "for" and
                 // "try", decrease it at "end".
-                if indent > 2 && unsafe { strncmp(p, c"end".as_ptr(), 3) } == 0 {
+                if indent > 2 && unsafe { cstr::starts_with(p, b"end") } {
                     indent -= 2;
-                } else if unsafe { strncmp(p, c"if".as_ptr(), 2) } == 0
-                    || unsafe { strncmp(p, c"wh".as_ptr(), 2) } == 0
-                    || unsafe { strncmp(p, c"for".as_ptr(), 3) } == 0
-                    || unsafe { strncmp(p, c"try".as_ptr(), 3) } == 0
+                } else if unsafe { cstr::starts_with(p, b"if") }
+                    || unsafe { cstr::starts_with(p, b"wh") }
+                    || unsafe { cstr::starts_with(p, b"for") }
+                    || unsafe { cstr::starts_with(p, b"try") }
                 {
                     indent += 2;
                 }
@@ -317,7 +318,7 @@ pub(crate) unsafe fn get_function_body(
                         if !arg.is_null() {
                             arg = unsafe { skipwhite(arg) };
                         }
-                        if !arg.is_null() && unsafe { strncmp(arg, c"=<<".as_ptr(), 3) } == 0 {
+                        if !arg.is_null() && unsafe { cstr::starts_with(arg, b"=<<") } {
                             p = unsafe { skipwhite(arg.add(3)) };
                             let mut has_trim = false;
                             loop {

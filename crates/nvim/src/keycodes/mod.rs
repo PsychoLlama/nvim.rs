@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::{ptr, slice};
 
@@ -32,7 +33,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, snprintf, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::strings::vim_strchr;
 use crate::types::{
     CpoFlag, MB_MAXBYTES, NUL, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T,
@@ -151,7 +152,7 @@ fn starts_with_ignoring_case(p: Cursor, lit: &CStr) -> bool {
 fn starts_with(p: Cursor, lit: &CStr) -> bool {
     let n = lit.to_bytes().len();
     // SAFETY: as [`starts_with_ignoring_case`].
-    unsafe { strncmp(p.raw(), lit.as_ptr(), n) == 0 }
+    unsafe { cstr::prefix_eq(p.raw(), lit.as_ptr(), n) }
 }
 
 /// [`vim_str2nr`] as the `<>` parsers ask for it: the unsigned value at `p`

@@ -54,7 +54,7 @@ use crate::message::{
     msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
 };
 use crate::optionstr::clear_string_option;
-use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, memmove, strncasecmp};
 use crate::os::input::line_breakcheck;
 use crate::path::path_is_absolute;
 use crate::pos::MAXLNUM;

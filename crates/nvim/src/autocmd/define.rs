@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, RefcountSize};
@@ -251,7 +252,7 @@ pub unsafe fn do_autocmd_event(
                 if !ap.is_null()
                     && unsafe { (*ap).group } == findgroup
                     && unsafe { (*ap).patlen } == patlen
-                    && unsafe { strncmp(pat, (*ap).pat, patlen as size_t) } == 0
+                    && unsafe { cstr::prefix_eq(pat, (*ap).pat, patlen as size_t) }
                 {
                     unsafe { aucmd_del(ac) };
                 }
@@ -339,7 +340,7 @@ pub unsafe fn autocmd_register(
         }
         if unsafe { (*ap).group } != findgroup
             || unsafe { (*ap).patlen } != patlen
-            || unsafe { strncmp(pat, (*ap).pat, patlen as size_t) } != 0
+            || !unsafe { cstr::prefix_eq(pat, (*ap).pat, patlen as size_t) }
         {
             ap = ::core::ptr::null_mut();
         }
@@ -509,7 +510,7 @@ pub unsafe fn aucmd_span_pattern(
 /// Whether `do_modelines` should be called: false when `*argp` begins with
 /// `<nomodeline>`, which is then skipped.
 pub unsafe fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
-    if unsafe { strncmp(*argp, c"<nomodeline>".as_ptr(), 12) } == 0 {
+    if unsafe { cstr::starts_with(*argp, b"<nomodeline>") } {
         unsafe { *argp = skipwhite((*argp).add(12)) };
         return false;
     }
@@ -604,7 +605,7 @@ unsafe fn arg_autocmd_flag_get(
     pattern: &CStr,
     len: ::core::ffi::c_int,
 ) -> bool {
-    if unsafe { strncmp(*cmd_ptr, pattern.as_ptr(), len as size_t) } == 0
+    if unsafe { cstr::prefix_eq(*cmd_ptr, pattern.as_ptr(), len as size_t) }
         && ascii_iswhite(unsafe { *(*cmd_ptr).offset(len as isize) } as ::core::ffi::c_int)
     {
         if unsafe { *flag } {

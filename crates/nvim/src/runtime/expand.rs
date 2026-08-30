@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
@@ -300,7 +301,7 @@ pub unsafe fn expand_runtime_cmd(
     // Complete the [where] argument too, when none was given.
     if runtime_expand_flags.get() == RuntimeOpts::NONE {
         for value in WHERE_VALUES {
-            if unsafe { strncmp(pat, value.as_ptr(), pat_len) } == 0 {
+            if unsafe { cstr::prefix_eq(pat, value.as_ptr(), pat_len) } {
                 unsafe { ga_grow(&raw mut ga, 1) };
                 unsafe {
                     *ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize) =

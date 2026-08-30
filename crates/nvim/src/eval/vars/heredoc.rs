@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -180,7 +181,7 @@ pub unsafe fn heredoc_get(
         debug_assert!(word.to_bytes().len() == 4);
         // SAFETY: `at` is NUL-terminated, so the fifth byte is only read
         // once the first four have proved not to hold the terminator.
-        let same = unsafe { strncmp(at, word.as_ptr(), 4) } == 0;
+        let same = unsafe { cstr::prefix_eq(at, word.as_ptr(), 4) };
         same && ascii_iswhite_or_nul(c_int::from(unsafe { *at.add(4) }))
     };
 
@@ -281,7 +282,7 @@ pub unsafe fn heredoc_get(
         // looking for the marker.
         let mut mi = 0;
         let indent = marker_indent_len as size_t;
-        if marker_indent_len > 0 && unsafe { strncmp(theline, *ea.cmdlinep, indent) } == 0 {
+        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, *ea.cmdlinep, indent) } {
             mi = marker_indent_len;
         }
         if unsafe { strcmp(marker, theline.offset(mi as isize)) } == 0 {

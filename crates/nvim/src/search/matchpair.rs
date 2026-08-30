@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::types::{CpoFlag, NUL};
@@ -158,7 +159,7 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
 /// # Safety
 /// `ptr` must be NUL-terminated.
 unsafe fn starts_with(ptr: *const c_char, word: &str) -> bool {
-    unsafe { strncmp(ptr, word.as_ptr() as *const c_char, word.len() as size_t) == 0 }
+    unsafe { cstr::prefix_eq(ptr, word.as_ptr() as *const c_char, word.len() as size_t) }
 }
 
 /// What the walk is looking for, once `initc` and the text under the

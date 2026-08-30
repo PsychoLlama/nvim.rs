@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -48,7 +49,7 @@ use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::check_signcolumn;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
@@ -787,7 +788,7 @@ pub(crate) unsafe fn do_spelllang_source(win: *mut win_T) {
     // NUL-terminated option value.
     let mut q = unsafe { (*(*win).w_s).b_p_spl };
     // "cjk" is a modifier, not a language.
-    if unsafe { strncmp(q, c"cjk,".as_ptr(), 4) } == 0 {
+    if unsafe { cstr::starts_with(q, b"cjk,") } {
         q = unsafe { q.add(4) };
     }
     let mut p = q;

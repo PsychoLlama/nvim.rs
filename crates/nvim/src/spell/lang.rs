@@ -43,7 +43,7 @@ use crate::main::{curbuf, curwin, e_invarg, p_enc, starting};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::option::{copy_option_part, valid_name};
-use crate::os::cshim::{memmove, snprintf, strncmp};
+use crate::os::cshim::{memmove, snprintf};
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
@@ -496,16 +496,18 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         let entries = ga.ga_data as *mut langp_T;
         for i in 0..ga.ga_len {
             let lp = unsafe { entries.offset(i as isize) };
+            // The first two bytes of `sl_name` are the language; a region
+            // suffix past them does not have to match.
+            let lang = unsafe { (*(*lp).lp_slang).sl_name };
 
             if unsafe { (*(*lp).lp_slang).sl_sal.ga_len } > 0 {
                 unsafe { (*lp).lp_sallang = (*lp).lp_slang };
             } else {
                 for j in 0..ga.ga_len {
                     let lp2 = unsafe { entries.offset(j as isize) };
+                    let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
                     if unsafe { (*(*lp2).lp_slang).sl_sal.ga_len } > 0
-                        && unsafe {
-                            strncmp((*(*lp).lp_slang).sl_name, (*(*lp2).lp_slang).sl_name, 2)
-                        } == 0
+                        && unsafe { cstr::prefix_eq(lang, lang2, 2) }
                     {
                         unsafe { (*lp).lp_sallang = (*lp2).lp_slang };
                         break;
@@ -518,10 +520,9 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
             } else {
                 for j in 0..ga.ga_len {
                     let lp2 = unsafe { entries.offset(j as isize) };
+                    let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
                     if unsafe { (*(*lp2).lp_slang).sl_rep.ga_len } > 0
-                        && unsafe {
-                            strncmp((*(*lp).lp_slang).sl_name, (*(*lp2).lp_slang).sl_name, 2)
-                        } == 0
+                        && unsafe { cstr::prefix_eq(lang, lang2, 2) }
                     {
                         unsafe { (*lp).lp_replang = (*lp2).lp_slang };
                         break;

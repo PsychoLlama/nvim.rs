@@ -29,6 +29,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -68,7 +69,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     let prompt_line = ml_get(cur_win().w_cursor.lnum);
     let prompt = unsafe { prompt_text() };
     let prompt_len = unsafe { strlen(prompt) };
-    if unsafe { strncmp(prompt_line, prompt, prompt_len) } != 0 {
+    if !unsafe { cstr::prefix_eq(prompt_line, prompt, prompt_len) } {
         return ::core::ptr::null_mut();
     }
     // STRMOVE: take the prompt off the front of the line.

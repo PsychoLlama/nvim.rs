@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::api::extmark::parse_virt_text;
+use crate::cstr;
 
 use crate::api::private::helpers::api_free_object;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -18,7 +19,7 @@ use crate::guard::Suppress;
 use crate::main::{curbuf, current_sctx, curwin, did_emsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
-use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
+use crate::os::cshim::{memmove, ngettext, strstr};
 use crate::strings::vim_snprintf;
 use crate::types::{Vv, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
 use crate::winlayer::{Buf, Win};
@@ -179,7 +180,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
     // SAFETY: `p` is inside one of them, at or before its terminator.
     let at = |p: *const c_char| unsafe { *p } as c_int;
     // SAFETY: as `at`; `n` never reaches past the shorter of the two.
-    let ncmp = |a: *const c_char, b: *const c_char, n: size_t| unsafe { strncmp(a, b, n) } == 0;
+    let ncmp = |a: *const c_char, b: *const c_char, n: size_t| unsafe { cstr::prefix_eq(a, b, n) };
     // SAFETY: as `at`.
     let skip_ws = |p: *mut c_char| unsafe { skipwhite(p) };
     // How far `b` is past `a`, in bytes, without dereferencing either.

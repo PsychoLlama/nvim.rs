@@ -31,6 +31,7 @@ use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, cur_win, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
+use crate::cstr;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
@@ -44,7 +45,7 @@ use crate::message_fmt::c_str;
 use crate::option::set_option_direct;
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::check_buf_options;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::path::free_wild;
 use crate::pos::MAXCOL;
@@ -610,7 +611,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
             let other = unsafe { *file.offset(j as isize) };
             if j != i
                 && unsafe { strlen(other) } as c_int == len + 3
-                && unsafe { strncmp(tag, other, len as size_t + 1) } == 0
+                && unsafe { cstr::prefix_eq(tag, other, len as size_t + 1) }
             {
                 break;
             }

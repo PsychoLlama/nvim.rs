@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::allocator::Owned;
@@ -31,7 +32,6 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
-use crate::os::cshim::strncmp;
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
@@ -269,7 +269,7 @@ pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -
             let syl =
                 unsafe { ((*slang).sl_syl_items.ga_data as *mut syl_item_T).offset(i as isize) };
             if unsafe { (*syl).sy_len } > len
-                && unsafe { strncmp(p, (*syl).sy_chars.as_ptr(), (*syl).sy_len as size_t) } == 0
+                && unsafe { cstr::prefix_eq(p, (*syl).sy_chars.as_ptr(), (*syl).sy_len as size_t) }
             {
                 len = unsafe { (*syl).sy_len };
             }

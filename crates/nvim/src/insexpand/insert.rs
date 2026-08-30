@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{NUL, OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
@@ -90,7 +91,7 @@ pub(crate) unsafe fn fuzzy_longest_match() {
             let (prefix_step, match_step) =
                 unsafe { (utfc_ptr2len(prefix_ptr), utfc_ptr2len(match_ptr)) };
             // SAFETY: as above.
-            if unsafe { strncmp(prefix_ptr, match_ptr, prefix_step as size_t) } != 0 {
+            if !unsafe { cstr::prefix_eq(prefix_ptr, match_ptr, prefix_step as size_t) } {
                 break;
             }
             // SAFETY: as above -- the step lands on the next character.
@@ -108,7 +109,7 @@ pub(crate) unsafe fn fuzzy_longest_match() {
     let leader_len = ins_compl_leader_len();
     // SAFETY: the leader is readable for `leader_len` bytes and `prefix` is
     // a match's NUL-terminated text.
-    let consecutive = unsafe { strncmp(prefix, ins_compl_leader(), leader_len) } == 0;
+    let consecutive = unsafe { cstr::prefix_eq(prefix, ins_compl_leader(), leader_len) };
     if leader_len == 0 || consecutive {
         // SAFETY: `prefix_len` bytes of `prefix`, copied with a NUL added.
         let copy = unsafe { xmemdupz(prefix.cast(), prefix_len as size_t) }.cast::<c_char>();

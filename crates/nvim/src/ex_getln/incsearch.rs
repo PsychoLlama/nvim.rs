@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
@@ -155,8 +156,9 @@ pub unsafe fn parse_pattern_and_range(
     // accepts, and 0 where it imposes none (`p` never precedes `cmd`, so
     // `MAX(p - cmd, 0)` is just `p - cmd`).
     let namelen = p.addr().wrapping_sub(cmd.addr()) as isize;
+    let width = |min: isize| namelen.max(min) as size_t;
     let abbreviates =
-        |name: &CStr, min: isize| unsafe { strncmp(cmd, name.as_ptr(), namelen.max(min) as size_t) } == 0;
+        |name: &CStr, min: isize| unsafe { cstr::prefix_eq(cmd, name.as_ptr(), width(min)) };
 
     if abbreviates(c"substitute", 0)
         || abbreviates(c"smagic", 0)

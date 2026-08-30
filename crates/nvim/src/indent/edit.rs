@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::CStr;
 use core::ptr;
 
@@ -30,7 +31,7 @@ use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
-use crate::os::cshim::{gettext, memmove, ngettext, snprintf, strncmp};
+use crate::os::cshim::{gettext, memmove, ngettext, snprintf};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
@@ -677,7 +678,7 @@ struct RetabTabs {
 unsafe fn parse_retab_arg(arg: *mut c_char) -> Option<RetabTabs> {
     // SAFETY: the caller's argument, walked to its NUL.
     let mut ptr = arg;
-    let indent_only = unsafe { strncmp(ptr, c"-indentonly".as_ptr(), 11) } == 0
+    let indent_only = unsafe { cstr::starts_with(ptr, b"-indentonly") }
         && ascii_iswhite_or_nul(unsafe { *ptr.offset(11) } as c_int);
     if indent_only {
         ptr = unsafe { skipwhite(ptr.offset(11)) };

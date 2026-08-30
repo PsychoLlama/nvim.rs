@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::optionstr::{empty_option, is_empty_option};
 use crate::semsg;
@@ -510,7 +511,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
 unsafe fn sync_count_key(key: *const c_char) -> Option<&'static SyncCount> {
     SYNC_COUNTS
         .iter()
-        .find(|(name, _)| unsafe { strncmp(key, name.as_ptr(), name.count_bytes()) } == 0)
+        .find(|(name, _)| unsafe { cstr::prefix_eq(key, name.as_ptr(), name.count_bytes()) })
         .map(|(_, count)| count)
 }
 

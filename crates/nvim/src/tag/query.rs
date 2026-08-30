@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
 use crate::smsg;
@@ -150,7 +151,7 @@ unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
         return true;
     }
     let is_static = unsafe { test_for_static(&tp) };
-    if unsafe { strncmp(tp.tagname, c"!_TAG_".as_ptr(), 6) } == 0 {
+    if unsafe { cstr::starts_with(tp.tagname, b"!_TAG_") } {
         // A pseudo-tag line: the file's own metadata, not a tag.
         return true;
     }
@@ -298,7 +299,7 @@ impl Scan {
     fn starts_with(self, what: &CStr) -> bool {
         let n = what.count_bytes();
         // SAFETY: as [`Scan::byte`]; `strncmp` stops at either NUL.
-        unsafe { strncmp(self.0, what.as_ptr(), n) == 0 }
+        unsafe { cstr::prefix_eq(self.0, what.as_ptr(), n) }
     }
 
     /// How many bytes the character here takes.

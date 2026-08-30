@@ -14,6 +14,7 @@
 
 use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
+use crate::cstr;
 use crate::fileio::Loaded;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
@@ -135,7 +136,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             break 'theend;
         }
         let mut b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
-        if unsafe { strncmp((*b0p).b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) } == 0 {
+        if unsafe { cstr::starts_with((*b0p).b0_version.as_ptr(), b"VIM 3.0") } {
             unsafe { msg_start() };
             unsafe { msg_outtrans(mf_fname(mfp), 0, true) };
             note(c" cannot be used with this version of Nvim.\n", 0);

@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
@@ -237,7 +238,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
         cmdline = unsafe { skiptowhite_esc(arg) };
 
         let after = |lit: &CStr| {
-            if unsafe { strncmp(arg, lit.as_ptr(), lit.count_bytes()) } == 0 {
+            if unsafe { cstr::prefix_eq(arg, lit.as_ptr(), lit.count_bytes()) } {
                 Some(unsafe { arg.add(lit.count_bytes()) })
             } else {
                 None
@@ -429,7 +430,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 
     while unsafe { *arg } != 0 {
         let after = |lit: &CStr| {
-            if unsafe { strncmp(arg, lit.as_ptr(), lit.count_bytes()) } == 0 {
+            if unsafe { cstr::prefix_eq(arg, lit.as_ptr(), lit.count_bytes()) } {
                 Some(unsafe { arg.add(lit.count_bytes()) })
             } else {
                 None

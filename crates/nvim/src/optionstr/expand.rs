@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -31,7 +32,7 @@ use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::os::cshim::{snprintf, strncmp};
+use crate::os::cshim::snprintf;
 use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
@@ -381,7 +382,7 @@ unsafe fn directly_after(at: *const c_char, start: *const c_char, prefix: &CStr)
     // SAFETY: both point into the same string, as documented above, and the
     // length test is what puts the `sub` in range.
     unsafe {
-        at.offset_from(start) >= len as isize && strncmp(at.sub(len), prefix.as_ptr(), len) == 0
+        at.offset_from(start) >= len as isize && cstr::prefix_eq(at.sub(len), prefix.as_ptr(), len)
     }
 }
 

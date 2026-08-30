@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
 use crate::tr_plural;
@@ -525,7 +526,7 @@ pub unsafe fn trans_function_name(
         if !name.is_null() {
             name = unsafe { xstrdup(name) };
             unsafe { *pp = end as *mut c_char };
-            if unsafe { strncmp(name, c"<SNR>".as_ptr(), 5) } == 0 {
+            if unsafe { cstr::starts_with(name, b"<SNR>") } {
                 // Change "<SNR>" to the byte sequence.
                 unsafe { *name = K_SPECIAL as c_char };
                 unsafe { *name.add(1) = KS_EXTRA as c_char };
@@ -554,8 +555,8 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     if funcname.is_null() {
         return ptr::null_mut();
     }
-    if unsafe { strncmp(funcname, c"s:".as_ptr(), 2) } != 0
-        && unsafe { strncmp(funcname, c"<SID>".as_ptr(), 5) } != 0
+    if !unsafe { cstr::starts_with(funcname, b"s:") }
+        && !unsafe { cstr::starts_with(funcname, b"<SID>") }
     {
         // The function name does not have a script-local prefix.
         return ptr::null_mut();
@@ -597,7 +598,7 @@ pub unsafe fn save_function_name(
 ) -> *mut c_char {
     let mut p = unsafe { *name };
     let saved;
-    if unsafe { strncmp(p, c"<lambda>".as_ptr(), 8) } == 0 {
+    if unsafe { cstr::starts_with(p, b"<lambda>") } {
         p = unsafe { p.add(8) };
         unsafe { getdigits(&raw mut p, false, 0) };
         saved = unsafe { xmemdupz(*name as *const c_void, p.offset_from(*name) as size_t) }

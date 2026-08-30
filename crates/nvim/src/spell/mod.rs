@@ -30,6 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -42,7 +43,7 @@ use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
+use crate::os::cshim::{gettext, memmove, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
     colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
@@ -313,7 +314,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
         let line = get_cursor_line_ptr();
         let col = unsafe { (*curwin.get()).w_cursor.col };
         if addlen <= 0
-            || unsafe { strncmp(line.offset(col as isize), repl_to.get(), repl_to_len) } != 0
+            || !(unsafe { cstr::prefix_eq(line.offset(col as isize), repl_to.get(), repl_to_len) })
         {
             let p = unsafe { xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) }
                 as *mut c_char;

@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -199,7 +200,7 @@ pub unsafe fn del_menutrans_vars() {
     // against the rehash that would otherwise move `ht_array`.
     unsafe { hash_lock(ht) };
     for hi in tv_ht_iter(unsafe { &*ht }) {
-        if unsafe { strncmp((*hi).hi_key, c"menutrans_".as_ptr(), 10) } == 0 {
+        if unsafe { cstr::starts_with((*hi).hi_key, b"menutrans_") } {
             unsafe { delete_var(ht, hi) };
         }
     }

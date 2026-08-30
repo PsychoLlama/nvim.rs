@@ -7,6 +7,7 @@
 //! table cannot express.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -153,13 +154,13 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
     debug_assert!(ea.cmdidx as c_int >= 0);
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if len == 3 && strncmp(c"def".as_ptr(), ea.cmd, 3) == 0 {
+    if len == 3 && prefix_eq(ea.cmd, c"def".as_ptr(), 3) {
         ea.cmdidx = CMD_SIZE;
     }
 
     while (ea.cmdidx as c_int) < CMD_SIZE as c_int {
         let name = cmdnames[ea.cmdidx as usize].cmd_name;
-        if strncmp(name, ea.cmd, len as size_t) == 0 {
+        if prefix_eq(name, ea.cmd, len as size_t) {
             if !full.is_null() && byte_at(name, len as isize) == NUL {
                 unsafe { *full = 1 };
             }
@@ -302,7 +303,7 @@ fn blank_exarg() -> exarg_T {
 /// The command index for a name of a known length, without the rest of
 /// `find_ex_command`'s bookkeeping. Used by the API's command parser.
 pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
-    if len == 3 && strncmp(c"def".as_ptr(), cmd, 3) == 0 {
+    if len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3) {
         return CMD_SIZE;
     }
     let mut idx: cmdidx_T = CMD_append;
@@ -313,7 +314,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
     // shortcut: this entry point is not on the hot path.
     let mut idx = CMD_append;
     while (idx as c_int) < CMD_SIZE as c_int {
-        if strncmp(cmdnames[idx as usize].cmd_name, cmd, len) == 0 {
+        if prefix_eq(cmdnames[idx as usize].cmd_name, cmd, len) {
             break;
         }
         idx = (idx as c_int + 1) as cmdidx_T;
@@ -338,20 +339,17 @@ pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     cmdnames[idx as usize].cmd_name
 }
 
+/// Whether two NUL-terminated strings agree over their first `n` bytes --
+/// `cstr::prefix_eq(a, b, n)` -- as checked code.
+fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
+    // SAFETY: two NUL-terminated strings; each scan stops at its terminator.
+    unsafe { cstr::prefix_eq(a, b, n) }
+}
+
 /// `skipwhite()` as checked code.
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
-}
-
-/// `strncmp()` as checked code.
-fn strncmp(
-    __s1: *const ::core::ffi::c_char,
-    __s2: *const ::core::ffi::c_char,
-    __n: size_t,
-) -> ::core::ffi::c_int {
-    // SAFETY: two NUL-terminated strings, and a length within both.
-    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

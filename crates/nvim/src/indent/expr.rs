@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::CStr;
 
 use super::*;
@@ -20,7 +21,6 @@ use crate::main::{
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::memory::{xfree, xstrdup};
 use crate::option::{copy_option_part, was_set_insecurely};
-use crate::os::cshim::strncmp;
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
 use crate::search::{findmatch, linewhite};
@@ -383,7 +383,7 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
                 c",".as_ptr().cast_mut(),
             )
         };
-        if unsafe { strncmp(buf.as_ptr(), p, len) } == 0
+        if unsafe { cstr::prefix_eq(buf.as_ptr(), p, len) }
             && ascii_iswhite_or_nul(unsafe { *p.add(len) } as c_int)
         {
             return true;

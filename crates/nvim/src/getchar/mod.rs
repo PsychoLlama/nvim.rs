@@ -58,7 +58,7 @@ use crate::r#move::{validate_cursor, win_col_off};
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::ops::clear_oparg;
 use crate::options::kOptBoFlagError;
-use crate::os::cshim::{gettext, putc, stderr, strncmp};
+use crate::os::cshim::{gettext, putc, stderr};
 use crate::os::env::expand_env;
 use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};

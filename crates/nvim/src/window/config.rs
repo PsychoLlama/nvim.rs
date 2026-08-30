@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -28,7 +29,7 @@ use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
 use crate::main::{Columns, Rows, float_anchor_str, p_acd, p_ch};
 use crate::r#move::textpos2screenpos;
-use crate::os::cshim::{gettext_ptr, strncmp};
+use crate::os::cshim::gettext_ptr;
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
 use crate::search::FORWARD;
@@ -127,7 +128,7 @@ fn fdccol_count(wp: Win) -> c_int {
     // it.
     let byte = |n: isize| unsafe { *fdc.offset(n) } as c_int;
     // SAFETY: as above.
-    if unsafe { strncmp(fdc, c"auto".as_ptr(), 4 as size_t) } != 0 {
+    if !unsafe { cstr::starts_with(fdc, b"auto") } {
         return byte(0) - '0' as c_int;
     }
     let fdccol = if byte(4) == ':' as c_int {

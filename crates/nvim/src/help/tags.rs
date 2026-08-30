@@ -24,12 +24,13 @@
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
 use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
+use crate::cstr;
 use crate::fileio::vim_fgets;
 use crate::main::{e_fnametoolong, got_int, p_rtp};
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp};
+use crate::os::cshim::{gettext, putc, snprintf, strchr};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
@@ -53,7 +54,7 @@ use super::flag::kEqualFiles;
 pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
-    if unsafe { strncmp((*eap).arg, c"++t".as_ptr(), 3) } == 0
+    if unsafe { cstr::starts_with((*eap).arg, b"++t") }
         && ascii_iswhite(unsafe { *(*eap).arg.offset(3) } as c_int)
     {
         add_help_tags = true;
@@ -487,7 +488,7 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
 unsafe fn write_tags(fd: *mut FILE, tags: &[*mut c_char]) {
     // SAFETY: caller contract.
     for &entry in tags {
-        if unsafe { strncmp(entry, c"help-tags\t".as_ptr(), 10) } == 0 {
+        if unsafe { cstr::starts_with(entry, b"help-tags\t") } {
             unsafe { fputs(entry, fd) };
             continue;
         }

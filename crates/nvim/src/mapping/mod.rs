@@ -58,7 +58,7 @@ use crate::message::{
     msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, str2special_arena,
     str2special_save,
 };
-use crate::os::cshim::{gettext, putc, snprintf, strchr, strncmp, strstr};
+use crate::os::cshim::{gettext, putc, snprintf, strchr, strstr};
 use crate::regexp::vim_regexec;
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,

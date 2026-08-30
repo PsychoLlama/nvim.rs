@@ -37,7 +37,6 @@ use crate::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_pos};
 use crate::memory::{xfree, xstrdup};
 use crate::option::{copy_option_part, skip_to_option_part};
-use crate::os::cshim::strncmp;
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;

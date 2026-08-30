@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -40,9 +41,7 @@ use crate::options::{
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
 use crate::optionstr::{check_buf_options, free_string_option};
-use crate::os::cshim::{
-    bind_textdomain_codeset, gettext_ptr, memmove, snprintf, strncasecmp, strncmp,
-};
+use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, memmove, snprintf, strncasecmp};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
@@ -494,7 +493,7 @@ pub(crate) unsafe fn find_dup_item(
                 || unsafe { *s.add(newvallen) } as c_int == ',' as c_int
                 || unsafe { *s.add(newvallen) } == NUL as c_char
         };
-        if starts_item && unsafe { strncmp(s, newval, newvallen) } == 0 && ends_item() {
+        if starts_item && unsafe { cstr::prefix_eq(s, newval, newvallen) } && ends_item() {
             return s;
         }
         let escaping = (s > unsafe { origval.add(1) }

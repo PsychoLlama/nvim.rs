@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -31,7 +32,7 @@ use crate::mbyte::{
 };
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
     EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
@@ -337,7 +338,7 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
             let mut p = fromstr;
             while unsafe { *p } != 0 {
                 let fromlen = unsafe { utfc_ptr2len(p) };
-                if fromlen == inlen && unsafe { strncmp(in_str, p, inlen as size_t) } == 0 {
+                if fromlen == inlen && unsafe { cstr::prefix_eq(in_str, p, inlen as size_t) } {
                     found = true;
                     break;
                 }

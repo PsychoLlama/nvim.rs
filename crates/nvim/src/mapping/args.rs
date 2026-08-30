@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
@@ -229,7 +230,7 @@ pub(crate) unsafe fn take_map_arg(to_parse: &mut *mut c_char, word: &[u8]) -> bo
     // comparison stops inside it, and on a match the `word.len()` bytes it
     // just matched are there to step over.
     unsafe {
-        if strncmp(*to_parse, word.as_ptr().cast(), word.len() as size_t) != 0 {
+        if !(cstr::prefix_eq(*to_parse, word.as_ptr().cast(), word.len() as size_t)) {
             return false;
         }
         *to_parse = skipwhite(to_parse.add(word.len()));

@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -297,7 +298,7 @@ unsafe fn word_matches(
         if icase {
             unsafe { mb_strnicmp(a, b, len) == 0 }
         } else {
-            unsafe { strncmp(a, b, len) == 0 }
+            unsafe { cstr::prefix_eq(a, b, len) }
         }
     };
 

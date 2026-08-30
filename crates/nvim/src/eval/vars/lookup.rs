@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str_len;
 use crate::semsg;
 use crate::winlayer::{Buf, Win};
@@ -97,7 +98,7 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     };
 
     if let Some(key) = step(&gdone, get_globvar_ht()) {
-        if unsafe { strncmp(c"g:".as_ptr(), (*xp).xp_pattern, 2) } == 0 {
+        if unsafe { cstr::starts_with((*xp).xp_pattern, b"g:") } {
             return unsafe { cat_prefix_varname(b'g' as c_int, key) };
         }
         return key;

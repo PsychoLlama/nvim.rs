@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
 use crate::smsg;
@@ -148,7 +149,7 @@ pub(crate) unsafe fn concat_continued_line(
     // SAFETY: the caller's contract; `skipwhite_len` stays within `len`.
     let line = unsafe { skipwhite_len(p, len) };
     let len = len - unsafe { line.offset_from(p) } as size_t;
-    if len >= 3 && unsafe { strncmp(line, c"\"\\ ".as_ptr(), 3) } == 0 {
+    if len >= 3 && unsafe { cstr::starts_with(line, b"\"\\ ") } {
         return true;
     }
     if len == 0 || unsafe { *line } as c_int != '\\' as c_int {

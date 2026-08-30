@@ -299,7 +299,7 @@ unsafe fn highlight_list_two(cnt: c_int, id: c_int) {
     os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);
 }
 
-/// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
+/// `cstr::prefix_eq(full, word, word.len())`: whether `word` is a prefix of
 /// `full`. A longer `word` cannot match, because `full`'s NUL stops it.
 fn is_prefix(word: &[u8], full: &[u8]) -> bool {
     word.len() <= full.len() && full.starts_with(word)

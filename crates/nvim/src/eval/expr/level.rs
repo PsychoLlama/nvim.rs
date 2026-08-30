@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::winlayer::{Ea, Live};
 use core::ffi::{c_char, c_int};
@@ -37,7 +38,7 @@ use crate::main::{called_emsg, did_emsg, p_ic};
 use crate::memory::{strnequal, xfree};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     Failed, NUL, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
@@ -266,7 +267,7 @@ pub(crate) unsafe fn may_call_simple_func(
         }
     } else {
         // A script-local name arrives as `<SNR>123_name`.
-        let snr = unsafe { strncmp(arg, c"<SNR>".as_ptr(), 5) } == 0;
+        let snr = unsafe { cstr::starts_with(arg, b"<SNR>") };
         let p = if snr {
             (unsafe { skipdigits(arg.add(5)) }) as *const c_char
         } else {

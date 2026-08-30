@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -36,8 +37,8 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
     let len = unsafe { p.since(arg) };
     // `isdigit()` is one of the ctype predicates the C standard fixes to
     // ASCII in every locale, so this really is the same test.
-    let named = (len == 9 && unsafe { strncmp(arg, c"firstline".as_ptr(), 9) } == 0)
-        || (len == 8 && unsafe { strncmp(arg, c"lastline".as_ptr(), 8) } == 0);
+    let named = (len == 9 && unsafe { cstr::starts_with(arg, b"firstline") })
+        || (len == 8 && unsafe { cstr::starts_with(arg, b"lastline") });
     if arg == p.raw() || unsafe { *arg as u8 }.is_ascii_digit() || named {
         if !skip {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.

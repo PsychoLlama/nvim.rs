@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_long, c_void};
@@ -41,7 +42,7 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
-use crate::os::cshim::{gettext, gettext_ptr, strncmp, strstr};
+use crate::os::cshim::{gettext, gettext_ptr, strstr};
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
@@ -235,7 +236,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
 
         // The line holds the word when the flags or the line end
         // follow it directly.
-        let matched = unsafe { strncmp(word, line.as_ptr(), len as size_t) } == 0
+        let matched = unsafe { cstr::prefix_eq(word, line.as_ptr(), len as size_t) }
             && (line[len as usize] == b'/' as c_char
                 || (line[len as usize] as uint8_t as c_int) < ' ' as c_int);
         if !matched {

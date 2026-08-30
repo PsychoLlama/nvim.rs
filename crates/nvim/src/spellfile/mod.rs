@@ -12,7 +12,7 @@ use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
 use crate::semsg;
@@ -469,7 +469,7 @@ pub unsafe fn ex_mkspell(eap: *mut exarg_T) {
     // the count and the vector, which `free_wild` then releases.
     let mut arg = unsafe { (*eap).arg };
     let mut ascii = false;
-    if unsafe { strncmp(arg, c"-ascii".as_ptr(), 6) } == 0 {
+    if unsafe { cstr::starts_with(arg, b"-ascii") } {
         ascii = true;
         arg = unsafe { skipwhite(arg.add(6)) };
     }

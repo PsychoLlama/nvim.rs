@@ -1,6 +1,7 @@
 //! Arguments that are not file names: `++opt=value`, `+cmd`, the tab page
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::cstr;
 use crate::strings::vim_snprintf;
 
 use std::ffi::CString;
@@ -110,7 +111,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
     let mut bad_char_idx: c_int = 0;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
-    if strncmp(arg, c"bin".as_ptr(), 3) == 0 || strncmp(arg, c"nobin".as_ptr(), 5) == 0 {
+    if starts_with(arg, b"bin") || starts_with(arg, b"nobin") {
         if byte(arg) == 'n' as c_int {
             arg = unsafe { arg.add(2) };
             ea.force_bin = FORCE_NOBIN;
@@ -125,7 +126,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
     }
 
     // `++edit`, and not `++editsomething`.
-    if strncmp(arg, c"edit".as_ptr(), 4) == 0 && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
+    if starts_with(arg, b"edit") && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
         ea.read_edit = 1;
         ea.arg = unsafe { skipwhite(arg.add(4)) };
         return Ok(());
@@ -138,22 +139,16 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
         return Ok(());
     }
 
-    let pp: *mut c_int = if strncmp(arg, c"ff".as_ptr(), 2) == 0 {
+    let pp: *mut c_int = if starts_with(arg, b"ff") {
         arg = unsafe { arg.add(2) };
         ea.force_ff_ptr()
-    } else if strncmp(arg, c"fileformat".as_ptr(), 10) == 0 {
+    } else if starts_with(arg, b"fileformat") {
         arg = unsafe { arg.add(10) };
         ea.force_ff_ptr()
-    } else if strncmp(arg, c"enc".as_ptr(), 3) == 0 {
-        arg = unsafe {
-            arg.add(if strncmp(arg, c"encoding".as_ptr(), 8) == 0 {
-                8
-            } else {
-                3
-            })
-        };
+    } else if starts_with(arg, b"enc") {
+        arg = unsafe { arg.add(if starts_with(arg, b"encoding") { 8 } else { 3 }) };
         ea.force_enc_ptr()
-    } else if strncmp(arg, c"bad".as_ptr(), 3) == 0 {
+    } else if starts_with(arg, b"bad") {
         arg = unsafe { arg.add(3) };
         &raw mut bad_char_idx
     } else {
@@ -225,7 +220,7 @@ pub unsafe fn expand_argopt(
             let n = word.to_bytes().len() as isize;
             unsafe {
                 name_end.offset_from(x.xp_line) >= n
-                    && strncmp(name_end.offset(-n), word.as_ptr(), n as size_t) == 0
+                    && prefix_eq(name_end.offset(-n), word.as_ptr(), n as size_t)
             }
         };
         let cb: CompleteListItemGetter = if ends_with(c"ff") || ends_with(c"fileformat") {
@@ -244,7 +239,7 @@ pub unsafe fn expand_argopt(
         return Ok(());
     }
     // `++ff` is the only abbreviation worth finishing on its own.
-    if x.xp_pattern_len == 2 && strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) == 0 {
+    if x.xp_pattern_len == 2 && starts_with(x.xp_pattern, b"ff") {
         unsafe { *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char };
         unsafe { *num_matches = 1 };
         unsafe { **matches = xstrdup(c"fileformat=".as_ptr()) };
@@ -503,6 +498,19 @@ fn cur_win() -> Win {
     unsafe { Win::current() }
 }
 
+/// Whether two NUL-terminated strings agree over their first `n` bytes --
+/// `cstr::prefix_eq(a, b, n)` -- as checked code.
+fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
+    // SAFETY: two NUL-terminated strings; each scan stops at its terminator.
+    unsafe { cstr::prefix_eq(a, b, n) }
+}
+
+/// `strncmp()`'s prefix test as checked code.
+fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
+    unsafe { cstr::starts_with(p, prefix) }
+}
+
 /// `ex_errmsg()` as checked code.
 fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CString {
     // SAFETY: the pointers are the command line's own, and live for the call.
@@ -548,16 +556,6 @@ fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
 fn skipwhite(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::charset::skipwhite(p) }
-}
-
-/// `strncmp()` as checked code.
-fn strncmp(
-    __s1: *const ::core::ffi::c_char,
-    __s2: *const ::core::ffi::c_char,
-    __n: size_t,
-) -> ::core::ffi::c_int {
-    // SAFETY: two NUL-terminated strings, and a length within both.
-    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -405,7 +406,7 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
                 let n = (len2 - off) as size_t;
                 // SAFETY: `tail` is `off` bytes into a string of `len2`, and
                 // `n` is the rest of it; `com_leader` is NUL-terminated.
-                if unsafe { strncmp(tail, com_leader.from(0), n) } == 0 {
+                if unsafe { cstr::prefix_eq(tail, com_leader.from(0), n) } {
                     lower_check_bound = lower_check_bound.min(i - off);
                 }
             }

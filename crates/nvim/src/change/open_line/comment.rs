@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::change::*;
@@ -214,7 +215,7 @@ unsafe fn plan_start_or_middle(
         while q.byte() != 0 {
             // SAFETY: `lead_end` holds the `n` bytes just copied into it, and
             // `q` is inside the NUL-terminated old line.
-            if unsafe { strncmp(q.raw(), lead_end.as_ptr(), n) } == 0 {
+            if unsafe { cstr::prefix_eq(q.raw(), lead_end.as_ptr(), n) } {
                 plan.comment_end = q.raw();
                 plan.lead_len = 0;
                 return;

@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use crate::keycodes::Ctrl_V;
 use crate::types::{
     CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,
@@ -448,7 +449,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
 
     // Does command allow "++argopt" argument?
     if ea.argt.has(ExArgt::ARGOPT) {
-        while unsafe { *arg } as c_int != NUL && unsafe { strncmp(arg, c"++".as_ptr(), 2) } == 0 {
+        while unsafe { *arg } as c_int != NUL && unsafe { cstr::starts_with(arg, b"++") } {
             p = unsafe { arg.add(2) };
             while unsafe { *p } != 0 && !ascii_isspace(unsafe { *p } as c_int) {
                 p = unsafe { p.add(utfc_ptr2len(p) as usize) };

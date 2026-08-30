@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::narrow::number_as_int;
 use crate::types::ExpandContext;
 
@@ -175,7 +176,7 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char
 
     // After the `=`: the argument's value.
     unsafe { (*xp).xp_pattern = eq.add(1) };
-    let starts = |lit: &CStr| unsafe { strncmp(last, lit.as_ptr(), lit.count_bytes()) } == 0;
+    let starts = |lit: &CStr| unsafe { cstr::prefix_eq(last, lit.as_ptr(), lit.count_bytes()) };
     match cmd_idx {
         SIGNCMD_DEFINE => {
             if starts(c"texthl") || starts(c"linehl") || starts(c"culhl") || starts(c"numhl") {

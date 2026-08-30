@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -265,16 +266,16 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     // Find the trailing attributes.
                     loop {
                         p = unsafe { skipwhite(p) };
-                        if unsafe { strncmp(p, c"range".as_ptr(), 5) } == 0 {
+                        if unsafe { cstr::starts_with(p, b"range") } {
                             flags |= FC_RANGE;
                             p = unsafe { p.add(5) };
-                        } else if unsafe { strncmp(p, c"dict".as_ptr(), 4) } == 0 {
+                        } else if unsafe { cstr::starts_with(p, b"dict") } {
                             flags |= FC_DICT;
                             p = unsafe { p.add(4) };
-                        } else if unsafe { strncmp(p, c"abort".as_ptr(), 5) } == 0 {
+                        } else if unsafe { cstr::starts_with(p, b"abort") } {
                             flags |= FC_ABORT;
                             p = unsafe { p.add(5) };
-                        } else if unsafe { strncmp(p, c"closure".as_ptr(), 7) } == 0 {
+                        } else if unsafe { cstr::starts_with(p, b"closure") } {
                             flags |= FC_CLOSURE;
                             p = unsafe { p.add(7) };
                             if current_funccal.get().is_null() {

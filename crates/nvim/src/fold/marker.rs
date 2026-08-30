@@ -11,6 +11,7 @@
 use crate::ascii::ascii_isdigit;
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
+use crate::cstr;
 use crate::extmark::extmark_splice_cols;
 use crate::main::e_modifiable;
 use crate::mbyte::utfc_ptr2len;
@@ -184,7 +185,7 @@ pub(super) unsafe fn fold_del_marker(
     let line = unsafe { ml_get_buf(buf, lnum) };
     let mut p = line;
     while unsafe { *p } as c_int != NUL {
-        if unsafe { strncmp(p, marker, markerlen) } != 0 {
+        if !unsafe { cstr::prefix_eq(p, marker, markerlen) } {
             p = unsafe { p.offset(1) };
             continue;
         }
@@ -206,7 +207,7 @@ pub(super) unsafe fn fold_del_marker(
                         cms2.offset_from(cms) as size_t,
                     )
                 } == 0
-                && unsafe { strncmp(p.add(len), cms2.offset(2), strlen(cms2.offset(2))) } == 0
+                && unsafe { cstr::starts_with(p.add(len), cstr::bytes_at(cms2.offset(2))) }
             {
                 p = unsafe { p.offset(-(cms2.offset_from(cms))) };
                 len = len.wrapping_add(unsafe { strlen(cms) }.wrapping_sub(2));

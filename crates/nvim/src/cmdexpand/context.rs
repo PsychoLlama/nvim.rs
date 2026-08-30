@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
@@ -500,7 +501,7 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
         let len = unsafe { p.offset_from(arg) } as size_t;
         let named = [c"messages", c"ctype", c"time", c"collate"]
             .iter()
-            .any(|kind| unsafe { strncmp(arg, kind.as_ptr(), len) } == 0);
+            .any(|kind| unsafe { cstr::prefix_eq(arg, kind.as_ptr(), len) });
         if named {
             xp.xp_context = ExpandContext::Locales;
             xp.xp_pattern = unsafe { skipwhite(p) };
@@ -538,9 +539,7 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
     }
     let subcmd_start = p;
 
-    if unsafe { strncmp(c"file ".as_ptr(), p, 5) } == 0
-        || unsafe { strncmp(c"func ".as_ptr(), p, 5) } == 0
-    {
+    if unsafe { cstr::starts_with(p, b"file ") } || unsafe { cstr::starts_with(p, b"func ") } {
         // :breakadd file [lnum] <filename>
         // :breakadd func [lnum] <funcname>
         p = unsafe { skipwhite(p.add(4)) };
@@ -554,13 +553,13 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
             }
             p = unsafe { skipwhite(p) };
         }
-        xp.xp_context = if unsafe { strncmp(c"file".as_ptr(), subcmd_start, 4) } == 0 {
+        xp.xp_context = if unsafe { cstr::starts_with(subcmd_start, b"file") } {
             ExpandContext::Files
         } else {
             ExpandContext::UserFunc
         };
         xp.xp_pattern = p as *mut c_char;
-    } else if unsafe { strncmp(c"expr ".as_ptr(), p, 5) } == 0 {
+    } else if unsafe { cstr::starts_with(p, b"expr ") } {
         // :breakadd expr <expression>
         xp.xp_context = ExpandContext::Expression;
         xp.xp_pattern = unsafe { skipwhite(p.add(5)) };
@@ -612,12 +611,12 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
     let mut saw_indent = false;
 
     loop {
-        if unsafe { strncmp(p, c"plugin".as_ptr(), 6) } == 0 {
+        if unsafe { cstr::starts_with(p, b"plugin") } {
             saw_plugin = true;
             p = unsafe { skipwhite(p.add(6)) };
             continue;
         }
-        if unsafe { strncmp(p, c"indent".as_ptr(), 6) } == 0 {
+        if unsafe { cstr::starts_with(p, b"indent") } {
             saw_indent = true;
             p = unsafe { skipwhite(p.add(6)) };
             continue;

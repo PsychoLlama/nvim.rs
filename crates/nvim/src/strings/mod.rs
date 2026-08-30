@@ -1,10 +1,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
-use crate::os::cshim::{strchr, strncmp, strstr};
+use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
 use ::libc::{qsort, strcasecmp, strcmp, strlen};
@@ -259,7 +260,9 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
 pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
     let kv1 = unsafe { &*(a as *const keyvalue_T) };
     let kv2 = unsafe { &*(b as *const keyvalue_T) };
-    unsafe { strncmp(kv1.value, kv2.value, kv1.length.max(kv2.length)) }
+    let n = kv1.length.max(kv2.length);
+    // SAFETY: two NUL-terminated keys of the caller's table.
+    unsafe { cstr::prefix_cmp(kv1.value, kv2.value, n) as c_int }
 }
 #[cfg(test)]
 mod tests {

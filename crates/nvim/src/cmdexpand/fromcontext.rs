@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::types::{ExpandContext, Failed};
 use core::ffi::{c_char, c_int, c_void};
@@ -173,7 +174,7 @@ pub(crate) unsafe fn expand_from_context(
     // When expanding a function name starting with s:, match the <SNR>nr_
     // prefix.
     let mut tofree = ptr::null_mut::<c_char>();
-    if context == ExpandContext::UserFunc && unsafe { strncmp(pat, c"^s:".as_ptr(), 3) } == 0 {
+    if context == ExpandContext::UserFunc && unsafe { cstr::starts_with(pat, b"^s:") } {
         let len = unsafe { strlen(pat) } + 20;
         tofree = unsafe { xmalloc(len) } as *mut c_char;
         unsafe { snprintf(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3)) };

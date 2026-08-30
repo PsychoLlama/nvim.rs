@@ -30,7 +30,6 @@ use crate::options::{
     kOptKeymap, kOptPackpath, kOptPath, kOptRuntimepath, kOptSpellsuggest, kOptSyntax, kOptTags,
     kOptViewdir,
 };
-use crate::os::cshim::strncmp;
 use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
@@ -156,7 +155,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         (c"inv", XP_PREFIX_INV as xp_prefix_T),
     ] {
         let len = spelling.count_bytes();
-        if unsafe { strncmp(p, spelling.as_ptr(), len) } == 0 {
+        if unsafe { cstr::prefix_eq(p, spelling.as_ptr(), len) } {
             unsafe { (*xp).xp_context = ExpandContext::BoolSettings };
             unsafe { (*xp).xp_prefix = prefix };
             p = unsafe { p.add(len) };
@@ -238,7 +237,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     }
     // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
     if opt_idx == kOptSpellsuggest {
-        if unsafe { strncmp((*xp).xp_pattern, c"file:".as_ptr(), 5) } == 0 {
+        if unsafe { cstr::starts_with((*xp).xp_pattern, b"file:") } {
             unsafe { (*xp).xp_pattern = (*xp).xp_pattern.add(5) };
         } else if get_option(IDX.get()).opt_expand_cb.is_some() {
             unsafe { (*xp).xp_context = ExpandContext::StringSetting };

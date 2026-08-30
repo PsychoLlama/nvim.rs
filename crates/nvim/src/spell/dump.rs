@@ -26,6 +26,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::buffer::buf_is_empty;
@@ -40,7 +41,7 @@ use crate::memory::xstrlcpy;
 use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_puts, msg_start};
 use crate::option::{get_option_value, optval_free, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
-use crate::os::cshim::{snprintf, strncmp};
+use crate::os::cshim::snprintf;
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
@@ -405,7 +406,7 @@ unsafe fn dump_word(
         let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
             unsafe { mb_strnicmp(p, pat, strlen(pat)) == 0 }
         } else {
-            unsafe { strncmp(p, pat, strlen(pat)) == 0 }
+            unsafe { cstr::starts_with(p, cstr::bytes_at(pat)) }
         };
         let len = unsafe { strlen(p) } as c_int;
         let ic = p_ic.get() != 0;

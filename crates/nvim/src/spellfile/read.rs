@@ -25,6 +25,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_uint};
@@ -37,7 +38,7 @@ use crate::memline::ml_append_buf;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
-use crate::os::cshim::{getc, gettext, gettext_ptr, strncmp, strstr};
+use crate::os::cshim::{getc, gettext, gettext_ptr, strstr};
 use crate::os::fs::os_fopen;
 use crate::os::input::fast_breakcheck;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
@@ -479,7 +480,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
     for b in buf.iter_mut().take(VIMSUGMAGICL as usize) {
         *b = unsafe { getc(fd) } as c_char;
     }
-    if unsafe { strncmp(buf.as_ptr(), VIMSUGMAGIC.as_ptr(), VIMSUGMAGICL as size_t) } != 0 {
+    if !(unsafe { cstr::prefix_eq(buf.as_ptr(), VIMSUGMAGIC.as_ptr(), VIMSUGMAGICL as size_t) }) {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let sl_fname = unsafe { c_str((*slang).sl_fname) };
         semsg!("E778: This does not look like a .sug file: {sl_fname}");

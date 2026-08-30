@@ -6,6 +6,7 @@
 //! `repl_cmdline` does and why it is the only place allowed to free the
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::cstr;
 use crate::os::cshim::snprintf;
 
 use crate::cmdexpand::{WildMode, WildOpts};
@@ -381,7 +382,7 @@ const SPEC_SID: ssize_t = 14;
 pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssize_t {
     for (i, spec) in SPECIALS.iter().enumerate() {
         let len = spec.to_bytes().len() as size_t;
-        if strncmp(src, spec.as_ptr(), len) == 0 {
+        if starts_with(src, spec.to_bytes()) {
             unsafe { *usedlen = len };
             return i as ssize_t;
         }
@@ -709,7 +710,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
     let mut result = unsafe { xstrdup(arg) };
     let mut p = result;
     while unsafe { *p } != 0 {
-        if strncmp(p, c"<sfile>".as_ptr(), 7) != 0 {
+        if !starts_with(p, b"<sfile>") {
             p = unsafe { p.add(1) };
             continue;
         }
@@ -763,6 +764,12 @@ fn cur_buf() -> Buf {
     unsafe { Buf::current() }
 }
 
+/// `strncmp()`'s prefix test as checked code.
+fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
+    unsafe { cstr::starts_with(p, prefix) }
+}
+
 /// `gettext()` as checked code.
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
@@ -783,16 +790,6 @@ fn memmove(
 fn path_has_wildcard(p: *const c_char) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::path::path_has_wildcard(p) }
-}
-
-/// `strncmp()` as checked code.
-fn strncmp(
-    __s1: *const ::core::ffi::c_char,
-    __s2: *const ::core::ffi::c_char,
-    __n: size_t,
-) -> ::core::ffi::c_int {
-    // SAFETY: two NUL-terminated strings, and a length within both.
-    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }
 
 /// `vim_strchr()` as checked code.

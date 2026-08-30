@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 
@@ -111,7 +112,7 @@ pub(crate) unsafe fn au_show_for_event(
             }
             if patlen != 0
                 && (unsafe { (*ap).patlen } != patlen
-                    || unsafe { strncmp(pat, (*ap).pat, patlen as size_t) } != 0)
+                    || !unsafe { cstr::prefix_eq(pat, (*ap).pat, patlen as size_t) })
             {
                 continue;
             }

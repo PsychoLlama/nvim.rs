@@ -66,7 +66,7 @@ use crate::option::{
 use crate::options::{
     kOptAleph, kOptCharconvert, kOptDiffexpr, kOptInvalid, kOptPatchexpr, kOptSpellsuggest,
 };
-use crate::os::cshim::{__ctype_b_loc, gettext, snprintf, strncmp};
+use crate::os::cshim::{__ctype_b_loc, gettext, snprintf};
 use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::pos::MAXCOL;
 use crate::register::{get_reg_contents, write_reg_contents};

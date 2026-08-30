@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 /// What reading the next line produced.
@@ -155,13 +156,13 @@ impl FindTags {
         let line = self.lbuf.as_mut_ptr();
         // A header line starts with "!_TAG_"; anything else here is a
         // non-header item before the header, e.g. "!" on its own.
-        if unsafe { strncmp(line, c"!_TAG_".as_ptr().cast_mut(), 6) } != 0 {
+        if !(unsafe { cstr::prefix_eq(line, c"!_TAG_".as_ptr().cast_mut(), 6) }) {
             return true;
         }
-        if unsafe { strncmp(line, c"!_TAG_FILE_SORTED\t".as_ptr().cast_mut(), 18) } == 0 {
+        if unsafe { cstr::prefix_eq(line, c"!_TAG_FILE_SORTED\t".as_ptr().cast_mut(), 18) } {
             self.tag_file_sorted = unsafe { *line.add(18) } as u8 as c_int;
         }
-        if unsafe { strncmp(line, c"!_TAG_FILE_ENCODING\t".as_ptr().cast_mut(), 20) } == 0 {
+        if unsafe { cstr::prefix_eq(line, c"!_TAG_FILE_ENCODING\t".as_ptr().cast_mut(), 20) } {
             // Prepare to convert every line from that encoding to
             // 'encoding'. The name ends at the first byte that is not
             // printable ASCII, which is cut off in place.
@@ -187,7 +188,7 @@ impl FindTags {
         // SAFETY: the buffer is NUL-terminated and `fp` is open.
         // The header ends at the first line that sorts below "!_TAG_".
         // With case folded, a lower-case letter sorts before "_".
-        if unsafe { strncmp(self.lbuf.as_ptr(), c"!_TAG_".as_ptr(), 6) } <= 0
+        if unsafe { cstr::prefix_at(self.lbuf.as_ptr(), 6) } <= b"!_TAG_".as_slice()
             || (self.lbuf[0] == b'!' as c_char && (self.lbuf[1] as u8).is_ascii_lowercase())
         {
             return self.hdr_parse();
@@ -309,7 +310,7 @@ impl FindTags {
                 let mut tagcmp = if margs.sortic {
                     unsafe { tag_strnicmp(tagp.tagname, head, cmplen) }
                 } else {
-                    unsafe { strncmp(tagp.tagname, head, cmplen) }
+                    unsafe { cstr::prefix_cmp(tagp.tagname, head, cmplen) as c_int }
                 };
                 // A match on a shorter tag means to search forward, on
                 // a longer one to search backward.
@@ -402,11 +403,11 @@ impl FindTags {
             if self.orgpat.regmatch.rm_ic {
                 let same = unsafe { mb_strnicmp(tagp.tagname, pat, len) } == 0;
                 if same {
-                    margs.match_no_ic = unsafe { strncmp(tagp.tagname, pat, len) } == 0;
+                    margs.match_no_ic = unsafe { cstr::prefix_eq(tagp.tagname, pat, len) };
                 }
                 same
             } else {
-                unsafe { strncmp(tagp.tagname, pat, len) == 0 }
+                unsafe { cstr::prefix_eq(tagp.tagname, pat, len) }
             }
         };
 

@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, Failed, NUL};
@@ -155,7 +156,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> Result<(), Failed> {
                 unsafe { *line.offset(col as isize) as c_int == c }
             } else {
                 unsafe {
-                    strncmp(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t) == 0
+                    cstr::prefix_eq(line.offset(col as isize), bytes.as_ptr(), bytelen as size_t)
                 }
             };
             if hit && stop {

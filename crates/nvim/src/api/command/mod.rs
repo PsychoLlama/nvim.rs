@@ -21,7 +21,7 @@ use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::main::{capture_ga, curbuf, msg_col, redir_off};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
-use crate::os::cshim::{snprintf, strncmp};
+use crate::os::cshim::snprintf;
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::strings::kv_do_printf;

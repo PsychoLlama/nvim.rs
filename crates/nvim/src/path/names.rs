@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -168,7 +169,7 @@ pub unsafe fn path_fnamencmp(fname1: *const c_char, fname2: *const c_char, len: 
     if p_fic.get() != 0 {
         unsafe { mb_strnicmp(fname1, fname2, len) }
     } else {
-        unsafe { strncmp(fname1, fname2, len) }
+        unsafe { cstr::prefix_cmp(fname1, fname2, len) as c_int }
     }
 }
 

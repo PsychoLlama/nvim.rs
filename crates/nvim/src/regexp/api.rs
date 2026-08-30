@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::{
@@ -20,7 +21,7 @@ use super::{
 use crate::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
-use crate::os::cshim::{gettext, gettext_ptr, strncmp};
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::types::{
     OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
@@ -56,7 +57,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
     // engine table's entries are set at compile time.
     let mut expr = expr_arg;
     regexp_engine.set(p_re.get() as c_int);
-    if unsafe { strncmp(expr, c"\\%#=".as_ptr(), 4) } == 0 {
+    if unsafe { cstr::starts_with(expr, b"\\%#=") } {
         let chosen = unsafe { *expr.offset(4) } as c_int - '0' as c_int;
         if chosen == AUTOMATIC_ENGINE as c_int
             || chosen == BACKTRACKING_ENGINE as c_int

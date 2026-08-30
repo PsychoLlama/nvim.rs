@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -79,7 +80,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     }
     // SAFETY: `argend` points inside `arg`, so it is NUL-terminated too.
     let mut expr = unsafe { skipwhite(argend) };
-    let concat = unsafe { strncmp(expr, c"..=".as_ptr(), 3) } == 0;
+    let concat = unsafe { cstr::starts_with(expr, b"..=") };
     let lead = unsafe { *expr } as u8;
     let has_assign = lead == b'='
         || (!unsafe { vim_strchr(OPERATORS.as_ptr(), lead.into()) }.is_null()

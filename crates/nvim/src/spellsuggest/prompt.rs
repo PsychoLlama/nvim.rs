@@ -31,6 +31,7 @@
 
 use crate::change::inserted_bytes;
 use crate::charset::rl_mirror_ascii;
+use crate::cstr;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally, beep_flush,
@@ -49,7 +50,7 @@ use crate::message::{
 };
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::options::kOptBoFlagSpell;
-use crate::os::cshim::{gettext, memmove, strncmp};
+use crate::os::cshim::{gettext, memmove};
 use crate::search::FORWARD;
 use crate::smsg;
 use crate::spell::{
@@ -249,7 +250,7 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
     lines_left.set(Rows.get()); // avoid the more-prompt
 
     let mut fmt = gettext(c"Change \"%.*s\" to:");
-    if cmdmsg_rl.get() && unsafe { strncmp(fmt.as_ptr(), c"Change".as_ptr(), 6) } == 0 {
+    if cmdmsg_rl.get() && unsafe { cstr::starts_with(fmt.as_ptr(), b"Change") } {
         // And now the rabbit from the high hat: avoid showing the
         // untranslated message right-to-left.
         fmt = c":ot \"%.*s\" egnahC";

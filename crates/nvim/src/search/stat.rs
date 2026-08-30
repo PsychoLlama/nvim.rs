@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::regexp::RE_LAST;
@@ -91,7 +92,7 @@ impl Counted {
             // The null test suppresses clang's "NULL passed as
             // nonnull parameter" on `strncmp`.
             && !self.pat.is_null()
-            && unsafe { strncmp(self.pat, live.pat, self.patlen) } == 0
+            && unsafe { cstr::prefix_eq(self.pat, live.pat, self.patlen) }
             && self.patlen == live.patlen
             && equalpos(self.at, cursor_pos)
             && self.buf == Some(cur_buf().id())

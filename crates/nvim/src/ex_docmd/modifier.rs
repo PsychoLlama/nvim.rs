@@ -7,6 +7,7 @@
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
+use crate::cstr;
 use crate::ex_docmd::scan::ends_excmd;
 
 use crate::winlayer::{Buf, Ea, Win};
@@ -40,7 +41,6 @@ use crate::message::redirecting;
 use crate::option::{kOptValTypeString, set_option_direct};
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
-use crate::os::cshim::strncmp;
 
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
@@ -129,7 +129,7 @@ pub(crate) unsafe fn parse_command_modifiers(
     // there) is stepped over so a modifier after it is still seen, and
     // put back below — the range has to reach the command, not the
     // modifier scan.
-    if unsafe { strncmp(ea.cmd, c"'<,'>".as_ptr(), 5) } == 0 {
+    if unsafe { cstr::starts_with(ea.cmd, b"'<,'>") } {
         let p = unsafe { skipwhite(ea.cmd.add(5)) };
         if byte(p) != NUL && byte(p) != '|' as c_int {
             ea.cmd = unsafe { ea.cmd.add(5) };

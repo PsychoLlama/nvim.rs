@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::Ctrl_N;
 use crate::types::{ExpandContext, Failed, NUL};
 
@@ -50,7 +51,7 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
         };
         if (unsafe { (*s).c } != K_UP && unsafe { (*s).c } != K_DOWN)
             || unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt }
-            || unsafe { strncmp(entry.text, (*s).lookfor, (*s).lookforlen as size_t) } == 0
+            || unsafe { cstr::prefix_eq(entry.text, (*s).lookfor, (*s).lookforlen as size_t) }
         {
             break;
         }

@@ -24,13 +24,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init};
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_removed};
 use crate::highlight_group::HLF_COUNT;
 use crate::main::curwin;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memory::{xfree, xmemdupz, xstrdup, xstrlcpy};
-use crate::os::cshim::strncmp;
 use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs};
@@ -151,7 +151,7 @@ pub(super) unsafe fn add_suggestion(
     for stp in unsafe { suggestions(gap) } {
         if stp.st_wordlen != goodlen
             || stp.st_orglen != badlen
-            || unsafe { strncmp(stp.st_word, goodword, goodlen as size_t) } != 0
+            || !unsafe { cstr::prefix_eq(stp.st_word, goodword, goodlen as size_t) }
         {
             continue;
         }

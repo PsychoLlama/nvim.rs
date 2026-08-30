@@ -80,7 +80,7 @@ use crate::normal::check_scrollbind;
 use crate::option::{set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::optionstr::free_string_option;
-use crate::os::cshim::{gettext, snprintf, strncmp};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::{os_env_exists, os_unsetenv};
 use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
 use crate::os::shell::{ShellOpts, call_shell};

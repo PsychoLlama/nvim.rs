@@ -49,7 +49,7 @@ use crate::message::{
 };
 use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
-use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp};
 use crate::os::env::expand_env_save;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_now;

@@ -18,7 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::os::cshim::strncmp;
+use crate::cstr;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::{fromto_T, garray_T};
@@ -104,7 +104,7 @@ impl Walk {
                 self.stack[level].child = unsafe { (*gap).ga_len } as i16;
                 break;
             }
-            if unsafe { strncmp((*item).ft_from, p, strlen((*item).ft_from)) } != 0
+            if !(unsafe { cstr::starts_with(p, cstr::bytes_at((*item).ft_from)) })
                 || !unsafe { self.try_deeper(SCORE_REP) }
             {
                 continue;

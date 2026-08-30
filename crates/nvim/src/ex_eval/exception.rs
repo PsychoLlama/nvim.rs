@@ -41,6 +41,7 @@ use super::flag::{
 };
 use super::{cause_abort, message};
 use crate::ascii::ascii_isdigit;
+use crate::cstr;
 use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
@@ -55,7 +56,7 @@ use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;
-use crate::os::cshim::{gettext_ptr, snprintf, strncmp};
+use crate::os::cshim::{gettext_ptr, snprintf};
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
@@ -183,7 +184,7 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
     if plist == head || severe {
         // Skip the extra "Vim " prefix, as on message "E458".
         let tmsg = unsafe { (*elem).msg };
-        let vim_prefixed = unsafe { strncmp(tmsg, c"Vim E".as_ptr(), 5) } == 0
+        let vim_prefixed = unsafe { cstr::starts_with(tmsg, b"Vim E") }
             && ascii_isdigit(unsafe { *tmsg.add(5) } as c_int)
             && ascii_isdigit(unsafe { *tmsg.add(6) } as c_int)
             && ascii_isdigit(unsafe { *tmsg.add(7) } as c_int)
@@ -404,7 +405,7 @@ pub(super) unsafe fn throw_exception(
     // try block is found.
     if type_0 == ET_USER {
         let v = value.cast::<c_char>();
-        if unsafe { strncmp(v, c"Vim".as_ptr(), 3) } == 0
+        if unsafe { cstr::starts_with(v, b"Vim") }
             && (unsafe { *v.add(3) } == NUL as c_char
                 || unsafe { *v.add(3) } == b':' as c_char
                 || unsafe { *v.add(3) } == b'(' as c_char)

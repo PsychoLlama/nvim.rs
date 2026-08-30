@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -34,7 +35,7 @@ use crate::ascii::ascii_iswhite;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::options::kOptKeywordprg;
-use crate::os::cshim::{memmove, strncmp};
+use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, OptIndex, size_t, uint32_t};
 use ::libc::{strcpy, strlen};
@@ -232,7 +233,7 @@ pub(crate) unsafe fn find_key_item(
     let mut p = src;
     while c_int::from(unsafe { *p }) != NUL {
         if (p == src || unsafe { *p.sub(1) } == b',' as c_char)
-            && unsafe { strncmp(p, key, keylen as size_t) } == 0
+            && unsafe { cstr::prefix_eq(p, key, keylen as size_t) }
         {
             let mut end = unsafe { vim_strchr(p, c_int::from(b',')) };
             if end.is_null() {
@@ -380,7 +381,7 @@ pub(crate) unsafe fn stropt_handle_keymatch(
                         if found.is_null() {
                             unsafe { place(newval, item_start, item_len, op) };
                         } else if old_itemlen == item_len
-                            && unsafe { strncmp(found, item_start, item_len as size_t) } == 0
+                            && unsafe { cstr::prefix_eq(found, item_start, item_len as size_t) }
                         {
                             // The same item already: keep it where it
                             // is, and drop any later duplicate.

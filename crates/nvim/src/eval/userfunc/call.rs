@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Lock, Suppress};
@@ -90,7 +91,7 @@ pub unsafe fn call_user_func(
     let slot = size_of::<*mut ufunc_T>() as c_int;
     unsafe { ga_init(&raw mut (*fc).fc_ufuncs, slot, 1) };
 
-    let islambda = unsafe { strncmp(uf_name_ptr(fp), c"<lambda>".as_ptr(), 8) } == 0;
+    let islambda = unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") };
 
     // `fc_fixvar` is an array of FIXVAR_CNT variables with names up to
     // VAR_SHORT_LEN long.  Handing out slots of it rather than allocating

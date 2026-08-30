@@ -4,11 +4,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::Rex;
 use crate::mbyte::{mb_ptr2char_adv, utf_fold, utf_ptr2char, utf_strnicmp, utfc_ptr2len};
-use crate::os::cshim::strncmp;
 use crate::strings::vim_strchr;
 
 /// The base characters of U+FB20..U+FB4F, the Hebrew presentation forms, so
@@ -85,7 +85,7 @@ pub(crate) fn decompose(c: c_int) -> [c_int; 3] {
 /// `s1` and `s2` must point to NUL-terminated strings.
 pub(crate) unsafe fn cstrncmp(rex: Rex, s1: *mut c_char, s2: *mut c_char, n: &mut c_int) -> c_int {
     let mut result = if !rex.reg_ic() {
-        unsafe { strncmp(s1, s2, *n as usize) }
+        unsafe { cstr::prefix_cmp(s1, s2, *n as usize) as c_int }
     } else {
         // Count the characters `*n` bytes of s1 spans, then measure how
         // many bytes the same count takes in s2. NB: upstream subtracts

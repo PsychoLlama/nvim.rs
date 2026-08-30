@@ -565,7 +565,7 @@ pub unsafe fn xmemdup(data: *const c_void, len: usize) -> *mut c_void {
     }
 }
 
-/// `strncmp(a, b, n) == 0`, phrased over whole C strings: the length-`n`
+/// `cstr::prefix_eq(a, b, n)`, phrased over whole C strings: the length-`n`
 /// prefixes match, where a terminator before `n` ends both sides.
 fn eq_upto(a: &[u8], b: &[u8], n: usize) -> bool {
     a[..a.len().min(n)] == b[..b.len().min(n)]

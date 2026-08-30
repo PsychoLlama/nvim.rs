@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::Failed;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -55,9 +56,8 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> Result<(), Fa
                     // ed-style and unified.
                     let mut linebuf = [0 as c_char; LBUFLEN as usize];
                     while !unsafe { vim_fgets(linebuf.as_mut_ptr(), LBUFLEN, fd) } {
-                        if unsafe { strncmp(linebuf.as_ptr(), c"1c1".as_ptr(), 3) } == 0
-                            || unsafe { strncmp(linebuf.as_ptr(), c"@@ -1 +1 @@".as_ptr(), 11) }
-                                == 0
+                        if unsafe { cstr::starts_with(linebuf.as_ptr(), b"1c1") }
+                            || unsafe { cstr::starts_with(linebuf.as_ptr(), b"@@ -1 +1 @@") }
                         {
                             ok = true;
                         }

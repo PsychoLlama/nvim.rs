@@ -65,7 +65,7 @@ use crate::r#move::validate_cursor;
 use crate::normal::may_start_select;
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
-use crate::os::cshim::{gettext, snprintf, strncmp, strstr};
+use crate::os::cshim::{gettext, snprintf, strstr};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::time::{os_delay, os_time};

@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
@@ -17,7 +18,6 @@ use crate::fileio::vim_fgets;
 use crate::main::{got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::xfree;
-use crate::os::cshim::strncmp;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};
@@ -180,7 +180,7 @@ unsafe fn read_wordfile_header(
 ) {
     // SAFETY: the caller promises the strings; the region name is copied
     // only after its length has been checked against the array.
-    if unsafe { strncmp(line, c"encoding=".as_ptr(), 9) } == 0 {
+    if unsafe { cstr::starts_with(line, b"encoding=") } {
         if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
@@ -214,7 +214,7 @@ unsafe fn read_wordfile_header(
             unsafe { xfree(enc.cast()) };
             unsafe { (*spin).si_conv.vc_fail = true };
         }
-    } else if unsafe { strncmp(line, c"regions=".as_ptr(), 8) } == 0 {
+    } else if unsafe { cstr::starts_with(line, b"regions=") } {
         if unsafe { (*spin).si_region_count } > 1 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, line) = unsafe { (c_str(fname), c_str(line)) };

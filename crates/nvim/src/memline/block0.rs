@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
@@ -346,7 +347,7 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
     match unsafe { ZeroBlock::read(fname) } {
         Err(NoBlock::CannotOpen) => unsafe { kv_puts(msg, c"         [cannot be opened]") },
         Err(NoBlock::CannotRead) => unsafe { kv_puts(msg, c"         [cannot be read]") },
-        Ok(b0) if unsafe { strncmp(b0.b0_version.as_ptr(), c"VIM 3.0".as_ptr(), 7) } == 0 => {
+        Ok(b0) if unsafe { cstr::starts_with(b0.b0_version.as_ptr(), b"VIM 3.0") } => {
             unsafe { kv_puts(msg, c"         [from Vim version 3.0]") };
         }
         Ok(b0) if !ml_check_b0_id(&b0) => {

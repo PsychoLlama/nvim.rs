@@ -38,6 +38,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
 use crate::api::private::validate::{err_bad_value, err_bad_value_ptr, err_expected, err_required};
 use crate::api_error;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::types::{ExArgt, FieldHashfn, NUL};
@@ -62,7 +63,7 @@ fn err_invalid_ptr(err: &mut Error, name: &CStr, value: *const c_char) {
 /// [`err_expected`] where what arrived is a pointer.
 fn err_expected_at(err: &mut Error, name: &CStr, expected: &CStr, actual: *const c_char) {
     // SAFETY: `actual` is null or a NUL-terminated string of the caller's.
-    let actual = unsafe { crate::cstr::at_opt(actual) };
+    let actual = unsafe { cstr::at_opt(actual) };
     *err = err_expected(name, expected, actual);
 }
 
@@ -272,7 +273,7 @@ unsafe fn resolve_command(
             } else {
                 get_command_name(ptr::null_mut(), ea.cmdidx as c_int)
             };
-            strncmp(fullname, cmdname, strlen(cmdname)) == 0
+            cstr::starts_with(fullname, cstr::bytes_at(cmdname))
         };
         if !matched {
             // SAFETY: `cmdname` is the caller's NUL-terminated name.

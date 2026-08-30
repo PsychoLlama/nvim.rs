@@ -32,7 +32,7 @@ use crate::message::emsg;
 use crate::normal::get_visual_text;
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
 use crate::os::env::expand_env_esc;
 use crate::os::fs::{os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists};
 use crate::os::input::os_breakcheck;

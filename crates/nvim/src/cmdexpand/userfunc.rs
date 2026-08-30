@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::types::{
     ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
@@ -187,7 +188,7 @@ pub(crate) unsafe fn expand_shellcmd(
             }
 
             pathlen = unsafe { e.offset_from(s) } as size_t;
-            if unsafe { strncmp(s, c".".as_ptr(), pathlen) } == 0 {
+            if unsafe { cstr::prefix_eq(s, c".".as_ptr(), pathlen) } {
                 did_curdir = true;
                 flags |= ExpandFlags::DIR;
             } else {

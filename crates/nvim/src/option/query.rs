@@ -27,7 +27,7 @@ use crate::main::{
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::*;
 use crate::optionstr::empty_option;
-use crate::os::cshim::{strncmp, strstr};
+use crate::os::cshim::strstr;
 use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
@@ -128,7 +128,7 @@ pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> Resul
             (c"number".to_bytes(), kOptCuloptFlagNumber),
             (c"screenline".to_bytes(), kOptCuloptFlagScreenline),
         ] {
-            if unsafe { strncmp(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) } == 0 {
+            if unsafe { cstr::prefix_eq(p, word.as_ptr().cast::<c_char>(), word.len() as size_t) } {
                 p = unsafe { p.add(word.len()) };
                 flags |= bits as uint8_t;
                 break;
@@ -182,8 +182,8 @@ pub(crate) unsafe fn option_set_callback_func(
     // A lambda, `function(...)` or `funcref(...)` is an expression; a
     // bare name is the function's name.
     let tv = if unsafe { *optval } == b'{' as c_char
-        || unsafe { strncmp(optval, c"function(".as_ptr(), 9) } == 0
-        || unsafe { strncmp(optval, c"funcref(".as_ptr(), 8) } == 0
+        || unsafe { cstr::starts_with(optval, b"function(") }
+        || unsafe { cstr::starts_with(optval, b"funcref(") }
     {
         let tv = unsafe { eval_expr(optval, ptr::null_mut::<exarg_T>()) };
         if tv.is_null() {

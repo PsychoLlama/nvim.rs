@@ -2,6 +2,7 @@
 //! what a buffer is. Plus `:checkhealth`, which is a Lua entry point.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::semsg_multiline;
@@ -77,10 +78,10 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
     let mut plugin = false;
     let mut indent = false;
     loop {
-        if strncmp(arg, c"plugin".as_ptr(), 6) == 0 {
+        if starts_with(arg, b"plugin") {
             plugin = true;
             arg = unsafe { skipwhite(arg.add(6)) };
-        } else if strncmp(arg, c"indent".as_ptr(), 6) == 0 {
+        } else if starts_with(arg, b"indent") {
             indent = true;
             arg = unsafe { skipwhite(arg.add(6)) };
         } else {
@@ -197,7 +198,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
         return;
     }
     let mut arg = eap.arg;
-    if strncmp(arg, c"FALLBACK ".as_ptr(), 9) == 0 {
+    if starts_with(arg, b"FALLBACK ") {
         arg = unsafe { arg.add(9) };
     }
     set_option_value_give_err(
@@ -301,6 +302,12 @@ fn cur_buf() -> Buf {
     unsafe { Buf::current() }
 }
 
+/// `strncmp()`'s prefix test as checked code.
+fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
+    unsafe { cstr::starts_with(p, prefix) }
+}
+
 /// `cstr_as_string()` as checked code.
 fn cstr_as_string(str: *const c_char) -> String_0 {
     // SAFETY: the pointers are the command line's own, and live for the call.
@@ -339,16 +346,6 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::runtime::source_runtime(name, flags) }
-}
-
-/// `strncmp()` as checked code.
-fn strncmp(
-    __s1: *const ::core::ffi::c_char,
-    __s2: *const ::core::ffi::c_char,
-    __n: size_t,
-) -> ::core::ffi::c_int {
-    // SAFETY: two NUL-terminated strings, and a length within both.
-    unsafe { crate::os::cshim::strncmp(__s1, __s2, __n) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

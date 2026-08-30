@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -60,7 +61,7 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
     for (keyword, flags) in WHERE_FLAGS {
         // SAFETY: both strings are NUL-terminated and `arg` has `where_len`
         // bytes; `skipwhite` stops at the terminator.
-        if unsafe { strncmp(arg, keyword.as_ptr(), where_len) } == 0 {
+        if unsafe { cstr::prefix_eq(arg, keyword.as_ptr(), where_len) } {
             unsafe { *argp = skipwhite(arg.add(where_len)) };
             return flags;
         }

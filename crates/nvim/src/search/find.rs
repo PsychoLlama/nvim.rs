@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
@@ -748,7 +749,8 @@ pub unsafe fn search_for_exact_line(
             let same = if p_ic.get() != 0 {
                 unsafe { mb_strnicmp(text, pat, compl_len as size_t) }
             } else {
-                unsafe { strncmp(text, pat, compl_len as size_t) }
+                let n = compl_len as size_t;
+                unsafe { cstr::prefix_cmp(text, pat, n) as c_int }
             };
             if same == 0 {
                 return Ok(());

@@ -67,7 +67,7 @@ use crate::option::{
 use crate::options::{
     kOptBoFlagWildmode, kOptWopFlagExacttext, kOptWopFlagFuzzy, kOptWopFlagPum, kOptWopFlagTagfile,
 };
-use crate::os::cshim::{gettext, memmove, snprintf, strchr, strncmp};
+use crate::os::cshim::{gettext, memmove, snprintf, strchr};
 use crate::os::env::{expand_env_save_opt, get_env_name, home_replace, vim_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::lang::{get_lang_arg, get_locales};

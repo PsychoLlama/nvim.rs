@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::winlayer::Buf;
@@ -162,7 +163,7 @@ pub unsafe fn aupat_is_buflocal(
     patlen: ::core::ffi::c_int,
 ) -> bool {
     patlen >= 8
-        && unsafe { strncmp(pat, c"<buffer".as_ptr(), 7) } == 0
+        && unsafe { cstr::starts_with(pat, b"<buffer") }
         && unsafe { *pat.add(patlen as usize - 1) } == b'>' as ::core::ffi::c_char
 }
 

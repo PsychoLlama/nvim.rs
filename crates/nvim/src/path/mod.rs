@@ -32,7 +32,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy};
 use crate::option::copy_option_part;
-use crate::os::cshim::{strchr, strncmp};
+use crate::os::cshim::strchr;
 use crate::os::env::{expand_env, expand_env_save_opt, os_getenv, vim_env_iter};
 use crate::os::fs::{
     os_can_exe, os_closedir, os_dirname, os_file_is_readable, os_fileid, os_fileid_equal,

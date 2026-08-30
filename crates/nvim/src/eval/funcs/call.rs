@@ -9,6 +9,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
@@ -35,7 +36,7 @@ use crate::main::{
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, strncmp};
+use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
@@ -241,7 +242,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
         }
         // Any prefix of "silent" silences; only the exact "silent!"
         // also silences errors.
-        silence = unsafe { strncmp(s, c"silent".as_ptr(), 6) } == 0;
+        silence = unsafe { cstr::starts_with(s, b"silent") };
         if unsafe { strcmp(s, c"silent!".as_ptr()) } == 0 {
             emsg_silent.set(1);
             emsg_noredir.set(true);
@@ -426,13 +427,12 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     // Expand `s:` and `<SID>` into `<SNR>nr_` so the result can be
     // called from another script. `trans_function_name` would do it
     // too, but some plugins depend on the name staying printable.
-    let name = if unsafe { strncmp(s, c"s:".as_ptr(), 2) } == 0
-        || unsafe { strncmp(s, c"<SID>".as_ptr(), 5) } == 0
-    {
-        unsafe { get_scriptlocal_funcname(s) }
-    } else {
-        unsafe { xstrdup(s) }
-    };
+    let name =
+        if unsafe { cstr::starts_with(s, b"s:") } || unsafe { cstr::starts_with(s, b"<SID>") } {
+            unsafe { get_scriptlocal_funcname(s) }
+        } else {
+            unsafe { xstrdup(s) }
+        };
 
     // The second argument may be either the argument list or the dict;
     // a third settles it.

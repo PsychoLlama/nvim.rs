@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::semsg;
@@ -333,8 +334,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
 
         if item == ITEM_MATCHGROUP {
             let p = unsafe { skiptowhite(rest) };
-            if (unsafe { p.offset_from(rest) } == 4
-                && unsafe { strncmp(rest, c"NONE".as_ptr(), 4) } == 0)
+            if (unsafe { p.offset_from(rest) } == 4 && unsafe { cstr::starts_with(rest, b"NONE") })
                 || unsafe { (*eap).skip } != 0
             {
                 matchgroup_id = 0;
@@ -532,7 +532,7 @@ unsafe fn offset_name(end: *const c_char) -> Option<c_int> {
         if idx < 0 {
             return None;
         }
-        if unsafe { strncmp(end, SPO_NAME_TAB[idx as usize].as_ptr(), 3) } == 0 {
+        if unsafe { cstr::prefix_eq(end, SPO_NAME_TAB[idx as usize].as_ptr(), 3) } {
             return Some(idx);
         }
     }

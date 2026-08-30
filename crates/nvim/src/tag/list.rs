@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
@@ -198,8 +199,7 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
 
         // Skip "file:" with no value: that is the static-tag marker,
         // and the priority column already says so.
-        if unsafe { strncmp(p, c"file:".as_ptr(), 5) } == 0
-            && ascii_isspace(unsafe { *p.add(5) } as c_int)
+        if unsafe { cstr::starts_with(p, b"file:") } && ascii_isspace(unsafe { *p.add(5) } as c_int)
         {
             p = unsafe { p.add(5) };
             continue;
@@ -207,8 +207,7 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
         // Skip "kind:<kind>" and a bare "<kind>": the kind has its own
         // column.
         if p == tagp.tagkind
-            || (p.wrapping_add(5) == tagp.tagkind
-                && unsafe { strncmp(p, c"kind:".as_ptr(), 5) } == 0)
+            || (p.wrapping_add(5) == tagp.tagkind && unsafe { cstr::starts_with(p, b"kind:") })
         {
             p = tagp.tagkind_end;
             continue;

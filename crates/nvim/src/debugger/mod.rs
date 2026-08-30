@@ -29,6 +29,7 @@
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int32, skipwhite};
+use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::{kCallbackNone, tv_free};
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
@@ -48,7 +49,7 @@ use crate::main::{
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{memmove, strncmp, strstr};
+use crate::os::cshim::{memmove, strstr};
 use crate::os::env::{expand_env_save, home_replace};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
@@ -321,17 +322,17 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<(), Failed> 
     // SAFETY: caller contract; every read below stays inside `arg`, and `bp`
     // is the scratch entry nothing else can reach.
     let (kind, here) = unsafe {
-        if strncmp(arg, c"func".as_ptr(), 4) == 0 {
+        if cstr::starts_with(arg, b"func") {
             (DBG_FUNC, false)
-        } else if strncmp(arg, c"file".as_ptr(), 4) == 0 {
+        } else if cstr::starts_with(arg, b"file") {
             (DBG_FILE, false)
-        } else if debugger && strncmp(arg, c"here".as_ptr(), 4) == 0 {
+        } else if debugger && cstr::starts_with(arg, b"here") {
             if (*curbuf.get()).b_ffname.is_null() {
                 semsg!("E32: No file name");
                 return Err(Failed);
             }
             (DBG_FILE, true)
-        } else if debugger && strncmp(arg, c"expr".as_ptr(), 4) == 0 {
+        } else if debugger && cstr::starts_with(arg, b"expr") {
             (DBG_EXPR, false)
         } else {
             semsg!("E475: Invalid argument: {}", c_str(arg));
@@ -382,7 +383,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<(), Failed> 
         if kind == DBG_FUNC {
             // `g:` is how the user may spell a global function; the table
             // does not carry it.
-            let bare = if strncmp(p, c"g:".as_ptr(), 2) == 0 {
+            let bare = if cstr::starts_with(p, b"g:") {
                 p.offset(2)
             } else {
                 p

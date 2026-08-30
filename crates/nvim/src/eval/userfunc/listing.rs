@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -238,7 +239,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     let fp = unsafe { (*hi.get()).hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
 
     if unsafe { (*fp).uf_flags } & FC_DICT != 0
-        || unsafe { strncmp(uf_name_ptr(fp), c"<lambda>".as_ptr(), 8) } == 0
+        || unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") }
     {
         // Don't show dict and lambda functions.
         return c"".as_ptr() as *mut c_char;

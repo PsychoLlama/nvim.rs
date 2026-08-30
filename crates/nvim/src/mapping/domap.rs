@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
 use crate::message_fmt::{c_str, emsg_text};
@@ -77,7 +78,7 @@ unsafe fn global_map_exists(mode: c_int, lhs: *const c_char, len: c_int, is_abbr
         // Check entries with the same mode.
         // SAFETY: `m_keys` is NUL-terminated and the caller's promise makes
         // `lhs` readable for `len` bytes, so the comparison stays in both.
-        let same = mp.m_keylen == len && unsafe { strncmp(mp.m_keys, lhs, len as size_t) } == 0;
+        let same = mp.m_keylen == len && unsafe { cstr::prefix_eq(mp.m_keys, lhs, len as size_t) };
         (mp.m_mode & mode != 0 && same).then_some(true)
     };
     // SAFETY: the global tables are live and `clashes` only reads them.
@@ -110,7 +111,7 @@ unsafe fn show_buffer_local(
                 let n = mp.m_keylen;
                 // SAFETY: `m_keys` is NUL-terminated and `lhs` is readable for
                 // `len` bytes by the caller's promise.
-                unsafe { strncmp(mp.m_keys, lhs, n.min(len) as size_t) == 0 }
+                unsafe { cstr::prefix_eq(mp.m_keys, lhs, n.min(len) as size_t) }
             };
             if show {
                 // SAFETY: `mp` is an entry of the buffer's live table.
@@ -406,7 +407,7 @@ pub(crate) unsafe fn buf_do_map(
                                 (entry.m_keylen, entry.m_keys)
                             };
                             // SAFETY: as above, and `lhs` is `len` bytes.
-                            if unsafe { strncmp(p, lhs, n.min(len) as size_t) } != 0 {
+                            if !unsafe { cstr::prefix_eq(p, lhs, n.min(len) as size_t) } {
                                 break 'entry;
                             }
 

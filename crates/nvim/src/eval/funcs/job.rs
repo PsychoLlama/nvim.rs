@@ -13,6 +13,7 @@ use crate::channel::{
     channel_close, channel_create_event, channel_decref, channel_incref, channel_job_start,
     channel_proc, channel_pty, channel_terminal_alloc, find_channel,
 };
+use crate::cstr;
 use crate::eval::typval::{
     NumBuf, kCallbackNone, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc,
     tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove,
@@ -33,7 +34,7 @@ use crate::memory::{xcalloc, xfree};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
 use crate::r#move::win_col_off;
-use crate::os::cshim::{gettext, snprintf, strncmp};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
@@ -454,9 +455,9 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         // An unrecognised `stdin` is a warning, not a failure.
         let s = unsafe { numbuf.dict_string(job_opts, c"stdin".as_ptr()) };
         if !s.is_null() {
-            if unsafe { strncmp(s, c"null".as_ptr(), NUMBUFLEN as usize) } == 0 {
+            if unsafe { cstr::prefix_eq(s, c"null".as_ptr(), NUMBUFLEN as usize) } {
                 stdin_mode = kChannelStdinNull;
-            } else if unsafe { strncmp(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } != 0 {
+            } else if !unsafe { cstr::prefix_eq(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (arg0, s) = unsafe { (c_str(c"stdin".as_ptr()), c_str(s)) };
                 semsg!("E475: Invalid value for argument {arg0}: {s}");

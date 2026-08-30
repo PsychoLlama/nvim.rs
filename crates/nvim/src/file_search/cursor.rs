@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Script;
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
@@ -163,9 +164,9 @@ unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
     let localized = unsafe { CStr::from_ptr(gettext(line_msg).as_ptr()) };
 
     let mut p = after_name.cast_mut();
-    if unsafe { strncmp(p, english.as_ptr(), english.count_bytes()) } == 0 {
+    if unsafe { cstr::prefix_eq(p, english.as_ptr(), english.count_bytes()) } {
         p = unsafe { p.add(english.count_bytes()) };
-    } else if unsafe { strncmp(p, localized.as_ptr(), localized.count_bytes()) } == 0 {
+    } else if unsafe { cstr::prefix_eq(p, localized.as_ptr(), localized.count_bytes()) } {
         p = unsafe { p.add(localized.count_bytes()) };
     } else {
         p = unsafe { skipwhite(p) };
@@ -258,7 +259,7 @@ pub(crate) unsafe fn find_file_name_in_path(
     // after "file:/" keeps the slash.
     if options.has(FileNameOpts::HYP)
         && len > 6
-        && unsafe { strncmp(ptr, c"file:/".as_ptr(), 6) } == 0
+        && unsafe { cstr::starts_with(ptr, b"file:/") }
         && !vim_ispathsep(unsafe { *ptr.add(6) } as c_int)
     {
         let off = if unsafe { path_has_drive_letter(ptr.add(6), len - 6) } {

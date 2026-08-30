@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::message_fmt::c_str;
@@ -43,7 +44,7 @@ unsafe fn abbr_matches(mp: Mb, word: *const c_char, len: c_int) -> bool {
     // `q` is NUL-terminated, so `strncmp` stops inside both.
     let matched = mp.m_mode & State.get() != 0
         && qlen == len
-        && unsafe { strncmp(q, word, len as size_t) } == 0;
+        && unsafe { cstr::prefix_eq(q, word, len as size_t) };
     if q != keys {
         // SAFETY: the scratch copy made above, freed once.
         unsafe { xfree(q.cast()) };
