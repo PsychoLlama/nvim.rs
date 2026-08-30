@@ -250,7 +250,7 @@ pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force:
     } else {
         unsafe { !fc_referenced(fc) }
     };
-    if unused && unsafe { unlink_parked_funccals(|parked| parked == fc) } {
+    if unused && unsafe { unlink_parked_funccals(Sweep::First, |parked| parked == fc) } {
         return;
     }
     // SAFETY: as above -- the closure array is this funccall's own.
@@ -513,13 +513,23 @@ unsafe fn can_free_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
 /// Called from the collector, with `copyID` the mark just used.
 pub unsafe fn free_unref_funccal(copyID: c_int, testing: c_int) -> bool {
     // SAFETY: the collector's own mark, and the parked list is this module's.
-    let did_free = unsafe { unlink_parked_funccals(|fc| can_free_funccal(fc, copyID)) };
+    let did_free = unsafe { unlink_parked_funccals(Sweep::All, |fc| can_free_funccal(fc, copyID)) };
     if did_free {
         // Freeing a funccal may have made more items collectable.
         // SAFETY: called from the collector, which is between marks.
         unsafe { garbage_collect(testing != 0) };
     }
     did_free
+}
+
+/// How far a walk of the parked list goes.
+enum Sweep {
+    /// Stop as soon as one node has been freed. `funccal_unref` is looking
+    /// for one specific funccall, and the C returns from the loop the moment
+    /// it finds it.
+    First,
+    /// Walk the whole list: the collector frees every node it can.
+    All,
 }
 
 /// Unlink and free every parked funccall `doomed` accepts; answers whether
@@ -530,32 +540,55 @@ pub unsafe fn free_unref_funccal(copyID: c_int, testing: c_int) -> bool {
 /// walk carries the *previous* node instead and writes through whichever of
 /// the two is right.
 ///
+/// **The cursor is re-read from the list on every step, never carried across
+/// the free.** Freeing a parked funccall runs the destructors of everything
+/// it holds, and a closure among them re-enters this walk through
+/// `funccal_unref`, which can unlink and free nodes *after* the one being
+/// freed here. A successor read before `free_funccal_contents` is a dangling
+/// pointer by the time the walk steps onto it. The C gets this for free: its
+/// `*pfc` is a load from the list itself, and the re-entrant walk writes
+/// through the very link it would read next.
+///
 /// # Safety
 /// Every node of the parked list must be live, which is the list's own
-/// invariant; `doomed` must not touch the list.
-unsafe fn unlink_parked_funccals(mut doomed: impl FnMut(*mut funccall_T) -> bool) -> bool {
+/// invariant.
+unsafe fn unlink_parked_funccals(
+    stop: Sweep,
+    mut doomed: impl FnMut(*mut funccall_T) -> bool,
+) -> bool {
     let mut freed = false;
     let mut prev = ptr::null_mut::<funccall_T>();
-    let mut fc = previous_funccal.get();
-    while !fc.is_null() {
-        // SAFETY: a live node of the list.
-        let next = unsafe { (*fc).fc_caller };
-        if doomed(fc) {
-            if prev.is_null() {
-                previous_funccal.set(next);
-            } else {
-                // SAFETY: `prev` is the live node before `fc`.
-                unsafe { (*prev).fc_caller = next };
-            }
-            // SAFETY: unlinked above, so nothing reaches it any more.
-            unsafe { free_funccal_contents(fc) };
-            freed = true;
+    loop {
+        // The cursor, re-loaded from the list rather than remembered: see
+        // the note above.
+        // SAFETY: `prev` is null or a live node of the list.
+        let fc = if prev.is_null() {
+            previous_funccal.get()
         } else {
-            prev = fc;
+            unsafe { (*prev).fc_caller }
+        };
+        if fc.is_null() {
+            return freed;
         }
-        fc = next;
+        if !doomed(fc) {
+            prev = fc;
+            continue;
+        }
+        // SAFETY: a live node of the list, read before it is freed.
+        let next = unsafe { (*fc).fc_caller };
+        if prev.is_null() {
+            previous_funccal.set(next);
+        } else {
+            // SAFETY: `prev` is the live node before `fc`.
+            unsafe { (*prev).fc_caller = next };
+        }
+        // SAFETY: unlinked above, so nothing reaches it any more.
+        unsafe { free_funccal_contents(fc) };
+        freed = true;
+        if matches!(stop, Sweep::First) {
+            return freed;
+        }
     }
-    freed
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
