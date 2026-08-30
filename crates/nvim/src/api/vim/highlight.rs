@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str, has_key};
+use crate::api::private::helpers::{Reported, dict_put_str, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::highlight::HlAttrFlags;
 
@@ -22,7 +22,7 @@ pub unsafe fn nvim_get_hl(
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, &mut error).reported(error) }
 }
 
@@ -32,7 +32,7 @@ pub unsafe fn nvim_set_hl(
     name: String_0,
     val: *mut KeyDict_highlight,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
         // SAFETY: the caller's highlight name is NUL-terminated.
@@ -79,7 +79,7 @@ pub unsafe fn nvim_set_hl(
 }
 
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if has_key(
         unsafe { (*opts).is_set__get_ns_ },
         KEYSET_OPTIDX_get_ns__winid,
@@ -95,7 +95,7 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
 }
 
 pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if !(ns_id >= 0 as Integer) {
         error = err_bad_number(c"namespace", ns_id);
         return ().reported(error);

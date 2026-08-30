@@ -8,9 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, array_add, dict_put, dict_put_str, has_key,
-};
+use crate::api::private::helpers::{NIL, Reported, array_add, dict_put, dict_put_str, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::cstr;
@@ -24,7 +22,7 @@ pub unsafe fn nvim_get_autocmds(
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut id: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;

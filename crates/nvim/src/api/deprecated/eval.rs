@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
@@ -19,7 +19,7 @@ pub unsafe fn nvim_exec(
     src: String_0,
     output: Boolean,
 ) -> Result<String_0, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut opts = KeyDict_exec_opts { output };
     // SAFETY: `src` is the caller's and `opts`/`error` are this frame's.
     unsafe { exec_impl(channel_id, src, &raw mut opts, &mut error) }.reported(error)
@@ -29,7 +29,7 @@ pub unsafe fn nvim_command_output(
     channel_id: uint64_t,
     command: String_0,
 ) -> Result<String_0, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut opts = KeyDict_exec_opts { output: true };
     // SAFETY: as `nvim_exec`.
     unsafe { exec_impl(channel_id, command, &raw mut opts, &mut error) }.reported(error)
@@ -51,11 +51,11 @@ pub unsafe fn nvim_call_atomic(
     calls: Array,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // "results" and the error report, and one result per call.
     let mut rv: Array = arena_array(arena, 2 as size_t);
     let mut results: Array = arena_array(arena, calls.size);
-    let mut nested_error = ERROR_INIT;
+    let mut nested_error = Error::none();
     let mut i: size_t = 0;
     // A call that is not a well-formed [name, args] pair is the caller's
     // mistake rather than a failed call, so it is reported through `err` and

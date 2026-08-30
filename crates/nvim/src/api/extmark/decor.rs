@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::kvec::Kvec;
 
@@ -19,7 +19,7 @@ pub unsafe fn nvim_buf_del_extmark(
     ns_id: Integer,
     id: Integer,
 ) -> Result<Boolean, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
@@ -37,7 +37,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     line_start: Integer,
     mut line_end: Integer,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);

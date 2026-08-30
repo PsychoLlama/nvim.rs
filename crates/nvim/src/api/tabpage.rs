@@ -10,8 +10,8 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_try, arena_array, array_add, buffer_by_handle, dict_get_value,
-    dict_set_var, has_key, tabpage_by_handle, window_by_handle,
+    NIL, Reported, api_try, arena_array, array_add, buffer_by_handle, dict_get_value, dict_set_var,
+    has_key, tabpage_by_handle, window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
 
@@ -36,7 +36,7 @@ use core::ptr;
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena) -> Result<Array, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let mut rv = Array::EMPTY;
     let Some(tab) = tabpage_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
         return rv.reported(err);
@@ -62,7 +62,7 @@ pub unsafe fn nvim_tabpage_get_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return NIL.reported(err);
     };
@@ -81,7 +81,7 @@ pub unsafe fn nvim_tabpage_set_var(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };
@@ -98,7 +98,7 @@ pub unsafe fn nvim_tabpage_set_var(
 /// # Safety
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };
@@ -111,7 +111,7 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(
 
 /// The window `tp` is showing.
 pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
         return (0 as Window).reported(err);
     };
@@ -133,7 +133,7 @@ pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
 
 /// Make `win` the window `tp` shows.
 pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tp) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };
@@ -161,7 +161,7 @@ pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> 
 
 /// `tp`'s 1-based position in the tab line.
 pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return (0 as Integer).reported(err);
     };
@@ -170,7 +170,7 @@ pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
 
 /// Whether `tabpage` still names a tab page.
 pub fn nvim_tabpage_is_valid(tabpage: Tabpage) -> Boolean {
-    let mut stub: Error = ERROR_INIT;
+    let mut stub: Error = Error::none();
     let ret = tabpage_by_handle(tabpage, &mut stub).is_some();
     // The message the lookup may have left behind is dropped rather than
     // reported.
@@ -192,7 +192,7 @@ pub unsafe fn nvim_open_tabpage(
     // module-level constants into.
     const OPTIDX_AFTER: ::core::ffi::c_int = 1;
 
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(b) = buffer_by_handle(buf, &mut err) else {
         return (0 as Tabpage).reported(err);
     };

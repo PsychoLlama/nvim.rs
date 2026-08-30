@@ -63,8 +63,6 @@ const kRetMulti: LuaRetMode = 3;
 /// Ask `nlua_call_ref` for one value, interpreted as a boolean.
 const kRetNilBool: LuaRetMode = 1;
 
-const ERROR_INIT: Error = Error::none();
-
 /// The registered providers, in registration order — which is the order every
 /// callback runs in. Entries are never removed: unregistering clears the
 /// callbacks and marks the provider disabled, because `w_ns_hl_winhl` and the
@@ -134,7 +132,7 @@ unsafe fn decor_provider_invoke(
     res: Option<&mut Array>,
 ) -> bool {
     // SAFETY: the caller's arguments; `nlua_call_ref` owns `args` from here.
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let want_list = res.is_some();
 
     let locked = Lock::text();

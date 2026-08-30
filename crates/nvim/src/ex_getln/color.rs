@@ -199,7 +199,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         type_0: kCallbackNone,
     };
     let mut can_free_cb = false;
-    let mut err: Error = ERROR_INIT;
+    let mut err: Error = Error::none();
     let mut err_errmsg = e_intern2.as_ptr();
     let mut dgc_ret = true;
 

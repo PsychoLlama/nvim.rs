@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
+use crate::api::private::helpers::{NIL, Reported, array_add, has_key};
 use crate::api_error;
 use crate::cstr;
 use crate::guard::Lock;
@@ -17,7 +17,7 @@ use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Buf;
 
 pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
-    let mut slot = ERROR_INIT;
+    let mut slot = Error::none();
     let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
     if b.is_null() {
         return (0 as Integer).reported(slot);
@@ -162,7 +162,7 @@ unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
 }
 
 pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
-    let mut slot = ERROR_INIT;
+    let mut slot = Error::none();
     let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if data.is_empty() {
         return ().reported(slot);

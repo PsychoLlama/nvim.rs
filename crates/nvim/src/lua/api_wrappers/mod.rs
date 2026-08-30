@@ -199,9 +199,6 @@ mod known {
 
 use known::*;
 
-/// A fresh, unset error.
-const ERROR_INIT: Error = Error::none();
-
 /// Flags for handing a result back to Lua.
 ///
 /// `kNluaPushFreeRefs` always applies: the binding owns the value and
@@ -227,7 +224,7 @@ impl Call {
     const fn new() -> Self {
         Call {
             arena: ARENA_EMPTY,
-            err: ERROR_INIT,
+            err: Error::none(),
             err_param: ptr::null_mut(),
         }
     }

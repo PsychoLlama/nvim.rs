@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
@@ -30,7 +30,7 @@ pub unsafe fn nvim_buf_set_extmark(
     mut col: Integer,
     opts: *mut KeyDict_set_extmark,
 ) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Opts::new(opts) };
     let mut id: uint32_t = 0;

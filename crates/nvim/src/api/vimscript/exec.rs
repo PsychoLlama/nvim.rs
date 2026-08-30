@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, api_try, dict_put_str};
+use crate::api::private::helpers::{Reported, api_try, dict_put_str};
 use crate::guard::Suppress;
 use crate::types::NUL;
 use core::ffi::c_char;
@@ -19,7 +19,7 @@ pub unsafe fn nvim_exec2(
     src: String_0,
     opts: *mut KeyDict_exec_opts,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `src`/`opts` are the caller's and `error` this frame's slot.
     let output: String_0 = unsafe { exec_impl(channel_id, src, opts, &mut error) };
     // SAFETY: `opts` is the caller's keydict, live for the call.
@@ -116,7 +116,7 @@ pub unsafe fn exec_impl(
 }
 
 pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     api_try(&mut error, |_| {
         // SAFETY: `cmd` is the caller's NUL-terminated command line.
         let _ = unsafe { do_cmdline_cmd(cmd.data()) };

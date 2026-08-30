@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api_error;
 use crate::kvec::InitVec;
 use crate::message_fmt::msg_bytes;
@@ -34,7 +34,7 @@ pub unsafe fn nvim_parse_expression(
     hl: Boolean,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `flags` is the caller's string and `error` this frame's slot.
     let Some(pflags) = (unsafe { parse_flags(flags, &mut error) }) else {
         return Dict::EMPTY.reported(error);

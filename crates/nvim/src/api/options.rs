@@ -16,8 +16,7 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key,
-    window_by_handle,
+    NIL, Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key, window_by_handle,
 };
 use crate::autocmd::{
     EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
@@ -316,7 +315,7 @@ pub unsafe fn nvim_get_option_value(
     name: String_0,
     opts: *mut KeyDict_option,
 ) -> Result<Object, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: `name` and `opts` are the caller's, per this function's
     // contract, and `err` is this frame's own.
     let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
@@ -380,7 +379,7 @@ pub unsafe fn nvim_set_option_value(
     value: Object,
     opts: *mut KeyDict_option,
 ) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: as `nvim_get_option_value`.
     let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
         return ().reported(err);
@@ -429,7 +428,7 @@ pub unsafe fn nvim_get_option_info2(
     opts: *mut KeyDict_option,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: as `nvim_get_option_value`.
     let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
         return Dict::EMPTY.reported(err);

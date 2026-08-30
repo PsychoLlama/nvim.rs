@@ -7,7 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::helpers::{Reported, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::types::OptionSetFlags;
 use crate::winlayer::Live;
@@ -19,7 +19,7 @@ pub unsafe fn nvim_exec_autocmds(
 ) -> Result<(), Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut modeline: bool = true;
     let mut b: *mut buf_T = curbuf.get();

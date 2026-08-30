@@ -10,7 +10,7 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::{ERROR_INIT, TRY_STATE_INIT, nlua_push_errstr};
+use super::{TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{handle_get_buffer, try_enter, try_leave};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
@@ -23,7 +23,7 @@ use crate::main::curbuf;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{
-    buf_T, colnr_T, handle_T, linenr_T, lua_State, luaL_Reg, regmatch_T, regprog_T,
+    Error, buf_T, colnr_T, handle_T, linenr_T, lua_State, luaL_Reg, regmatch_T, regprog_T,
 };
 
 /// The registry key the metatable is stored under, and the type name
@@ -208,7 +208,7 @@ pub(crate) static REGEX_META: ConstTable<[luaL_Reg; 5]> = luaL_reg_table![
 /// `lstate` must be a live Lua state holding this function's arguments.
 pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let text = luaL_checkstring(lstate, 1);
 
         // vim_regcomp reports a bad pattern by throwing, so it runs bracketed.

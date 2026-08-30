@@ -498,9 +498,6 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     mouse_used: ::core::ptr::null_mut::<bool>(),
 };
 
-/// An all-zero [`Error`], C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error::none();
-
 /// An all-zero [`pos_T`].
 pub(crate) const POS_INIT: pos_T = pos_T {
     lnum: 0,

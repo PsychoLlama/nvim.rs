@@ -7,11 +7,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
 
 pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut res: bool = false;
@@ -54,7 +54,7 @@ pub unsafe fn nvim_buf_set_mark(
     col: Integer,
     _opts: *mut KeyDict_empty,
 ) -> Result<Boolean, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut res: bool = false;
     let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
@@ -76,7 +76,7 @@ pub unsafe fn nvim_buf_get_mark(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut rv: Array = Array {

@@ -61,7 +61,8 @@ pub struct Error {
 }
 
 impl Error {
-    /// An error that is not set: upstream's `ERROR_INIT`.
+    /// An error that is not set: upstream's `ERROR_INIT`, and the whole of
+    /// what that name used to buy at 245 call sites.
     pub(crate) const fn none() -> Self {
         Self {
             kind: kErrorTypeNone,

@@ -20,7 +20,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::helpers::{Reported, has_key};
 use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
@@ -51,7 +51,7 @@ pub unsafe fn nvim_eval_statusline(
     opts: *mut KeyDict_eval_statusline,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let empty = Dict {
         size: 0,
         capacity: 0,
@@ -402,7 +402,7 @@ pub unsafe fn nvim__complete_set(
     opts: *mut KeyDict_complete_set,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv = arena_dict(arena, 2);
     // SAFETY: the API dispatcher's own frame.
     let opts = unsafe { &*opts };

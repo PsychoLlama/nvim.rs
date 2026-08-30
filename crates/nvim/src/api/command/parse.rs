@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
@@ -222,7 +222,7 @@ pub unsafe fn nvim_parse_cmd(
     _opts: *mut KeyDict_empty,
     arena: *mut Arena,
 ) -> Result<KeyDict_cmd, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY (all three): a plain C aggregate whose all-zero state is the
     // valid "nothing parsed yet" one, as the C original's CLEAR_FIELD relies
     // on.

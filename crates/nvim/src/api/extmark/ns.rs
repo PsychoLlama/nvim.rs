@@ -11,9 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{
-    ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
-};
+use crate::api::private::helpers::{Reported, array_add, dict_put_str, has_key, set_key};
 use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tab_windows};
 use core::ptr;
@@ -232,7 +230,7 @@ pub fn ns_initialized(mut ns: uint32_t) -> bool {
 }
 
 pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return ().reported(error);
@@ -306,7 +304,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
 }
 
 pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut opts: KeyDict_ns_opts = KEYDICT_INIT;
     let mut windows: Array = ARRAY_DICT_INIT;
     opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);

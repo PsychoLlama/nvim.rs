@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Live;
 
@@ -126,7 +126,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -162,7 +162,7 @@ pub unsafe fn nvim_buf_get_extmarks(
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -364,7 +364,7 @@ pub unsafe fn nvim__buf_debug_extmarks(
     keys: Boolean,
     dot: Boolean,
 ) -> Result<String_0, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return String_0::NULL.reported(error);

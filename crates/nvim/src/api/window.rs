@@ -10,8 +10,8 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_try, arena_array, arena_dict, array_add, buffer_by_handle,
-    dict_get_value, dict_put, dict_set_var, has_key, normalize_index, window_by_handle,
+    NIL, Reported, api_try, arena_array, arena_dict, array_add, buffer_by_handle, dict_get_value,
+    dict_put, dict_set_var, has_key, normalize_index, window_by_handle,
 };
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
@@ -42,7 +42,7 @@ use core::ptr;
 
 /// The buffer `win` is showing.
 pub fn nvim_win_get_buf(win: Window) -> Result<Buffer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return (0 as Buffer).reported(err);
     };
@@ -51,7 +51,7 @@ pub fn nvim_win_get_buf(win: Window) -> Result<Buffer, Error> {
 
 /// Show `buf` in `win`.
 pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let w = window_by_handle(win, &mut err);
     let b = buffer_by_handle(buf, &mut err);
     let (Some(w), Some(b)) = (w, b) else {
@@ -73,7 +73,7 @@ pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_cursor(win: Window, arena: *mut Arena) -> Result<Array, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return Array::EMPTY.reported(err);
     };
@@ -95,7 +95,7 @@ pub unsafe fn nvim_win_get_cursor(win: Window, arena: *mut Arena) -> Result<Arra
 /// # Safety
 /// `pos` must point at its own elements.
 pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(mut w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -138,7 +138,7 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
 
 /// `win`'s height in text lines.
 pub fn nvim_win_get_height(win: Window) -> Result<Integer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return (0 as Integer).reported(err);
     };
@@ -148,7 +148,7 @@ pub fn nvim_win_get_height(win: Window) -> Result<Integer, Error> {
 /// Resize `win` to `height` text lines, taking from or giving to its
 /// neighbours.
 pub fn nvim_win_set_height(win: Window, height: Integer) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -161,7 +161,7 @@ pub fn nvim_win_set_height(win: Window, height: Integer) -> Result<(), Error> {
 
 /// `win`'s width in screen columns.
 pub fn nvim_win_get_width(win: Window) -> Result<Integer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return (0 as Integer).reported(err);
     };
@@ -170,7 +170,7 @@ pub fn nvim_win_get_width(win: Window) -> Result<Integer, Error> {
 
 /// Resize `win` to `width` screen columns. See [`nvim_win_set_height`].
 pub fn nvim_win_set_width(win: Window, width: Integer) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -190,7 +190,7 @@ pub unsafe fn nvim_win_get_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return NIL.reported(err);
     };
@@ -205,7 +205,7 @@ pub unsafe fn nvim_win_get_var(
 /// # Safety
 /// `name` and `value` must own their bytes: the store takes them over.
 pub unsafe fn nvim_win_set_var(win: Window, name: String_0, value: Object) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -220,7 +220,7 @@ pub unsafe fn nvim_win_set_var(win: Window, name: String_0, value: Object) -> Re
 /// # Safety
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_win_del_var(win: Window, name: String_0) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -235,7 +235,7 @@ pub unsafe fn nvim_win_del_var(win: Window, name: String_0) -> Result<(), Error>
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_position(win: Window, arena: *mut Arena) -> Result<Array, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return Array::EMPTY.reported(err);
     };
@@ -251,7 +251,7 @@ pub unsafe fn nvim_win_get_position(win: Window, arena: *mut Arena) -> Result<Ar
 
 /// The tab page `win` is on.
 pub fn nvim_win_get_tabpage(win: Window) -> Result<Tabpage, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return (0 as Tabpage).reported(err);
     };
@@ -262,7 +262,7 @@ pub fn nvim_win_get_tabpage(win: Window) -> Result<Tabpage, Error> {
 
 /// `win`'s 1-based position within its tab page, as `CTRL-W w` counts.
 pub fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return (0 as Integer).reported(err);
     };
@@ -275,7 +275,7 @@ pub fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
 
 /// Whether `win` still names a window.
 pub fn nvim_win_is_valid(win: Window) -> Boolean {
-    let mut stub: Error = ERROR_INIT;
+    let mut stub: Error = Error::none();
     let ret = window_by_handle(win, &mut stub).is_some();
     // The message the lookup may have left behind is dropped rather than
     // reported.
@@ -285,7 +285,7 @@ pub fn nvim_win_is_valid(win: Window) -> Boolean {
 
 /// Close `win`, keeping its buffer loaded -- `:hide`.
 pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: `w` is live, and `err` is this frame's own.
     let Some(w) = window_by_handle(win, &mut err)
         .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
@@ -314,7 +314,7 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
 
 /// Close `win`, unloading its buffer when it was the last window on it.
 pub fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: `w` is live, and `err` is this frame's own.
     let Some(w) = window_by_handle(win, &mut err)
         .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
@@ -338,7 +338,7 @@ pub fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
 
 /// Call the Lua function `fun` with `win` as the current window.
 pub fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return NIL.reported(err);
     };
@@ -364,7 +364,7 @@ pub fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
 
 /// Point `win` at highlight namespace `ns_id`, or at the global one for -1.
 pub fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(mut w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -398,7 +398,7 @@ pub unsafe fn nvim_win_text_height(
     const OPTIDX_MAX_HEIGHT: ::core::ffi::c_int = 4;
     const OPTIDX_START_VCOL: ::core::ffi::c_int = 5;
 
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.

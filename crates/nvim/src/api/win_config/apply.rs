@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::winlayer::{TabPage, Win};
 
@@ -432,7 +432,7 @@ pub unsafe fn nvim_win_set_config(
     win: Window,
     config: *mut KeyDict_win_config,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `error` is this frame's own slot, live for the whole call, and
     // `config` is the caller's keyset.
     let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };

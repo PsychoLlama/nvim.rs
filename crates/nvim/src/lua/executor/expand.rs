@@ -16,7 +16,6 @@ use core::ptr;
 
 use super::{get_global_lstate, nlua_error, nlua_pcall};
 use crate::api::private::helpers::string_to_cstr;
-use crate::ex_getln::ERROR_INIT;
 use crate::global_cell::GlobalCell;
 use crate::lua::converter::{nlua_pop_array, nlua_pop_integer};
 use crate::lua::ffi::{
@@ -24,7 +23,9 @@ use crate::lua::ffi::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::os::cshim::gettext;
-use crate::types::{Arena, FAIL, Failed, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t};
+use crate::types::{
+    Arena, Error, FAIL, Failed, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t,
+};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_get_matches`] to take ownership of them. Each entry is an
@@ -74,7 +75,7 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
             return;
         }
 
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let mut arena: Arena = ARENA_EMPTY;
         let prefix_len = nlua_pop_integer(lstate, &raw mut arena, &mut err) as ptrdiff_t;
         let mut matches: Vec<*mut c_char> = Vec::new();

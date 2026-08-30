@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::helpers::{Reported, has_key};
 use crate::api::private::validate::{
     err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
@@ -25,7 +25,7 @@ pub unsafe fn nvim_create_autocmd(
 ) -> Result<Integer, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_autocmd>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;
     let mut buf: Buffer = 0;
@@ -227,7 +227,7 @@ pub unsafe fn nvim_create_autocmd(
 }
 
 pub unsafe fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if !(id > 0 as Integer) {
         error = err_bad_number(c"autocmd id", id);
         return ().reported(error);
@@ -245,7 +245,7 @@ pub unsafe fn nvim_clear_autocmds(
 ) -> Result<(), Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_clear_autocmds>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut event_array: Array = unsafe {
         unpack_string_or_array(
             opts.event,

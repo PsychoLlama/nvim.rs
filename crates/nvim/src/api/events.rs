@@ -11,7 +11,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::api::private::helpers::{ERROR_INIT, Reported, api_typename};
+use crate::api::private::helpers::{Reported, api_typename};
 use crate::api::private::validate::err_expected;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
@@ -54,7 +54,7 @@ pub unsafe fn nvim_ui_term_event(
     event: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     // SAFETY: `event` is the caller's and NUL-terminated, as the RPC decoder
     // leaves every string it builds.
     if !unsafe { strequal(c"termresponse".as_ptr(), event.data()) } {

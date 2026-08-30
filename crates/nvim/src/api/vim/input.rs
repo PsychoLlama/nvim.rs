@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::cstr;
 use crate::getchar::typeahead;
@@ -108,7 +108,7 @@ pub unsafe fn nvim_input_mouse(
     row: Integer,
     col: Integer,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut code: ::core::ffi::c_int = 0;
     let mut modmask: ::core::ffi::c_int = 0;
     may_trigger_vim_suspend_resume(false);
@@ -232,7 +232,7 @@ pub unsafe fn nvim_set_keymap(
     rhs: String_0,
     opts: *mut KeyDict_keymap,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let slot = &mut error;
     unsafe { modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, slot) };
     ().reported(error)

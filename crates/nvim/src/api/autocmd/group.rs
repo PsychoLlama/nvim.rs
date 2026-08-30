@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::winlayer::Live;
 
@@ -20,7 +20,7 @@ pub unsafe fn nvim_create_augroup(
 ) -> Result<Integer, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut augroup_name_0: *mut ::core::ffi::c_char = name.data();
     let mut clear_autocmds: bool = if opts.is_set__create_augroup_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
@@ -52,7 +52,7 @@ pub unsafe fn nvim_create_augroup(
 }
 
 pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -74,7 +74,7 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
 }
 
 pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try};
+use crate::api::private::helpers::{NIL, Reported, api_try};
 use crate::api::private::validate::err_bad_value;
 use crate::kvec::InitVec;
 use crate::types::NUL;
@@ -20,7 +20,7 @@ pub unsafe fn nvim_exec_lua(
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `code` and `args` are the caller's, `arena` is the caller's
     // own and `error` is this frame's slot.
@@ -36,7 +36,7 @@ pub unsafe fn nvim__exec_lua_fast(
 }
 
 pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if text.len() > ::core::ffi::c_int::MAX as size_t {
         too_long(&mut error, c"text length");
         return (0 as Integer).reported(error);
@@ -57,7 +57,7 @@ pub unsafe fn nvim_get_runtime_file(
     all: Boolean,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut cookie: RuntimeCookie = RuntimeCookie {
         rv: ArrayBuilder {
             size: 0 as size_t,
@@ -144,7 +144,7 @@ pub unsafe fn nvim__get_runtime(
     opts: *mut KeyDict_runtime,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { Live::new(opts) };
     // SAFETY: the Lua state exists from startup to exit.
@@ -175,7 +175,7 @@ fn too_long(err: &mut Error, name: &CStr) {
 }
 
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if dir.len() >= 4096 as size_t {
         too_long(&mut error, c"directory name");
         return ().reported(error);

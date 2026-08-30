@@ -240,7 +240,7 @@ pub(crate) unsafe fn command_line_enter(
     cc.prompt_id = prompt_id;
     cc.level = cmdline_level.get();
 
-    let mut err: Error = ERROR_INIT;
+    let mut err: Error = Error::none();
     let mut firstcbuf: [::core::ffi::c_char; 2] = [0; 2];
 
     if cmdline_level.get() == 50 {
@@ -330,7 +330,7 @@ pub(crate) unsafe fn command_line_enter(
                 err.clear();
                 unsafe { redrawcmd() };
             }
-            err = ERROR_INIT;
+            err = Error::none();
         }
         unsafe { may_trigger_modechanged() };
 

@@ -32,9 +32,7 @@ pub use line::remote_ui_raw_line;
 pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
-use crate::api::private::helpers::{
-    ERROR_INIT, Reported, api_typename, cstr_as_string, string_to_cstr,
-};
+use crate::api::private::helpers::{Reported, api_typename, cstr_as_string, string_to_cstr};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
@@ -183,7 +181,7 @@ pub unsafe fn nvim_ui_attach(
     height: Integer,
     options: Dict,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if find_ui(channel_id).is_some() {
         error = api_error!(
             kErrorTypeException,
@@ -324,7 +322,7 @@ pub unsafe fn ui_attach(
 ///
 /// The editor must be running.
 pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if get_ui_or_err(channel_id, &mut error).is_null() {
         return Err(error);
     }
@@ -344,7 +342,7 @@ pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), 
 ///
 /// The editor must be running.
 pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     remote_ui_disconnect(channel_id, &mut error, false);
     ().reported(error)
 }
@@ -380,7 +378,7 @@ pub unsafe fn nvim_ui_try_resize(
     width: Integer,
     height: Integer,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);
@@ -410,7 +408,7 @@ pub unsafe fn nvim_ui_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return Err(error);
@@ -636,7 +634,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
     width: Integer,
     height: Integer,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     if get_ui_or_err(channel_id, &mut error).is_null() {
         return ().reported(error);
     }
@@ -657,7 +655,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
 ///
 /// The editor must be running.
 pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);
@@ -689,7 +687,7 @@ pub unsafe fn nvim_ui_pum_set_bounds(
     row: Float,
     col: Float,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);

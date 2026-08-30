@@ -9,12 +9,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, buffer_by_handle};
+use crate::api::private::helpers::{Reported, buffer_by_handle};
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::cstr;
 
 pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
@@ -90,7 +90,7 @@ pub unsafe fn nvim_buf_add_highlight(
     col_start: Integer,
     mut col_end: Integer,
 ) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
@@ -150,7 +150,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     chunks: Array,
     _opts: *mut KeyDict_empty,
 ) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };

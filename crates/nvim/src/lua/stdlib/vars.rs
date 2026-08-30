@@ -10,7 +10,7 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use super::{ERROR_INIT, nlua_push_errstr};
+use super::nlua_push_errstr;
 use crate::api::private::helpers::{
     dict_check_writable, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
@@ -27,7 +27,8 @@ use crate::lua::ffi::{
 };
 use crate::runtime::script_autoload;
 use crate::types::{
-    Buffer, String_0, Tabpage, Window, dict_T, dictitem_T, handle_T, lua_State, ptrdiff_t, size_t,
+    Buffer, Error, String_0, Tabpage, Window, dict_T, dictitem_T, handle_T, lua_State, ptrdiff_t,
+    size_t,
 };
 
 /// The dictionary the `(scope, handle)` pair at stack slots 1 and 2 names.
@@ -42,7 +43,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
         let handle = luaL_checkinteger(lstate, 2) as handle_T;
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let dict = match scope.to_bytes() {
             b"g" => get_globvar_dict(),
             b"v" => get_vimvar_dict(),
@@ -101,7 +102,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, &mut err);
         if err.is_set() {
             nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, buffer_by_handle, window_by_handle};
+use crate::api::private::helpers::{NIL, Reported, buffer_by_handle, window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::option::NIL_OPTVAL;
@@ -16,7 +16,7 @@ use crate::types::OptionSetFlags;
 use core::ffi::{CStr, c_char, c_void};
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let (buf, win) = (curbuf.get(), curwin.get());
     // SAFETY: `name` is the caller's, the two globals name the current
     // buffer and window, and `arena`/`error` are the caller's and this
@@ -30,20 +30,20 @@ pub unsafe fn nvim_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: the global scope names no object, so `NULL` is what it takes.
     unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, &mut error) };
     ().reported(error)
 }
 
 pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: as `nvim_set_option`.
     unsafe { get_option_from(NULL, kOptScopeGlobal, name, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return NIL.reported(error);
     };
@@ -59,7 +59,7 @@ pub unsafe fn nvim_buf_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return ().reported(error);
     };
@@ -70,7 +70,7 @@ pub unsafe fn nvim_buf_set_option(
 }
 
 pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
         return NIL.reported(error);
     };
@@ -86,7 +86,7 @@ pub unsafe fn nvim_win_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
         return ().reported(error);
     };

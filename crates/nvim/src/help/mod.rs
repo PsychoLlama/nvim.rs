@@ -101,9 +101,6 @@ use flag::{
     TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool, kRetObject,
 };
 
-/// An error slot with nothing in it: C's `ERROR_INIT`.
-const NO_ERROR: Error = Error::none();
-
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
 /// be changed.
 fn keepalt_is_off() -> bool {
@@ -294,7 +291,7 @@ unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
 /// # Safety
 /// Runs Lua: main thread only.
 unsafe fn resolve_tag_at_cursor() -> *mut c_char {
-    let mut err = NO_ERROR;
+    let mut err = Error::none();
     // SAFETY: a static chunk, an empty argument array, and our error slot.
     let chunk = static_cstring(c"return require'vim._core.help'.resolve_tag()");
     let (name, arena) = (ptr::null(), ptr::null_mut());
@@ -524,7 +521,7 @@ pub(crate) unsafe fn find_help_tags(
     matches: *mut *mut *mut c_char,
     keep_lang: bool,
 ) -> Result<(), Failed> {
-    let mut err = NO_ERROR;
+    let mut err = Error::none();
     // The search pattern lives here between the two calls below. Upstream
     // uses the shared `IObuff`, and `find_tags` runs a tag function.
     let mut pattern = [0 as c_char; IOSIZE as usize];
@@ -690,7 +687,7 @@ pub(crate) unsafe fn prepare_help_buffer() {
 /// # Safety
 /// Runs Lua: main thread only.
 pub(crate) unsafe fn get_local_additions() {
-    let mut err = NO_ERROR;
+    let mut err = Error::none();
     // SAFETY: a static chunk, no arguments, and our own error slot.
     let chunk = static_cstring(c"return require'vim._core.help'.local_additions()");
     let (name, arena) = (ptr::null(), ptr::null_mut());

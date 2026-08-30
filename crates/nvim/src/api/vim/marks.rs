@@ -7,7 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
@@ -52,7 +52,7 @@ unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
 /// # Safety
 /// `name` must name its own bytes.
 pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `name` is the caller's and `error` this frame's own slot.
     if unsafe { global_mark_name(name, &mut error) }.is_none() {
         return false.reported(error);
@@ -75,7 +75,7 @@ pub unsafe fn nvim_get_mark(
     _opts: *mut KeyDict_empty,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `name` is the caller's and `error` this frame's own slot.
     let Some(mark) = (unsafe { global_mark_name(name, &mut error) }) else {
         return Array::EMPTY.reported(error);

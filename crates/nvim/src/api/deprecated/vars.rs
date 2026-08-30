@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, buffer_by_handle, tabpage_by_handle, window_by_handle,
+    NIL, Reported, buffer_by_handle, tabpage_by_handle, window_by_handle,
 };
 
 pub unsafe fn buffer_set_var(
@@ -17,7 +17,7 @@ pub unsafe fn buffer_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return NIL.reported(error);
     };
@@ -32,7 +32,7 @@ pub unsafe fn buffer_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return NIL.reported(error);
     };
@@ -47,7 +47,7 @@ pub unsafe fn window_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
         return NIL.reported(error);
     };
@@ -61,7 +61,7 @@ pub unsafe fn window_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
         return NIL.reported(error);
     };
@@ -76,7 +76,7 @@ pub unsafe fn tabpage_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
         return NIL.reported(error);
     };
@@ -90,7 +90,7 @@ pub unsafe fn tabpage_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
         return NIL.reported(error);
     };
@@ -104,14 +104,14 @@ pub unsafe fn vim_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let vars = get_globvar_dict();
     // SAFETY: as `buffer_set_var`, for the global dictionary.
     unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let vars = get_globvar_dict();
     // SAFETY: as `vim_set_var`.
     unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)

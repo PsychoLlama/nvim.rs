@@ -310,15 +310,11 @@ pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) ->
     value
 }
 
-/// A fresh, unset error, to lend to a helper that still reports through an
-/// out-parameter. C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error::none();
-
 /// Answering with what a helper that still reports through an error
 /// out-parameter produced.
 pub(crate) trait Reported: Sized {
-    /// `self`, unless the lent [`ERROR_INIT`] slot `err` says why the call
-    /// that produced it could not answer.
+    /// `self`, unless the lent [`Error`] slot `err` says why the call that
+    /// produced it could not answer.
     ///
     /// This is deliberately more forgiving than `?`. A `find_*_by_handle`
     /// miss answers null *without* setting the error when the handle is `0`

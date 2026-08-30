@@ -11,7 +11,7 @@
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
-use super::{ERROR_INIT, TRY_STATE_INIT, nlua_push_errstr};
+use super::{TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{handle_get_buffer, handle_get_window, try_enter, try_leave};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
@@ -23,7 +23,7 @@ use crate::lua::ffi::{
 };
 use crate::main::g_min_log_level;
 use crate::types::{
-    CmdModFlags, Failed, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T,
+    CmdModFlags, Error, Failed, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T,
     win_execute_T,
 };
 use crate::window::win_find_tabpage;
@@ -122,7 +122,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             ..cmdmod_T::default()
         });
 
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let mut tstate = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
         {

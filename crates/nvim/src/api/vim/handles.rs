@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    ERROR_INIT, Reported, api_try, array_add, buffer_by_handle, tabpage_by_handle, window_by_handle,
+    Reported, api_try, array_add, buffer_by_handle, tabpage_by_handle, window_by_handle,
 };
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
@@ -74,7 +74,7 @@ pub unsafe fn nvim_get_current_buf() -> Buffer {
 /// # Safety
 /// The editor must be running.
 pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(b) = buffer_by_handle(buf, &mut err) else {
         return ().reported(err);
     };
@@ -119,7 +119,7 @@ pub unsafe fn nvim_get_current_win() -> Window {
 /// # Safety
 /// The editor must be running.
 pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
@@ -139,7 +139,7 @@ pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
 /// # Safety
 /// The editor must be running.
 pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffer, Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let ret = api_try(&mut err, |_| create_buf(listed, scratch));
     if ret == 0 && !err.is_set() {
         err = Error::exception(c"Failed to create buffer");
@@ -249,7 +249,7 @@ pub unsafe fn nvim_get_current_tabpage() -> Tabpage {
 /// # Safety
 /// The editor must be running.
 pub unsafe fn nvim_set_current_tabpage(tabpage: Tabpage) -> Result<(), Error> {
-    let mut err = ERROR_INIT;
+    let mut err = Error::none();
     let Some(tp) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };

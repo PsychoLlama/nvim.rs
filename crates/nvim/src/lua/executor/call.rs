@@ -18,7 +18,7 @@ use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_lea
 use crate::api_error;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
-use crate::ex_getln::{ERROR_INIT, TRY_STATE_INIT};
+use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval};
 use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
@@ -31,7 +31,7 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Arena, ArenaMem, Array, Object, consumed_blk, kErrorTypeException, kErrorTypeValidation,
+    Arena, ArenaMem, Array, Error, Object, consumed_blk, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
 
@@ -52,7 +52,7 @@ const QUOTED_FMT_LEN: size_t = size_of::<[c_char; 22]>();
 pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
     let mut refused = [0 as c_char; NAME_LIMIT + QUOTED_FMT_LEN + 1];
     unsafe {
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let mut name_len: size_t = 0;
         let name = luaL_checklstring(lstate, 1, &raw mut name_len);
 
@@ -166,7 +166,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
         let name = luaL_checklstring(lstate, 2, &raw mut name_len);
         let nargs = lua_gettop(lstate) - 2;
 
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let mut arena: Arena = ARENA_EMPTY;
         let mut args: Array = arena_array(&raw mut arena, nargs as size_t);
 

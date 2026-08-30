@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
+use crate::api::private::helpers::{NIL, Reported, array_add, dict_put};
 use crate::cstr;
 
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
@@ -81,7 +81,7 @@ pub unsafe fn nvim_set_client_info(
 }
 
 pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
         let msg = e_invchan.as_ptr();

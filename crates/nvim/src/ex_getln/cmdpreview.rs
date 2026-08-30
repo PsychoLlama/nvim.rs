@@ -86,7 +86,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
     }
 
     let preview_win = curwin.get();
-    let mut err: Error = ERROR_INIT;
+    let mut err: Error = Error::none();
 
     // Switch to the preview buffer. C's TRY_WRAP.
     let mut tstate: TryState = TRY_STATE_INIT;
@@ -465,7 +465,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // Execute the preview callback: its return value says whether to
         // show a preview and whether to open the preview window. It also
         // makes the changes and highlights the preview shows.
-        let mut err: Error = ERROR_INIT;
+        let mut err: Error = Error::none();
         let mut tstate: TryState = TRY_STATE_INIT;
         unsafe { try_enter(&raw mut tstate) };
         cmdpreview_type = unsafe { execute_cmd(&raw mut ea, &raw mut cmdinfo, true) };

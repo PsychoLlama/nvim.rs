@@ -6,7 +6,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 pub unsafe fn nvim_get_hl_by_id(
@@ -14,7 +14,7 @@ pub unsafe fn nvim_get_hl_by_id(
     rgb: Boolean,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
     if !known {
@@ -32,7 +32,7 @@ pub unsafe fn nvim_get_hl_by_name(
     rgb: Boolean,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {

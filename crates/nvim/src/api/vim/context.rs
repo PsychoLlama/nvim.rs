@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
+use crate::api::private::helpers::{NIL, Reported, dict_put, has_key};
 use crate::api::private::validate::err_bad_value;
 use crate::cstr;
 
@@ -30,7 +30,7 @@ pub unsafe fn nvim_get_context(
     opts: *mut KeyDict_context,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut types: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -83,7 +83,7 @@ pub unsafe fn nvim_get_context(
 }
 
 pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut ctx: Context = CONTEXT_INIT;
     let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);

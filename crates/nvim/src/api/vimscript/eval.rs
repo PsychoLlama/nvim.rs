@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, api_try};
+use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
@@ -46,7 +46,7 @@ impl Drop for RecursionGuard {
 pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     let mut evalarg = EVALARG_EVALUATE;
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv = Object::NIL;
     let _nesting = enter_recursive(&recursive);
     let mut rettv: typval_T = TV_INITIAL_VALUE;
@@ -152,7 +152,7 @@ pub unsafe fn nvim_call_function(
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `fn_0`/`args`/`arena` are the caller's, and `error` this
     // frame's slot; a null self dictionary means a plain function call.
     let rv =
@@ -167,7 +167,7 @@ pub unsafe fn nvim_call_dict_function(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut evalarg = EVALARG_EVALUATE;
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rettv: typval_T = TV_INITIAL_VALUE;
     // Only the evaluated form owns what it produced.
     let mut mustfree = false;

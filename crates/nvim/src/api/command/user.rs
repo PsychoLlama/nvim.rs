@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::helpers::{Reported, has_key};
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid,
 };
@@ -33,7 +33,7 @@ pub unsafe fn nvim_create_user_command(
     cmd: Object,
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `opts` is the caller's keydict and `error` this frame's slot.
     unsafe { create_user_command(channel_id, name, cmd, opts, 0, &mut error) };
     ().reported(error)
@@ -51,7 +51,7 @@ pub unsafe fn nvim_buf_create_user_command(
     cmd: Object,
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `error` is this frame's slot.
     let target_buf = unsafe { find_buffer_by_handle(buf, &mut error) };
     if error.is_set() {
@@ -69,7 +69,7 @@ pub unsafe fn nvim_buf_create_user_command(
 }
 
 pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let table = if buf == -1 {
         Table::Global
     } else {
@@ -379,7 +379,7 @@ pub unsafe fn nvim_buf_get_commands(
     opts: *mut KeyDict_get_commands,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let builtin = unsafe { (*opts).builtin };
     if buf == -1 {

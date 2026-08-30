@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::{Error, TryState};
+use crate::types::TryState;
 
 mod regex;
 mod register;
@@ -26,9 +26,6 @@ pub use self::register::*;
 pub use self::strings::*;
 pub use self::vars::*;
 pub(crate) use self::with::*;
-
-/// An all-zero [`Error`], C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error::none();
 
 /// An all-zero [`TryState`], which [`try_enter`] fills.
 ///

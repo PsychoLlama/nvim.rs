@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::api::private::helpers::{NIL, Reported, array_add};
 use crate::api::private::validate::err_out_of_range;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
@@ -25,7 +25,7 @@ pub unsafe fn nvim_buf_set_text(
     mut replacement: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut scratch: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,

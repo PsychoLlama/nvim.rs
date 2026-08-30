@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::guard::Suppress;
 use crate::kvec::Kvec;
 use crate::message::{emsg_ptr, msg_ptr};
@@ -143,7 +143,7 @@ pub unsafe fn nvim_notify(
     opts: Dict,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));

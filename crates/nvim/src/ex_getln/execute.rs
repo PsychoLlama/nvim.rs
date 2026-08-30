@@ -473,7 +473,7 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     if !has_event(EVENT_CMDLINECHANGED) {
         return;
     }
-    let mut err: Error = ERROR_INIT;
+    let mut err: Error = Error::none();
     let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
     let mut firstcbuf: [::core::ffi::c_char; 2] = [firstc as ::core::ffi::c_char, 0];
     let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };

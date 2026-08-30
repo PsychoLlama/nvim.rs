@@ -43,7 +43,7 @@ use crate::buffer::{buf_hide, buf_is_quickfix};
 use crate::cursor::check_cursor;
 use crate::drawscreen::redraw_all_later;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::ex_getln::{ERROR_INIT, is_in_cmdwin};
+use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
@@ -238,7 +238,7 @@ pub fn window_layout_locked(cmd: cmdidx_T) -> bool {
 /// Whether an autocommand has forbidden this change to the window layout,
 /// reporting the reason itself.
 fn layout_locked(cmd: cmdidx_T) -> bool {
-    let mut e = ERROR_INIT;
+    let mut e = Error::none();
     let locked = locked_err(cmd, &mut e);
     if e.is_set() {
         err(e.message_or_empty().as_ptr());

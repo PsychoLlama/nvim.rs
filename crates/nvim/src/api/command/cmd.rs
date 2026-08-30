@@ -35,7 +35,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
+use crate::api::private::helpers::{Reported, array_add, has_key};
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::cstr;
@@ -90,7 +90,7 @@ pub unsafe fn nvim_cmd(
     opts: *mut KeyDict_cmd_opts,
     arena: *mut Arena,
 ) -> Result<String_0, Error> {
-    let mut slot = ERROR_INIT;
+    let mut slot = Error::none();
     let err = &mut slot;
     // SAFETY: the dispatcher decodes both keydicts onto its own frame and
     // keeps them alive across the call; neither is reachable from anything

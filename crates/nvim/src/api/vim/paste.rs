@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try, array_add};
+use crate::api::private::helpers::{NIL, Reported, api_try, array_add};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::cstr;
 use crate::getchar::PastePhase;
@@ -39,7 +39,7 @@ pub unsafe fn nvim_paste(
     phase: Integer,
     arena: *mut Arena,
 ) -> Result<Boolean, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     static cancelled: GlobalCell<bool> = GlobalCell::new(false);
     if !(-1..=3).contains(&phase) {
         let name = c"phase".as_ptr();
@@ -122,7 +122,7 @@ pub unsafe fn nvim_put(
     follow: Boolean,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut reg = yankreg_T {
         y_array: ::core::ptr::null_mut::<String_0>(),
         y_size: 0,

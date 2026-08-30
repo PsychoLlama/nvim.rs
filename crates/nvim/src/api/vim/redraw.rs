@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::helpers::{Reported, has_key};
 use crate::guard::Allow;
 use crate::types::NUL;
 use crate::winlayer::{Live, Win, first_window, windows};
@@ -56,7 +56,7 @@ fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
 /// `opts` must be the caller's decoded keyset, whose `range` array names its
 /// own items.
 pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let mut opts = unsafe { Redraw::new(opts) };
     let keys = opts.is_set__redraw_;

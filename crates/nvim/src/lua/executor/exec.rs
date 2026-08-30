@@ -18,7 +18,6 @@ use super::{
 };
 use crate::api::private::helpers::arena_array;
 use crate::ex_cmds::check_secure;
-use crate::ex_getln::ERROR_INIT;
 use crate::garray::ga_concat_strings;
 use crate::lua::converter::{
     kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
@@ -417,7 +416,7 @@ unsafe fn nlua_call_pop_retval(
             lua_pop(lstate, 1);
             return Object::NIL;
         }
-        let mut dummy = ERROR_INIT;
+        let mut dummy = Error::none();
         let perr: &mut Error = err.unwrap_or(&mut dummy);
         match mode {
             kRetNilBool => {

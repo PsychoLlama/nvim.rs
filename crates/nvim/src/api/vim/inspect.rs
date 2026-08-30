@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
+use crate::api::private::helpers::{NIL, Reported, array_add, dict_put};
 use crate::api::private::validate::err_bad_number;
 use crate::api_error;
 use crate::cstr;
@@ -67,7 +67,7 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
 }
 
 pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv: ::core::ffi::c_int = 0;
     let mut rvobj: Array = Array {
         size: 0 as size_t,
@@ -134,7 +134,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
 }
 
 pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rvobj: Object = NIL;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
@@ -191,7 +191,7 @@ pub unsafe fn nvim__inspect_cell(
     col: Integer,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut ret: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -244,6 +244,6 @@ pub unsafe fn nvim__invalidate_glyph_cache() {
 }
 
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     unsafe { unpack(str.data(), str.len(), arena, &mut error).reported(error) }
 }

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_expected, err_out_of_range, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
@@ -34,7 +34,7 @@ pub unsafe fn nvim_echo(
     history: Boolean,
     opts: *mut KeyDict_echo_opts,
 ) -> Result<Object, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { EchoOpts::new(opts) };
     let mut id = Object::integer(-1);

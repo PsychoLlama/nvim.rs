@@ -10,14 +10,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::cstr;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
 
 pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);
@@ -39,7 +39,7 @@ pub unsafe fn nvim_buf_get_lines(
     arena: *mut Arena,
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -83,7 +83,7 @@ pub unsafe fn nvim_buf_set_lines(
     replacement: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
@@ -296,7 +296,7 @@ pub unsafe fn nvim_buf_get_text(
     arena: *mut Arena,
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut str: String_0 = String_0::NULL;
     let mut rv: Array = Array {
         size: 0 as size_t,
@@ -373,7 +373,7 @@ pub unsafe fn nvim_buf_get_text(
 }
 
 pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);

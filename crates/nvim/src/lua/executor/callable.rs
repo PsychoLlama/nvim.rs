@@ -16,7 +16,6 @@ use core::ptr;
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
 use crate::api::private::helpers::cstr_as_string;
 use crate::eval::userfunc::register_luafunc;
-use crate::ex_getln::ERROR_INIT;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_to_buf, vim_unescape_ks};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
@@ -30,6 +29,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 use crate::strings::{arena_printf, vim_snprintf};
+use crate::types::Error;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Array, LuaRef, Object, String_0, VAR_DICT, VAR_LIST, buf_T, kObjectTypeBoolean, size_t,
@@ -223,7 +223,7 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
             items: args__items.as_mut_ptr(),
         };
 
-        let mut err = ERROR_INIT;
+        let mut err = Error::none();
         let result = nlua_exec(
             static_cstring(c"return type(loadstring(...)()) == 'function'"),
             ptr::null::<c_char>(),

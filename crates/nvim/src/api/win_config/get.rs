@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, set_key, window_by_handle};
+use crate::api::private::helpers::{Reported, array_add, set_key, window_by_handle};
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -129,7 +129,7 @@ pub unsafe fn nvim_win_get_config(
     win: Window,
     arena: *mut Arena,
 ) -> Result<KeyDict_win_config, Error> {
-    let mut error = ERROR_INIT;
+    let mut error = Error::none();
     let mut rv: KeyDict_win_config = KEYDICT_INIT;
     let Some(wp) = window_by_handle(win, &mut error) else {
         return rv.reported(error);
