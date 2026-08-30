@@ -68,7 +68,7 @@ pub(super) unsafe fn spell_read_wordfile(
         if rline[0] as c_int == b'#' as c_int {
             continue;
         }
-        let mut l = unsafe { cstr::bytes_at(rline.as_ptr()) }.len() as usize;
+        let mut l = unsafe { cstr::bytes_at(rline.as_ptr()) }.len();
         while l > 0 && rline[l - 1] as uint8_t as c_int <= b' ' as c_int {
             l -= 1;
         }

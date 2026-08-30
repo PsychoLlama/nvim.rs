@@ -181,7 +181,7 @@ pub unsafe fn get_lib_dir() -> *mut c_char {
     // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
     // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
     // empty in an appimage build.
-    if unsafe { cstr::bytes_at(default_lib_dir.get()) }.len() != 0
+    if !unsafe { cstr::bytes_at(default_lib_dir.get()) }.is_empty()
         && unsafe { os_isdir(default_lib_dir.get()) }
     {
         return unsafe { xstrdup(default_lib_dir.get()) };

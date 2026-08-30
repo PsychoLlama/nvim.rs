@@ -704,7 +704,7 @@ impl WinLineVars {
         let translen = unsafe {
             transstr_buf(
                 p,
-                buf.as_ptr().add(len as usize).offset_from(p) as ssize_t,
+                buf.as_ptr().add(len).offset_from(p) as ssize_t,
                 transbuf.as_mut_ptr(),
                 MAXPATHL as size_t,
                 true,

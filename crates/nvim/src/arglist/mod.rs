@@ -429,7 +429,7 @@ unsafe fn get_arglist(gap: *mut garray_T, str: *mut c_char, escaped: bool) {
     // argument: `split_one_arg` only ever shortens what it is given, so the
     // original length still bounds it.
     unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
-    let total = unsafe { cstr::bytes_at(str) }.len() as usize;
+    let total = unsafe { cstr::bytes_at(str) }.len();
     let buf = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), total + 1) };
     let mut at = 0;
     while at < total && buf[at] != 0 {

@@ -127,7 +127,7 @@ pub(super) unsafe fn spell_read_dic(
         }
         // Trim trailing white space, and skip the line if nothing is
         // left.
-        let mut l = unsafe { cstr::bytes_at(line.as_ptr()) }.len() as usize;
+        let mut l = unsafe { cstr::bytes_at(line.as_ptr()) }.len();
         while l > 0 && line[l - 1] as uint8_t as c_int <= b' ' as c_int {
             l -= 1;
         }

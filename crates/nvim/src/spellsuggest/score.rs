@@ -132,7 +132,7 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
     if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
         0
     } else {
-        unsafe { utf_ptr2char(key.add(cstr::bytes_at(key).len() as usize + 1)) }
+        unsafe { utf_ptr2char(key.add(cstr::bytes_at(key).len() + 1)) }
     }
 }
 

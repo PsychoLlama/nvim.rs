@@ -17,8 +17,6 @@ use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
 
-/// `NULL` where a message names no offending string value.
-
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
 }

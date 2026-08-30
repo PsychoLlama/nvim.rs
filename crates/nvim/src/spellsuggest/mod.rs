@@ -646,9 +646,7 @@ unsafe fn suggest_try_special(mut su: Sug) {
     let mut p = unsafe { skiptowhite(fbadword) };
     let len = unsafe { p.offset_from(fbadword) } as usize;
     p = unsafe { skipwhite(p) };
-    if unsafe { cstr::bytes_at(p) }.len() as usize != len
-        || !unsafe { cstr::prefix_eq(fbadword, p, len) }
-    {
+    if unsafe { cstr::bytes_at(p) }.len() != len || !unsafe { cstr::prefix_eq(fbadword, p, len) } {
         return;
     }
 
@@ -697,7 +695,7 @@ unsafe fn suggest_try_change(mut su: Sug) {
     let _ = unsafe { spell_casefold(curwin.get(), tail, taillen, dest, MAXWLEN as c_int - n) };
 
     // Keep the result no longer than the original text.
-    let n = unsafe { cstr::bytes_at(su.su_badptr) }.len() as usize;
+    let n = unsafe { cstr::bytes_at(su.su_badptr) }.len();
     if n < MAXWLEN {
         fword[n] = NUL as c_char;
     }

@@ -571,7 +571,7 @@ pub unsafe fn write_reg_contents_ex(
                 }
                 buf
             } else {
-                let end = str.offset(len as isize);
+                let end = str.offset(len);
                 find_buf(buflist_findpat(str, end, true, false, false))
             }
         };

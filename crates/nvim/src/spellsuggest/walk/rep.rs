@@ -198,5 +198,5 @@ unsafe fn move_tail(p: *mut core::ffi::c_char, from_len: c_int, to_len: c_int) {
     // this has to be a move rather than a copy.
     let src = unsafe { p.offset(from_len as isize) };
     let src_len = unsafe { cstr::bytes_at(src) }.len();
-    unsafe { ptr::copy(src, p.offset(to_len as isize), src_len as usize + 1) };
+    unsafe { ptr::copy(src, p.offset(to_len as isize), src_len + 1) };
 }

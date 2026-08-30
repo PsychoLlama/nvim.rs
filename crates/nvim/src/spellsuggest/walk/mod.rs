@@ -553,7 +553,7 @@ impl Walk {
     fn preword_len(&self) -> usize {
         // SAFETY: `preword` is NUL-terminated wherever this is called, and
         // it is this module's own buffer.
-        unsafe { cstr::bytes_at(self.preword.as_ptr()).len() as usize }
+        unsafe { cstr::bytes_at(self.preword.as_ptr()).len() }
     }
 
     /// Step a pointer back over the character before it, as the C's

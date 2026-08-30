@@ -355,8 +355,7 @@ pub(crate) unsafe fn eval_string(
     // walks below stay inside that expression: the measuring pass stops at
     // the NUL and the filling pass repeats it byte for byte.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    let arg_end =
-        unsafe { cur.get().add(cstr::bytes_at(cur.get()).len() as usize) } as *const c_char;
+    let arg_end = unsafe { cur.get().add(cstr::bytes_at(cur.get()).len()) } as *const c_char;
     let off = if interpolate { 0 } else { 1 };
     // How much longer the result is than the text it is read from. The
     // 1 an interpolated piece starts with is the terminator it writes;

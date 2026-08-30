@@ -230,7 +230,7 @@ pub(super) unsafe fn add_sound_suggest(
     // with the `hi`/`hash` pair `hash_lookup` just produced for it.
     let sounddone = unsafe { &raw mut (*slang).sl_sounddone };
     let hash = unsafe { hash_hash(goodword) };
-    let goodword_len = unsafe { cstr::bytes_at(goodword).len() } as usize;
+    let goodword_len = unsafe { cstr::bytes_at(goodword).len() };
     let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
     let key = unsafe { (*hi).hi_key };
     if key.is_null() || ptr::eq(key, &raw const hash_removed) {

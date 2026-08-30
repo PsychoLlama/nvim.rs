@@ -38,7 +38,7 @@ pub(crate) unsafe fn set_context_for_expression(
         xpand.xp_context = ExpandContext::UserVars;
         if unsafe { strpbrk(arg, BREAKS.as_ptr()) }.is_null() {
             // ":let var1 var2 ...": find the last space.
-            let mut p = unsafe { arg.add(cstr::bytes_at(arg).len() as usize) };
+            let mut p = unsafe { arg.add(cstr::bytes_at(arg).len()) };
             loop {
                 xpand.xp_pattern = p;
                 // Upstream steps back unconditionally and so reads the

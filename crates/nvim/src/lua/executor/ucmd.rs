@@ -145,7 +145,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || cstr::bytes_at((*eap).arg).len() != 0 {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at((*eap).arg).is_empty() {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);

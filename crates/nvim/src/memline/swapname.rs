@@ -209,7 +209,7 @@ pub unsafe fn makeswapname(
         fname
     };
 
-    let len = unsafe { cstr::bytes_at(dir_name) }.len() as usize;
+    let len = unsafe { cstr::bytes_at(dir_name) }.len();
     let end = unsafe { dir_name.add(len) };
     if unsafe { after_pathsep(dir_name, end) } != 0
         && len > 1
@@ -514,7 +514,7 @@ pub(crate) unsafe fn findswapname(
         if fname.is_null() {
             break; // out of memory
         }
-        let n = unsafe { cstr::bytes_at(fname) }.len() as usize;
+        let n = unsafe { cstr::bytes_at(fname) }.len();
         if n == 0 {
             // Safety check.
             unsafe { xfree(fname.cast()) };

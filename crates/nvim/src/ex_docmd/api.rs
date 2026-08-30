@@ -261,7 +261,7 @@ pub(crate) unsafe fn execute_cmd0(
             {
                 unsafe { skiptowhite_esc(ea.arg) }
             } else {
-                let mut p = unsafe { ea.arg.add(cstr::bytes_at(ea.arg).len() as usize) };
+                let mut p = unsafe { ea.arg.add(cstr::bytes_at(ea.arg).len()) };
                 while p > ea.arg && ascii_iswhite(byte(unsafe { p.sub(1) })) {
                     p = unsafe { p.sub(1) };
                 }

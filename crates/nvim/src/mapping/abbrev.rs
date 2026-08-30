@@ -170,7 +170,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
                 // Need to escape K_SPECIAL.
                 let escaped = vim_strsave_escape_ks(at);
                 if !escaped.is_null() {
-                    let newlen = cstr::bytes_at(escaped).len() as usize;
+                    let newlen = cstr::bytes_at(escaped).len();
                     ptr::copy(escaped.cast::<u8>(), tb.as_mut_ptr().add(j), newlen);
                     j += newlen;
                     xfree(escaped.cast());

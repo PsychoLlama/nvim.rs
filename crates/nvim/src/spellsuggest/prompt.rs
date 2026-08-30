@@ -416,8 +416,8 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
 
     // Build the new line: what came before the bad word, the
     // suggestion, and what came after what it replaces.
-    let size = unsafe { cstr::bytes_at(line) }.len() as usize - stp.st_orglen as usize
-        + stp.st_wordlen as usize;
+    let size =
+        unsafe { cstr::bytes_at(line) }.len() - stp.st_orglen as usize + stp.st_wordlen as usize;
     let newline = unsafe { xmalloc(size + 1) } as *mut c_char;
     let col = unsafe { sug.su_badptr.offset_from(line) } as c_int;
     unsafe { newline.cast::<u8>().copy_from(line.cast(), col as usize) };

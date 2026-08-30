@@ -115,7 +115,7 @@ pub(super) unsafe fn add_suggestion(
     // into the line the bad word came from, so both walks start at the end
     // of a live string and only step back over characters already matched;
     // the loop stops as soon as either offset reaches zero.
-    let mut pgood = unsafe { goodword.add(cstr::bytes_at(goodword).len() as usize) };
+    let mut pgood = unsafe { goodword.add(cstr::bytes_at(goodword).len()) };
     let mut pbad = unsafe { (*su).su_badptr.offset(badlenarg as isize) };
     let (goodlen, badlen) = loop {
         let lens = (unsafe { pgood.offset_from(goodword) } as c_int, unsafe {
@@ -280,7 +280,7 @@ pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
     // back the `hi`/`hash` pair `hash_lookup` just produced for it, and the
     // copy it takes is owned by the table until `hash_clear_all` frees it.
     let hash = unsafe { hash_hash(word) };
-    let word_len = unsafe { cstr::bytes_at(word) }.len() as usize;
+    let word_len = unsafe { cstr::bytes_at(word) }.len();
     let hi = unsafe { hash_lookup(&raw mut (*su).su_banned, word, word_len, hash) };
     let key = unsafe { (*hi).hi_key };
     if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {

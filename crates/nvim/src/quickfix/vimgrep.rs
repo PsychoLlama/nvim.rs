@@ -376,7 +376,7 @@ unsafe fn match_buflines(
                 }
                 // `pat_len` is at least 1 here: an empty pattern fills
                 // no position and so never passes the test above.
-                col = positions[pat_len as usize - 1] as colnr_T + col + 1;
+                col = positions[pat_len - 1] as colnr_T + col + 1;
                 if col > linelen {
                     break;
                 }

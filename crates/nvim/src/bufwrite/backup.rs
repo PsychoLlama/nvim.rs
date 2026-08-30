@@ -307,7 +307,7 @@ unsafe fn step_backup_name(
     // safe, so do the arithmetic where it cannot go below zero.
     let at = unsafe { cstr::bytes_at(backup) }
         .len()
-        .saturating_sub(1 + unsafe { cstr::bytes_at(backup_ext) }.len() as usize);
+        .saturating_sub(1 + unsafe { cstr::bytes_at(backup_ext) }.len());
     let p = unsafe { backup.add(at) };
     unsafe { *p = b'z' as c_char };
     while unsafe { *p } > b'a' as c_char
