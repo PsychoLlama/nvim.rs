@@ -253,7 +253,7 @@ pub unsafe fn tv_dict_watcher_notify(
     let add = |name: &str, from: *mut typval_T| {
         let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
         unsafe { tv_copy(from, &raw mut (*v).di_tv) };
-        unsafe { tv_dict_add(event, v) };
+        let _ = unsafe { tv_dict_add(event, v) };
     };
     if !newtv.is_null() {
         add("new", newtv);

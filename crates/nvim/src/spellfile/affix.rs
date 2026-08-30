@@ -118,7 +118,7 @@ pub(super) unsafe fn handle_affix_header(
             );
         }
         unsafe { strcpy(affheader_T::key(st.cur_aff), items[1]) };
-        unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
+        let _ = unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
         unsafe { (*st.cur_aff).ah_combine = combines as c_int };
     }
 

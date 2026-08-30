@@ -35,12 +35,12 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
         Some(name) => name.as_ptr(),
         None => c"".as_ptr(),
     };
-    add_str(
+    let _ = add_str(
         "complete_word",
         if word.is_null() { c"".as_ptr() } else { word },
     );
-    add_str("complete_type", mode_str);
-    add_str(
+    let _ = add_str("complete_type", mode_str);
+    let _ = add_str(
         "reason",
         if c == Ctrl_Y || !word.is_null() {
             c"accept".as_ptr()
@@ -100,7 +100,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: b
         user_hl[0] = unsafe { get_user_highlight_attr(borrowed(c"abbr_hlgroup", &mut numbuf2)) };
         user_hl[1] = unsafe { get_user_highlight_attr(borrowed(c"kind_hlgroup", &mut numbuf2)) };
 
-        unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
+        let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
 
         if get_nr(c"icase") != 0 {
             flags |= CP_ICASE;
@@ -359,26 +359,26 @@ pub(crate) unsafe fn fill_complete_info_dict(
         tv_dict_add_str(di, key.as_ptr().cast(), key.len(), val)
     };
 
-    add_str("word", unsafe { (*match_0).cp_str }.data());
-    add_str("abbr", unsafe { (*match_0).cp_text[CPT_ABBR as usize] });
-    add_str("menu", unsafe { (*match_0).cp_text[CPT_MENU as usize] });
-    add_str("kind", unsafe { (*match_0).cp_text[CPT_KIND as usize] });
-    add_str("info", unsafe { (*match_0).cp_text[CPT_INFO as usize] });
+    let _ = add_str("word", unsafe { (*match_0).cp_str }.data());
+    let _ = add_str("abbr", unsafe { (*match_0).cp_text[CPT_ABBR as usize] });
+    let _ = add_str("menu", unsafe { (*match_0).cp_text[CPT_MENU as usize] });
+    let _ = add_str("kind", unsafe { (*match_0).cp_text[CPT_KIND as usize] });
+    let _ = add_str("info", unsafe { (*match_0).cp_text[CPT_INFO as usize] });
     if add_match {
         // SAFETY: `match_0` is a live match.
         let in_array = unsafe { (*match_0).cp_in_match_array } as BoolVarValue;
         let (key, klen) = ("match".as_ptr().cast(), "match".len());
         // SAFETY: `di` is the dict being built and `key` a static name.
-        unsafe { tv_dict_add_bool(di, key, klen, in_array) };
+        let _ = unsafe { tv_dict_add_bool(di, key, klen, in_array) };
     }
     if unsafe { (*match_0).cp_user_data.v_type } == VAR_UNKNOWN {
         // Add an empty string for backwards compatibility.
-        add_str("user_data", c"".as_ptr());
+        let _ = add_str("user_data", c"".as_ptr());
     } else {
         let (key, klen) = ("user_data".as_ptr().cast(), "user_data".len());
         // SAFETY: `di` is the dict being built, and the value is the address
         // of one of the live match's fields, taken from its raw pointer.
-        unsafe { tv_dict_add_tv(di, key, klen, &raw mut (*match_0).cp_user_data) };
+        let _ = unsafe { tv_dict_add_tv(di, key, klen, &raw mut (*match_0).cp_user_data) };
     }
 }
 
@@ -413,7 +413,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         }
     }
 
-    let mut ret = OK;
+    let mut ret = Ok(());
     if what_flag & CI_WHAT_MODE != 0 {
         let (key, klen) = ("mode".as_ptr().cast(), "mode".len());
         // SAFETY: `retdict` is the dict being built and `ins_compl_mode`
@@ -421,11 +421,11 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         ret = unsafe { tv_dict_add_str(retdict, key, klen, ins_compl_mode()) };
     }
 
-    if ret == OK && what_flag & CI_WHAT_PUM_VISIBLE != 0 {
+    if ret.is_ok() && what_flag & CI_WHAT_PUM_VISIBLE != 0 {
         ret = add_nr("pum_visible", pum_visible() as varnumber_T);
     }
 
-    if ret == OK && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
+    if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
         let line = get_cursor_line_ptr();
         let len = compl_ins_end_col.get() - cur_win().w_cursor.col;
         let text = if len > 0 {
@@ -439,7 +439,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         ret = unsafe { tv_dict_add_str_len(retdict, key, klen, text, len.max(0)) };
     }
 
-    if ret != OK
+    if ret.is_err()
         || what_flag & (CI_WHAT_ITEMS | CI_WHAT_SELECTED | CI_WHAT_MATCHES | CI_WHAT_COMPLETED) == 0
     {
         return;
@@ -459,14 +459,14 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         };
         ret = unsafe { tv_dict_add_list(retdict, key.as_ptr().cast(), key.len(), li) };
     }
-    if ret == OK
+    if ret.is_ok()
         && what_flag & CI_WHAT_SELECTED != 0
         && !compl_curr_match.get().is_null()
         && unsafe { (*compl_curr_match.get()).cp_number } == -1
     {
         ins_compl_update_sequence_numbers();
     }
-    if ret == OK {
+    if ret.is_ok() {
         let mut list_idx = 0;
         for match_0 in matches_from(first_match()) {
             if match_0.is_original() {
@@ -489,17 +489,18 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
             }
         }
     }
-    if ret == OK && what_flag & CI_WHAT_SELECTED != 0 {
+    if ret.is_ok() && what_flag & CI_WHAT_SELECTED != 0 {
         ret = add_nr("selected", selected_idx as varnumber_T);
         if let Some(wp) = win_float_find_preview() {
-            add_nr("preview_winid", wp.handle as varnumber_T);
-            add_nr("preview_bufnr", wp.buffer().handle as varnumber_T);
+            let _ = add_nr("preview_winid", wp.handle as varnumber_T);
+            let _ = add_nr("preview_bufnr", wp.buffer().handle as varnumber_T);
         }
     }
-    if ret == OK && selected_idx != -1 && has_completed {
+    if ret.is_ok() && selected_idx != -1 && has_completed {
         let di = unsafe { tv_dict_alloc() };
         unsafe { fill_complete_info_dict(di, compl_curr_match.get(), false) };
-        unsafe { tv_dict_add_dict(retdict, "completed".as_ptr().cast(), "completed".len(), di) };
+        let (key, klen) = ("completed".as_ptr().cast(), "completed".len());
+        let _ = unsafe { tv_dict_add_dict(retdict, key, klen, di) };
     }
 }
 

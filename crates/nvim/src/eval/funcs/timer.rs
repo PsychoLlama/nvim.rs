@@ -23,7 +23,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, FAIL, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST,
+    Callback, Callback_data, EvalFuncData, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST,
     VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, proftime_T,
     time_t, typval_T, typval_vval_union, varnumber_T,
 };
@@ -236,7 +236,7 @@ pub unsafe fn f_timer_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // SAFETY throughout: the timer list is main-thread state; the return value is the
     // caller's cleared typval.
     list_alloc_ret(rettv, kListLenUnknown as c_int as isize);
-    if check_arg(args, 0, tv_check_for_opt_number_arg) == FAIL {
+    if check_arg(args, 0, tv_check_for_opt_number_arg).is_err() {
         return;
     }
     if !args.has(0) {
@@ -292,7 +292,7 @@ pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     }
     let mut repeat: c_int = 1;
     if args.has(2) {
-        if check_arg(args, 2, tv_check_for_nonnull_dict_arg) == FAIL {
+        if check_arg(args, 2, tv_check_for_nonnull_dict_arg).is_err() {
             return;
         }
         let di = unsafe { tv_dict_find(args.get(2).vval.v_dict, c"repeat".as_ptr(), 6) };
@@ -321,7 +321,7 @@ pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_timer_stop(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: the timer comes from the main-thread timer table.
-    if check_arg(args, 0, tv_check_for_number_arg) == FAIL {
+    if check_arg(args, 0, tv_check_for_number_arg).is_err() {
         return;
     }
     let timer = find_timer_by_nr(arg_number(args.get(0)));

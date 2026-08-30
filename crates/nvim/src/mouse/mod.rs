@@ -621,7 +621,7 @@ pub(crate) unsafe fn f_getmousepos(
     };
     let add = |key: &CStr, value: varnumber_T| {
         // SAFETY: the dict just allocated, and a NUL-terminated literal key.
-        unsafe { tv_dict_add_nr(d, key.as_ptr(), key.to_bytes().len() as size_t, value) };
+        let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.to_bytes().len() as size_t, value) };
     };
     add(c"screenrow", mouse_row.get() as varnumber_T + 1);
     add(c"screencol", mouse_col.get() as varnumber_T + 1);

@@ -502,7 +502,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: paired with the `restore_v_event` below.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.
-    unsafe { tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as varnumber_T) };
     // SAFETY: as above.
     unsafe { tv_dict_set_keys_readonly(dict) };
     let mut payload = DictBuf::<1>::new();

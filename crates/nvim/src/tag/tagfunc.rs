@@ -380,7 +380,7 @@ unsafe fn string_fields(d: *mut dict_T) -> Vec<Field> {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
-    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
 /// The buffer the editor is working in.

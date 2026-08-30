@@ -12,7 +12,7 @@ use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use crate::winlayer::windows;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -60,7 +60,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `numbuf` outlives the strings it lends back.
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN
-        && unsafe { tv_check_for_opt_dict_arg(argvars, 1) } == FAIL
+        && unsafe { tv_check_for_opt_dict_arg(argvars, 1) }.is_err()
     {
         return None;
     }

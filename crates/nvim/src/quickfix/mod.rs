@@ -37,7 +37,7 @@ use crate::drawscreen::{
 };
 use crate::edit::beginline;
 use crate::eval::typval::{
-    KeyTaken, added, callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy,
+    KeyTaken, callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy,
     tv_dict_add, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string_alloc, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free,

@@ -35,8 +35,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FAIL, OK, OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, garray_T, linenr_T, list_T,
-    ptrdiff_t, save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, garray_T, linenr_T, list_T, ptrdiff_t,
+    save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -164,7 +164,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
         let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
         // SAFETY: a live dictionary, a static key of the given length, and a
         // value the dictionary takes over.
-        if unsafe { tv_dict_add_tv(d, name, len, &raw mut tv) } == FAIL {
+        if unsafe { tv_dict_add_tv(d, name, len, &raw mut tv) }.is_err() {
             unref_dict(d);
             return ptr::null_mut::<dict_T>();
         }
@@ -287,7 +287,7 @@ fn scan_windows(what: &mut Scan) {
         let key_len =
             unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
         // SAFETY: a live dictionary, and a live dictionary to add to it.
-        if unsafe { tv_dict_add_dict(*v_event, name, key_len as size_t, d) } == FAIL {
+        if unsafe { tv_dict_add_dict(*v_event, name, key_len as size_t, d) }.is_err() {
             unref_dict(d);
             break;
         }
@@ -305,7 +305,7 @@ fn scan_windows(what: &mut Scan) {
     }
     let (key, len) = (c"all".as_ptr(), 3 as size_t);
     // SAFETY: two live dictionaries.
-    if unsafe { tv_dict_add_dict(*v_event, key, len, alldict) } == FAIL {
+    if unsafe { tv_dict_add_dict(*v_event, key, len, alldict) }.is_err() {
         unref_dict(alldict);
     } else {
         hand_over(alldict);
@@ -402,7 +402,7 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut list_T) {
     let v_event = unsafe { get_v_event(&raw mut save) };
     let (key, len) = (c"windows".as_ptr(), 7 as size_t);
     // SAFETY: a live dictionary, a static key, and a live list it takes over.
-    if unsafe { tv_dict_add_list(v_event, key, len, windows_list) } == OK {
+    if unsafe { tv_dict_add_list(v_event, key, len, windows_list) }.is_ok() {
         let (name, buf) = (resize.name(), resize.buffer());
         // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
         unsafe { tv_dict_set_keys_readonly(v_event) };

@@ -12,7 +12,8 @@ use crate::message_fmt::emsg_text;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::tr_plural;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::Failed;
+use crate::types::NUL;
 
 /// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
 /// naming the argument's one-based position and answer `FAIL`.
@@ -27,14 +28,14 @@ fn arg_check(
     ok: bool,
     errmsg: *const ::core::ffi::c_char,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if ok {
-        return OK;
+        return Ok(());
     }
     // SAFETY: `errmsg` is one of the module's NUL-terminated statics.
     let errmsg = unsafe { gettext_ptr(errmsg) };
     emsg_text(tr_plural!(errmsg, idx + 1));
-    FAIL
+    Err(Failed)
 }
 
 /// Whether `tv` is a Number or a String, raising the type-specific error if
@@ -109,7 +110,7 @@ pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
 pub unsafe fn tv_check_for_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_STRING,
@@ -128,9 +129,9 @@ pub unsafe fn tv_check_for_string_arg(
 pub unsafe fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if unsafe { tv_check_for_string_arg(args, idx) } == FAIL {
-        return FAIL;
+) -> Result<(), Failed> {
+    if unsafe { tv_check_for_string_arg(args, idx) }.is_err() {
+        return Err(Failed);
     }
     let s = unsafe { (*args.offset(idx as isize)).vval.v_string };
     let nonempty = !s.is_null() && unsafe { *s } as ::core::ffi::c_int != NUL;
@@ -151,9 +152,9 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
 pub unsafe fn tv_check_for_opt_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
     unsafe { tv_check_for_string_arg(args, idx) }
 }
@@ -168,7 +169,7 @@ pub unsafe fn tv_check_for_opt_string_arg(
 pub unsafe fn tv_check_for_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_NUMBER,
@@ -187,9 +188,9 @@ pub unsafe fn tv_check_for_number_arg(
 pub unsafe fn tv_check_for_opt_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
     unsafe { tv_check_for_number_arg(args, idx) }
 }
@@ -204,7 +205,7 @@ pub unsafe fn tv_check_for_opt_number_arg(
 pub unsafe fn tv_check_for_float_or_nr_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_FLOAT || arg.v_type == VAR_NUMBER,
@@ -223,7 +224,7 @@ pub unsafe fn tv_check_for_float_or_nr_arg(
 pub unsafe fn tv_check_for_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     let numeric_bool = arg.v_type == VAR_NUMBER
         && (unsafe { arg.vval.v_number } == 0 || unsafe { arg.vval.v_number } == 1);
@@ -244,9 +245,9 @@ pub unsafe fn tv_check_for_bool_arg(
 pub unsafe fn tv_check_for_opt_bool_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
     unsafe { tv_check_for_bool_arg(args, idx) }
 }
@@ -261,7 +262,7 @@ pub unsafe fn tv_check_for_opt_bool_arg(
 pub unsafe fn tv_check_for_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_BLOB,
@@ -280,7 +281,7 @@ pub unsafe fn tv_check_for_blob_arg(
 pub unsafe fn tv_check_for_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_LIST,
@@ -299,7 +300,7 @@ pub unsafe fn tv_check_for_list_arg(
 pub unsafe fn tv_check_for_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_DICT,
@@ -318,9 +319,9 @@ pub unsafe fn tv_check_for_dict_arg(
 pub unsafe fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    if unsafe { tv_check_for_dict_arg(args, idx) } == FAIL {
-        return FAIL;
+) -> Result<(), Failed> {
+    if unsafe { tv_check_for_dict_arg(args, idx) }.is_err() {
+        return Err(Failed);
     }
     let dict = unsafe { (*args.offset(idx as isize)).vval.v_dict };
     arg_check(
@@ -340,9 +341,9 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
 pub unsafe fn tv_check_for_opt_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
     unsafe { tv_check_for_dict_arg(args, idx) }
 }
@@ -357,7 +358,7 @@ pub unsafe fn tv_check_for_opt_dict_arg(
 pub unsafe fn tv_check_for_string_or_number_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_STRING || arg.v_type == VAR_NUMBER,
@@ -376,7 +377,7 @@ pub unsafe fn tv_check_for_string_or_number_arg(
 pub unsafe fn tv_check_for_buffer_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { tv_check_for_string_or_number_arg(args, idx) }
 }
 
@@ -390,7 +391,7 @@ pub unsafe fn tv_check_for_buffer_arg(
 pub unsafe fn tv_check_for_lnum_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { tv_check_for_string_or_number_arg(args, idx) }
 }
 
@@ -404,7 +405,7 @@ pub unsafe fn tv_check_for_lnum_arg(
 pub unsafe fn tv_check_for_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_STRING || arg.v_type == VAR_LIST,
@@ -423,7 +424,7 @@ pub unsafe fn tv_check_for_string_or_list_arg(
 pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_STRING || arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
@@ -442,9 +443,9 @@ pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
 pub unsafe fn tv_check_for_opt_string_or_list_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
     unsafe { tv_check_for_string_or_list_arg(args, idx) }
 }
@@ -459,7 +460,7 @@ pub unsafe fn tv_check_for_opt_string_or_list_arg(
 pub unsafe fn tv_check_for_string_or_func_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_PARTIAL || arg.v_type == VAR_FUNC || arg.v_type == VAR_STRING,
@@ -478,7 +479,7 @@ pub unsafe fn tv_check_for_string_or_func_arg(
 pub unsafe fn tv_check_for_list_or_blob_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
         arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,

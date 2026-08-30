@@ -19,7 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
 
@@ -289,7 +289,7 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 
 /// `charclass({string})` — the class of the string's first character.
 pub unsafe fn f_charclass(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { (*argvars).vval.v_string }.is_null()
     {
         return;

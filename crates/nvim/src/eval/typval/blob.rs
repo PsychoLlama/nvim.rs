@@ -11,7 +11,7 @@
 use super::*;
 use crate::message::emsg_ptr;
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 
 /// Allocate an empty blob.  The caller owns the reference count.
 pub unsafe fn tv_blob_alloc() -> *mut blob_T {
@@ -70,7 +70,7 @@ pub(crate) unsafe fn tv_blob_slice(
     mut n2: varnumber_T,
     exclusive: bool,
     rettv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // The resulting variable is a sub-blob.  If the indexes
     // are out of range the result is empty.
     if n1 < 0 {
@@ -107,7 +107,7 @@ pub(crate) unsafe fn tv_blob_slice(
         unsafe { tv_blob_set_ret(rettv, new_blob) };
     }
 
-    OK
+    Ok(())
 }
 
 /// `blob[idx]`: store the byte in `rettv`.
@@ -119,7 +119,7 @@ pub(crate) unsafe fn tv_blob_index(
     len: ::core::ffi::c_int,
     mut idx: varnumber_T,
     rettv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // The resulting variable is a byte value.
     // If the index is too big or negative that is an error.
     if idx < 0 {
@@ -127,14 +127,14 @@ pub(crate) unsafe fn tv_blob_index(
     }
     if idx >= varnumber_T::from(len) || idx < 0 {
         semsg!("E979: Blob index out of range: {}", idx);
-        return FAIL;
+        return Err(Failed);
     }
 
     let v = unsafe { tv_blob_get((*rettv).vval.v_blob, idx as ::core::ffi::c_int) };
     unsafe { tv_clear(rettv) };
     unsafe { (*rettv).v_type = VAR_NUMBER };
     unsafe { (*rettv).vval.v_number = varnumber_T::from(v) };
-    OK
+    Ok(())
 }
 
 /// `blob[n1]` or `blob[n1 : n2]`, whichever `is_range` says.
@@ -145,7 +145,7 @@ pub unsafe fn tv_blob_slice_or_index(
     n2: varnumber_T,
     exclusive: bool,
     rettv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let len = unsafe { tv_blob_len((*rettv).vval.v_blob) };
     if is_range {
         unsafe { tv_blob_slice(blob, len, n1, n2, exclusive, rettv) }
@@ -160,14 +160,14 @@ pub unsafe fn tv_blob_check_index(
     bloblen: ::core::ffi::c_int,
     n1: varnumber_T,
     quiet: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if n1 < 0 || n1 > varnumber_T::from(bloblen) {
         if !quiet {
             semsg!("E979: Blob index out of range: {}", n1);
         }
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
@@ -176,14 +176,14 @@ pub unsafe fn tv_blob_check_range(
     n1: varnumber_T,
     n2: varnumber_T,
     quiet: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if n2 < 0 || n2 >= varnumber_T::from(bloblen) || n2 < n1 {
         if !quiet {
             semsg!("E979: Blob index out of range: {}", n2);
         }
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
@@ -192,11 +192,11 @@ pub unsafe fn tv_blob_set_range(
     n1: varnumber_T,
     n2: varnumber_T,
     src: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if n2 - n1 + 1 != varnumber_T::from(unsafe { tv_blob_len((*src).vval.v_blob) }) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
         unsafe { emsg_ptr(msg) };
-        return FAIL;
+        return Err(Failed);
     }
     let mut il = n1 as ::core::ffi::c_int;
     let mut ir = 0;
@@ -205,7 +205,7 @@ pub unsafe fn tv_blob_set_range(
         il += 1;
         ir += 1;
     }
-    OK
+    Ok(())
 }
 
 /// `blob[idx] = byte`, growing the blob by one when `idx` is the slot just
@@ -308,7 +308,7 @@ pub unsafe fn tv_blob_remove(
 /// `blob2list()`: the blob's bytes as a list of numbers.
 pub unsafe fn f_blob2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
-    if unsafe { tv_check_for_blob_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_blob_arg(argvars, 0) }.is_err() {
         return;
     }
     let blob = unsafe { (*argvars).vval.v_blob };
@@ -323,7 +323,7 @@ pub unsafe fn f_blob2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
 pub unsafe fn f_list2blob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let blob = unsafe { tv_blob_alloc_ret(rettv) };
-    if unsafe { tv_check_for_list_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_list_arg(argvars, 0) }.is_err() {
         return;
     }
     let l = unsafe { (*argvars).vval.v_list };

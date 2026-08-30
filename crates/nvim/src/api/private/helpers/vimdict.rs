@@ -155,7 +155,7 @@ pub(crate) unsafe fn dict_set_var(
         // SAFETY: `key` names its own bytes and `dict` is live.
         unsafe {
             di = tv_dict_item_alloc_len(key.data(), key.len());
-            tv_dict_add(dict, di);
+            let _ = tv_dict_add(dict, di);
         }
     } else {
         if retval {

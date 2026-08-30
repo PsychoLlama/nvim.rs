@@ -36,7 +36,7 @@ use crate::os::cshim::{gettext, strncmp};
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
+    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
     float_T, kBoolVarTrue, kObjectTypeNil, linenr_T, list_T, ptrdiff_t, typval_T,
     typval_vval_union, varnumber_T, win_T,
@@ -132,8 +132,8 @@ pub(crate) fn arg_copy(tv: &typval_T, to: &mut typval_T) {
 pub(crate) fn check_arg(
     args: Args<'_>,
     idx: c_int,
-    check: unsafe fn(*const typval_T, c_int) -> c_int,
-) -> c_int {
+    check: unsafe fn(*const typval_T, c_int) -> Result<(), Failed>,
+) -> Result<(), Failed> {
     debug_assert!(idx >= 0 && idx as usize <= MAX_ARGS);
     // SAFETY: the frame's array is `MAX_ARGS + 1` long and terminated, and
     // `idx` is in it.

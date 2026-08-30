@@ -94,7 +94,7 @@ unsafe fn qf_add_entry_from_dict(
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
+    let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
 
     // An entry that names neither a file nor a position cannot be
     // jumped to.

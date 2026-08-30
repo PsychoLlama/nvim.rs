@@ -11,7 +11,7 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
 use crate::smsg;
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{FAIL, Failed, MAXPATHL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -164,10 +164,11 @@ unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
         tp.tagkind_end
     };
     let static_key = c"static";
-    let mut ok = unsafe { add_tag_field(dict, c"name".as_ptr(), tp.tagname, tp.tagname_end) } == OK
-        && unsafe { add_tag_field(dict, c"filename".as_ptr(), full_fname, ptr::null()) } == OK
-        && unsafe { add_tag_field(dict, c"cmd".as_ptr(), tp.command, tp.command_end) } == OK
-        && unsafe { add_tag_field(dict, c"kind".as_ptr(), tp.tagkind, kind_end) } == OK
+    let mut ok = unsafe { add_tag_field(dict, c"name".as_ptr(), tp.tagname, tp.tagname_end) }
+        .is_ok()
+        && unsafe { add_tag_field(dict, c"filename".as_ptr(), full_fname, ptr::null()) }.is_ok()
+        && unsafe { add_tag_field(dict, c"cmd".as_ptr(), tp.command, tp.command_end) }.is_ok()
+        && unsafe { add_tag_field(dict, c"kind".as_ptr(), tp.tagkind, kind_end) }.is_ok()
         && unsafe {
             tv_dict_add_nr(
                 dict,
@@ -175,7 +176,8 @@ unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
                 static_key.count_bytes(),
                 is_static as varnumber_T,
             )
-        } == OK;
+        }
+        .is_ok();
     unsafe { xfree(full_fname.cast()) };
 
     ok &= unsafe { add_extra_fields(dict, &tp) };
@@ -235,7 +237,7 @@ unsafe fn add_extra_fields(dict: *mut dict_T, tp: &TagParts) -> bool {
                 // SAFETY: as above; `name`, `value` and the cursor all
                 // point into the same NUL-terminated match.
                 let added = unsafe { add_tag_field(dict, name, value, p.here()) };
-                if added != OK {
+                if added.is_err() {
                     ok = false;
                 }
                 // SAFETY: as above.
@@ -321,7 +323,7 @@ unsafe fn add_tag_field(
     field_name: *const c_char,
     start: *const c_char,
     end: *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise.
     // A dictionary holds one value per key, so a field name the tags
     // line repeats is dropped rather than replacing the first.
@@ -333,7 +335,7 @@ unsafe fn add_tag_field(
             smsg!(0, "Duplicate field name: {field_name}");
             unsafe { verbose_leave() };
         }
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut value = Vec::with_capacity(MAXPATHL as usize);

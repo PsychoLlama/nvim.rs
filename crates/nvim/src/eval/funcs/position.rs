@@ -110,8 +110,8 @@ fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
 fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
     // SAFETY throughout: `fnum` is a live local and
     // `var2fpos` hands back a pointer into the named window or buffer.
-    if check_arg(args, 0, tv_check_for_string_or_list_arg) == FAIL
-        || check_arg(args, 1, tv_check_for_opt_number_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_string_or_list_arg).is_err()
+        || check_arg(args, 1, tv_check_for_opt_number_arg).is_err()
     {
         return;
     }
@@ -528,11 +528,11 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
     let csearch = last_csearch();
     unsafe { tv_dict_alloc_ret(rettv) };
     let dict = unsafe { (*rettv).vval.v_dict };
-    unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
+    let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
     let forward = last_csearch_forward() as varnumber_T;
-    unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
     let until = last_csearch_until() as varnumber_T;
-    unsafe { tv_dict_add_nr(dict, c"until".as_ptr(), 5, until) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"until".as_ptr(), 5, until) };
 }
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
@@ -542,7 +542,7 @@ pub unsafe fn f_setcharsearch(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a Dict pointer, which may still be null.
-    if check_arg(args, 0, tv_check_for_dict_arg) == FAIL {
+    if check_arg(args, 0, tv_check_for_dict_arg).is_err() {
         return;
     }
     let d = unsafe { args.get(0).vval.v_dict };

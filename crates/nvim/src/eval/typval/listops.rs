@@ -11,7 +11,8 @@
 
 use super::*;
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::FAIL;
+use crate::types::Failed;
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
 ///
@@ -267,7 +268,7 @@ pub unsafe fn tv_list_concat(
     l1: *mut list_T,
     l2: *mut list_T,
     tv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.v_type = VAR_LIST;
@@ -284,10 +285,10 @@ pub unsafe fn tv_list_concat(
         l
     };
     if l.is_null() && !(l1.is_null() && l2.is_null()) {
-        return FAIL;
+        return Err(Failed);
     }
     val.vval.v_list = l;
-    OK
+    Ok(())
 }
 
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into

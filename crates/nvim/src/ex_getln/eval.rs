@@ -12,7 +12,7 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
-use crate::types::{ExpandContext, FAIL, NUL, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, NUL, VAR_STRING, VAR_UNKNOWN};
 
 /// Whether a command line is being edited at all: C's
 /// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`
@@ -220,8 +220,8 @@ pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 /// `setcmdline()` function.
 pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_opt_number_arg(argvars, 1) } == FAIL
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_opt_number_arg(argvars, 1) }.is_err()
     {
         return;
     }

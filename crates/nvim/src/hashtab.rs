@@ -27,12 +27,12 @@
 
 use crate::message_fmt::c_str;
 use crate::siemsg;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::{ptr, slice};
 
 use crate::memory::{xcalloc, xfree};
 
-use crate::types::{FAIL, OK, hash_T, hashitem_T, hashtab_T};
+use crate::types::{Failed, hash_T, hashitem_T, hashtab_T};
 
 /// The array a table starts with, inline in the struct. Growing past it moves
 /// to the heap; shrinking back to this size moves back in.
@@ -363,7 +363,7 @@ pub unsafe fn hash_lookup(
 ///
 /// `ht` points to a live `hashtab_T` and `key` is NUL-terminated and stays
 /// alive for as long as the table holds it.
-pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
+pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> Result<(), Failed> {
     // SAFETY: the caller's table and NUL-terminated key.
     let hash = unsafe { hash_hash(key) };
     let hi = unsafe { hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash) };
@@ -371,10 +371,10 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> c_int {
         // SAFETY: `%s` spends the NUL-terminated key.
         let key = unsafe { c_str(key) };
         siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { hash_add_item(ht, hi, key, hash) };
-    OK
+    Ok(())
 }
 
 /// Add `key` at `hi`, which the caller obtained from `hash_lookup` on a

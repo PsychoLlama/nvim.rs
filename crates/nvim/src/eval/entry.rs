@@ -459,7 +459,7 @@ pub(crate) unsafe fn typval2string(tv: *mut typval_T, join_list: bool) -> *mut c
         let l = unsafe { value.vval.v_list };
         if !l.is_null() {
             // SAFETY: `l` is the typval's live List.
-            unsafe { tv_list_join(&raw mut ga, l, c"\n".as_ptr()) };
+            let _ = unsafe { tv_list_join(&raw mut ga, l, c"\n".as_ptr()) };
             // SAFETY: as above.
             if unsafe { tv_list_len(l) } > 0 {
                 // SAFETY: `ga` is this frame's.

@@ -36,7 +36,7 @@ use crate::types::{
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
 use super::{
     AssertType, E_ASSERT_FAILS_FIFTH_ARGUMENT, E_ASSERT_FAILS_FOURTH_ARGUMENT,
-    E_ASSERT_FAILS_SECOND_ARG, FAIL, NUMBUFLEN, arg, arg_given, arg_type, assert_append_cmd_or_arg,
+    E_ASSERT_FAILS_SECOND_ARG, NUMBUFLEN, arg, arg_given, arg_type, assert_append_cmd_or_arg,
 };
 
 /// What checking `assert_fails()`'s expectations against the reported error
@@ -73,18 +73,18 @@ struct FailsMismatch {
 /// `argvars` has five slots.
 unsafe fn assert_fails_args_ok(argvars: *mut typval_T) -> bool {
     // SAFETY: the caller's arguments.
-    if unsafe { tv_check_for_string_or_number_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_opt_string_or_list_arg(argvars, 1) } == FAIL
+    if unsafe { tv_check_for_string_or_number_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_opt_string_or_list_arg(argvars, 1) }.is_err()
     {
         return false;
     }
     if !unsafe { arg_given(argvars, 1) } || !unsafe { arg_given(argvars, 2) } {
         return true;
     }
-    if unsafe { tv_check_for_opt_number_arg(argvars, 3) } == FAIL {
+    if unsafe { tv_check_for_opt_number_arg(argvars, 3) }.is_err() {
         return false;
     }
-    !unsafe { arg_given(argvars, 3) } || unsafe { tv_check_for_opt_string_arg(argvars, 4) } != FAIL
+    !unsafe { arg_given(argvars, 3) } || unsafe { tv_check_for_opt_string_arg(argvars, 4) }.is_ok()
 }
 
 /// Match the error the command reported against the caller's second argument.

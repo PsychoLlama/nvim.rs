@@ -24,16 +24,16 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     let dict = unsafe { tv_dict_alloc() };
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
     let str = |key: &CStr, value: *const c_char| {
         // SAFETY: a live dictionary, and two NUL-terminated strings.
-        unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
     };
     let list = |key: &CStr, value: *mut list_T| {
         // SAFETY: a live dictionary and a live list, which the dictionary
         // takes over.
-        unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
     nr(c"bufnr", varnumber_T::from(buf.handle));
@@ -69,7 +69,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     nr(c"command", varnumber_T::from(buf.raw() == cmdwin_buf.get()));
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
     let vars = c"variables";
-    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buf.b_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buf.b_vars) };
 
     // The windows displaying this buffer.
     // SAFETY: the list is handed to the dictionary below, so it is not leaked.

@@ -38,9 +38,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T,
-    hlf_T, kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T,
-    vimconv_T,
+    CONV_NONE, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
+    kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
 };
 use ::libc::{mktime, strftime, strlen, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -109,7 +108,7 @@ pub unsafe fn f_fnameescape(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_gettext(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: `args.ptr(0)` is a live typval.
-    if check_arg(args, 0, tv_check_for_nonempty_string_arg) == FAIL {
+    if check_arg(args, 0, tv_check_for_nonempty_string_arg).is_err() {
         return;
     }
     rettv.v_type = VAR_STRING;
@@ -124,7 +123,7 @@ pub unsafe fn f_keytrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     rettv.v_type = VAR_STRING;
     // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a String pointer, which may still be null.
-    if check_arg(args, 0, tv_check_for_string_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_string_arg).is_err()
         || unsafe { args.get(0).vval.v_string }.is_null()
     {
         return;
@@ -253,7 +252,7 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
         let to = ((i + 1) * slen - 1) as varnumber_T;
         // SAFETY: `out` has room for `len` bytes and the source is a live
         // Blob typval.
-        unsafe { tv_blob_set_range(out, from, to, args.ptr(0)) };
+        let _ = unsafe { tv_blob_set_range(out, from, to, args.ptr(0)) };
     }
 }
 

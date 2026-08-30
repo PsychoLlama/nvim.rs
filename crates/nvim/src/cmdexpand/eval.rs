@@ -13,7 +13,7 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{ExpandContext, FAIL, OK, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -36,7 +36,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let mut filtered = false;
     let mut options = GETCOMPLETION;
 
-    if unsafe { tv_check_for_string_arg(argvars, 1) } == FAIL {
+    if unsafe { tv_check_for_string_arg(argvars, 1) }.is_err() {
         return;
     }
     let type_0 = unsafe { numbuf.string(argvars.add(1)) };
@@ -184,7 +184,7 @@ pub unsafe fn f_getcompletiontype(
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = ptr::null_mut() };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err() {
         return;
     }
 
@@ -228,17 +228,17 @@ pub unsafe fn f_cmdcomplete_info(
     let add_list = |k: &str, v| unsafe { tv_dict_add_list(retdict, k.as_ptr().cast(), k.len(), v) };
 
     let mut ret = add_str("cmdline_orig", cmdline_orig.get());
-    if ret == OK {
+    if ret.is_ok() {
         ret = add_nr("pum_visible", pum_visible() as varnumber_T);
     }
-    if ret == OK {
+    if ret.is_ok() {
         ret = add_nr("selected", unsafe { (*xpc).xp_selected } as varnumber_T);
     }
-    if ret == OK {
+    if ret.is_ok() {
         let li = unsafe { tv_list_alloc((*xpc).xp_numfiles as ptrdiff_t) };
         ret = add_list("matches", li);
         let mut idx = 0;
-        while ret == OK && idx < unsafe { (*xpc).xp_numfiles } {
+        while ret.is_ok() && idx < unsafe { (*xpc).xp_numfiles } {
             unsafe { tv_list_append_string(li, *(*xpc).xp_files.offset(idx as isize), -1) };
             idx += 1;
         }

@@ -308,7 +308,7 @@ pub(crate) unsafe fn add_nr_var(
     unsafe { strcpy(key, name) };
     let mut item = unsafe { Live::new(v) };
     item.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-    unsafe { hash_add(&raw mut (*dp).dv_hashtab, key) };
+    let _ = unsafe { hash_add(&raw mut (*dp).dv_hashtab, key) };
     item.di_tv.v_type = VAR_NUMBER;
     item.di_tv.v_lock = VarLock::Fixed;
     item.di_tv.vval.v_number = nr;

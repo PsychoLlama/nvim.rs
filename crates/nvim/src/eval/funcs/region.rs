@@ -28,7 +28,7 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, FAIL, MotionType, NUL, OK, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
+    EvalFuncData, MotionType, NUL, OK, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
     kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use ::libc::memset;
@@ -137,9 +137,9 @@ fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
     list_alloc_ret(rettv, kListLenMayKnow as isize);
-    if check_arg(args, 0, tv_check_for_list_arg) == FAIL
-        || check_arg(args, 1, tv_check_for_list_arg) == FAIL
-        || check_arg(args, 2, tv_check_for_opt_dict_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_list_arg).is_err()
+        || check_arg(args, 1, tv_check_for_list_arg).is_err()
+        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
     {
         return None;
     }

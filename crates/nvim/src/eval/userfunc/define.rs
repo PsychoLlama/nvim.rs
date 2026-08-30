@@ -457,7 +457,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             if fudi.fd_di.is_null() {
                                 // Add a new dict entry.
                                 fudi.fd_di = unsafe { tv_dict_item_alloc(fudi.fd_newkey) };
-                                if unsafe { tv_dict_add(fudi.fd_dict, fudi.fd_di) } == FAIL {
+                                if unsafe { tv_dict_add(fudi.fd_dict, fudi.fd_di) }.is_err() {
                                     unsafe { xfree(fudi.fd_di as *mut c_void) };
                                     unsafe { xfree(fp as *mut c_void) };
                                     fp = ptr::null_mut();
@@ -481,7 +481,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         if overwrite {
                             let hi = unsafe { func_table().find(name) };
                             unsafe { (*hi).hi_key = uf_name_ptr(fp) };
-                        } else if unsafe { func_table().add(uf_name_ptr(fp)) } == FAIL {
+                        } else if unsafe { func_table().add(uf_name_ptr(fp)) }.is_err() {
                             free_fp = true;
                             break 'erret;
                         }

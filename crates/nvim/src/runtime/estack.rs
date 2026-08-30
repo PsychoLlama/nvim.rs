@@ -302,11 +302,11 @@ unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
 unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
-    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
 unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
-    unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
 /// Append one `getstacktrace()` frame to `l`.
@@ -330,7 +330,7 @@ unsafe fn stacktrace_push_item(
         vval: typval_vval_union { v_dict: d },
     };
     if !fp.is_null() {
-        unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp) };
+        let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp) };
     }
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };

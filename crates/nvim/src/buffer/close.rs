@@ -247,7 +247,7 @@ fn clear_buf_vars(buf: Buf) {
 fn rescue_changedtick(mut buf: Buf) {
     let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut dictitem_T);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
+    let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
 }
 
 fn release_vars(mut buf: Buf) {

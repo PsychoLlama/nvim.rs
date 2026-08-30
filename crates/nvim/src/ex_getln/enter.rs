@@ -174,8 +174,9 @@ pub(crate) unsafe fn cmdline_event_dict(
     cmdtype: *const ::core::ffi::c_char,
 ) -> *mut dict_T {
     let dict = unsafe { get_v_event(save_v_event) };
-    unsafe { tv_dict_add_str(dict, c"cmdtype".as_ptr(), c"cmdtype".count_bytes(), cmdtype) };
-    unsafe {
+    let _ =
+        unsafe { tv_dict_add_str(dict, c"cmdtype".as_ptr(), c"cmdtype".count_bytes(), cmdtype) };
+    let _ = unsafe {
         tv_dict_add_nr(
             dict,
             c"cmdlevel".as_ptr(),
@@ -394,7 +395,7 @@ pub(crate) unsafe fn command_line_enter(
             let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
             // Not readonly, unlike the keys above:
-            unsafe {
+            let _ = unsafe {
                 tv_dict_add_bool(
                     dict,
                     c"abort".as_ptr(),

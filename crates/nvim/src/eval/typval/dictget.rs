@@ -12,7 +12,8 @@
 use super::*;
 use crate::message::emsg_ptr;
 use crate::semsg;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::Failed;
+use crate::types::NUL;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 ///
@@ -137,13 +138,13 @@ pub unsafe fn tv_dict_get_tv(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     rettv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { tv_copy(&raw mut (*di).di_tv, rettv) };
-    OK
+    Ok(())
 }
 
 /// `d[key]` as a number, or 0 when there is no such key.
@@ -353,7 +354,7 @@ pub(crate) unsafe fn tv_dict2list(
     rettv: *mut typval_T,
     what: DictListType,
 ) {
-    if unsafe { tv_check_for_dict_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_dict_arg(argvars, 0) }.is_err() {
         unsafe { tv_list_alloc_ret(rettv, 0) };
         return;
     }
@@ -443,7 +444,7 @@ pub unsafe fn f_values(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// yet.
 pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { tv_check_for_dict_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_dict_arg(argvars, 0) }.is_err() {
         return;
     }
     let d = unsafe { (*argvars).vval.v_dict };

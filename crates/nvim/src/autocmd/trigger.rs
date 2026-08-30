@@ -252,7 +252,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is
                     // the dict entry's own name of the length given.
-                    unsafe {
+                    let _ = unsafe {
                         tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &raw mut tv)
                     };
                     unsafe { tv_clear(&raw mut tv) };
@@ -372,7 +372,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     debug_assert!(chanid < varnumber_T::MAX as uint64_t);
     // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
     // literal of the length given.
-    unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T) };
     // SAFETY: as above.
     unsafe { tv_dict_set_keys_readonly(dict) };
 

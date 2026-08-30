@@ -66,12 +66,12 @@ pub(crate) unsafe fn create_special_dict(
     type_item.di_tv.v_lock = VarLock::Unlocked;
     unsafe { (*type_di).di_tv.vval.v_list = msgpack_type_list(type_) };
     unsafe { tv_list_ref((*type_di).di_tv.vval.v_list) };
-    unsafe { tv_dict_add(dict, type_di) };
+    let _ = unsafe { tv_dict_add(dict, type_di) };
 
     let val_di: *mut dictitem_T =
         unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
     unsafe { (*val_di).di_tv = val };
-    unsafe { tv_dict_add(dict, val_di) };
+    let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
     unsafe { *rettv = typval_T::dict(dict) };

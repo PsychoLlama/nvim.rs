@@ -458,7 +458,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
         }
         let mut tv = unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) };
         let name = get_option(opt_idx).fullname;
-        unsafe { tv_dict_add_tv(d, name, strlen(name), &raw mut tv) };
+        let _ = unsafe { tv_dict_add_tv(d, name, strlen(name), &raw mut tv) };
     }
     d
 }

@@ -59,8 +59,8 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
     let mut saved = save_v_event_T::default();
     let dict = unsafe { get_v_event(&raw mut saved) };
     let key: &CStr = if pre { c"directory" } else { c"cwd" };
-    unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), new_dir) };
-    unsafe {
+    let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), new_dir) };
+    let _ = unsafe {
         tv_dict_add_str(
             dict,
             c"scope".as_ptr(),
@@ -68,7 +68,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
             scope_name.as_ptr().cast_mut(),
         )
     };
-    unsafe {
+    let _ = unsafe {
         tv_dict_add_bool(
             dict,
             c"changed_window".as_ptr(),

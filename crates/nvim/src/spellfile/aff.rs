@@ -671,7 +671,7 @@ unsafe fn handle_line(
             if unsafe { (*hi).hi_key }.is_null()
                 || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
             {
-                unsafe { hash_add(&raw mut (*spin).si_commonwords, xstrdup(item)) };
+                let _ = unsafe { hash_add(&raw mut (*spin).si_commonwords, xstrdup(item)) };
             }
         }
         return true;

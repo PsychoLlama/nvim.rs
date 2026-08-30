@@ -297,11 +297,11 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
 /// `tv_dict_add_*` take the key and its length separately; upstream spells
 /// that pair `S_LEN(key)`. A negative `len` means "up to the NUL".
 unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char, len: c_int) {
-    unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
+    let _ = unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
 }
 
 unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
-    unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
 /// Describe a swap file in the ATTENTION message and in `:recover`'s listing.

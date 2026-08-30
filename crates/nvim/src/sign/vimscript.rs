@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::funcs::args::{Args, frame};
 use crate::eval::typval::NumBuf;
 use crate::narrow::number_as_int;
-use crate::types::{FAIL, OK, VAR_DICT, VAR_LIST, kListLenMayKnow};
+use crate::types::{OK, VAR_DICT, VAR_LIST, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -35,7 +35,7 @@ const HL_KEYS: [&str; 4] = ["linehl", "texthl", "culhl", "numhl"];
 /// `d` must be a live dictionary and `val` a NUL-terminated string.
 unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
     // SAFETY: the caller's dictionary and value.
-    unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -44,7 +44,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
 /// `d` must be a live dictionary.
 unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
     // SAFETY: the caller's dictionary.
-    unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
+    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
 
 /// `NULL`, for the many optional pointers in this file.
@@ -262,7 +262,7 @@ unsafe fn sign_get_placed_in_buf(
         tv_list_append_dict(retlist, d);
         put_nr(d, "bufnr", varnumber_T::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), l);
+        let _ = tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), l);
         l
     };
 
@@ -396,7 +396,7 @@ pub(crate) unsafe fn f_sign_define(
     // SAFETY: the argument slots the frame named.
     let name = unsafe { numbuf.string_chk(args.ptr(0)) }.cast_mut();
     // SAFETY: as above.
-    if name.is_null() || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) } == FAIL {
+    if name.is_null() || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) }.is_err() {
         return;
     }
     // SAFETY: the tag says the dictionary arm is live.
@@ -456,7 +456,7 @@ pub(crate) unsafe fn f_sign_getplaced(
                 return;
             }
             if args.has(1) {
-                if tv_check_for_nonnull_dict_arg(args.ptr(0), 1) == FAIL {
+                if tv_check_for_nonnull_dict_arg(args.ptr(0), 1).is_err() {
                     return;
                 }
                 let dict = args.get(1).vval.v_dict;
@@ -639,7 +639,7 @@ pub(crate) unsafe fn f_sign_place(
     let mut dict = null();
     if args.has(4) {
         // SAFETY: the frame's argument slots.
-        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 4) } == FAIL {
+        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 4) }.is_err() {
             return;
         }
         // SAFETY: the check above says the dictionary arm is live.
@@ -761,8 +761,8 @@ pub(crate) unsafe fn f_sign_unplace(
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the frame's argument slots.
-    if unsafe { tv_check_for_string_arg(args.ptr(0), 0) } == FAIL
-        || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) } == FAIL
+    if unsafe { tv_check_for_string_arg(args.ptr(0), 0) }.is_err()
+        || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) }.is_err()
     {
         return;
     }

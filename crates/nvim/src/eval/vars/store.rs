@@ -23,7 +23,7 @@ use super::*;
 use crate::message::emsg_ptr;
 use crate::message_fmt::{c_str, c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 // ---------------------------------------------------------------------
 // Reporting, and the one place a value this frame owns is freed.
@@ -171,7 +171,7 @@ pub unsafe fn set_var_const(
         // other item in the tree comes from; `valid_varname` has just
         // walked `varname` to its NUL, so the two agree on the length.
         di = unsafe { tv_dict_item_alloc_len(varname, varname_len) };
-        if unsafe { hash_add(ht, tv_dict_item_key(di)) } == FAIL {
+        if unsafe { hash_add(ht, tv_dict_item_key(di)) }.is_err() {
             unsafe { xfree(di.cast()) };
             return;
         }

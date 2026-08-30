@@ -26,7 +26,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, FAIL, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
+    EvalFuncData, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
     kListLenUnknown, linenr_T, list_T, listitem_T, regmatch_T, regprog_T, typval_T, varnumber_T,
 };
 use ::libc::strlen;
@@ -350,18 +350,18 @@ unsafe fn get_matches_in_str(
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         if matchbuf {
-            unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, idx as varnumber_T) };
+            let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, idx as varnumber_T) };
         } else {
-            unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as varnumber_T) };
+            let _ = unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as varnumber_T) };
         }
         let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
         let byteidx = unsafe { start.offset_from(str) } as colnr_T as varnumber_T;
-        unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
+        let _ = unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
         let matchlen = unsafe { end.offset_from(start) } as c_int;
-        unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
+        let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
         if submatches {
             let sml = unsafe { tv_list_alloc(NSUBEXP as isize - 1) };
-            unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, sml) };
+            let _ = unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, sml) };
             for i in 1..NSUBEXP as usize {
                 if unsafe { (*rmp).endp[i] }.is_null() {
                     unsafe { tv_list_append_string(sml, c"".as_ptr(), 0) };
@@ -393,11 +393,11 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
     let retlist = unsafe { rettv.vval.v_list };
-    if check_arg(args, 0, tv_check_for_buffer_arg) == FAIL
-        || check_arg(args, 1, tv_check_for_string_arg) == FAIL
-        || check_arg(args, 2, tv_check_for_lnum_arg) == FAIL
-        || check_arg(args, 3, tv_check_for_lnum_arg) == FAIL
-        || check_arg(args, 4, tv_check_for_opt_dict_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_buffer_arg).is_err()
+        || check_arg(args, 1, tv_check_for_string_arg).is_err()
+        || check_arg(args, 2, tv_check_for_lnum_arg).is_err()
+        || check_arg(args, 3, tv_check_for_lnum_arg).is_err()
+        || check_arg(args, 4, tv_check_for_opt_dict_arg).is_err()
     {
         return;
     }
@@ -526,9 +526,9 @@ pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
     let retlist = unsafe { rettv.vval.v_list };
-    if check_arg(args, 0, tv_check_for_list_arg) == FAIL
-        || check_arg(args, 1, tv_check_for_string_arg) == FAIL
-        || check_arg(args, 2, tv_check_for_opt_dict_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_list_arg).is_err()
+        || check_arg(args, 1, tv_check_for_string_arg).is_err()
+        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
     {
         return;
     }

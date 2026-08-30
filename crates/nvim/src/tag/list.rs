@@ -396,7 +396,7 @@ pub(crate) unsafe fn add_llist_tags(
         unsafe { tv_list_append_dict(list, dict) };
         unsafe { add_str(dict, c"text", name.as_ptr()) };
         unsafe { add_str(dict, c"filename", fname.as_ptr()) };
-        unsafe {
+        let _ = unsafe {
             tv_dict_add_nr(
                 dict,
                 c"lnum".as_ptr(),
@@ -499,5 +499,5 @@ unsafe fn search_pattern(tagp: &TagParts) -> Name {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
-    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }

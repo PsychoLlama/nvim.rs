@@ -29,7 +29,7 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
     nr(c"tabnr", varnumber_T::from(tpnr));
@@ -54,7 +54,7 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
     let vars = c"variables";
-    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), wp.w_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), wp.w_vars) };
     dict
 }
 
@@ -70,7 +70,7 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
     let (nrkey, hint) = (c"tabnr", kListLenMayKnow as ptrdiff_t);
     let nr = varnumber_T::from(tp_idx);
     let dict = unsafe { tv_dict_alloc() };
-    unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
+    let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
     let windows = unsafe { tv_list_alloc(hint) };
     let append = |handle: handle_T| {
         // SAFETY: a live list.
@@ -81,8 +81,8 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
     let (wins, vars) = (c"windows", c"variables");
-    unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), windows) };
-    unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp.tp_vars) };
+    let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), windows) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp.tp_vars) };
     dict
 }
 

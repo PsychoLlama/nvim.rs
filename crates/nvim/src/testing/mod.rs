@@ -37,7 +37,7 @@ use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
+    BoolVarValue, EvalFuncData, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
     VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
     kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
@@ -601,10 +601,10 @@ pub(crate) unsafe fn f_assert_inrange(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    if unsafe { tv_check_for_float_or_nr_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_float_or_nr_arg(argvars, 1) } == FAIL
-        || unsafe { tv_check_for_float_or_nr_arg(argvars, 2) } == FAIL
-        || unsafe { tv_check_for_opt_string_arg(argvars, 3) } == FAIL
+    if unsafe { tv_check_for_float_or_nr_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_float_or_nr_arg(argvars, 1) }.is_err()
+        || unsafe { tv_check_for_float_or_nr_arg(argvars, 2) }.is_err()
+        || unsafe { tv_check_for_opt_string_arg(argvars, 3) }.is_err()
     {
         return;
     }

@@ -12,27 +12,22 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{CONV_NONE, FAIL, NUL, OK, Refcount};
+use crate::types::{CONV_NONE, FAIL, Failed, NUL, Refcount};
 
 /// The dictionary already has an entry under that key — or, in a scope
 /// dictionary, the key would shadow a builtin function — so nothing was
 /// stored and the value the caller passed is still the caller's to free.
 ///
-/// The `tv_dict_add_*` family is `extern "C"` and pinned by the ABI ledger,
-/// so it goes on answering `OK`/`FAIL`. This is the name that `FAIL` has, for
-/// Rust callers that convert at the call with [`added`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The `tv_dict_add_*` family answers the anonymous [`Failed`]; this is the
+/// name that failure has for a caller who is filling a dictionary, and the
+/// `From` below is what lets one `?` into the other.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
+#[error("the key was already in the dictionary")]
 pub struct KeyTaken;
 
-/// One of the `tv_dict_add_*` answers as a `Result`.
-///
-/// The conversion belongs at the FFI edge and nowhere else: a caller that
-/// writes several keys in a row wants `?`, not a `status == OK` ladder.
-pub fn added(status: ::core::ffi::c_int) -> Result<(), KeyTaken> {
-    if status == FAIL {
-        Err(KeyTaken)
-    } else {
-        Ok(())
+impl From<Failed> for KeyTaken {
+    fn from(_: Failed) -> Self {
+        KeyTaken
     }
 }
 
@@ -247,10 +242,10 @@ pub unsafe fn tv_dict_unref(d: *mut dict_T) {
 /// `d` must point at a live dictionary and `item` at a fresh item that is
 /// in no hashtab. On `OK` the dictionary owns `item`; on `FAIL` it is
 /// still the caller's to free.
-pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> Result<(), Failed> {
     let key = tv_dict_item_key(item);
     if unsafe { tv_dict_wrong_func_name(d, &raw mut (*item).di_tv, key) } != 0 {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { hash_add(&raw mut (*d).dv_hashtab, key) }
 }
@@ -266,7 +261,7 @@ pub unsafe fn tv_dict_add_list(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     list: *mut list_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::list(list) };
     unsafe { tv_list_ref(list) };
@@ -284,7 +279,7 @@ pub unsafe fn tv_dict_add_tv(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     tv: *mut typval_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { tv_copy(tv, &raw mut (*item).di_tv) };
     unsafe { add_or_free(d, item) }
@@ -301,7 +296,7 @@ pub unsafe fn tv_dict_add_dict(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     dict: *mut dict_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::dict(dict) };
     unsafe { (*dict).dv_refcount.retain() };
@@ -318,7 +313,7 @@ pub unsafe fn tv_dict_add_nr(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     nr: varnumber_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::number(nr) };
     unsafe { add_or_free(d, item) }
@@ -334,7 +329,7 @@ pub unsafe fn tv_dict_add_float(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     nr: float_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::float(nr) };
     unsafe { add_or_free(d, item) }
@@ -350,7 +345,7 @@ pub unsafe fn tv_dict_add_bool(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     val: BoolVarValue,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::boolean(val) };
     unsafe { add_or_free(d, item) }
@@ -366,7 +361,7 @@ pub unsafe fn tv_dict_add_str(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     val: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { tv_dict_add_str_len(d, key, key_len, val, -1) }
 }
 
@@ -383,7 +378,7 @@ pub unsafe fn tv_dict_add_str_len(
     key_len: size_t,
     val: *const ::core::ffi::c_char,
     len: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let s = if val.is_null() {
         ::core::ptr::null_mut()
     } else if len < 0 {
@@ -406,7 +401,7 @@ pub unsafe fn tv_dict_add_allocated_str(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     val: *mut ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::string(val) };
     unsafe { add_or_free(d, item) }
@@ -424,7 +419,7 @@ pub unsafe fn tv_dict_add_func(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
     fp: *mut ufunc_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     let name = unsafe { (&raw mut (*fp).uf_name).cast() };
     // SAFETY: the caller's promise: a live function.
@@ -437,12 +432,12 @@ pub unsafe fn tv_dict_add_func(
             ..typval_T::string(owned)
         }
     };
-    if unsafe { tv_dict_add(d, item) } == FAIL {
+    if unsafe { tv_dict_add(d, item) }.is_err() {
         unsafe { tv_dict_item_free(item) };
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { func_ref((*item).di_tv.vval.v_string) };
-    OK
+    Ok(())
 }
 
 /// The tail every `tv_dict_add_*` shares: hand `item` to `d`, or free it again
@@ -453,12 +448,12 @@ pub unsafe fn tv_dict_add_func(
 /// handing it back — so the caller must not touch `item` after this returns
 /// on either answer.
 #[inline]
-unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> ::core::ffi::c_int {
-    if unsafe { tv_dict_add(d, item) } == FAIL {
+unsafe fn add_or_free(d: *mut dict_T, item: *mut dictitem_T) -> Result<(), Failed> {
+    if unsafe { tv_dict_add(d, item) }.is_err() {
         unsafe { tv_dict_item_free(item) };
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Free every item of `d`, leaving it allocated and empty.
@@ -510,7 +505,7 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
             if action == b'm' {
                 // Cheap way to move a dict item from "d2" to "d1".
                 // If dict_add() fails then "d2" won't be empty.
-                if unsafe { tv_dict_add(d1, di2) } == OK {
+                if unsafe { tv_dict_add(d1, di2) }.is_ok() {
                     unsafe { hash_remove(&raw mut (*d2).dv_hashtab, hi2) };
                     // Note upstream does not gate this on `watched`, unlike
                     // the copying branch below.
@@ -520,7 +515,7 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
                 }
             } else {
                 let new_di = unsafe { tv_dict_item_copy(di2) };
-                if unsafe { tv_dict_add(d1, new_di) } == FAIL {
+                if unsafe { tv_dict_add(d1, new_di) }.is_err() {
                     unsafe { tv_dict_item_free(new_di) };
                 } else if watched {
                     let key = tv_dict_item_key(new_di);
@@ -657,7 +652,7 @@ pub unsafe fn tv_dict_copy(
         } else {
             unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv) };
         }
-        if unsafe { tv_dict_add(copy, new_di) } == FAIL {
+        if unsafe { tv_dict_add(copy, new_di) }.is_err() {
             unsafe { tv_dict_item_free(new_di) };
             break;
         }

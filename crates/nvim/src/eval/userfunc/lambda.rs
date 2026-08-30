@@ -201,7 +201,7 @@ pub unsafe fn get_lambda_tv(
             }
 
             f.uf_refcount = Refcount::ONE;
-            unsafe { func_table().add(uf_name_ptr(fp)) };
+            let _ = unsafe { func_table().add(uf_name_ptr(fp)) };
             f.uf_args = newargs;
             let slot = size_of::<*mut c_char>() as c_int;
             unsafe { ga_init(&raw mut (*fp).uf_def_args, slot, 1) };
@@ -347,6 +347,6 @@ pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
     f.uf_script_ctx = current_sctx.get();
     f.uf_luaref = ref_0;
 
-    unsafe { func_table().add(uf_name_ptr(fp)) };
+    let _ = unsafe { func_table().add(uf_name_ptr(fp)) };
     uf_name_ptr(fp)
 }

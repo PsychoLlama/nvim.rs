@@ -204,7 +204,7 @@ fn now() -> time_t {
 fn add_changedtick(mut buf: Buf) {
     let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut dictitem_T);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    unsafe { tv_dict_add(vars, di) };
+    let _ = unsafe { tv_dict_add(vars, di) };
 }
 
 // ---------------------------------------------------------------------------

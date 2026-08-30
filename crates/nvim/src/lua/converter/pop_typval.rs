@@ -32,8 +32,8 @@ use crate::memory::xstrdup;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VarLock, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VarLock,
+    kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
     typval_vval_union, varnumber_T,
 };
@@ -145,7 +145,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
                         cur = TVPopStackItem::leaf(&raw mut (*tv_list_last(kv_pair)).li_tv);
                     } else {
                         let di = tv_dict_item_alloc_len(s, len);
-                        if tv_dict_add((*cur.tv).vval.v_dict, di) == FAIL {
+                        if tv_dict_add((*cur.tv).vval.v_dict, di).is_err() {
                             abort();
                         }
                         stack.push(cur);

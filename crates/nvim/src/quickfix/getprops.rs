@@ -24,7 +24,7 @@ use core::ptr;
 /// `dict` must be a live dictionary.
 unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
-    added(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) })
+    Ok(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) }?)
 }
 
 /// Add a string under `key`. A null `value` is stored as the empty string,
@@ -36,7 +36,7 @@ unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> Result<(),
 unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> Result<(), KeyTaken> {
     let value = if value.is_null() { c"".as_ptr() } else { value };
     // SAFETY: the caller's dictionary and string.
-    added(unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) })
+    Ok(unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) }?)
 }
 
 /// Add a list under `key`, which takes over the reference.
@@ -46,7 +46,7 @@ unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> Result<
 /// `dict` and `list` must be live.
 unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and list.
-    added(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) })
+    Ok(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) }?)
 }
 
 /// Add a copy of `tv` under `key`.
@@ -56,7 +56,7 @@ unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> Result<()
 /// `dict` must be live and `tv` a live value.
 unsafe fn add_tv(dict: *mut dict_T, key: &str, tv: *mut typval_T) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and value.
-    added(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) })
+    Ok(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) }?)
 }
 
 /// The entry of `what` under `key`, or null.
@@ -469,12 +469,12 @@ unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<()
     }
     let di = unsafe { tv_dict_item_alloc_len(c"context".as_ptr(), "context".len()) };
     unsafe { tv_copy((*qfl).qf_ctx, &raw mut (*di).di_tv) };
-    let status = added(unsafe { tv_dict_add(retdict, di) });
+    let status = unsafe { tv_dict_add(retdict, di) };
     if status.is_err() {
         // A refused item is still ours to free.
         unsafe { tv_dict_item_free(di) };
     }
-    status
+    Ok(status?)
 }
 
 /// The index of the current entry, or of the entry `eidx` names.

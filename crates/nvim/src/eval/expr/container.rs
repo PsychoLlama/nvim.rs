@@ -230,7 +230,7 @@ pub(crate) unsafe fn eval_dict(
                 item.di_tv = tv;
                 item.di_tv.v_lock = VarLock::Unlocked;
                 let item = item.raw();
-                if unsafe { tv_dict_add(dict, item) } == FAIL {
+                if unsafe { tv_dict_add(dict, item) }.is_err() {
                     unsafe { tv_dict_item_free(item) };
                 }
             }

@@ -24,8 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, FAIL, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T,
-    win_T,
+    EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,
 };
 use crate::winlayer::{Pos, Win};
 
@@ -387,7 +386,7 @@ unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> varnumber_T {
 /// `dict` must be a live Dict.
 unsafe fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: c_int) {
     let bytes = key.to_bytes();
-    unsafe {
+    let _ = unsafe {
         tv_dict_add_nr(
             dict,
             bytes.as_ptr().cast::<c_char>(),
@@ -430,7 +429,7 @@ pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the evaluator's calling convention.
     unsafe { (*rettv).vval.v_number = -1 };
     // SAFETY: the evaluator's calling convention: three arguments.
-    let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(argvars, n) != FAIL) };
+    let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(argvars, n).is_ok()) };
     if !typed {
         return;
     }

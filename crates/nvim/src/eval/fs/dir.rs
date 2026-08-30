@@ -70,7 +70,7 @@ fn can_defer() -> bool {
 /// Whether argument `i` is a String, having reported if not.
 fn is_string_arg(args: Args<'_>, i: usize) -> bool {
     // SAFETY: the argument vector's own base, and `i` an index into it.
-    unsafe { tv_check_for_string_arg(args.ptr(0), i as c_int) != FAIL }
+    unsafe { tv_check_for_string_arg(args.ptr(0), i as c_int).is_ok() }
 }
 
 /// Argument `i` as a path, spelled into `buf` when it is not already a

@@ -74,7 +74,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
-    if check_arg(args, 1, tv_check_for_list_arg) == FAIL {
+    if check_arg(args, 1, tv_check_for_list_arg).is_err() {
         return;
     }
     // A null List is v:_null_list, which calls nothing.
@@ -122,7 +122,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // A bad {dict} skips the call but still runs the cleanup below.
     let selfdict = if !args.has(2) {
         Some(ptr::null_mut())
-    } else if check_arg(args, 2, tv_check_for_dict_arg) == FAIL {
+    } else if check_arg(args, 2, tv_check_for_dict_arg).is_err() {
         None
     } else {
         Some(unsafe { args.get(2).vval.v_dict })
@@ -450,7 +450,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
             arg_idx = 1;
         }
         if dict_idx > 0 {
-            if check_arg(args, dict_idx, tv_check_for_dict_arg) == FAIL {
+            if check_arg(args, dict_idx, tv_check_for_dict_arg).is_err() {
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }

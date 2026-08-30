@@ -593,10 +593,11 @@ pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
         c = f64::from(pum_col.get());
     }
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
-        unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T) };
+        let _ =
+            unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T) };
     }
-    unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T) };
-    unsafe {
+    let _ = unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T) };
+    let _ = unsafe {
         tv_dict_add_bool(
             dict,
             c"scrollbar".as_ptr(),

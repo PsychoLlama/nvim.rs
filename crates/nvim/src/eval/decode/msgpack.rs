@@ -38,7 +38,7 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    FAIL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
     kSpecialVarNull, list_T, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T,
     varnumber_T,
 };
@@ -231,7 +231,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
     for i in 0..len {
         let key = unsafe { (*pairs.add(i * 2)).vval.v_string };
         let di = unsafe { tv_dict_item_alloc_len(key, strlen(key)) };
-        if unsafe { tv_dict_add(dict, di) } == FAIL {
+        if unsafe { tv_dict_add(dict, di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.

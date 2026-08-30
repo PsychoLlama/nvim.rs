@@ -22,7 +22,7 @@ use crate::semsg;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, IOSIZE, MAXPATHL, NUL, OK};
+use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -303,7 +303,7 @@ enum ScriptQuery {
 pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
     unsafe { tv_list_alloc_ret(rettv, script_count() as ptrdiff_t) };
-    if unsafe { tv_check_for_opt_dict_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_opt_dict_arg(argvars, 0) }.is_err() {
         return;
     }
     // The pattern's source string is freed on the way out, as upstream does,
@@ -422,11 +422,11 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
         if let ScriptQuery::Sid(_) = *query {
             let sv_dict = unsafe { &raw mut (*(*si).sn_vars).sv_dict };
             let vars = unsafe { tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
-            unsafe { tv_dict_add_dict(d, c"variables".as_ptr(), c"variables".count_bytes(), vars) };
+            let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
+            let _ = unsafe { tv_dict_add_dict(d, key, klen, vars) };
             let funcs = unsafe { get_script_local_funcs(sid as scid_T) };
-            unsafe {
-                tv_dict_add_list(d, c"functions".as_ptr(), c"functions".count_bytes(), funcs)
-            };
+            let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
+            let _ = unsafe { tv_dict_add_list(d, key, klen, funcs) };
         }
     }
 }
@@ -445,15 +445,15 @@ fn empty_regmatch() -> regmatch_T {
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
 unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
-    unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
 unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
-    unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
 unsafe fn dict_add_bool(d: *mut dict_T, key: &CStr, val: BoolVarValue) {
-    unsafe { tv_dict_add_bool(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_bool(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
 // ---------------------------------------------------------------------------

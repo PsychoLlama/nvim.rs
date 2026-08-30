@@ -439,7 +439,7 @@ unsafe fn store_counts(
 ) {
     // SAFETY: the caller's promise -- a live dictionary.
     let mut add = |key: &::core::ffi::CStr, value: varnumber_T| {
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
     add(c"words", counts.words);
     add(c"chars", counts.chars);

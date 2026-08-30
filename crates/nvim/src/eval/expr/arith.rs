@@ -21,7 +21,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
-    FAIL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, float_T, typval_T,
+    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, float_T, typval_T,
     typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
@@ -117,7 +117,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut typval_T, tv2: *mut typval_T) -> boo
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `list_T`, and `joined` is this frame's own.
     let (l1, l2) = unsafe { ((*tv1).vval.v_list, (*tv2).vval.v_list) };
-    if unsafe { tv_list_concat(l1, l2, &raw mut joined) } == FAIL {
+    if unsafe { tv_list_concat(l1, l2, &raw mut joined) }.is_err() {
         unsafe { tv_clear(tv1) };
         unsafe { tv_clear(tv2) };
         return false;

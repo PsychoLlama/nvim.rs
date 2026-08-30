@@ -12,7 +12,8 @@
 use super::*;
 use crate::message::emsg_ptr;
 use crate::semsg;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::Failed;
+use crate::types::NUL;
 
 /// Resolve the first index of `l[n1:n2]`, clamping a negative one that fell
 /// off the front and raising `E684` when there is no such item.
@@ -40,7 +41,7 @@ pub unsafe fn tv_list_check_range_index_two(
     li1: *const listitem_T,
     n2: *mut ::core::ffi::c_int,
     quiet: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { *n2 } < 0 {
         let ni = unsafe { tv_list_find(l, *n2) };
         if ni.is_null() {
@@ -49,7 +50,7 @@ pub unsafe fn tv_list_check_range_index_two(
                 let at = int64_t::from(unsafe { *n2 });
                 semsg!("E684: List index out of range: {at}");
             }
-            return FAIL;
+            return Err(Failed);
         }
         unsafe { *n2 = tv_list_idx_of_item(l, ni) };
     }
@@ -62,9 +63,9 @@ pub unsafe fn tv_list_check_range_index_two(
             let at = int64_t::from(unsafe { *n2 });
             semsg!("E684: List index out of range: {at}");
         }
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
@@ -78,7 +79,7 @@ pub unsafe fn tv_list_assign_range(
     empty_idx2: bool,
     op: *const ::core::ffi::c_char,
     varname: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut idx1 = idx1_arg;
     let first_li = unsafe { tv_list_find_index(dest, &raw mut idx1) };
 
@@ -89,7 +90,7 @@ pub unsafe fn tv_list_assign_range(
     let mut src_li = unsafe { tv_list_first(src) };
     while !src_li.is_null() && !dest_li.is_null() {
         if unsafe { value_check_lock((*dest_li).li_tv.v_lock, varname, TV_CSTRING as size_t) } {
-            return FAIL;
+            return Err(Failed);
         }
         src_li = unsafe { (*src_li).li_next };
         if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
@@ -129,7 +130,7 @@ pub unsafe fn tv_list_assign_range(
     if !src_li.is_null() {
         let msg = tr(c"E710: List value has more items than target");
         unsafe { emsg_ptr(msg) };
-        return FAIL;
+        return Err(Failed);
     }
     let short = if empty_idx2 {
         !dest_li.is_null() && !unsafe { (*dest_li).li_next }.is_null()
@@ -138,9 +139,9 @@ pub unsafe fn tv_list_assign_range(
     };
     if short {
         emsg(gettext(c"E711: List value has not enough items"));
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// `flatten()`: splice the items of any nested list into `list` in place,
@@ -226,7 +227,7 @@ pub unsafe fn tv_list_slice_or_index(
     exclusive: bool,
     rettv: *mut typval_T,
     verbose: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let len = unsafe { tv_list_len((*rettv).vval.v_list) };
     let mut n1 = n1_arg;
     let mut n2 = n2_arg;
@@ -241,7 +242,7 @@ pub unsafe fn tv_list_slice_or_index(
             if verbose {
                 semsg!("E684: List index out of range: {}", n1_arg);
             }
-            return FAIL;
+            return Err(Failed);
         }
         n1 = varnumber_T::from(len);
     }
@@ -270,7 +271,7 @@ pub unsafe fn tv_list_slice_or_index(
         unsafe { tv_clear(rettv) };
         unsafe { *rettv = var1 };
     }
-    OK
+    Ok(())
 }
 
 /// `join()`'s two passes: stringify every item into `join_gap`, then
@@ -282,7 +283,7 @@ pub(crate) unsafe fn list_join_inner(
     l: *mut list_T,
     sep: *const ::core::ffi::c_char,
     join_gap: *mut garray_T,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut sumlen: size_t = 0;
     let mut first = true;
 
@@ -295,7 +296,7 @@ pub(crate) unsafe fn list_join_inner(
         let data = unsafe { encode_tv2echo(&raw mut (*item).li_tv, s.len_mut()) };
         s.set_data(data);
         if s.data().is_null() {
-            return FAIL;
+            return Err(Failed);
         }
 
         sumlen += s.len();
@@ -334,7 +335,7 @@ pub(crate) unsafe fn list_join_inner(
         i += 1;
     }
 
-    OK
+    Ok(())
 }
 
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
@@ -342,9 +343,9 @@ pub unsafe fn tv_list_join(
     gap: *mut garray_T,
     l: *mut list_T,
     sep: *const ::core::ffi::c_char,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     if unsafe { tv_list_len(l) } == 0 {
-        return OK;
+        return Ok(());
     }
 
     let mut join_ga = GARRAY_EMPTY;
@@ -387,7 +388,7 @@ pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let mut ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    unsafe { tv_list_join(&raw mut ga, (*argvars).vval.v_list, sep) };
+    let _ = unsafe { tv_list_join(&raw mut ga, (*argvars).vval.v_list, sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }

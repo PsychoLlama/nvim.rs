@@ -131,7 +131,7 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     if list.is_null() {
         return;
     }
-    unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list) };
+    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list) };
 
     let mut buf: TypeBuf = [0; 67];
     let mut reglen: colnr_T = 0;
@@ -149,18 +149,18 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         // contents, which the null check above established.
         _ => unreachable!("register {regname} has contents but no type"),
     }
-    unsafe { tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_ptr()) };
+    let _ = unsafe { tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_ptr()) };
 
     // The unnamed register reports what it points at; every other one
     // reports whether it is what the unnamed register points at.
     buf[0] = get_register_name(unsafe { get_unname_register() }) as c_char;
     buf[1] = NUL as c_char;
     if regname == b'"' as c_int {
-        unsafe { tv_dict_add_str(dict, c"points_to".as_ptr(), 9, buf.as_ptr()) };
+        let _ = unsafe { tv_dict_add_str(dict, c"points_to".as_ptr(), 9, buf.as_ptr()) };
     } else {
         let unnamed = regname == buf[0] as c_int;
         let flag = if unnamed { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
-        unsafe { tv_dict_add_bool(dict, c"isunnamed".as_ptr(), 9, flag) };
+        let _ = unsafe { tv_dict_add_bool(dict, c"isunnamed".as_ptr(), 9, flag) };
     }
 }
 

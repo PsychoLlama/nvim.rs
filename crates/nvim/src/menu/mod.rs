@@ -535,28 +535,28 @@ pub(crate) fn dict_add_str(dict: *mut dict_T, key: &CStr, value: &CStr) {
 /// [`dict_add_str`] for a value that is still a raw pointer.
 pub(crate) fn dict_add_str_raw(dict: *mut dict_T, key: &CStr, value: *const c_char) {
     // SAFETY: see the section note; `tv_dict_add_str` copies `value`.
-    unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
 /// [`dict_add_str`] handing over an allocation the Dict then owns.
 pub(crate) fn dict_add_allocated_str(dict: *mut dict_T, key: &CStr, value: *mut c_char) {
     // SAFETY: see the section note; the Dict takes over `value`.
-    unsafe { tv_dict_add_allocated_str(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { tv_dict_add_allocated_str(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
 pub(crate) fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: varnumber_T) {
     // SAFETY: see the section note.
-    unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
 pub(crate) fn dict_add_bool(dict: *mut dict_T, key: &CStr, value: bool) {
     // SAFETY: see the section note.
-    unsafe { tv_dict_add_bool(dict, key.as_ptr(), key.count_bytes(), value.into()) };
+    let _ = unsafe { tv_dict_add_bool(dict, key.as_ptr(), key.count_bytes(), value.into()) };
 }
 
 pub(crate) fn dict_add_list(dict: *mut dict_T, key: &CStr, value: *mut list_T) {
     // SAFETY: see the section note; the Dict takes a reference to the list.
-    unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
 /// A nested Dict under a key given as raw bytes -- `menu_get()` files each
@@ -564,7 +564,7 @@ pub(crate) fn dict_add_list(dict: *mut dict_T, key: &CStr, value: *mut list_T) {
 /// terminal mode lands under `t` rather than `tl`.
 pub(crate) fn dict_add_dict(dict: *mut dict_T, key: &[u8], value: *mut dict_T) {
     // SAFETY: see the section note; `key` is a live slice of `key.len()`.
-    unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
+    let _ = unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
 }
 
 pub(crate) fn list_alloc() -> *mut list_T {

@@ -19,7 +19,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    EvalFuncData, FAIL, NUL, OK, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
+    EvalFuncData, NUL, OK, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
     typval_T, varnumber_T,
 };
 use crate::winlayer::Win;
@@ -41,9 +41,9 @@ unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
     // immediately, so it is not leaked.
     let d = unsafe { tv_dict_alloc() };
     unsafe { tv_list_append_dict(l, d) };
-    unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as varnumber_T) };
-    unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as varnumber_T) };
-    unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as varnumber_T) };
     d
 }
 
@@ -113,10 +113,10 @@ pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             continue;
         }
         let d = unsafe { append_mark(l, entry.fmark.mark) };
-        unsafe { tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as varnumber_T) };
+        let _ = unsafe { tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as varnumber_T) };
         // A jump into a file that is no longer loaded keeps its name.
         if !entry.fname.is_null() {
-            unsafe { tv_dict_add_str(d, c"filename".as_ptr(), 8, entry.fname) };
+            let _ = unsafe { tv_dict_add_str(d, c"filename".as_ptr(), 8, entry.fname) };
         }
     }
 }
@@ -163,7 +163,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: the arguments are live typvals; after the check argument 1's
     // union holds a Dict pointer, which may still be null.
     let found = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
-    let Some(wp) = found.filter(|_| check_arg(args, 1, tv_check_for_dict_arg) != FAIL) else {
+    let Some(wp) = found.filter(|_| check_arg(args, 1, tv_check_for_dict_arg).is_ok()) else {
         return;
     };
     let d = unsafe { args.get(1).vval.v_dict };
@@ -174,7 +174,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // a longer string starting with one of them, is E962.
     let mut action = b'r' as c_char;
     if args.has(2) {
-        if check_arg(args, 2, tv_check_for_string_arg) == FAIL {
+        if check_arg(args, 2, tv_check_for_string_arg).is_err() {
             return;
         }
         let actstr = arg_string_chk(&mut numbuf, args.get(2));

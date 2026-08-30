@@ -48,9 +48,9 @@ use crate::memory::{xfree, xmalloc};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, FAIL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow,
-    kListLenUnknown, linenr_T, list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
+    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown, linenr_T,
+    list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// The most characters of a pattern or a candidate that are looked at, and
@@ -871,7 +871,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
     let mut matchseq = false;
     let mut limit = 0;
     if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) } == FAIL {
+        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) }.is_err() {
             return;
         }
         let d: *mut dict_T = unsafe { (*argvars.add(2)).vval.v_dict };

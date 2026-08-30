@@ -288,7 +288,7 @@ pub(crate) unsafe fn get_lval_blob(
     };
     let n1 = lp.ll_n1 as varnumber_T;
     // SAFETY: the index is checked against the length measured above.
-    if unsafe { tv_blob_check_index(bloblen, n1, quiet) } == FAIL {
+    if unsafe { tv_blob_check_index(bloblen, n1, quiet) }.is_err() {
         return FAIL;
     }
     if lp.ll_range && !lp.ll_empty2 {
@@ -296,7 +296,7 @@ pub(crate) unsafe fn get_lval_blob(
         lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
         let n2 = lp.ll_n2 as varnumber_T;
         // SAFETY: as above.
-        if unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) } == FAIL {
+        if unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }.is_err() {
             return FAIL;
         }
     }
@@ -363,7 +363,7 @@ pub(crate) unsafe fn get_lval_list(
         // indexes are `lp`'s own fields.
         unsafe { *n2 = tv_get_number(var2) as c_int };
         // SAFETY: `li` is the item index one selected.
-        if unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) } == FAIL {
+        if unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }.is_err() {
             return FAIL;
         }
     }
@@ -773,7 +773,7 @@ pub unsafe fn set_var_lval(
         let (list, n1, n2) = (lp.ll_list, lp.ll_n1, lp.ll_n2);
         let (empty2, name) = (lp.ll_empty2, lp.ll_name);
         // SAFETY: as above.
-        unsafe { tv_list_assign_range(list, src, n1, n2, empty2, op, name) };
+        let _ = unsafe { tv_list_assign_range(list, src, n1, n2, empty2, op, name) };
         return;
     }
 
@@ -817,7 +817,7 @@ pub unsafe fn set_var_lval(
                 return;
             }
             let di = unsafe { tv_dict_item_alloc(lp.ll_newkey) };
-            if unsafe { tv_dict_add(target, di) } == FAIL {
+            if unsafe { tv_dict_add(target, di) }.is_err() {
                 unsafe { xfree(di as *mut c_void) };
                 return;
             }
@@ -970,7 +970,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
         }
         let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as varnumber_T, lp.ll_n2 as varnumber_T);
         // SAFETY: as above; `rettv` holds the Blob being assigned.
-        if unsafe { tv_blob_set_range(blob, n1, n2, rettv) } == FAIL {
+        if unsafe { tv_blob_set_range(blob, n1, n2, rettv) }.is_err() {
             return false;
         }
         return true;

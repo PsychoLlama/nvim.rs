@@ -197,7 +197,7 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: `v_event` is the dict just built, the key is a static string
     // of the length given, and `buf` is the current buffer.
     unsafe {
-        tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, item);
+        let _ = tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, item);
         pum_set_event_info(v_event);
         tv_dict_set_keys_readonly(v_event);
     }

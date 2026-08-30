@@ -231,10 +231,11 @@ unsafe fn is_dict(tv: *mut typval_T) -> bool {
 unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -> c_int {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
-    let exp_d = unsafe { (*exp_tv).vval.v_dict };
-    let got_d = unsafe { (*got_tv).vval.v_dict };
-    unsafe { (*exp_tv).vval.v_dict = tv_dict_alloc() };
-    unsafe { (*got_tv).vval.v_dict = tv_dict_alloc() };
+    let (exp_d, got_d) = unsafe { ((*exp_tv).vval.v_dict, (*got_tv).vval.v_dict) };
+    // The pruned copies that replace them, which the caller then owns.
+    let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
+    unsafe { (*exp_tv).vval.v_dict = exp };
+    unsafe { (*got_tv).vval.v_dict = got };
 
     let mut omitted = 0;
     for hi in tv_dict_iter(unsafe { &*exp_d }) {
@@ -247,9 +248,9 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
         }
         // Absent from the actual value, or present with a different one.
         let key_len = unsafe { strlen(key) };
-        unsafe { tv_dict_add_tv((*exp_tv).vval.v_dict, key, key_len, expected) };
+        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, expected) };
         if !item2.is_null() {
-            unsafe { tv_dict_add_tv((*got_tv).vval.v_dict, key, key_len, &raw mut (*item2).di_tv) };
+            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &raw mut (*item2).di_tv) };
         }
     }
 
@@ -257,8 +258,8 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
     for hi in tv_dict_iter(unsafe { &*got_d }) {
         let key = unsafe { (*hi).hi_key };
         if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
-            let got = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
-            unsafe { tv_dict_add_tv((*got_tv).vval.v_dict, key, strlen(key), got) };
+            let tv = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
+            let _ = unsafe { tv_dict_add_tv(got, key, strlen(key), tv) };
         }
     }
     omitted

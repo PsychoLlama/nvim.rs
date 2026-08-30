@@ -20,7 +20,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, Failed, NUL};
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,
 /// or a string comparison of their `string()` forms.
@@ -351,7 +351,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     argvars: *mut typval_T,
     info: *mut sortinfo_T,
     how: &mut NumBuf,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's stack `sortinfo_T`.
     let mut sort_info = unsafe { Si::new(info) };
     sort_info.item_compare_ic = 0;
@@ -366,7 +366,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     // SAFETY: the builtin's argument array, which has at least two slots.
     let arg1 = unsafe { Tv::new(argvars.add(1)) };
     if arg1.v_type == VAR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
 
     // optional second argument: {func}
@@ -378,7 +378,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
         let mut error = false;
         let nr = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) } as ::core::ffi::c_int;
         if error {
-            return FAIL; // type error; errmsg already given
+            return Err(Failed); // type error; errmsg already given
         }
         if nr == 1 {
             sort_info.item_compare_ic = 1;
@@ -387,7 +387,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
             sort_info.item_compare_func = name;
         } else if nr != 0 {
             emsg(gettext(e_invarg));
-            return FAIL;
+            return Err(Failed);
         }
 
         let how = sort_info.item_compare_func;
@@ -416,13 +416,13 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 
     if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
         // optional third argument: {dict}
-        if unsafe { tv_check_for_dict_arg(argvars, 2) } == FAIL {
-            return FAIL;
+        if unsafe { tv_check_for_dict_arg(argvars, 2) }.is_err() {
+            return Err(Failed);
         }
         unsafe { (*info).item_compare_selfdict = (*argvars.add(2)).vval.v_dict };
     }
 
-    OK
+    Ok(())
 }
 
 /// The body `sort()` and `uniq()` share: check the argument, publish a
@@ -460,7 +460,7 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
     if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
         unsafe { tv_list_set_ret(rettv, l) };
         if unsafe { tv_list_len(l) } > 1
-            && unsafe { parse_sort_uniq_args(argvars, &raw mut info, &mut how) } == OK
+            && unsafe { parse_sort_uniq_args(argvars, &raw mut info, &mut how) }.is_ok()
         {
             if sort {
                 unsafe { do_sort(l, &raw mut info) };

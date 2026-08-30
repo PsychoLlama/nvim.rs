@@ -289,7 +289,7 @@ pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eva
     // one allocated above; `f_jobstart` takes the whole argument vector.
     let dict = unsafe { argv[1].vval.v_dict };
     // SAFETY: as above -- `dict` is that dictionary.
-    unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
+    let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
     // SAFETY: as above -- the whole argument vector goes to `jobstart()`.
     unsafe { f_jobstart(argvars, rettv, fptr) };
     if must_free {

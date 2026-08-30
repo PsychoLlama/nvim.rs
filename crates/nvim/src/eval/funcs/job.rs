@@ -345,7 +345,8 @@ unsafe fn create_environment(
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
             if p_tgc.get() != 0 {
-                unsafe { tv_dict_add_str(env, c"COLORTERM".as_ptr(), 9, c"truecolor".as_ptr()) };
+                let truecolor = c"truecolor".as_ptr();
+                let _ = unsafe { tv_dict_add_str(env, c"COLORTERM".as_ptr(), 9, truecolor) };
             }
         }
     }
@@ -355,7 +356,7 @@ unsafe fn create_environment(
         if !dv.is_null() {
             unsafe { tv_dict_item_remove(env, dv) };
         }
-        unsafe { tv_dict_add_str(env, c"TERM".as_ptr(), 4, pty_term_name) };
+        let _ = unsafe { tv_dict_add_str(env, c"TERM".as_ptr(), 4, pty_term_name) };
     }
 
     // $NVIM points the child at this instance's server address, when
@@ -366,7 +367,7 @@ unsafe fn create_environment(
         if !dv.is_null() {
             unsafe { tv_dict_item_remove(env, dv) };
         }
-        unsafe { tv_dict_add_str(env, c"NVIM".as_ptr(), 4, nvim_addr) };
+        let _ = unsafe { tv_dict_add_str(env, c"NVIM".as_ptr(), 4, nvim_addr) };
     }
 
     // The job's own `env` wins over everything above.
@@ -380,7 +381,7 @@ unsafe fn create_environment(
             if unsafe { tv_dict_find(env, name.as_ptr(), len as isize) }.is_null() {
                 let value = unsafe { os_getenv(name.as_ptr()) };
                 if !value.is_null() {
-                    unsafe { tv_dict_add_allocated_str(env, name.as_ptr(), len, value) };
+                    let _ = unsafe { tv_dict_add_allocated_str(env, name.as_ptr(), len, value) };
                 }
             }
         }

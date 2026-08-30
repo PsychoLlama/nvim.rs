@@ -16,7 +16,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{NUL, Refcount};
+use crate::types::{Failed, NUL, Refcount};
 
 /// A handle on the global user-function table.
 ///
@@ -77,7 +77,7 @@ impl FuncTable {
     ///
     /// # Safety
     /// `key` must be a NUL-terminated string that outlives the entry.
-    pub(crate) unsafe fn add(self, key: *mut c_char) -> c_int {
+    pub(crate) unsafe fn add(self, key: *mut c_char) -> Result<(), Failed> {
         // SAFETY: the caller's key; the table is this crate's `static`.
         unsafe { hash_add(self.0, key) }
     }

@@ -11,7 +11,7 @@ use crate::api_error;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
+use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -70,7 +70,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         // SAFETY: as above.
         is_abbr = unsafe { tv_get_bool(argvars.add(1)) } != 0;
         // SAFETY: as above.
-        if unsafe { tv_check_for_dict_arg(argvars, 2) } == FAIL {
+        if unsafe { tv_check_for_dict_arg(argvars, 2) }.is_err() {
             return;
         }
         // SAFETY: `tv_check_for_dict_arg` just said slot 2 is a dict.

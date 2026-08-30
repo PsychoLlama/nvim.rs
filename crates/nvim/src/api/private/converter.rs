@@ -490,7 +490,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, tak
                     let di: *mut dictitem_T = tv_dict_item_alloc((*item).key.data());
                     let value = &raw mut (*item).value;
                     object_to_vim_take_luaref(value, &raw mut (*di).di_tv, take_luaref);
-                    tv_dict_add(dict, di);
+                    let _ = tv_dict_add(dict, di);
                 }
             }
             // SAFETY: `dict` is the dictionary just built; the reference the

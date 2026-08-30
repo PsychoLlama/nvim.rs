@@ -25,7 +25,7 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
-use crate::types::{EvalFuncData, FAIL, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
 use ::libc::strlen;
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
@@ -137,11 +137,11 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_number_arg(argvars, 1) } == FAIL
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) } == FAIL
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_number_arg(argvars, 1) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) }.is_err()
         || (given(unsafe { &*argvars.add(2) })
-            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) } == FAIL)
+            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) }.is_err())
     {
         return;
     }
@@ -226,8 +226,8 @@ pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 1) } == FAIL
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(argvars, 1) }.is_err()
     {
         return;
     }
@@ -367,11 +367,11 @@ pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) } == FAIL
-        || unsafe { tv_check_for_opt_number_arg(argvars, 1) } == FAIL
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) } == FAIL
+    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
+        || unsafe { tv_check_for_opt_number_arg(argvars, 1) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) }.is_err()
         || (given(unsafe { &*argvars.add(2) })
-            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) } == FAIL)
+            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) }.is_err())
     {
         return;
     }

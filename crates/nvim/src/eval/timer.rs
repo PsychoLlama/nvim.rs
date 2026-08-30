@@ -31,8 +31,8 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::registry::SlotTable;
 use crate::types::{
-    Callback, FAIL, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
-    int64_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    Callback, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, int64_t,
+    ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -85,14 +85,14 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
         let len = key.count_bytes() as size_t;
         // SAFETY: `dict` is the dictionary just appended, and `key` is a
         // NUL-terminated literal `len` bytes long.
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), len, value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), len, value) };
     }
 
     // SAFETY: `tv_dict_item_alloc` never answers NULL.
     let di: *mut dictitem_T = unsafe { tv_dict_item_alloc(c"callback".as_ptr()) };
     // SAFETY: `di` is the item just allocated, and it is freed again here
     // when the dictionary refuses it.
-    if unsafe { tv_dict_add(dict, di) } == FAIL {
+    if unsafe { tv_dict_add(dict, di) }.is_err() {
         // SAFETY: nothing took the item over.
         unsafe { xfree(di as *mut c_void) };
         return;

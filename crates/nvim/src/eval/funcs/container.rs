@@ -58,7 +58,7 @@ pub unsafe fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arguments and `rettv` are live typvals.
-    if check_arg(args, 1, tv_check_for_opt_bool_arg) == FAIL {
+    if check_arg(args, 1, tv_check_for_opt_bool_arg).is_err() {
         return;
     }
     let noref = args.has(1) && unsafe { tv_get_bool_chk(args.ptr(1), ptr::null_mut()) } != 0;
@@ -351,9 +351,9 @@ unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     } else {
         required -= unsafe { (*pt).pt_argc };
     }
-    unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as varnumber_T) };
-    unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as varnumber_T) };
-    unsafe { tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as varnumber_T) };
+    let _ = unsafe { tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue) };
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
@@ -446,9 +446,9 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     rettv.vval.v_number = -1;
     // SAFETY throughout: the arguments are live typvals; the two `v:` variables are
     // saved and put back around the search whatever it does.
-    if check_arg(args, 0, tv_check_for_list_or_blob_arg) == FAIL
-        || check_arg(args, 1, tv_check_for_string_or_func_arg) == FAIL
-        || check_arg(args, 2, tv_check_for_opt_dict_arg) == FAIL
+    if check_arg(args, 0, tv_check_for_list_or_blob_arg).is_err()
+        || check_arg(args, 1, tv_check_for_string_or_func_arg).is_err()
+        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
     {
         return;
     }

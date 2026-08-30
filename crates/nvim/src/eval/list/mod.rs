@@ -438,7 +438,7 @@ impl Dict {
     pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut typval_T) -> bool {
         // SAFETY: a live dict, `key` the NUL-terminated key of one of its own
         // items, and `tv` a live value.
-        unsafe { tv_dict_add_tv(self.0, key, strlen(key), tv) != 0 }
+        unsafe { tv_dict_add_tv(self.0, key, strlen(key), tv) }.is_ok()
     }
 
     #[inline(always)]
@@ -932,9 +932,9 @@ pub unsafe fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
 pub unsafe fn f_reverse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: the caller's contract; the check reports E1252 for a type that
-    // cannot be reversed, and answers FAIL -- which is zero -- for it.
-    if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) } == 0 {
+    // SAFETY: the caller's contract; the check reports E1252 for a type
+    // that cannot be reversed.
+    if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) }.is_err() {
         return;
     }
     // SAFETY: the caller's contract.

@@ -271,7 +271,7 @@ unsafe fn call_qftf_func(
 
     let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
     let add = |key: &CStr, value: varnumber_T| {
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
     add(
         c"quickfix",

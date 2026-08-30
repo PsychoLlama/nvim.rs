@@ -86,7 +86,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
         // SAFETY: the `v:` hashtab, and a key that is the row's own.
-        unsafe { hash_add(get_vimvar_ht(), vimvar_key(idx)) };
+        let _ = unsafe { hash_add(get_vimvar_ht(), vimvar_key(idx)) };
     }
 }
 

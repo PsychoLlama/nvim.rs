@@ -108,7 +108,7 @@ pub unsafe fn call_user_func(
     let add_fix_var = |v: *mut dictitem_T, ht: *mut hashtab_T, key: &CStr| {
         unsafe { strcpy(tv_dict_item_key(v), key.as_ptr()) };
         unsafe { (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
-        unsafe { hash_add(ht, tv_dict_item_key(v)) };
+        let _ = unsafe { hash_add(ht, tv_dict_item_key(v)) };
     };
 
     // Init the l: variables.
@@ -241,9 +241,9 @@ pub unsafe fn call_user_func(
             // A lambda sees its arguments as l: variables too, so the
             // value has to be reference-counted twice.
             unsafe { tv_copy(&raw mut (*v).di_tv, &raw mut (*v).di_tv) };
-            unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, tv_dict_item_key(v)) };
+            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, tv_dict_item_key(v)) };
         } else {
-            unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, tv_dict_item_key(v)) };
+            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, tv_dict_item_key(v)) };
         }
 
         if (0..MAX_FUNC_ARGS).contains(&ai) {

@@ -23,7 +23,7 @@ use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::types::{FAIL, VAR_LIST, VAR_STRING, list_T, typval_T};
+use crate::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
 use ::libc::abort;
 
 /// One container the decoder is currently inside.
@@ -183,7 +183,7 @@ impl<'a> Decoder<'a> {
                 );
                 let obj_di = unsafe { tv_dict_item_alloc(key.val.vval.v_string) };
                 unsafe { tv_clear(&raw mut key.val) };
-                if unsafe { tv_dict_add(last.container.vval.v_dict, obj_di) } == FAIL {
+                if unsafe { tv_dict_add(last.container.vval.v_dict, obj_di) }.is_err() {
                     unsafe { abort() };
                 }
                 unsafe { (*obj_di).di_tv = obj.val };

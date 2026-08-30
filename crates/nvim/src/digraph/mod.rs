@@ -573,7 +573,7 @@ pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// Standard eval-function contract.
 pub unsafe fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
-    if unsafe { tv_check_for_opt_bool_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_opt_bool_arg(argvars, 0) }.is_err() {
         return;
     }
     // SAFETY: caller contract; the optional argument was just type-checked.

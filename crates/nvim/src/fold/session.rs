@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_session::{put_eol, put_line};
+use crate::types::Failed;
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int};
 

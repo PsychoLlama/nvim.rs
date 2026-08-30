@@ -202,7 +202,7 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
         unsafe { channel_callback_call(chan, reader) };
     } else if unsafe { tv_dict_find((*reader).self_0, (*reader).type_0, -1) }.is_null() {
         let data = unsafe { reader_lines(reader) };
-        unsafe {
+        let _ = unsafe {
             tv_dict_add_list(
                 (*reader).self_0,
                 (*reader).type_0,

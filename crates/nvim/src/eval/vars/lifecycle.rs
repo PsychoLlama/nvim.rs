@@ -12,7 +12,7 @@ use core::ptr;
 
 use super::*;
 use crate::types::MessagePackType;
-use crate::types::{FAIL, NUL, Refcount};
+use crate::types::{NUL, Refcount};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
@@ -53,11 +53,11 @@ pub unsafe fn evalvars_init() {
         // always available, which is what a `VAR_UNKNOWN` row means.
         // SAFETY: the two scope hashtabs, and the row's own key.
         if declared != VAR_UNKNOWN {
-            unsafe { hash_add(get_vimvar_ht(), key) };
+            let _ = unsafe { hash_add(get_vimvar_ht(), key) };
         }
         if flags.has(VimVarFlags::COMPAT) {
             // ... and into the scope that has no prefix at all.
-            unsafe { hash_add(get_compat_ht(), key) };
+            let _ = unsafe { hash_add(get_compat_ht(), key) };
         }
     }
 
@@ -85,7 +85,7 @@ pub unsafe fn evalvars_init() {
             vval: typval_vval_union { v_list: type_list },
         };
         type_lists[i] = type_list;
-        if unsafe { tv_dict_add(msgpack_types_dict, di) } == FAIL {
+        if unsafe { tv_dict_add(msgpack_types_dict, di) }.is_err() {
             // The names are distinct by construction.
             unsafe { abort() };
         }

@@ -72,7 +72,7 @@ pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         let key = unsafe { xstrdup(entry) };
         unsafe { *entry.offset(len) = saved };
         if unsafe { tv_dict_find(rettv.vval.v_dict, key, len) }.is_null() {
-            unsafe { tv_dict_add_str(rettv.vval.v_dict, key, len as usize, value) };
+            let _ = unsafe { tv_dict_add_str(rettv.vval.v_dict, key, len as usize, value) };
         }
         unsafe { xfree(key as *mut c_void) };
     }

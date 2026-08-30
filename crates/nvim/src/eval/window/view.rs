@@ -152,7 +152,7 @@ pub unsafe fn f_win_splitmove(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         return;
     }
     let (flags, size) = if args.has(2) {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) } == FAIL {
+        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) }.is_err() {
             return;
         }
         unsafe { splitmove_options(args.ptr(2)) }
@@ -255,7 +255,7 @@ pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// current value.
 pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and `curwin` is set.
-    if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) } == FAIL {
+    if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
         return;
     }
     let dict = unsafe { (*argvars).vval.v_dict };
@@ -334,7 +334,7 @@ pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let win = cur_win();
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.
-        unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
     nr(c"lnum", varnumber_T::from(win.w_cursor.lnum));

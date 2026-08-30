@@ -211,7 +211,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     let mut arena: Arena = ARENA_EMPTY;
     let retval = unsafe { info_tv((*chan).id, &raw mut arena) };
-    unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict) };
+    let _ = unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict) };
     unsafe { tv_dict_set_keys_readonly(dict) };
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, curbuf.get()) };
     unsafe { restore_v_event(dict, &raw mut save_v_event) };

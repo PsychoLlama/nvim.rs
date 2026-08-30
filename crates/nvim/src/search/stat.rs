@@ -369,7 +369,7 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     unsafe { tv_dict_alloc_ret(rettv) };
 
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) } == FAIL {
+        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
             return;
         }
         let dict = unsafe { (*argvars).vval.v_dict };
@@ -453,7 +453,7 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         let mut add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as varnumber_T);
             // SAFETY: adding a number under a static key.
-            unsafe { tv_dict_add_nr(dict, k, klen, v) };
+            let _ = unsafe { tv_dict_add_nr(dict, k, klen, v) };
         };
         add(c"current", stat.cur);
         add(c"total", stat.cnt);

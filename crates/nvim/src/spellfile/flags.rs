@@ -277,7 +277,7 @@ pub(super) unsafe fn process_compflags(
                     }
                 };
                 unsafe { (*ci).ci_newID = id };
-                unsafe { hash_add(&raw mut (*aff).af_comp, compitem_T::key(ci)) };
+                let _ = unsafe { hash_add(&raw mut (*aff).af_comp, compitem_T::key(ci)) };
                 id
             };
             unsafe { *tp = id as uint8_t };

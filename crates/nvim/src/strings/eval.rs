@@ -34,8 +34,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
-    EvalFuncData, FAIL, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T,
-    uint8_t, varnumber_T,
+    EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
+    varnumber_T,
 };
 use ::libc::strlen;
 
@@ -393,7 +393,7 @@ pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = ptr::null_mut() };
-    if head.is_null() || unsafe { tv_check_for_opt_string_arg(argvars, 1) } == FAIL {
+    if head.is_null() || unsafe { tv_check_for_opt_string_arg(argvars, 1) }.is_err() {
         return;
     }
 

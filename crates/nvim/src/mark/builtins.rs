@@ -72,11 +72,11 @@ pub(super) unsafe fn add_mark(
         )
     };
     unsafe { tv_list_append_number(lpos, varnumber_T::from(pos.coladd)) };
-    if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) } == FAIL
-        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) } == FAIL
+    if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) }.is_err()
+        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) }.is_err()
         || (!fname.is_null()
             && unsafe { tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) }
-                == FAIL)
+                .is_err())
     {
         return FAIL;
     }

@@ -290,7 +290,7 @@ pub(crate) unsafe fn eval_index_inner(
         VAR_BLOB => {
             // SAFETY: the tag says the union holds a Blob.
             let blob = unsafe { rv.vval.v_blob };
-            unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, rettv) };
+            let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, rettv) };
         }
         VAR_LIST => {
             if var1.is_null() {
@@ -304,7 +304,7 @@ pub(crate) unsafe fn eval_index_inner(
             let sliced = unsafe {
                 tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
             };
-            if sliced == FAIL {
+            if sliced.is_err() {
                 return FAIL;
             }
         }

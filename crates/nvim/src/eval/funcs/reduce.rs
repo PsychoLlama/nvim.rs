@@ -268,7 +268,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
         let len = unsafe { utfc_ptr2len(p) };
         *rettv = unsafe { owned_str(p, len) };
         p = unsafe { p.add(len as usize) };
-    } else if check_arg(args, 2, tv_check_for_string_arg) == FAIL {
+    } else if check_arg(args, 2, tv_check_for_string_arg).is_err() {
         return;
     } else {
         arg_copy(args.get(2), rettv);
@@ -295,7 +295,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
     let b: *const blob_T = unsafe { args.get(0).vval.v_blob };
     let called_emsg_start = called_emsg.get();
     let (initial, mut i) = if args.has(2) {
-        if check_arg(args, 2, tv_check_for_number_arg) == FAIL {
+        if check_arg(args, 2, tv_check_for_number_arg).is_err() {
             return;
         }
         (*args.get(2), 0)

@@ -28,7 +28,7 @@ const MAX_SAVED_POS: c_int = 8;
 /// `d` must be live and `val` null or NUL-terminated.
 unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
     // SAFETY: the caller's dictionary and value.
-    unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
+    let _ = unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -37,7 +37,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
 /// `d` must be live.
 unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
     // SAFETY: the caller's dictionary.
-    unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
+    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
 
 /// `tv_dict_find` with a Rust key; null when absent.
@@ -135,7 +135,7 @@ pub(crate) unsafe fn f_getmatches(
                     unsafe { tv_list_append_number(sub, (*llpos).len as varnumber_T) };
                 }
                 let key = format!("pos{}", i + 1);
-                unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub) };
+                let _ = unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub) };
             }
         } else {
             unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };

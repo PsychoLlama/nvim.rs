@@ -23,13 +23,13 @@ use crate::winlayer::Buf;
 fn dict_add_nr(dict: *mut dict_T, key: &CStr, val: varnumber_T) {
     // SAFETY: a dictionary this module just allocated, and a NUL-terminated
     // key with its own length.
-    unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), val) };
 }
 
 /// [`dict_add_nr`] for a list value, which the dictionary takes over.
 fn dict_add_list(dict: *mut dict_T, key: &CStr, val: *mut list_T) {
     // SAFETY: as [`dict_add_nr`], plus a list this module just built.
-    unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), val) };
 }
 
 /// One `:undolist` row: the header's sequence number, how many changes deep
