@@ -304,7 +304,11 @@ plus these whole-tree metrics, which are not per-file:
                     the idiom and its replacement look alike the needle is
                     narrowed, and the narrowing is written down here.
 
-                      c_int_returns   `-> c_int` — the C status-code return.
+                      c_int_returns   `-> c_int` — the C status-code return,
+                        in every spelling of the type (`c_int`,
+                        `::core::ffi::c_int`, `core::ffi::c_int`,
+                        `std::ffi::c_int`, `libc::c_int`), so that re-spelling
+                        one is not progress and converting one is.
                         Function-pointer types count too: apigen's tables
                         declare them and they retire with their callees.
                       ok_fail         `return OK`/`return FAIL` and `== `/
@@ -683,8 +687,14 @@ WINLAYER = {
 VOCABULARY = {
     # `\s*` rather than a literal space: rustfmt wraps a long signature's
     # `-> c_int` onto its own line. `\b` so `c_int_ish` is not a match, and no
-    # trailing anchor so `{`, `;`, `,` and end-of-line all count.
-    "c_int_returns": re.compile(r"->\s*c_int\b"),
+    # trailing anchor so `{`, `;`, `,` and end-of-line all count. The path
+    # prefix is optional and covers every spelling the tree uses for the same
+    # type — `c2rust` emitted `::core::ffi::c_int` in the files it left fully
+    # qualified, and `libc::c_int` is what an FFI declaration reaches for — so
+    # that converting one is progress and re-spelling one is not.
+    "c_int_returns": re.compile(
+        r"->\s*(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_int\b"
+    ),
     # The comparisons are written `[=!]=` rather than `==|!=` so that `>=`/`<=`
     # do not match; `>= OK` is not a status-code test.
     "ok_fail": re.compile(r"\breturn\s+(?:OK|FAIL)\b|[=!]=\s*(?:OK|FAIL)\b"),
@@ -2109,9 +2119,14 @@ SELF_TEST_VOCABULARY = [
             "fn b() -> c_int;\n"
             "type F = fn() -> c_int;\n"
             "fn c(\n    x: u8,\n) -> c_int\n{\n}\n"
+            "fn e() -> ::core::ffi::c_int {\n}\n"
+            "fn f() -> core::ffi::c_int {\n}\n"
+            "fn g() -> std::ffi::c_int {\n}\n"
+            "fn h() -> libc::c_int {\n}\n"
             "fn d() -> c_int_ish {\n}\n"
+            "fn i() -> c_uint {\n}\n"
         },
-        {"c_int_returns": 4},
+        {"c_int_returns": 8},
     ),
     (
         {
