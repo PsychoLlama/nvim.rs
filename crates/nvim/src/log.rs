@@ -222,9 +222,16 @@ fn log_path_init() {
     setenv_path(ENV_LOGFILE, &path);
     LOG_FILE_PATH.set(CString::new(path).ok());
     if log_dir_failure != 0 {
-        let dir = failed_dir.map_or(core::ptr::null(), |d| d.as_ptr());
-        // SAFETY: `dir` outlives the call; `uv_strerror` returns a static
-        // string.
+        // `as_ref`, not `map_or` by value: moving the `CString` into the
+        // closure drops it at the end of the expression, and the pointer
+        // `as_ptr` answered is into the buffer that just went. glibc's `%s`
+        // read the freed bytes without ASan noticing, because the scan is
+        // inside libc; `CStr::from_ptr`'s `strlen` is intercepted.
+        let dir = failed_dir
+            .as_ref()
+            .map_or(core::ptr::null(), |d| d.as_ptr());
+        // SAFETY: `dir` borrows `failed_dir`, which outlives the call;
+        // `uv_strerror` returns a static string.
         let (dir, why) = unsafe { (c_str(dir), c_str(uv_strerror(log_dir_failure))) };
         logmsg!(
             LOGLVL_WRN,
