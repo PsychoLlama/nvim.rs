@@ -24,6 +24,7 @@
 use super::attr::ADDR_TYPES;
 use super::{Scope, ucmd_name};
 use crate::charset::{skiptowhite, skipwhite};
+use crate::cstr;
 use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
@@ -32,7 +33,6 @@ use crate::os::cshim::snprintf;
 use crate::types::{
     CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, ExArgt, ExpandContext, NUL, expand_T,
 };
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -322,7 +322,7 @@ pub(crate) unsafe fn cmdcomplete_type_to_str(
         return unsafe { xstrdup(name.as_ptr()) };
     }
     // SAFETY: caller contract.
-    let buflen = name.count_bytes() + unsafe { strlen(compl_arg) } + 2;
+    let buflen = name.count_bytes() + unsafe { cstr::bytes_at(compl_arg) }.len() + 2;
     let buffer = unsafe { xmalloc(buflen) }.cast::<c_char>();
     unsafe { snprintf(buffer, buflen, c"%s,%s".as_ptr(), name.as_ptr(), compl_arg) };
     buffer

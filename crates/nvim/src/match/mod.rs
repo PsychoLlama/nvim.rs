@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 
@@ -50,7 +51,6 @@ use crate::types::{
     varnumber_T, win_T,
 };
 use crate::winlayer::{Live, Win};
-use ::libc::strlen;
 
 mod searchhl;
 pub(crate) use self::searchhl::*;
@@ -128,7 +128,7 @@ unsafe fn match_add(
         }
     }
 
-    let hlg_id = unsafe { syn_check_group(grp, strlen(grp)) };
+    let hlg_id = unsafe { syn_check_group(grp, cstr::bytes_at(grp).len()) };
     if hlg_id == 0 {
         return -1;
     }

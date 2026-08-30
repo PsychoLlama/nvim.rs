@@ -38,7 +38,6 @@ use crate::types::{
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
 use crate::winlayer::Live;
-use ::libc::strlen;
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
@@ -83,7 +82,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
         val
     };
     // The buffer the expansion lands in is `MAXPATHL` bytes.
-    if val.is_null() || unsafe { strlen(val) } > MAXPATHL as size_t {
+    if val.is_null() || unsafe { cstr::bytes_at(val) }.len() > MAXPATHL as size_t {
         return None;
     }
     // 'path' and 'tags' hold escaped file names, so their separators
@@ -123,7 +122,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         return;
     }
 
-    let argend = unsafe { arg.add(strlen(arg)) };
+    let argend = unsafe { arg.add(cstr::bytes_at(arg).len()) };
     // A trailing unescaped space starts a fresh argument.
     let last = unsafe { argend.sub(1) };
     if unsafe { *last } as c_int == ' ' as c_int
@@ -732,7 +731,7 @@ pub(crate) unsafe fn expand_setting_subtract(
         if unsafe { *(*xp).xp_pattern } != NUL as c_char {
             return Err(Failed);
         }
-        let num_flags = unsafe { strlen(value) };
+        let num_flags = unsafe { cstr::bytes_at(value) }.len();
         if num_flags == 0 {
             return Err(Failed);
         }

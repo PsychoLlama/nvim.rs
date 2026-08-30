@@ -24,6 +24,7 @@ pub use dirs::{
 pub use expand::{expand_env, expand_env_esc, expand_env_save, expand_env_save_opt};
 
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
 };
@@ -38,7 +39,7 @@ use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
 use crate::types::{IOSIZE, MAXPATHL, expand_T, int64_t, size_t};
-use ::libc::{getpid, strcasecmp, strcpy, strlen, strpbrk, uname, utsname};
+use ::libc::{getpid, strcasecmp, strcpy, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -464,7 +465,11 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
         xmemcpyz(dir.as_mut_ptr().cast(), fname.cast(), dirlen);
 
         let path = os_getenv(c"PATH".as_ptr());
-        let pathlen = if path.is_null() { 0 } else { strlen(path) };
+        let pathlen = if path.is_null() {
+            0
+        } else {
+            cstr::bytes_at(path).len()
+        };
         let newlen = pathlen + dirlen + 2;
         let mut retval = false;
         if newlen < MAX_ENVPATHLEN {

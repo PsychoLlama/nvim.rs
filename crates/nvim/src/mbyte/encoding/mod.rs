@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use ::libc::nl_langinfo;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -138,7 +139,8 @@ pub unsafe fn remove_bom(s: *mut c_char) {
         if unsafe { *p.offset(1) } as u8 == 0xbb && unsafe { *p.offset(2) } as u8 == 0xbf {
             // Move the rest of the string down over the mark, NUL included.
             let rest = unsafe { p.offset(3) };
-            unsafe { memmove(p as *mut c_void, rest as *const c_void, strlen(rest) + 1) };
+            let rest_len = unsafe { cstr::bytes_at(rest) }.len();
+            unsafe { memmove(p as *mut c_void, rest as *const c_void, rest_len + 1) };
         } else {
             p = unsafe { p.offset(1) };
         }

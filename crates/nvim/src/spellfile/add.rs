@@ -55,7 +55,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
-use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror, strlen};
+use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror};
 
 use super::wordtree::valid_spell_word;
 use super::{
@@ -329,7 +329,7 @@ unsafe fn init_spellfile() {
     }
 
     // "<dir>/<lang>"
-    let used = unsafe { strlen(buf) };
+    let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
     let taken = unsafe { lend.offset_from(lstart) } as c_int;
     unsafe { vim_snprintf(at, buf_len - used, c"/%.*s".as_ptr(), taken, lstart) };
@@ -345,7 +345,7 @@ unsafe fn init_spellfile() {
     } else {
         unsafe { spell_enc() as *const c_char }
     };
-    let used = unsafe { strlen(buf) };
+    let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
     unsafe { vim_snprintf(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };
 

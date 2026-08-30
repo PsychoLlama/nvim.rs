@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::message_fmt::c_str;
@@ -117,7 +118,7 @@ pub(crate) unsafe fn get_normal_compl_info(
                 unsafe { quote_meta(data.offset(2), line.offset(compl_col.get() as isize), 1) };
                 unsafe { strcat(data, c"\\k".as_ptr()) };
                 compl_pattern().set_data(data);
-                compl_pattern().set_len(unsafe { strlen(data) });
+                compl_pattern().set_len(unsafe { cstr::bytes_at(data) }.len());
             } else {
                 let (data, n) = build_pattern(c"\\<", compl_length.get());
                 compl_pattern().set_data(data);

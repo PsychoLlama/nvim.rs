@@ -15,6 +15,7 @@ use crate::api::private::validate::{
     err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected,
 };
 use crate::api_error;
+use crate::cstr;
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::kvec::InitVec;
 use crate::winlayer::Live;
@@ -325,7 +326,8 @@ pub unsafe fn nvim_get_autocmds(
                                         let mut pat_0: *mut ::core::ffi::c_char =
                                             pattern_filters[j as usize];
                                         let mut patlen: ::core::ffi::c_int =
-                                            unsafe { strlen(pat_0) } as ::core::ffi::c_int;
+                                            unsafe { cstr::bytes_at(pat_0) }.len()
+                                                as ::core::ffi::c_int;
                                         let mut pattern_buflocal: [::core::ffi::c_char; 25] =
                                             [0; 25];
                                         if unsafe { aupat_is_buflocal(pat_0, patlen) } {

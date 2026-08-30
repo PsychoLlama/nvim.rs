@@ -13,6 +13,7 @@
 
 use super::exec::Sub;
 use super::subflags;
+use crate::cstr;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
@@ -44,7 +45,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::winlayer::Win;
-use ::libc::{memset, strlen};
+use ::libc::memset;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -194,7 +195,8 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         // Position the cursor relative to the end of the line: the
         // previous substitute may have inserted or deleted characters
         // before it.
-        len_change = unsafe { strlen(new_line) } as c_int - unsafe { strlen(orig_line) } as c_int;
+        len_change = unsafe { cstr::bytes_at(new_line) }.len() as c_int
+            - unsafe { cstr::bytes_at(orig_line) }.len() as c_int;
         cur_win().w_cursor.col += len_change;
         let _ = unsafe { ml_replace(st.lnum, new_line, false) };
     }
@@ -317,7 +319,7 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
         // get stuck when pressing 'n'.
         if st.nmatch > 1 as c_int {
             // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { strlen(st.sub_firstline) } as colnr_T;
+            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
             st.skip_match = true;
         }
         return Confirm::Skip;

@@ -45,7 +45,7 @@ use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
 use crate::types::{FILE, Failed, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
-use ::libc::{fclose, fputc, fwrite, qsort, strlen, time};
+use ::libc::{fclose, fputc, fwrite, qsort, time};
 
 use super::wordtree::wordnode_T;
 use super::{
@@ -97,7 +97,7 @@ impl SplWriter {
     /// `p` must point at a NUL-terminated string.
     unsafe fn payload_str(&mut self, p: *const c_char) -> usize {
         // SAFETY: the caller promises a terminated string.
-        let len = unsafe { strlen(p) };
+        let len = unsafe { cstr::bytes_at(p) }.len();
         unsafe { self.payload(p.cast(), len) };
         len
     }
@@ -193,7 +193,7 @@ unsafe fn put_info(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_info` is a NUL-terminated arena string.
-    let len = unsafe { strlen(spin.si_info) };
+    let len = unsafe { cstr::bytes_at(spin.si_info) }.len();
     w.section(SN_INFO as c_int, 0, len);
     unsafe { w.payload(spin.si_info.cast(), len) };
 }
@@ -254,7 +254,7 @@ unsafe fn put_midword(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_midword` is a NUL-terminated arena string.
-    let len = unsafe { strlen(spin.si_midword) };
+    let len = unsafe { cstr::bytes_at(spin.si_midword) }.len();
     w.section(SN_MIDWORD as c_int, SNF_REQUIRED, len);
     unsafe { w.payload(spin.si_midword.cast(), len) };
 }
@@ -312,8 +312,8 @@ unsafe fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
         let mut len = 2usize;
         for i in 0..unsafe { (*gap).ga_len } as usize {
             let ftp = unsafe { entries.add(i) };
-            len += 1 + unsafe { strlen((*ftp).ft_from) };
-            len += 1 + unsafe { strlen((*ftp).ft_to) };
+            len += 1 + unsafe { cstr::bytes_at((*ftp).ft_from) }.len();
+            len += 1 + unsafe { cstr::bytes_at((*ftp).ft_to) }.len();
         }
         if round == 2 {
             // The extra flags byte SAL carries.
@@ -339,7 +339,7 @@ unsafe fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
         for i in 0..unsafe { (*gap).ga_len } as usize {
             let ftp = unsafe { entries.add(i) };
             for p in [unsafe { (*ftp).ft_from }, unsafe { (*ftp).ft_to }] {
-                let l = unsafe { strlen(p) };
+                let l = unsafe { cstr::bytes_at(p) }.len();
                 debug_assert!(l < c_int::MAX as usize);
                 w.byte(l as c_int);
                 // A zero-length half is legitimate here, and writing
@@ -358,8 +358,8 @@ unsafe fn put_sofo(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: both are NUL-terminated arena strings.
-    let from_len = unsafe { strlen(spin.si_sofofr) };
-    let to_len = unsafe { strlen(spin.si_sofoto) };
+    let from_len = unsafe { cstr::bytes_at(spin.si_sofofr) }.len();
+    let to_len = unsafe { cstr::bytes_at(spin.si_sofoto) }.len();
     // Two length-prefixed strings.
     w.section(SN_SOFO as c_int, 0, from_len + to_len + 4);
     w.u16(from_len);
@@ -388,7 +388,7 @@ unsafe fn put_words(w: &mut SplWriter, spin: &spellinfo_T) {
             {
                 // Keys go out with their terminator, so the reader can
                 // split them apart again.
-                let l = unsafe { strlen((*hi).hi_key) } + 1;
+                let l = unsafe { cstr::bytes_at((*hi).hi_key) }.len() + 1;
                 len += l;
                 if round == 2 {
                     unsafe { w.payload((*hi).hi_key.cast(), l) };
@@ -452,9 +452,9 @@ unsafe fn put_compound(w: &mut SplWriter, spin: &spellinfo_T) {
     let patterns = spin.si_comppat.ga_data.cast::<*mut c_char>();
     let count = spin.si_comppat.ga_len as usize;
 
-    let mut len = unsafe { strlen(spin.si_compflags) };
+    let mut len = unsafe { cstr::bytes_at(spin.si_compflags) }.len();
     for i in 0..count {
-        len += unsafe { strlen(*patterns.add(i)) } + 1;
+        len += unsafe { cstr::bytes_at(*patterns.add(i)) }.len() + 1;
     }
     // Five limit bytes, a spare, and the two-byte pattern count.
     w.section(SN_COMPOUND as c_int, 0, len + 7);
@@ -467,8 +467,8 @@ unsafe fn put_compound(w: &mut SplWriter, spin: &spellinfo_T) {
     w.u16(count);
     for i in 0..count {
         let p = unsafe { *patterns.add(i) };
-        debug_assert!(unsafe { strlen(p) } < c_int::MAX as usize);
-        w.byte(unsafe { strlen(p) } as c_int);
+        debug_assert!(unsafe { cstr::bytes_at(p) }.len() < c_int::MAX as usize);
+        w.byte(unsafe { cstr::bytes_at(p) }.len() as c_int);
         unsafe { w.payload_str(p) };
     }
     unsafe { w.payload_str(spin.si_compflags) };
@@ -484,7 +484,7 @@ unsafe fn put_syllable(w: &mut SplWriter, spin: &spellinfo_T) {
         return;
     }
     // SAFETY: `si_syllable` is a NUL-terminated arena string.
-    let len = unsafe { strlen(spin.si_syllable) };
+    let len = unsafe { cstr::bytes_at(spin.si_syllable) }.len();
     w.section(SN_SYLLABLE as c_int, 0, len);
     unsafe { w.payload(spin.si_syllable.cast(), len) };
 }
@@ -696,7 +696,7 @@ pub(super) unsafe fn write_spell_prefcond(
             }
             continue;
         }
-        let len = unsafe { strlen(p) };
+        let len = unsafe { cstr::bytes_at(p) }.len();
         if !fd.is_null() {
             debug_assert!(len <= c_int::MAX as usize);
             unsafe { fputc(len as c_int, fd) };

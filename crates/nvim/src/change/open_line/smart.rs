@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::change::*;
@@ -209,7 +210,7 @@ unsafe fn smart_indent_forward(
     //
     // SAFETY: the line's own NUL, stepped back one -- which is the read
     // upstream makes.
-    let end = unsafe { ptr.add(strlen(ptr)) }.wrapping_offset(-1);
+    let end = unsafe { ptr.add(cstr::bytes_at(ptr).len()) }.wrapping_offset(-1);
     // SAFETY: as above.
     let mut p = unsafe { Ln::new(end) };
     while p.raw() > start.raw() && p.white() {
@@ -281,7 +282,8 @@ unsafe fn smart_indent_backward(
         {
             // SAFETY: `ptr` is NUL-terminated and not empty, as just tested.
             was_backslashed = start.byte() != 0
-                && unsafe { c_int::from(*ptr.add(strlen(ptr).wrapping_sub(1))) } == '\\' as c_int;
+                && unsafe { c_int::from(*ptr.add(cstr::bytes_at(ptr).len().wrapping_sub(1))) }
+                    == '\\' as c_int;
             cur_win().w_cursor.lnum += 1;
             ptr = line_at(cur_win().w_cursor.lnum);
             // SAFETY: a line of the current buffer.

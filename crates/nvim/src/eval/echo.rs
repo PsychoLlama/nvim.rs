@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::winlayer::Ea;
@@ -41,7 +42,7 @@ use crate::types::{
     var_flavour_T,
 };
 use crate::ui::ui_has;
-use ::libc::{memcpy, strlen};
+use ::libc::memcpy;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -224,7 +225,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             // SAFETY: `argstr` is NUL-terminated, and `ga_grow` makes room
             // for the separator, the bytes and the terminator before any of
             // them is written.
-            let len = unsafe { strlen(argstr) };
+            let len = unsafe { cstr::bytes_at(argstr) }.len();
             // SAFETY: as above.
             unsafe { ga_grow(&raw mut ga, len as c_int + 2) };
             if ga.ga_len > 0 {
@@ -322,7 +323,7 @@ pub unsafe fn var_set_global(name: *const c_char, mut vartv: typval_T) {
     unsafe { save_funccal(&raw mut funccall_entry) };
     // SAFETY: the caller's promise about `name`; `vartv` is this frame's
     // copy, whose ownership moves into the variable.
-    unsafe { set_var(name, strlen(name), &raw mut vartv, false) };
+    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut vartv, false) };
     // SAFETY: this undoes the save above.
     unsafe { restore_funccal() };
 }

@@ -48,7 +48,7 @@ use crate::types::{
     Directory, Failed, FileComparison, FileID, FileInfo, MAXPATHL, PATHSEPSTR, file_comparison,
     garray_T, regmatch_T, size_t,
 };
-use ::libc::{qsort, strcasecmp, strcpy, strlen};
+use ::libc::{qsort, strcasecmp, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod names;
@@ -410,7 +410,7 @@ pub unsafe fn vim_full_name(
     if fname.is_null() {
         return Err(Failed);
     }
-    if unsafe { strlen(fname) } > len.wrapping_sub(1) {
+    if unsafe { cstr::bytes_at(fname) }.len() > len.wrapping_sub(1) {
         unsafe { xstrlcpy(buf, fname, len) }; // truncate
         return Err(Failed);
     }

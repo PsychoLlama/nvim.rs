@@ -33,7 +33,7 @@ use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
-use ::libc::{atoi, strcpy, strlen};
+use ::libc::{atoi, strcpy};
 
 use super::aff::{AffState, str_equal};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
@@ -95,7 +95,7 @@ pub(super) unsafe fn handle_affix_header(
         // An unusable name is fatal: the key would not fit, or the
         // flag could not be read.
         if unsafe { (*st.cur_aff).ah_flag } == 0
-            || unsafe { strlen(items[1]) } >= AH_KEY_LEN as size_t
+            || unsafe { cstr::bytes_at(items[1]) }.len() >= AH_KEY_LEN as size_t
         {
             return false;
         }
@@ -273,7 +273,7 @@ pub(super) unsafe fn postpone_prefix(
                 || unsafe { utf_ptr2char((*entry).ae_cond) } == c)
         {
             // Step back to the last character of what is added.
-            let mut p = unsafe { (*entry).ae_add.add(strlen((*entry).ae_add)) };
+            let mut p = unsafe { (*entry).ae_add.add(cstr::bytes_at((*entry).ae_add).len()) };
             p = unsafe { p.offset(-((utf_head_off((*entry).ae_add, p.sub(1)) + 1) as isize)) };
             if unsafe { utf_ptr2char(p) } == c_up {
                 upper = true;

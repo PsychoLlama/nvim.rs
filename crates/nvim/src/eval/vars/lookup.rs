@@ -34,7 +34,7 @@ static varnamebuflen: GlobalCell<size_t> = GlobalCell::new(0);
 pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_char {
     // SAFETY: the caller's obligation -- a NUL-terminated name -- and the
     // buffer below is grown to hold the prefix, the name and its NUL.
-    let mut len = unsafe { strlen(name) } + 3;
+    let mut len = unsafe { cstr::bytes_at(name) }.len() + 3;
     if len > varnamebuflen.get() {
         unsafe { xfree(varnamebuf.get().cast()) };
         len += 10;
@@ -392,7 +392,7 @@ pub unsafe fn find_var_ht(
 pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_char {
     // SAFETY: the caller's obligation -- a NUL-terminated name; the answer
     // borrows the item that was found or the caller's scratch.
-    let v = unsafe { find_var(name, strlen(name), ptr::null_mut(), false) };
+    let v = unsafe { find_var(name, cstr::bytes_at(name).len(), ptr::null_mut(), false) };
     if v.is_null() {
         return ptr::null_mut();
     }

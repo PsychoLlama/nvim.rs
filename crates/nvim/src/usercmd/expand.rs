@@ -27,6 +27,7 @@
 use super::Scope;
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::guard::Script;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
@@ -40,7 +41,7 @@ use crate::types::{
     CMD_USER, CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
-use ::libc::{strcat, strlen};
+use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
 use core::{ptr, slice};
@@ -279,7 +280,7 @@ unsafe fn add_cmd_modifier(
     multi_mods: &mut bool,
 ) -> size_t {
     // SAFETY: caller contract.
-    let mut result = unsafe { strlen(mod_str) };
+    let mut result = unsafe { cstr::bytes_at(mod_str) }.len();
     if *multi_mods {
         result += 1;
     }
@@ -714,7 +715,7 @@ unsafe fn expand_replacement(cmd: &ucmd_T, eap: &exarg_T) -> *mut c_char {
         // SAFETY: module contract.
         let pass = unsafe { expand_pass(cmd, eap, buf, &raw mut split_buf, &raw mut split_len) };
         // SAFETY: `tail` points into `uc_rep`, which is NUL-terminated.
-        let tail_len = unsafe { strlen(pass.tail) };
+        let tail_len = unsafe { cstr::bytes_at(pass.tail) }.len();
         if buf.is_null() {
             // SAFETY: `xmalloc` never answers null.
             buf = unsafe { xmalloc(pass.total + tail_len + 1) }.cast::<c_char>();

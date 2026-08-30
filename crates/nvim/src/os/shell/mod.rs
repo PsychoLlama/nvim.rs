@@ -59,7 +59,7 @@ use crate::types::{
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
-use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy, strlen};
+use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -554,7 +554,7 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
         if *p_sxe.get() != NUL as c_char && cstr::bytes_at(p_sxq.get()) == b"(" {
             ecmd = vim_strsave_escaped_ext(cmd, p_sxe.get(), '^' as c_char, false);
         }
-        let ncmd_size = strlen(ecmd) + strlen(p_sxq.get()) * 2 + 1;
+        let ncmd_size = cstr::bytes_at(ecmd).len() + cstr::bytes_at(p_sxq.get()).len() * 2 + 1;
         let ncmd = xmalloc(ncmd_size) as *mut c_char;
 
         // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".

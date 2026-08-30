@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::option::cpo_has;
 use crate::semsg;
 use crate::types::{CpoFlag, MAXPATHL};
@@ -116,7 +117,7 @@ unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
         let entry = walker;
         let next = unsafe { vim_strchr(walker, c_int::from(b';')) };
         let len = if next.is_null() {
-            unsafe { strlen(entry) }
+            unsafe { cstr::bytes_at(entry) }.len()
         } else {
             unsafe { next.offset_from(entry) as usize }
         };

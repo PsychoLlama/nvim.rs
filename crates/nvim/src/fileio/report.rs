@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -55,7 +56,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     let io = report.as_mut_ptr();
     unsafe { add_quoted_fname(io, IOSIZE as size_t, Buf::current(), sfname) };
     let mut noted = false;
-    let mut buflen = unsafe { strlen(io) } as c_int;
+    let mut buflen = unsafe { cstr::bytes_at(io) }.len() as c_int;
     let mut note = |text: *const c_char| {
         buflen += note_text(io, buflen, text);
         noted = true;

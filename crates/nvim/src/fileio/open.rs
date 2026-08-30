@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::cstr;
 use crate::fileio::Loaded;
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
 use crate::winlayer::Buf;
@@ -182,7 +183,7 @@ pub(crate) unsafe fn open_source(
     );
 
     if !fname.is_null() && unsafe { *fname } != 0 {
-        let fnamelen = unsafe { strlen(fname) };
+        let fnamelen = unsafe { cstr::bytes_at(fname) }.len();
         // If the name is too long we might crash further on, quit
         // here.
         if fnamelen >= MAXPATHL as size_t {

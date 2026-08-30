@@ -15,6 +15,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::Failed;
@@ -40,7 +41,7 @@ pub(crate) unsafe fn describe_sign_text(buf: *mut c_char, sign_text: *mut schar_
         // many of them the cells so far have used.
         let len = unsafe {
             schar_get(buf.add(at), cell);
-            strlen(buf.add(at))
+            cstr::bytes_at(buf.add(at)).len()
         };
         if len == 0 {
             break;
@@ -92,7 +93,7 @@ pub(crate) unsafe fn init_sign_text(
     from_define: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's text, NUL-terminated and writable.
-    let len = unsafe { strlen(text) };
+    let len = unsafe { cstr::bytes_at(text) }.len();
     let len = if from_define {
         // SAFETY: as above; the shift copies the NUL along with the rest, so
         // the string stays NUL-terminated at its new length.

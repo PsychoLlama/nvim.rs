@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -39,7 +40,7 @@ pub unsafe fn cin_is_cinword(line: *const c_char) -> bool {
 
     let mut cinw = cur_buf().b_p_cinw;
     // SAFETY: 'cinwords' is a NUL-terminated option string.
-    let mut part = vec![0u8; unsafe { strlen(cinw) } + 1];
+    let mut part = vec![0u8; unsafe { cstr::bytes_at(cinw) }.len() + 1];
     let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
     // SAFETY: `cinw` walks that same option string, which `copy_option_part`
     // advances while writing at most `part_len` bytes into `part`.
@@ -195,7 +196,7 @@ pub(crate) unsafe fn cin_isscopedecl(p: *const c_char) -> bool {
 
     let mut cinsd = cur_buf().b_p_cinsd;
     // SAFETY: 'cinscopedecls' is a NUL-terminated option string.
-    let mut part = vec![0u8; unsafe { strlen(cinsd) } + 1];
+    let mut part = vec![0u8; unsafe { cstr::bytes_at(cinsd) }.len() + 1];
     let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
     // SAFETY: `cinsd` walks that same option string, which `copy_option_part`
     // advances while writing at most `part_len` bytes into `part`.
@@ -460,7 +461,7 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
 /// `s` must point at a NUL-terminated string.
 pub(crate) unsafe fn cin_ends_in_backslash(s: *const c_char) -> bool {
     // SAFETY: the caller's promise; `strlen` is at least 1 past the test.
-    unsafe { *s != 0 && *s.add(strlen(s) - 1) as u8 == b'\\' }
+    unsafe { *s != 0 && *s.add(cstr::bytes_at(s).len() - 1) as u8 == b'\\' }
 }
 
 /// Whether `s` ends with `find`, allowing white space and comments after it.

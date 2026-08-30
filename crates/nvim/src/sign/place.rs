@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::Failed;
@@ -467,7 +468,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T)
             return -1;
         }
         // SAFETY: a live buffer's name is a NUL-terminated string it owns.
-        let cmdlen = unsafe { strlen(buf.b_fname) } + 24;
+        let cmdlen = unsafe { cstr::bytes_at(buf.b_fname) }.len() + 24;
         let mut cmd = vec![0 as c_char; cmdlen + 1];
         // SAFETY: as above; `cmd` has room for `cmdlen` bytes plus the NUL.
         unsafe {

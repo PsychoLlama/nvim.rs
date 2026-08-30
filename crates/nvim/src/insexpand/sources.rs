@@ -62,7 +62,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         // match the pattern.  Also need to double backslashes.
         if ctrl_x_mode_line_or_eval() {
             let pat_esc = unsafe { vim_strsave_escaped(pat, c"\\".as_ptr()) };
-            let len = unsafe { strlen(pat_esc) } + 10;
+            let len = unsafe { cstr::bytes_at(pat_esc) }.len() + 10;
             let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
             unsafe { vim_snprintf(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };
             regmatch.regprog = unsafe { vim_regcomp(ptr, RE_MAGIC) };
@@ -719,7 +719,7 @@ pub(crate) unsafe fn get_register_completion() {
             }
 
             if adding_mode {
-                let str_len = unsafe { strlen(str) } as c_int;
+                let str_len = unsafe { cstr::bytes_at(str) }.len() as c_int;
                 if str_len == 0 {
                     continue;
                 }
@@ -735,7 +735,7 @@ pub(crate) unsafe fn get_register_completion() {
                 }
             } else {
                 // The safe end of the string, to avoid NUL byte issues.
-                let str_end = unsafe { str.add(strlen(str)) };
+                let str_end = unsafe { str.add(cstr::bytes_at(str).len()) };
                 let mut p = str;
                 while p < str_end && unsafe { *p } as c_int != NUL {
                     let old_p = p;

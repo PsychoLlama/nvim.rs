@@ -90,7 +90,7 @@ use crate::types::{
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
 use crate::winlayer::{Ea, Live};
-use ::libc::{abort, memchr, memcpy, strcpy, strlen};
+use ::libc::{abort, memchr, memcpy, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod assign;

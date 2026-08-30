@@ -121,7 +121,7 @@ unsafe fn glob_rounds(
 unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_int) {
     // SAFETY: `matched` is NUL-terminated, and every walk below stays between
     // its first byte and its terminator.
-    let mut e = unsafe { matched.add(strlen(matched)) };
+    let mut e = unsafe { matched.add(cstr::bytes_at(matched).len()) };
     if unsafe { e.offset_from(matched) } > 4
         && !keep_ext
         && (unsafe { strncasecmp(e.sub(4), c".vim".as_ptr(), 4) } == 0
@@ -188,7 +188,7 @@ unsafe fn collect_runtime_matches(
         // SAFETY: as above; `buf` is sized for the longest pattern built into
         // it (the longest prefix is fifteen bytes, the longest suffix eleven).
         let dir = unsafe { *dirnames.add(i) };
-        let buf_len = unsafe { strlen(dir) } + pat_len + 64;
+        let buf_len = unsafe { cstr::bytes_at(dir) }.len() + pat_len + 64;
         let buf = unsafe { xmalloc(buf_len) }.cast::<c_char>();
         unsafe { glob_rounds(pat, buf, buf_len, dir, flags, gap) };
         unsafe { xfree(buf.cast()) };
@@ -261,7 +261,8 @@ pub unsafe fn expand_runtime_dir(
     unsafe { *num_file = 0 };
     unsafe { *file = ptr::null_mut() };
     let mut ga = new_string_garray();
-    unsafe { collect_runtime_matches(pat, strlen(pat), flags, false, &raw mut ga, dirnames) };
+    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
+    unsafe { collect_runtime_matches(pat, pat_len, flags, false, &raw mut ga, dirnames) };
     unsafe { take_matches(ga, num_file, file) }
 }
 
@@ -285,7 +286,7 @@ pub unsafe fn expand_runtime_cmd(
     unsafe { *num_matches = 0 };
     unsafe { *matches = ptr::null_mut() };
     let mut ga = new_string_garray();
-    let pat_len = unsafe { strlen(pat) };
+    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
     let mut dirnames = [c"".as_ptr().cast_mut(), ptr::null_mut()];
     unsafe {
         collect_runtime_matches(
@@ -330,7 +331,7 @@ pub unsafe fn expand_packadd_dir(
     unsafe { *file = ptr::null_mut() };
     let mut ga = new_string_garray();
 
-    let buflen = unsafe { strlen(pat) } + 26;
+    let buflen = unsafe { cstr::bytes_at(pat) }.len() + 26;
     let s = unsafe { xmalloc(buflen) }.cast::<c_char>();
     for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
         unsafe { snprintf(s, buflen, fmt.as_ptr(), pat) };
@@ -341,7 +342,7 @@ pub unsafe fn expand_packadd_dir(
     // Offer the package name, not the path it was found at.
     for &matched in unsafe { ga_strings(&raw mut ga) } {
         let tail = unsafe { path_tail(matched) };
-        unsafe { memmove(matched.cast(), tail.cast(), strlen(tail) + 1) };
+        unsafe { memmove(matched.cast(), tail.cast(), cstr::bytes_at(tail).len() + 1) };
     }
 
     if ga.ga_len <= 0 {

@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::os::uv_error::UV_ENOTSUP;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_uint};
@@ -304,7 +305,9 @@ unsafe fn step_backup_name(
     // Upstream computes `backup + strlen(backup) - 1 - strlen(ext)` and
     // clamps it up to `backup`; the clamp is what makes an empty name
     // safe, so do the arithmetic where it cannot go below zero.
-    let at = unsafe { strlen(backup) }.saturating_sub(1 + unsafe { strlen(backup_ext) } as usize);
+    let at = unsafe { cstr::bytes_at(backup) }
+        .len()
+        .saturating_sub(1 + unsafe { cstr::bytes_at(backup_ext) }.len() as usize);
     let p = unsafe { backup.add(at) };
     unsafe { *p = b'z' as c_char };
     while unsafe { *p } > b'a' as c_char

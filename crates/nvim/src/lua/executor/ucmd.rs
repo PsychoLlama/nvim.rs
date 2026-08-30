@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::{
@@ -31,7 +32,6 @@ use crate::types::{
 };
 use crate::usercmd::{uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
-use ::libc::strlen;
 
 /// How much room `uc_mods` is given to render the modifier prefix.
 const MODS_BUFSIZE: usize = 200;
@@ -145,7 +145,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || strlen((*eap).arg) != 0 {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || cstr::bytes_at((*eap).arg).len() != 0 {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
@@ -154,7 +154,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
             lua_pop(lstate, 1);
             // Not pre-split (`:command` rather than `nvim_cmd`): split here,
             // honouring backslash escapes.
-            let length = strlen((*eap).arg);
+            let length = cstr::bytes_at((*eap).arg).len();
             let mut end: size_t = 0;
             let mut len: size_t = 0;
             let mut i: c_int = 1;

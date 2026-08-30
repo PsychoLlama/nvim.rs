@@ -15,6 +15,7 @@
 
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
+use crate::cstr;
 use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, kSubHonorOptions, kSubIgnoreCase,
     kSubMatchCase, subflags_T,
@@ -32,7 +33,7 @@ use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{Failed, NUL, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
 use crate::winlayer::{Buf, Win};
-use ::libc::{memset, strlen};
+use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -200,7 +201,7 @@ pub(crate) unsafe fn sub_grow_buf(
     // Check whether the temporary buffer is long enough to substitute into.
     // If not, make it larger (again with a bit extra).
     // SAFETY: caller's contract -- a NUL-terminated buffer.
-    let len = unsafe { strlen(*new_start) };
+    let len = unsafe { cstr::bytes_at(*new_start) }.len();
     needed_len += len as c_int;
     if needed_len > *new_start_len {
         let prev_new_start_len = *new_start_len as size_t;

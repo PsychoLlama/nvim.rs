@@ -13,6 +13,7 @@
 //! takes one `unsafe` block for its whole body — see `scan.rs`.
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::ascii::ascii_isdigit;
+use crate::cstr;
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -50,7 +51,6 @@ use crate::types::{
     pos_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
-use ::libc::strlen;
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.
 ///
@@ -617,7 +617,7 @@ pub unsafe fn get_address(
                             c,
                             c,
                             cmd,
-                            strlen(cmd),
+                            cstr::bytes_at(cmd).len(),
                             1,
                             flags,
                             ptr::null_mut(),

@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::{Buf, Win};
@@ -214,7 +215,7 @@ pub(crate) unsafe fn list_arg_vars(
                 // what should be shown.
                 let used_name = if arg == arg_subsc { name } else { name_start };
                 let name_size = if ptr::eq(used_name, tofree) {
-                    unsafe { strlen(used_name) as ptrdiff_t }
+                    unsafe { cstr::bytes_at(used_name).len() as ptrdiff_t }
                 } else {
                     unsafe { arg.offset_from(used_name) }
                 };
@@ -244,7 +245,7 @@ unsafe fn list_one_var(v: *mut dictitem_T, prefix: *const c_char, first: *mut c_
     let key = tv_dict_item_key(v);
     let tv = item.field_ptr(offset_of!(dictitem_T, di_tv));
     let s = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
-    let len = unsafe { strlen(key) } as ptrdiff_t;
+    let len = unsafe { cstr::bytes_at(key) }.len() as ptrdiff_t;
     let text = if s.is_null() { c"".as_ptr() } else { s };
     let ty = item.di_tv.v_type;
     unsafe { list_one_var_a(prefix, key, len, ty, text, first) };

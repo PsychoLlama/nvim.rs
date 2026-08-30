@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -83,7 +84,9 @@ pub(crate) unsafe fn write_lines(
         let mut ptr = unsafe { ml_get_buf(buf, lnum) };
         if let Some(sha) = sha.as_deref_mut() {
             // The terminating NUL goes in as the line separator.
-            sha.update(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), strlen(ptr) + 1) });
+            sha.update(unsafe {
+                core::slice::from_raw_parts(ptr.cast::<u8>(), cstr::bytes_at(ptr).len() + 1)
+            });
         }
         // The next loop runs once for each character written. Keep it
         // fast!

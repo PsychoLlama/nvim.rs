@@ -8,6 +8,7 @@ use super::wrappers::{
     check_arg, list_alloc_ret, non_zero_arg,
 };
 use super::{GA_EMPTY_INIT_VALUE, NSUBEXP, VSE_NONE};
+use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
@@ -41,7 +42,7 @@ use crate::types::{
     CONV_NONE, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
     kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
 };
-use ::libc::{mktime, strftime, strlen, time};
+use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;
 
@@ -268,7 +269,7 @@ unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     // SAFETY throughout: the caller's obligation; `p` is NUL-terminated and outlives
     // the copies made from it.
     let p = arg_string(&mut numbuf, args.get(0));
-    let slen = unsafe { strlen(p) };
+    let slen = unsafe { cstr::bytes_at(p) }.len();
     if slen == 0 {
         return;
     }
@@ -313,7 +314,7 @@ pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     } else {
         // SAFETY throughout: `tv_get_string` hands back a NUL-terminated buffer.
         let p = arg_string(&mut numbuf, args.get(0));
-        let bytes = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), strlen(p)) };
+        let bytes = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), cstr::bytes_at(p).len()) };
         hex_digest(bytes)
     };
     // SAFETY throughout: `hash` is a live buffer of `hash.len()` bytes.
@@ -538,7 +539,7 @@ unsafe fn split_into(
         let end: *const c_char = if matched {
             regmatch.startp[0]
         } else {
-            unsafe { str.add(strlen(str)) }
+            unsafe { str.add(cstr::bytes_at(str).len()) }
         };
         if keepempty
             || end > str
@@ -717,7 +718,7 @@ pub unsafe fn f_substitute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             let out = ptr::null_mut();
             // SAFETY: every string is NUL-terminated and outlives the call,
             // and `expr` is null or argument 2.
-            let len = unsafe { strlen(str) };
+            let len = unsafe { cstr::bytes_at(str) }.len();
             unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
         };
 }

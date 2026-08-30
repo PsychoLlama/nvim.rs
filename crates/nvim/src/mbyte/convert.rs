@@ -367,7 +367,7 @@ pub unsafe fn string_convert_ext(
     unconvlenp: *mut size_t,
 ) -> *mut c_char {
     let len = if lenp.is_null() {
-        unsafe { strlen(ptr) }
+        unsafe { cstr::bytes_at(ptr) }.len()
     } else {
         unsafe { *lenp }
     };

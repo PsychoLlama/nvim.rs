@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
 use crate::types::builders::static_cstring;
@@ -258,7 +259,7 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
     // SAFETY: `keys` is NUL-terminated, and both `*_buf` slots are locals that
     // outlive the calls; the allocations they take over are freed below.
     let (keys_simplified, mut found) = unsafe {
-        let len = strlen(keys);
+        let len = cstr::bytes_at(keys).len();
         let simplified = replace_termcodes(keys, len, out, 0, flags, simplify, cpo);
         (simplified, check_map(simplified, mode, exact, false, abbr))
     };
@@ -271,7 +272,7 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
         // is the same answer.
         // SAFETY: as above.
         found = unsafe {
-            let len = strlen(keys);
+            let len = cstr::bytes_at(keys).len();
             replace_termcodes(keys, len, alt_out, 0, nosimp, plain, cpo);
             check_map(alt_keys_buf, mode, exact, false, abbr)
         };
@@ -358,7 +359,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             let lhs = unsafe { str2special_arena(mp.m_keys, true, false, &raw mut arena) };
             // SAFETY: as above.
             unsafe {
-                let len = strlen(lhs);
+                let len = cstr::bytes_at(lhs).len();
                 replace_termcodes(lhs, len, out, 0, flags, simplify, cpo);
             }
 

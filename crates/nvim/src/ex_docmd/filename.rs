@@ -99,7 +99,7 @@ pub unsafe fn replace_makeprg(
     let mut new_cmdline = unsafe { strrep(program, c"$*".as_ptr(), arg) };
     if new_cmdline.is_null() {
         // No `$*`: the argument goes on the end.
-        new_cmdline = xmalloc(strlen(program) + strlen(arg) + 2) as *mut c_char;
+        new_cmdline = xmalloc(len_of(program) + len_of(arg) + 2) as *mut c_char;
         unsafe { strcpy(new_cmdline, program as *mut c_char) };
         unsafe { strcat(new_cmdline, c" ".as_ptr()) };
         unsafe { strcat(new_cmdline, arg) };
@@ -231,7 +231,7 @@ pub(crate) unsafe fn expand_filename(
             let out = expanded.as_mut_ptr();
             unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
-            repl_cmdline(eap, ea.arg, strlen(ea.arg), out, cmdlinep);
+            repl_cmdline(eap, ea.arg, len_of(ea.arg), out, cmdlinep);
         }
     }
     if !has_wildcards {
@@ -258,7 +258,7 @@ pub(crate) unsafe fn expand_filename(
     if expanded.is_null() {
         return Err(Failed);
     }
-    repl_cmdline(eap, ea.arg, strlen(ea.arg), expanded, cmdlinep);
+    repl_cmdline(eap, ea.arg, len_of(ea.arg), expanded, cmdlinep);
     xfree(expanded as *mut c_void);
     Ok(())
 }
@@ -278,16 +278,16 @@ pub(crate) fn repl_cmdline(
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
     let mut ea = unsafe { Ea::new(eap) };
-    let len = strlen(repl);
+    let len = len_of(repl);
     // The tail after the replacement, the replacement itself, a
     // terminator, and — because `nextcmd` is stored past the end — the
     // next command and its own terminator.
     let mut size = unsafe { src.offset_from(*cmdlinep) } as size_t
-        + unsafe { strlen(src.add(srclen)) }
+        + unsafe { cstr::bytes_at(src.add(srclen)) }.len()
         + len
         + 3;
     if !ea.nextcmd.is_null() {
-        size += strlen(ea.nextcmd);
+        size += len_of(ea.nextcmd);
     }
     let new_cmdline = xmalloc(size) as *mut c_char;
 
@@ -311,7 +311,7 @@ pub(crate) fn repl_cmdline(
     let resume = unsafe { new_cmdline.add(tail) };
 
     if !ea.nextcmd.is_null() {
-        let after = strlen(new_cmdline) + 1;
+        let after = len_of(new_cmdline) + 1;
         unsafe { strcpy(new_cmdline.add(after), ea.nextcmd) };
         ea.nextcmd = unsafe { new_cmdline.add(after) };
     }
@@ -434,7 +434,7 @@ pub unsafe fn eval_vars(
             memmove(
                 src.offset(-1) as *mut c_void,
                 src as *const c_void,
-                strlen(src) + 1,
+                len_of(src) + 1,
             )
         };
         return ptr::null_mut();
@@ -657,7 +657,7 @@ pub unsafe fn eval_vars(
             }
         }
 
-        resultlen = strlen(result);
+        resultlen = len_of(result);
         if byte_at(src, unsafe { *usedlen } as isize) == '<' as c_int {
             // A trailing `<` drops the extension.
             unsafe { *usedlen += 1 };
@@ -738,7 +738,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             p = unsafe { p.add(srclen as usize) };
             continue;
         }
-        let size = strlen(result) - srclen + strlen(repl) + 1;
+        let size = len_of(result) - srclen + len_of(repl) + 1;
         let newres = xmalloc(size) as *mut c_char;
         unsafe {
             memmove(
@@ -748,7 +748,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
             )
         };
         unsafe { strcpy(newres.offset(p.offset_from(result)), repl) };
-        let used = strlen(newres);
+        let used = len_of(newres);
         unsafe { strcat(newres, p.add(srclen as usize)) };
         xfree(repl as *mut c_void);
         xfree(result as *mut c_void);
@@ -828,10 +828,11 @@ fn byte_at(p: *const c_char, i: isize) -> c_int {
     unsafe { *p.offset(i) as c_int }
 }
 
-/// `strlen()` as checked code.
-fn strlen(s: *const c_char) -> usize {
+/// The length of the string at `s` -- `strlen`, as the slice's own `len()`
+/// -- as checked code.
+fn len_of(s: *const c_char) -> usize {
     // SAFETY: a NUL-terminated string.
-    unsafe { ::libc::strlen(s) }
+    unsafe { cstr::bytes_at(s) }.len()
 }
 
 /// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --

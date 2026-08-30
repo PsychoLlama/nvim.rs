@@ -17,7 +17,7 @@ use core::ffi::{CStr, c_char, c_int};
 /// How long a 'comments' leader part may be.
 const LEN: usize = COM_MAX_LEN as usize;
 
-/// Whether `a` and `b` agree for `n` bytes -- `cstr::prefix_eq(a, b, n)` over
+/// Whether `a` and `b` agree for `n` bytes -- `strncmp(a, b, n) == 0` over
 /// two NUL-terminated strings held as slices.
 ///
 /// Not `starts_with`: a comparison that reaches the NUL in *both* stops there

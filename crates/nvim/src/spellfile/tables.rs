@@ -23,7 +23,7 @@ use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, fromto_T, garray_T};
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 
 use super::aff::{AffState, is_digit_byte};
 use super::{MAXWLEN, spellinfo_T};
@@ -39,9 +39,12 @@ pub(super) unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) 
     let old = if unsafe { (*spin).si_info }.is_null() {
         0
     } else {
-        unsafe { strlen((*spin).si_info) }
+        unsafe { cstr::bytes_at((*spin).si_info) }.len()
     };
-    let len = old + unsafe { strlen(items[0]) } + unsafe { strlen(items[1]) } + 3;
+    let len = old
+        + unsafe { cstr::bytes_at(items[0]) }.len()
+        + unsafe { cstr::bytes_at(items[1]) }.len()
+        + 3;
     let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
     if !unsafe { (*spin).si_info }.is_null() {
         unsafe { strcpy(p, (*spin).si_info) };
@@ -214,11 +217,11 @@ pub(super) unsafe fn add_fromto(
     let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
 
     let (win, out) = (curwin.get(), word.as_mut_ptr());
-    let len = unsafe { strlen(from) } as c_int;
+    let len = unsafe { cstr::bytes_at(from) }.len() as c_int;
     let _ = unsafe { spell_casefold(win, from, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_from = (*spin).si_arena.save_str(word.as_mut_ptr()) };
     let (win, out) = (curwin.get(), word.as_mut_ptr());
-    let len = unsafe { strlen(to) } as c_int;
+    let len = unsafe { cstr::bytes_at(to) }.len() as c_int;
     let _ = unsafe { spell_casefold(win, to, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_to = (*spin).si_arena.save_str(word.as_mut_ptr()) };
 }

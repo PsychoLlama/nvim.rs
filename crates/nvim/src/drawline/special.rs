@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::grid::linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::MAXCOL;
@@ -143,7 +144,7 @@ impl Cells {
                     &raw mut self.fold_vt,
                 )
             };
-            wlv.extra_todo = unsafe { strlen(wlv.extra_text) } as ::core::ffi::c_int;
+            wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;
             if wlv.extra_text != f.fold_buf {
                 debug_assert!(self.foldtext_free.is_null());
                 self.foldtext_free = wlv.extra_text;
@@ -439,11 +440,12 @@ impl Cells {
                     wlv.extra_todo as size_t,
                 )
             };
+            let text_len = unsafe { cstr::bytes_at(wlv.extra_text) }.len();
             unsafe {
                 memcpy(
                     p.cast::<::core::ffi::c_void>(),
                     wlv.extra_text.offset(1).cast::<::core::ffi::c_void>(),
-                    strlen(wlv.extra_text) - 1,
+                    text_len - 1,
                 )
             };
             unsafe { *p.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };

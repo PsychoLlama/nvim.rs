@@ -40,7 +40,7 @@ use crate::types::{
     staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, memcmp, memcpy, qsort, strcasecmp, strcoll, strcpy, strlen, strtod};
+use ::libc::{abort, memcmp, memcpy, qsort, strcasecmp, strcoll, strcpy, strtod};
 
 // The carve of the transpiled module; see each child's docs.
 mod access;

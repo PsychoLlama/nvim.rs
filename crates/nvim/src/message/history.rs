@@ -71,7 +71,7 @@ pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
 pub(crate) unsafe fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int) {
     let mut start = s;
     let mut size = if len < 0 {
-        unsafe { strlen(s) }
+        unsafe { cstr::bytes_at(s) }.len()
     } else {
         len as size_t
     };

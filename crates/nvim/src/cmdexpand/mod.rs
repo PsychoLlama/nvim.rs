@@ -114,7 +114,7 @@ use crate::usercmd::{
 };
 use crate::window::{global_stl_height, last_status};
 use crate::winlayer::{Cc, Live};
-use ::libc::{qsort, strcpy, strlen, strncpy};
+use ::libc::{qsort, strcpy, strncpy};
 use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.

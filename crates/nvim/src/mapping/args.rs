@@ -126,7 +126,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
         return false;
     }
     // SAFETY: `replace_termcodes` answers a NUL-terminated string.
-    args.lhs_len = unsafe { strlen(replaced) };
+    args.lhs_len = unsafe { cstr::bytes_at(replaced) }.len();
     let lhs = args.field_ptr(offset_of!(MapArguments, lhs));
     // SAFETY: the field's own address, and `MAXMAPLEN_BUF` is its size.
     unsafe { xstrlcpy(lhs, replaced, MAXMAPLEN_BUF) };
@@ -138,7 +138,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
             return false;
         }
         // SAFETY: as above.
-        args.alt_lhs_len = unsafe { strlen(replaced) };
+        args.alt_lhs_len = unsafe { cstr::bytes_at(replaced) }.len();
         let alt = args.field_ptr(offset_of!(MapArguments, alt_lhs));
         // SAFETY: as the `lhs` copy above.
         unsafe { xstrlcpy(alt, replaced, MAXMAPLEN_BUF) };
@@ -212,7 +212,7 @@ pub(crate) unsafe fn set_maparg_rhs(
         let replaced =
             unsafe { replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo_val) };
         // SAFETY: `replace_termcodes` answers a NUL-terminated string.
-        args.rhs_len = unsafe { strlen(replaced) };
+        args.rhs_len = unsafe { cstr::bytes_at(replaced) }.len();
         // replace_termcodes may produce an empty string even when orig_rhs is
         // not empty -- a single ^V, see :h map-empty-rhs.
         args.rhs_is_noop = orig_rhs_len != 0 && args.rhs_len == 0;
@@ -330,7 +330,7 @@ pub(crate) unsafe fn str_to_mapargs(
     // SAFETY: `rhs_start` is inside the caller's NUL-terminated string, `lhs`
     // names the local copy just made, and `mapargs` is the caller's struct.
     let ok = unsafe {
-        let orig_rhs_len = strlen(rhs_start);
+        let orig_rhs_len = cstr::bytes_at(rhs_start).len();
         let rhs = rhs_start;
         set_maparg_lhs_rhs(
             lhs,

@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -34,7 +35,7 @@ use crate::types::{
     VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
     lua_State, size_t, typval_T, varnumber_T,
 };
-use ::libc::{memcpy, strlen};
+use ::libc::memcpy;
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
 /// `)` closed after it, so the expression is evaluated with `_A` bound to
@@ -226,7 +227,7 @@ unsafe fn push_typval_args(
 pub unsafe fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_char) {
     unsafe {
         let code = ga_concat_strings(ga, c"\n".as_ptr());
-        let len = strlen(code);
+        let len = cstr::bytes_at(code).len();
         nlua_typval_exec(
             code,
             len,

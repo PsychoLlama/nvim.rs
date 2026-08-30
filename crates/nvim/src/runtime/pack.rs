@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::path::ExpandFlags;
 
 use crate::types::{FAIL, Failed, MAXPATHL, OK, OptionSetFlags};
@@ -182,7 +183,7 @@ unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option
     if insp.is_null() {
         // Neither "fname" nor an `after/` directory: append at the end.
         // SAFETY: 'runtimepath' is NUL-terminated.
-        insp = unsafe { p_rtp.get().add(strlen(p_rtp.get())) };
+        insp = unsafe { p_rtp.get().add(cstr::bytes_at(p_rtp.get()).len()) };
     }
     Some(InsertPoints { insp, after_insp })
 }
@@ -218,7 +219,7 @@ unsafe fn splice_rtp(
     points: &InsertPoints,
 ) -> Option<Spliced> {
     // SAFETY: 'runtimepath' is NUL-terminated.
-    let oldlen = unsafe { strlen(p_rtp.get()) };
+    let oldlen = unsafe { cstr::bytes_at(p_rtp.get()) }.len();
     let capacity = oldlen + addlen + afterlen + 1; // +1 for the NUL
     // SAFETY: `try_malloc` answers null rather than aborting.
     let new_rtp = unsafe { try_malloc(capacity) }.cast::<c_char>();
@@ -408,7 +409,7 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
         return Err(Failed);
     }
     // SAFETY: `ffname` is an owned NUL-terminated string, freed below.
-    let fname_len = unsafe { strlen(ffname) };
+    let fname_len = unsafe { cstr::bytes_at(ffname) }.len();
     let points = unsafe { find_insert_points(ffname, fname_len) };
 
     let mut afterdir = ptr::null_mut();
@@ -424,11 +425,11 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
             unsafe { os_isdir(afterdir) }
         };
         let afterlen = if has_after {
-            unsafe { strlen(afterdir) + 1 }
+            unsafe { cstr::bytes_at(afterdir).len() + 1 }
         } else {
             0
         };
-        let addlen = unsafe { strlen(fname) } + 1; // +1 for the comma
+        let addlen = unsafe { cstr::bytes_at(fname) }.len() + 1; // +1 for the comma
 
         if let Some(spliced) = unsafe { splice_rtp(fname, afterdir, addlen, afterlen, &points) } {
             let was_valid = runtime_search_path_valid.get();
@@ -486,7 +487,7 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
     // SAFETY: `fname` is the caller's path; `ffname` and `pat` are owned and
     // freed below.
     let ffname = unsafe { fix_fname(fname) };
-    let len = unsafe { strlen(ffname) } + PLUGIN_PATTERN.count_bytes() + 1;
+    let len = unsafe { cstr::bytes_at(ffname) }.len() + PLUGIN_PATTERN.count_bytes() + 1;
     let mut pat = unsafe { xmallocz(len) }.cast::<c_char>();
     let visitor = Visitor {
         callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
@@ -673,7 +674,9 @@ unsafe fn add_pack_start_dir(
         for start_pat in START_PATTERNS {
             // SAFETY: the length test keeps both halves inside `buf`, and
             // `xstrlcpy`/`xstrlcat` NUL-terminate within the size given.
-            if unsafe { strlen(fname) } + start_pat.count_bytes() + 1 > MAXPATHL as size_t {
+            if unsafe { cstr::bytes_at(fname) }.len() + start_pat.count_bytes() + 1
+                > MAXPATHL as size_t
+            {
                 continue;
             }
             unsafe { xstrlcpy(buf.as_mut_ptr(), fname, MAXPATHL as size_t) };
@@ -779,7 +782,7 @@ const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 pub unsafe fn ex_packadd(eap: *mut exarg_T) {
     // SAFETY: `eap` is the live command; `pat` is owned and freed below.
     let arg = unsafe { (*eap).arg };
-    let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { strlen(arg) } + 5;
+    let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;
     let pat = unsafe { xmallocz(len) }.cast::<c_char>();
     let cookie = if unsafe { (*eap).forceit } != 0 {
         PackWork::AddDir

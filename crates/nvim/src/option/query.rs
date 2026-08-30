@@ -36,7 +36,6 @@ use crate::types::{
     OptionSetFlags, ShmFlag, VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
     uint8_t,
 };
-use ::libc::strlen;
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
@@ -461,7 +460,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
         }
         let mut tv = unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) };
         let name = get_option(opt_idx).fullname;
-        let _ = unsafe { tv_dict_add_tv(d, name, strlen(name), &raw mut tv) };
+        let _ = unsafe { tv_dict_add_tv(d, name, cstr::bytes_at(name).len(), &raw mut tv) };
     }
     d
 }

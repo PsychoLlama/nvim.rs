@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::submatch::Rsm;
@@ -41,7 +42,7 @@ use crate::semsg;
 use crate::types::{
     buf_T, colnr_T, linenr_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t, win_T,
 };
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 
 use crate::winlayer::{Buf, Win};
 /// Let the user interrupt a long match, unless the caller asked for an
@@ -442,7 +443,7 @@ fn take_line_copy(rex: Rex) {
     }
     // SAFETY: `rex.line` is the NUL-terminated line being matched, and
     // `reg_tofree` is this module's own allocation, grown to fit it here.
-    let mut len = unsafe { strlen(rex.line().cast()) } as c_int;
+    let mut len = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as c_int;
     if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
         len += 50;
         unsafe { xfree(reg_tofree.get().cast()) };

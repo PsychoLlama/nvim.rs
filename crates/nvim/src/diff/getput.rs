@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
@@ -147,7 +148,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         // The argument names the other buffer, by number or by pattern.
         // SAFETY: the command's own NUL-terminated argument; `p` walks back
         // over its own bytes and stops at its start.
-        let mut p = unsafe { eap.arg.add(strlen(eap.arg)) };
+        let mut p = unsafe { eap.arg.add(cstr::bytes_at(eap.arg).len()) };
         // SAFETY: as above.
         while p > eap.arg && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
             p = p.wrapping_sub(1);

@@ -37,6 +37,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
@@ -50,7 +51,6 @@ use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
 use crate::types::{Failed, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
-use ::libc::strlen;
 
 use super::{MAXWLEN, WF_KEEPCAP, spell_message_fmt, spellinfo_T};
 
@@ -130,7 +130,7 @@ impl SpellArena {
     pub unsafe fn save_str(&mut self, s: *const c_char) -> *mut c_char {
         // SAFETY: the caller promises a terminated string, and the arena
         // just handed out `size` writable bytes.
-        let size = unsafe { strlen(s) } + 1;
+        let size = unsafe { cstr::bytes_at(s) }.len() + 1;
         let p = self.alloc_bytes(size, false);
         unsafe { ptr::copy_nonoverlapping(s, p, size) };
         p
@@ -288,7 +288,7 @@ pub(super) unsafe fn store_word(
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises terminated strings; `foldword` is a
     // MAXWLEN buffer, which is the bound spell_casefold is given.
-    let len = unsafe { strlen(word) } as c_int;
+    let len = unsafe { cstr::bytes_at(word) }.len() as c_int;
     let ct = unsafe { captype(word, word.offset(len as isize)) };
     let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut res = Ok(());
@@ -692,7 +692,7 @@ unsafe fn node_compress(
             // names a node.
             let key = digest_key(child);
             let hash = unsafe { hash_hash(key) };
-            let hi = unsafe { hash_lookup(ht, key, strlen(key), hash) };
+            let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
             if unsafe { (*hi).hi_key }.is_null()
                 || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
             {

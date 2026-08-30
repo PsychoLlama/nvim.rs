@@ -175,7 +175,7 @@ pub(crate) unsafe fn expand_from_context(
     // prefix.
     let mut tofree = ptr::null_mut::<c_char>();
     if context == ExpandContext::UserFunc && unsafe { cstr::starts_with(pat, b"^s:") } {
-        let len = unsafe { strlen(pat) } + 20;
+        let len = unsafe { cstr::bytes_at(pat) }.len() + 20;
         tofree = unsafe { xmalloc(len) } as *mut c_char;
         unsafe { snprintf(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3)) };
         pat = tofree;
@@ -326,7 +326,7 @@ pub unsafe fn expand_generic(
         if ptr::fn_addr_eq(get_item, get_menu_names as ItemGetter) {
             // Undo the separator get_menu_names() added, in the copy that
             // is now in the array.
-            let last = unsafe { str.add(strlen(str) - 1) };
+            let last = unsafe { str.add(cstr::bytes_at(str).len() - 1) };
             if unsafe { *last } == 1 {
                 unsafe { *last = b'.' as c_char };
             }

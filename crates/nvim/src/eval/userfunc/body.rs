@@ -102,7 +102,7 @@ pub(crate) unsafe fn get_function_body(
                 theline = line_arg;
                 p = unsafe { vim_strchr(theline, b'\n' as c_int) };
                 if p.is_null() {
-                    line_arg = unsafe { line_arg.add(strlen(line_arg)) };
+                    line_arg = unsafe { line_arg.add(cstr::bytes_at(line_arg).len()) };
                 } else {
                     unsafe { *p = NUL as c_char };
                     line_arg = unsafe { p.add(1) };

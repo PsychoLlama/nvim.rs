@@ -194,7 +194,7 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             let end = unsafe {
                 let comma = vim_strchr(look, c_int::from(b','));
                 if comma.is_null() {
-                    look.add(strlen(look))
+                    look.add(cstr::bytes_at(look).len())
                 } else {
                     comma
                 }

@@ -16,6 +16,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, api_try};
 use crate::api::private::validate::err_expected_ptr;
 use crate::api_error;
+use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
 use core::ffi::{CStr, c_int};
@@ -268,7 +269,7 @@ unsafe fn call_in_dict(
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
         let name = unsafe { (*di).di_tv.vval.v_string };
         // SAFETY: as above.
-        *fn_0 = String_0::from_raw_parts(name, unsafe { strlen(name) });
+        *fn_0 = String_0::from_raw_parts(name, unsafe { cstr::bytes_at(name) }.len());
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
         *err = Error::validation(c"Invalid function name: (empty)");

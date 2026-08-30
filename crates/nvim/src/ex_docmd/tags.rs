@@ -7,6 +7,7 @@
 //! `:tselect` and the rest only in their second.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -29,7 +30,6 @@ use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;
 use crate::types::{NUL, exarg_T};
 use crate::winlayer::Ea;
-use ::libc::strlen;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
 ///
@@ -84,7 +84,7 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
             find_pattern_in_path(
                 ea.arg,
                 kDirectionNotSet,
-                strlen(ea.arg),
+                cstr::bytes_at(ea.arg).len(),
                 whole,
                 ea.forceit == 0,
                 if *ea.cmd as c_int == 'd' as c_int {

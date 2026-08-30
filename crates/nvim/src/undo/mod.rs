@@ -67,7 +67,7 @@ use crate::strings::vim_snprintf;
 use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::Win;
-use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, strlen, time};
+use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, time};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 

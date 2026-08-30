@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::winlayer::Live;
 use core::ffi::{c_char, c_int, c_void};
@@ -36,7 +37,6 @@ use crate::types::{
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, evalarg_T,
     ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
-use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -256,7 +256,7 @@ pub(crate) unsafe fn eval_index_inner(
             // SAFETY: `numbuf` is this frame's own scratch, and the String
             // it answers is NUL-terminated with `n1`/`n2` inside it.
             let s = unsafe { numbuf.string(rettv) };
-            let len = unsafe { strlen(s) } as c_int as varnumber_T;
+            let len = unsafe { cstr::bytes_at(s) }.len() as c_int as varnumber_T;
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
                 if is_range {
@@ -361,7 +361,7 @@ pub(crate) unsafe fn char_from_string(str: *const c_char, index: varnumber_T) ->
     if str.is_null() {
         return null_mut();
     }
-    let slen = unsafe { strlen(str) };
+    let slen = unsafe { cstr::bytes_at(str) }.len();
     let mut nchar = index;
 
     // As for a List, a negative index counts from the end — but unlike a
@@ -440,7 +440,7 @@ pub(crate) unsafe fn string_slice(
     if str.is_null() {
         return null_mut();
     }
-    let slen = unsafe { strlen(str) };
+    let slen = unsafe { cstr::bytes_at(str) }.len();
     // A very negative first index starts at zero rather than failing.
     let start_byte = unsafe { char_idx2byte(str, slen, first) }.max(0);
     let end_byte = if (last == -1 && !exclusive) || last == VARNUMBER_MAX {

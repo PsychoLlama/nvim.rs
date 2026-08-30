@@ -51,7 +51,7 @@ use crate::types::{
     size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
-use ::libc::{atoi, strlen};
+use ::libc::atoi;
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.
@@ -400,7 +400,7 @@ unsafe fn restore_visual_range(
     }
     if ea.cmd > cmd_start {
         if use_plus_cmd {
-            let len = unsafe { strlen(cmd_start) };
+            let len = unsafe { cstr::bytes_at(cmd_start) }.len();
             memmove(orig_cmd as *mut c_void, cmd_start as *const c_void, len);
             unsafe { xmemcpyz(orig_cmd.add(len) as *mut c_void, c" *+".as_ptr().cast(), 3) };
         } else {

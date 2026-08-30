@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 
 use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_char};
@@ -180,7 +181,9 @@ pub unsafe fn get_lib_dir() -> *mut c_char {
     // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
     // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
     // empty in an appimage build.
-    if unsafe { strlen(default_lib_dir.get()) } != 0 && unsafe { os_isdir(default_lib_dir.get()) } {
+    if unsafe { cstr::bytes_at(default_lib_dir.get()) }.len() != 0
+        && unsafe { os_isdir(default_lib_dir.get()) }
+    {
         return unsafe { xstrdup(default_lib_dir.get()) };
     }
     let mut exe_name = [0 as c_char; MAXPATHL as usize];

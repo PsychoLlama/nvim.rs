@@ -221,7 +221,7 @@ pub(crate) unsafe fn msg_puts_display(
             msg_ext_last_hl_id.set(hl_id);
         }
         let len = if maxlen < 0 {
-            unsafe { strlen(str) }
+            unsafe { cstr::bytes_at(str) }.len()
         } else {
             unsafe { strnlen(str, maxlen as size_t) }
         };

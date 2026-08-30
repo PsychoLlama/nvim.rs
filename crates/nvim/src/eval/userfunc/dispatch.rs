@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -193,7 +194,7 @@ pub unsafe fn call_func(
     unsafe { (*rettv).v_type = VAR_UNKNOWN };
 
     if len <= 0 {
-        len = unsafe { strlen(funcname) } as c_int;
+        len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;
     }
     if !partial.is_null() {
         fp = unsafe { (*partial).pt_func };
@@ -292,7 +293,7 @@ pub unsafe fn call_func(
                 // `call()`, `nvim_call_function`, `vim.fn` -- because
                 // that one's `find_var` has already sourced it.
                 if fp.is_null()
-                    && unsafe { script_autoload(rfname, strlen(rfname), true) }
+                    && unsafe { script_autoload(rfname, cstr::bytes_at(rfname).len(), true) }
                     && !aborting()
                 {
                     fp = unsafe { find_func(rfname) };

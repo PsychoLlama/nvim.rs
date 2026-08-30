@@ -7,6 +7,7 @@ use super::{
     NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
     kSomeMatchStrPos, tv_get_buf,
 };
+use crate::cstr;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{
     NumBuf, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
@@ -29,7 +30,6 @@ use crate::types::{
     EvalFuncData, VAR_BOOL, VAR_LIST, VAR_STRING, buf_T, colnr_T, dict_T, kListLenMayKnow,
     kListLenUnknown, linenr_T, list_T, listitem_T, regmatch_T, regprog_T, typval_T, varnumber_T,
 };
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -158,7 +158,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
         } else {
             str = arg_string(&mut numbuf, args.get(0)) as *mut c_char;
             expr = str;
-            len = unsafe { strlen(str) } as i64;
+            len = unsafe { cstr::bytes_at(str) }.len() as i64;
         }
 
         let mut patbuf = NumBuf::new();
@@ -339,7 +339,7 @@ unsafe fn get_matches_in_str(
 ) {
     // SAFETY: the caller's obligation; every pointer written below comes
     // back from the matcher and points into `str`.
-    let len = unsafe { strlen(str) };
+    let len = unsafe { cstr::bytes_at(str) }.len();
     let mut startidx: colnr_T = 0;
     loop {
         if !unsafe { vim_regexec_nl(rmp, str, startidx) } {

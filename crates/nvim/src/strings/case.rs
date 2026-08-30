@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
@@ -16,7 +17,6 @@ use super::strnlen;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char_info};
 use crate::memory::{xmalloc, xrealloc};
 use crate::types::size_t;
-use ::libc::strlen;
 
 /// ASCII-uppercase `s` in place (bytes ≥ 0x80 untouched).
 pub(crate) fn ascii_upcase(s: &mut [u8]) {
@@ -29,7 +29,7 @@ pub(crate) fn ascii_upcase(s: &mut [u8]) {
 
 /// ASCII-uppercased copy of `string`.
 pub unsafe fn vim_strsave_up(string: *const c_char) -> *mut c_char {
-    let p1 = unsafe { xmalloc(strlen(string).wrapping_add(1)) as *mut c_char };
+    let p1 = unsafe { xmalloc(cstr::bytes_at(string).len().wrapping_add(1)) as *mut c_char };
     unsafe { vim_strcpy_up(p1, string) };
     p1
 }
@@ -80,7 +80,7 @@ pub unsafe fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
 /// Case-fold `orig` per character (multibyte-aware), growing the result
 /// when a folded character encodes longer than its original.
 pub unsafe fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
-    let mut orig_len = unsafe { strlen(orig) };
+    let mut orig_len = unsafe { cstr::bytes_at(orig) }.len();
     let mut res = unsafe { xmalloc(orig_len.wrapping_add(1)) as *mut c_char };
     let mut res_index: size_t = 0;
     let mut p = orig;

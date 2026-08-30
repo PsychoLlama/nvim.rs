@@ -525,7 +525,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         // A LANGMAP mapping's keys were not recorded above, so they are
         // recorded here instead.
         if keylen > tb.maplen() && mp.m_mode & MODE_LANGMAP != 0 {
-            unsafe { gotchars(map_str.cast(), strlen(map_str)) };
+            unsafe { gotchars(map_str.cast(), cstr::bytes_at(map_str).len()) };
         }
 
         // Whether the RHS starts with the LHS, which is what decides

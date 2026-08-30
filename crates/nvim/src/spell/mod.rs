@@ -50,7 +50,7 @@ use crate::types::{
     slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 
 mod chartab;
 mod check;
@@ -275,8 +275,8 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
         emsg(gettext(c"E752: No previous spell replacement"));
         return;
     }
-    let repl_from_len = unsafe { strlen(repl_from.get()) };
-    let repl_to_len = unsafe { strlen(repl_to.get()) };
+    let repl_from_len = unsafe { cstr::bytes_at(repl_from.get()) }.len();
+    let repl_to_len = unsafe { cstr::bytes_at(repl_to.get()) }.len();
     let addlen = repl_to_len as i64 - repl_from_len as i64;
 
     let frompatsize = repl_from_len + 7;

@@ -76,7 +76,7 @@ unsafe fn get_emsg_source() -> *mut c_char {
         tofree
     };
     let p = gettext(c"Error in %s:");
-    let buf_len = unsafe { strlen(sname) } + p.count_bytes() + 1;
+    let buf_len = unsafe { cstr::bytes_at(sname) }.len() + p.count_bytes() + 1;
     let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
     unsafe { snprintf(buf, buf_len, p.as_ptr(), sname) };
     unsafe { xfree(tofree.cast()) };
@@ -220,7 +220,7 @@ pub unsafe fn emsg_multiline(
                 // could in principle move.
                 let write_line = |line: *mut c_char| {
                     if !line.is_null() {
-                        let len = unsafe { strlen(line) };
+                        let len = unsafe { cstr::bytes_at(line) }.len();
                         unsafe { *line.add(len) = b'\n' as c_char };
                         unsafe { redir_write(line, len as ptrdiff_t + 1) };
                         unsafe { xfree(line.cast()) };
@@ -228,7 +228,7 @@ pub unsafe fn emsg_multiline(
                 };
                 write_line(unsafe { get_emsg_source() });
                 write_line(unsafe { get_emsg_lnum() });
-                unsafe { redir_write(s, strlen(s) as ptrdiff_t) };
+                unsafe { redir_write(s, cstr::bytes_at(s).len() as ptrdiff_t) };
             }
             let at = c"emsg_multiline".as_ptr();
             if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {

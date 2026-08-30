@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::c_int;
 
 use super::postfix;
@@ -23,7 +24,6 @@ use crate::regexp::{
     Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa,
 };
 use crate::types::{FAIL, NUL, uint8_t};
-use ::libc::strlen;
 
 /// Reset the compile-time state and reserve the postfix program.
 ///
@@ -34,7 +34,7 @@ pub(crate) unsafe fn nfa_regcomp_start(rex: Rex, expr: *mut uint8_t, re_flags: c
     nstate.set(0);
     istate.set(0);
     // SAFETY: the caller's NUL-terminated pattern.
-    postfix::start(unsafe { strlen(expr.cast()) });
+    postfix::start(unsafe { cstr::bytes_at(expr.cast()) }.len());
     wants_nfa.set(false);
     rex.set_nfa_has_zend(0);
     rex.set_nfa_has_backref(0);

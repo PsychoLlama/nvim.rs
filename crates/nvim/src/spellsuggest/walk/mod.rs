@@ -81,13 +81,13 @@ mod rep;
 mod split;
 mod transpose;
 
+use crate::cstr;
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
 use crate::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.
@@ -553,7 +553,7 @@ impl Walk {
     fn preword_len(&self) -> usize {
         // SAFETY: `preword` is NUL-terminated wherever this is called, and
         // it is this module's own buffer.
-        unsafe { strlen(self.preword.as_ptr()) as usize }
+        unsafe { cstr::bytes_at(self.preword.as_ptr()).len() as usize }
     }
 
     /// Step a pointer back over the character before it, as the C's

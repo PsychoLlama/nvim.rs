@@ -237,7 +237,7 @@ pub unsafe fn do_autocmd_event(
                 )
             };
             pat = buflocal_pat.as_ptr();
-            patlen = unsafe { strlen(buflocal_pat.as_ptr()) } as ::core::ffi::c_int;
+            patlen = unsafe { cstr::bytes_at(buflocal_pat.as_ptr()) }.len() as ::core::ffi::c_int;
         }
 
         if del {
@@ -306,7 +306,7 @@ pub unsafe fn autocmd_register(
     // 0 is not a valid group.
     debug_assert!(group != 0);
 
-    if patlen > unsafe { strlen(pat) } as ::core::ffi::c_int {
+    if patlen > unsafe { cstr::bytes_at(pat) }.len() as ::core::ffi::c_int {
         return Err(Failed);
     }
 
@@ -325,7 +325,7 @@ pub unsafe fn autocmd_register(
             aupat_normalize_buflocal_pat(buflocal_pat.as_mut_ptr(), pat, patlen, buflocal_nr)
         };
         pat = buflocal_pat.as_ptr();
-        patlen = unsafe { strlen(buflocal_pat.as_ptr()) } as ::core::ffi::c_int;
+        patlen = unsafe { cstr::bytes_at(buflocal_pat.as_ptr()) }.len() as ::core::ffi::c_int;
     }
 
     // Reuse the pattern of the last live autocommand when it is the

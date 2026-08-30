@@ -22,7 +22,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{CONV_NONE, Failed, NUL, linenr_T, size_t, uint8_t};
-use ::libc::{fclose, strcpy, strlen};
+use ::libc::{fclose, strcpy};
 
 use super::wordtree::store_word;
 use super::{
@@ -68,7 +68,7 @@ pub(super) unsafe fn spell_read_wordfile(
         if rline[0] as c_int == b'#' as c_int {
             continue;
         }
-        let mut l = unsafe { strlen(rline.as_ptr()) } as usize;
+        let mut l = unsafe { cstr::bytes_at(rline.as_ptr()) }.len() as usize;
         while l > 0 && rline[l - 1] as uint8_t as c_int <= b' ' as c_int {
             l -= 1;
         }
@@ -225,12 +225,12 @@ unsafe fn read_wordfile_header(
             );
         } else {
             line = unsafe { line.add(8) };
-            if unsafe { strlen(line) } > (MAXREGIONS as c_int * 2) as size_t {
+            if unsafe { cstr::bytes_at(line) }.len() > (MAXREGIONS as c_int * 2) as size_t {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
                 smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
             } else {
-                unsafe { (*spin).si_region_count = strlen(line) as c_int / 2 };
+                unsafe { (*spin).si_region_count = cstr::bytes_at(line).len() as c_int / 2 };
                 unsafe { strcpy((&raw mut (*spin).si_region_name).cast::<c_char>(), line) };
                 unsafe { (*spin).si_region = (1 << (*spin).si_region_count) - 1 };
             }

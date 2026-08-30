@@ -4,6 +4,7 @@
 use super::args::frame;
 use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
+use crate::cstr;
 use crate::eval::typval::{
     NumBuf, callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_islocked,
 };
@@ -18,7 +19,6 @@ use crate::types::{
     Callback, Callback_data, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING,
     typval_T, varnumber_T,
 };
-use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -57,7 +57,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
     if key_pattern.is_null() {
         return;
     }
-    let key_pattern_len = unsafe { strlen(key_pattern) };
+    let key_pattern_len = unsafe { cstr::bytes_at(key_pattern) }.len();
     let mut callback = NO_CALLBACK;
     if !unsafe { callback_from_typval(&raw mut callback, args.ptr(2)) } {
         semsg!("E475: Invalid argument: funcref");
@@ -97,7 +97,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
     // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
     // watcher here and is freed below.
     let d = unsafe { args.get(0).vval.v_dict };
-    let len = unsafe { strlen(key_pattern) };
+    let len = unsafe { cstr::bytes_at(key_pattern) }.len();
     if !unsafe { tv_dict_watcher_remove(d, key_pattern, len, &callback) } {
         semsg!("Couldn't find a watcher matching key and callback");
     }

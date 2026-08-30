@@ -9,6 +9,7 @@
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
+use crate::cstr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
@@ -34,7 +35,6 @@ use crate::types::{
     linenr_T, pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
 };
 use crate::winlayer::{Buf, Win};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -242,7 +242,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
         sa_timed_out: 0,
         sa_wrapped: 0,
     };
-    let patlen = unsafe { strlen(pat) };
+    let patlen = unsafe { cstr::bytes_at(pat) }.len();
 
     // Repeat until {skip} answers false.
     let mut subpatnum;
@@ -363,7 +363,7 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     if !error && !name.is_null() {
         let word = name as *mut c_char;
         // SAFETY: `name` is the NUL-terminated argument.
-        let len = unsafe { strlen(name) };
+        let len = unsafe { cstr::bytes_at(name) }.len();
         let keep = SEARCH_KEEP as c_int;
         let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
         rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
@@ -576,16 +576,16 @@ pub unsafe fn do_searchpair(
     // Without a middle pattern the nested search is the same as the
     // outer one.
     let outer = alternation(&[
-        unsafe { core::slice::from_raw_parts(spat as *const u8, strlen(spat)) },
-        unsafe { core::slice::from_raw_parts(epat as *const u8, strlen(epat)) },
+        unsafe { core::slice::from_raw_parts(spat as *const u8, cstr::bytes_at(spat).len()) },
+        unsafe { core::slice::from_raw_parts(epat as *const u8, cstr::bytes_at(epat).len()) },
     ]);
     let full = if unsafe { *mpat } == 0 {
         outer.clone()
     } else {
         alternation(&[
-            unsafe { core::slice::from_raw_parts(spat as *const u8, strlen(spat)) },
-            unsafe { core::slice::from_raw_parts(epat as *const u8, strlen(epat)) },
-            unsafe { core::slice::from_raw_parts(mpat as *const u8, strlen(mpat)) },
+            unsafe { core::slice::from_raw_parts(spat as *const u8, cstr::bytes_at(spat).len()) },
+            unsafe { core::slice::from_raw_parts(epat as *const u8, cstr::bytes_at(epat).len()) },
+            unsafe { core::slice::from_raw_parts(mpat as *const u8, cstr::bytes_at(mpat).len()) },
         ])
     };
 

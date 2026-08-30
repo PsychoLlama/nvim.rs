@@ -151,7 +151,7 @@ pub(crate) unsafe fn ins_compl_add(
     }
     if len < 0 {
         // SAFETY: `len < 0` is the caller saying `str` is NUL-terminated.
-        len = unsafe { strlen(str) } as c_int;
+        len = unsafe { cstr::bytes_at(str) }.len() as c_int;
     }
 
     // If the same match is already present, don't add it.

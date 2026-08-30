@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
 use crate::semsg;
@@ -61,7 +62,7 @@ use crate::types::{
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;
-use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close, strlen};
+use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close};
 
 // The carve of the transpiled module; see each child's docs.
 mod convert;
@@ -310,7 +311,7 @@ pub unsafe fn buf_write(
     if check_secure() {
         return Err(Failed); // writing is disallowed in secure mode
     }
-    if unsafe { strlen(fname) } >= MAXPATHL as size_t {
+    if unsafe { cstr::bytes_at(fname) }.len() >= MAXPATHL as size_t {
         emsg(gettext(e_longname)); // avoid a crash for a long name
         return Err(Failed);
     }

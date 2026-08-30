@@ -60,7 +60,7 @@ pub unsafe fn deref_func_name(
             unsafe { *lenp = 0 };
             return c"".as_ptr() as *mut c_char;
         }
-        unsafe { *lenp = strlen((*tv).vval.v_string) as c_int };
+        unsafe { *lenp = cstr::bytes_at((*tv).vval.v_string).len() as c_int };
         return unsafe { (*tv).vval.v_string };
     }
 
@@ -75,7 +75,7 @@ pub unsafe fn deref_func_name(
             unsafe { *partialp = pt };
         }
         let s = unsafe { partial_name(pt) };
-        unsafe { *lenp = strlen(s) as c_int };
+        unsafe { *lenp = cstr::bytes_at(s).len() as c_int };
         return s;
     }
 
@@ -153,7 +153,7 @@ pub(crate) unsafe fn fname_trans_sid(
         let sid = current_sctx.get().sc_sid;
         fname_buflen += unsafe { snprintf(into, left, c"%d_".as_ptr(), sid) } as size_t;
     }
-    let fnamelen = fname_buflen + unsafe { strlen(script_name) };
+    let fnamelen = fname_buflen + unsafe { cstr::bytes_at(script_name) }.len();
     if fnamelen < FLEN_FIXED as size_t {
         unsafe { strcpy(fname_buf.add(fname_buflen), script_name) };
         fname_buf
@@ -235,7 +235,7 @@ pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
     // The two spellings upstream uses -- `strchr` when the length is
     // unknown, `memchr` when it is -- are one search over the same bytes.
     let n = if len == -1 {
-        unsafe { strlen(name) }
+        unsafe { cstr::bytes_at(name) }.len()
     } else {
         len as size_t
     };
@@ -278,7 +278,7 @@ unsafe fn mangle_function_name(
 ) -> *mut c_char {
     let mut len;
     if !lv.ll_exp_name.is_null() {
-        len = unsafe { strlen(lv.ll_exp_name) } as c_int;
+        len = unsafe { cstr::bytes_at(lv.ll_exp_name) }.len() as c_int;
         let script_local = c"s:".as_ptr() as *const c_void;
         if lead <= 2
             && core::ptr::eq(lv.ll_name, lv.ll_exp_name)
@@ -507,7 +507,7 @@ pub unsafe fn trans_function_name(
 
         // Check whether the name is a funcref; if so, use its value.
         if !lv.ll_exp_name.is_null() {
-            len = unsafe { strlen(lv.ll_exp_name) } as c_int;
+            len = unsafe { cstr::bytes_at(lv.ll_exp_name) }.len() as c_int;
             let (lenp, quiet) = (&raw mut len, flags & TFN_NO_AUTOLOAD != 0);
             let exp = lv.ll_exp_name;
             name = unsafe { deref_func_name(exp, lenp, partial, quiet, ptr::null_mut()) };
@@ -532,7 +532,7 @@ pub unsafe fn trans_function_name(
                 unsafe { *name.add(1) = KS_EXTRA as c_char };
                 unsafe { *name.add(2) = KE_SNR as c_char };
                 let (into, from) = unsafe { (name.add(3), name.add(5)) };
-                let len = unsafe { strlen(from) } + 1;
+                let len = unsafe { cstr::bytes_at(from) }.len() + 1;
                 unsafe { memmove(into as *mut c_void, from as *const c_void, len) };
             }
             break 'theend;
@@ -576,7 +576,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     } else {
         5
     };
-    let newnamesize = sid_buflen + unsafe { strlen(funcname.add(off)) } + 1;
+    let newnamesize = sid_buflen + unsafe { cstr::bytes_at(funcname.add(off)) }.len() + 1;
     let newname = unsafe { xmalloc(newnamesize) } as *mut c_char;
     // SAFETY: `newname` has `newnamesize` bytes, `sid_buf` is this frame's
     // own and `funcname + off` is inside the caller's name.

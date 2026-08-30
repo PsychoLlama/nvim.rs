@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -56,7 +57,6 @@ use crate::types::{
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
 use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
-use ::libc::strlen;
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};
 use super::pos::{Entry, WinInfos};
@@ -828,7 +828,7 @@ fn match_pattern(
         return None;
     }
     // SAFETY: a NUL-terminated allocation.
-    let patlen = unsafe { strlen(pat) };
+    let patlen = unsafe { cstr::bytes_at(pat) }.len();
     // SAFETY: `patlen` bytes plus the terminator, all of them writable.
     let buf = unsafe { slice::from_raw_parts_mut(pat.cast::<u8>(), patlen + 1) };
     // Whether the pattern ends in '$', which attempts 0 and 1 take off.

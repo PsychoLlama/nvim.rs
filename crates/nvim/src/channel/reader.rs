@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -26,7 +27,6 @@ use crate::types::{
     CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
     kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
-use ::libc::strlen;
 
 use super::{channel_decref, channel_incref};
 
@@ -202,14 +202,8 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
         unsafe { channel_callback_call(chan, reader) };
     } else if unsafe { tv_dict_find((*reader).self_0, (*reader).type_0, -1) }.is_null() {
         let data = unsafe { reader_lines(reader) };
-        let _ = unsafe {
-            tv_dict_add_list(
-                (*reader).self_0,
-                (*reader).type_0,
-                strlen((*reader).type_0),
-                data,
-            )
-        };
+        let n_len = unsafe { cstr::bytes_at((*reader).type_0) }.len();
+        let _ = unsafe { tv_dict_add_list((*reader).self_0, (*reader).type_0, n_len, data) };
     } else {
         // SAFETY: the reader's own stream name and the channel's id.
         let (kind, id) = unsafe { (c_str((*reader).type_0), (*chan).id) };

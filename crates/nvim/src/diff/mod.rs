@@ -106,7 +106,7 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
-use ::libc::{atol, fclose, fwrite, strcat, strcpy, strlen, tolower};
+use ::libc::{atol, fclose, fwrite, strcat, strcpy, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

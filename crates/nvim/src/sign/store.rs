@@ -288,7 +288,7 @@ pub(crate) unsafe fn sign_define_by_name(
         // SAFETY: the caller's highlight group name, NUL-terminated.
         let hl = unsafe {
             if *arg != 0 {
-                syn_check_group(arg, strlen(arg))
+                syn_check_group(arg, cstr::bytes_at(arg).len())
             } else {
                 0
             }

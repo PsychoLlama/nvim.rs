@@ -10,6 +10,7 @@
 use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::charset::backslash_halve;
+use crate::cstr;
 use crate::fileio::vim_tempname;
 use crate::main::{Rows, cmdline_row, e_notmp, e_wildexpand, sandbox, secure};
 use crate::memory::{xfree, xmalloc, xstrdup};
@@ -499,7 +500,7 @@ pub unsafe fn os_expand_wildcards(
                 continue;
             }
 
-            let p = xmalloc(strlen(name) + 1 + dir as usize) as *mut c_char;
+            let p = xmalloc(cstr::bytes_at(name).len() + 1 + dir as usize) as *mut c_char;
             strcpy(p, name);
             if dir {
                 // A directory name gets a trailing '/'.

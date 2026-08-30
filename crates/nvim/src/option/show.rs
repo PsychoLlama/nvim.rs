@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -41,7 +42,7 @@ use crate::types::{
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
-use ::libc::{fprintf, fputs, strlen};
+use ::libc::{fprintf, fputs};
 
 use super::{
     OptSlot, copy_option_part, get_option, get_option_unset_value, get_varp, get_varp_scope,
@@ -117,7 +118,8 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                 1
             } else {
                 unsafe { option_value2string(opt_idx, opt_flags, &mut rendered) };
-                unsafe { strlen(opt.fullname) as c_int + vim_strsize(rendered.as_mut_ptr()) + 1 }
+                let fullname_len = unsafe { cstr::bytes_at(opt.fullname) }.len();
+                unsafe { fullname_len as c_int + vim_strsize(rendered.as_mut_ptr()) + 1 }
             };
             let fits = len <= INC - GAP;
             if fits == (run == 1) {
@@ -463,7 +465,7 @@ enum Written {
 /// `value_str` must be NUL-terminated.
 unsafe fn needs_splitting(value_str: *const c_char, flags: uint32_t) -> bool {
     // SAFETY: the caller's string.
-    unsafe { strlen(value_str) }.wrapping_add(1) >= MAXPATHL as size_t
+    unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1) >= MAXPATHL as size_t
         && flags & kOptFlagComma as uint32_t != 0
         && !unsafe { vim_strchr(value_str, ',' as c_int) }.is_null()
 }
@@ -490,7 +492,7 @@ unsafe fn put_string_value(
         };
     }
 
-    let size = unsafe { strlen(value_str) }.wrapping_add(1);
+    let size = unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1);
     let buf = unsafe { xmalloc(size) }.cast::<c_char>();
     unsafe { home_replace(ptr::null::<buf_T>(), value_str, buf, size, false) };
 

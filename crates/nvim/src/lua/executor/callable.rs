@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -34,7 +35,6 @@ use crate::types::{
     Arena, Array, LuaRef, Object, String_0, VAR_DICT, VAR_LIST, buf_T, kObjectTypeBoolean, size_t,
     typval_T,
 };
-use ::libc::strlen;
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
 const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
@@ -212,7 +212,7 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
     unsafe {
         // `return %s` plus the terminator: the name is evaluated as an
         // expression rather than looked up, so `v:lua.pkg.fn` works.
-        let length = strlen(lua_funcname).wrapping_add(8);
+        let length = cstr::bytes_at(lua_funcname).len().wrapping_add(8);
         let str = xmalloc(length).cast::<c_char>();
         vim_snprintf(str, length, c"return %s".as_ptr(), lua_funcname);
 

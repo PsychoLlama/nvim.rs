@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
 
@@ -34,7 +35,7 @@ pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::f
         || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || unsafe { (*eap).ea_getline }.is_none()
     {
-        unsafe { *lenp = strlen((*eap).arg) };
+        unsafe { *lenp = cstr::bytes_at((*eap).arg).len() };
         if unsafe { (*eap).skip } != 0 {
             return ::core::ptr::null_mut();
         }
@@ -217,7 +218,7 @@ pub unsafe fn get_user_input(
     let mut xp_arg = ::core::ptr::null_mut::<::core::ffi::c_char>();
     if !xp_name.is_null() {
         // input() with a third argument: completion
-        let xp_namelen = unsafe { strlen(xp_name) } as ::core::ffi::c_int;
+        let xp_namelen = unsafe { cstr::bytes_at(xp_name) }.len() as ::core::ffi::c_int;
         let mut argt = ExArgt::NONE;
         if unsafe { parse_compl_arg(xp_name, xp_namelen, &mut xp_type, &mut argt, &mut xp_arg) }
             .is_err()

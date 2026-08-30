@@ -121,7 +121,7 @@ use crate::undo::undo_allowed;
 use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{atoi, fclose, memcmp, qsort, strcat, strcpy, strlen, strncpy, strrchr};
+use ::libc::{atoi, fclose, memcmp, qsort, strcat, strcpy, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;

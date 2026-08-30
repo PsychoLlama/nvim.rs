@@ -18,6 +18,7 @@
 use super::exec::{Sub, SubArgs, save_undo_once};
 use super::{sub_grow_buf, subflags};
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
+use crate::cstr;
 use crate::ex_cmds::{
     CAR, LineData, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
 };
@@ -36,7 +37,7 @@ use crate::regexp::vim_regsub_multi;
 use crate::types::{NUL, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use crate::winlayer::{Buf, Win};
-use ::libc::{strcat, strlen};
+use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -72,11 +73,12 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
             // extmark_splice() will be given.
             st.sublen -= 1;
             // SAFETY: moving the tail, terminator included, one byte down.
+            let n_len = unsafe { cstr::bytes_at(p1.add(1)) }.len();
             unsafe {
                 memmove(
                     p1 as *mut c_void,
                     p1.add(1) as *const c_void,
-                    strlen(p1.add(1)).wrapping_add(1 as size_t),
+                    n_len.wrapping_add(1 as size_t),
                 )
             };
         } else if here == CAR {
@@ -121,11 +123,12 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 cur_win().w_cursor.lnum += 1;
                 // Copy the rest.
                 // SAFETY: both point into the replacement buffer.
+                let n_len = unsafe { cstr::bytes_at(p1.add(1)) }.len();
                 unsafe {
                     memmove(
                         st.new_start as *mut c_void,
                         p1.add(1) as *const c_void,
-                        strlen(p1.add(1)).wrapping_add(1 as size_t),
+                        n_len.wrapping_add(1 as size_t),
                     )
                 };
                 // Restart from the beginning of what is left; the step below
@@ -211,8 +214,8 @@ pub(super) unsafe fn build_replacement(
     let copy_len = st.regmatch.startpos[0].col - st.copycol;
     // SAFETY: `p1` is a live line and the buffer is ours to grow.
     let mut new_end = unsafe {
-        let needed =
-            strlen(p1) as c_int - st.regmatch.endpos[0].col + copy_len + st.sublen + 1 as c_int;
+        let p1_len = cstr::bytes_at(p1).len() as c_int;
+        let needed = p1_len - st.regmatch.endpos[0].col + copy_len + st.sublen + 1 as c_int;
         sub_grow_buf(&mut st.new_start, &mut st.new_start_len, needed)
     };
 
@@ -273,8 +276,8 @@ pub(super) unsafe fn build_replacement(
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {
         // SAFETY: the lines of a multi-line match are all in the buffer.
-        replaced_bytes +=
-            unsafe { strlen(ml_get(st.lnum_start + i as linenr_T)) } as bcount_t + 1 as bcount_t;
+        let line = unsafe { cstr::bytes_at(ml_get(st.lnum_start + i as linenr_T)) };
+        replaced_bytes += line.len() as bcount_t + 1 as bcount_t;
         i += 1;
     }
     replaced_bytes += (end.col - start.col) as bcount_t;
@@ -285,7 +288,7 @@ pub(super) unsafe fn build_replacement(
     unsafe { split_carriage_returns(st, new_end) };
 
     // SAFETY: the replacement is NUL-terminated.
-    let new_endcol = unsafe { strlen(st.new_start) } as colnr_T;
+    let new_endcol = unsafe { cstr::bytes_at(st.new_start) }.len() as colnr_T;
     current_match.end.col = new_endcol;
     current_match.end.lnum = st.lnum;
 
@@ -374,7 +377,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     // NUL-terminated.
     let old_len = unsafe {
         strcat(st.new_start, st.sub_firstline.add(st.copycol as usize));
-        strlen(st.sub_firstline) as colnr_T
+        cstr::bytes_at(st.sub_firstline).len() as colnr_T
     };
     st.matchcol = old_len - st.matchcol;
     st.prev_matchcol = old_len - st.prev_matchcol;
@@ -434,7 +437,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.sub_firstline = st.new_start;
     st.new_start = ptr::null_mut();
     // SAFETY: the new old-text is NUL-terminated.
-    let new_len = unsafe { strlen(st.sub_firstline) } as colnr_T;
+    let new_len = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
     st.matchcol = new_len - st.matchcol;
     st.prev_matchcol = new_len - st.prev_matchcol;
     st.copycol = 0 as colnr_T;

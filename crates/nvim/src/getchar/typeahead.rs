@@ -23,6 +23,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{Failed, MB_MAXBYTES};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -547,7 +548,7 @@ pub unsafe fn ins_typebuf(
     // `offset` within the current typeahead.
     unsafe { state_no_longer_safe(c"ins_typebuf()".as_ptr()) };
 
-    let addlen = unsafe { strlen(str) } as c_int;
+    let addlen = unsafe { cstr::bytes_at(str) }.len() as c_int;
     let inserted =
         TYPEBUF.with_mut(|tb| unsafe { tb.insert(str, addlen, offset, noremap, nottyped, silent) });
     if !inserted {

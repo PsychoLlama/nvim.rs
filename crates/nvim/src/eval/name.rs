@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -26,7 +27,6 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, Vv, partial_T, size_t, typval_T, uint8_t,
 };
-use ::libc::strlen;
 
 /// The length of the environment-variable name at the cursor, which is
 /// left after it. Zero when there is none.
@@ -174,7 +174,7 @@ pub unsafe fn get_name_len(
         // SAFETY: `p` is into the source string.
         unsafe { *arg = skipwhite(p) };
         // SAFETY: the expansion is NUL-terminated.
-        return unsafe { strlen(temp_string) } as c_int;
+        return unsafe { cstr::bytes_at(temp_string) }.len() as c_int;
     }
 
     // SAFETY: `arg` is still a cursor into the string.
@@ -383,7 +383,7 @@ pub(crate) unsafe fn make_expanded_name(
         // SAFETY: as above.
         let after = unsafe { in_end.offset_from(expr_end) } as size_t;
         // SAFETY: `temp_result` is NUL-terminated.
-        let retvalsize = before + unsafe { strlen(temp_result) } + after + 1;
+        let retvalsize = before + unsafe { cstr::bytes_at(temp_result) }.len() + after + 1;
         // SAFETY: `xmalloc` never answers NULL.
         retval = unsafe { xmalloc(retvalsize) as *mut c_char };
         // SAFETY: the tail begins after the closing brace.

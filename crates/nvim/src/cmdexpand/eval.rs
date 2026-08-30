@@ -65,7 +65,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
     // skips the per-type switch entirely.
     if unsafe { cstr::bytes_at(type_0) == b"cmdline" } {
-        let cmdline_len = unsafe { strlen(pattern) } as c_int;
+        let cmdline_len = unsafe { cstr::bytes_at(pattern) }.len() as c_int;
         unsafe {
             set_cmd_context(
                 &raw mut xpc,
@@ -76,12 +76,12 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
             )
         };
         pattern_start = xpc.xp_pattern;
-        xpc.xp_pattern_len = unsafe { strlen(xpc.xp_pattern) };
+        xpc.xp_pattern_len = unsafe { cstr::bytes_at(xpc.xp_pattern) }.len();
         xpc.xp_col = cmdline_len;
     } else {
         unsafe { expand_init(&raw mut xpc) };
         xpc.xp_pattern = pattern as *mut c_char;
-        xpc.xp_pattern_len = unsafe { strlen(xpc.xp_pattern) };
+        xpc.xp_pattern_len = unsafe { cstr::bytes_at(xpc.xp_pattern) }.len();
         xpc.xp_line = pattern as *mut c_char;
 
         xpc.xp_context = unsafe { cmdcomplete_str_to_type(type_0) };
@@ -151,7 +151,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     }
 
     if xpc.xp_context == ExpandContext::Lua {
-        xpc.xp_col = unsafe { strlen(xpc.xp_line) } as c_int;
+        xpc.xp_col = unsafe { cstr::bytes_at(xpc.xp_line) }.len() as c_int;
         unsafe { nlua_expand_pat(&raw mut xpc) };
         xpc.xp_pattern_len -= unsafe { xpc.xp_pattern.offset_from(pattern_start) } as size_t;
     }
@@ -193,7 +193,7 @@ pub unsafe fn f_getcompletiontype(
     let mut xpc: expand_T = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
 
-    let cmdline_len = unsafe { strlen(pat) } as c_int;
+    let cmdline_len = unsafe { cstr::bytes_at(pat) }.len() as c_int;
     unsafe {
         set_cmd_context(
             &raw mut xpc,

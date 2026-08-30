@@ -115,7 +115,7 @@ unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
     let hyp = options.has(FileNameOpts::HYP);
     // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
     // 'isfname'.
-    let mut len = if unsafe { path_has_drive_letter(ptr, strlen(ptr)) } {
+    let mut len = if unsafe { path_has_drive_letter(ptr, cstr::bytes_at(ptr).len()) } {
         2
     } else {
         0
@@ -276,7 +276,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         tofree = unsafe { eval_includeexpr(ptr, len) };
         if !tofree.is_null() {
             ptr = tofree;
-            len = unsafe { strlen(ptr) };
+            len = unsafe { cstr::bytes_at(ptr) }.len();
         }
     }
 
@@ -307,7 +307,7 @@ pub(crate) unsafe fn find_file_name_in_path(
             tofree = unsafe { eval_includeexpr(ptr, len) };
             if !tofree.is_null() {
                 ptr = tofree;
-                len = unsafe { strlen(ptr) };
+                len = unsafe { cstr::bytes_at(ptr) }.len();
                 file_name = look(ptr, len, true);
             }
         }

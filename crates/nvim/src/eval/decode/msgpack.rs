@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -43,7 +44,7 @@ use crate::types::{
     varnumber_T,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, memcpy, strlen};
+use ::libc::{abort, memcpy};
 
 /// A live `mpack_node_t`: the parser stack entry a callback is standing on.
 type Nd = Live<mpack_node_t>;
@@ -230,7 +231,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
 
     for i in 0..len {
         let key = unsafe { (*pairs.add(i * 2)).vval.v_string };
-        let di = unsafe { tv_dict_item_alloc_len(key, strlen(key)) };
+        let di = unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) };
         if unsafe { tv_dict_add(dict, di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every

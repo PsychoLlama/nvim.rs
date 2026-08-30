@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -101,7 +102,8 @@ unsafe fn get_var_from(
                     b'w' => unsafe { &raw mut (*(*win).w_vars).dv_hashtab },
                     _ => unsafe { &raw mut (*(*tp).tp_vars).dv_hashtab },
                 };
-                let v = unsafe { find_var_in_ht(ht, htname, varname, strlen(varname), false) };
+                let varname_len = unsafe { cstr::bytes_at(varname) }.len();
+                let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };
                 if !v.is_null() {
                     unsafe { tv_copy(&raw const (*v).di_tv, rettv) };
                     done = true;
@@ -355,7 +357,7 @@ unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
 /// # Safety
 /// `varname` is a NUL-terminated name and `varp` a live value.
 unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut typval_T) {
-    let varname_len = unsafe { strlen(varname) };
+    let varname_len = unsafe { cstr::bytes_at(varname) }.len();
     let name = unsafe { xmalloc(varname_len + 3) } as *mut c_char;
     unsafe { memcpy(name.cast(), scope.as_ptr().cast(), 2) };
     unsafe { memcpy(name.add(2).cast(), varname.cast(), varname_len + 1) };

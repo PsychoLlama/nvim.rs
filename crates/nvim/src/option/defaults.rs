@@ -55,7 +55,7 @@ use crate::types::{
 };
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
-use ::libc::{getuid, strlen};
+use ::libc::getuid;
 
 use super::{
     NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, check_options,
@@ -122,7 +122,7 @@ fn set_init_default_shell() {
     if unsafe { vim_strchr(shell, ' ' as c_int) }.is_null() {
         unsafe { set_string_default(kOptShell, shell, false) };
     } else {
-        let len = unsafe { strlen(shell) }.wrapping_add(3);
+        let len = unsafe { cstr::bytes_at(shell) }.len().wrapping_add(3);
         let quoted = unsafe { xmalloc(len) }.cast::<c_char>();
         unsafe { snprintf(quoted, len, c"\"%s\"".as_ptr(), shell) };
         unsafe { set_string_default(kOptShell, quoted, true) };
@@ -157,7 +157,7 @@ fn set_init_default_backupskip() {
         if !dir.is_null() && unsafe { *dir } != NUL as c_char {
             let mut trailing_sep = false;
             if dirlen == 0 {
-                dirlen = unsafe { strlen(dir) };
+                dirlen = unsafe { cstr::bytes_at(dir) }.len();
                 trailing_sep = unsafe { after_pathsep(dir, dir.add(dirlen)) } != 0;
             }
             let itemsize = dirlen + usize::from(!trailing_sep) + 2;
@@ -202,8 +202,8 @@ fn set_init_default_cdpath() {
     if cdpath.is_null() {
         return;
     }
-    let buf =
-        unsafe { xmalloc(2usize.wrapping_mul(strlen(cdpath)).wrapping_add(2)) }.cast::<c_char>();
+    let cdpath_len = unsafe { cstr::bytes_at(cdpath) }.len();
+    let buf = unsafe { xmalloc(2usize.wrapping_mul(cdpath_len).wrapping_add(2)) }.cast::<c_char>();
     unsafe { *buf = ',' as c_char };
     let mut at = 1isize;
     let mut src = cdpath;
@@ -296,7 +296,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     // 'backupdir' is the state directory's backup subdirectory, with
     // "." in front of it so a backup lands next to the file when it can.
     let subpath = unsafe { stdpaths_user_state_subpath(c"backup".as_ptr(), 2, true) };
-    let len = unsafe { strlen(subpath) };
+    let len = unsafe { cstr::bytes_at(subpath) }.len();
     let backupdir =
         unsafe { xrealloc(subpath.cast::<c_void>(), len.wrapping_add(3)) }.cast::<c_char>();
     let after = unsafe { backupdir.add(2) }.cast::<c_void>();
@@ -610,7 +610,7 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
         return;
     }
     // SAFETY: the caller's `lang` is NUL-terminated.
-    let lang_len = unsafe { strlen(lang) };
+    let lang_len = unsafe { cstr::bytes_at(lang) }.len();
     // Two letters is what the option holds; anything shorter cannot be
     // a language code.
     if lang_len < 2 || option_was_set(kOptHelplang) {

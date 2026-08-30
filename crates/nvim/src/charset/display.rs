@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -23,7 +24,6 @@ use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
 use crate::types::{NUL, StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
-use ::libc::strlen;
 
 use super::{
     CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
@@ -392,7 +392,7 @@ pub unsafe fn str_foldcase(
                     // buffer either grew or the character did not.
                     unsafe {
                         let src = at(&ga, i + olen);
-                        ptr::copy(src, at(&ga, i + nlen), strlen(src) + 1);
+                        ptr::copy(src, at(&ga, i + nlen), cstr::bytes_at(src).len() + 1);
                     }
                     if buf.is_null() {
                         ga.ga_len += nlen - olen;
@@ -593,7 +593,7 @@ pub unsafe fn transchar_hex(buf: *mut c_char, c: c_int) -> size_t {
 pub unsafe fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char) {
     // SAFETY: forwarded to the caller's contract.
     let len = if end.is_null() {
-        unsafe { strlen(str) }
+        unsafe { cstr::bytes_at(str) }.len()
     } else {
         end.addr() - str.addr()
     };

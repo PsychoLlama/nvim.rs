@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_long, c_uint};
 use core::ptr;
 
@@ -40,7 +41,7 @@ use crate::types::{
     Failed, NUL, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
     varnumber_T,
 };
-use ::libc::{__errno_location, abort, strlen};
+use ::libc::{__errno_location, abort};
 
 pub mod display;
 pub mod str2nr;
@@ -955,7 +956,7 @@ pub unsafe fn backslash_halve(p: *mut c_char) {
 /// # Safety
 /// `p` must be a NUL-terminated string.
 pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
-    let res = unsafe { xmalloc(strlen(p) + 1) } as *mut c_char;
+    let res = unsafe { xmalloc(cstr::bytes_at(p).len() + 1) } as *mut c_char;
     // SAFETY: the allocation is at least as long as the string, and halving
     // only ever shortens it.
     unsafe { copy_unescaped(Bytes::new(p), res) };

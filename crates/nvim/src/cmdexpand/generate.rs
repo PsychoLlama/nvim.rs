@@ -44,7 +44,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     let free_pat = xp.xp_backslash != BackslashEscape::NONE;
     if free_pat {
         // Halve the backslashes of an escaped space (or comma).
-        let pat_len = unsafe { strlen(pat) };
+        let pat_len = unsafe { cstr::bytes_at(pat) }.len();
         pat = unsafe { xstrnsave(pat, pat_len) };
         let mut pat_end = unsafe { pat.add(pat_len) };
         let mut p = pat;

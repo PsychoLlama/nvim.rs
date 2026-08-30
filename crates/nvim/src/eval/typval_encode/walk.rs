@@ -4,6 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -24,7 +25,6 @@ use crate::types::{
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, dict_T, dictitem_T, int64_t, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, list_T, partial_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
-use ::libc::strlen;
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
 /// upstream's `goto typval_encode_stop_converting_one_item` into that
@@ -62,7 +62,7 @@ pub(crate) unsafe fn tv_strlen(tv: *const typval_T) -> size_t {
     if val.string().is_null() {
         0
     } else {
-        unsafe { strlen((*tv).vval.v_string) }
+        unsafe { cstr::bytes_at((*tv).vval.v_string) }.len()
     }
 }
 
@@ -597,7 +597,9 @@ unsafe fn walk<S: TypvalSink>(
                     *todo_slot = todo;
                 }
                 let key = tv_dict_item_key(di);
-                walk_hook!(unsafe { sink.conv_str_string(ptr::null_mut(), key, strlen(key)) });
+                walk_hook!(unsafe {
+                    sink.conv_str_string(ptr::null_mut(), key, cstr::bytes_at(key).len())
+                });
                 unsafe { sink.conv_dict_after_key(cur_tv, Some(dictp)) };
                 tv = di_tv(di);
             }

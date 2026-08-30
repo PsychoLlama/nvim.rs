@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::{c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
@@ -248,9 +249,9 @@ pub unsafe fn value_check_lock(
     } else {
         if name_len == TV_TRANSLATE as size_t {
             name = unsafe { gettext_ptr(name) }.as_ptr();
-            name_len = unsafe { strlen(name) };
+            name_len = unsafe { cstr::bytes_at(name) }.len();
         } else if name_len == TV_CSTRING as size_t {
-            name_len = unsafe { strlen(name) };
+            name_len = unsafe { cstr::bytes_at(name) }.len();
         }
         // SAFETY: `name` is readable for `name_len` bytes.
         let shown = unsafe { c_str_len(name, name_len) };

@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::CStr;
 
 use super::format::*;
@@ -32,7 +33,8 @@ pub unsafe fn u_compute_hash(buf: Buf, hash: *mut uint8_t) {
         let line: *mut c_char = unsafe { ml_get_buf(buf.raw(), lnum) };
         // The terminating NUL goes in too, as a line separator.
         // SAFETY: that line, NUL-terminated, as `ml_get_buf` hands it back.
-        let bytes = unsafe { ::core::slice::from_raw_parts(line.cast(), strlen(line) + 1) };
+        let bytes =
+            unsafe { ::core::slice::from_raw_parts(line.cast(), cstr::bytes_at(line).len() + 1) };
         ctx.update(bytes);
     }
     // SAFETY: `hash` points at `UNDO_HASH_SIZE` writable bytes, by the
@@ -267,7 +269,7 @@ pub(crate) unsafe fn serialize_header(bi: *mut bufinfo_T, hash: *mut uint8_t) ->
     let len: size_t = if line_ptr.is_null() {
         0
     } else {
-        unsafe { strlen(line_ptr) }
+        unsafe { cstr::bytes_at(line_ptr) }.len()
     };
     // SAFETY: an open file, and `len` readable bytes of the shadow line; the
     // buffer stays live for the fields read off it.
@@ -663,7 +665,7 @@ pub(crate) unsafe fn serialize_uep(bi: *mut bufinfo_T, uep: *mut u_entry_T) -> b
         // SAFETY: the entry holds `ue_size` NUL-terminated lines.
         let line: *mut c_char = unsafe { *(*uep).ue_array.add(i) };
         // SAFETY: as above.
-        let len = unsafe { strlen(line) };
+        let len = unsafe { cstr::bytes_at(line) }.len();
         // SAFETY: an open file, by the contract above.
         if !unsafe { undo_write_bytes(bi, len as uintmax_t, 4) } {
             return false;

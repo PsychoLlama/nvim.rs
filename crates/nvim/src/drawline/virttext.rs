@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::decoration::{
     kDecorKindUIWatched, kDecorKindVirtText, kHlModeBlend, kHlModeCombine, kVPosEndOfLine,
     kVPosEndOfLineRightAlign, kVPosInline, kVPosRightAlign, kVPosWinCol, kVTRepeatLinebreak,
@@ -452,7 +453,7 @@ impl WinLineVars {
                 continue;
             }
             self.extra_text = text;
-            self.extra_todo = unsafe { strlen(text) } as ::core::ffi::c_int;
+            self.extra_todo = unsafe { cstr::bytes_at(text) }.len() as ::core::ffi::c_int;
             if self.extra_todo == 0 {
                 continue;
             }

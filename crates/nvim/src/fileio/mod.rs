@@ -15,6 +15,7 @@ use crate::buffer::{
 };
 use crate::buffer_updates::buf_updates_unload;
 use crate::change::{appended_lines_mark, save_file_ff, unchanged};
+use crate::cstr;
 use crate::cursor::{check_cursor, check_cursor_lnum};
 use crate::diff::diff_invalidate;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
@@ -93,7 +94,7 @@ use crate::undo::{
 use crate::winlayer::{Buf, Ea};
 use ::libc::{
     __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
-    memchr, memcpy, read, readlink, strlen, symlink, umask, write,
+    memchr, memcpy, read, readlink, symlink, umask, write,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -343,7 +344,7 @@ pub(crate) unsafe fn msg_add_lines(
     nchars: off_T,
 ) {
     let io = report.as_mut_ptr();
-    let mut len = unsafe { strlen(io) };
+    let mut len = unsafe { cstr::bytes_at(io) }.len();
     let space = if insert_space != 0 { c" " } else { c"" }.as_ptr();
 
     if shortmess(ShmFlag::LINES) {
@@ -566,7 +567,7 @@ pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: Buf) {
     // SAFETY: the caller's command, live for the call.
     let mut ea = unsafe { Ea::new(eap) };
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
-    let cmd_len = 15 + unsafe { strlen(buf.b_p_fenc) };
+    let cmd_len = 15 + unsafe { cstr::bytes_at(buf.b_p_fenc) }.len();
     ea.cmd = unsafe { xmalloc(cmd_len) }.cast();
     unsafe { snprintf(ea.cmd, cmd_len, c"e ++enc=%s".as_ptr(), buf.b_p_fenc) };
     // Where the encoding name starts in that command.

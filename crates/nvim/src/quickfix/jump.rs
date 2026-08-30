@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_tab;
 use crate::optionstr::is_empty_option;
@@ -224,7 +225,7 @@ unsafe fn qf_jump_goto_line(
         let oap = ptr::null_mut();
         let dirc = '/' as c_int;
         let search_delim = '/' as c_int;
-        let patlen = unsafe { strlen(qf_pattern) };
+        let patlen = unsafe { cstr::bytes_at(qf_pattern) }.len();
         let count = 1;
         let options = SEARCH_KEEP as c_int;
         let sia = ptr::null_mut();

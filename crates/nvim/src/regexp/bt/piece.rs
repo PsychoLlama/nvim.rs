@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::c_int;
 
 use super::atom::regatom;
@@ -35,7 +36,6 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{NUL, int64_t, regprog_T, uint8_t, uint32_t};
-use ::libc::strlen;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -519,7 +519,7 @@ fn find_shortcuts(prog: BtProg, flags: c_int) {
         let mut len = 0;
         while !scan.is_null() {
             if unsafe { *scan } as c_int == EXACTLY {
-                let scanlen = unsafe { strlen(scan.add(3).cast()) } as c_int;
+                let scanlen = unsafe { cstr::bytes_at(scan.add(3).cast()) }.len() as c_int;
                 // `>=` rather than `>`: upstream prefers the *last* of
                 // equally long candidates.
                 if scanlen >= len {

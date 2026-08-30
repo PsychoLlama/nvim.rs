@@ -9,6 +9,7 @@
 //! with `do_one_cmd`.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -58,7 +59,7 @@ use crate::types::{
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
-use ::libc::{memset, strlen};
+use ::libc::memset;
 
 /// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
 /// nothing.
@@ -261,7 +262,7 @@ pub(crate) unsafe fn execute_cmd0(
             {
                 unsafe { skiptowhite_esc(ea.arg) }
             } else {
-                let mut p = unsafe { ea.arg.add(strlen(ea.arg) as usize) };
+                let mut p = unsafe { ea.arg.add(cstr::bytes_at(ea.arg).len() as usize) };
                 while p > ea.arg && ascii_iswhite(byte(unsafe { p.sub(1) })) {
                     p = unsafe { p.sub(1) };
                 }

@@ -105,7 +105,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
-use ::libc::{abort, atoi, memcpy, memset, strcpy, strlen};
+use ::libc::{abort, atoi, memcpy, memset, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod contents;

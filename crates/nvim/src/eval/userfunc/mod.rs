@@ -87,7 +87,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
-use ::libc::{abort, memcmp, memcpy, memset, strcpy, strlen};
+use ::libc::{abort, memcmp, memcpy, memset, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod args;

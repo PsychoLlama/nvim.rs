@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::os::shell::ShellOpts;
 use crate::types::{CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, NUL};
 use core::ffi::{CStr, c_char, c_int};
@@ -59,11 +60,14 @@ fn make_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
 unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut c_char {
     // SAFETY: forwarded from the caller.
     let quote = p_shq.get();
-    let mut len = unsafe { strlen(quote) } * 2 + unsafe { strlen(makecmd) } + 1;
+    let mut len =
+        unsafe { cstr::bytes_at(quote) }.len() * 2 + unsafe { cstr::bytes_at(makecmd) }.len() + 1;
     // If 'shellpipe' is empty the output is not redirected at all.
     let redirect = unsafe { *p_sp.get() } as c_int != NUL;
     if redirect {
-        len += unsafe { strlen(p_sp.get()) } + unsafe { strlen(fname) } + 3;
+        len += unsafe { cstr::bytes_at(p_sp.get()) }.len()
+            + unsafe { cstr::bytes_at(fname) }.len()
+            + 3;
     }
 
     let cmd: *mut c_char = unsafe { xmalloc(len) }.cast();

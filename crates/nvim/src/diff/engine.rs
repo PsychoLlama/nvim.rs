@@ -170,10 +170,10 @@ pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> Result<(), Failed> {
 
     // "diff " plus six two-character flags, three file names, the redirect
     // and the terminator.
-    let len = unsafe { strlen(tmp_orig) }
-        + unsafe { strlen(tmp_new) }
-        + unsafe { strlen(tmp_diff) }
-        + unsafe { strlen(p_srr.get()) }
+    let len = unsafe { cstr::bytes_at(tmp_orig) }.len()
+        + unsafe { cstr::bytes_at(tmp_new) }.len()
+        + unsafe { cstr::bytes_at(tmp_diff) }.len()
+        + unsafe { cstr::bytes_at(p_srr.get()) }.len()
         + 27;
     let cmd = unsafe { xmalloc(len) } as *mut c_char;
     // The user's own `diff` options would corrupt the output format.

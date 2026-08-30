@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::grid::linebuf;
 use crate::message::emsg_ptr;
 use crate::types::kFloatRelativeEditor;
@@ -190,7 +191,7 @@ unsafe fn pum_compute_text_attrs(
         })
     };
 
-    let leader_len = unsafe { strlen(leader) };
+    let leader_len = unsafe { cstr::bytes_at(leader) }.len();
     let mut attrs = vec![0; unsafe { vim_strsize(text) } as usize];
     let mut ptr: *const c_char = text;
     let mut cell_idx = 0;

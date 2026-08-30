@@ -8,7 +8,7 @@ use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
-use ::libc::{qsort, strcasecmp, strlen};
+use ::libc::{qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -209,7 +209,7 @@ pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
 /// Every occurrence of `what` in `src` replaced by `rep`, freshly
 /// allocated, or NULL when `what` does not occur at all.
 pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
-    let what_len = unsafe { strlen(what) };
+    let what_len = unsafe { cstr::bytes_at(what) }.len();
 
     let mut count: size_t = 0;
     let mut pos = src;
@@ -227,8 +227,9 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
 
     // `replen - whatlen` underflows when the replacement is shorter;
     // the product then wraps back to the right (smaller) total.
-    let rep_len = unsafe { strlen(rep) };
-    let size = unsafe { strlen(src) }
+    let rep_len = unsafe { cstr::bytes_at(rep) }.len();
+    let size = unsafe { cstr::bytes_at(src) }
+        .len()
         .wrapping_add(count.wrapping_mul(rep_len.wrapping_sub(what_len)))
         .wrapping_add(1);
     let ret = unsafe { xmalloc(size) as *mut c_char };
@@ -247,7 +248,7 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
         out = unsafe { out.add(rep_len) };
         src = unsafe { pos.add(what_len) };
     }
-    let tail = unsafe { strlen(src) };
+    let tail = unsafe { cstr::bytes_at(src) }.len();
     unsafe { ptr::copy_nonoverlapping(src, out, tail + 1) };
     ret
 }

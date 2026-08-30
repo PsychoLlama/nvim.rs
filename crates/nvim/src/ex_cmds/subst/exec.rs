@@ -24,6 +24,7 @@ use super::replace::{build_replacement, commit_line};
 use super::{do_sub_msg, global_need_beginline, show_sub, static_cstr_optval, subflags};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
+use crate::cstr;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
@@ -60,7 +61,6 @@ use crate::types::{
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
 use crate::winlayer::{Buf, Win};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -301,7 +301,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
         // on the next line.  Avoids that ":s/\nB\@=//gc" gets stuck.
         if st.nmatch > 1 as c_int {
             // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { strlen(st.sub_firstline) } as colnr_T;
+            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
             st.nmatch = 1 as c_int;
             st.skip_match = true;
         }

@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_F, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_V, Ctrl_W};
 use crate::types::{ExpandContext, NUL};
@@ -189,7 +190,7 @@ fn byte(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
 
 fn len(p: *const ::core::ffi::c_char) -> size_t {
     // SAFETY: a NUL-terminated string.
-    unsafe { strlen(p) }
+    unsafe { cstr::bytes_at(p) }.len()
 }
 
 /// `STRCPY(dst, src)`: copy `src` and its NUL.

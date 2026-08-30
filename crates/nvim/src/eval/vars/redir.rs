@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -154,7 +155,7 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
     // SAFETY: the caller's `value` is readable for `value_len` bytes, or is
     // NUL-terminated when the length is -1.
     let len = match value_len == -1 {
-        true => unsafe { strlen(value) },
+        true => unsafe { cstr::bytes_at(value) }.len(),
         false => value_len as size_t,
     };
     let bytes = unsafe { slice::from_raw_parts(value.cast::<u8>(), len) };

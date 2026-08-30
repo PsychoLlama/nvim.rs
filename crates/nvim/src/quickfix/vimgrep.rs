@@ -332,7 +332,9 @@ unsafe fn match_buflines(
             // position per *character*, so for a multibyte pattern the
             // position read below is one the matcher never wrote. It has
             // to be zero, which is why the array is cleared every line.
-            let pat_len = unsafe { strlen(search.spat) }.min(FUZZY_MATCH_MAX_LEN as size_t);
+            let pat_len = unsafe { cstr::bytes_at(search.spat) }
+                .len()
+                .min(FUZZY_MATCH_MAX_LEN as size_t);
             let mut col: colnr_T = 0;
             // Cleared once per line, not once per match: a second match
             // on the same line reads whatever the first one left in the

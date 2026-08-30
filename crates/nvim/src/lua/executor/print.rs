@@ -36,7 +36,6 @@ use crate::types::{
     intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use crate::ui::ui_has;
-use ::libc::strlen;
 
 /// The message kind `print()`'s output is reported under.
 const LUA_PRINT_KIND: &CStr = c"lua_print";
@@ -270,7 +269,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
             if luaL_loadbuffer(
                 lstate,
                 input.vval.v_string,
-                strlen(input.vval.v_string),
+                cstr::bytes_at(input.vval.v_string).len(),
                 c"=(debug command)".as_ptr(),
             ) != 0
             {

@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
@@ -495,7 +496,7 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
         let tail = unsafe { part.as_ptr().add(1) };
         let out = folded.as_mut_ptr();
         unsafe { home_replace(core::ptr::null(), tail, out, MAXPATHL as size_t, true) };
-        let n = unsafe { strlen(folded.as_ptr()) };
+        let n = unsafe { cstr::bytes_at(folded.as_ptr()) }.len();
         if unsafe { mb_strnicmp(folded.as_ptr(), new_name, n) } == 0 {
             retval = true;
             break;

@@ -9,6 +9,7 @@
 
 use super::{CAR, NL, arena_string, arena_take_arraybuilder};
 use crate::api::private::validate::err_invalid_ptr;
+use crate::cstr;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
@@ -16,7 +17,7 @@ use crate::pos::MAXLNUM;
 use crate::types::{
     Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, linenr_T, size_t,
 };
-use ::libc::{strlen, strnlen};
+use ::libc::strnlen;
 use core::ffi::c_char;
 use core::{mem, slice};
 
@@ -50,7 +51,7 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
         if str.is_null() {
             return String_0::NULL;
         }
-        cbuf_to_string(str, strlen(str))
+        cbuf_to_string(str, cstr::bytes_at(str).len())
     }
 }
 
@@ -74,7 +75,7 @@ pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
         if str.is_null() {
             return String_0::NULL;
         }
-        String_0::from_raw_parts(str as *mut c_char, strlen(str))
+        String_0::from_raw_parts(str as *mut c_char, cstr::bytes_at(str).len())
     }
 }
 

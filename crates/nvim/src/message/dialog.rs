@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::types::{MB_MAXBYTES, NUL};
@@ -180,8 +181,8 @@ unsafe fn console_dialog_alloc(
         r = unsafe { r.add(utfc_ptr2len(r) as usize) };
     }
 
-    msg_len += unsafe { strlen(message) as c_int } + 3; // for the NLs and NUL
-    button_len += unsafe { strlen(buttons) as c_int } + 3; // for the ": " and NUL
+    msg_len += unsafe { cstr::bytes_at(message).len() as c_int } + 3; // for the NLs and NUL
+    button_len += unsafe { cstr::bytes_at(buttons).len() as c_int } + 3; // for the ": " and NUL
     lenhotkey += 1; // for the NUL
 
     // If no hotkey is specified, the first char is used.
@@ -263,7 +264,7 @@ unsafe fn copy_confirm_hotkeys(
             push(&mut msgp, b' ');
 
             // Advance to the next hotkey and set the default one.
-            hotkeys_ptr = unsafe { hotkeys_ptr.add(strlen(hotkeys_ptr)) };
+            hotkeys_ptr = unsafe { hotkeys_ptr.add(cstr::bytes_at(hotkeys_ptr).len()) };
             unsafe { *hotkeys_ptr.add(copy_char(r.add(1), hotkeys_ptr, true) as usize) = 0 };
 
             if default_button_idx != 0 {

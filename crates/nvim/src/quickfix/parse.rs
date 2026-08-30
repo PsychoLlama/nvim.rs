@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -384,7 +385,8 @@ impl Fields {
                     return Status::Fail;
                 }
                 let len = unsafe { end.offset_from(start) } as usize;
-                let dsize = (unsafe { strlen(self.module.as_ptr()) } + len + 1).min(FIELD_MAX);
+                let dsize = (unsafe { cstr::bytes_at(self.module.as_ptr()) }.len() + len + 1)
+                    .min(FIELD_MAX);
                 unsafe { xstrlcat(self.module.as_mut_ptr(), start, dsize) };
             }
             _ => unreachable!("conversion {idx} is handled by its caller"),
@@ -492,7 +494,7 @@ pub(crate) unsafe fn parse_line(
                 // SAFETY: `tail` points into the NUL-terminated line.
                 let rest = unsafe { skipwhite(tail) };
                 // SAFETY: ditto.
-                let rest_len = unsafe { strlen(rest) };
+                let rest_len = unsafe { cstr::bytes_at(rest) }.len();
                 if rest_len >= linelen {
                     // The tail is no shorter than the line it came from, so
                     // re-scanning could not make progress.
@@ -605,8 +607,8 @@ unsafe fn continue_multiline(prefix: u8, qfl: *mut qf_list_T, fields: &mut Field
         }
         if unsafe { *fields.errmsg() } != 0 {
             // Append the continuation as a new line of the message.
-            let textlen = unsafe { strlen((*prev).qf_text) };
-            let errlen = unsafe { strlen(fields.errmsg()) };
+            let textlen = unsafe { cstr::bytes_at((*prev).qf_text) }.len();
+            let errlen = unsafe { cstr::bytes_at(fields.errmsg()) }.len();
             unsafe {
                 (*prev).qf_text = xrealloc((*prev).qf_text.cast(), textlen + errlen + 2).cast()
             };

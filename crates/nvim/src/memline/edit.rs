@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
@@ -88,7 +89,7 @@ pub(crate) unsafe fn ml_append_int(
 
     // Space needed for the text, and then for its index entry too.
     let len = if len_arg == 0 {
-        unsafe { strlen(line) as colnr_T + 1 }
+        unsafe { cstr::bytes_at(line).len() as colnr_T + 1 }
     } else {
         len_arg
     };

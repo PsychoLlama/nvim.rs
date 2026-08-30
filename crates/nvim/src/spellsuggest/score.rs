@@ -37,6 +37,7 @@
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite;
+use crate::cstr;
 use crate::hashtab::{hash_find, hash_removed};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
@@ -48,7 +49,7 @@ use crate::spellsuggest::{
     suginfo_T,
 };
 use crate::types::{MB_MAXCHAR, NUL, hashitem_T, size_t, slang_T, wordcount_T};
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 
 /// A sound-folded word and the room around it, as the callers keep it.
@@ -131,7 +132,7 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
     if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
         0
     } else {
-        unsafe { utf_ptr2char(key.add(strlen(key) as usize + 1)) }
+        unsafe { utf_ptr2char(key.add(cstr::bytes_at(key).len() as usize + 1)) }
     }
 }
 

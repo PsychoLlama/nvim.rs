@@ -23,6 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -64,7 +65,7 @@ use crate::types::{
     dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T,
 };
-use ::libc::{memset, strlen};
+use ::libc::memset;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -643,7 +644,7 @@ pub unsafe fn get_lval(
             lp.ll_name_len = 0 as size_t;
         } else {
             // SAFETY: the expansion is NUL-terminated.
-            lp.ll_name_len = unsafe { strlen(lp.ll_name) };
+            lp.ll_name_len = unsafe { cstr::bytes_at(lp.ll_name) }.len();
         }
     } else {
         lp.ll_name = name;

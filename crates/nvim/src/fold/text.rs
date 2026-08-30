@@ -23,7 +23,6 @@ use crate::os::cshim::{memmove, ngettext, strstr};
 use crate::strings::vim_snprintf;
 use crate::types::{Vv, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
 use crate::winlayer::{Buf, Win};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
@@ -189,7 +188,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
     // 'commentstring' split around its `%s`, with the padding trimmed.
     let cms_start = skip_ws(cur_buf().b_p_cms);
     // SAFETY: 'commentstring' is a NUL-terminated option string.
-    let mut cms_slen = unsafe { strlen(cms_start) };
+    let mut cms_slen = unsafe { cstr::bytes_at(cms_start) }.len();
     while cms_slen > 0 && ascii_iswhite(at(cms_start.wrapping_add(cms_slen - 1))) {
         cms_slen -= 1;
     }
@@ -251,7 +250,11 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
             // its terminator included -- fits where `s` is.
             unsafe {
                 let tail = s.add(len);
-                memmove(s as *mut c_void, tail as *const c_void, strlen(tail) + 1)
+                memmove(
+                    s as *mut c_void,
+                    tail as *const c_void,
+                    cstr::bytes_at(tail).len() + 1,
+                )
             };
         } else {
             // SAFETY: `s` is on a character of `str`.

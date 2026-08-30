@@ -69,7 +69,6 @@ use crate::types::{
     blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
     typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
 };
-use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod count;
@@ -438,7 +437,7 @@ impl Dict {
     pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut typval_T) -> bool {
         // SAFETY: a live dict, `key` the NUL-terminated key of one of its own
         // items, and `tv` a live value.
-        unsafe { tv_dict_add_tv(self.0, key, strlen(key), tv) }.is_ok()
+        unsafe { tv_dict_add_tv(self.0, key, cstr::bytes_at(key).len(), tv) }.is_ok()
     }
 
     #[inline(always)]

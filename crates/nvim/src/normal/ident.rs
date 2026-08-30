@@ -52,7 +52,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is
@@ -811,7 +811,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
 
     // Room for the command, the word with every byte escaped, and a
     // terminator.
-    let kplen = unsafe { strlen(kp) };
+    let kplen = unsafe { cstr::bytes_at(kp) }.len();
     let mut out = CmdBuf::new(n.wrapping_mul(2).wrapping_add(30).wrapping_add(kplen));
 
     // Whether the command being built is a tag lookup, which decides the
@@ -881,7 +881,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
         // SAFETY: `owned` and `quoted` came from the allocations above, and
         // `quoted` is NUL-terminated.
         unsafe { xfree(owned as *mut c_void) };
-        let plen = unsafe { strlen(quoted) };
+        let plen = unsafe { cstr::bytes_at(quoted) }.len();
         out.append_grown(quoted, plen);
         unsafe { xfree(quoted as *mut c_void) };
     } else {

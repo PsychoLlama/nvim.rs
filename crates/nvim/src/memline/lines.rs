@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
@@ -214,7 +215,7 @@ pub unsafe fn ml_add_deleted_len_buf(
     if inhibit_delete_count.get() != 0 {
         return;
     }
-    let maxlen = unsafe { strlen(ptr) } as ssize_t;
+    let maxlen = unsafe { cstr::bytes_at(ptr) }.len() as ssize_t;
     let len = if len_arg == -1 || len_arg > maxlen {
         maxlen
     } else {
@@ -276,7 +277,7 @@ pub unsafe fn ml_replace_buf(
     let len = if line.is_null() {
         -1 as ::core::ffi::c_int as size_t
     } else {
-        unsafe { strlen(line) }
+        unsafe { cstr::bytes_at(line) }.len()
     };
     unsafe { ml_replace_buf_len(buf, lnum, line, len, copy, noalloc) }
 }

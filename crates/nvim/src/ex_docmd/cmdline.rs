@@ -15,6 +15,7 @@
 //! is the specification of when a script stops on an error.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -64,7 +65,7 @@ use crate::types::{
     Failed, LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
 };
 use crate::ui::ui_has;
-use ::libc::{memset, strlen};
+use ::libc::memset;
 
 /// The top of the execution stack: the script or function whose line is
 /// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
@@ -462,11 +463,12 @@ pub unsafe fn do_cmdline(
         } else {
             // Move what follows the `|` to the front of the buffer, for
             // the next `do_one_cmd`.
+            let cmdline_len = unsafe { cstr::bytes_at(next_cmdline) }.len();
             unsafe {
                 memmove(
                     cmdline_copy as *mut c_void,
                     next_cmdline as *const c_void,
-                    strlen(next_cmdline) + 1,
+                    cmdline_len + 1,
                 )
             };
             next_cmdline = cmdline_copy;

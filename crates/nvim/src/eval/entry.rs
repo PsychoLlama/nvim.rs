@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
@@ -54,7 +55,7 @@ use crate::types::{
     win_T,
 };
 use crate::winlayer::{Ea, Live};
-use ::libc::{atol, memcmp, memset, strlen};
+use ::libc::{atol, memcmp, memset};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -625,7 +626,7 @@ pub unsafe fn call_vim_function(
     rettv: *mut typval_T,
 ) -> Result<(), Failed> {
     let mut func = func;
-    let mut len = unsafe { strlen(func) } as c_int;
+    let mut len = unsafe { cstr::bytes_at(func) }.len() as c_int;
     let mut pt: *mut partial_T = null_mut();
     let mut ret = Err(Failed);
 

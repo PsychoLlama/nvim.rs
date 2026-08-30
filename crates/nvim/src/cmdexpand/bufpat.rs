@@ -225,7 +225,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
         return Err(Failed);
     }
 
-    let pat_len = unsafe { strlen(pat) } as c_int;
+    let pat_len = unsafe { cstr::bytes_at(pat) }.len() as c_int;
     let mut cur_match_pos: pos_T = unsafe { core::mem::zeroed() };
     let mut prev_match_pos: pos_T = unsafe { core::mem::zeroed() };
     if has_range {

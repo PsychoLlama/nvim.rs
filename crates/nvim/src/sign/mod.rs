@@ -80,7 +80,7 @@ use crate::types::{
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};
-use ::libc::{atoi, strlen};
+use ::libc::atoi;
 
 mod command;
 pub(crate) use self::command::*;

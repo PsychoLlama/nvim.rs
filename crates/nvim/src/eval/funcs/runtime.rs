@@ -12,6 +12,7 @@ use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::cmdexpand::cmdline_pum_active;
+use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_append_number};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
@@ -44,7 +45,7 @@ use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, windows_in_tab};
-use ::libc::{atoi, strcasecmp, strlen, strtoul};
+use ::libc::{atoi, strcasecmp, strtoul};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -179,7 +180,7 @@ unsafe fn has_patch(name: *const c_char) -> bool {
     // SAFETY: the caller's obligation puts `name[5]` at or before the
     // terminator, and the length test below covers `name[6]`.
     if unsafe { *name.add(5) } as u8 == b'-'
-        && unsafe { strlen(name) } >= 11
+        && unsafe { cstr::bytes_at(name) }.len() >= 11
         && (b'1'..=b'9').contains(&(unsafe { *name.add(6) } as u8))
     {
         // patch-M.m.PPPP, with exactly one minor digit -- which is

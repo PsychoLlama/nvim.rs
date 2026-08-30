@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::Failed;
@@ -312,7 +313,7 @@ pub(crate) unsafe fn list_join_inner(
 
     // Allocate result buffer with its total size, avoid re-allocation and
     // multiple copy operations.  Add 2 for a tailing ']' and NUL.
-    let seplen = unsafe { strlen(sep) };
+    let seplen = unsafe { cstr::bytes_at(sep) }.len();
     // SAFETY: the caller's stack garray.
     let ga = unsafe { Ga::new(join_gap) };
     if ga.ga_len >= 2 {

@@ -54,7 +54,7 @@ use crate::types::{
     synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
-use ::libc::{strcasecmp, strcpy, strlen};
+use ::libc::{strcasecmp, strcpy};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
@@ -77,7 +77,7 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// `latin9` uses `latin1`'s files, and anything implausibly long falls back
 /// to `latin1`.
 pub unsafe fn spell_enc() -> *mut c_char {
-    if unsafe { strlen(p_enc.get()) } < 60
+    if unsafe { cstr::bytes_at(p_enc.get()) }.len() < 60
         && unsafe { cstr::bytes_at(p_enc.get()) != b"iso-8859-15" }
     {
         return p_enc.get();
@@ -161,7 +161,8 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         }
     } else if !sl.sl_slang.is_null() {
         // At least one file loaded; now take all the additions.
-        let at = unsafe { fname_enc.as_mut_ptr().add(strlen(fname_enc.as_ptr()) - 3) };
+        let ptr_len = unsafe { cstr::bytes_at(fname_enc.as_ptr()) }.len();
+        let at = unsafe { fname_enc.as_mut_ptr().add(ptr_len - 3) };
         unsafe { strcpy(at, c"add.spl".as_ptr()) };
         let _ =
             unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
@@ -711,7 +712,7 @@ unsafe fn use_midword(lp: *mut slang_T, wp: *mut win_T) {
             let copy = unsafe { xmemdupz(p as *const c_void, l as size_t) };
             unsafe { (*(*wp).w_s).b_spell_ismw_mb = copy as *mut c_char };
         } else {
-            let n = unsafe { strlen((*(*wp).w_s).b_spell_ismw_mb) } as c_int;
+            let n = unsafe { cstr::bytes_at((*(*wp).w_s).b_spell_ismw_mb) }.len() as c_int;
             let bp = unsafe { xstrnsave((*(*wp).w_s).b_spell_ismw_mb, (n + l) as size_t) };
             unsafe { xfree((*(*wp).w_s).b_spell_ismw_mb as *mut c_void) };
             unsafe { (*(*wp).w_s).b_spell_ismw_mb = bp };

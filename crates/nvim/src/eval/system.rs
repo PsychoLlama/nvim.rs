@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -38,7 +39,6 @@ use crate::types::{
     EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv,
     kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
-use ::libc::strlen;
 
 /// Build a `NULL`-terminated argument vector out of a String (through the
 /// shell) or a List (directly). `cmd`, when given, comes back naming the
@@ -385,7 +385,7 @@ pub unsafe fn save_tv_as_string(
             return null_mut();
         }
         // SAFETY: `ret` is NUL-terminated, and `len` is the caller's.
-        unsafe { *len = strlen(ret) as ptrdiff_t };
+        unsafe { *len = cstr::bytes_at(ret).len() as ptrdiff_t };
         // SAFETY: `ret` has the `*len` bytes just measured.
         return unsafe { xmemdupz(ret as *const c_void, *len as size_t) as *mut c_char };
     }
@@ -418,7 +418,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
     for lnum in 1..=buf.line_count() {
         // SAFETY: `lnum` is a line of the buffer, and a line is
         // NUL-terminated; `len` is the caller's.
-        unsafe { *len += strlen(ml_get_buf(buf.raw(), lnum)) as ptrdiff_t + 1 };
+        unsafe { *len += cstr::bytes_at(ml_get_buf(buf.raw(), lnum)).len() as ptrdiff_t + 1 };
     }
     // SAFETY: the caller's promise about `len`.
     if unsafe { *len } == 0 {
@@ -464,7 +464,8 @@ unsafe fn list_as_string(
         while !li.is_null() {
             // SAFETY: `li` is one of the List's items, `numbuf` outlives
             // the string rendered into it, and `len` is the caller's.
-            unsafe { *len += strlen(numbuf.string(&raw const (*li).li_tv)) as ptrdiff_t + sep };
+            let tv_len = unsafe { cstr::bytes_at(numbuf.string(&raw const (*li).li_tv)) }.len();
+            unsafe { *len += tv_len as ptrdiff_t + sep };
             // SAFETY: `li` is a live item.
             li = unsafe { (*li).li_next };
         }

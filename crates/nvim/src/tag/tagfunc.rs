@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::hashtab::hash_removed;
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
@@ -259,7 +260,7 @@ unsafe fn tag_of(d: *mut dict_T, flags: c_int) -> Option<Match> {
     // key and colon, plus two for the `;"`.
     let mut len = 2;
     for field in &fields {
-        len += unsafe { strlen(field.value) } + 1;
+        len += unsafe { cstr::bytes_at(field.value) }.len() + 1;
         match field.key().to_bytes() {
             b"name" => name = field.value,
             b"filename" => fname = field.value,

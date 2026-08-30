@@ -67,7 +67,7 @@ impl Scan {
     /// The string's length, `strlen`.
     fn len(self) -> c_int {
         // SAFETY: the constructor's promise.
-        unsafe { strlen(self.0) as c_int }
+        unsafe { cstr::bytes_at(self.0).len() as c_int }
     }
 }
 

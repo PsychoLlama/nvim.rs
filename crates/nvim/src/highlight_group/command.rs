@@ -102,7 +102,7 @@ impl Line {
     }
 }
 
-/// `cstr::prefix_eq(full, word, word.len())`: whether `word` is a prefix of
+/// `strncmp(full, word, word.len()) == 0`: whether `word` is a prefix of
 /// `full`, which is how `:hi` accepts `def`, `cle` and `li`.
 fn is_prefix(word: &[u8], full: &[u8]) -> bool {
     word.len() <= full.len() && full.starts_with(word)

@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::did_echo_string_emsg;
@@ -31,7 +32,6 @@ use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{blob_T, dict_T, float_T, garray_T, int64_t, ptrdiff_t, size_t, typval_T};
-use ::libc::strlen;
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -217,7 +217,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         let name_off = self.gap.0.ga_len as usize;
         let prefix = prefix.to_bytes();
         self.gap.concat(prefix);
-        unsafe { self.quoted(fun, strlen(fun)) };
+        unsafe { self.quoted(fun, cstr::bytes_at(fun).len()) };
         let data = self.gap.0.ga_data.cast::<u8>();
         unsafe { *data.add(name_off) = b'\'' };
         unsafe {

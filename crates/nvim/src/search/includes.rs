@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::message_fmt::c_str;
@@ -320,7 +321,7 @@ impl Walk {
             self.line = self.buf;
             self.files.innermost().lnum += 1;
             // Remove any CR and LF from it.
-            let mut i = unsafe { strlen(self.line) } as isize;
+            let mut i = unsafe { cstr::bytes_at(self.line) }.len() as isize;
             if i > 0 && unsafe { *self.line.offset(i - 1) } as c_int == '\n' as c_int {
                 i -= 1;
                 unsafe { *self.line.offset(i) = NUL as c_char };
@@ -532,7 +533,7 @@ unsafe fn show_include_name(
             if i == 0 {
                 // Nothing found; use the rest of the line.
                 p = pats.incl.endp[0];
-                i = unsafe { strlen(p) } as c_int;
+                i = unsafe { cstr::bytes_at(p) }.len() as c_int;
             } else if p > line {
                 // Avoid looking before the start of the line, which
                 // can happen when \zs appears in the pattern.
@@ -592,7 +593,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
     walk.found = true;
     let mut p = startp;
     let mut aux = p;
-    if compl_status_adding() && unsafe { strlen(p) } as c_int >= ins_compl_len() {
+    if compl_status_adding() && unsafe { cstr::bytes_at(p) }.len() as c_int >= ins_compl_len() {
         p = unsafe { p.offset(ins_compl_len() as isize) };
         if unsafe { vim_iswordp(p) } {
             return After::Resume(p);

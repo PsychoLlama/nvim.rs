@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::linebuf;
 use crate::r#move::WinValid;
@@ -699,7 +700,7 @@ impl WinLineVars {
             p = unsafe { (*sp).start };
             sp = unsafe { sp.add(1) };
         }
-        let len = unsafe { strlen(buf.as_ptr()) };
+        let len = unsafe { cstr::bytes_at(buf.as_ptr()) }.len();
         let translen = unsafe {
             transstr_buf(
                 p,
@@ -801,7 +802,8 @@ impl WinLineVars {
             let attr =
                 unsafe { hl_combine_attr(self.cursorline_attr, win_hl_attr(wp.raw(), HLF_AT)) };
             let vcol_before = self.vcol;
-            unsafe { self.draw_col_buf(wp, sbr, strlen(sbr), attr, ::core::ptr::null(), true) };
+            let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
+            unsafe { self.draw_col_buf(wp, sbr, sbr_len, attr, ::core::ptr::null(), true) };
             self.showbreak_vcol = self.vcol;
 
             // As in `handle_breakindent`: move the highlighted area past

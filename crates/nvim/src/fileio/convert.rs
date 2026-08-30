@@ -48,7 +48,7 @@ pub(crate) unsafe fn next_fenc(pp: &mut *mut c_char, alloced: &mut bool) -> *mut
     let comma = unsafe { vim_strchr(*pp, b',' as c_int) };
     let r = if comma.is_null() {
         let r = unsafe { enc_canonize(*pp) };
-        *pp = unsafe { (*pp).add(strlen(*pp)) };
+        *pp = unsafe { (*pp).add(cstr::bytes_at(*pp).len()) };
         r
     } else {
         let one = unsafe { xmemdupz(pp.cast(), comma.offset_from(*pp) as size_t) }.cast::<c_char>();

@@ -112,8 +112,8 @@ pub(crate) unsafe fn test_for_static(tagp: &TagParts) -> bool {
 pub(crate) unsafe fn matching_line_len(lbuf: *const c_char) -> size_t {
     // SAFETY: the caller's promise.
     let name = unsafe { lbuf.add(1) };
-    let line = unsafe { name.add(strlen(name) + 1) };
-    (unsafe { line.offset_from(lbuf) } as size_t) + unsafe { strlen(line) }
+    let line = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
+    (unsafe { line.offset_from(lbuf) } as size_t) + unsafe { cstr::bytes_at(line) }.len()
 }
 
 /// Split a stored match into its parts.
@@ -129,7 +129,7 @@ pub(crate) unsafe fn parse_match(lbuf: *mut c_char, tagp: &mut TagParts) -> bool
     // SAFETY: the caller's promise. Every pointer written into `tagp`
     // points into the match, which the caller keeps alive.
     tagp.tag_fname = unsafe { lbuf.add(1) };
-    let line = unsafe { lbuf.add(strlen(tagp.tag_fname) + 2) };
+    let line = unsafe { lbuf.add(cstr::bytes_at(tagp.tag_fname).len() + 2) };
 
     let parsed = unsafe { parse_tag_line(line, tagp) };
     tagp.tagkind = ptr::null_mut();

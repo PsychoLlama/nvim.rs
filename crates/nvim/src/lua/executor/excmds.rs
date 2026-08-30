@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -32,7 +33,7 @@ use crate::types::{
     typval_T,
 };
 use crate::undo::u_save;
-use ::libc::{memcpy, strlen};
+use ::libc::memcpy;
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";
@@ -109,7 +110,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
             return;
         }
         let cmd = (*eap).arg;
-        let cmd_len = strlen(cmd);
+        let cmd_len = cstr::bytes_at(cmd).len();
         let lstate = get_global_lstate();
 
         let head = DOSTART.count_bytes();

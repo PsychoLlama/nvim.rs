@@ -24,6 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
@@ -43,7 +44,6 @@ use crate::strings::concat_str;
 use crate::types::{
     colnr_T, garray_T, hlf_T, langp_T, linenr_T, regmatch_T, size_t, uint8_t, win_T,
 };
-use ::libc::strlen;
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -169,7 +169,7 @@ pub unsafe fn spell_check(
     let taken = unsafe { mi.mi_fend.offset_from(ptr) } as c_int;
     let room = MAXWLEN as c_int + 1;
     let _ = unsafe { super::chartab::spell_casefold(wp, ptr, taken, fword, room) };
-    mi.mi_fwordlen = unsafe { strlen(fword) } as c_int;
+    mi.mi_fwordlen = unsafe { cstr::bytes_at(fword) }.len() as c_int;
 
     if is_camel_case && mi.mi_fwordlen > 0 {
         // Put a fake word end into the folded word.
@@ -407,7 +407,7 @@ pub unsafe fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bo
                 // A space stands in for the line break.
                 line_copy = unsafe { concat_str(line, c" ".as_ptr()) };
                 line = line_copy;
-                endcol = unsafe { strlen(line) } as colnr_T;
+                endcol = unsafe { cstr::bytes_at(line) }.len() as colnr_T;
             }
         }
     } else {

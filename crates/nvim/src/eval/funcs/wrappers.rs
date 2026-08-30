@@ -43,7 +43,6 @@ use crate::types::{
     typval_vval_union, varnumber_T, win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -175,7 +174,7 @@ pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
     // SAFETY: `name` is NUL-terminated, so its first `len` bytes are
     // readable. `from_raw_parts` refuses a null pointer even for an empty
     // slice, and an empty name is not a builtin anyway.
-    let len = unsafe { strlen(name) };
+    let len = unsafe { cstr::bytes_at(name) }.len();
     let key = if len == 0 {
         &[][..]
     } else {
@@ -343,7 +342,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     if key.is_null() {
         return ptr::null_mut();
     }
-    let key_len = unsafe { strlen(key) };
+    let key_len = unsafe { cstr::bytes_at(key) }.len();
     let buf = unsafe { &raw mut (*xp).xp_buf };
     unsafe { ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len) };
     unsafe { (*buf)[key_len] = b'(' as c_char };
@@ -519,7 +518,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     let save_cpo = p_cpo.get();
     p_magic.set(1);
     p_cpo.set(empty_option());
-    let end = unsafe { name.add(strlen(name)) };
+    let end = unsafe { name.add(cstr::bytes_at(name).len()) };
     let only = curtab_only != 0;
     let buf = unsafe { buflist_findpat(name, end, true, false, only) };
     let found = find_buf(buf);

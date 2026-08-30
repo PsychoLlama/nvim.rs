@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -135,7 +136,7 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
                 MAXKEYWLEN + 1,
             )
         };
-        (folded, unsafe { strlen(folded) })
+        (folded, unsafe { cstr::bytes_at(folded) }.len())
     } else {
         (name, namelen)
     };
@@ -161,7 +162,7 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
     } else {
         syn_field!(cur_syn_block(), b_keywtab)
     };
-    let hi = unsafe { hash_lookup(ht, key, strlen(key), hash) };
+    let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
     if unsafe { (*hi).is_kept() } {
         // The keyword already has entries: prepend to the chain.
         unsafe { (*kp).ke_next = key_to_entry((*hi).hi_key) };
@@ -184,7 +185,7 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
     let mut p = unsafe { vim_strchr(kw, '[' as c_int) };
     loop {
         if p.is_null() {
-            kwlen = unsafe { strlen(kw) };
+            kwlen = unsafe { cstr::bytes_at(kw) }.len();
         } else {
             unsafe { *p = NUL as c_char };
             kwlen = unsafe { p.offset_from(kw) } as size_t;
@@ -238,7 +239,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
         if syn_id != 0 {
             // A buffer for the keywords with their backslashes removed;
             // it can only shrink, so the argument's length is enough.
-            let keyword_copy = unsafe { xmalloc(strlen(rest) + 1) } as *mut c_char;
+            let keyword_copy = unsafe { xmalloc(cstr::bytes_at(rest).len() + 1) } as *mut c_char;
             let mut opt = syn_opt_arg_T {
                 flags: SynFlags::NONE,
                 keyword: true,

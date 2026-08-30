@@ -12,6 +12,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::api_error;
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
@@ -64,7 +65,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
         keys_esc = keys.data();
     }
     if lowlevel {
-        unsafe { input_enqueue_raw(keys_esc, strlen(keys_esc)) };
+        unsafe { input_enqueue_raw(keys_esc, cstr::bytes_at(keys_esc).len()) };
     } else {
         let remap_flag = if remap {
             REMAP_YES as ::core::ffi::c_int

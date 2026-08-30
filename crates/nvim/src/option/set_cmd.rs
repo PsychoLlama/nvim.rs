@@ -46,7 +46,6 @@ use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
     OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
 };
-use ::libc::strlen;
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
@@ -735,7 +734,7 @@ pub(crate) unsafe fn string_to_key(arg: *mut c_char) -> c_int {
     // SAFETY: the caller's string; the second byte is only read once the
     // first is known not to be the terminator.
     if unsafe { *arg } as c_int == '<' as c_int && unsafe { *arg.add(1) } != 0 {
-        return unsafe { find_key_len(arg.add(1), strlen(arg), true) };
+        return unsafe { find_key_len(arg.add(1), cstr::bytes_at(arg).len(), true) };
     }
     if unsafe { *arg } as c_int == '^' as c_int && unsafe { *arg.add(1) } != 0 {
         // CTRL-x, where NUL would be ambiguous with "no key".

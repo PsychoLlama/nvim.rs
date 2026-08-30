@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::charset::CHAR_DISPLAY_LEN;
+use crate::cstr;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -40,7 +41,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
     let mut lead = ptr::null();
     if list {
         if lcs.trail != 0 {
-            trail = unsafe { s.add(strlen(s)) };
+            trail = unsafe { s.add(cstr::bytes_at(s).len()) };
             while trail > s && ascii_iswhite(unsafe { *trail.sub(1) as c_int }) {
                 trail = unsafe { trail.sub(1) };
             }

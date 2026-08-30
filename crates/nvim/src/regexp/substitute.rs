@@ -48,7 +48,7 @@ use crate::types::{
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
 use crate::winlayer::Live;
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 
 /// How deep a `\=` expression may nest substitutions before it is more
 /// likely to be a mistake than an intention.
@@ -260,7 +260,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         let prefixlen = unsafe { p.offset_from(newsub) } as usize; // not including the tilde
         let postfix = unsafe { p.add(tildelen) };
         if newsublen == 0 {
-            newsublen = unsafe { strlen(newsub) };
+            newsublen = unsafe { cstr::bytes_at(newsub) }.len();
         }
         newsublen -= tildelen;
         let postfixlen = newsublen - prefixlen;
@@ -440,7 +440,7 @@ unsafe fn eval_replacement(
         if text.is_null() {
             return;
         }
-        let len = unsafe { strlen(text) };
+        let len = unsafe { cstr::bytes_at(text) }.len();
         // A result that no longer fits means the measuring pass saw a
         // different one; leave it for a later pass rather than overrun.
         if len < out.destlen as usize {
@@ -487,7 +487,7 @@ unsafe fn eval_replacement(
             unsafe { xfree(text.cast()) };
             text = doubled;
         }
-        out.skip(unsafe { strlen(text) } as isize);
+        out.skip(unsafe { cstr::bytes_at(text) }.len() as isize);
     }
     stash(nested, text);
 

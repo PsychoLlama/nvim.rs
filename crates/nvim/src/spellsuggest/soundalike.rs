@@ -32,6 +32,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_buf;
@@ -229,7 +230,7 @@ pub(super) unsafe fn add_sound_suggest(
     // with the `hi`/`hash` pair `hash_lookup` just produced for it.
     let sounddone = unsafe { &raw mut (*slang).sl_sounddone };
     let hash = unsafe { hash_hash(goodword) };
-    let goodword_len = unsafe { libc::strlen(goodword) } as usize;
+    let goodword_len = unsafe { cstr::bytes_at(goodword).len() } as usize;
     let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
     let key = unsafe { (*hi).hi_key };
     if key.is_null() || ptr::eq(key, &raw const hash_removed) {

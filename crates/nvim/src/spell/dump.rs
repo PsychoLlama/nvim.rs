@@ -49,7 +49,7 @@ use crate::types::{
     Direction, IOSIZE, NUL, OK, OptVal, OptValData, OptionSetFlags, exarg_T, hashitem_T, idx_T,
     langp_T, linenr_T, size_t, slang_T, wordcount_T,
 };
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
@@ -175,7 +175,7 @@ pub unsafe fn spell_dump_compl(
             if n == WF_ONECAP as c_int {
                 dumpflags |= DUMPFLAG_ONECAP;
             } else if n == WF_ALLCAP as c_int
-                && unsafe { strlen(pat) } as c_int > unsafe { utfc_ptr2len(pat) }
+                && unsafe { cstr::bytes_at(pat) }.len() as c_int > unsafe { utfc_ptr2len(pat) }
             {
                 dumpflags |= DUMPFLAG_ALLCAP;
             }
@@ -227,7 +227,7 @@ pub unsafe fn spell_dump_compl(
         // Without prefixes, a pattern can prune the walk; with them, a
         // prefix could still make a non-matching branch match.
         let patlen = if !pat.is_null() && unsafe { (*slang).sl_pbyts }.is_null() {
-            unsafe { strlen(pat) as c_int }
+            unsafe { cstr::bytes_at(pat).len() as c_int }
         } else {
             -1
         };
@@ -376,7 +376,7 @@ unsafe fn dump_word(
             if flags & WF_REGION as c_int != 0 {
                 for i in 0..7 {
                     if flags & (0x10000 << i) != 0 {
-                        let badword_len = unsafe { strlen(badword.as_ptr()) };
+                        let badword_len = unsafe { cstr::bytes_at(badword.as_ptr()) }.len();
                         let room = badword.len() - badword_len;
                         let at = unsafe { badword.as_mut_ptr().add(badword_len) };
                         unsafe { snprintf(at, room, c"%d".as_ptr(), i + 1) };
@@ -404,11 +404,11 @@ unsafe fn dump_word(
         let _ = unsafe { ml_append(lnum, p, 0, false) };
     } else {
         let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
-            unsafe { mb_strnicmp(p, pat, strlen(pat)) == 0 }
+            unsafe { mb_strnicmp(p, pat, cstr::bytes_at(pat).len()) == 0 }
         } else {
             unsafe { cstr::starts_with(p, cstr::bytes_at(pat)) }
         };
-        let len = unsafe { strlen(p) } as c_int;
+        let len = unsafe { cstr::bytes_at(p) }.len() as c_int;
         let ic = p_ic.get() != 0;
         let want = unsafe { *dir };
         let none = core::ptr::null_mut();

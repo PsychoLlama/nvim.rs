@@ -100,7 +100,7 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strlen, strnlen};
+use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strnlen};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -649,7 +649,7 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
     }
 
     // Last part: the end of the string.
-    let mut i = unsafe { strlen(s) as c_int };
+    let mut i = unsafe { cstr::bytes_at(s).len() as c_int };
     half = i;
     loop {
         half = half - unsafe { utf_head_off(s, s.offset(half as isize).offset(-1)) } - 1;
@@ -664,7 +664,7 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
     if i <= e + 3 {
         // Text fits without truncating.
         if s != buf.cast_const() {
-            len = unsafe { strlen(s) as c_int };
+            len = unsafe { cstr::bytes_at(s).len() as c_int };
             if len >= buflen {
                 len = buflen - 1;
             }
@@ -678,7 +678,7 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
     } else if e + 3 < buflen {
         // Set the middle and copy the last part.
         unsafe { ptr::copy_nonoverlapping(c"...".as_ptr(), buf.offset(e as isize), 3) };
-        len = unsafe { strlen(s.offset(i as isize)) as c_int } + 1;
+        len = unsafe { cstr::bytes_at(s.offset(i as isize)).len() as c_int } + 1;
         if len >= buflen - e - 3 {
             len = buflen - e - 3 - 1;
         }
@@ -731,7 +731,7 @@ pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
     let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get() - 1;
     if room > 0
         && (force || (shortmess(ShmFlag::TRUNC) && !exmode_active.get()))
-        && unsafe { strlen(s) as c_int } - room > 0
+        && unsafe { cstr::bytes_at(s).len() as c_int } - room > 0
     {
         // May have up to 18 bytes per cell (6 per char, up to two
         // composing chars).

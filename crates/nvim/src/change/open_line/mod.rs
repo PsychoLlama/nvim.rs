@@ -68,7 +68,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     }
     let prompt_line = ml_get(cur_win().w_cursor.lnum);
     let prompt = unsafe { prompt_text() };
-    let prompt_len = unsafe { strlen(prompt) };
+    let prompt_len = unsafe { cstr::bytes_at(prompt) }.len();
     if !unsafe { cstr::prefix_eq(prompt_line, prompt, prompt_len) } {
         return ::core::ptr::null_mut();
     }
@@ -76,7 +76,8 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     let rest = prompt_line.wrapping_add(prompt_len);
     // SAFETY: the prompt is the first `prompt_len` bytes of the line, so the
     // rest of it -- including the NUL -- fits where the prompt was.
-    unsafe { memmove(prompt_line.cast(), rest.cast(), strlen(rest) + 1) };
+    let rest_len = unsafe { cstr::bytes_at(rest) }.len();
+    unsafe { memmove(prompt_line.cast(), rest.cast(), rest_len + 1) };
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
     let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, prompt_line, true) };
     unsafe { concat_str(prompt, p_extra) }
@@ -194,7 +195,7 @@ unsafe fn truncate_old_line(
     }
     let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, saved_line, false) };
 
-    let new_len = unsafe { strlen(saved_line) } as c_int;
+    let new_len = unsafe { cstr::bytes_at(saved_line) }.len() as c_int;
     let mut cols_spliced = 0;
     if new_len < cur_win().w_cursor.col {
         // Trailing white space went as well as the split.
@@ -323,7 +324,7 @@ pub unsafe fn open_line(
         unsafe { replace_push_nul() };
         unsafe { replace_push_nul() };
         let p = unsafe { saved_line.offset(cur_win().w_cursor.col as isize) };
-        unsafe { replace_push(p, strlen(p)) };
+        unsafe { replace_push(p, cstr::bytes_at(p).len()) };
         unsafe { *p = NUL as c_char };
     }
 
@@ -339,7 +340,7 @@ pub unsafe fn open_line(
             // 'smartindent' wants the first character after the break.
             first_char = c_int::from(unsafe { *skipwhite(p_extra) } as u8);
         }
-        extra_len = unsafe { strlen(p_extra) } as c_int;
+        extra_len = unsafe { cstr::bytes_at(p_extra) }.len() as c_int;
         saved_char = unsafe { *p_extra };
         unsafe { *p_extra = NUL as c_char };
     }
@@ -491,7 +492,8 @@ pub unsafe fn open_line(
             // 'formatlistpat': pad after the comment leader so that the
             // text lines up with the first line's. The white space
             // *before* the leader is `set_indent`'s job below.
-            let padding = second_line_indent - (newindent + unsafe { strlen(leader) } as c_int);
+            let padding =
+                second_line_indent - (newindent + unsafe { cstr::bytes_at(leader) }.len() as c_int);
             for _ in 0..padding {
                 unsafe { strcat(leader, c" ".as_ptr()) };
                 less_cols -= 1;

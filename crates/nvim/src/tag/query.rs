@@ -347,7 +347,7 @@ unsafe fn add_tag_field(
     if !start.is_null() {
         let end = if end.is_null() {
             // Only an unbracketed value has its line ending trimmed.
-            let mut end = unsafe { start.add(strlen(start)) };
+            let mut end = unsafe { start.add(cstr::bytes_at(start).len()) };
             while end > start && matches!(unsafe { *end.sub(1) } as u8, b'\r' | b'\n') {
                 end = unsafe { end.sub(1) };
             }
@@ -359,7 +359,8 @@ unsafe fn add_tag_field(
         value.extend_from_slice(unsafe { core::slice::from_raw_parts(start, len) });
     }
     value.push(0);
-    unsafe { tv_dict_add_str(dict, field_name, strlen(field_name), value.as_ptr()) }
+    let name_len = unsafe { cstr::bytes_at(field_name) }.len();
+    unsafe { tv_dict_add_str(dict, field_name, name_len, value.as_ptr()) }
 }
 
 /// The buffer the editor is working in.

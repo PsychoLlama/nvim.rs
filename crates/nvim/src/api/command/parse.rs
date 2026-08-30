@@ -11,6 +11,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
 use crate::api_error;
+use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
@@ -42,7 +43,7 @@ unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
     if unsafe { *rhs_start } != NUL as c_char {
         // SAFETY: as above -- the rest of the line is one opaque argument.
         unsafe {
-            let rhs_len = strlen(rhs_start);
+            let rhs_len = cstr::bytes_at(rhs_start).len();
             array_add(
                 &mut args,
                 Object::string(cstrn_as_string(rhs_start, rhs_len)),
@@ -58,7 +59,7 @@ unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
 /// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
 unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
-    let (length, empty) = unsafe { (strlen(ea.arg), *ea.arg == NUL as c_char) };
+    let (length, empty) = unsafe { (cstr::bytes_at(ea.arg).len(), *ea.arg == NUL as c_char) };
 
     // `is_map_cmd` indexes the command table by `cmdidx`, so the `CMD_SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.

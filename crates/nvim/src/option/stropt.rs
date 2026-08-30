@@ -38,7 +38,7 @@ use crate::options::kOptKeywordprg;
 use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, OptIndex, size_t, uint32_t};
-use ::libc::{strcpy, strlen};
+use ::libc::strcpy;
 
 use super::{
     OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, find_dup_item, kOptFlagColon,
@@ -64,9 +64,9 @@ unsafe fn shift(dst: *mut c_char, src: *const c_char, n: size_t) {
 /// Both are C strings.
 unsafe fn room_for(arg: *const c_char, origval: *const c_char, op: set_op_T) -> size_t {
     // SAFETY: the caller guarantees C strings.
-    let mut room = unsafe { strlen(arg) } + 1;
+    let mut room = unsafe { cstr::bytes_at(arg) }.len() + 1;
     if op != OP_NONE {
-        room += unsafe { strlen(origval) } + 1;
+        room += unsafe { cstr::bytes_at(origval) }.len() + 1;
     }
     room
 }
@@ -154,7 +154,7 @@ pub(crate) unsafe fn stropt_concat_with_comma(
         && c_int::from(unsafe { *newval }) != NUL;
     let comma = usize::from(separated);
     let len = if op == OP_ADDING {
-        let mut len = unsafe { strlen(origval) };
+        let mut len = unsafe { cstr::bytes_at(origval) }.len();
         if separated
             && len > 1
             && flags & kOptFlagOneComma as uint32_t == kOptFlagOneComma as uint32_t
@@ -164,13 +164,15 @@ pub(crate) unsafe fn stropt_concat_with_comma(
             len -= 1;
         }
         // Shift the new part along and put the current value in front.
-        unsafe { shift(newval.add(len + comma), newval, strlen(newval) + 1) };
+        let newval_len = unsafe { cstr::bytes_at(newval) }.len();
+        unsafe { shift(newval.add(len + comma), newval, newval_len + 1) };
         unsafe { shift(newval, origval, len) };
         len
     } else {
         // Prepending: the new part is already in front.
-        let len = unsafe { strlen(newval) };
-        unsafe { shift(newval.add(len + comma), origval, strlen(origval) + 1) };
+        let len = unsafe { cstr::bytes_at(newval) }.len();
+        let origval_len = unsafe { cstr::bytes_at(origval) }.len();
+        unsafe { shift(newval.add(len + comma), origval, origval_len + 1) };
         len
     };
     if separated {
@@ -212,7 +214,8 @@ pub(crate) unsafe fn stropt_remove_val(
         }
     }
     let at = unsafe { strval.offset_from(origval) } as usize;
-    unsafe { shift(newval.add(at), strval.add(len), strlen(strval.add(len)) + 1) };
+    let len_len = unsafe { cstr::bytes_at(strval.add(len)) }.len();
+    unsafe { shift(newval.add(at), strval.add(len), len_len + 1) };
 }
 
 /// Find the item of `src` that opens with `key`, and report how long it is.
@@ -237,7 +240,7 @@ pub(crate) unsafe fn find_key_item(
         {
             let mut end = unsafe { vim_strchr(p, c_int::from(b',')) };
             if end.is_null() {
-                end = unsafe { p.add(strlen(p)) };
+                end = unsafe { p.add(cstr::bytes_at(p).len()) };
             }
             unsafe { *itemlenp = end.offset_from(p) };
             return p;
@@ -256,9 +259,9 @@ pub(crate) unsafe fn remove_comma_item(str: *const c_char, item: *mut c_char, it
     // SAFETY: the caller's string, as documented above.
     let after = unsafe { item.offset(itemlen) };
     if unsafe { *after } == b',' as c_char {
-        unsafe { shift(item, after.add(1), strlen(after.add(1)) + 1) };
+        unsafe { shift(item, after.add(1), cstr::bytes_at(after.add(1)).len() + 1) };
     } else if item > str.cast_mut() && unsafe { *item.sub(1) } == b',' as c_char {
-        unsafe { shift(item.sub(1), after, strlen(after) + 1) };
+        unsafe { shift(item.sub(1), after, cstr::bytes_at(after).len() + 1) };
     } else {
         // The only item there was.
         unsafe { *item = NUL as c_char };
@@ -305,7 +308,7 @@ pub(crate) unsafe fn remove_key_item(
 /// terminator; `item` has at least `item_len` bytes.
 pub(crate) unsafe fn append_item(str: *mut c_char, item: *mut c_char, item_len: isize) {
     // SAFETY: the caller's buffer, as documented above.
-    let mut len = unsafe { strlen(str) } as isize;
+    let mut len = unsafe { cstr::bytes_at(str) }.len() as isize;
     if len > 0 {
         unsafe { *str.offset(len) = b',' as c_char };
         len += 1;
@@ -320,7 +323,7 @@ pub(crate) unsafe fn append_item(str: *mut c_char, item: *mut c_char, item_len: 
 /// As [`append_item`].
 pub(crate) unsafe fn prepend_item(str: *mut c_char, item: *mut c_char, item_len: isize) {
     // SAFETY: the caller's buffer, as documented above.
-    let len = unsafe { strlen(str) };
+    let len = unsafe { cstr::bytes_at(str) }.len();
     let comma = usize::from(len > 0);
     unsafe { shift(str.offset(item_len).add(comma), str, len + 1) };
     unsafe { shift(str, item, item_len as size_t) };
@@ -362,7 +365,7 @@ pub(crate) unsafe fn stropt_handle_keymatch(
     loop {
         let next = unsafe { vim_strchr(item_start, c_int::from(b',')) };
         let item_len = if next.is_null() {
-            unsafe { strlen(item_start) as isize }
+            unsafe { cstr::bytes_at(item_start).len() as isize }
         } else {
             unsafe { next.offset_from(item_start) }
         };
@@ -471,7 +474,7 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
         } else {
             unsafe { s.add(1) }
         };
-        unsafe { shift(s, past, strlen(past) + 1) };
+        unsafe { shift(s, past, cstr::bytes_at(past).len() + 1) };
     }
 }
 
@@ -526,7 +529,7 @@ pub(crate) unsafe fn stropt_get_newval(
         let mut len = 0;
         let mut at: *const c_char = ptr::null();
         if op == OP_REMOVING || flags & kOptFlagNoDup as uint32_t != 0 {
-            len = unsafe { strlen(newval) } as c_int;
+            len = unsafe { cstr::bytes_at(newval) }.len() as c_int;
             at = unsafe { find_dup_item(origval, newval, len as size_t, flags) };
             // Adding something already there changes nothing.
             if (op == OP_ADDING || op == OP_PREPENDING) && !at.is_null() {
@@ -536,7 +539,7 @@ pub(crate) unsafe fn stropt_get_newval(
             if at.is_null() {
                 // Removing something that is not there cuts an empty
                 // span off the end.
-                at = unsafe { origval.add(strlen(origval)) };
+                at = unsafe { origval.add(cstr::bytes_at(origval).len()) };
             }
         }
         if op == OP_ADDING || op == OP_PREPENDING {

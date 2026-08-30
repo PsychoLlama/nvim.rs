@@ -9,6 +9,7 @@
 
 use super::store::{Header, header_chain, header_free, store_release};
 use super::*;
+use crate::cstr;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
@@ -281,13 +282,15 @@ pub unsafe fn u_undoline() {
     }
     let oldp: *mut c_char = unsafe { u_save_line(cur_buf().b_u_line_lnum) };
     let _ = unsafe { ml_replace(cur_buf().b_u_line_lnum, cur_buf().b_u_line_ptr, true) };
+    let oldp_len = unsafe { cstr::bytes_at(oldp) }.len();
+    let ptr_len = unsafe { cstr::bytes_at(cur_buf().b_u_line_ptr) }.len();
     unsafe {
         extmark_splice_cols(
             curbuf.get(),
             cur_buf().b_u_line_lnum as c_int - 1,
             0,
-            strlen(oldp) as colnr_T,
-            strlen(cur_buf().b_u_line_ptr) as colnr_T,
+            oldp_len as colnr_T,
+            ptr_len as colnr_T,
             kExtmarkUndo,
         )
     };

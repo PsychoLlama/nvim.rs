@@ -579,7 +579,8 @@ unsafe fn concat_continuations(sp: *mut source_cookie_T, line: *mut c_char) -> *
     unsafe { ga_concat(&raw mut ga, line) };
     while !unsafe { (*sp).nextline }.is_null()
         && unsafe {
-            concat_continued_line(&raw mut ga, 400, (*sp).nextline, strlen((*sp).nextline))
+            let next = cstr::bytes_at((*sp).nextline);
+            concat_continued_line(&raw mut ga, 400, (*sp).nextline, next.len())
         }
     {
         unsafe { xfree((*sp).nextline.cast::<c_void>()) };
@@ -710,7 +711,8 @@ unsafe fn read_file_chunk(sp: *mut source_cookie_T, ga: *mut garray_T) -> Option
         unsafe { *__errno_location() = 0 };
         if !unsafe { fgets(buf.add(filled as usize), (*ga).ga_maxlen - filled, (*sp).fp) }.is_null()
         {
-            return Some(filled + unsafe { strlen(buf.add(filled as usize)) } as c_int);
+            let rest = unsafe { cstr::bytes_at(buf.add(filled as usize)) }.len();
+            return Some(filled + rest as c_int);
         }
         if unsafe { *__errno_location() } != EINTR {
             return None;

@@ -4,6 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
@@ -28,7 +29,6 @@ use crate::regexp::{
     reg_nextline, reg_prev_class,
 };
 use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
-use ::libc::strlen;
 
 use crate::winlayer::Win;
 const BACKREF_1: c_int = BACKREF + 1;
@@ -293,7 +293,7 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
     if unsafe { *opnd.add(1) } as c_int == NUL && !rex.reg_ic() {
         len = 1;
     } else {
-        len = unsafe { strlen(opnd.cast()) } as c_int;
+        len = unsafe { cstr::bytes_at(opnd.cast()) }.len() as c_int;
         if unsafe { cstrncmp(rex, opnd.cast(), rex.input().cast(), &mut len) } != 0 {
             return RA_NOMATCH;
         }
@@ -458,7 +458,7 @@ fn external_reference(rex: Rex, no: c_int) -> c_int {
     if text.is_null() {
         return RA_CONT;
     }
-    let mut len = unsafe { strlen(text.cast()) } as c_int;
+    let mut len = unsafe { cstr::bytes_at(text.cast()) }.len() as c_int;
     if unsafe { cstrncmp(rex, text.cast(), rex.input().cast(), &mut len) } != 0 {
         return RA_NOMATCH;
     }

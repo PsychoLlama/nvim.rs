@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::types::{Failed, OptionSetFlags};
 
@@ -159,13 +160,14 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: 'eventignore' holds a NUL-terminated value and `what` is the
     // caller's NUL-terminated string, so both lengths are the strings' own.
-    let p_ei_len = unsafe { strlen(p_ei.get()) };
+    let p_ei_len = unsafe { cstr::bytes_at(p_ei.get()) }.len();
     // SAFETY: `p_ei_len` bytes of the option value, copied out.
     let save_ei = unsafe { xmemdupz(p_ei.get().cast::<::core::ffi::c_void>(), p_ei_len) }
         .cast::<::core::ffi::c_char>();
     // SAFETY: room for the old value and `what`, whichever way they are
     // joined below.
-    let new_ei = unsafe { xstrnsave(p_ei.get(), p_ei_len.wrapping_add(strlen(what))) };
+    let what_len = unsafe { cstr::bytes_at(what) }.len();
+    let new_ei = unsafe { xstrnsave(p_ei.get(), p_ei_len.wrapping_add(what_len)) };
     if unsafe { *what } == b',' as ::core::ffi::c_char && unsafe { *p_ei.get() } == 0 {
         // SAFETY: `what` without its leading comma is shorter still.
         unsafe { strcpy(new_ei, what.add(1)) };

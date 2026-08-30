@@ -509,7 +509,7 @@ pub(crate) unsafe fn do_one_cmd(
                         memmove(
                             s as *mut c_void,
                             s.add(1) as *const c_void,
-                            strlen(s.add(1)) + 1,
+                            len_of(s.add(1)) + 1,
                         )
                     };
                 } else if byte(s) == '\n' as c_int {
@@ -754,7 +754,7 @@ pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
     let mut buf = [0 as c_char; IOSIZE as usize];
     let iobuff = buf.as_mut_ptr();
     unsafe { xstrlcpy(iobuff, msg.as_ptr(), IOSIZE as size_t) };
-    let len = strlen(iobuff);
+    let len = len_of(iobuff);
     if len > (IOSIZE - 100) as size_t {
         let mut d = unsafe { iobuff.add(IOSIZE as usize - 100) };
         d = unsafe { d.sub(utf_head_off(iobuff, d) as usize) };
@@ -763,7 +763,7 @@ pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
     unsafe { xstrlcat(iobuff, c": ".as_ptr(), IOSIZE as size_t) };
 
     let mut s = cmd;
-    let mut d = unsafe { iobuff.add(strlen(iobuff)) };
+    let mut d = unsafe { iobuff.add(len_of(iobuff)) };
     while byte(s) != NUL && unsafe { d.offset_from(iobuff) } + 5 < IOSIZE as isize {
         if ubyte_at(s, 0) == 0xc2 && ubyte_at(s, 1) == 0xa0 {
             s = unsafe { s.add(2) };
@@ -887,8 +887,9 @@ fn ubyte_at(p: *const c_char, i: isize) -> u8 {
     unsafe { *p.offset(i) as u8 }
 }
 
-/// `strlen()` as checked code.
-fn strlen(s: *const c_char) -> usize {
+/// The length of the string at `s` -- `strlen`, as the slice's own `len()`
+/// -- as checked code.
+fn len_of(s: *const c_char) -> usize {
     // SAFETY: a NUL-terminated string.
-    unsafe { ::libc::strlen(s) }
+    unsafe { cstr::bytes_at(s) }.len()
 }

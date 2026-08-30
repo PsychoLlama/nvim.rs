@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
@@ -24,7 +25,7 @@ pub(crate) unsafe fn color_expr_cmdline(
     let mut parser_lines: [ParserLine; 2] = [
         ParserLine {
             data: colored_ccline.text(),
-            size: unsafe { strlen(colored_ccline.text()) },
+            size: unsafe { cstr::bytes_at(colored_ccline.text()) }.len(),
             allocated: false,
         },
         ParserLine {
@@ -412,7 +413,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     if arg_allocated {
         let s = unsafe { arg.vval.v_string };
         // SAFETY: `arg` holds this frame's own NUL-terminated copy.
-        let text = unsafe { ::core::slice::from_raw_parts(s, strlen(s)) };
+        let text = unsafe { ::core::slice::from_raw_parts(s, cstr::bytes_at(s).len()) };
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ccline_colors).remember(id, text) };
         unsafe { xfree(s as *mut ::core::ffi::c_void) };

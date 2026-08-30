@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{BackslashEscape, ExpandContext, FAIL, OK};
@@ -183,7 +184,7 @@ pub(crate) unsafe fn nextwild(
                 }
                 literal += 1;
             }
-            if (unsafe { strlen(p) } as c_int) < literal {
+            if (unsafe { cstr::bytes_at(p) }.len() as c_int) < literal {
                 unsafe { xfree(p as *mut c_void) };
                 p = ptr::null_mut();
             }
@@ -197,7 +198,7 @@ pub(crate) unsafe fn nextwild(
     }
 
     if !p.is_null() && !got_int.get() && !options.has(WildOpts::NOSELECT) {
-        let plen = unsafe { strlen(p) };
+        let plen = unsafe { cstr::bytes_at(p) }.len();
         let difflen = plen as c_int - xp.xp_pattern_len as c_int;
         // The buffer may move; re-derive the pattern pointer from `at`.
         realloc_cmdbuff(ccline, ccline.len() + difflen + 4);
@@ -581,7 +582,7 @@ pub unsafe fn expand_one(
         let last = files.len() - 1;
         let mut ss_size = prefix.count_bytes() * last;
         for &name in files {
-            ss_size += unsafe { strlen(name) } + 1; // +1 for the suffix
+            ss_size += unsafe { cstr::bytes_at(name) }.len() + 1; // +1 for the suffix
         }
         ss_size += 1; // +1 for the NUL
 

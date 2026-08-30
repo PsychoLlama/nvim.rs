@@ -16,6 +16,7 @@
 
 use crate::autocmd::{EVENT_DIRCHANGED, EVENT_DIRCHANGEDPRE, apply_autocmds, has_event};
 use crate::charset::{getdigits_int32, getdigits_long, skipwhite, vim_isfilec};
+use crate::cstr;
 use crate::cursor::get_cursor_line_ptr;
 use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_str, tv_dict_set_keys_readonly};
 use crate::eval::vars::set_vim_var_string;
@@ -46,7 +47,7 @@ use crate::types::{
     BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, cmdarg_T, event_T, linenr_T, ptrdiff_t,
     save_v_event_T, size_t,
 };
-use ::libc::{abort, strcpy, strlen};
+use ::libc::{abort, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CStr;
@@ -485,7 +486,7 @@ impl FindContext {
                 continue; // not a directory
             }
             // Prepare the filename to be checked for existence below.
-            let dirlen = unsafe { strlen(dir) };
+            let dirlen = unsafe { cstr::bytes_at(dir) }.len();
             let wanted = &self.file_to_search;
             if dirlen + 1 + wanted.len() >= MAXPATHL as usize {
                 return Err(TooLong);

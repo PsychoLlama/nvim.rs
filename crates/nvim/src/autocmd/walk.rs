@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::message_fmt::c_str;
 use crate::smsg;
@@ -82,9 +83,10 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 
             let name = event_nr2name(unsafe { (*apc).event });
             let s = gettext(c"%s Autocommands for \"%s\"");
+            let name_len = unsafe { cstr::bytes_at(name) }.len();
             let sourcing_name_len = unsafe {
                 s.count_bytes()
-                    .wrapping_add(strlen(name))
+                    .wrapping_add(name_len)
                     .wrapping_add((*ap).patlen as size_t)
                     .wrapping_add(1)
             };

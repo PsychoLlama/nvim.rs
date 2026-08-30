@@ -12,6 +12,7 @@
 //! puts the tag in the high byte instead, and the transpile dropped it.
 
 use super::*;
+use crate::cstr;
 use crate::types::NUL;
 
 /// Largest glyph in bytes, including the terminating NUL.
@@ -100,7 +101,7 @@ pub unsafe fn schar_from_str(str: *const c_char) -> schar_T {
     if str.is_null() {
         return 0;
     }
-    unsafe { schar_from_buf(str, strlen(str)) }
+    unsafe { schar_from_buf(str, cstr::bytes_at(str).len()) }
 }
 
 /// Intern `len` bytes of `buf` as a glyph.
@@ -177,7 +178,7 @@ pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
         let idx = schar_idx(sc);
         debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
         let key = glyph_cache().key(idx);
-        (key.cast_const(), unsafe { strlen(key) })
+        (key.cast_const(), unsafe { cstr::bytes_at(key) }.len())
     } else {
         let inline = (&raw const sc).cast::<c_char>();
         (inline, unsafe { strnlen(inline, 4) })
@@ -195,7 +196,7 @@ pub unsafe fn schar_len(sc: schar_T) -> size_t {
     if schar_high(sc) {
         let idx = schar_idx(sc);
         debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
-        unsafe { strlen(glyph_cache().key(idx)) }
+        unsafe { cstr::bytes_at(glyph_cache().key(idx)) }.len()
     } else {
         unsafe { strnlen((&raw const sc).cast::<c_char>(), 4) }
     }
@@ -341,7 +342,7 @@ unsafe fn reshape(sc: schar_T, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int)
     // Whatever followed the one or two codepoints we just replaced.
     let off = utf_char2len(c0) + if c1 != 0 { utf_char2len(c1) } else { 0 };
     let tail = unsafe { old.as_ptr().offset(off as isize) };
-    let mut rest = unsafe { strlen(tail) };
+    let mut rest = unsafe { cstr::bytes_at(tail) }.len();
     if rest + len + 1 > MAX_SCHAR_SIZE as size_t {
         // Too bigly: discard one codepoint. That is always enough,
         // because c0 cannot grow by more than two bytes (base Arabic to

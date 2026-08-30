@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::list::{op, out_of, out1_of};
+use crate::cstr;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
 
@@ -35,7 +36,6 @@ use crate::regexp::{
     reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
 };
 use crate::types::{Failed, colnr_T, uint8_t};
-use ::libc::strlen;
 
 /// Is `c` a member of the `[:name:]` class `cls` stands for?
 ///
@@ -133,7 +133,7 @@ pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
         return true;
     }
     let captured = unsafe { (*captures).matches[subidx as usize] } as *mut c_char;
-    let mut len = unsafe { strlen(captured) } as c_int;
+    let mut len = unsafe { cstr::bytes_at(captured) }.len() as c_int;
     if unsafe { cstrncmp(rex, captured, rex.input_str(), &mut len) } == 0 {
         *bytelen = len;
         return true;

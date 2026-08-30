@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
@@ -55,7 +56,7 @@ use crate::window::{
 use crate::winlayer::{
     Buf, TabPage, Win, WinId, first_window, last_window, windows_back, windows_in_tab,
 };
-use ::libc::{qsort, strlen};
+use ::libc::qsort;
 
 /// Above this `zindex` a float is not capped by 'cmdheight'.
 const kZIndexMessages: c_int = 200;
@@ -168,7 +169,7 @@ fn opt_is_set(s: *const c_char) -> bool {
 
 fn opt_len(s: *const c_char) -> usize {
     // SAFETY: a NUL-terminated string option, its caller having ruled out null.
-    unsafe { strlen(s) }
+    unsafe { cstr::bytes_at(s) }.len()
 }
 
 /// Free a string option's value and put `new` in its place.

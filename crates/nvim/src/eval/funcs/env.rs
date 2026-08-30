@@ -11,6 +11,7 @@ use super::{
     kXDGRuntimeDir, kXDGStateHome, tv_get_buf,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
+use crate::cstr;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_str, tv_dict_find, tv_dict_get_bool, tv_list_alloc,
     tv_list_append_allocated_string, tv_list_append_string, tv_list_ref,
@@ -38,7 +39,6 @@ use crate::types::{
     VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
     kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
 };
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -243,7 +243,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     if mode_str.is_null() {
         return;
     }
-    if unsafe { strlen(mode_str) } != 9 {
+    if unsafe { cstr::bytes_at(mode_str) }.len() != 9 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let mode_str = unsafe { c_str(mode_str) };
         semsg!("E475: Invalid argument: {mode_str}");

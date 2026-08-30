@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
@@ -197,7 +198,7 @@ impl Cells {
             self.char_code = unsafe { mb_ptr2char_adv(&raw mut p) };
             wlv.extra_text = p as *mut ::core::ffi::c_char;
             self.cell_char = schar_from_char(self.char_code);
-            wlv.extra_todo = unsafe { strlen(wlv.extra_text) } as ::core::ffi::c_int;
+            wlv.extra_todo = unsafe { cstr::bytes_at(wlv.extra_text) }.len() as ::core::ffi::c_int;
             wlv.extra_fill = NUL as schar_T;
             wlv.extra_last = NUL as schar_T;
             if self.area_attr == 0 && self.search_attr == 0 {

@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -436,7 +437,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
 
     if !insert_string.data().is_null() {
         // SAFETY: the computed register answered a NUL-terminated string.
-        insert_string.set_len(unsafe { strlen(insert_string.data()) });
+        insert_string.set_len(unsafe { cstr::bytes_at(insert_string.data()) }.len());
         if regname == '=' as c_int {
             // Only `"=` can produce more than one line.
             //

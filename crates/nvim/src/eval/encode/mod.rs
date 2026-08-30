@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
@@ -49,7 +50,7 @@ use crate::types::{
     Failed, IOSIZE, ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
     garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
 };
-use ::libc::{abort, strlen};
+use ::libc::abort;
 
 // The sinks carved out of this module's `typval_encode.c.h` instantiations.
 mod json;
@@ -109,7 +110,11 @@ unsafe fn item_string(li: *const listitem_T) -> *mut c_char {
 #[inline(always)]
 unsafe fn item_strlen(li: *const listitem_T) -> size_t {
     let s = unsafe { item_string(li) };
-    if s.is_null() { 0 } else { unsafe { strlen(s) } }
+    if s.is_null() {
+        0
+    } else {
+        unsafe { cstr::bytes_at(s) }.len()
+    }
 }
 
 /// The items of `list`, front to back.  A NULL list is an empty one.

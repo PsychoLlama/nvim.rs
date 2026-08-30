@@ -5,6 +5,7 @@ use super::args::frame;
 use super::wrappers::{arg_string, arg_string_chk, blob_alloc_ret, list_alloc_ret};
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
 use crate::api::private::helpers::api_free_string;
+use crate::cstr;
 use crate::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
 };
@@ -25,7 +26,6 @@ use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
     kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;
 use core::ptr;
@@ -67,7 +67,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         if s.is_null() {
             return;
         }
-        len = unsafe { strlen(s) };
+        len = unsafe { cstr::bytes_at(s) }.len();
         s
     };
     if unsafe { json_decode_string(s, len, rettv) }.is_err() {

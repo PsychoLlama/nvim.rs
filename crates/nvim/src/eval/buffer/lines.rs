@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 use core::mem::offset_of;
@@ -88,9 +89,9 @@ pub(crate) unsafe fn set_buffer_lines(
                 u_sync(true);
             }
             if !append && lnum <= cur_buf().line_count() {
-                let old_len = len_as_int(unsafe { strlen(ml_get(lnum)) });
+                let old_len = len_as_int(unsafe { cstr::bytes_at(ml_get(lnum)) }.len());
                 if u_savesub(lnum).is_ok() && unsafe { ml_replace(lnum, line, true) }.is_ok() {
-                    let new_len = len_as_int(unsafe { strlen(line) });
+                    let new_len = len_as_int(unsafe { cstr::bytes_at(line) }.len());
                     unsafe { inserted_bytes(lnum, 0, old_len, new_len) };
                     if is_curbuf && lnum == cur_win().w_cursor.lnum {
                         check_cursor_col(cur_win());

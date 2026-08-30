@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
@@ -12,7 +13,7 @@ use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
 use crate::strings::vim_strchr;
 use crate::types::{CMD_call, CMD_const, CMD_let, ExpandContext, NUL, cmdidx_T, expand_T};
-use ::libc::{strlen, strpbrk};
+use ::libc::strpbrk;
 
 /// The characters that end the plain-name part of an expression: whatever
 /// one of them introduces is what completion should look at instead.
@@ -37,7 +38,7 @@ pub(crate) unsafe fn set_context_for_expression(
         xpand.xp_context = ExpandContext::UserVars;
         if unsafe { strpbrk(arg, BREAKS.as_ptr()) }.is_null() {
             // ":let var1 var2 ...": find the last space.
-            let mut p = unsafe { arg.add(strlen(arg) as usize) };
+            let mut p = unsafe { arg.add(cstr::bytes_at(arg).len() as usize) };
             loop {
                 xpand.xp_pattern = p;
                 // Upstream steps back unconditionally and so reads the

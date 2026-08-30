@@ -38,7 +38,6 @@ use crate::types::{
     EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
     varnumber_T,
 };
-use ::libc::strlen;
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
 /// `NUMBUFLEN` in the C.
@@ -118,7 +117,7 @@ pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     if given(unsafe { &*argvars.add(2) }) {
         let mut error = false;
         let start_idx = unsafe { tv_get_number_chk(argvars.add(2), &raw mut error) as ptrdiff_t };
-        if error || start_idx >= unsafe { strlen(haystack) as ptrdiff_t } {
+        if error || start_idx >= unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t } {
             return;
         }
         // A negative start is ignored, not counted from the end.
@@ -154,7 +153,7 @@ pub unsafe fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         }
         idx
     } else {
-        unsafe { strlen(haystack) as ptrdiff_t }
+        unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t }
     };
     let last_allowed = unsafe { haystack.offset(end_idx as isize) };
 
@@ -189,7 +188,7 @@ pub unsafe fn f_string(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// "strlen()" function: the length in bytes.
 pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = strlen(numbuf.string(argvars)) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = cstr::bytes_at(numbuf.string(argvars)).len() as varnumber_T };
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -439,7 +438,7 @@ pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         }
     }
 
-    let mut tail = unsafe { head.add(strlen(head)) };
+    let mut tail = unsafe { head.add(cstr::bytes_at(head).len()) };
     if dir == 0 || dir == 2 {
         while tail > head {
             // Step back over one whole character.

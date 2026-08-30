@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_char;
 
@@ -671,7 +672,8 @@ impl BlockScan<'_> {
         // `l` holds code -- `cin_nocode` was false -- so `strlen` is at
         // least 1 and upstream's `l[strlen(l) - 1]` is in bounds.
         // SAFETY: `l` is NUL-terminated, so `strlen`'s index is in bounds.
-        let last = unsafe { strlen(l).checked_sub(1).map_or(0, |i| *l.add(i) as u8) };
+        let n = unsafe { cstr::bytes_at(l) }.len();
+        let last = unsafe { n.checked_sub(1).map_or(0, |i| *l.add(i) as u8) };
         // SAFETY: `l` is NUL-terminated, so `skipwhite` stays in it.
         let opens_bracket = self.lookfor != LOOKFOR_ENUM_OR_INIT
             && (unsafe { *skipwhite(l) } as u8 == b'[' || last == b'[');
@@ -907,7 +909,7 @@ impl BlockScan<'_> {
         self.amount = self.cur_amount;
 
         // SAFETY: `l` is that line, NUL-terminated.
-        let n = unsafe { strlen(l) };
+        let n = unsafe { cstr::bytes_at(l) }.len();
         // SAFETY: `l` is NUL-terminated; the `n >= 2` test in front of
         // `l.add(n - 2)` is its bounds proof, so the chain stays whole.
         let ends_in_bracket = cur_buf().b_ind_js != 0

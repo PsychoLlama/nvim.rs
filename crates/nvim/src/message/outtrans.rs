@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::charset::CharDisplay;
+use crate::cstr;
 use crate::keycodes::{MAX_KEY_NAME_LEN, SpecialKeyName};
 use crate::keycodes::{termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;
@@ -82,7 +83,7 @@ pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
 ///
 /// Answers how many screen cells it took.
 pub unsafe fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int {
-    unsafe { msg_outtrans_len(str, strlen(str) as c_int, hl_id, hist) }
+    unsafe { msg_outtrans_len(str, cstr::bytes_at(str).len() as c_int, hl_id, hist) }
 }
 
 /// Show the one character at `p`, answering a pointer to the next one.
@@ -169,7 +170,7 @@ pub unsafe fn msg_outtrans_len(
                 flush_plain(str, plain_start);
                 plain_start = unsafe { str.add(1) };
                 unsafe { msg_puts_hl(rendered.as_ptr(), special_hl(hl_id), false) };
-                cells += unsafe { strlen(rendered.as_ptr()) as c_int };
+                cells += unsafe { cstr::bytes_at(rendered.as_ptr()).len() as c_int };
             } else {
                 cells += 1;
             }
@@ -298,7 +299,7 @@ pub unsafe fn str2special_arena(
     let mut p = str;
     while unsafe { *p } != 0 {
         let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        len += unsafe { strlen(text) };
+        len += unsafe { cstr::bytes_at(text) }.len();
     }
 
     let buf: *mut c_char = unsafe { arena_alloc(arena, len + 1, false) }.cast();
@@ -306,7 +307,7 @@ pub unsafe fn str2special_arena(
     p = str;
     while unsafe { *p } != 0 {
         let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        let piece_len = unsafe { strlen(text) };
+        let piece_len = unsafe { cstr::bytes_at(text) }.len();
         unsafe { ptr::copy_nonoverlapping(text, buf.add(at), piece_len) };
         at += piece_len;
     }
@@ -402,7 +403,7 @@ fn to_special(second: u8, third: u8) -> c_int {
 ///
 /// Does not handle multi-byte characters.
 pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
-    let len = unsafe { strlen(longstr) as c_int };
+    let len = unsafe { cstr::bytes_at(longstr).len() as c_int };
     let mut tail = len;
     let room = Columns.get() - msg_col.get();
     if !ui_has(kUIMessages) && len > room && room >= 20 {

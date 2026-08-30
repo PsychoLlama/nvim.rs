@@ -8,6 +8,7 @@
 //! transpiled inside an `unsafe` block.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -58,7 +59,7 @@ use crate::window::{
     tabpage_move, valid_tab, valid_win,
 };
 use crate::winlayer::{Buf, Ea, TabPage, Win, tabs, windows, windows_in_tab};
-use ::libc::{atol, strlen};
+use ::libc::atol;
 
 // ---------------------------------------------------------------------------
 // The command's own arguments.
@@ -144,7 +145,7 @@ fn byte(p: *const c_char) -> c_int {
 
 fn len(p: *const c_char) -> size_t {
     // SAFETY: a NUL-terminated string.
-    unsafe { strlen(p) }
+    unsafe { cstr::bytes_at(p) }.len()
 }
 
 fn cur_win() -> Win {

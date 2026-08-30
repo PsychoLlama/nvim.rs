@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::os::cshim::gettext_ptr;
@@ -404,7 +405,7 @@ pub(crate) unsafe fn replace_last_used_pattern(s: *const c_char) {
     let idx = last_idx.get();
     let mut pat = spat(idx);
     unsafe { xfree(pat.pat as *mut c_void) };
-    pat.patlen = unsafe { strlen(s) };
+    pat.patlen = unsafe { cstr::bytes_at(s) }.len();
     pat.pat = unsafe { xstrnsave(s, pat.patlen) };
     put_spat(idx, pat);
 }
@@ -500,7 +501,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
     let patlen = if unsafe { *s } as c_int == NUL {
         0
     } else {
-        unsafe { strlen(s) }
+        unsafe { cstr::bytes_at(s) }.len()
     };
     put_spat(
         idx,

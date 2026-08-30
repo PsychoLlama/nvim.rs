@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -30,7 +31,6 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::os::cshim::memmove;
 use crate::strings::xstrnsave;
 use crate::types::Failed;
-use ::libc::strlen;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
 /// of the preceding atom.
@@ -177,7 +177,7 @@ pub unsafe fn skip_regexp_ex(
         } else if unsafe { *p } as u8 == b'\\' && unsafe { *p.add(1) } as u8 != 0 {
             if dirc == b'?' as c_int && !newp.is_null() && unsafe { *p.add(1) } as u8 == b'?' {
                 if startplen == 0 {
-                    startplen = unsafe { strlen(startp) };
+                    startplen = unsafe { cstr::bytes_at(startp) }.len();
                 }
                 if unsafe { (*newp).is_null() } {
                     unsafe { *newp = xstrnsave(startp, startplen) };

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
@@ -275,7 +276,7 @@ unsafe fn file_changed_shell(buf: Buf, bufref: BufRef, reason: Reason) -> Fcs {
 fn warn_changed(buf: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
     let path = unsafe { home_replace_save(buf.raw(), buf.b_fname) };
     // +2 for either '\n' or "; " and +1 for NUL.
-    let size = unsafe { strlen(path) } + mesg.count_bytes() + mesg2.count_bytes() + 3;
+    let size = unsafe { cstr::bytes_at(path) }.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
     let mut tbuf = vec![0 as c_char; size];
     let at = unsafe { snprintf(tbuf.as_mut_ptr(), size, mesg.as_ptr(), path) } as usize;
     unsafe { xfree(path.cast()) };

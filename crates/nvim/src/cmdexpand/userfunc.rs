@@ -53,7 +53,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
 
     for i in 0..unsafe { *numMatches } {
         let mut name = unsafe { *(*matches).offset(i as isize) };
-        let namelen = unsafe { strlen(name) };
+        let namelen = unsafe { cstr::bytes_at(name) }.len();
 
         if namelen > pathlen {
             // Check if this name was already found.
@@ -103,7 +103,7 @@ pub(crate) unsafe fn expand_shellcmd(
 
     // For ":set path=" and ":set tags=" halve backslashes for escaped
     // space.
-    let mut patlen = unsafe { strlen(filepat) };
+    let mut patlen = unsafe { cstr::bytes_at(filepat) }.len();
     let pat = unsafe { xmemdupz(filepat as *const c_void, patlen) } as *mut c_char;
     // Replace "\ " with " ".
     let mut e = unsafe { pat.add(patlen) };
@@ -184,7 +184,7 @@ pub(crate) unsafe fn expand_shellcmd(
         } else {
             e = unsafe { vim_strchr(s, ENV_SEPCHAR) };
             if e.is_null() {
-                e = unsafe { s.add(strlen(s)) };
+                e = unsafe { s.add(cstr::bytes_at(s).len()) };
             }
 
             pathlen = unsafe { e.offset_from(s) } as size_t;
@@ -342,7 +342,7 @@ pub(crate) unsafe fn expand_user_defined(
     while unsafe { *s } as c_int != NUL {
         let mut e = unsafe { vim_strchr(s, '\n' as c_int) };
         if e.is_null() {
-            e = unsafe { s.add(strlen(s)) };
+            e = unsafe { s.add(cstr::bytes_at(s).len()) };
         }
         let keep = unsafe { *e };
         unsafe { *e = NUL as c_char };
@@ -511,7 +511,7 @@ pub unsafe fn globpath(
         ExpandContext::Files
     };
 
-    let filelen = unsafe { strlen(file) };
+    let filelen = unsafe { cstr::bytes_at(file) }.len();
 
     // Loop over all entries in {path}.
     let mut path = path;

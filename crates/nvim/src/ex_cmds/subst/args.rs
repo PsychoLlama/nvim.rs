@@ -18,6 +18,7 @@ use super::{
 };
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
+use crate::cstr;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
@@ -36,7 +37,6 @@ use crate::types::{
     AdditionalData, CMD_tilde, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
@@ -206,7 +206,7 @@ unsafe fn read_pattern(
             cmd = unsafe { cmd.add(1) };
             has_second_delim = true;
         }
-        patlen = unsafe { strlen(pat) };
+        patlen = unsafe { cstr::bytes_at(pat) }.len();
     }
 
     // Small incompatibility: vi sees '\n' as end of the command, but we want

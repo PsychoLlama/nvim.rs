@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::charset::skipwhite;
+use crate::cstr;
 use crate::decoration::{clear_virttext, next_virt_text_chunk};
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
@@ -18,7 +19,7 @@ use crate::os::cshim::{ngettext, snprintf};
 use crate::search::linewhite;
 use crate::strings::concat_str;
 use crate::winlayer::{Buf, Live};
-use ::libc::{strcat, strlen};
+use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 use core::ptr;
 
@@ -133,10 +134,13 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let one = c"+-%s%3d line: ";
     let many = c"+-%s%3d lines: ";
     let txt = ngettext(one, many, count as c_ulong);
-    let mut len = txt.count_bytes() + unsafe { strlen(dashes) } + 20 + unsafe { strlen(s) };
+    let mut len = txt.count_bytes()
+        + unsafe { cstr::bytes_at(dashes) }.len()
+        + 20
+        + unsafe { cstr::bytes_at(s) }.len();
     let r = unsafe { xmalloc(len) } as *mut c_char;
     unsafe { snprintf(r, len, txt.as_ptr(), dashes, count) };
-    len = unsafe { strlen(r) };
+    len = unsafe { cstr::bytes_at(r) }.len();
     unsafe { strcat(r, s) };
     unsafe { foldtext_cleanup(r.add(len)) };
     rv.vval.v_string = r;

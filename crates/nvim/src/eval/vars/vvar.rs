@@ -418,7 +418,7 @@ pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char 
             // was parsed out of, at the offset `force_enc` records.
             // SAFETY: a live command's `cmd` with its own recorded offset.
             let enc = unsafe { eap.cmd.offset(eap.force_enc as isize) };
-            len += unsafe { strlen(enc) } + 7;
+            len += unsafe { cstr::bytes_at(enc) }.len() + 7;
         }
         if eap.bad_char != 0 {
             len += 7 + 4; // " ++bad=" + "keep" or "drop"

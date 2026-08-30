@@ -30,6 +30,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
@@ -206,7 +207,7 @@ impl KeyBuffer {
             // promise, and every block reached here is one this buffer
             // allocated -- sized `offset_of!(KeyBlock, bytes) + len + 1`,
             // which is what makes the writes past `bytes` in range.
-            unsafe { strlen(s) }
+            unsafe { cstr::bytes_at(s) }.len()
         } else {
             slen as usize
         };

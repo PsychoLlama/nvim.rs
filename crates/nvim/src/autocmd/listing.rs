@@ -84,7 +84,7 @@ pub(crate) unsafe fn au_show_for_event(
             };
             pat = buflocal_pat.as_ptr();
             // SAFETY: the normalised pattern is NUL-terminated.
-            patlen = unsafe { strlen(buflocal_pat.as_ptr()) } as ::core::ffi::c_int;
+            patlen = unsafe { cstr::bytes_at(buflocal_pat.as_ptr()) }.len() as ::core::ffi::c_int;
         }
 
         let mut i: usize = 0;

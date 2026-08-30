@@ -12,6 +12,7 @@
 
 use super::lines::set_buffer_lines;
 use super::*;
+use crate::cstr;
 use crate::eval::typval::{NumBuf, kCallbackNone};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
@@ -25,7 +26,7 @@ use core::mem::offset_of;
 unsafe fn ends_in_newline(s: *const c_char) -> bool {
     // SAFETY: the caller's obligation; the index is within the string because
     // `strlen` measured it.
-    let len = unsafe { strlen(s) };
+    let len = unsafe { cstr::bytes_at(s) }.len();
     len > 0 && unsafe { *s.add(len - 1) } == b'\n'.cast_signed()
 }
 
@@ -209,7 +210,7 @@ pub unsafe fn f_prompt_setprompt(
         return;
     };
     let new_prompt = unsafe { numbuf.string(args.ptr(1)) };
-    let new_prompt_len = len_as_int(unsafe { strlen(new_prompt) });
+    let new_prompt_len = len_as_int(unsafe { cstr::bytes_at(new_prompt) }.len());
     if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
         unsafe { rewrite_prompt_line(buf, new_prompt, new_prompt_len) };
     }
@@ -235,7 +236,7 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
     let old_prompt = buf_prompt_text(buf);
     let old_line = unsafe { buf.line(prompt_lno) }.raw();
     let old_line_len = unsafe { buf.line_len(prompt_lno) };
-    let old_prompt_len = len_as_int(unsafe { strlen(old_prompt) });
+    let old_prompt_len = len_as_int(unsafe { cstr::bytes_at(old_prompt) }.len());
     let mut cursor_col = cur_win().w_cursor.col;
     let prompt_col = buf.b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the

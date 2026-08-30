@@ -629,7 +629,7 @@ unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
 unsafe fn strip_bom(conv: *mut vimconv_T, firstline: *mut c_char) -> *mut c_char {
     // SAFETY: the caller's contract; the length check is what makes the
     // three-byte read in bounds.
-    if firstline.is_null() || unsafe { strlen(firstline) } < 3 {
+    if firstline.is_null() || unsafe { cstr::bytes_at(firstline) }.len() < 3 {
         return firstline;
     }
     if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {

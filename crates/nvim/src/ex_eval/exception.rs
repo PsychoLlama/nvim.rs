@@ -64,7 +64,7 @@ use crate::types::{
     Failed, IOSIZE, NUL, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t, list_T,
     msglist_T, ptrdiff_t,
 };
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -166,7 +166,8 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
     while !unsafe { *plist }.is_null() {
         // Concatenate onto the last entry (a multi-part message).
         if unsafe { (**plist).next }.is_null() && concat {
-            let joined = unsafe { strlen((**plist).msg) } + unsafe { strlen(mesg) } + 1;
+            let (old, add) = unsafe { (cstr::bytes_at((**plist).msg), cstr::bytes_at(mesg)) };
+            let joined = old.len() + add.len() + 1;
             unsafe { (**plist).msg = xrealloc((**plist).msg.cast(), joined).cast() };
             unsafe { (**plist).throw_msg = strcat((**plist).msg, mesg) };
             return true;
@@ -318,13 +319,14 @@ pub(crate) unsafe fn get_exception_string(
     let ret;
 
     let val = if !cmdname.is_null() && unsafe { *cmdname } != NUL as c_char {
-        let cmdlen = unsafe { strlen(cmdname) };
-        ret = unsafe { xstrnsave(c"Vim(".as_ptr(), 4 + cmdlen + 2 + strlen(mesg)) };
+        let cmdlen = unsafe { cstr::bytes_at(cmdname) }.len();
+        let room = 4 + cmdlen + 2 + unsafe { cstr::bytes_at(mesg) }.len();
+        ret = unsafe { xstrnsave(c"Vim(".as_ptr(), room) };
         unsafe { strcpy(ret.add(4), cmdname) };
         unsafe { strcpy(ret.add(4 + cmdlen), c"):".as_ptr()) };
         unsafe { ret.add(4 + cmdlen + 2) }
     } else {
-        ret = unsafe { xstrnsave(c"Vim:".as_ptr(), 4 + strlen(mesg)) };
+        ret = unsafe { xstrnsave(c"Vim:".as_ptr(), 4 + cstr::bytes_at(mesg).len()) };
         unsafe { ret.add(4) }
     };
 
@@ -351,9 +353,10 @@ pub(crate) unsafe fn get_exception_string(
             // '"filename" E123: message text'
             unsafe { strcat(val, p) };
             unsafe { *p.sub(2) = NUL as c_char };
+            let p_len = unsafe { cstr::bytes_at(p) }.len();
             unsafe {
                 snprintf(
-                    val.add(strlen(p)),
+                    val.add(p_len),
                     c" (%s)".count_bytes(),
                     c" (%s)".as_ptr(),
                     mesg.add(1),

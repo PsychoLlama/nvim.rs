@@ -257,7 +257,7 @@ pub unsafe fn heredoc_get(
             theline = line_arg;
             let next_line = unsafe { vim_strchr(theline, b'\n' as c_int) };
             if next_line.is_null() {
-                line_arg = unsafe { line_arg.add(strlen(line_arg)) };
+                line_arg = unsafe { line_arg.add(cstr::bytes_at(line_arg).len()) };
             } else {
                 unsafe { *next_line = NUL as c_char };
                 line_arg = unsafe { next_line.add(1) };

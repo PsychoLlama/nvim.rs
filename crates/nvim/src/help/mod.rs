@@ -59,7 +59,7 @@ use crate::types::{
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
-use ::libc::{fclose, qsort, strcasecmp, strlen};
+use ::libc::{fclose, qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -181,7 +181,7 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
         while i < num_matches {
             // SAFETY: `matches` holds `num_matches` NUL-terminated strings.
             let m = unsafe { *matches.offset(i as isize) };
-            let len = unsafe { strlen(m) } as c_int;
+            let len = unsafe { cstr::bytes_at(m) }.len() as c_int;
             if len > 3
                 && unsafe { *m.offset((len - 3) as isize) } == b'@' as c_char
                 && unsafe { strcasecmp(m.offset((len - 2) as isize), lang) } == 0
@@ -277,7 +277,7 @@ unsafe fn split_off_next_cmd(eap: *mut exarg_T) {
 unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract. `p` starts one before the NUL, which is `arg`
     // itself for an empty string, so the loop never steps below `arg`.
-    let mut p = unsafe { arg.add(strlen(arg)).offset(-1) };
+    let mut p = unsafe { arg.add(cstr::bytes_at(arg).len()).offset(-1) };
     while p > arg
         && ascii_iswhite(unsafe { *p } as c_int)
         && unsafe { *p.offset(-1) } != b'\\' as c_char
@@ -440,7 +440,7 @@ pub(crate) unsafe fn ex_viusage(_eap: *mut exarg_T) {
 /// `arg` is NUL-terminated, and writable if it can end in `@xx`.
 pub(crate) unsafe fn check_help_lang(arg: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract.
-    let len = unsafe { strlen(arg) } as isize;
+    let len = unsafe { cstr::bytes_at(arg) }.len() as isize;
     if len >= 3
         && unsafe { *arg.offset(len - 3) } == b'@' as c_char
         && ascii_isalpha(unsafe { *arg.offset(len - 2) } as c_int)
@@ -502,8 +502,9 @@ unsafe extern "C" fn help_compare(s1: *const c_void, s2: *const c_void) -> c_int
     // SAFETY: caller contract.
     let t1 = unsafe { *s1.cast::<*mut c_char>() };
     let t2 = unsafe { *s2.cast::<*mut c_char>() };
-    let cmp =
-        unsafe { cstr::cmp(t1.add(strlen(t1)).offset(1), t2.add(strlen(t2)).offset(1)) as c_int };
+    let t1_len = unsafe { cstr::bytes_at(t1) }.len();
+    let t2_len = unsafe { cstr::bytes_at(t2) }.len();
+    let cmp = unsafe { cstr::cmp(t1.add(t1_len).offset(1), t2.add(t2_len).offset(1)) as c_int };
     if cmp != 0 {
         return cmp;
     }
@@ -600,7 +601,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     // SAFETY: caller contract; every truncation writes inside a string.
     for i in 0..num_file {
         let tag = unsafe { *file.offset(i as isize) };
-        let len = unsafe { strlen(tag) } as c_int - 3;
+        let len = unsafe { cstr::bytes_at(tag) }.len() as c_int - 3;
         if len <= 0 || unsafe { cstr::bytes_at(tag.offset(len as isize)) != b"@en" } {
             continue;
         }
@@ -611,7 +612,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
         while j < num_file {
             let other = unsafe { *file.offset(j as isize) };
             if j != i
-                && unsafe { strlen(other) } as c_int == len + 3
+                && unsafe { cstr::bytes_at(other) }.len() as c_int == len + 3
                 && unsafe { cstr::prefix_eq(tag, other, len as size_t + 1) }
             {
                 break;
@@ -627,7 +628,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     if suffix[0] != NUL as c_char {
         for i in 0..num_file {
             let tag = unsafe { *file.offset(i as isize) };
-            let len = unsafe { strlen(tag) } as c_int - 3;
+            let len = unsafe { cstr::bytes_at(tag) }.len() as c_int - 3;
             if len > 0 && unsafe { cstr::eq(tag.offset(len as isize), suffix.as_ptr()) } {
                 unsafe { *tag.offset(len as isize) = NUL as c_char };
             }

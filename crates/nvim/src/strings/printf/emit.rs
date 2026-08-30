@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{
     CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
 };
@@ -38,7 +39,6 @@ use crate::strings::vim_strchr;
 use crate::types::{
     VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
 };
-use ::libc::strlen;
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
 
@@ -437,7 +437,7 @@ unsafe fn render_string(
                 return Body::At(c"[NULL]".as_ptr(), 6);
             }
             let mut str_arg_l = if !c.precision_specified {
-                unsafe { strlen(str_arg) }
+                unsafe { cstr::bytes_at(str_arg) }.len()
             } else if c.precision == 0 {
                 0
             } else {
@@ -667,7 +667,7 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
         let out = tmp.as_mut_ptr();
         unsafe { xstrlcpy(out, text.as_ptr(), TMP) };
         c.zero_padding = false;
-        return Body::Tmp(unsafe { strlen(tmp.as_ptr()) });
+        return Body::Tmp(unsafe { cstr::bytes_at(tmp.as_ptr()) }.len());
     }
     if f.is_nan() {
         let nan = if c.fmt_spec.is_ascii_uppercase() {
@@ -726,7 +726,8 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
 
 /// Delete one byte at `at`, terminator included, and report the new length.
 unsafe fn delete_byte(at: *mut c_char, len: size_t) -> size_t {
-    unsafe { memmove(at.cast(), at.add(1).cast(), strlen(at.add(1)) + 1) };
+    let n_len = unsafe { cstr::bytes_at(at.add(1)) }.len();
+    unsafe { memmove(at.cast(), at.add(1).cast(), n_len + 1) };
     len - 1
 }
 

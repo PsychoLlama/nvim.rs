@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 
 use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
@@ -265,7 +266,7 @@ unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
 
         // SAFETY: `es_name` is NUL-terminated, and the grow reserves room for
         // both concatenations plus the `[%d]` and `..` that may follow.
-        let name_len = unsafe { strlen(entry.es_name) };
+        let name_len = unsafe { cstr::bytes_at(entry.es_name) }.len();
         unsafe {
             ga_grow(
                 &raw mut ga,

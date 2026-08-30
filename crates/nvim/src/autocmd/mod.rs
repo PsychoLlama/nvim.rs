@@ -79,7 +79,7 @@ use crate::window::{
 };
 use crate::winfloat::win_config_float;
 use crate::winlayer::{forget_window, free_deferred, register_window};
-use ::libc::{abort, atoi, strcasecmp, strcpy, strlen};
+use ::libc::{abort, atoi, strcasecmp, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod aucmdwin;

@@ -89,7 +89,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
         };
 
         if !p.is_null() {
-            let len = unsafe { strlen(p) } as ::core::ffi::c_int;
+            let len = unsafe { cstr::bytes_at(p) }.len() as ::core::ffi::c_int;
             realloc_cmdbuff(cc, len + 1);
             cc.set_len(len);
             unsafe { strcpy(cc.text(), p) };

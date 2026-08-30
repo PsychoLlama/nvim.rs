@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;
 
@@ -27,7 +28,6 @@ use crate::types::{
     Arena, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, float_T, size_t, typval_T,
     varnumber_T,
 };
-use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod emit;
@@ -125,7 +125,7 @@ pub unsafe extern "C" fn vim_snprintf_add(
     fmt: *const c_char,
     mut args: ...
 ) -> c_int {
-    let len = unsafe { strlen(str) };
+    let len = unsafe { cstr::bytes_at(str) }.len();
     let space = str_m.saturating_sub(len);
     unsafe { vim_vsnprintf(str.add(len), space, fmt, args.clone()) }
 }

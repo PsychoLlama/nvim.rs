@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::tr_plural;
 use core::ffi::{c_char, c_int};
@@ -231,9 +232,9 @@ pub unsafe fn var_check_ro(flags: c_int, mut name: *const c_char, mut name_len: 
 
     if name_len == TV_TRANSLATE as size_t {
         name = unsafe { gettext_ptr(name).as_ptr() };
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     } else if name_len == TV_CSTRING as size_t {
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     }
     // SAFETY: `error_message` is one of the module's statics, and `name` is
     // readable for `name_len` bytes.
@@ -252,9 +253,9 @@ pub unsafe fn var_check_lock(flags: c_int, mut name: *const c_char, mut name_len
     }
     if name_len == TV_TRANSLATE as size_t {
         name = unsafe { gettext_ptr(name).as_ptr() };
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     } else if name_len == TV_CSTRING as size_t {
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
     let name = unsafe { c_str_len(name, name_len) };
@@ -273,9 +274,9 @@ pub unsafe fn var_check_fixed(flags: c_int, mut name: *const c_char, mut name_le
     }
     if name_len == TV_TRANSLATE as size_t {
         name = unsafe { gettext_ptr(name).as_ptr() };
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     } else if name_len == TV_CSTRING as size_t {
-        name_len = unsafe { strlen(name) };
+        name_len = unsafe { cstr::bytes_at(name) }.len();
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
     let name = unsafe { c_str_len(name, name_len) };

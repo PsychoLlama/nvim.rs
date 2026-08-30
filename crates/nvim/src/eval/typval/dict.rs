@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{CONV_NONE, Failed, NUL, Refcount};
@@ -69,7 +70,7 @@ pub unsafe fn tv_dict_item_alloc_len(
 /// [`tv_dict_item_alloc_len`], including the caller's ownership of the
 /// result.
 pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut dictitem_T {
-    unsafe { tv_dict_item_alloc_len(key, strlen(key)) }
+    unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) }
 }
 
 /// Clear `item`'s value and free it, if it was allocated (rather than embedded
@@ -486,7 +487,7 @@ pub unsafe fn tv_dict_clear(d: *mut dict_T) {
 pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::core::ffi::c_char) {
     let watched = unsafe { tv_dict_is_watched(d1) };
     let arg_errmsg = tr(c"extend() argument");
-    let arg_errmsg_len = unsafe { strlen(arg_errmsg) };
+    let arg_errmsg_len = unsafe { cstr::bytes_at(arg_errmsg) }.len();
     let action = unsafe { *action } as u8;
 
     if action == b'm' {
@@ -630,7 +631,7 @@ pub unsafe fn tv_dict_copy(
             unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) }
         } else {
             let di_key = tv_dict_item_key(di);
-            let mut len = unsafe { strlen(di_key) };
+            let mut len = unsafe { cstr::bytes_at(di_key) }.len();
             let key = unsafe { string_convert(conv, di_key, &raw mut len) };
             if key.is_null() {
                 // The conversion failed: keep the original key, but at the

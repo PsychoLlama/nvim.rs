@@ -344,7 +344,8 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     let mut namelen: size_t = 0;
                     if fudi.fd_dict.is_null() {
                         let mut ht: *mut hashtab_T = ptr::null_mut();
-                        let v = unsafe { find_var(name, strlen(name), &raw mut ht, false) };
+                        let name_len = unsafe { cstr::bytes_at(name) }.len();
+                        let v = unsafe { find_var(name, name_len, &raw mut ht, false) };
                         if !v.is_null() && unsafe { (*v).di_tv.v_type } == VAR_FUNC {
                             let clash = c"E707: Function name conflicts with variable: %s";
                             unsafe { emsg_funcname(clash.as_ptr(), name) };
@@ -430,10 +431,11 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             let mut j = FAIL;
                             let sourcing_name = sourcing_entry().es_name;
                             if !sourcing_name.is_null() {
-                                let scriptname = unsafe { autoload_name(name, strlen(name)) };
+                                let scriptname =
+                                    unsafe { autoload_name(name, cstr::bytes_at(name).len()) };
                                 p = unsafe { vim_strchr(scriptname, b'/' as c_int) };
-                                let plen = unsafe { strlen(p) } as isize;
-                                let slen = unsafe { strlen(sourcing_name) } as isize;
+                                let plen = unsafe { cstr::bytes_at(p) }.len() as isize;
+                                let slen = unsafe { cstr::bytes_at(sourcing_name) }.len() as isize;
                                 if slen > plen
                                     && unsafe {
                                         path_fnamecmp(p, sourcing_name.offset(slen - plen))
@@ -454,7 +456,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         }
 
                         if namelen == 0 {
-                            namelen = unsafe { strlen(name) };
+                            namelen = unsafe { cstr::bytes_at(name) }.len();
                         }
                         fp = unsafe { alloc_ufunc(name, namelen) };
 

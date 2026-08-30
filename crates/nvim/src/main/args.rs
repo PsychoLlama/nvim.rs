@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::Buf;
@@ -57,7 +58,7 @@ use crate::types::{
     aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
 };
 use crate::winlayer::Live;
-use ::libc::{atoi, fprintf, memset, strcasecmp, strlen};
+use ::libc::{atoi, fprintf, memset, strcasecmp};
 
 /// A bare `-V` is "a little bit verbose".
 const DEFAULT_VERBOSE: c_int = 10;
@@ -443,7 +444,7 @@ impl Scan {
                     // `-V{N}{file}`: whatever follows the digits is
                     // 'verbosefile', and it uses up the whole word.
                     set_opt(kOptVerbosefile, unsafe { string_opt(self.tail()) });
-                    self.argv_idx = unsafe { strlen(self.arg()) } as c_int;
+                    self.argv_idx = unsafe { cstr::bytes_at(self.arg()) }.len() as c_int;
                 }
             }
             b'w' => {
@@ -510,7 +511,7 @@ impl Scan {
                         self.arg()
                     };
                     // "so " + the name + the NUL, with room to spare.
-                    let size = unsafe { strlen(file) } + 9;
+                    let size = unsafe { cstr::bytes_at(file) }.len() + 9;
                     let cmd = unsafe { xmalloc(size) } as *mut c_char;
                     unsafe { snprintf(cmd, size, c"so %s".as_ptr(), file) };
                     self.push_command(cmd, true);
@@ -673,7 +674,7 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
     // The first `+cmd`/`-c` becomes `v:swapcommand`, so the ATTENTION
     // prompt can say what the process was asked to do.
     if unsafe { (*parmp).n_commands } > 0 {
-        let len = unsafe { strlen((*parmp).commands[0]) } + 2;
+        let len = unsafe { cstr::bytes_at((*parmp).commands[0]) }.len() + 2;
         let swcmd = unsafe { xmalloc(len + 1) } as *mut c_char;
         unsafe { snprintf(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]) };
         unsafe { set_vim_var_string(Vv::Swapcommand, swcmd, len as ptrdiff_t) };

@@ -23,6 +23,7 @@ use super::{
     Args, e_error_while_writing_str, frame, from, kFileAppend, kFileCreate, kFileMkDir,
     kFileTruncate, str_arg_chk,
 };
+use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
@@ -39,7 +40,6 @@ use crate::types::{
     EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, blob_T, list_T,
     listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
 };
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -296,7 +296,7 @@ fn write_blob(out: &mut Out, blob: *const blob_T) -> bool {
 fn write_string(out: &mut Out, data: *const c_char) -> bool {
     // SAFETY: a live String argument, which is NUL-terminated, and so
     // readable for the `strlen` bytes before its terminator.
-    unsafe { write_data(out, data, strlen(data)) }
+    unsafe { write_data(out, data, cstr::bytes_at(data).len()) }
 }
 
 // ---------------------------------------------------------------------

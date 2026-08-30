@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::cstr;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
@@ -192,8 +193,8 @@ pub unsafe fn nvim_buf_set_lines(
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes +=
-                        unsafe { strlen(*lines.add(i_1)) } as bcount_t + 1 as bcount_t;
+                    inserted_bytes += unsafe { cstr::bytes_at(*lines.add(i_1)) }.len() as bcount_t
+                        + 1 as bcount_t;
                     i_1 = i_1.wrapping_add(1);
                 }
             }
@@ -217,8 +218,8 @@ pub unsafe fn nvim_buf_set_lines(
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes +=
-                        unsafe { strlen(*lines.add(i_2)) } as bcount_t + 1 as bcount_t;
+                    inserted_bytes += unsafe { cstr::bytes_at(*lines.add(i_2)) }.len() as bcount_t
+                        + 1 as bcount_t;
                     extra += 1;
                     i_2 = i_2.wrapping_add(1);
                 }

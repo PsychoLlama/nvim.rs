@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{
     Failed, MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
 };
@@ -128,10 +129,11 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result
 pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
+    let dir_len = unsafe { cstr::bytes_at(new_dir) }.len();
     let dir_name = unsafe {
         find_directory_in_path(
             new_dir,
-            strlen(new_dir),
+            dir_len,
             FileNameOpts::MESS,
             (*curbuf.get()).b_ffname,
             &raw mut file_to_find,

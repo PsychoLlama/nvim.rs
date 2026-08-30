@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
+use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -34,7 +35,6 @@ use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
 use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
 use crate::winlayer::{Buf, Win};
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -172,7 +172,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
         // SAFETY: `pat` is NUL-terminated -- by the argument's own terminator
         // when there was no closing delimiter, by the one just written when
         // there was.
-        patlen: unsafe { strlen(pat) },
+        patlen: unsafe { cstr::bytes_at(pat) }.len(),
         which_pat: RE_LAST as c_int,
         cmd,
     })

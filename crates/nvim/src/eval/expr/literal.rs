@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -37,7 +38,7 @@ use crate::types::{
     Failed, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
     VarLock, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
-use ::libc::{strlen, strtod, toupper};
+use ::libc::{strtod, toupper};
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -354,7 +355,8 @@ pub(crate) unsafe fn eval_string(
     // walks below stay inside that expression: the measuring pass stops at
     // the NUL and the filling pass repeats it byte for byte.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    let arg_end = unsafe { cur.get().add(strlen(cur.get()) as usize) } as *const c_char;
+    let arg_end =
+        unsafe { cur.get().add(cstr::bytes_at(cur.get()).len() as usize) } as *const c_char;
     let off = if interpolate { 0 } else { 1 };
     // How much longer the result is than the text it is read from. The
     // 1 an interpolated piece starts with is the terminator it writes;

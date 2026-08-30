@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -178,7 +179,7 @@ unsafe fn report_row(entry: &TimeEntry) {
     } else {
         Columns.get() - 70
     };
-    let len = room.min(unsafe { strlen(entry.pattern) } as c_int);
+    let len = room.min(unsafe { cstr::bytes_at(entry.pattern) }.len() as c_int);
     unsafe { msg_outtrans_len(entry.pattern, len, 0, false) };
     unsafe { msg_puts(c"\n".as_ptr()) };
 }

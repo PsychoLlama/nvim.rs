@@ -44,6 +44,7 @@ use crate::autocmd::{
 };
 use crate::change::deleted_lines_buf;
 use crate::channel::main_loop_events;
+use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
 use crate::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
@@ -85,7 +86,7 @@ use crate::vterm::vterm::{
     vterm_output_set_callback, vterm_set_size, vterm_set_utf8,
 };
 use crate::winlayer::{self, Buf, Win, tab_windows, windows};
-use ::libc::{abort, strlen};
+use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
 
@@ -367,7 +368,8 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) 
     if !ffname.is_null() {
         // SAFETY: a non-null `b_ffname` is a NUL-terminated file name, read
         // before anything here can free it.
-        let title = unsafe { ::core::slice::from_raw_parts(ffname.cast(), strlen(ffname)) };
+        let title =
+            unsafe { ::core::slice::from_raw_parts(ffname.cast(), cstr::bytes_at(ffname).len()) };
         callbacks::buf_set_term_title(Some(buf), title);
     }
     // Both would tie the terminal window's scroll position to another

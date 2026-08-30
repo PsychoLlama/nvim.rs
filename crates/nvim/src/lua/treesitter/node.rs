@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
@@ -404,7 +405,7 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
         let mut node: TSNode = ts_tree_root_node(descendant.tree);
         while node.id != descendant.id && !ts_node_is_null(node) {
             let mut node_type_0: *const ::core::ffi::c_char = ts_node_type(node);
-            let mut node_type_len: size_t = strlen(node_type_0);
+            let mut node_type_len: size_t = cstr::bytes_at(node_type_0).len();
             let mut i: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
             while i <= pred_len {
                 lua_rawgeti(L, 2 as ::core::ffi::c_int, i);

@@ -51,6 +51,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
+use crate::cstr;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
@@ -86,7 +87,6 @@ use crate::window::goto_tabpage_win;
 use crate::winlayer::{
     Buf, Win, buffers as all_buffers, first_buffer, tabs, windows, windows_in_tab,
 };
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -742,7 +742,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     );
     let _ = unsafe { do_unlet(name, len, true) };
 
-    let mut pattern = Vec::with_capacity(unsafe { strlen((*eap).arg) } + 12);
+    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at((*eap).arg) }.len() + 12);
     pattern.extend_from_slice(b"compiler/");
     pattern.extend_from_slice(unsafe { CStr::from_ptr((*eap).arg) }.to_bytes());
     pattern.extend_from_slice(b".*\0");

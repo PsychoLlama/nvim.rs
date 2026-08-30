@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -40,7 +41,7 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{NUL, VAR_NUMBER, Vv, varnumber_T};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
-use ::libc::{exit, fprintf, strlen, tcdrain};
+use ::libc::{exit, fprintf, tcdrain};
 
 use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
@@ -260,7 +261,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
     }
 
     if !errmsg.is_null() && unsafe { *errmsg } as c_int != NUL {
-        let has_eol = unsafe { *errmsg.add(strlen(errmsg) - 1) } as u8 == b'\n';
+        let has_eol = unsafe { *errmsg.add(cstr::bytes_at(errmsg).len() - 1) } as u8 == b'\n';
         let fmt = if has_eol {
             c"%s".as_ptr()
         } else {

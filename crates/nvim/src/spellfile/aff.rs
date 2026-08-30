@@ -49,7 +49,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::spell::init_spell_chartab;
 use crate::types::{CONV_NONE, NUL, uint8_t};
-use ::libc::{atoi, fclose, strcat, strcpy, strlen};
+use ::libc::{atoi, fclose, strcat, strcpy};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};
@@ -492,7 +492,7 @@ unsafe fn handle_line(
 
     if unsafe { is_aff_rule(items, c"COMPOUNDFLAG", 2) } && st.compflags.is_null() {
         // One flag becomes a pattern matching one or more of it.
-        let len = unsafe { strlen(items[1]) } + 2;
+        let len = unsafe { cstr::bytes_at(items[1]) }.len() + 2;
         let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
         unsafe { strcpy(p, items[1]) };
         unsafe { strcat(p, c"+".as_ptr()) };
@@ -517,9 +517,9 @@ unsafe fn handle_line(
         // A rule that is only digits is the count line, unless a
         // pattern has already been started.
         if !st.compflags.is_null() || unsafe { *skipdigits(items[1]) } as c_int != NUL {
-            let mut len = unsafe { strlen(items[1]) } + 1;
+            let mut len = unsafe { cstr::bytes_at(items[1]) }.len() + 1;
             if !st.compflags.is_null() {
-                len += unsafe { strlen(st.compflags) } + 1;
+                len += unsafe { cstr::bytes_at(st.compflags) }.len() + 1;
             }
             let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
             if !st.compflags.is_null() {

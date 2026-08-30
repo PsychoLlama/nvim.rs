@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -54,7 +55,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     // whose only precondition is the live `curwin`/`curbuf` this mode runs
     // with; `prompt` and `text` are NUL-terminated strings of that buffer.
     let prompt = unsafe { prompt_text() };
-    let prompt_len = unsafe { strlen(prompt) } as c_int;
+    let prompt_len = unsafe { cstr::bytes_at(prompt) }.len() as c_int;
 
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust

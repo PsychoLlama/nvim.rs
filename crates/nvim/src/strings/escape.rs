@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -20,7 +21,6 @@ use crate::mbyte::{mb_copy_char, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
 use crate::option::{csh_like_shell, fish_like_shell};
 use crate::types::size_t;
-use ::libc::strlen;
 
 /// Walk `src` as `vim_strnsave_unquoted` reads it, feeding kept bytes to
 /// `emit`: unescaped double quotes toggle quote mode and vanish; inside
@@ -132,7 +132,7 @@ pub unsafe fn vim_strsave_shellescape(
     let mut l: size_t = 0;
 
     // First pass: measure (3 = the surrounding quotes plus NUL).
-    let mut length: size_t = unsafe { strlen(string) }.wrapping_add(3);
+    let mut length: size_t = unsafe { cstr::bytes_at(string) }.len().wrapping_add(3);
     let mut p = string;
     while unsafe { *p } != 0 {
         if unsafe { *p } == b'\'' as c_char {

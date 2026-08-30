@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -26,7 +27,6 @@ use crate::eval::typval::{
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
 use crate::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
-use ::libc::strlen;
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.
@@ -209,7 +209,7 @@ pub unsafe fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         return;
     }
 
-    let len = unsafe { strlen(str) };
+    let len = unsafe { cstr::bytes_at(str) }.len();
     let mut byteidx: size_t = 0;
     while charidx >= 0 && byteidx < len {
         if charidx == 0 {
@@ -252,7 +252,7 @@ pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let p = unsafe { numbuf.string(argvars) };
-    let slen = unsafe { strlen(p) };
+    let slen = unsafe { cstr::bytes_at(p) }.len();
 
     let mut nbyte: c_int = 0;
     let mut skipcc = false;
@@ -322,7 +322,7 @@ pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut numbuf = NumBuf::new();
     let mut error = false;
     let p = unsafe { numbuf.string(argvars) };
-    let slen = unsafe { strlen(p) as varnumber_T };
+    let slen = unsafe { cstr::bytes_at(p).len() as varnumber_T };
 
     let mut n = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
     let mut len = if error {

@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -57,7 +58,6 @@ use crate::types::{
     yankreg_T,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
@@ -487,7 +487,7 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
         coladvance(unsafe { Win::current() }, MAXCOL as c_int);
         State.set(save_state);
     } else {
-        cur_win().w_cursor.col += unsafe { strlen(get_cursor_pos_ptr()) } as colnr_T;
+        cur_win().w_cursor.col += unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as colnr_T;
     }
 }
 

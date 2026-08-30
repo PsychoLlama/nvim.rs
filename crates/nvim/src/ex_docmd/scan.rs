@@ -8,6 +8,7 @@
 //! is both cheaper and more honest than stating it forty times.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -36,7 +37,6 @@ use crate::types::{
     CpoFlag, ExArgt, Failed, NUL, size_t,
 };
 use crate::winlayer::{Buf, Ea};
-use ::libc::strlen;
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
 /// `::::print` both reach the command name.
@@ -84,7 +84,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
         if ea.skip == 0 {
             unsafe { set_expr_line(xstrdup(ea.arg)) };
         }
-        ea.arg = unsafe { ea.arg.add(strlen(ea.arg)) };
+        ea.arg = unsafe { ea.arg.add(cstr::bytes_at(ea.arg).len()) };
     }
     ea.arg = skipwhite(ea.arg);
 }
@@ -286,13 +286,8 @@ unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
 
 /// Delete the byte at `p` by pulling the terminator-inclusive tail over it.
 fn drop_one_byte(p: *mut c_char) {
-    unsafe {
-        memmove(
-            p.cast(),
-            p.add(1).cast::<c_void>(),
-            strlen(p.add(1)).wrapping_add(1),
-        )
-    };
+    let n_len = unsafe { cstr::bytes_at(p.add(1)) }.len();
+    unsafe { memmove(p.cast(), p.add(1).cast::<c_void>(), n_len.wrapping_add(1)) };
 }
 
 /// Step to the end of a whitespace-delimited argument, optionally removing

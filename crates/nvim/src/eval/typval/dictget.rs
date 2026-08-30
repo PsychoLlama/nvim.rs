@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::Failed;
@@ -215,7 +216,10 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
         let key = tv_dict_item_key(var);
         let str = unsafe { numbuf.string(&raw mut (*var).di_tv) };
         debug_assert!(!str.is_null());
-        let len = unsafe { strlen(key) } + unsafe { strlen(str) } + c"=".count_bytes() + 1;
+        let len = unsafe { cstr::bytes_at(key) }.len()
+            + unsafe { cstr::bytes_at(str) }.len()
+            + c"=".count_bytes()
+            + 1;
         unsafe { *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char };
         unsafe { snprintf(*env.add(i), len, c"%s=%s".as_ptr(), key, str) };
     }

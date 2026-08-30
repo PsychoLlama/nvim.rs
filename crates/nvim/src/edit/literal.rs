@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -190,7 +191,10 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
     }
     if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
         let mut name = get_special_key_name(c, mod_mask.get());
-        let (p, len) = (name.as_mut_ptr(), unsafe { strlen(name.as_ptr()) } as c_int);
+        let (p, len) = (
+            name.as_mut_ptr(),
+            unsafe { cstr::bytes_at(name.as_ptr()) }.len() as c_int,
+        );
         c = unsafe { *p.offset((len - 1) as isize) } as uint8_t as c_int;
         if len > 2 {
             if unsafe { stop_arrow() }.is_err() {

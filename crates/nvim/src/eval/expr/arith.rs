@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy, copy_nonoverlapping};
 
@@ -24,7 +25,6 @@ use crate::types::{
     VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, float_T, typval_T,
     typval_vval_union, varnumber_T,
 };
-use ::libc::strlen;
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
 /// or a Float into. `NUMBUFLEN` in the C.
@@ -146,8 +146,8 @@ pub(crate) unsafe fn grow_string_tv(tv1: *mut typval_T, s2: *const c_char) -> bo
     }
     // SAFETY: `old` is that String's allocation and `s2` is NUL-terminated
     // and outside it, so the copy does not overlap what `xrealloc` moved.
-    let len1 = unsafe { strlen(old) };
-    let len2 = unsafe { strlen(s2) };
+    let len1 = unsafe { cstr::bytes_at(old) }.len();
+    let len2 = unsafe { cstr::bytes_at(s2) }.len();
     let grown = unsafe { xrealloc(old.cast(), len1 + len2 + 1) } as *mut c_char;
     // The terminator moves with the bytes.
     unsafe { copy(s2, grown.add(len1), len2 + 1) };

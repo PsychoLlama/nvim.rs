@@ -22,7 +22,6 @@ use crate::cstr;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::types::{fromto_T, garray_T};
-use ::libc::strlen;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -117,8 +116,8 @@ impl Walk {
 
             // Change the "from" text into the "to" text, closing or
             // opening the gap between them first.
-            let from_len = unsafe { strlen((*item).ft_from) } as c_int;
-            let to_len = unsafe { strlen((*item).ft_to) } as c_int;
+            let from_len = unsafe { cstr::bytes_at((*item).ft_from) }.len() as c_int;
+            let to_len = unsafe { cstr::bytes_at((*item).ft_to) }.len() as c_int;
             if from_len != to_len {
                 unsafe { move_tail(p, from_len, to_len) };
                 self.repextra += to_len - from_len;
@@ -158,8 +157,8 @@ impl Walk {
             ((*gap).ga_data as *mut fromto_T).offset(self.stack[level].child as isize - 1)
         };
 
-        let from_len = unsafe { strlen((*item).ft_from) } as c_int;
-        let to_len = unsafe { strlen((*item).ft_to) } as c_int;
+        let from_len = unsafe { cstr::bytes_at((*item).ft_from) }.len() as c_int;
+        let to_len = unsafe { cstr::bytes_at((*item).ft_to) }.len() as c_int;
         let p = unsafe { self.fword_ptr(self.stack[level].bad_idx as usize) };
         if from_len != to_len {
             unsafe { move_tail(p, to_len, from_len) };
@@ -198,5 +197,6 @@ unsafe fn move_tail(p: *mut core::ffi::c_char, from_len: c_int, to_len: c_int) {
     // SAFETY: the caller guarantees the buffer; the regions overlap, so
     // this has to be a move rather than a copy.
     let src = unsafe { p.offset(from_len as isize) };
-    unsafe { ptr::copy(src, p.offset(to_len as isize), strlen(src) as usize + 1) };
+    let src_len = unsafe { cstr::bytes_at(src) }.len();
+    unsafe { ptr::copy(src, p.offset(to_len as isize), src_len as usize + 1) };
 }

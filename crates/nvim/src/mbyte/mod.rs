@@ -29,6 +29,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -70,8 +71,7 @@ use crate::utf8proc::{
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
 use ::libc::{
-    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcpy, strlen, tolower,
-    toupper,
+    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcpy, tolower, toupper,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -153,7 +153,7 @@ pub unsafe fn show_utf8() {
             )
         };
         clen -= 1;
-        rlen += unsafe { strlen(out.add(rlen)) };
+        rlen += unsafe { cstr::bytes_at(out.add(rlen)) }.len();
         if rlen > (IOSIZE - 20) as size_t {
             break;
         }

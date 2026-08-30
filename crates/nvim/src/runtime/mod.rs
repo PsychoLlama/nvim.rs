@@ -106,7 +106,7 @@ use crate::types::{
     vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
-use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcpy, strlen};
+use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;

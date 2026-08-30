@@ -11,6 +11,7 @@
 use super::*;
 use crate::charset::{vim_is_ident_char, vim_isfilec};
 use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
+use crate::cstr;
 use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
@@ -203,7 +204,7 @@ pub unsafe fn expand_env_esc(
         let prefix_len = if prefix.is_null() {
             0
         } else {
-            strlen(prefix) as c_int
+            cstr::bytes_at(prefix).len() as c_int
         };
         let mut src = skipwhite(srcp.cast_mut()).cast_const();
         // At the start of a name, which is what makes a `~` here mean the
@@ -263,8 +264,8 @@ pub unsafe fn expand_env_esc(
                 }
 
                 if !var.is_null() && *var != 0 {
-                    let c = strlen(var);
-                    if c + strlen(tail) + 1 < dstlen as usize {
+                    let c = cstr::bytes_at(var).len();
+                    if c + cstr::bytes_at(tail).len() + 1 < dstlen as usize {
                         strcpy(dst, var);
                         dstlen -= c as c_int;
                         // If the value ends in a path separator and the tail

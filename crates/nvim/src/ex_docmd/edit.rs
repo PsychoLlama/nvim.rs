@@ -2,6 +2,7 @@
 //! `:normal`, which re-enters the normal-mode state machine.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -76,7 +77,6 @@ use crate::undo::store::header_chain;
 use crate::undo::{u_clearline, u_redo, u_undo};
 
 use crate::winlayer::{Buf, Ea, Win, windows};
-use ::libc::strlen;
 
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
@@ -735,7 +735,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
         return ptr::null_mut();
     }
 
-    let out = unsafe { xmalloc(strlen(src) + extra as size_t + 1) } as *mut c_char;
+    let out = unsafe { xmalloc(cstr::bytes_at(src).len() + extra as size_t + 1) } as *mut c_char;
     let mut len = 0;
     let mut p = src;
     while byte(p) != NUL {

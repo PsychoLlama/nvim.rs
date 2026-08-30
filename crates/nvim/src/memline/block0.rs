@@ -162,10 +162,10 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
         if name[0] as c_int == '~' as c_int {
             let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
             let named = unsafe { os_get_username(uname.as_mut_ptr(), B0_UNAME_SIZE as size_t) };
-            let ulen = unsafe { strlen(uname.as_ptr()) } as usize;
+            let ulen = unsafe { cstr::bytes_at(uname.as_ptr()) }.len() as usize;
             // `flen` counts the bytes after the tilde *including* the
             // terminator, which is exactly what has to shift right.
-            let flen = unsafe { strlen(name.as_ptr()) } as usize;
+            let flen = unsafe { cstr::bytes_at(name.as_ptr()) }.len() as usize;
             if named.is_err() || ulen + flen > B0_FNAME_SIZE_CRYPT as usize - 1 {
                 // No user name, or no room for one: keep the path as it
                 // was given.
@@ -227,10 +227,10 @@ pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     let mut b = unsafe { Buf::new(buf) };
     let size = B0_FNAME_SIZE_NOCRYPT as usize;
     let fenc = b.b_p_fenc;
-    let n = unsafe { strlen(fenc) } as usize;
+    let n = unsafe { cstr::bytes_at(fenc) }.len() as usize;
     // SAFETY: as [`set_b0_fname`] -- the field itself, not a copy of it.
     let name = unsafe { &mut (*b0p).b0_fname };
-    let fits = unsafe { strlen(name.as_ptr()) } as usize + n < size;
+    let fits = unsafe { cstr::bytes_at(name.as_ptr()) }.len() as usize + n < size;
     if fits {
         let at = size - n;
         unsafe { core::ptr::copy_nonoverlapping(fenc, name[at..].as_mut_ptr(), n) };

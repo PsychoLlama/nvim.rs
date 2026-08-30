@@ -40,7 +40,7 @@ use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
 };
-use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strlen};
+use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -176,7 +176,7 @@ unsafe fn do_helptags(dirname: *mut c_char, add_help_tags: bool, ignore_writeerr
 /// `name` is NUL-terminated.
 unsafe fn help_file_lang(name: *const c_char) -> Option<[c_char; 2]> {
     // SAFETY: caller contract; every read is within the name's length.
-    let len = unsafe { strlen(name) } as isize;
+    let len = unsafe { cstr::bytes_at(name) }.len() as isize;
     if len <= 4 {
         return None;
     }
@@ -313,7 +313,7 @@ unsafe fn helptags_one(
         || unsafe { path_full_compare(c"$VIMRUNTIME/doc".as_ptr().cast_mut(), dir, false, true) }
             == kEqualFiles
     {
-        let len = 18 + unsafe { strlen(tagfname) };
+        let len = 18 + unsafe { cstr::bytes_at(tagfname) }.len();
         let entry = unsafe { xmalloc(len) }.cast::<c_char>();
         unsafe { snprintf(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname) };
         tags.push(entry);
@@ -408,8 +408,9 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
                 {
                     unsafe { *p2 = NUL as c_char };
                     p1 = unsafe { p1.offset(1) };
-                    let len =
-                        unsafe { p2.offset_from(p1) } as size_t + unsafe { strlen(fname) } + 2;
+                    let len = unsafe { p2.offset_from(p1) } as size_t
+                        + unsafe { cstr::bytes_at(fname) }.len()
+                        + 2;
                     let entry = unsafe { xmalloc(len) }.cast::<c_char>();
                     tags.push(entry);
                     unsafe { snprintf(entry, len, c"%s\t%s".as_ptr(), p1, fname) };
@@ -422,7 +423,7 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
 
         // A line ending in ">" — optionally with a `:lang` tail — opens
         // an example.
-        let mut off = unsafe { strlen(iobuff) };
+        let mut off = unsafe { cstr::bytes_at(iobuff) }.len();
         if off >= 2 && unsafe { *iobuff.add(off - 1) } == b'\n' as c_char {
             off -= 2;
             while off > 0

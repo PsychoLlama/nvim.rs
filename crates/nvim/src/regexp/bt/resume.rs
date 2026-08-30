@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::compile::regnext;
@@ -24,7 +25,6 @@ use crate::regexp::{
     regstate_T, restore_subexpr,
 };
 use crate::types::{NUL, colnr_T, int64_t, uint8_t};
-use ::libc::strlen;
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.
@@ -288,7 +288,7 @@ unsafe fn step_back_lines(
     let (was, stop) = (start.pos.as_pos(), stop.as_pos());
     let end_col = if was.lnum < stop.lnum {
         // SAFETY: `rex.line` is the NUL-terminated line being matched.
-        unsafe { strlen(rex.line().cast()) as colnr_T }
+        unsafe { cstr::bytes_at(rex.line().cast()).len() as colnr_T }
     } else {
         stop.col
     };
@@ -306,7 +306,7 @@ unsafe fn step_back_lines(
         }
         reg_restore(rex, start, backpos);
         // SAFETY: as above.
-        start.pos.pos_mut().col = unsafe { strlen(rex.line().cast()) } as colnr_T;
+        start.pos.pos_mut().col = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as colnr_T;
     } else {
         let line = reg_getline(rex, was.lnum);
         // SAFETY: `was.col` is a column of `line` and is not zero, so the

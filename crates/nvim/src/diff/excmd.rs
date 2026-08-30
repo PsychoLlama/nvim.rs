@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
@@ -78,7 +79,10 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
         // SAFETY: a NUL-terminated file name.
         esc_name = unsafe { vim_strsave_shellescape(name, true, true) };
         // SAFETY: three NUL-terminated strings.
-        let buflen = unsafe { strlen(tmp_orig) + strlen(esc_name) + strlen(tmp_new) + 16 };
+        let orig_len = unsafe { cstr::bytes_at(tmp_orig) }.len();
+        let name_len = unsafe { cstr::bytes_at(esc_name) }.len();
+        let new_len = unsafe { cstr::bytes_at(tmp_new) }.len();
+        let buflen = orig_len + name_len + new_len + 16;
         // SAFETY: `xmalloc` aborts rather than answer null.
         buf = unsafe { xmalloc(buflen) }.cast::<c_char>();
 
@@ -137,7 +141,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                 let fname = cur_buf().b_fname;
                 // SAFETY: the buffer's own file name, NUL-terminated; the
                 // four extra bytes are for the `.new` appended next.
-                newname = unsafe { xstrnsave(fname, strlen(fname) + 4) };
+                newname = unsafe { xstrnsave(fname, cstr::bytes_at(fname).len() + 4) };
                 unsafe { strcat(newname, c".new".as_ptr()) };
             }
             cmdmod_set_tab(0);
@@ -359,7 +363,7 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
     let width = diff_foldcolumn.get();
     // SAFETY: `fdc` is the one-digit string just allocated, and `strlen + 1`
     // is exactly the room it has.
-    unsafe { snprintf(fdc, strlen(fdc) + 1, c"%d".as_ptr(), width) };
+    unsafe { snprintf(fdc, cstr::bytes_at(fdc).len() + 1, c"%d".as_ptr(), width) };
     wp.w_onebuf_opt.wo_fen = 1;
     wp.w_onebuf_opt.wo_fdl = 0 as OptInt;
     // SAFETY: a live window, in all three calls.

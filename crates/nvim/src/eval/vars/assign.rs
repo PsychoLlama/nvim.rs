@@ -648,7 +648,7 @@ unsafe fn ex_let_register(
     }
     if !p.is_null() {
         // SAFETY: a register name and a NUL-terminated value.
-        unsafe { write_reg_contents(regname, p, strlen(p) as ssize_t, 0) };
+        unsafe { write_reg_contents(regname, p, cstr::bytes_at(p).len() as ssize_t, 0) };
         arg_end = past;
     }
     // SAFETY: `ptofree` is NULL or this frame's own allocation.

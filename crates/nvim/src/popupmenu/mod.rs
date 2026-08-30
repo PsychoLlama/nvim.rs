@@ -75,7 +75,6 @@ use crate::window::{
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
 use crate::winlayer::{Win, windows};
-use ::libc::strlen;
 
 // The carve of the transpiled module; see each child's docs.
 mod layout;

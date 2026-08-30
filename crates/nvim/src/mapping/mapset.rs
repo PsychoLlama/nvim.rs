@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::api_error;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -163,7 +164,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let parsed = &raw mut args;
     // SAFETY: `orig_rhs` is NUL-terminated and `args` this frame's own struct.
     unsafe {
-        let rhs_len = strlen(orig_rhs);
+        let rhs_len = cstr::bytes_at(orig_rhs).len();
         set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo, parsed);
     }
 
@@ -188,7 +189,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let unmap = &raw mut unmap_args;
     // SAFETY: `lhs` is NUL-terminated and `unmap_args` this frame's struct.
     unsafe {
-        let lhs_len = strlen(lhs);
+        let lhs_len = cstr::bytes_at(lhs).len();
         set_maparg_lhs_rhs(lhs, lhs_len, c"".as_ptr(), 0, LUA_NOREF, cpo, unmap);
     }
     unmap_args.buffer = buffer;

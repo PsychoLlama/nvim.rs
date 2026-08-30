@@ -44,7 +44,7 @@ use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, colnr_T, int64_t, linenr_T, lpos_T, oparg_T, pos_T, size_t, typval_T, varnumber_T,
 };
-use ::libc::{atoi, strlen, tolower};
+use ::libc::{atoi, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod cino;

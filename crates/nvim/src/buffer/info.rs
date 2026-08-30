@@ -56,7 +56,7 @@ use crate::types::{
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
-use ::libc::{qsort, strcpy, strlen};
+use ::libc::{qsort, strcpy};
 
 use super::list::buf_time_compare;
 
@@ -583,7 +583,7 @@ impl Msg {
         // buffer's own tail.
         unsafe { home_replace(buf, name, dst, room, true) };
         // SAFETY: what `home_replace` just NUL-terminated.
-        self.len += unsafe { strlen(dst) };
+        self.len += unsafe { cstr::bytes_at(dst) }.len();
     }
 }
 
@@ -696,7 +696,7 @@ fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
         name = unsafe { path_tail(buf.b_ffname) };
     }
     // SAFETY: a NUL-terminated name.
-    let mut namelen = unsafe { strlen(name) } as c_int;
+    let mut namelen = unsafe { cstr::bytes_at(name) }.len() as c_int;
     if namelen > 100 {
         namelen -= 100;
         // SAFETY: a position inside the name.

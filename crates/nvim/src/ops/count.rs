@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -147,7 +148,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
 
         bom_count = varnumber_T::from(unsafe { bomb_size() });
         if dict.is_null() && bom_count > 0 {
-            let len = unsafe { strlen(report.as_ptr()) };
+            let len = unsafe { cstr::bytes_at(report.as_ptr()) }.len();
             let at = unsafe { report.as_mut_ptr().add(len) };
             let fmt = gettext(c"(+%ld for BOM)");
             unsafe { vim_snprintf(at, IOSIZE as size_t - len, fmt.as_ptr(), bom_count) };
@@ -328,7 +329,7 @@ fn count_selected_line(
     if lnum == cur_buf().line_count()
         && cur_buf().b_p_eol == 0
         && (cur_buf().b_p_bin != 0 || cur_buf().b_p_fixeol == 0)
-        && (unsafe { strlen(s) } as c_int) < len
+        && (unsafe { cstr::bytes_at(s) }.len() as c_int) < len
     {
         counts.bytes_cursor -= varnumber_T::from(eol_size);
     }

@@ -25,7 +25,6 @@ use crate::types::{
     time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
-use ::libc::strlen;
 use core::ffi::CStr;
 mod add;
 mod aff;
@@ -624,7 +623,7 @@ unsafe fn output_name(
     // SAFETY: the caller promises the paths and the buffer's size, which is
     // the bound both writers below are given.
     let first = unsafe { *fnames };
-    let len = unsafe { strlen(first) };
+    let len = unsafe { cstr::bytes_at(first) }.len();
     let ends_with = |ext: &::core::ffi::CStr| {
         len > 4 && unsafe { cstr::eq(first.add(len).sub(4), ext.as_ptr()) }
     };
@@ -704,8 +703,8 @@ unsafe fn read_region_names(
     // the last two before the terminator of a name at least five long.
     for i in 0..incount as usize {
         let name = unsafe { *innames.add(i) };
-        let len = unsafe { strlen(name) };
-        if unsafe { strlen(path_tail(name)) } < 5
+        let len = unsafe { cstr::bytes_at(name) }.len();
+        if unsafe { cstr::bytes_at(path_tail(name)) }.len() < 5
             || unsafe { *name.add(len - 3) } != b'_' as ::core::ffi::c_char
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -826,7 +825,7 @@ pub unsafe fn ex_spell(eap: *mut exarg_T) {
     };
 
     // SAFETY: `arg` is the excommand's NUL-terminated argument.
-    let len = unsafe { strlen(arg) } as ::core::ffi::c_int;
+    let len = unsafe { cstr::bytes_at(arg) }.len() as ::core::ffi::c_int;
     let undo = cmdidx == CMD_spellundo;
     unsafe { spell_add_word(arg, len, kind as SpellAddType, which, undo) };
 }

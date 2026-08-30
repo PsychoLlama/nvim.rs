@@ -2,6 +2,7 @@
 //! recovering, and the buffer list.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
@@ -59,7 +60,6 @@ use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_und
 use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
 use crate::winfloat::win_float_remove;
 use crate::winlayer::{Buf, Ea, Win};
-use ::libc::strlen;
 
 /// Would editing `fnum`/`ffname` mean leaving the current buffer?
 ///
@@ -213,7 +213,7 @@ pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
         1
     };
     let fname = if byte(get_findfunc()) != NUL {
-        unsafe { findfunc_find_file(eap.arg, strlen(eap.arg), count) }
+        unsafe { findfunc_find_file(eap.arg, cstr::bytes_at(eap.arg).len(), count) }
     } else {
         unsafe { find_nth_on_path(eap.arg, eap.addr_count, eap.line2) }
     };
@@ -233,10 +233,11 @@ pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
 unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
-    let mut fname = unsafe {
+    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
+    let mut fname = {
         find_file_in_path(
             pat,
-            strlen(pat),
+            pat_len,
             FileNameOpts::MESS,
             true,
             cur_buf().b_ffname,

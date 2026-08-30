@@ -30,6 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_uint};
@@ -42,7 +43,7 @@ use crate::memory::{xfree, xmemcpyz};
 use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, hashitem_T, size_t, uint8_t};
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 
 use super::{
     AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, ZERO_FLAG, affentry_T, afffile_T, affheader_T,
@@ -193,7 +194,7 @@ pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affen
         {
             // Remove the flag from the list and stay put, so the next
             // flag is read from where this one was.
-            unsafe { memmove(prevp.cast(), p.cast(), strlen(p) + 1) };
+            unsafe { memmove(prevp.cast(), p.cast(), cstr::bytes_at(p).len() + 1) };
             p = prevp;
             if flag == unsafe { (*affile).af_comppermit } {
                 unsafe { (*entry).ae_comppermit = 1 };
@@ -223,9 +224,9 @@ pub(super) unsafe fn process_compflags(
 ) {
     // SAFETY: the destination is sized for the old pattern, a separator and
     // the new one, and each flag turns into at most one byte.
-    let mut len = unsafe { strlen(compflags) } + 1;
+    let mut len = unsafe { cstr::bytes_at(compflags) }.len() + 1;
     if !unsafe { (*spin).si_compflags }.is_null() {
-        len += unsafe { strlen((*spin).si_compflags) } + 1;
+        len += unsafe { cstr::bytes_at((*spin).si_compflags) }.len() + 1;
     }
     let dest = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
     if !unsafe { (*spin).si_compflags }.is_null() {
@@ -234,7 +235,7 @@ pub(super) unsafe fn process_compflags(
     }
     unsafe { (*spin).si_compflags = dest };
 
-    let mut tp = unsafe { dest.cast::<uint8_t>().add(strlen(dest)) };
+    let mut tp = unsafe { dest.cast::<uint8_t>().add(cstr::bytes_at(dest).len()) };
     let mut p = compflags;
     let mut key: [c_char; 17] = [0; 17];
     while unsafe { *p } as c_int != NUL {

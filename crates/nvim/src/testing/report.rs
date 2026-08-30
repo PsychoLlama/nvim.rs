@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -26,7 +27,6 @@ use crate::strings::vim_snprintf_safelen;
 use crate::types::{
     VAR_DICT, VAR_STRING, VAR_UNKNOWN, garray_T, int64_t, linenr_T, size_t, typval_T,
 };
-use ::libc::strlen;
 
 use super::{AssertType, ESTACK_NONE, NUMBUFLEN};
 
@@ -247,7 +247,7 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
             continue;
         }
         // Absent from the actual value, or present with a different one.
-        let key_len = unsafe { strlen(key) };
+        let key_len = unsafe { cstr::bytes_at(key) }.len();
         let _ = unsafe { tv_dict_add_tv(exp, key, key_len, expected) };
         if !item2.is_null() {
             let _ = unsafe { tv_dict_add_tv(got, key, key_len, &raw mut (*item2).di_tv) };
@@ -259,7 +259,7 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
         let key = unsafe { (*hi).hi_key };
         if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
             let tv = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
-            let _ = unsafe { tv_dict_add_tv(got, key, strlen(key), tv) };
+            let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), tv) };
         }
     }
     omitted

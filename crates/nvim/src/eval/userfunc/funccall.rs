@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -725,7 +726,7 @@ pub unsafe fn find_hi_in_scoped_ht(
     {
         return ptr::null_mut();
     }
-    let namelen = unsafe { strlen(name) };
+    let namelen = unsafe { cstr::bytes_at(name) }.len();
     // Upstream answers the *last* hashitem it looked at, not only a
     // found one, so a miss still hands back a non-null empty slot.
     let mut last: *mut hashitem_T = ptr::null_mut();

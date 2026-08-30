@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -45,7 +46,7 @@ fn cursor_line() -> (*mut c_char, colnr_T) {
 /// # Safety
 /// `p` must be NUL-terminated. The caller must have prepared for undo.
 pub unsafe fn ins_bytes(p: *mut c_char) {
-    unsafe { ins_bytes_len(p, strlen(p)) };
+    unsafe { ins_bytes_len(p, cstr::bytes_at(p).len()) };
 }
 
 /// Insert `len` bytes of `p` at the cursor, one character at a time.

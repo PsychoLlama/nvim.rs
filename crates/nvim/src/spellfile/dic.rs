@@ -32,6 +32,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -56,7 +57,7 @@ use crate::types::{
     CONV_NONE, Failed, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
 };
 use crate::ui::ui_flush;
-use ::libc::{fclose, strlen};
+use ::libc::fclose;
 
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
@@ -126,7 +127,7 @@ pub(super) unsafe fn spell_read_dic(
         }
         // Trim trailing white space, and skip the line if nothing is
         // left.
-        let mut l = unsafe { strlen(line.as_ptr()) } as usize;
+        let mut l = unsafe { cstr::bytes_at(line.as_ptr()) }.len() as usize;
         while l > 0 && line[l - 1] as uint8_t as c_int <= b' ' as c_int {
             l -= 1;
         }
@@ -163,7 +164,8 @@ pub(super) unsafe fn spell_read_dic(
                 && (unsafe { *p.add(1) } as c_int == b'\\' as c_int
                     || unsafe { *p.add(1) } as c_int == b'/' as c_int)
             {
-                unsafe { memmove(p.cast(), p.add(1).cast(), strlen(p.add(1)) + 1) };
+                let n_len = unsafe { cstr::bytes_at(p.add(1)) }.len();
+                unsafe { memmove(p.cast(), p.add(1).cast(), n_len + 1) };
             } else if unsafe { *p } as c_int == b'/' as c_int {
                 unsafe { *p = NUL as c_char };
                 afflist = unsafe { p.add(1) };
@@ -206,7 +208,8 @@ pub(super) unsafe fn spell_read_dic(
         }
 
         let hash: hash_T = unsafe { hash_hash(dw) };
-        let hi: *mut hashitem_T = unsafe { hash_lookup(&raw mut ht, dw, strlen(dw), hash) };
+        let hi: *mut hashitem_T =
+            unsafe { hash_lookup(&raw mut ht, dw, cstr::bytes_at(dw).len(), hash) };
         if unsafe { (*hi).hi_key }.is_null()
             || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
         {
@@ -466,7 +469,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
     let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut retval = Ok(());
-    let wordlen = unsafe { strlen(word) };
+    let wordlen = unsafe { cstr::bytes_at(word) }.len();
 
     let mut todo = unsafe { (*ht).ht_used } as c_int;
     let mut hi = unsafe { (*ht).ht_array };
@@ -694,7 +697,9 @@ unsafe fn affix_applies(
         return false;
     }
     // There has to be something left after chopping.
-    if !unsafe { (*ae).ae_chop }.is_null() && unsafe { strlen((*ae).ae_chop) } >= wordlen {
+    if !unsafe { (*ae).ae_chop }.is_null()
+        && unsafe { cstr::bytes_at((*ae).ae_chop) }.len() >= wordlen
+    {
         return false;
     }
     // The affix's condition must match the word.
@@ -752,7 +757,8 @@ unsafe fn build_affixed_word(
     // A suffix: chop from the end, then append.
     unsafe { xstrlcpy(newword.as_mut_ptr(), word, cap) };
     if !unsafe { (*ae).ae_chop }.is_null() {
-        let mut p = unsafe { newword.as_mut_ptr().add(strlen(newword.as_ptr())) };
+        let ptr_len = unsafe { cstr::bytes_at(newword.as_ptr()) }.len();
+        let mut p = unsafe { newword.as_mut_ptr().add(ptr_len) };
         for _ in 0..unsafe { mb_charlen((*ae).ae_chop) } {
             // Step back one whole character.
             p = unsafe { p.offset(-((utf_head_off(newword.as_mut_ptr(), p.sub(1)) + 1) as isize)) };

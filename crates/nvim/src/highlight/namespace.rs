@@ -28,6 +28,7 @@ use super::{
 use super::{default_hl_attr, default_hl_attr_table};
 use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
+use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
@@ -48,7 +49,6 @@ use crate::types::{
     LuaRetMode, NS, Object, kObjectTypeDict, win_T,
 };
 use crate::winlayer::Win;
-use ::libc::strlen;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
@@ -521,7 +521,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
     let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
-        let id = unsafe { syn_check_group(name, strlen(name)) };
+        let id = unsafe { syn_check_group(name, cstr::bytes_at(name).len()) };
         // These two are the groups where "undefined" is meaningful.
         let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
         unsafe { *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional) };

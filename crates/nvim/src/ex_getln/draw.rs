@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::NUL;
 
 /// The screen width of the command-line byte at `idx`.
@@ -193,7 +194,7 @@ pub unsafe fn put_on_cmdline(
     redraw: bool,
 ) {
     if len < 0 {
-        len = unsafe { strlen(str) } as ::core::ffi::c_int;
+        len = unsafe { cstr::bytes_at(str) }.len() as ::core::ffi::c_int;
     }
 
     let mut cc = Cc::current();

@@ -32,7 +32,7 @@ use crate::viml::parser::expressions::{
     viml_pexpr_parse,
 };
 use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
-use ::libc::{abort, strlen};
+use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod eval;

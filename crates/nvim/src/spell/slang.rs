@@ -38,7 +38,7 @@ use crate::types::{
     NUL, OK, buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T,
     uint8_t, uint16_t, wordcount_T,
 };
-use ::libc::{memcpy, strlen};
+use ::libc::memcpy;
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
 
@@ -189,7 +189,7 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
     };
 
     let hash: hash_T = unsafe { hash_hash(p) };
-    let p_len = unsafe { strlen(p) };
+    let p_len = unsafe { cstr::bytes_at(p) }.len();
     let hi: *mut hashitem_T = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
     if unsafe { (*hi).hi_key }.is_null()
         || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
@@ -226,7 +226,7 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
         let s = p;
         p = unsafe { vim_strchr(p, '/' as c_int) };
         let l = if p.is_null() {
-            unsafe { strlen(s) as c_int }
+            unsafe { cstr::bytes_at(s).len() as c_int }
         } else {
             unsafe { p.offset_from(s) as c_int }
         };

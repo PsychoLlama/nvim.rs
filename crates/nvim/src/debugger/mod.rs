@@ -62,7 +62,7 @@ use crate::types::{
     colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
     tasave_T, typval_T, uint8_t,
 };
-use ::libc::{atoi, strcpy, strlen};
+use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -699,7 +699,7 @@ unsafe fn debuggy_find(
     // SAFETY: caller contract.
     let name = unsafe {
         if !file && *fname as uint8_t as c_int == K_SPECIAL {
-            let owned: *mut c_char = xmalloc(strlen(fname) + 3).cast();
+            let owned: *mut c_char = xmalloc(cstr::bytes_at(fname).len() + 3).cast();
             strcpy(owned, c"<SNR>".as_ptr());
             strcpy(owned.offset(5), fname.offset(3));
             owned

@@ -67,7 +67,7 @@ use crate::types::{IOSIZE, NUL, colnr_T, int64_t, pos_T};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
-use ::libc::{strcat, strcpy, strlen};
+use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -416,7 +416,8 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
 
     // Build the new line: what came before the bad word, the
     // suggestion, and what came after what it replaces.
-    let size = unsafe { strlen(line) } as usize - stp.st_orglen as usize + stp.st_wordlen as usize;
+    let size = unsafe { cstr::bytes_at(line) }.len() as usize - stp.st_orglen as usize
+        + stp.st_wordlen as usize;
     let newline = unsafe { xmalloc(size + 1) } as *mut c_char;
     let col = unsafe { sug.su_badptr.offset_from(line) } as c_int;
     unsafe { memmove(newline as *mut c_void, line as *const c_void, col as usize) };

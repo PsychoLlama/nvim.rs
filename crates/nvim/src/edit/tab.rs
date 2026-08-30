@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -306,7 +307,7 @@ fn tab_spaces_to_tabs() {
                 // SAFETY: the tail is NUL-terminated and moves down over the
                 // `i` spaces in front of it, terminator included.
                 let tail = unsafe { ptr.offset(i as isize) };
-                let tail_len = unsafe { strlen(tail) } + 1;
+                let tail_len = unsafe { cstr::bytes_at(tail) }.len() + 1;
                 unsafe { memmove(ptr.cast(), tail.cast(), tail_len) };
             }
 

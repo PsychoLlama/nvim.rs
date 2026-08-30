@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -233,7 +234,7 @@ fn measure_join(
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let mut buf = cur_win().buffer();
             buf.b_op_start.lnum = cur_win().w_cursor.lnum;
-            buf.b_op_start.col = unsafe { strlen(plan.curr) } as colnr_T;
+            buf.b_op_start.col = unsafe { cstr::bytes_at(plan.curr) }.len() as colnr_T;
         }
 
         if !plan.comments.is_null() {
@@ -308,7 +309,7 @@ fn measure_join(
             };
         }
 
-        plan.currsize = unsafe { strlen(plan.curr) } as c_int;
+        plan.currsize = unsafe { cstr::bytes_at(plan.curr) }.len() as c_int;
         plan.sumsize += plan.currsize + added;
 
         endcurr1 = NUL;
@@ -403,7 +404,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         if insert_space && t > 1 {
             plan.curr = unsafe { skipwhite(plan.curr) };
         }
-        plan.currsize = unsafe { strlen(plan.curr) } as c_int;
+        plan.currsize = unsafe { cstr::bytes_at(plan.curr) }.len() as c_int;
         t -= 1;
     }
 

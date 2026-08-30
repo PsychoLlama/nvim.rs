@@ -204,7 +204,7 @@ pub unsafe fn find_word_end(mut ptr: *mut c_char) -> *mut c_char {
 
 /// Just after the line, omitting the CR and NL at its end.
 pub unsafe fn find_line_end(ptr: *mut c_char) -> *mut c_char {
-    let mut s = unsafe { ptr.add(strlen(ptr)) };
+    let mut s = unsafe { ptr.add(cstr::bytes_at(ptr).len()) };
     while s > ptr && matches!(unsafe { *s.offset(-1) } as c_int, c if c == CAR || c == NL) {
         s = unsafe { s.offset(-1) };
     }
@@ -229,7 +229,7 @@ pub(crate) unsafe fn get_next_bufname_token() {
             // SAFETY: `tail` is a NUL-terminated buffer name, and there is
             // no `cptext`, user data or highlight pair.
             unsafe {
-                let len = strlen(tail) as c_int;
+                let len = cstr::bytes_at(tail).len() as c_int;
                 let no_dup = false;
                 ins_compl_add(
                     tail, len, no_name, no_cptext, false, no_data, dir, flags, no_dup, no_hl, score,
@@ -327,7 +327,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
                 if first.is_null() && starts_with_leader {
                     first = text;
                     // SAFETY: as above.
-                    len = unsafe { strlen(first) } as c_int;
+                    len = unsafe { cstr::bytes_at(first) }.len() as c_int;
                 } else if !first.is_null() {
                     // Shorten the prefix to what this match still agrees on.
                     let mut j: c_int = 0; // count in bytes
@@ -368,7 +368,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
     }
     debug_assert!(!first.is_null());
     // Avoid inserting text that duplicates the text already after the cursor.
-    if len == unsafe { strlen(first) } as c_int {
+    if len == unsafe { cstr::bytes_at(first) }.len() as c_int {
         let p = unsafe { get_cursor_line_ptr().offset(cur_win().w_cursor.col as isize) };
         if !p.is_null() && !ascii_iswhite_or_nul(unsafe { *p } as c_int) {
             // SAFETY: `find_word_end` answers a pointer into the same line.

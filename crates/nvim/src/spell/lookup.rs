@@ -52,7 +52,6 @@ use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
-use ::libc::strlen;
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
@@ -611,7 +610,7 @@ pub unsafe fn match_checkcompoundpattern(
         let second = unsafe { *pats.offset((i + 1) as isize) };
         if unsafe { cstr::starts_with(ptr.offset(wlen as isize), cstr::bytes_at(second)) } {
             let first = unsafe { *pats.offset(i as isize) };
-            let len = unsafe { strlen(first) } as c_int;
+            let len = unsafe { cstr::bytes_at(first) }.len() as c_int;
             let n = len as usize;
             if len <= wlen
                 && unsafe { cstr::prefix_eq(ptr.offset((wlen - len) as isize), first, n) }
@@ -657,7 +656,7 @@ pub unsafe fn can_compound(
     if unsafe { (*slang).sl_compsylmax } < MAXWLEN as c_int
         && unsafe { count_syllables(slang, word) } > unsafe { (*slang).sl_compsylmax }
     {
-        return (unsafe { strlen(flags as *const c_char) } as c_int)
+        return (unsafe { cstr::bytes_at(flags as *const c_char) }.len() as c_int)
             < unsafe { (*slang).sl_compmax };
     }
     true
@@ -877,7 +876,7 @@ unsafe fn fold_more(mip: *mut matchinf_T) -> c_int {
     let taken = unsafe { (*mip).mi_fend.offset_from(p) } as c_int;
     let room = MAXWLEN as c_int - fwordlen;
     let _ = unsafe { spell_casefold(win, p, taken, tail, room) };
-    let flen = unsafe { strlen(tail) } as c_int;
+    let flen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     unsafe { (*mip).mi_fwordlen += flen };
     flen
 }

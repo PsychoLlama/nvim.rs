@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::grid::{default_grid_ref, default_gridview};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -352,7 +353,7 @@ pub(crate) unsafe fn inc_msg_scrolled() {
         if p.data().is_null() {
             p = unsafe { cstr_as_string(gettext(c"Unknown").as_ptr()) };
         } else {
-            let tofreesize = unsafe { strlen(p.data()) } + 40;
+            let tofreesize = unsafe { cstr::bytes_at(p.data()) }.len() + 40;
             tofree = unsafe { xmalloc(tofreesize) }.cast();
             let fmt = gettext(c"%s line %ld");
             let name = p.data();

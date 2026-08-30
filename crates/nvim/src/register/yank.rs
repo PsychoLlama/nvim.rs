@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Lock;
 use crate::message_fmt::{c_str, report_msg};
@@ -318,7 +319,7 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
                 // The region may reach past the end of a short line.
                 //
                 // SAFETY: `textstart` points into that line, NUL-terminated.
-                let tmp = unsafe { strlen(bd.textstart) } as c_int;
+                let tmp = unsafe { cstr::bytes_at(bd.textstart) }.len() as c_int;
                 if tmp < bd.textlen {
                     bd.textlen = tmp;
                 }

@@ -53,7 +53,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     // that lives until the end of this body.
     let mut len = unsafe {
         msg_puts(mapchars.as_ptr());
-        strlen(mapchars.as_mut_ptr())
+        cstr::bytes_at(mapchars.as_mut_ptr()).len()
     };
     len += 1;
     while len <= 3 {

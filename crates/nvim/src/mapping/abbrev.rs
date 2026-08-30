@@ -37,7 +37,7 @@ unsafe fn abbr_matches(mp: Mb, word: *const c_char, len: c_int) -> bool {
         unsafe {
             q = xstrdup(keys);
             vim_unescape_ks(q);
-            qlen = strlen(q) as c_int;
+            qlen = cstr::bytes_at(q).len() as c_int;
         }
     }
     // SAFETY: the caller's promise — `word` is readable for `len` bytes — and
@@ -169,7 +169,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
                 // Need to escape K_SPECIAL.
                 let escaped = vim_strsave_escape_ks(at);
                 if !escaped.is_null() {
-                    let newlen = strlen(escaped) as usize;
+                    let newlen = cstr::bytes_at(escaped).len() as usize;
                     ptr::copy(escaped.cast::<u8>(), tb.as_mut_ptr().add(j), newlen);
                     j += newlen;
                     xfree(escaped.cast());
@@ -203,7 +203,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
         unsafe {
             let _ = ins_typebuf(s, noremap, 0, true, silent);
             // No abbreviation for these chars.
-            typeahead().add_no_abbr_cnt(strlen(s) as c_int + j as c_int + 1);
+            typeahead().add_no_abbr_cnt(cstr::bytes_at(s).len() as c_int + j as c_int + 1);
             if expr {
                 xfree(s.cast());
             }
@@ -313,7 +313,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
         // SAFETY: `p` is the NUL-terminated result of the evaluation, and
         // `res` a live slot for the allocation `replace_termcodes` makes.
         unsafe {
-            let len = strlen(p);
+            let len = cstr::bytes_at(p).len();
             replace_termcodes(p, len, out, 0, dolt, simplify, cpo);
         }
     } else {

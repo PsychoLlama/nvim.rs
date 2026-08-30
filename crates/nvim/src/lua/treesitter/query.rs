@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
 
@@ -97,7 +98,7 @@ unsafe fn query_err_string(
             let mut line_length: ::core::ffi::c_int = if !end_str.is_null() {
                 end_str.offset_from(src_tmp) as ::core::ffi::c_int
             } else {
-                strlen(src_tmp) as ::core::ffi::c_int
+                cstr::bytes_at(src_tmp).len() as ::core::ffi::c_int
             };
             let mut line_end: ::core::ffi::c_int = line_start + line_length;
             if line_end > error_offset {
@@ -122,7 +123,7 @@ unsafe fn query_err_string(
             column + 1 as ::core::ffi::c_int,
             type_msg,
         );
-        let mut offset: size_t = strlen(err);
+        let mut offset: size_t = cstr::bytes_at(err).len();
         errlen = errlen.wrapping_sub(offset);
         err = err.add(offset);
         if error_type as ::core::ffi::c_uint
@@ -166,7 +167,7 @@ unsafe fn query_err_string(
                 }
             }
             snprintf(err, errlen, c"\"%.*s\":\n".as_ptr(), suffix_len, suffix);
-            offset = strlen(err);
+            offset = cstr::bytes_at(err).len();
             errlen = errlen.wrapping_sub(offset);
             err = err.add(offset);
         }

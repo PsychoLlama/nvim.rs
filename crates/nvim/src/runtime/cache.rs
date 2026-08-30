@@ -187,8 +187,8 @@ pub(crate) unsafe fn do_in_cached_path(
             continue;
         }
         // SAFETY: both are NUL-terminated.
-        let buflen = unsafe { strlen(item.path) };
-        if buflen + unsafe { strlen(name) } + 2 >= MAXPATHL as size_t {
+        let buflen = unsafe { cstr::bytes_at(item.path) }.len();
+        if buflen + unsafe { cstr::bytes_at(name) }.len() + 2 >= MAXPATHL as size_t {
             continue;
         }
         // SAFETY: the length test above proves the directory and its separator
@@ -196,7 +196,7 @@ pub(crate) unsafe fn do_in_cached_path(
         let tail = unsafe {
             strcpy(buf.as_mut_ptr(), item.path);
             add_pathsep(buf.as_mut_ptr());
-            buf.as_mut_ptr().add(strlen(buf.as_ptr()))
+            buf.as_mut_ptr().add(cstr::bytes_at(buf.as_ptr()).len())
         };
         // SAFETY: as documented on `expand_name_patterns`.
         unsafe {
@@ -358,7 +358,7 @@ unsafe fn expand_pack_entry(
 
         // The `after/` directories go in one block at the end of the
         // build, so they sort behind every non-`after` entry.
-        let after_size = unsafe { strlen(buf.as_ptr()) } + 7;
+        let after_size = unsafe { cstr::bytes_at(buf.as_ptr()) }.len() + 7;
         let after = unsafe { xmallocz(after_size) }.cast::<c_char>();
         unsafe { xstrlcpy(after, buf.as_ptr(), after_size) };
         unsafe { xstrlcat(after, c"/after".as_ptr(), after_size) };

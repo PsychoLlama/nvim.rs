@@ -178,7 +178,9 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<
             unsafe { strcpy(tmp.as_mut_ptr(), buf) };
         } else {
             let tail = unsafe { path_tail(tmp.as_ptr()) };
-            if unsafe { strlen(tail) } + unsafe { strlen(buf) } >= MAXPATHL as size_t {
+            if unsafe { cstr::bytes_at(tail) }.len() + unsafe { cstr::bytes_at(buf) }.len()
+                >= MAXPATHL as size_t
+            {
                 return Err(Failed);
             }
             unsafe { strcpy(tail, buf) };
@@ -207,7 +209,7 @@ pub unsafe fn makeswapname(
         fname
     };
 
-    let len = unsafe { strlen(dir_name) } as usize;
+    let len = unsafe { cstr::bytes_at(dir_name) }.len() as usize;
     let end = unsafe { dir_name.add(len) };
     if unsafe { after_pathsep(dir_name, end) } != 0
         && len > 1
@@ -503,7 +505,7 @@ pub(crate) unsafe fn findswapname(
     let buf_fname = unsafe { (*buf).b_fname };
 
     // Isolate one directory name out of *dirp.
-    let dir_len = unsafe { strlen(*dirp) } + 1;
+    let dir_len = unsafe { cstr::bytes_at(*dirp) }.len() + 1;
     let dir_name = unsafe { xmalloc(dir_len) } as *mut c_char;
     unsafe { copy_option_part(dirp, dir_name, dir_len, c",".as_ptr().cast_mut()) };
 
@@ -512,7 +514,7 @@ pub(crate) unsafe fn findswapname(
         if fname.is_null() {
             break; // out of memory
         }
-        let n = unsafe { strlen(fname) } as usize;
+        let n = unsafe { cstr::bytes_at(fname) }.len() as usize;
         if n == 0 {
             // Safety check.
             unsafe { xfree(fname.cast()) };
@@ -646,7 +648,7 @@ pub unsafe fn recover_names(
     // One buffer for the directory name, big enough for the longest
     // entry in 'directory'.
     let mut dir_name = String_0::from_raw_parts(
-        unsafe { xmalloc(strlen(p_dir.get()) + 1) } as *mut c_char,
+        unsafe { xmalloc(cstr::bytes_at(p_dir.get()).len() + 1) } as *mut c_char,
         0,
     );
     let mut dirp = p_dir.get();
@@ -854,8 +856,8 @@ unsafe fn recov_file_names(
     } else {
         // Both forms may have come out the same; keep only one.
         let mut p = names[num_names - 1];
-        let extra = unsafe { strlen(names[num_names - 1]) } as isize
-            - unsafe { strlen(names[num_names]) } as isize;
+        let extra = unsafe { cstr::bytes_at(names[num_names - 1]) }.len() as isize
+            - unsafe { cstr::bytes_at(names[num_names]) }.len() as isize;
         if extra > 0 {
             p = unsafe { p.offset(extra) }; // the name was expanded to a full path
         }

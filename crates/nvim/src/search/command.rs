@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
 use crate::pos::MAXCOL;
@@ -248,7 +249,7 @@ fn echo_size(plen: size_t, off_len: size_t, with_stats: bool) -> size_t {
 /// `echo.buf` must be an `xmalloc`ed NUL-terminated string of `echo.len`.
 unsafe fn reverse_echo(echo: &mut Echo) {
     unsafe { echo.buf.replace(reverse_text(echo.buf.as_ptr())) };
-    echo.len = unsafe { strlen(echo.buf.as_ptr()) };
+    echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
     let base = echo.buf.as_ptr();
     // Move the reversed text to the beginning of the buffer.
     let mut r = base;
@@ -331,7 +332,7 @@ unsafe fn echo_search_cmd(
         let trunc = unsafe { msg_strtrunc(echo.buf.as_ptr(), 1) };
         if !trunc.is_null() {
             unsafe { echo.buf.replace(trunc) };
-            echo.len = unsafe { strlen(echo.buf.as_ptr()) };
+            echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
         }
 
         if cur_win().w_onebuf_opt.wo_rl != 0
@@ -550,7 +551,7 @@ pub unsafe fn do_search(
                 if copied != before {
                     // Made a copy of "pat" to change "\?" to "?".
                     unsafe { strcopy.replace(copied) };
-                    let len = unsafe { strlen(copied) };
+                    let len = unsafe { cstr::bytes_at(copied) }.len();
                     // Wrapping, as upstream: `patlen` is what the
                     // caller claimed, which for `get_address` is a
                     // prefix of a longer command line — the copy can

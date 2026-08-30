@@ -7,6 +7,7 @@ use super::args::{Args, frame};
 use super::wrappers::{
     arg_copy, arg_number_chk, arg_string, check_arg, dict_alloc_ret, list_alloc_ret,
 };
+use crate::cstr;
 use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
@@ -33,7 +34,6 @@ use crate::types::{
     VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, Vv, blob_T, kBoolVarTrue, kSpecialVarNull, list_T,
     listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
 };
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -592,7 +592,7 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     rettv.vval.v_number = match tv.v_type {
         VAR_STRING | VAR_NUMBER => {
             let s = arg_string(&mut numbuf, args.get(0));
-            unsafe { strlen(s) as varnumber_T }
+            unsafe { cstr::bytes_at(s).len() as varnumber_T }
         }
         VAR_BLOB => unsafe { tv_blob_len(tv.vval.v_blob) as varnumber_T },
         VAR_LIST => unsafe { tv_list_len(tv.vval.v_list) as varnumber_T },

@@ -20,6 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -78,7 +79,7 @@ pub unsafe fn get_c_indent() -> c_int {
     // `strlen` test -- which the `&&` chain keeps in front -- is what says
     // `col` indexes inside it.
     if State.get() & MODE_INSERT != 0
-        && (col as size_t) < unsafe { strlen(linecopy) }
+        && (col as size_t) < unsafe { cstr::bytes_at(linecopy) }.len()
         && unsafe { *linecopy.offset(col as isize) } as u8 == b')'
     {
         unsafe { *linecopy.offset(col as isize) = NUL as c_char };

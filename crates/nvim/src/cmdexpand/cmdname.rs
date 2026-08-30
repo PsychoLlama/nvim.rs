@@ -553,7 +553,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     // Find start of last argument (argument just before cursor).
     p = buff;
     xp.xp_pattern = p as *mut c_char;
-    let len = unsafe { strlen(buff) };
+    let len = unsafe { cstr::bytes_at(buff) }.len();
     while unsafe { *p } != 0 && p < unsafe { buff.add(len) } {
         if unsafe { *p } as c_int == ' ' as c_int || unsafe { *p } as c_int == TAB {
             // Argument starts after a space.

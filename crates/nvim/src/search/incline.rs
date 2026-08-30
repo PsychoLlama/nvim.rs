@@ -166,7 +166,7 @@ pub(crate) unsafe fn show_pat_in_path(
         return; // 'q' typed at the "--more--" message
     }
     let mut line = line;
-    let mut linelen = unsafe { strlen(line) };
+    let mut linelen = unsafe { cstr::bytes_at(line) }.len();
     loop {
         // `p` ends up on the last character of the line, which is
         // what decides whether a definition continues.
@@ -205,7 +205,7 @@ pub(crate) unsafe fn show_pat_in_path(
             if unsafe { vim_fgets(line, LSIZE as c_int, fp) } {
                 break; // end of file
             }
-            linelen = unsafe { strlen(line) };
+            linelen = unsafe { cstr::bytes_at(line) }.len();
             unsafe { *lnum += 1 };
         } else {
             unsafe { *lnum += 1 };

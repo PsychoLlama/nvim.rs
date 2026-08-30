@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::grid::default_gridview;
 use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
 use crate::winlayer::last_window;
@@ -310,7 +311,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
         if emenu && unsafe { menu_is_separator(s) } {
             unsafe { strcpy(buf.offset(len as isize), transchar('|' as c_int).as_ptr()) };
-            l = unsafe { strlen(buf.offset(len as isize)) } as c_int;
+            l = unsafe { cstr::bytes_at(buf.offset(len as isize)) }.len() as c_int;
             len += l;
             clen += l;
         } else {
@@ -325,7 +326,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                 } else {
                     let out = unsafe { buf.offset(len as isize) };
                     unsafe { strcpy(out, transchar_byte(*s as u8 as c_int).as_ptr()) };
-                    len += unsafe { strlen(buf.offset(len as isize)) } as c_int;
+                    len += unsafe { cstr::bytes_at(buf.offset(len as isize)) }.len() as c_int;
                 }
                 s = unsafe { s.add(1) };
             }

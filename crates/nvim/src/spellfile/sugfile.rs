@@ -31,6 +31,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -51,7 +52,7 @@ use crate::types::{
     FILE, Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T,
     uint8_t, uint16_t, uintmax_t,
 };
-use ::libc::{fclose, fwrite, strlen};
+use ::libc::{fclose, fwrite};
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
 use super::write::{clear_node, put_node};
@@ -113,7 +114,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
         // letters swapped: "spl" becomes "sug".
         fname = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
         unsafe { xstrlcpy(fname, wfname, MAXPATHL as size_t) };
-        let len = unsafe { strlen(fname) } as isize;
+        let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
         unsafe { *fname.offset(len - 2) = b'u' as c_char };
         unsafe { *fname.offset(len - 1) = b'g' as c_char };
         unsafe { sug_write(spin, fname) };

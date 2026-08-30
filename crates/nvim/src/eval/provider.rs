@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -42,7 +43,6 @@ use crate::types::{
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
-use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -415,7 +415,7 @@ pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
     // the recorded column.
     let col = buf.b_prompt_start.mark.col;
     // SAFETY: a buffer line is NUL-terminated.
-    if unsafe { strlen(text) } as c_int >= col {
+    if unsafe { cstr::bytes_at(text) }.len() as c_int >= col {
         // SAFETY: `col` is inside the line, measured just above.
         text = unsafe { text.offset(col as isize) };
     }

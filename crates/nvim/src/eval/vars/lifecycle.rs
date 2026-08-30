@@ -47,7 +47,7 @@ pub unsafe fn evalvars_init() {
         // in the table fits in.
         // SAFETY: the row's name is a NUL-terminated literal, and its key
         // member is the 17 bytes the assertion just measured against.
-        debug_assert!(unsafe { strlen(name) } <= 16);
+        debug_assert!(unsafe { cstr::bytes_at(name) }.len() <= 16);
         unsafe { strcpy(key, name) };
 
         // Into the `v:` scope dictionary -- unless the value is not
@@ -187,7 +187,7 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_string: value },
     };
-    unsafe { set_var(name, strlen(name), &raw mut tv, true) };
+    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut tv, true) };
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.

@@ -22,7 +22,7 @@ use crate::ops::skip_comment;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::strings::vim_strchr;
 use crate::undo::u_save;
-use ::libc::{atoi, memcpy, strcpy, strlen};
+use ::libc::{atoi, memcpy, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -76,7 +76,7 @@ pub(super) unsafe fn fold_add_marker(
         xmalloc(
             line_len
                 .wrapping_add(markerlen)
-                .wrapping_add(strlen(cms))
+                .wrapping_add(cstr::bytes_at(cms).len())
                 .wrapping_add(1),
         )
     } as *mut c_char;
@@ -111,7 +111,7 @@ pub(super) unsafe fn fold_add_marker(
             )
         };
         markerlen
-            .wrapping_add(unsafe { strlen(cms) })
+            .wrapping_add(unsafe { cstr::bytes_at(cms) }.len())
             .wrapping_sub(2)
     };
     let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
@@ -210,7 +210,7 @@ pub(super) unsafe fn fold_del_marker(
                 && unsafe { cstr::starts_with(p.add(len), cstr::bytes_at(cms2.offset(2))) }
             {
                 p = unsafe { p.offset(-(cms2.offset_from(cms))) };
-                len = len.wrapping_add(unsafe { strlen(cms) }.wrapping_sub(2));
+                len = len.wrapping_add(unsafe { cstr::bytes_at(cms) }.len().wrapping_sub(2));
             }
         }
         if u_save(lnum - 1, lnum + 1).is_ok() {
@@ -261,7 +261,7 @@ pub(super) fn parse_marker(wp: Win) {
     foldstartmarkerlen.set(unsafe { comma.offset_from(foldmarker) } as size_t);
     let end = unsafe { comma.offset(1) };
     foldendmarker.set(end);
-    foldendmarkerlen.set(unsafe { strlen(end) });
+    foldendmarkerlen.set(unsafe { cstr::bytes_at(end) }.len());
 }
 
 /// Low level function to get the foldlevel for the "marker" method.

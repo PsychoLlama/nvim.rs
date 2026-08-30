@@ -59,7 +59,7 @@ unsafe fn remove_tail(path: *mut c_char, pend: *mut c_char, dirname: *const c_ch
     // SAFETY: the caller's contract; `new_tail` is compared against `path`
     // before it is read through.
     unsafe {
-        let len = strlen(dirname);
+        let len = cstr::bytes_at(dirname).len();
         let new_tail = pend.sub(len + 1);
         if new_tail >= path
             && path_fnamencmp(new_tail, dirname, len) == 0
@@ -97,7 +97,7 @@ pub unsafe fn vim_env_iter(
         *dir = varval;
         let dirend = strchr(varval, delim as c_int);
         if dirend.is_null() {
-            *len = strlen(varval);
+            *len = cstr::bytes_at(varval).len();
             return ptr::null();
         }
         *len = dirend.offset_from(varval) as size_t;
@@ -119,7 +119,7 @@ pub unsafe fn vim_env_iter_rev(
     // SAFETY: the caller's contract.
     unsafe {
         let varend = if iter.is_null() {
-            val.add(strlen(val)).sub(1)
+            val.add(cstr::bytes_at(val).len()).sub(1)
         } else {
             iter as *const c_char
         };
@@ -307,7 +307,7 @@ pub unsafe fn home_replace(
         let dirlen = if homedir.get().is_null() {
             0
         } else {
-            strlen(homedir.get())
+            cstr::bytes_at(homedir.get()).len()
         };
 
         let homedir_env = os_getenv(c"HOME".as_ptr());
@@ -317,7 +317,7 @@ pub unsafe fn home_replace(
             // A $HOME that is itself relative to a home directory.
             must_free = true;
             let mut usedlen: size_t = 0;
-            let mut flen = strlen(homedir_env_mod);
+            let mut flen = cstr::bytes_at(homedir_env_mod).len();
             let mut fbuf: *mut c_char = ptr::null_mut();
             modify_fname(
                 c":p".as_ptr().cast_mut(),
@@ -327,7 +327,7 @@ pub unsafe fn home_replace(
                 &raw mut fbuf,
                 &raw mut flen,
             );
-            flen = strlen(homedir_env_mod);
+            flen = cstr::bytes_at(homedir_env_mod).len();
             debug_assert!(homedir_env_mod != homedir_env);
             if vim_ispathsep(*homedir_env_mod.add(flen - 1) as c_int) {
                 // Drop the '/' that gets added to a directory.
@@ -337,7 +337,7 @@ pub unsafe fn home_replace(
         let envlen = if homedir_env_mod.is_null() {
             0
         } else {
-            strlen(homedir_env_mod)
+            cstr::bytes_at(homedir_env_mod).len()
         };
 
         let mut src = if one { src } else { skipwhite(src.cast_mut()) };
@@ -424,7 +424,11 @@ pub unsafe fn home_replace_save(buf: *mut buf_T, src: *const c_char) -> *mut c_c
     // SAFETY: the caller's contract; the buffer is sized for the source plus
     // "~/" and the NUL.
     unsafe {
-        let len = 3 + if src.is_null() { 0 } else { strlen(src) };
+        let len = 3 + if src.is_null() {
+            0
+        } else {
+            cstr::bytes_at(src).len()
+        };
         let dst = xmalloc(len) as *mut c_char;
         home_replace(buf, src, dst, len, true);
         dst

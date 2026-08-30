@@ -73,7 +73,7 @@ use crate::types::{
     synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::winlayer::{Live, Win};
-use ::libc::{qsort, strcasecmp, strcpy, strlen, strpbrk};
+use ::libc::{qsort, strcasecmp, strcpy, strpbrk};
 
 mod flags;
 pub(crate) use self::flags::*;

@@ -401,8 +401,9 @@ pub unsafe fn do_in_path(
             continue;
         }
         // SAFETY: the three strings are NUL-terminated.
-        let room_needed =
-            buflen + 2 + unsafe { strlen(prefix) } + unsafe { strlen(name) } < MAXPATHL as size_t;
+        let (prefix_len, name_len) =
+            unsafe { (cstr::bytes_at(prefix).len(), cstr::bytes_at(name).len()) };
+        let room_needed = buflen + 2 + prefix_len + name_len < MAXPATHL as size_t;
         if !room_needed {
             continue;
         }
@@ -411,7 +412,7 @@ pub unsafe fn do_in_path(
         let tail = unsafe {
             add_pathsep(buf);
             strcat(buf, prefix);
-            buf.add(strlen(buf))
+            buf.add(cstr::bytes_at(buf).len())
         };
         // SAFETY: as documented on `expand_name_patterns`.
         unsafe {

@@ -44,6 +44,7 @@ use crate::arglist::alist_name;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{EVENT_SESSIONWRITEPOST, apply_autocmds};
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
+use crate::cstr;
 use crate::eval::vars::set_vim_var_string;
 use crate::ex_docmd::{open_exfile, vim_mkdir_emsg};
 use crate::ex_getln::vim_strsave_fnameescape;
@@ -75,7 +76,7 @@ use crate::types::{
     OptionSetFlags, Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use crate::winlayer::Win;
-use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
+use ::libc::{fclose, fprintf, fputs, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
 
@@ -435,11 +436,12 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         p = unsafe { p.offset(1) };
     }
 
-    let retval =
-        unsafe { xmalloc(strlen(sname) + extra + strlen(p_vdir.get()) + 9) }.cast::<c_char>();
+    let sname_len = unsafe { cstr::bytes_at(sname) }.len();
+    let get_len = unsafe { cstr::bytes_at(p_vdir.get()) }.len();
+    let retval = unsafe { xmalloc(sname_len + extra + get_len + 9) }.cast::<c_char>();
     unsafe { strcpy(retval, p_vdir.get()) };
     unsafe { add_pathsep(retval) };
-    let mut s = unsafe { retval.add(strlen(retval)) };
+    let mut s = unsafe { retval.add(cstr::bytes_at(retval).len()) };
     p = sname;
     while unsafe { *p } != NUL as c_char {
         if unsafe { *p } == b'=' as c_char {

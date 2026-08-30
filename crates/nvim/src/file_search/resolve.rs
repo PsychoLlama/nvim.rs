@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::path::buffer_path;
 use crate::tr_c;
@@ -216,7 +217,7 @@ unsafe fn find_without_path(
     let rel_fnamelen = if rel_fname.is_null() {
         0
     } else {
-        unsafe { strlen(rel_fname) }
+        unsafe { cstr::bytes_at(rel_fname) }.len()
     };
     let relative = unsafe { rel_to_curdir(file_to_find) }
         && options.has(FileNameOpts::REL)
@@ -385,7 +386,7 @@ pub(crate) unsafe fn find_file_in_path_option(
         unsafe { prepare_name(ptr, len, options, file_to_find) };
     }
     let name = unsafe { *file_to_find };
-    let namelen = unsafe { strlen(name) };
+    let namelen = unsafe { cstr::bytes_at(name) }.len();
 
     // "..", "../path", "." and "./path" mean the current directory just
     // as an absolute name means itself: neither uses `path_option`.

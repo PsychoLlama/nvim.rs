@@ -53,7 +53,7 @@ use crate::types::{
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
-use ::libc::{atoi, strlen};
+use ::libc::atoi;
 
 static DID_SHOW_EXT_RULER: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -501,7 +501,7 @@ unsafe fn draw_custom(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool, ui_ev
     let line = Expanded {
         start: buf.as_mut_ptr(),
         // SAFETY: the expander NUL-terminates its output.
-        len: unsafe { strlen(buf.as_ptr()) } as isize,
+        len: unsafe { cstr::bytes_at(buf.as_ptr()) }.len() as isize,
     };
     let runs = built.hl.expect("hltab was asked for");
     let start_col = target.col;

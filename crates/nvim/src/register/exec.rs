@@ -45,7 +45,8 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
 
     // SAFETY: `p` is NUL-terminated, and a valid register name answers a
     // live register.
-    let (plen, reg) = unsafe { (strlen(p), get_yank_register(regname, YREG_YANK)) };
+    let p_len = unsafe { cstr::bytes_at(p) }.len();
+    let (plen, reg) = unsafe { (p_len, get_yank_register(regname, YREG_YANK)) };
     // SAFETY: `reg` is that live register, so its `y_array` is there to test.
     if is_append_register(regname) && !unsafe { (*reg).y_array.is_null() } {
         // Append to the register's last line rather than replacing it.

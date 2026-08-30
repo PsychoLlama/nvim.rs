@@ -230,7 +230,7 @@ pub(crate) unsafe fn map_add(
     mp.m_orig_str = args.orig_rhs;
     mp.m_luaref = args.rhs_lua;
     // SAFETY: the `xstrdup` just above.
-    mp.m_keylen = unsafe { strlen(mp.m_keys) } as c_int;
+    mp.m_keylen = unsafe { cstr::bytes_at(mp.m_keys) }.len() as c_int;
     mp.m_noremap = noremap;
     mp.m_nowait = args.nowait as c_char;
     mp.m_silent = args.silent as c_char;
@@ -370,7 +370,7 @@ pub(crate) unsafe fn map_to_exists(
     let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
     // allocation `replace_termcodes` may leave in `buf` is freed below.
-    let len = unsafe { strlen(str) };
+    let len = unsafe { cstr::bytes_at(str) }.len();
     // SAFETY: as above.
     let rhs = unsafe { replace_termcodes(str, len, out, 0, dolt, simplify, cpo) };
 
@@ -443,7 +443,7 @@ pub(crate) unsafe fn check_map(
 ) -> Option<MapMatch> {
     // SAFETY: the caller's promise — `keys` is NUL-terminated, and `curbuf` a
     // live buffer.
-    let len = unsafe { strlen(keys) } as c_int;
+    let len = unsafe { cstr::bytes_at(keys) }.len() as c_int;
     // SAFETY: as above.
     let cur = unsafe { Buf::current() };
     let visit = |local: bool| {

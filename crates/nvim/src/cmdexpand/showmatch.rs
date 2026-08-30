@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::types::{ExpandContext, MAXPATHL, NUL};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -51,7 +52,7 @@ pub(crate) unsafe fn showmatches_oneline(
             let name = unsafe { *matches.offset(j as isize) };
             // SAFETY: the tag file name follows the tag's own NUL, which is
             // how `ExpandContext::TagsListFiles` packs the two.
-            let p = unsafe { name.add(strlen(name) + 1) };
+            let p = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
             unsafe { msg_advance(maxlen + 1) };
             unsafe { msg_puts(p) };
             unsafe { msg_advance(maxlen + 3) };

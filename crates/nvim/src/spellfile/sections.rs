@@ -22,6 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::fileio::{get2c, read_string};
@@ -39,7 +40,7 @@ use crate::types::{
     FILE, NUL, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
     size_t, slang_T, uint8_t,
 };
-use ::libc::{memset, strlen, ungetc};
+use ::libc::{memset, ungetc};
 
 use super::read::read_nonnul_bytes;
 use super::{
@@ -806,7 +807,7 @@ pub(super) unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
 
         let hash: hash_T = unsafe { hash_hash(b) };
         let hi: *mut hashitem_T =
-            unsafe { hash_lookup(&raw mut (*lp).sl_map_hash, b, strlen(b), hash) };
+            unsafe { hash_lookup(&raw mut (*lp).sl_map_hash, b, cstr::bytes_at(b).len(), hash) };
         if unsafe { (*hi).hi_key }.is_null()
             || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
         {

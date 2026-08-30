@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
@@ -150,7 +151,7 @@ impl Drop for CmdlineBlock {
 /// Append one line to the `ext_cmdline` block — the body a `:if` or
 /// `:function` accumulates while it is being typed.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
-    let buf = unsafe { xmallocz(indent + strlen(line)) } as *mut ::core::ffi::c_char;
+    let buf = unsafe { xmallocz(indent + cstr::bytes_at(line).len()) } as *mut ::core::ffi::c_char;
     unsafe {
         memset(
             buf as *mut ::core::ffi::c_void,
@@ -158,11 +159,12 @@ pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::f
             indent,
         )
     };
+    let line_len = unsafe { cstr::bytes_at(line) }.len();
     unsafe {
         memcpy(
             buf.add(indent) as *mut ::core::ffi::c_void,
             line as *const ::core::ffi::c_void,
-            strlen(line),
+            line_len,
         )
     };
 

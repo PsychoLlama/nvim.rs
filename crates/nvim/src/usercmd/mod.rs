@@ -57,6 +57,7 @@ pub(crate) use list::commands_array;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite, skipwhite};
+use crate::cstr;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
@@ -75,7 +76,6 @@ use crate::types::{
     exarg_T, expand_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
-use ::libc::strlen;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr, slice};
@@ -376,7 +376,7 @@ pub(crate) unsafe fn uc_add_command(
     let (no_flags, no_did_simplify, cpo) = (0, ptr::null_mut(), p_cpo.get());
     // SAFETY: caller contract; `rep_buf` is this frame's own.
     unsafe {
-        let len = strlen(rep);
+        let len = cstr::bytes_at(rep).len();
         replace_termcodes(rep, len, out, 0, no_flags, no_did_simplify, cpo)
     };
     if rep_buf.is_null() {

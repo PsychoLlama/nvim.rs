@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
@@ -518,7 +519,7 @@ pub unsafe fn write_reg_contents_lst(
     // it; upstream passes `strlen((char *)strings)` all the same.
     // SAFETY: `strings` is the null-terminated array of NUL-terminated
     // strings `str_list` asks for, and `reg` is the register just prepared.
-    let len = unsafe { strlen(strings as *mut c_char) };
+    let len = unsafe { cstr::bytes_at(strings as *mut c_char) }.len();
     unsafe { str_to_reg(reg, yank_type, strings as *mut c_char, len, block_len, true) };
     unsafe { finish_write_reg(name, reg, old_y_previous) };
 }
@@ -541,7 +542,7 @@ pub unsafe fn write_reg_contents_ex(
 ) {
     // SAFETY: a negative `len` means `str` is NUL-terminated.
     let len = if len < 0 {
-        unsafe { strlen(str) as ssize_t }
+        unsafe { cstr::bytes_at(str).len() as ssize_t }
     } else {
         len
     };
@@ -585,7 +586,7 @@ pub unsafe fn write_reg_contents_ex(
         if must_append && !expr_line.get().is_null() {
             // SAFETY: the `is_null` in front proves there is a string, and
             // `expr_line` is always NUL-terminated.
-            let exprlen = unsafe { strlen(expr_line.get()) };
+            let exprlen = unsafe { cstr::bytes_at(expr_line.get()) }.len();
             totlen = totlen.wrapping_add(exprlen);
             offset = exprlen;
         }

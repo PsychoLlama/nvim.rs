@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::cstr_to_string;
+use crate::cstr;
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_list, tv_list_append_string, tv_list_first, tv_list_last,
     tv_list_len,
@@ -28,7 +29,6 @@ use crate::types::{
     AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
     yankreg_T,
 };
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 
 /// The message shown once when a clipboard register is used and no provider
@@ -196,7 +196,7 @@ pub(crate) unsafe fn get_clipboard(
                 break 'err;
             }
             let regtype = unsafe { (*tv_list_last(res)).li_tv.vval.v_string };
-            if regtype.is_null() || unsafe { strlen(regtype) } > 1 {
+            if regtype.is_null() || unsafe { cstr::bytes_at(regtype) }.len() > 1 {
                 break 'err;
             }
             match regtype_of(unsafe { *regtype } as u8) {

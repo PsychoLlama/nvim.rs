@@ -73,7 +73,7 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::types::{MAXPATHL, NUL, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
-use ::libc::{atoi, strcpy, strlen};
+use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::{mem, ptr};
@@ -388,7 +388,8 @@ pub(crate) unsafe fn spell_suggest_list(
         // not replace goes on the end.
         let tail = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
         let wcopy =
-            unsafe { xmalloc(stp.st_wordlen as usize + strlen(tail) as usize + 1) } as *mut c_char;
+            unsafe { xmalloc(stp.st_wordlen as usize + cstr::bytes_at(tail).len() as usize + 1) }
+                as *mut c_char;
         unsafe { strcpy(wcopy, stp.st_word) };
         unsafe { strcpy(wcopy.offset(stp.st_wordlen as isize), tail) };
         unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = wcopy };
@@ -645,7 +646,9 @@ unsafe fn suggest_try_special(mut su: Sug) {
     let mut p = unsafe { skiptowhite(fbadword) };
     let len = unsafe { p.offset_from(fbadword) } as usize;
     p = unsafe { skipwhite(p) };
-    if unsafe { strlen(p) } as usize != len || !unsafe { cstr::prefix_eq(fbadword, p, len) } {
+    if unsafe { cstr::bytes_at(p) }.len() as usize != len
+        || !unsafe { cstr::prefix_eq(fbadword, p, len) }
+    {
         return;
     }
 
@@ -684,17 +687,17 @@ unsafe fn suggest_try_change(mut su: Sug) {
     let mut fword = [0 as c_char; MAXWLEN];
     let fwordp = fword.as_mut_ptr();
     unsafe { strcpy(fwordp, su.su_fbadword() as *const c_char) };
-    let n = unsafe { strlen(fwordp) } as c_int;
+    let n = unsafe { cstr::bytes_at(fwordp) }.len() as c_int;
     let tail = unsafe { su.su_badptr.offset(su.su_badlen as isize) };
     // SAFETY: `tail` is what follows the bad word in its line, so it is
     // NUL-terminated; `n` bytes of `fword` are used, and the fold is told
     // it may fill the `MAXWLEN - n` that are left.
-    let taillen = unsafe { strlen(tail) } as c_int;
+    let taillen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     let dest = unsafe { fwordp.offset(n as isize) };
     let _ = unsafe { spell_casefold(curwin.get(), tail, taillen, dest, MAXWLEN as c_int - n) };
 
     // Keep the result no longer than the original text.
-    let n = unsafe { strlen(su.su_badptr) } as usize;
+    let n = unsafe { cstr::bytes_at(su.su_badptr) }.len() as usize;
     if n < MAXWLEN {
         fword[n] = NUL as c_char;
     }

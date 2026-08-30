@@ -96,7 +96,7 @@ use crate::types::{
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
 use crate::winlayer::{Live, Pos};
-use ::libc::{abort, memset, strcpy, strlen};
+use ::libc::{abort, memset, strcpy};
 use core::mem::offset_of;
 
 // The carve of the transpiled module; see each child's docs.

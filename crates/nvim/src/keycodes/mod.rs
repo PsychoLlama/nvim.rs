@@ -38,7 +38,6 @@ use crate::strings::vim_strchr;
 use crate::types::{
     CpoFlag, MB_MAXBYTES, NUL, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T,
 };
-use ::libc::strlen;
 
 mod codes;
 pub use self::codes::*;
@@ -731,7 +730,7 @@ pub unsafe fn replace_termcodes(
                     // takes exactly the one `c_int` argument given.
                     unsafe { snprintf(at, room, c"%d".as_ptr(), sid) };
                     // SAFETY: `snprintf` NUL-terminated what it wrote.
-                    dlen += unsafe { strlen(at) };
+                    dlen += unsafe { cstr::bytes_at(at) }.len();
                     // SAFETY: as above -- one byte, still inside `buf_len`.
                     dlen = unsafe { put_bytes(result, dlen, b"_") };
                     continue;
@@ -776,7 +775,7 @@ pub unsafe fn replace_termcodes(
                 // Up to 8 * 6 characters of "mapleader" are allowed.
                 // SAFETY: `get_var_value` answers null or a NUL-terminated
                 // string that outlives this loop.
-                let too_long = !value.is_null() && unsafe { strlen(value) } > 8 * 6;
+                let too_long = !value.is_null() && unsafe { cstr::bytes_at(value) }.len() > 8 * 6;
                 // SAFETY: the option's value, or the static backslash.
                 let mut leader = unsafe { Cursor::new(value.cast_const()) };
                 if value.is_null() || leader.byte() == 0 || too_long {
@@ -877,7 +876,7 @@ pub unsafe fn vim_strsave_escape_ks(p: *mut c_char) -> *mut c_char {
     // 0xc0 -> 0xc3 - 0x80 -> 0xc3 K_SPECIAL KS_SPECIAL KE_FILLER.
     // SAFETY: the caller's promise -- `p` is NUL-terminated, so `strlen`
     // measures it and the NUL stops the walk below.
-    let res = unsafe { xmalloc(strlen(p) * 4 + 1) }.cast::<c_char>();
+    let res = unsafe { xmalloc(cstr::bytes_at(p).len() * 4 + 1) }.cast::<c_char>();
     let mut dst = res;
     // SAFETY: as above.
     let mut src = unsafe { Cursor::new(p) };

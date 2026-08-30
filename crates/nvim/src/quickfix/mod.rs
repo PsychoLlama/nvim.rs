@@ -125,9 +125,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
     win_setheight, win_split, win_valid,
 };
-use ::libc::{
-    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, strlen, time,
-};
+use ::libc::{__errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, time};
 use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.

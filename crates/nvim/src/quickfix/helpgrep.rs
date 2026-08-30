@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::optionstr::{empty_option, is_empty_option};
 use crate::path::ExpandFlags;
@@ -67,7 +68,7 @@ unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *
     while !unsafe { vim_fgets(line, IOSIZE, fd) } && !got_int.get() {
         if unsafe { vim_regexec(p_regmatch, line, 0) } {
             // Remove the trailing CR, LF, spaces, etc.
-            let mut l = unsafe { strlen(line) };
+            let mut l = unsafe { cstr::bytes_at(line) }.len();
             while l > 0 && unsafe { *line.add(l - 1) } as c_int <= ' ' as c_int {
                 l -= 1;
                 unsafe { *line.add(l) = NUL as c_char };
@@ -159,7 +160,7 @@ unsafe fn hgr_search_files_in_dir(
 /// long, which every name the wildcard produced is.
 unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
     // SAFETY: the caller's promise.
-    let ext = unsafe { fname.add(strlen(fname)).offset(-3) };
+    let ext = unsafe { fname.add(cstr::bytes_at(fname).len()).offset(-3) };
     // SAFETY: `lang` and `ext` are NUL-terminated and `ext` has three bytes.
     unsafe {
         strncasecmp(lang, ext, 2) == 0

@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -379,7 +380,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 
     // If it is the name of a variable of type VAR_FUNC or VAR_PARTIAL use
     // its contents; `trans_function_name` skips over "s:" and "g:".
-    let mut len = unsafe { strlen(tofree) } as c_int;
+    let mut len = unsafe { cstr::bytes_at(tofree) }.len() as c_int;
     let mut found_var = false;
     let want_partial = if partial.is_null() {
         &raw mut partial
@@ -525,7 +526,7 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
     if s.is_null() {
         s = c"".as_ptr() as *mut c_char;
     } else {
-        slen = unsafe { strlen(s) };
+        slen = unsafe { cstr::bytes_at(s) }.len();
     }
 
     const PREFIX: &CStr = c":return ";

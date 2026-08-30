@@ -377,7 +377,7 @@ pub unsafe fn ml_recover(checkext: bool) {
 /// from `a` to `w`, and any letter — the extensions `findswapname` permutes
 /// through.
 unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
-    let len = unsafe { strlen(fname) } as isize;
+    let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
     len >= 4
         && unsafe { strncasecmp(fname.offset(len - 4), c".s".as_ptr(), 2) } == 0
         && !unsafe {

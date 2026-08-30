@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
@@ -30,7 +31,6 @@ use crate::memory::xstrdup;
 use crate::os::cshim::strstr;
 use crate::strings::vim_strchr;
 use crate::types::{MB_MAXBYTES, NUL, langp_T, salitem_T, slang_T};
-use ::libc::strlen;
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
@@ -76,7 +76,7 @@ pub unsafe fn spell_soundfold(
     } else {
         let mut fword = [0 as c_char; MAXWLEN];
         let (win, out) = (curwin.get(), fword.as_mut_ptr());
-        let len = unsafe { strlen(inword) } as c_int;
+        let len = unsafe { cstr::bytes_at(inword) }.len() as c_int;
         let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
     }

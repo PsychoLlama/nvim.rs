@@ -402,7 +402,10 @@ pub(crate) unsafe fn buf_do_map(
                             // SAFETY: `m_str` and `m_keys` are the entry's own
                             // NUL-terminated strings.
                             let (n, p) = if round != 0 {
-                                (unsafe { strlen(entry.m_str) } as c_int, entry.m_str)
+                                (
+                                    unsafe { cstr::bytes_at(entry.m_str) }.len() as c_int,
+                                    entry.m_str,
+                                )
                             } else {
                                 (entry.m_keylen, entry.m_keys)
                             };
@@ -665,7 +668,7 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
     // SAFETY: the caller's promise — both strings are live and
     // NUL-terminated — and `args` is this frame's own struct.
     unsafe {
-        let (lhs_len, rhs_len) = (strlen(lhs), strlen(rhs));
+        let (lhs_len, rhs_len) = (cstr::bytes_at(lhs).len(), cstr::bytes_at(rhs).len());
         set_maparg_lhs_rhs(lhs, lhs_len, rhs, rhs_len, LUA_NOREF, cpo, parsed);
     }
     args.buffer = buffer;

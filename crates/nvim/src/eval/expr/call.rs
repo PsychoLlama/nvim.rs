@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
@@ -36,7 +37,6 @@ use crate::types::{
     Failed, NUL, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, funcexe_T,
     partial_T, size_t, typval_T, typval_vval_union,
 };
-use ::libc::strlen;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -335,7 +335,7 @@ pub(crate) unsafe fn eval_method(
                 name = unsafe { callee.vval.v_string };
                 callee.vval.v_string = null_mut();
                 tofree = name;
-                len = unsafe { strlen(name) } as c_int;
+                len = unsafe { cstr::bytes_at(name) }.len() as c_int;
             } else if callee.v_type == VAR_PARTIAL && !unsafe { callee.vval.v_partial }.is_null() {
                 // SAFETY: the tag says the union holds a live partial.
                 let pt = unsafe { Live::new(callee.vval.v_partial) };
@@ -353,7 +353,7 @@ pub(crate) unsafe fn eval_method(
                         ret = Err(Failed);
                         name = cur.get();
                     } else {
-                        len = unsafe { strlen(name) } as c_int;
+                        len = unsafe { cstr::bytes_at(name) }.len() as c_int;
                     }
                 }
             } else {

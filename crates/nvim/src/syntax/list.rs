@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_int};
@@ -509,7 +510,7 @@ unsafe fn put_keyword(
     let outlen = if force_newline {
         0
     } else {
-        unsafe { strlen(entry_to_key(kp)) as c_int }
+        unsafe { cstr::bytes_at(entry_to_key(kp)).len() as c_int }
     };
     if unsafe { syn_list_header(did_header, outlen, id, force_newline) } {
         *prev = KeywordOpts::none();

@@ -28,6 +28,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
@@ -49,7 +50,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{NUL, ShmFlag, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T};
-use ::libc::{memset, strcpy, strlen};
+use ::libc::{memset, strcpy};
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
 use super::{MAXWLEN, SMT_BAD, SMT_RARE};
@@ -165,9 +166,10 @@ pub unsafe fn spell_move_to(
         let empty_line = unsafe { *skipwhite(line) } == 0;
         unsafe { strcpy(buf, line) };
         if lnum < unsafe { (*(*wp).w_buffer).b_ml.ml_line_count } {
+            let buf_len = unsafe { cstr::bytes_at(buf) }.len();
             unsafe {
                 spell_cat_line(
-                    buf.add(strlen(buf)),
+                    buf.add(buf_len),
                     ml_get_buf((*wp).w_buffer, lnum + 1),
                     MAXWLEN as c_int,
                 )

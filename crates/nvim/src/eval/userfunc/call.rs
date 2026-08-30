@@ -201,7 +201,7 @@ pub unsafe fn call_user_func(
                     break;
                 }
             }
-            namelen = unsafe { strlen(name) };
+            namelen = unsafe { cstr::bytes_at(name) }.len();
         } else {
             if !has_args {
                 break;

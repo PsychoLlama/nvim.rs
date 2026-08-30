@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::Failed;
@@ -107,7 +108,7 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
     }
 
     let len = if maxlen == -1 {
-        unsafe { strlen(str) }
+        unsafe { cstr::bytes_at(str) }.len()
     } else {
         maxlen as size_t
     };

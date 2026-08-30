@@ -28,7 +28,7 @@ use crate::types::{
     kObjectTypeArray, kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
     msglist_T, size_t, uint64_t,
 };
-use ::libc::{abort, strlen};
+use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod create;

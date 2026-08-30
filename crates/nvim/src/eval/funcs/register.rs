@@ -9,6 +9,7 @@ use super::{
 };
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
+use crate::cstr;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find, tv_dict_get_number,
     tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_len, tv_list_ref,
@@ -27,7 +28,6 @@ use crate::types::{
     BoolVarValue, EvalFuncData, Failed, MotionType, NUL, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
     colnr_T, dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -331,7 +331,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             return;
         }
         let reg = regname as c_int;
-        let len = unsafe { strlen(strval) } as isize;
+        let len = unsafe { cstr::bytes_at(strval) }.len() as isize;
         unsafe { write_reg_contents_ex(reg, strval, len, append, yank_type, block_len) };
     }
     if pointreg != 0 {

@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -34,7 +35,6 @@ use crate::types::{
     MarkMove, MarkMoveRes, OP_NOP, OP_ROT13, cmdarg_T, fmark_T, searchit_arg_T, size_t,
 };
 use crate::window::goto_tabpage_lastused;
-use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_uint};
 
 /// Whether the highlight of the previous match has to be redrawn.
@@ -78,7 +78,7 @@ pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
     };
     let (pat, none) = (ca.searchbuf, ptr::null_mut());
     // SAFETY: `pat` is the NUL-terminated pattern just read.
-    let len = unsafe { strlen(pat) };
+    let len = unsafe { cstr::bytes_at(pat) }.len();
     unsafe { normal_search(cap, ca.cmdchar, pat, len, mark, none) };
 }
 

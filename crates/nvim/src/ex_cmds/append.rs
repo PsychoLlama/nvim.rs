@@ -13,6 +13,7 @@
 use super::lines::set_op_range;
 use super::{B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
+use crate::cstr;
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
@@ -32,7 +33,7 @@ use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
-use ::libc::{atol, strlen};
+use ::libc::atol;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -225,7 +226,7 @@ unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_ch
         }
         let mut end = unsafe { vim_strchr(next, NL) };
         if end.is_null() {
-            end = unsafe { next.add(strlen(next)) };
+            end = unsafe { next.add(cstr::bytes_at(next).len()) };
         }
         let line =
             unsafe { xmemdupz(next.cast(), end.offset_from(next) as size_t) }.cast::<c_char>();

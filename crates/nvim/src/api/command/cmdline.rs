@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::ascii::ascii_iswhite;
+use crate::cstr;
 use crate::types::ExArgt;
 use crate::winlayer::Ea;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -166,7 +167,7 @@ pub(crate) unsafe fn build_cmdline_str(
     let cmdname_idx: size_t = cmdline.size;
     let cmd = eap.cmd;
     // SAFETY: `eap.cmd` is the command name, NUL-terminated.
-    unsafe { cmdline_concat(&mut cmdline, cmd, strlen(cmd)) };
+    unsafe { cmdline_concat(&mut cmdline, cmd, cstr::bytes_at(cmd).len()) };
     if eap.argt.has(ExArgt::BANG) && eap.forceit != 0 {
         cmdline_concat_str(&mut cmdline, c"!");
     }

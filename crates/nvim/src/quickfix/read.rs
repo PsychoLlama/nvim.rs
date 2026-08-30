@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{CONV_NONE, IOSIZE, VAR_LIST, VAR_STRING};
@@ -228,7 +229,7 @@ impl Reader {
         }
         let newline = unsafe { vim_strchr(at, c_int::from(b'\n')) };
         let want = if newline.is_null() {
-            unsafe { strlen(at) }
+            unsafe { cstr::bytes_at(at) }.len()
         } else {
             unsafe { newline.offset_from(at) as usize + 1 }
         };
@@ -263,7 +264,7 @@ impl Reader {
             return Status::EndOfInput;
         }
         let text = unsafe { (*at).li_tv.vval.v_string };
-        self.len = self.fit(unsafe { strlen(text) });
+        self.len = self.fit(unsafe { cstr::bytes_at(text) }.len());
         unsafe { xstrlcpy(self.line(), text, self.len + 1) };
         self.source = Source::List(unsafe { (*at).li_next });
         Status::Ok
@@ -313,7 +314,7 @@ impl Reader {
                 return Status::EndOfInput;
             }
         }
-        self.len = unsafe { strlen(self.line.as_ptr()) };
+        self.len = unsafe { cstr::bytes_at(self.line.as_ptr()) }.len();
         if self.len != READ_CHUNK - 1 || self.line[self.len - 1] == b'\n' as c_char {
             return unsafe { self.convert() };
         }
@@ -336,7 +337,7 @@ impl Reader {
                 }
                 continue;
             }
-            self.len = unsafe { strlen(self.line.as_ptr().add(filled)) };
+            self.len = unsafe { cstr::bytes_at(self.line.as_ptr().add(filled)) }.len();
             filled += self.len;
             if self.line[filled - 1] == b'\n' as c_char {
                 break;
@@ -361,7 +362,7 @@ impl Reader {
                     if unsafe { *__errno_location() } != EINTR {
                         break;
                     }
-                } else if unsafe { strlen(scrap.as_ptr()) } < READ_CHUNK - 1
+                } else if unsafe { cstr::bytes_at(scrap.as_ptr()) }.len() < READ_CHUNK - 1
                     || scrap[READ_CHUNK - 2] == b'\n' as c_char
                 {
                     break;
@@ -609,7 +610,7 @@ pub(crate) unsafe fn qf_store_title(qfl: *mut qf_list_T, title: *const c_char) {
     if title.is_null() {
         return;
     }
-    let len = unsafe { strlen(title) } + 1;
+    let len = unsafe { cstr::bytes_at(title) }.len() + 1;
     let p: *mut c_char = unsafe { xmallocz(len) }.cast();
     unsafe { (*qfl).qf_title = p };
     unsafe { xstrlcpy(p, title, len + 1) };

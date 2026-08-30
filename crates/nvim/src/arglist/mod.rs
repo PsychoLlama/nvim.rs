@@ -27,6 +27,7 @@ use crate::buffer::{
     buf_hide, buf_is_empty, buf_set_name, buflist_add, curbuf_reusable, find_buf, maketitle,
     otherfile,
 };
+use crate::cstr;
 use crate::eval::typval::{
     tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_string,
 };
@@ -61,7 +62,6 @@ use crate::window::{
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
 use crate::winlayer::{Buf, Ea, Live, Win, tab_windows};
-use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -431,7 +431,7 @@ unsafe fn get_arglist(gap: *mut garray_T, str: *mut c_char, escaped: bool) {
     // argument: `split_one_arg` only ever shortens what it is given, so the
     // original length still bounds it.
     unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
-    let total = unsafe { strlen(str) } as usize;
+    let total = unsafe { cstr::bytes_at(str) }.len() as usize;
     let buf = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), total + 1) };
     let mut at = 0;
     while at < total && buf[at] != 0 {

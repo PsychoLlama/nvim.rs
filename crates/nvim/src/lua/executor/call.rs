@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -33,7 +34,6 @@ use crate::types::{
     Arena, ArenaMem, Array, Object, consumed_blk, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
-use ::libc::strlen;
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
@@ -57,7 +57,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
         let name = luaL_checklstring(lstate, 1, &raw mut name_len);
 
         if !nlua_is_deferred_safe() && !viml_func_is_fast(name) {
-            let length = strlen(name).min(NAME_LIMIT) + QUOTED_FMT_LEN;
+            let length = cstr::bytes_at(name).len().min(NAME_LIMIT) + QUOTED_FMT_LEN;
             vim_snprintf(
                 refused.as_mut_ptr(),
                 length,
