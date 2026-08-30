@@ -20,7 +20,7 @@ use crate::api::extmark::describe_ns;
 use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
 use crate::main::ui_event_ns_id;
 use crate::message_fmt::c_str;
@@ -254,15 +254,14 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
 /// `name` and `msg` must be valid C strings.
 unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
     let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
-    let format = c"Error in \"%s\" UI event handler (ns=%s):\n%s".as_ptr();
-    let who = c"report_error";
-    let (level, line) = (LOGLVL_ERR, line!() as i32);
-    let no_context = core::ptr::null();
-    let here = who.as_ptr();
-    // SAFETY: the format spends exactly the three C strings that follow it.
-    unsafe { logmsg_c!(level, no_context, here, line, true, format, name, ns, msg) };
-    // SAFETY: as above.
+    // SAFETY: the caller's two strings and the namespace name just built.
     let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    logmsg!(
+        LOGLVL_ERR,
+        c"report_error",
+        line!() as ::core::ffi::c_int,
+        "Error in \"{shown_name}\" UI event handler (ns={shown_ns}):\n{shown_msg}"
+    );
     msg_schedule_semsg_multiline!(
         "Error in \"{shown_name}\" UI event handler (ns={shown_ns}):\n{shown_msg}"
     );

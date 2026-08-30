@@ -29,7 +29,7 @@ use crate::api::buffer::buf_collect_lines;
 use crate::api::private::helpers::arena_array;
 use crate::buffer::buf_get_changedtick;
 use crate::guard::Lock;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_quiet};
 use crate::main::{cmdpreview, curbuf};
 use crate::memline::ml_flush_deleted_bytes;
@@ -242,10 +242,13 @@ fn callbacks_free(cb: BufUpdateCallbacks) {
 /// The line number is upstream's `__LINE__` at the call, kept so the log
 /// still names the C source everyone reads.
 fn elog_dead_channel(channelid: uint64_t) {
-    let here = c"buf_updates_send_changes".as_ptr();
-    let fmt = c"Disabling buffer updates for dead channel %lu".as_ptr();
-    // SAFETY: the format string takes exactly the one `uint64_t` passed.
-    unsafe { logmsg_c!(LOGLVL_ERR, ptr::null(), here, 258, true, fmt, channelid) };
+    logmsg!(
+        LOGLVL_ERR,
+        c"buf_updates_send_changes",
+        258,
+        "Disabling buffer updates for dead channel {}",
+        channelid
+    );
 }
 
 /// What `ml_flush_deleted_bytes` reports through three out-parameters.

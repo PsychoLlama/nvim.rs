@@ -36,6 +36,7 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
+use crate::message_fmt::{c_str, msg_addr};
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use crate::types::{
     Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,
@@ -264,10 +265,10 @@ unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *co
             LOGLVL_DBG,
             c"read_cb",
             122,
-            c"closing Stream (%p): %s (%s)",
-            stream.as_ptr().cast::<c_void>(),
-            uv_err_name(status),
-            uv_strerror(status),
+            "closing Stream ({}): {} ({})",
+            msg_addr(stream.as_ptr().cast::<c_void>()),
+            c_str(uv_err_name(status)),
+            c_str(uv_strerror(status))
         );
         uv_read_stop(uvstream);
     }

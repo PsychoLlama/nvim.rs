@@ -12,7 +12,8 @@
 use crate::cursor_shape::{SHAPE_BLOCK, SHAPE_HOR, SHAPE_IDX_N, SHAPE_VER, shape_entry};
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
-use crate::log::{LOGLVL_WRN, logmsg_c};
+use crate::log::{LOGLVL_WRN, logmsg};
+use crate::message_fmt::c_str;
 use crate::tui::output::{terminfo_out, terminfo_print_nums, terminfo_print_str};
 use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
@@ -63,17 +64,13 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
         b"horizontal" => SHAPE_HOR,
         _ => {
             // SAFETY: a NUL-terminated format and argument.
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_WRN,
-                    core::ptr::null(),
-                    c"tui_cursor_decode_shape".as_ptr(),
-                    0,
-                    true,
-                    c"Unknown shape value '%s'".as_ptr(),
-                    shape_str,
-                );
-            }
+            logmsg!(
+                LOGLVL_WRN,
+                c"tui_cursor_decode_shape",
+                0,
+                "Unknown shape value '{}'",
+                unsafe { c_str(shape_str) }
+            );
             SHAPE_BLOCK
         }
     }

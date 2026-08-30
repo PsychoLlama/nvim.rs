@@ -14,7 +14,7 @@ use crate::api::private::validate::err_bad_number;
 use crate::api_error;
 use crate::cstr;
 use crate::grid::default_grid_ref;
-use crate::log::logmsg_c;
+use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
 
 /// `NULL` where a message names no offending string value.
@@ -86,18 +86,12 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             None => rv = 2 as ::core::ffi::c_int,
         }
         if rv == 2 as ::core::ffi::c_int {
-            // SAFETY: the log macro's own operations; every argument is a
-            // literal that outlives the call.
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_DBG,
-                    ::core::ptr::null::<::core::ffi::c_char>(),
-                    c"nvim_get_proc_children".as_ptr(),
-                    1924 as ::core::ffi::c_int,
-                    true,
-                    c"fallback to vim._os_proc_children()".as_ptr(),
-                )
-            };
+            logmsg!(
+                LOGLVL_DBG,
+                c"nvim_get_proc_children",
+                1924,
+                "fallback to vim._os_proc_children()"
+            );
             let mut a: Array = Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,

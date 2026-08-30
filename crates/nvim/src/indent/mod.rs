@@ -25,12 +25,12 @@ use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::main::{State, curbuf, curwin, e_positive, saved_cursor};
 use crate::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::gettext;
 use crate::plines::getvcol;
@@ -590,16 +590,8 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     // `unsafe` block inherits it and so costs the ratchet nothing.
     let strict = |v: Option<c_int>, line: c_int, what: &CStr| -> c_int {
         v.unwrap_or_else(|| {
-            unsafe {
-                logmsg_c!(
-                    LOGLVL_ERR,
-                    ::core::ptr::null::<c_char>(),
-                    c"set_indent".as_ptr(),
-                    line,
-                    true,
-                    what.as_ptr(),
-                )
-            };
+            let what = msg_cstr(what);
+            logmsg!(LOGLVL_ERR, c"set_indent", line, "{what}");
             unsafe { abort() }
         })
     };

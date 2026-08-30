@@ -14,9 +14,10 @@ use crate::event::signal::{
 };
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
+use crate::message_fmt::c_str;
 use crate::os::cshim::snprintf;
 use crate::types::{
     IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
@@ -111,13 +112,11 @@ pub fn signal_init() {
         // on Linux. #5230
         sigemptyset(&raw mut mask);
         if pthread_sigmask(SIG_SETMASK, &raw mut mask, ptr::null_mut()) != 0 {
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                ptr::null(),
-                c"signal_init".as_ptr(),
+                c"signal_init",
                 47,
-                true,
-                c"Could not unblock signals, nvim might behave strangely.".as_ptr(),
+                "Could not unblock signals, nvim might behave strangely."
             );
         }
         for i in 0..WATCHED.len() {
@@ -196,15 +195,13 @@ fn deadly_signal(signum: c_int) -> ! {
         // Set the v:dying variable.
         set_vim_var_nr(Vv::Dying, 1);
         v_dying.set(1);
-        logmsg_c!(
+        logmsg!(
             LOGLVL_INF,
-            ptr::null(),
-            c"deadly_signal".as_ptr(),
+            c"deadly_signal",
             196,
-            true,
-            c"got signal %d (%s)".as_ptr(),
+            "got signal {} ({})",
             signum,
-            name,
+            c_str(name)
         );
         snprintf(
             dying.as_mut_ptr(),
@@ -259,15 +256,7 @@ fn handle_signal(signum: c_int) {
                 );
             }
             _ => {
-                logmsg_c!(
-                    LOGLVL_ERR,
-                    ptr::null(),
-                    c"on_signal".as_ptr(),
-                    254,
-                    true,
-                    c"invalid signal: %d".as_ptr(),
-                    signum,
-                );
+                logmsg!(LOGLVL_ERR, c"on_signal", 254, "invalid signal: {}", signum);
             }
         }
     }

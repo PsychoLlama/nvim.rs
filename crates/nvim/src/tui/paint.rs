@@ -16,7 +16,7 @@
 
 use crate::event::r#loop::{loop_purge, loop_size};
 use crate::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};
-use crate::log::{LOGLVL_WRN, logmsg_c};
+use crate::log::{LOGLVL_WRN, logmsg};
 use crate::mbyte::{utf_ambiguous_width, utf_char2cells, utf_ptr2char};
 use crate::tui::attrs::{attrs_differ, update_attrs};
 use crate::tui::events::tui_busy_stop;
@@ -569,14 +569,12 @@ pub fn tui_flush(tui: &mut TUIData) {
         if queued > TOO_MANY_EVENTS {
             // The editor is producing updates faster than they can be drawn;
             // drawing every one of them would only fall further behind.
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_WRN,
-                core::ptr::null(),
-                c"tui_flush".as_ptr(),
+                c"tui_flush",
                 0,
-                true,
-                c"TUI event-queue flooded (thread_events=%zu); purging".as_ptr(),
-                queued,
+                "TUI event-queue flooded (thread_events={}); purging",
+                queued
             );
             loop_purge(tui.loop_0);
             tui_busy_stop(tui);

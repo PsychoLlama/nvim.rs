@@ -30,6 +30,7 @@ use crate::event::libuv::{
 };
 use crate::event::r#loop::EventLoop;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
+use crate::message_fmt::msg_addr;
 use crate::types::{
     Loop, MultiQueue, Stream, uv_handle_t, uv_handle_type, uv_idle_t, uv_loop_t, uv_pipe_t,
     uv_run_mode, uv_stream_t, uv_tcp_t,
@@ -242,15 +243,13 @@ pub fn may_close(mut stream: Conn) {
         return;
     }
     // SAFETY: the log takes its own lock; the pointer is only formatted.
-    unsafe {
-        logmsg!(
-            LOGLVL_DBG,
-            c"stream_may_close",
-            101,
-            c"closing Stream: %p",
-            stream.as_ptr().cast::<c_void>(),
-        );
-    }
+    logmsg!(
+        LOGLVL_DBG,
+        c"stream_may_close",
+        101,
+        "closing Stream: {}",
+        msg_addr(stream.as_ptr().cast::<c_void>())
+    );
     stream.closed = true;
     if stream.pending_reqs == 0 {
         close_handle(stream);
@@ -266,16 +265,14 @@ pub fn close_handle(mut stream: Conn) {
             let unwritten = unsafe { uv_stream_get_write_queue_size(uvstream) };
             if unwritten > 0 {
                 // SAFETY: the log takes its own lock.
-                unsafe {
-                    logmsg!(
-                        LOGLVL_WRN,
-                        c"stream_close_handle",
-                        124,
-                        c"closed Stream (%p) with %zu unwritten bytes",
-                        stream.as_ptr().cast::<c_void>(),
-                        unwritten,
-                    );
-                }
+                logmsg!(
+                    LOGLVL_WRN,
+                    c"stream_close_handle",
+                    124,
+                    "closed Stream ({}) with {} unwritten bytes",
+                    msg_addr(stream.as_ptr().cast::<c_void>()),
+                    unwritten
+                );
             }
             uvstream.cast()
         }

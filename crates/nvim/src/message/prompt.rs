@@ -20,7 +20,8 @@ use crate::keycodes::{
     K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
     K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_X1MOUSE, K_X2MOUSE,
 };
-use crate::log::logmsg_c;
+use crate::log::logmsg;
+use crate::message_fmt::c_str;
 use crate::types::NUL;
 use core::ffi::c_int;
 use core::ptr;
@@ -572,14 +573,14 @@ pub unsafe fn msg_delay(ms: uint64_t, ignoreinput: bool) {
     }
     // Under the test harness a real delay would just be slow.
     let ms = if nvim_testing.get() { 100 } else { ms };
-    let at = c"msg_delay".as_ptr();
-    let fmt = c"%lu ms%s".as_ptr();
     let note = if nvim_testing.get() {
         c" (skipped by NVIM_TEST)".as_ptr()
     } else {
         c"".as_ptr()
     };
-    unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 4047, true, fmt, ms, note) };
+    // SAFETY: one of the two literals just above.
+    let note = unsafe { c_str(note) };
+    logmsg!(LOGLVL_DBG, c"msg_delay", 4047, "{ms} ms{note}");
     unsafe { ui_flush() };
     os_delay(ms, ignoreinput);
 }

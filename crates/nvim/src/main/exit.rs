@@ -23,7 +23,7 @@ use crate::eval::userfunc::invoke_all_defer;
 use crate::eval::vars::{get_vim_var_str, set_vim_var_nr, set_vim_var_string, set_vim_var_type};
 use crate::event::stream::stream_set_blocking;
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::entry::event_teardown;
 use crate::main::{
     curbuf, did_emsg, ex_exitval, exiting, exmode_active, garbage_collect_at_exit, no_wait_return,
@@ -88,8 +88,7 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
         stream_set_blocking(STDIN_FILENO, true);
     }
 
-    let (site, fmt) = (c"os_exit".as_ptr(), c"Nvim exit: %d".as_ptr());
-    unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), site, 737, true, fmt, r) };
+    logmsg!(LOGLVL_INF, c"os_exit", 737, "Nvim exit: {r}");
 
     unsafe { exit(r) };
 }

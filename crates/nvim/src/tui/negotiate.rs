@@ -13,14 +13,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg_c};
+use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::main::nvim_testing;
 use crate::memory::strequal;
+use crate::message_fmt::c_str;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};
 use ::libc::tcgetattr;
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{c_char, c_void};
 
 /// DEC private modes the TUI asks about or sets. The numbers are the
 /// terminal's own.
@@ -69,14 +70,14 @@ pub(crate) fn tui_set_term_mode(tui: &mut TUIData, mode: TermMode, set: bool) {
 pub unsafe fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState) {
     let is_set = match state {
         MODE_NOT_RECOGNIZED | MODE_PERMANENTLY_RESET => {
-            log_mode(c"TUI: terminal mode %d unavailable, state %d", mode, state);
+            log_mode("unavailable", mode, state);
             return;
         }
         MODE_SET | MODE_PERMANENTLY_SET => true,
         MODE_RESET => false,
         _ => return,
     };
-    log_mode(c"TUI: terminal mode %d detected, state %d", mode, state);
+    log_mode("detected", mode, state);
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         match mode {
@@ -103,23 +104,16 @@ pub unsafe fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: Ter
 }
 
 /// Log a mode query's outcome, unless a test is watching the messages.
-fn log_mode(message: &CStr, mode: TermMode, state: TermModeState) {
+fn log_mode(what: &str, mode: TermMode, state: TermModeState) {
     if nvim_testing.get() {
         return;
     }
-    // SAFETY: `message` holds the two `%d` these arguments fill.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_WRN,
-            core::ptr::null(),
-            c"tui_handle_term_mode".as_ptr(),
-            0,
-            true,
-            message.as_ptr(),
-            mode,
-            state,
-        );
-    }
+    logmsg!(
+        LOGLVL_WRN,
+        c"tui_handle_term_mode",
+        0,
+        "TUI: terminal mode {mode} {what}, state {state}"
+    );
 }
 
 // ------------------------------------------------------------ capability queries
@@ -249,14 +243,12 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
         let mut t: termios = core::mem::zeroed();
         if tcgetattr((*input).in_fd, &raw mut t) != -1 {
             erase = t.c_cc[VERASE];
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_DBG,
-                core::ptr::null(),
-                c"tui_get_stty_erase".as_ptr(),
+                c"tui_get_stty_erase",
                 0,
-                true,
-                c"stty/termios:erase=%s".as_ptr(),
-                ONE_CHAR_STRINGS[usize::from(erase)].as_ptr(),
+                "stty/termios:erase={}",
+                c_str(ONE_CHAR_STRINGS[usize::from(erase)].as_ptr())
             );
         }
     }
@@ -289,12 +281,12 @@ pub(crate) unsafe extern "C" fn tui_tk_ti_getstr(
         }
         let erase = ERASE.get();
         if strequal(name, c"key_backspace".as_ptr()) {
-            log_termkey(c"libtermkey:kbs=%s", value);
+            log_termkey("kbs", value);
             if *erase != 0 {
                 return erase;
             }
         } else if strequal(name, c"key_dc".as_ptr()) {
-            log_termkey(c"libtermkey:kdch1=%s", value);
+            log_termkey("kdch1", value);
             // A capability of -1 is terminfo's "absent", not a string.
             if !value.is_null()
                 && value != core::ptr::with_exposed_provenance::<c_char>(usize::MAX)
@@ -309,7 +301,7 @@ pub(crate) unsafe extern "C" fn tui_tk_ti_getstr(
                 };
             }
         } else if strequal(name, c"key_mouse".as_ptr()) {
-            log_termkey(c"libtermkey:kmous=%s", value);
+            log_termkey("kmous", value);
             return core::ptr::null();
         }
         value
@@ -320,18 +312,13 @@ const DEL_STR: [c_char; 2] = [DEL, 0];
 const CTRL_H_STR: [c_char; 2] = [CTRL_H, 0];
 
 /// Log a capability libtermkey asked for.
-fn log_termkey(message: &CStr, value: *const c_char) {
-    // SAFETY: `message` holds the one `%s` `value` fills, and `value` is
-    // libtermkey's own NUL-terminated capability string.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            core::ptr::null(),
-            c"tui_tk_ti_getstr".as_ptr(),
-            0,
-            true,
-            message.as_ptr(),
-            value,
-        );
-    }
+fn log_termkey(cap: &str, value: *const c_char) {
+    // SAFETY: libtermkey's own NUL-terminated capability string.
+    let value = unsafe { c_str(value) };
+    logmsg!(
+        LOGLVL_DBG,
+        c"tui_tk_ti_getstr",
+        0,
+        "libtermkey:{cap}={value}"
+    );
 }

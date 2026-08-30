@@ -32,7 +32,7 @@ use crate::event::libuv::{
     uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
     uv_translate_sys_error,
 };
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::main::{g_stats, p_verbose, stdin_fd};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
@@ -487,30 +487,26 @@ pub unsafe fn os_set_cloexec(fd: c_int) -> c_int {
         let fdflags = fcntl(fd, F_GETFD);
         if fdflags < 0 {
             let e = *__errno_location();
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                ptr::null::<c_char>(),
-                c"os_set_cloexec".as_ptr(),
+                c"os_set_cloexec",
                 497,
-                true,
-                c"Failed to get flags on descriptor %d: %s".as_ptr(),
+                "Failed to get flags on descriptor {}: {}",
                 fd,
-                strerror(e),
+                c_str(strerror(e))
             );
             *__errno_location() = e;
             return -1;
         }
         if fdflags & FD_CLOEXEC == 0 && fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) == -1 {
             let e = *__errno_location();
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                ptr::null::<c_char>(),
-                c"os_set_cloexec".as_ptr(),
+                c"os_set_cloexec",
                 504,
-                true,
-                c"Failed to set CLOEXEC on descriptor %d: %s".as_ptr(),
+                "Failed to set CLOEXEC on descriptor {}: {}",
                 fd,
-                strerror(e),
+                c_str(strerror(e))
             );
             *__errno_location() = e;
             return -1;

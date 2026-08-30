@@ -26,7 +26,7 @@ use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
 use crate::drawscreen::comp_col;
 use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::{
     Rows, curbuf, current_sctx, curwin, fenc_default, p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh,
     p_title, p_window,
@@ -34,6 +34,7 @@ use crate::main::{
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
+use crate::message_fmt::c_str;
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,
@@ -510,18 +511,13 @@ pub(crate) unsafe fn find_dup_item(
 
 /// The second startup pass, once the screen size is known.
 pub(crate) fn set_init_2(_headless: bool) {
-    // SAFETY: the option table and the screen are the editor's own.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"set_init_2".as_ptr(),
-            613,
-            true,
-            c"startup runtimepath/packpath value: %s".as_ptr(),
-            p_rtp.get(),
-        )
-    };
+    logmsg!(
+        LOGLVL_INF,
+        c"set_init_2",
+        613,
+        "startup runtimepath/packpath value: {}",
+        unsafe { c_str(p_rtp.get()) }
+    );
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.
     if !option_was_set(kOptScroll) {

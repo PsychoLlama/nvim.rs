@@ -99,13 +99,14 @@ unsafe fn decor_provider_error(ns_id: NS, name: *const c_char, msg: *const c_cha
     // SAFETY: the caller's NUL-terminated strings, plus the editor's own
     // namespace table.
     let ns = describe_ns(ns_id, c"(UNKNOWN PLUGIN)".as_ptr());
-    let who = c"decor_provider_error";
-    let logged = c"Error in decoration provider \"%s\" (ns=%s):\n%s";
-    // SAFETY: the caller's strings and the namespace name, and the format
-    // spends exactly the three `%s` that follow it.
-    unsafe { logmsg!(LOGLVL_ERR, who, 29, logged, name, ns, msg) };
-    // SAFETY: as above.
+    // SAFETY: the caller's strings and the namespace name.
     let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
+    logmsg!(
+        LOGLVL_ERR,
+        c"decor_provider_error",
+        29,
+        "Error in decoration provider \"{shown_name}\" (ns={shown_ns}):\n{shown_msg}"
+    );
     msg_schedule_semsg_multiline!(
         "Decoration provider \"{shown_name}\" (ns={shown_ns}):\n{shown_msg}"
     );

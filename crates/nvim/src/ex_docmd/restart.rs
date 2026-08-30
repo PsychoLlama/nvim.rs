@@ -19,7 +19,7 @@ use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
 use crate::ex_docmd::{GA_EMPTY_INIT_VALUE, cmdmod_has, kChannelPartAll};
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::{current_ui, e_invchan, exiting, getout};
 use crate::memory::{xcalloc, xmemdupz};
 
@@ -403,17 +403,9 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
         emsg(close_err);
         return;
     }
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"ex_detach".as_ptr(),
-            6019,
-            true,
-            c"detach current_ui=%ld".as_ptr(),
-            (*chan).id,
-        )
-    };
+    // SAFETY: the channel this command just closed is still live.
+    let id = unsafe { (*chan).id };
+    logmsg!(LOGLVL_INF, c"ex_detach", 6019, "detach current_ui={id}");
 }
 
 /// `:connect` — attach this session's UI to another server, then detach

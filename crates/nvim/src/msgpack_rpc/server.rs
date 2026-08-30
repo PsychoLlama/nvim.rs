@@ -22,6 +22,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::main::main_loop;
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
@@ -107,7 +108,7 @@ pub unsafe fn server_init(
 
     // SAFETY: a static name, and a message with no arguments.
     if unsafe { os_env_exists(c"__NVIM_TEST_LOG".as_ptr(), false) } {
-        unsafe { logmsg!(LOGLVL_ERR, c"server_init", 58, c"test log message") };
+        logmsg!(LOGLVL_ERR, c"server_init", 58, "test log message");
     }
 
     let mut ok = true;
@@ -218,16 +219,16 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
         .ok()
         .is_none_or(|w| w >= SOCKET_ADDR_LEN);
     if truncated {
-        // SAFETY: `address` is NUL-terminated and the verb takes a string.
-        unsafe {
-            logmsg!(
-                LOGLVL_ERR,
-                c"server_address_new",
-                133,
-                c"truncated server address: %.40s...",
-                address.as_mut_ptr(),
-            )
-        };
+        // SAFETY: `address` is this frame's NUL-terminated buffer; `%.40s`
+        // printed at most its first 40 bytes, which is what the slice is.
+        let head = unsafe { crate::cstr::bytes_at(address.as_ptr()) };
+        let head = msg_bytes(&head[..head.len().min(40)]);
+        logmsg!(
+            LOGLVL_ERR,
+            c"server_address_new",
+            133,
+            "truncated server address: {head}..."
+        );
     }
     // SAFETY: `address` is NUL-terminated.
     unsafe { xstrdup(address.as_ptr()) }
@@ -267,8 +268,7 @@ pub unsafe fn server_owns_pipe_address(address: *const c_char) -> bool {
 pub unsafe fn server_start(addr: *const c_char) -> c_int {
     // SAFETY: the caller's address.
     if addr.is_null() || unsafe { *addr == 0 } {
-        // SAFETY: a message with no arguments.
-        unsafe { logmsg!(LOGLVL_WRN, c"server_start", 169, c"Empty or NULL address") };
+        logmsg!(LOGLVL_WRN, c"server_start", 169, "Empty or NULL address");
         return 1;
     }
 
@@ -313,15 +313,13 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     if already_listening {
         // SAFETY: the watcher is live and its address is NUL-terminated; a
         // TCP watcher owns the addrinfo `socket_watcher_init` resolved.
-        unsafe {
-            logmsg!(
-                LOGLVL_ERR,
-                c"server_start",
-                186,
-                c"Already listening on %s",
-                watcher_addr(watcher),
-            )
-        };
+        logmsg!(
+            LOGLVL_ERR,
+            c"server_start",
+            186,
+            "Already listening on {}",
+            unsafe { c_str(watcher_addr(watcher)) }
+        );
         if unsafe { (*(*watcher).stream).type_0 } == UV_TCP {
             unsafe { uv_freeaddrinfo((*watcher).uv.tcp.addrinfo) };
         }
@@ -334,16 +332,14 @@ pub unsafe fn server_start(addr: *const c_char) -> c_int {
     if result < 0 {
         // SAFETY: the watcher is still live, and `free_server` releases it
         // once libuv is done.
-        unsafe {
-            logmsg!(
-                LOGLVL_WRN,
-                c"server_start",
-                197,
-                c"Failed to start server: %s: %s",
-                uv_strerror(result),
-                watcher_addr(watcher),
-            )
-        };
+        logmsg!(
+            LOGLVL_WRN,
+            c"server_start",
+            197,
+            "Failed to start server: {}: {}",
+            unsafe { c_str(uv_strerror(result)) },
+            unsafe { c_str(watcher_addr(watcher)) }
+        );
         unsafe { socket_watcher_close(watcher, Some(free_server)) };
         return result;
     }
@@ -388,16 +384,13 @@ pub unsafe fn server_stop(endpoint: *const c_char, keep_vservername: bool) -> bo
         Some(watchers.swap_remove(index))
     });
     let Some(watcher) = found else {
-        // SAFETY: `addr` is NUL-terminated and the verb takes a string.
-        unsafe {
-            logmsg!(
-                LOGLVL_WRN,
-                c"server_stop",
-                236,
-                c"Not listening on %s",
-                addr.as_mut_ptr(),
-            )
-        };
+        logmsg!(
+            LOGLVL_WRN,
+            c"server_stop",
+            236,
+            "Not listening on {}",
+            unsafe { c_str(addr.as_mut_ptr()) }
+        );
         return false;
     };
 
@@ -442,16 +435,13 @@ pub unsafe fn server_address_list(size: *mut size_t) -> *mut *mut c_char {
 /// `watcher` is the live watcher the connection arrived on.
 unsafe fn connection_cb(watcher: *mut SocketWatcher, result: c_int, _data: *mut c_void) {
     if result != 0 {
-        // SAFETY: `uv_strerror` answers a static string for any code.
-        unsafe {
-            logmsg!(
-                LOGLVL_ERR,
-                c"connection_cb",
-                276,
-                c"Failed to accept connection: %s",
-                uv_strerror(result),
-            )
-        };
+        logmsg!(
+            LOGLVL_ERR,
+            c"connection_cb",
+            276,
+            "Failed to accept connection: {}",
+            unsafe { c_str(uv_strerror(result)) }
+        );
         return;
     }
     // SAFETY: the caller's watcher, which has a pending connection.

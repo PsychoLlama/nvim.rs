@@ -57,6 +57,7 @@ use crate::main::{
     exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
     ui_client_exit_status,
 };
+use crate::message_fmt::c_str;
 use crate::os::proc::os_proc_tree_kill;
 use crate::os::pty_proc_unix::{
     pty_proc_close, pty_proc_close_master, pty_proc_flush_master, pty_proc_spawn, pty_proc_teardown,
@@ -334,9 +335,14 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     let pid = child.pid;
     // SAFETY: the child, which has just been spawned.
     let exepath = unsafe { proc_get_exepath(child.as_ptr()) };
-    let fmt = c"new: pid=%d exepath=[%s]";
-    // SAFETY: `logmsg_begin` takes the log's lock and hands back its handle.
-    unsafe { logmsg!(LOGLVL_DBG, c"proc_spawn", 127, fmt, pid, exepath) };
+    logmsg!(
+        LOGLVL_DBG,
+        c"proc_spawn",
+        127,
+        "new: pid={} exepath=[{}]",
+        pid,
+        unsafe { c_str(exepath) }
+    );
     0
 }
 
@@ -497,9 +503,12 @@ pub unsafe fn proc_free(proc: *mut Proc) {
 
 /// Self-exit, because the primary RPC channel was closed.
 pub fn exit_on_closed_chan(status: c_int) {
-    let msg = c"self-exit triggered by closed RPC channel...";
-    // SAFETY: `logmsg_begin` takes the log's lock and hands back its handle.
-    unsafe { logmsg!(LOGLVL_DBG, c"exit_on_closed_chan", 440, msg) };
+    logmsg!(
+        LOGLVL_DBG,
+        c"exit_on_closed_chan",
+        440,
+        "self-exit triggered by closed RPC channel..."
+    );
     let event = one_arg_event(Some(exit_event), pack_int(status));
     // SAFETY: `main_loop.fast_events` is live for as long as the editor is.
     unsafe { multiqueue_put_event((*main_loop.ptr()).fast_events, event) };
@@ -803,10 +812,15 @@ unsafe fn on_proc_exit(proc: *mut Proc) {
     let child = unsafe { Child::new(proc) };
     // The stray "lu" is upstream's: the C source concatenated PRIu64 onto a
     // format that had already consumed the argument with %d.
-    let fmt = c"child exited: pid=%d status=%dlu";
     let (pid, status) = (child.pid, child.status);
-    // SAFETY: `logmsg_begin` takes the log's lock and hands back its handle.
-    unsafe { logmsg!(LOGLVL_INF, c"on_proc_exit", 447, fmt, pid, status) };
+    logmsg!(
+        LOGLVL_INF,
+        c"on_proc_exit",
+        447,
+        "child exited: pid={} status={}lu",
+        pid,
+        status
+    );
 
     let queue = if child.events.is_null() {
         child.loop_events()

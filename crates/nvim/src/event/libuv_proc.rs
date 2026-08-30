@@ -24,6 +24,7 @@ use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror
 use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::ui_client_forward_stdin;
+use crate::message_fmt::c_str;
 use crate::narrow::number_as_int;
 use crate::os::env::os_free_fullenv;
 use crate::types::libc::STDERR_FILENO;
@@ -232,13 +233,15 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     // filled in above, which libuv keeps pointers into until it closes.
     let status = unsafe { uv_spawn(uv_loop, handle, opts) };
     if status != 0 {
-        let file = uvproc.uvopts.file;
-        // SAFETY: libuv's error strings are static.
-        let why = unsafe { uv_strerror(status) };
-        let fmt = c"uv_spawn(%s) failed: %s";
-        // SAFETY: `logmsg_begin` takes the log's lock and hands back its
-        // handle; libuv's error string is static.
-        unsafe { logmsg!(LOGLVL_INF, c"libuv_proc_spawn", 141, fmt, file, why) };
+        // SAFETY: the spawn options' own file name; libuv's error strings
+        // are static.
+        let (file, why) = unsafe { (c_str(uvproc.uvopts.file), c_str(uv_strerror(status))) };
+        logmsg!(
+            LOGLVL_INF,
+            c"libuv_proc_spawn",
+            141,
+            "uv_spawn({file}) failed: {why}"
+        );
         // Nothing will reach `close_cb` to free it.
         if !uvproc.uvopts.env.is_null() {
             let env = uvproc.uvopts.env;

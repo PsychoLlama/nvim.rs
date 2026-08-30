@@ -25,6 +25,7 @@
 
 pub mod address;
 
+use crate::message_fmt::c_str;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -202,16 +203,13 @@ pub unsafe fn socket_watcher_init(
             // SAFETY: `scan` walks the NUL-terminated port half.
             let ok = unsafe { try_getdigits(&raw mut scan, &raw mut iport) };
             if !ok || iport < 0 || iport > intmax_t::from(u16::MAX) {
-                // SAFETY: the log's lock; `port` is NUL-terminated.
-                unsafe {
-                    logmsg!(
-                        LOGLVL_ERR,
-                        c"socket_watcher_init",
-                        62,
-                        c"Invalid port: %s",
-                        port
-                    )
-                };
+                logmsg!(
+                    LOGLVL_ERR,
+                    c"socket_watcher_init",
+                    62,
+                    "Invalid port: {}",
+                    unsafe { c_str(port) }
+                );
                 return UV_EINVAL;
             }
             // SAFETY: `port` points into the buffer.
@@ -237,9 +235,13 @@ pub unsafe fn socket_watcher_init(
                 uv_getaddrinfo(uv, &raw mut request, None, addr, port, &raw const hints)
             };
             if retval != 0 {
-                let fmt = c"Host lookup failed: %s";
-                // SAFETY: the log's lock; `endpoint` is the caller's string.
-                unsafe { logmsg!(LOGLVL_ERR, c"socket_watcher_init", 78, fmt, endpoint) };
+                logmsg!(
+                    LOGLVL_ERR,
+                    c"socket_watcher_init",
+                    78,
+                    "Host lookup failed: {}",
+                    unsafe { c_str(endpoint) }
+                );
                 return retval;
             }
             // SAFETY: the watcher's own union, whose TCP arm this picks.
@@ -377,23 +379,36 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
 
     // SAFETY: the loop the watcher's handle belongs to, and its address.
     if unsafe { socket_alive(uv_loop, addr) } {
-        let fmt = c"Socket already in use by another Nvim instance: %s";
-        // SAFETY: the log's lock; `addr` is NUL-terminated.
-        unsafe { logmsg!(LOGLVL_ERR, c"socket_watcher_start", 203, fmt, addr) };
+        logmsg!(
+            LOGLVL_ERR,
+            c"socket_watcher_start",
+            203,
+            "Socket already in use by another Nvim instance: {}",
+            unsafe { c_str(addr) }
+        );
         return failure;
     }
 
-    let fmt = c"Removing stale socket: %s";
-    // SAFETY: the log's lock; `addr` is NUL-terminated.
-    unsafe { logmsg!(LOGLVL_INF, c"socket_watcher_start", 180, fmt, addr) };
+    logmsg!(
+        LOGLVL_INF,
+        c"socket_watcher_start",
+        180,
+        "Removing stale socket: {}",
+        unsafe { c_str(addr) }
+    );
     // SAFETY: the watcher's own address.
     let rm_result = unsafe { os_remove(addr) };
     if rm_result != 0 {
         // SAFETY: libuv's error strings are static.
         let why = unsafe { uv_strerror(rm_result) };
-        let fmt = c"Failed to remove stale socket %s: %s";
-        // SAFETY: the log's lock.
-        unsafe { logmsg!(LOGLVL_WRN, c"socket_watcher_start", 185, fmt, addr, why) };
+        logmsg!(
+            LOGLVL_WRN,
+            c"socket_watcher_start",
+            185,
+            "Failed to remove stale socket {}: {}",
+            unsafe { c_str(addr) },
+            unsafe { c_str(why) }
+        );
         return failure;
     }
 

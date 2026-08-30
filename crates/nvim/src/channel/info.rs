@@ -19,9 +19,10 @@ use crate::eval::{eval_fmt_source_name_line, get_v_event, restore_v_event};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::{channels, curbuf};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
+use crate::message_fmt::c_str;
 use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
@@ -147,19 +148,15 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
     let mut arena: Arena = ARENA_EMPTY;
     let mut tv = unsafe { info_tv((*chan).id, &raw mut arena) };
     let str = unsafe { encode_tv2json(&raw mut tv, ptr::null_mut()) };
-    unsafe {
-        logmsg_c!(
-            LOGLVL_INF,
-            ptr::null(),
-            c"channel_create_event".as_ptr(),
-            258,
-            true,
-            c"new channel %lu (%s) : %s".as_ptr(),
-            (*chan).id,
-            source,
-            str,
-        )
-    };
+    // SAFETY: the caller's live channel, and two NUL-terminated strings --
+    // the caller's `source` and the JSON just rendered.
+    let (id, source, info) = unsafe { ((*chan).id, c_str(source), c_str(str)) };
+    logmsg!(
+        LOGLVL_INF,
+        c"channel_create_event",
+        258,
+        "new channel {id} ({source}) : {info}"
+    );
     unsafe { xfree(str.cast()) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { channel_info_changed(chan, true) };

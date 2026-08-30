@@ -15,7 +15,7 @@
 //! handler, a waiting call frame or a closed channel.
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
@@ -26,6 +26,7 @@ use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{ch_before_blocking_events, resize_events, ui_client_attached};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
+use crate::message_fmt::{c_str_len, msg_addr};
 use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::types::{
@@ -61,9 +62,16 @@ pub(super) unsafe fn receive_msgpack(
     unsafe { channel_incref(chan.as_ptr()) };
     let id = chan.id;
     // SAFETY: the verbs match the arguments.
-    let fmt = c"ch %lu: parsing %zu bytes from msgpack Stream: %p";
     let from = stream.cast::<c_void>();
-    unsafe { logmsg!(LOGLVL_DBG, c"receive_msgpack", 211, fmt, id, c, from) };
+    logmsg!(
+        LOGLVL_DBG,
+        c"receive_msgpack",
+        211,
+        "ch {}: parsing {} bytes from msgpack Stream: {}",
+        id,
+        c,
+        msg_addr(from)
+    );
 
     let mut consumed = 0;
     if c > 0 {
@@ -291,16 +299,12 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         unsafe { multiqueue_put_event(resize_events.get(), ev) };
         return;
     }
-    // A method name is at most `protocol::METHOD_NAME_MAX` bytes, so the
-    // `%.*s` precision always fits; the clamp is for a shape the header
-    // parser cannot produce.
-    let name_len = c_int::try_from(p.method_name_len).unwrap_or(c_int::MAX);
-    let name = p.handler.name;
-    // SAFETY: the channel's queue is live, and the handler name is a static
-    // string the verbs match.
+    // SAFETY: the channel's queue is live.
     unsafe { multiqueue_put_event(chan.events, event) };
-    let fmt = c"RPC: scheduled %.*s";
-    unsafe { logmsg!(LOGLVL_DBG, c"handle_request", 347, fmt, name_len, name) };
+    // SAFETY: the handler name is a static string of at least
+    // `method_name_len` bytes -- the parser measured it there.
+    let name = unsafe { c_str_len(p.handler.name, p.method_name_len) };
+    logmsg!(LOGLVL_DBG, c"handle_request", 347, "RPC: scheduled {name}");
 }
 
 /// Runs one dispatched request and answers it.

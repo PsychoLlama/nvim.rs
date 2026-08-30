@@ -28,7 +28,7 @@ use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::hashtab::{
     hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_removed,
 };
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
@@ -310,10 +310,12 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
     unsafe { (*buf).b_spell = true };
     unsafe { (*buf).b_p_swf = 1 };
     if unsafe { ml_open(buf) }.is_err() {
-        let (site, at) = (c"open_spellbuf".as_ptr(), line!() as c_int);
-        let text = c"Error opening a new memline".as_ptr();
-        let none = core::ptr::null();
-        unsafe { logmsg_c!(LOGLVL_ERR, none, site, at, true, text) };
+        logmsg!(
+            LOGLVL_ERR,
+            c"open_spellbuf",
+            line!() as c_int,
+            "Error opening a new memline"
+        );
     }
     unsafe { ml_open_file(buf) }; // create the swap file now
 

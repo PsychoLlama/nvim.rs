@@ -15,8 +15,9 @@ use crate::api::private::helpers::{Reported, api_typename};
 use crate::api::private::validate::err_expected;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::strequal;
+use crate::message_fmt::c_str;
 use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint64_t};
 
 /// Log the failure a client reported for a request it had sent us.
@@ -32,15 +33,14 @@ pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: Stri
     } else {
         msg.data().cast_const()
     };
-    let fmt = c"async error on channel %ld: %s".as_ptr();
-    let (here, no_context) = (c"nvim_error_event".as_ptr(), ::core::ptr::null());
-    // SAFETY: the log macro's own operations; every argument outlives the
-    // call and matches its verb.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR, no_context, here, 44, true, fmt, channel_id, text
-        )
-    };
+    // SAFETY: `text` is the message this call was handed, NUL-terminated.
+    let text = unsafe { c_str(text) };
+    logmsg!(
+        LOGLVL_ERR,
+        c"nvim_error_event",
+        44,
+        "async error on channel {channel_id}: {text}"
+    );
 }
 
 /// Take delivery of a terminal event the UI forwarded. Only `termresponse` is

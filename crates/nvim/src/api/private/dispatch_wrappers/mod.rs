@@ -148,7 +148,7 @@ use crate::api::window::{
 use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
-use crate::log::logmsg_c;
+use crate::log::logmsg_line;
 use crate::main::{e_textlock, textlock};
 use crate::message_fmt::msg_cstr;
 use crate::types::{
@@ -214,24 +214,11 @@ unsafe fn args_slice(args: &Array) -> &[Object] {
 
 /// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
 /// level — the default — this is a load and a compare.
-fn log_invoke(handler: &CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
-    let fmt = c"RPC: ch %lu: invoke %s".as_ptr();
-    let (handler, method) = (handler.as_ptr(), method.as_ptr());
-    // SAFETY: the format string is this function's own and matches the two
-    // arguments after it; every string here is NUL-terminated and outlives
-    // the call.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            core::ptr::null(),
-            handler,
-            line,
-            true,
-            fmt,
-            channel_id,
-            method
-        );
-    }
+fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
+    let method = msg_cstr(method);
+    logmsg_line(LOGLVL_DBG, None, Some(handler), line, true, || {
+        format!("RPC: ch {channel_id}: invoke {method}")
+    });
 }
 
 /// Refuses a call that arrived with the wrong number of arguments.

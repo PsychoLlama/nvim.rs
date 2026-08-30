@@ -34,6 +34,7 @@ use crate::event::r#loop::loop_children;
 use crate::event::proc::{kProcTypePty, proc_get_exepath, proc_init};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
+use crate::message_fmt::{CDisplay, c_str};
 use crate::os::cshim::environ;
 use crate::os::fs::os_set_cloexec;
 use crate::os::signal::{SIGALRM, SIGCHLD, SIGCONT, SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM};
@@ -80,12 +81,26 @@ pub fn pty_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> PtyProc {
     rv
 }
 
+/// `strerror(errno)` as something a log line can print. Safe: `strerror`
+/// answers a static string for any errno.
+fn why() -> CDisplay<'static> {
+    // SAFETY: a static, NUL-terminated string for any errno.
+    unsafe { c_str(strerror(errno())) }
+}
+
 /// One `LOGLVL_ERR` line about a failed syscall, with `strerror(errno)` for
-/// its `%s`. Safe: `strerror` answers a static string for any errno.
-fn warn_errno(who: &CStr, line: c_int, fmt: &CStr) {
-    // SAFETY: `who` and `fmt` are NUL-terminated for the call, and `%s`
-    // spends the static string `strerror` answers.
-    unsafe { logmsg!(LOGLVL_ERR, who, line, fmt, strerror(errno())) };
+/// its tail.
+///
+/// A helper rather than a `logmsg!` per site because most of these sit
+/// inside a body-wide `unsafe` block, where the seven lines rustfmt wraps
+/// the call over are seven *unchecked* lines. One call, one line.
+fn warn_errno(who: &'static CStr, line: c_int, what: &str) {
+    logmsg!(LOGLVL_ERR, who, line, "{what}: {}", why());
+}
+
+/// [`warn_errno`] for a failure that carries no errno.
+fn warn(who: &'static CStr, line: c_int, what: &str) {
+    logmsg!(LOGLVL_ERR, who, line, "{what}");
 }
 
 /// Fork the child onto a new pseudo-terminal. Returns zero, or a negative
@@ -160,7 +175,7 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
     };
     if pid < 0 {
         let status = -errno();
-        warn_errno(c"pty_proc_spawn", 190, c"forkpty failed: %s");
+        warn_errno(c"pty_proc_spawn", 190, "forkpty failed");
         return status;
     }
     if pid == 0 {
@@ -177,22 +192,22 @@ pub unsafe fn pty_proc_spawn(ptyproc: *mut PtyProc) -> c_int {
             if flags == -1 {
                 // Captured before the logging, which does I/O of its own.
                 let status = -errno();
-                let fmt = c"Failed to get master descriptor status flags: %s";
-                warn_errno(c"pty_proc_spawn", 200, fmt);
+                let what = "Failed to get master descriptor status flags";
+                warn_errno(c"pty_proc_spawn", 200, what);
                 break 'configure status;
             }
             if fcntl(master, F_SETFL, flags | O_NONBLOCK) == -1 {
                 let status = -errno();
-                let fmt = c"Failed to make master descriptor non-blocking: %s";
-                warn_errno(c"pty_proc_spawn", 205, fmt);
+                let what = "Failed to make master descriptor non-blocking";
+                warn_errno(c"pty_proc_spawn", 205, what);
                 break 'configure status;
             }
             // Other jobs and providers must not get a copy of this
             // descriptor.
             if os_set_cloexec(master) == -1 {
                 let status = -errno();
-                let fmt = c"Failed to set CLOEXEC on ptmx file descriptor";
-                logmsg!(LOGLVL_ERR, c"pty_proc_spawn", 212, fmt);
+                let what = "Failed to set CLOEXEC on ptmx file descriptor";
+                warn(c"pty_proc_spawn", 212, what);
                 break 'configure status;
             }
             // Each direction gets its own copy of the master, so that
@@ -369,9 +384,8 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
         if !(*proc).cwd.is_null() {
             let err = uv_chdir((*proc).cwd);
             if err != 0 {
-                let fmt = c"chdir(%s) failed: %s";
-                let why = uv_strerror(err);
-                logmsg!(LOGLVL_ERR, c"init_child", 318, fmt, (*proc).cwd, why);
+                let (cwd, why) = (c_str((*proc).cwd), c_str(uv_strerror(err)));
+                logmsg!(LOGLVL_ERR, c"init_child", 318, "chdir({cwd}) failed: {why}");
                 _exit(EXEC_FAILED);
             }
         }
@@ -380,8 +394,8 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
         debug_assert!(!(*proc).env.is_null());
         environ = tv_dict_to_env((*proc).env);
         execvp(prog, (*proc).argv.cast::<*const c_char>());
-        let fmt = c"execvp(%s) failed: %s";
-        logmsg!(LOGLVL_ERR, c"init_child", 327, fmt, prog, strerror(errno()));
+        let (at, prog, why) = (c"init_child", c_str(prog), c_str(strerror(errno())));
+        logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
         _exit(EXEC_FAILED);
     }
 }
@@ -400,31 +414,29 @@ unsafe fn open_duplicate(fd: c_int, pipe: *mut uv_pipe_t) -> c_int {
         let fd_dup = dup(fd);
         if fd_dup < 0 {
             let status = -errno();
-            let fmt = c"Failed to dup descriptor %d: %s";
-            logmsg!(
-                LOGLVL_ERR,
-                c"open_duplicate",
-                398,
-                fmt,
-                fd,
-                strerror(errno())
-            );
+            let what = format!("Failed to dup descriptor {fd}");
+            warn_errno(c"open_duplicate", 398, &what);
             return status;
         }
 
         let status = if os_set_cloexec(fd_dup) == -1 {
             let status = -errno();
-            let fmt = c"Failed to set CLOEXEC on duplicate fd";
-            logmsg!(LOGLVL_ERR, c"open_duplicate", 404, fmt);
+            let what = "Failed to set CLOEXEC on duplicate fd";
+            warn(c"open_duplicate", 404, what);
             status
         } else {
             let status = uv_pipe_open(pipe, fd_dup);
             if status == 0 {
                 return 0;
             }
-            let fmt = c"Failed to set pipe to descriptor %d: %s";
-            let why = uv_strerror(status);
-            logmsg!(LOGLVL_ERR, c"open_duplicate", 411, fmt, fd_dup, why);
+            let why = c_str(uv_strerror(status));
+            let at = c"open_duplicate";
+            logmsg!(
+                LOGLVL_ERR,
+                at,
+                411,
+                "Failed to set pipe to descriptor {fd_dup}: {why}"
+            );
             status
         };
         close(fd_dup);

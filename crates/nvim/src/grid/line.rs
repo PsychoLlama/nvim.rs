@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::grid::{SLF_INC_VCOL, SLF_RIGHTLEFT, SLF_WRAP};
-use crate::log::logmsg_c;
+use crate::log::logmsg;
 use crate::types::{LineBuf, NUL};
 
 /// The one line under construction. See [`LineBuf`].
@@ -690,16 +690,12 @@ pub unsafe fn grid_put_linebuf(
 
     // Safety check; avoids clang warnings down the call stack.
     if !grid.is_allocated() || row >= grid.rows || coloff >= grid.cols {
-        unsafe {
-            logmsg_c!(
-                LOGLVL_DBG,
-                ::core::ptr::null(),
-                c"grid_put_linebuf".as_ptr(),
-                line!() as c_int,
-                true,
-                c"invalid state, skipped".as_ptr(),
-            )
-        };
+        logmsg!(
+            LOGLVL_DBG,
+            c"grid_put_linebuf",
+            line!() as c_int,
+            "invalid state, skipped"
+        );
         return;
     }
 

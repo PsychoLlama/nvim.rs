@@ -26,7 +26,7 @@
 
 mod scratch;
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
 use crate::drawscreen::windows_in_curtab;
@@ -34,7 +34,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
 use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
-use crate::log::{LOGLVL_DBG, logmsg_c};
+use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{Columns, Rows, curwin, hl_attr_active, p_wd, rdb_flags};
 use crate::message::msg_grid_ref;
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
@@ -660,13 +660,13 @@ pub unsafe fn ui_comp_compose_grid(grid: *mut ScreenGrid) {
 }
 
 /// C's `DLOG`, for the two geometry complaints below.
-///
-/// # Safety
-/// `fmt` must take two `Integer`s.
-unsafe fn dlog(line: c_int, fmt: *const c_char, value: Integer, grid: Integer) {
-    let here = c"ui_comp_raw_line".as_ptr();
-    // SAFETY: the caller's obligation.
-    unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), here, line, true, fmt, value, grid) };
+fn dlog(line: c_int, what: &str, value: Integer, grid: Integer) {
+    logmsg!(
+        LOGLVL_DBG,
+        c"ui_comp_raw_line",
+        line,
+        "compositor: invalid {what} {value} on grid {grid}"
+    );
 }
 
 /// One drawn line, straight from the grid the editor drew it into: either
@@ -703,15 +703,11 @@ pub unsafe fn ui_comp_raw_line(
     // a window is drawn against the older, larger screen size.
     let default = default_layer();
     if row >= Integer::from(default.rows) {
-        let fmt = c"compositor: invalid row %ld on grid %ld".as_ptr();
-        // SAFETY: two `Integer`s, as the format asks.
-        unsafe { dlog(580, fmt, row, grid) };
+        dlog(580, "row", row, grid);
         return;
     }
     if clearcol > Integer::from(default.cols) {
-        let fmt = c"compositor: invalid last column %ld on grid %ld".as_ptr();
-        // SAFETY: as above.
-        unsafe { dlog(585, fmt, clearcol, grid) };
+        dlog(585, "last column", clearcol, grid);
         if startcol >= Integer::from(default.cols) {
             return;
         }

@@ -12,10 +12,10 @@
 //! Nothing is written unless a debug log level is in force, so the formatting
 //! is left to `logmsg` rather than done at the call sites.
 
-use crate::log::logmsg_c;
+use crate::log::logmsg_tagged;
 use core::ffi::{CStr, c_char};
-use core::ptr;
 
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::types::{uint32_t, uint64_t};
 
 /// Fixed-width columns, so consecutive lines align. The trailing spaces are
@@ -39,12 +39,6 @@ mod column {
     /// The prefix every trace line shares. Passed as `logmsg`'s context rather
     /// than baked into the format, which is how the log file groups them.
     pub(super) const TAG: &CStr = c"RPC: ";
-
-    /// The three line shapes. A traced line is always
-    /// `<direction> <channel>: <column>` and then whatever the kind adds.
-    pub(super) const FMT_ID_NAME: &CStr = c"%s %lu: %s id=%u: %s\n";
-    pub(super) const FMT_NAME: &CStr = c"%s %lu: %s %s\n";
-    pub(super) const FMT_ID: &CStr = c"%s %lu: %s id=%u\n";
 }
 
 pub use column::{RECV, SEND};
@@ -55,44 +49,55 @@ pub use column::{RECV, SEND};
 /// the `[notify]` column instead.
 ///
 /// # Safety
-/// `name` is a NUL-terminated string, or null — the `%s` verb prints `(null)`
-/// for one, which is what an unresolved handler leaves behind.
+/// `name` is a NUL-terminated string, or null — an unresolved handler leaves
+/// null behind, and `c_str` prints it as `[NULL]`. glibc's `%s` wrote
+/// `(null)` there; the text of one debug line moves, nothing else.
 pub unsafe fn log_call(
     dir: &CStr,
     channel_id: uint64_t,
     req_id: Option<uint32_t>,
     name: *const c_char,
 ) {
-    let (lvl, tag, nofile) = (column::LOGLVL_DBG, column::TAG.as_ptr(), ptr::null());
-    let d = dir.as_ptr();
-    // SAFETY: the caller's `name`, and format verbs that match the arguments
-    // beside them. `logmsg_begin` refuses the line if no log file is open, so
-    // nothing here is evaluated against a closed handle.
+    let dir = msg_cstr(dir);
+    // SAFETY: the caller's promise -- `name` is NUL-terminated or null.
+    let name = unsafe { c_str(name) };
+    // A traced line is always `<direction> <channel>: <column>` and then
+    // whatever the kind adds. The closure runs only when a debug log is
+    // open, so an editor that is not tracing pays nothing to build it.
     match req_id {
         Some(id) => {
-            let k = column::REQUEST.as_ptr();
-            let fmt = column::FMT_ID_NAME.as_ptr();
-            unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, id, name) }
+            let kind = msg_cstr(column::REQUEST);
+            logmsg_tagged!(
+                column::LOGLVL_DBG,
+                column::TAG,
+                false,
+                "{dir} {channel_id}: {kind} id={id}: {name}\n"
+            )
         }
         None => {
-            let k = column::NOTIFY.as_ptr();
-            let fmt = column::FMT_NAME.as_ptr();
-            unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, name) }
+            let kind = msg_cstr(column::NOTIFY);
+            logmsg_tagged!(
+                column::LOGLVL_DBG,
+                column::TAG,
+                false,
+                "{dir} {channel_id}: {kind} {name}\n"
+            )
         }
     };
 }
 
 /// Traces a response. `errored` picks the `[error]` column over `[response]`.
 pub fn log_response(dir: &CStr, channel_id: uint64_t, errored: bool, req_id: uint32_t) {
-    let (lvl, tag, nofile) = (column::LOGLVL_DBG, column::TAG.as_ptr(), ptr::null());
-    let d = dir.as_ptr();
-    let k = if errored {
-        column::ERROR.as_ptr()
+    let dir = msg_cstr(dir);
+    let kind = msg_cstr(if errored {
+        column::ERROR
     } else {
-        column::RESPONSE.as_ptr()
-    };
-    let fmt = column::FMT_ID.as_ptr();
-    // SAFETY: every argument is a `&CStr`'s pointer or an integer, and the
-    // verbs match them; there is no caller-supplied pointer to get wrong.
-    unsafe { logmsg_c!(lvl, tag, nofile, -1, false, fmt, d, channel_id, k, req_id) };
+        column::RESPONSE
+    });
+    logmsg_tagged!(
+        column::LOGLVL_DBG,
+        column::TAG,
+        false,
+        "{dir} {channel_id}: {kind} id={req_id}\n"
+    );
 }

@@ -19,7 +19,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
-use crate::log::logmsg_c;
+use crate::log::logmsg;
 use crate::message_fmt::c_str;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
@@ -230,28 +230,37 @@ pub unsafe fn emsg_multiline(
                 write_line(unsafe { get_emsg_lnum() });
                 unsafe { redir_write(s, cstr::bytes_at(s).len() as ptrdiff_t) };
             }
-            let at = c"emsg_multiline".as_ptr();
+            // SAFETY: the message being reported, and the exec stack's own
+            // name for where it came from -- both NUL-terminated.
+            let text = unsafe { c_str(s) };
             if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-                let fmt = c"(:silent) %s (%s (line %d))".as_ptr();
-                let name = sourcing_top().es_name;
+                let name = unsafe { c_str(sourcing_top().es_name) };
                 let lnum = sourcing_top().es_lnum;
-                unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 845, true, fmt, s, name, lnum) };
+                logmsg!(
+                    LOGLVL_DBG,
+                    c"emsg_multiline",
+                    845,
+                    "(:silent) {text} ({name} (line {lnum}))"
+                );
             } else {
-                let fmt = c"(:silent) %s".as_ptr();
-                unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), at, 847, true, fmt, s) };
+                logmsg!(LOGLVL_DBG, c"emsg_multiline", 847, "(:silent) {text}");
             }
             return true;
         }
 
-        let at = c"emsg_multiline".as_ptr();
+        // SAFETY: as above.
+        let text = unsafe { c_str(s) };
         if !sourcing_top().es_name.is_null() && sourcing_top().es_lnum != 0 {
-            let fmt = c"%s (%s (line %d))".as_ptr();
-            let name = sourcing_top().es_name;
+            let name = unsafe { c_str(sourcing_top().es_name) };
             let lnum = sourcing_top().es_lnum;
-            unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), at, 855, true, fmt, s, name, lnum) };
+            logmsg!(
+                LOGLVL_INF,
+                c"emsg_multiline",
+                855,
+                "{text} ({name} (line {lnum}))"
+            );
         } else {
-            let fmt = c"%s".as_ptr();
-            unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), at, 857, true, fmt, s) };
+            logmsg!(LOGLVL_INF, c"emsg_multiline", 857, "{text}");
         }
 
         ex_exitval.set(1);

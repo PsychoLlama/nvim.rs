@@ -290,15 +290,15 @@ pub(crate) const fn check_template(template: &str) {
 // ---------------------------------------------------------------------------
 // Reporting
 
-/// The formatted message as the C string the message layer takes, truncated
-/// where the C wrapper's scratch buffer truncated it.
+/// The bytes a formatted message names.
 ///
-/// `cap` is that buffer's size, terminator included. An interior NUL from an
-/// argument ends the message there, as it did in the C caller.
-pub(crate) fn to_message(text: String, cap: usize) -> CString {
+/// `format_args!` can only carry a `&str`, so [`write_bytes`] puts a byte
+/// that is not valid UTF-8 through as `U+F700 + byte`; this is the other
+/// half, and it is why a file name or a pattern reaches the screen — or the
+/// log — byte for byte rather than as a run of `U+FFFD`.
+pub(crate) fn to_bytes(text: &str) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(text.len());
     for ch in text.chars() {
-        // A byte [`write_bytes`] could not put through a `&str`.
         match u32::from(ch)
             .checked_sub(ESCAPE_BASE)
             .and_then(|byte| u8::try_from(byte).ok())
@@ -310,6 +310,16 @@ pub(crate) fn to_message(text: String, cap: usize) -> CString {
             }
         }
     }
+    bytes
+}
+
+/// The formatted message as the C string the message layer takes, truncated
+/// where the C wrapper's scratch buffer truncated it.
+///
+/// `cap` is that buffer's size, terminator included. An interior NUL from an
+/// argument ends the message there, as it did in the C caller.
+pub(crate) fn to_message(text: String, cap: usize) -> CString {
+    let mut bytes = to_bytes(&text);
     if let Some(nul) = bytes.iter().position(|&b| b == 0) {
         bytes.truncate(nul);
     }
@@ -597,16 +607,17 @@ macro_rules! smsg_keep {
 /// The argument types vim's `printf` can read through a C variadic call.
 ///
 /// A variadic passes what it is handed, byte for byte, and the compiler
-/// checks nothing against the format string. That is survivable while every
-/// message argument is a raw pointer; it is a trap now that `gettext` answers
-/// a `&CStr`, because `&CStr` is a *fat* pointer and a `%s` reading one takes
-/// the length word for the rest of the string -- a segfault, and a silent one
-/// at the call site.
+/// checks nothing against the format string. `&CStr` is a *fat* pointer, so
+/// a `%s` reading one takes the length word for the rest of the string -- a
+/// segfault, and a silent one at the call site. This trait is the bound that
+/// keeps one out: it is implemented for the thin scalars and pointers vim's
+/// `printf` conversions actually consume, and deliberately not for `&CStr`,
+/// where the fix is `.as_ptr()`.
 ///
-/// So the `_c` macros route every value argument through [`c_arg`], and this
-/// trait is implemented for the thin scalars and pointers vim's `printf`
-/// conversions actually consume. `&CStr` is deliberately not among them: the
-/// fix at such a site is `.as_ptr()`.
+/// Nothing in the tree calls a variadic with a *message* any more. What is
+/// left is `encode`'s two `concat_num` helpers, which hand a number to
+/// `vim_snprintf` with a format of their own; the bound is what says the
+/// number is one a variadic can carry.
 pub(crate) trait CArg {}
 
 macro_rules! c_arg_scalars {
@@ -617,14 +628,6 @@ c_arg_scalars!(c_int, c_uint, c_long, c_ulong, usize, isize, f64);
 
 impl<T> CArg for *const T {}
 impl<T> CArg for *mut T {}
-
-/// Identity, with [`CArg`]'s bound on it: the seam where a variadic message
-/// argument is type-checked. Not meant to be called directly.
-#[doc(hidden)]
-#[inline(always)]
-pub(crate) fn c_arg<T: CArg>(arg: T) -> T {
-    arg
-}
 
 /// [`tr_template`] with its arguments spelled inline.
 ///

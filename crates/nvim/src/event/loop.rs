@@ -252,7 +252,7 @@ fn drain_until_closed(uv_loop: EventLoop, wait: bool) -> bool {
         if os_hrtime().wrapping_sub(start).wrapping_div(1_000_000_000) >= 2 {
             // SAFETY: the log's own locking; the loop is still readable.
             unsafe {
-                logmsg!(LOGLVL_ERR, c"loop_close", 172, c"uv_loop_close() hang?");
+                logmsg!(LOGLVL_ERR, c"loop_close", 172, "uv_loop_close() hang?");
                 log_uv_handles(uv_loop.uv().cast());
             }
             return false;

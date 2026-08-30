@@ -3,8 +3,10 @@
 //!
 //! A log line is written in three parts — [`logmsg_begin`] takes the lock and
 //! writes the `LVL date.millis name func:line:` prefix, the caller writes the
-//! payload, [`logmsg_finish`] terminates and releases. [`logmsg_c!`] is that
-//! sequence spelled once; it is what the ~100 call sites across the tree use.
+//! payload, [`logmsg_finish`] terminates and releases. [`logmsg_line`] is
+//! that sequence spelled once, and [`logmsg!`] / [`logmsg_tagged!`] are how
+//! the ~100 call sites across the tree spell it: a `format_args!` template
+//! the compiler checks, not a `printf` format the compiler cannot see.
 //!
 //! The file is chosen once, by [`log_init`], from `$NVIM_LOG_FILE` with two
 //! fallbacks (`$XDG_STATE_HOME/nvim/nvim.log`, then `./nvim.log`) and a last
@@ -40,14 +42,16 @@ use crate::types::{
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
 /// scope here ahead of its own textual definition.
-pub(crate) use crate::{logmsg, logmsg_c};
+pub(crate) use crate::{logmsg, logmsg_tagged};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
 use crate::os::cshim::{snprintf, stderr, stdout};
-use ::libc::{__errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, strerror, strftime};
+use ::libc::{
+    __errno_location, fclose, fflush, fopen, fprintf, fputc, fputs, fwrite, strerror, strftime,
+};
 
-/// The levels [`logmsg_c!`] takes, and 'verbose' compares against.
+/// The levels [`logmsg_line`] takes, and 'verbose' compares against.
 pub(crate) const LOGLVL_DBG: c_int = 1;
 pub(crate) const LOGLVL_INF: c_int = 2;
 pub(crate) const LOGLVL_WRN: c_int = 3;
@@ -218,18 +222,16 @@ fn log_path_init() {
     setenv_path(ENV_LOGFILE, &path);
     LOG_FILE_PATH.set(CString::new(path).ok());
     if log_dir_failure != 0 {
-        let failed_dir = failed_dir.map_or(core::ptr::null(), |d| d.as_ptr());
-        // SAFETY: `failed_dir` outlives the call; `uv_strerror` returns a
-        // static string.
-        let no_context = core::ptr::null::<c_char>();
-        let here = c"log_path_init".as_ptr();
-        let fmt = c"Failed to create directory %s for writing logs: %s".as_ptr();
-        let why = unsafe { uv_strerror(log_dir_failure) };
-        unsafe {
-            logmsg_c!(
-                LOGLVL_WRN, no_context, here, 106, true, fmt, failed_dir, why
-            )
-        };
+        let dir = failed_dir.map_or(core::ptr::null(), |d| d.as_ptr());
+        // SAFETY: `dir` outlives the call; `uv_strerror` returns a static
+        // string.
+        let (dir, why) = unsafe { (c_str(dir), c_str(uv_strerror(log_dir_failure))) };
+        logmsg!(
+            LOGLVL_WRN,
+            c"log_path_init",
+            106,
+            "Failed to create directory {dir} for writing logs: {why}"
+        );
     }
 }
 
@@ -263,8 +265,8 @@ fn log_unlock() {
 /// Returns the open log file with the lock held and the prefix already
 /// written, or null when the line is not going to be written at all — in
 /// which case nothing is held and the caller is done. **Every non-null
-/// return has to be paired with a [`logmsg_finish`]**; [`logmsg_c!`] is that
-/// pairing, and is how this should be called.
+/// return has to be paired with a [`logmsg_finish`]**; [`logmsg_line`] is
+/// that pairing, and is how this should be called.
 ///
 /// # Safety
 /// `context` and `func_name` are NUL-terminated or null, and outlive the
@@ -346,63 +348,94 @@ pub(crate) unsafe fn logmsg_finish(log_file: *mut FILE, eol: bool, payload_ok: b
 
 const EOF: c_int = -1;
 
-/// Write one `printf`-formatted line to the log file, at `log_level`, tagged
-/// with `context`/`func_name`/`line_num` and terminated by a newline when
-/// `eol`. Evaluates to `bool`: whether the line landed.
+/// Write one line to the log at `log_level`, tagged with
+/// `context`/`func_name`/`line_num` and terminated by a newline when `eol`.
+/// Answers whether the line landed.
 ///
-/// This is `logmsg()` split at the seam it already had — [`logmsg_begin`]
-/// takes the lock and writes the prefix, the expansion writes the payload
-/// with a direct `fprintf`, [`logmsg_finish`] terminates it and releases.
-/// Same handle, same order, same bytes as the C wrapper, without a C-variadic
-/// definition. As with the function, the *call site* supplies the `unsafe`.
+/// `text` renders the payload — [`logmsg_begin`] takes the lock and writes
+/// the prefix, this writes what `text` produced, [`logmsg_finish`]
+/// terminates it and releases. Same handle, same order, same bytes as the C
+/// wrapper.
 ///
-/// The payload arguments appear in both arms, so a log the guards refuse
-/// still evaluates them — C evaluated every argument before the callee could
-/// decide. They are evaluated *after* the guards rather than before, which
-/// only a payload argument that itself logs could observe; none does.
-#[macro_export]
-macro_rules! logmsg_c {
-    ($log_level:expr, $context:expr, $func_name:expr, $line_num:expr,
-     $eol:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {{
-        let log_level = $log_level;
-        let context = $context;
-        let func_name = $func_name;
-        let line_num = $line_num;
-        let eol = $eol;
-        let fmt = $fmt;
-        let log_file =
-            $crate::log::logmsg_begin(log_level, context, func_name, line_num);
-        if log_file.is_null() {
-            $(let _ = $arg;)*
-            false
-        } else {
-            let payload_ok =
-                ::libc::fprintf(log_file, fmt $(, $crate::message_fmt::c_arg($arg))*) >= 0;
-            $crate::log::logmsg_finish(log_file, eol, payload_ok)
-        }
-    }};
+/// **`text` runs only when the line is actually going to be written.** C
+/// evaluated every variadic argument before `logmsg()` could decide, and the
+/// macro that replaced it did the same on purpose; a closure lets the
+/// arguments of a `LOGLVL_DBG` line cost nothing in a build that is not
+/// logging at that level, which is what the per-message RPC trace wanted.
+/// Nothing passed here has a side effect, so the only difference is the
+/// cost.
+///
+/// The two tags are `'static` literals, which is the whole difference
+/// between this and the `fprintf` it replaced: a log line no longer has a
+/// raw pointer anywhere in it, so the call site needs no `unsafe`.
+pub(crate) fn logmsg_line(
+    log_level: c_int,
+    context: Option<&'static CStr>,
+    func_name: Option<&'static CStr>,
+    line_num: c_int,
+    eol: bool,
+    text: impl FnOnce() -> String,
+) -> bool {
+    let ptr = |s: Option<&'static CStr>| s.map_or(core::ptr::null(), CStr::as_ptr);
+    // SAFETY: two `'static` C strings, or null.
+    let log_file = unsafe { logmsg_begin(log_level, ptr(context), ptr(func_name), line_num) };
+    if log_file.is_null() {
+        return false;
+    }
+    let payload = crate::message_fmt::to_bytes(&text());
+    // SAFETY: `log_file` is the open handle `logmsg_begin` just answered, and
+    // `payload` is a live buffer of exactly that many bytes.
+    let written = unsafe { fwrite(payload.as_ptr().cast(), 1, payload.len(), log_file) };
+    // SAFETY: as above; this is `log_file`'s one `logmsg_finish`.
+    unsafe { logmsg_finish(log_file, eol, written == payload.len()) }
 }
 
-/// One log line in `logmsg`'s plain shape: no context tag, the upstream
-/// function name and line number, newline-terminated.
+/// One log line: the level, who is logging, the line number they are at, and
+/// a `format_args!` template.
 ///
-/// Spelled out, a [`logmsg_c!`] call is six fixed arguments before the format
-/// string and rustfmt wraps it over eight lines — eight lines of *unchecked*
-/// code, since the whole call has to sit inside the region. Naming the fixed
-/// half here leaves one line per site.
+/// ```ignore
+/// logmsg!(LOGLVL_ERR, c"os_proc_tree_kill", 103, "invalid pid {pid}");
+/// ```
 ///
-/// `who` and `fmt` are `CStr` literals; the macro takes the pointers.
+/// The template is a Rust literal and the arguments are `Display`s, so the
+/// compiler checks the two against each other — which is the whole point of
+/// retiring the `fprintf` this replaced, where a `&CStr` handed to a `%s`
+/// passed its *length word* off as string bytes. A pointer argument goes
+/// through `message_fmt`'s adaptors (`c_str`, `msg_bytes`, `msg_addr`) the
+/// same way a message's does; bytes that are not UTF-8 survive.
+///
+/// `who` is a `CStr` literal — the upstream function name, which the log
+/// prefix prints with the line number.
 #[macro_export]
 macro_rules! logmsg {
-    ($level:expr, $who:expr, $line:expr, $fmt:expr $(, $arg:expr)* $(,)?) => {
-        $crate::log::logmsg_c!(
+    ($level:expr, $who:expr, $line:expr, $($fmt:tt)*) => {
+        $crate::log::logmsg_line(
             $level,
-            ::core::ptr::null(),
-            $who.as_ptr(),
+            ::core::option::Option::None,
+            ::core::option::Option::Some($who),
             $line,
             true,
-            $fmt.as_ptr()
-            $(, $arg)*
+            || ::std::format!($($fmt)*),
+        )
+    };
+}
+
+/// [`logmsg!`] for a line that carries a *tag* instead of a source location:
+/// the RPC trace and the UI event log, which name a channel or an event
+/// rather than a function.
+///
+/// `eol` is false for the trace lines that append their payload to the line
+/// before them.
+#[macro_export]
+macro_rules! logmsg_tagged {
+    ($level:expr, $tag:expr, $eol:expr, $($fmt:tt)*) => {
+        $crate::log::logmsg_line(
+            $level,
+            ::core::option::Option::Some($tag),
+            ::core::option::Option::None,
+            -1,
+            $eol,
+            || ::std::format!($($fmt)*),
         )
     };
 }

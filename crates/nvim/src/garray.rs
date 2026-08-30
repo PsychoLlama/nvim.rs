@@ -31,7 +31,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
-use crate::log::{LOGLVL_WRN, logmsg, logmsg_c};
+use crate::log::{LOGLVL_WRN, logmsg};
 use crate::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::path::path_fnamecmp;
 use crate::strings::sort_strings;
@@ -89,14 +89,6 @@ fn join_into(dst: &mut [u8], parts: &[&[u8]], sep: &[u8]) {
         dst[off..off + part.len()].copy_from_slice(part);
         off += part.len();
     }
-}
-
-/// One `LOGLVL_WRN` line about an argument the caller got wrong. Safe: the
-/// only thing the format string consumes is the `c_int`.
-fn warn(who: &CStr, line: c_int, fmt: &CStr, arg: c_int) {
-    // SAFETY: `who` and `fmt` are NUL-terminated for the call, and `fmt`
-    // spends exactly the one `c_int` that follows it.
-    unsafe { logmsg!(LOGLVL_WRN, who, line, fmt, arg) };
 }
 
 /// The array's items, as a slice.
@@ -190,8 +182,12 @@ pub unsafe fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
 /// a caller bug; it is logged and clamped, as upstream does.
 fn set_growsize(ga: &mut garray_T, growsize: c_int) {
     if growsize < 1 {
-        let fmt = c"trying to set an invalid ga_growsize: %d";
-        warn(c"ga_set_growsize", 57, fmt, growsize);
+        logmsg!(
+            LOGLVL_WRN,
+            c"ga_set_growsize",
+            57,
+            "trying to set an invalid ga_growsize: {growsize}"
+        );
         ga.ga_growsize = 1;
     } else {
         ga.ga_growsize = growsize;
@@ -221,11 +217,12 @@ pub unsafe fn ga_grow(gap: *mut garray_T, n: c_int) {
         return;
     };
     if ga.ga_growsize < 1 {
-        warn(
+        let growsize = ga.ga_growsize;
+        logmsg!(
+            LOGLVL_WRN,
             c"ga_grow",
             76,
-            c"ga_growsize(%d) is less than 1",
-            ga.ga_growsize,
+            "ga_growsize({growsize}) is less than 1"
         );
     }
     let added = plan.new_size.wrapping_sub(plan.old_size);
@@ -345,22 +342,13 @@ pub unsafe fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_
     // SAFETY: the caller's array, grown to hold one more item just above.
     let ga = unsafe { &mut *gap };
     if item_size != as_size(ga.ga_itemsize) {
-        // SAFETY: `who` and `fmt` are NUL-terminated for the call, and the
-        // two conversions the format asks for are the two that follow it.
-        let fmt = c"wrong item size (%zu), should be %d";
-        let who = c"ga_append_via_ptr".as_ptr();
-        unsafe {
-            logmsg_c!(
-                LOGLVL_WRN,
-                ptr::null(),
-                who,
-                209,
-                true,
-                fmt.as_ptr(),
-                item_size,
-                ga.ga_itemsize
-            )
-        };
+        let want = ga.ga_itemsize;
+        logmsg!(
+            LOGLVL_WRN,
+            c"ga_append_via_ptr",
+            209,
+            "wrong item size ({item_size}), should be {want}"
+        );
     }
     unsafe { ga_grow(gap, 1) };
     let ga = unsafe { &mut *gap };

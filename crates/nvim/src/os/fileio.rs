@@ -28,6 +28,7 @@
 use crate::event::libuv::uv_strerror;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::{alloc_block, free_block};
+use crate::message_fmt::c_str;
 use crate::os::fs::{
     os_close, os_file_mkdir, os_fsync, os_open, os_open_stdin_fd, os_read, os_readv, os_write,
 };
@@ -200,8 +201,8 @@ pub unsafe fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
         let flags = (kFileReadOnly | kFileNonBlocking).cast_signed();
         let error = file_open_fd(fp, os_open_stdin_fd(), flags);
         if error != 0 {
-            let fmt = c"failed to open stdin: %s";
-            logmsg!(LOGLVL_ERR, c"file_open_stdin", 129, fmt, uv_strerror(error));
+            let (at, why) = (c"file_open_stdin", c_str(uv_strerror(error)));
+            logmsg!(LOGLVL_ERR, at, 129, "failed to open stdin: {why}");
         }
         error
     }

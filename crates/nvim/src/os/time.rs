@@ -12,9 +12,10 @@ use crate::event::libuv::uv_hrtime;
 use crate::event::libuv::{uv_clock_gettime, uv_err_name, uv_now, uv_sleep};
 use crate::event::r#loop::process_events_until;
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_DBG, LOGLVL_ERR, logmsg};
 use crate::main::{got_int, main_loop};
 use crate::memory::{xstrlcat, xstrlcpy};
+use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, tzset};
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::os::input::os_input_ready;
@@ -79,15 +80,13 @@ pub fn os_realtime() -> i64 {
     let error_number = unsafe {
         let error_number = uv_clock_gettime(UV_CLOCK_REALTIME, &raw mut ts);
         if error_number != 0 {
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                ptr::null(),
-                c"os_realtime".as_ptr(),
+                c"os_realtime",
                 48,
-                true,
-                c"uv_clock_gettime failed: %d %s".as_ptr(),
+                "uv_clock_gettime failed: {} {}",
                 error_number,
-                uv_err_name(error_number),
+                c_str(uv_err_name(error_number))
             );
         }
         error_number
@@ -119,15 +118,7 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
     // SAFETY: the main loop is live; the log call's format matches its one
     // argument; os_input_ready accepts a null queue.
     unsafe {
-        logmsg_c!(
-            LOGLVL_DBG,
-            ptr::null(),
-            c"os_delay".as_ptr(),
-            76,
-            true,
-            c"%lu ms".as_ptr(),
-            ms,
-        );
+        logmsg!(LOGLVL_DBG, c"os_delay", 76, "{} ms", ms);
         let ms = ms.min(c_int::MAX as u64) as i64;
         process_events_until(main_loop.ptr(), ptr::null_mut(), ms, || {
             if ignoreinput {

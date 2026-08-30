@@ -33,9 +33,10 @@ use crate::event::signal::{
 };
 use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
-use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg_c};
+use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
+use crate::message_fmt::c_str;
 use crate::os::env::{env_buf, os_getenv, os_getenv_into};
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
@@ -364,9 +365,9 @@ unsafe fn open_output(tui: *mut TUIData) {
                 &raw mut (*tui).output_handle.pipe,
                 0,
             );
-            log_uv_error(ret, c"uv_pipe_init failed: %s");
+            log_uv_error(ret, "uv_pipe_init");
             let ret = uv_pipe_open(&raw mut (*tui).output_handle.pipe, (*tui).out_fd as uv_file);
-            log_uv_error(ret, c"uv_pipe_open failed: %s");
+            log_uv_error(ret, "uv_pipe_open");
             return;
         }
         let ret = uv_tty_init(
@@ -375,7 +376,7 @@ unsafe fn open_output(tui: *mut TUIData) {
             (*tui).out_fd as uv_file,
             0,
         );
-        log_uv_error(ret, c"uv_tty_init failed: %s");
+        log_uv_error(ret, "uv_tty_init");
         // Setting the mode can be interrupted by a signal, which says
         // nothing about whether it would succeed.
         let mut retries = 10;
@@ -384,31 +385,20 @@ unsafe fn open_output(tui: *mut TUIData) {
             ret = uv_tty_set_mode(&raw mut (*tui).output_handle.tty, UV_TTY_MODE_IO);
             retries -= 1;
         }
-        log_uv_error(ret, c"uv_tty_set_mode failed: %s");
+        log_uv_error(ret, "uv_tty_set_mode");
     }
 }
 
 /// Log a libuv failure, if `ret` is one.
 ///
-/// # Safety
-/// `message` must hold exactly one `%s`.
-unsafe fn log_uv_error(ret: c_int, message: &CStr) {
+/// One `LOGLVL_ERR` line naming the libuv call that answered `ret`.
+fn log_uv_error(ret: c_int, call: &str) {
     if ret == 0 {
         return;
     }
-    // SAFETY: the caller guarantees the format string's one `%s`, which
-    // `uv_strerror` fills with a static string.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            core::ptr::null(),
-            c"tui".as_ptr(),
-            0,
-            true,
-            message.as_ptr(),
-            uv_strerror(ret),
-        );
-    }
+    // SAFETY: libuv's error strings are static.
+    let why = unsafe { c_str(uv_strerror(ret)) };
+    logmsg!(LOGLVL_ERR, c"tui", 0, "{call} failed: {why}");
 }
 
 /// Put the terminal back the way it was found, short of closing it.
@@ -530,14 +520,7 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
     // SAFETY: the caller guarantees `tui`.
     unsafe {
         if uv_is_closing((&raw mut (*tui).output_handle).cast::<uv_handle_t>()) != 0 {
-            logmsg_c!(
-                LOGLVL_ERR,
-                core::ptr::null(),
-                c"tui_stop".as_ptr(),
-                0,
-                true,
-                c"TUI already stopped (race?)".as_ptr(),
-            );
+            logmsg!(LOGLVL_ERR, c"tui_stop", 0, "TUI already stopped (race?)");
             (*tui).stopped = true;
             return;
         }
@@ -552,13 +535,11 @@ pub unsafe fn tui_stop(tui: *mut TUIData) {
             || (*tui).stopped || (*tui).input.read_stream.did_eof,
         );
         if !(*tui).stopped && !(*tui).input.read_stream.did_eof {
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_WRN,
-                core::ptr::null(),
-                c"tui_stop".as_ptr(),
+                c"tui_stop",
                 0,
-                true,
-                c"TUI: timed out waiting for DA1 response".as_ptr(),
+                "TUI: timed out waiting for DA1 response"
             );
         }
         (*tui).stopped = true;

@@ -43,7 +43,8 @@ use crate::api::ui::{
     remote_ui_win_viewport_margins,
 };
 use crate::global_cell::GlobalCell;
-use crate::log::logmsg_c;
+use crate::log::logmsg_tagged;
+use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, Boolean, Buffer, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, String_0,
@@ -134,6 +135,10 @@ macro_rules! broadcast {
 /// is by pointer, which is why every sink passes the same `&'static CStr`
 /// every time.
 pub(super) fn log_event(name: &'static CStr) {
+    /// The log prefix every UI-event line shares, passed as the context.
+    const UI_TAG: &CStr = c"UI: ";
+    const LOGLVL_DBG: c_int = 1;
+
     static seen: GlobalCell<usize> = GlobalCell::new(0);
     static last_event: GlobalCell<Option<&'static CStr>> = GlobalCell::new(None);
 
@@ -147,29 +152,13 @@ pub(super) fn log_event(name: &'static CStr) {
     if let Some(previous) = last_event.get()
         && seen.get() > 0
     {
-        let (fmt, was, n) = (
-            c"%s (+%zu times...)".as_ptr(),
-            previous.as_ptr(),
-            seen.get(),
-        );
-        // SAFETY: the format spends the `&'static CStr` and the count.
-        unsafe { log(fmt, was, n) };
+        let (was, n) = (msg_cstr(previous), seen.get());
+        logmsg_tagged!(LOGLVL_DBG, UI_TAG, true, "{was} (+{n} times...)");
     }
-    unsafe { log(c"%s".as_ptr(), name.as_ptr(), 0) };
+    let shown = msg_cstr(name);
+    logmsg_tagged!(LOGLVL_DBG, UI_TAG, true, "{shown}");
     seen.set(0);
     last_event.set(Some(name));
-}
-
-/// # Safety
-///
-/// `format` must be a valid format string for the two arguments.
-unsafe fn log(format: *const core::ffi::c_char, name: *const core::ffi::c_char, count: usize) {
-    const LOGLVL_DBG: c_int = 1;
-    let lvl = LOGLVL_DBG;
-    let tag = c"UI: ".as_ptr();
-    let no_func = core::ptr::null();
-    // The caller's promise: `format` spends `name` and `count`.
-    unsafe { logmsg_c!(lvl, tag, no_func, -1, true, format, name, count) };
 }
 
 /// Hands every UI that `reach` selects to `send`, and logs `name` if there

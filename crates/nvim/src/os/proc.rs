@@ -13,10 +13,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::event::libuv::uv_kill;
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
+use crate::message_fmt::c_str;
 use crate::os::uv_error::UV_ESRCH;
 use core::ffi::c_int;
-use core::ptr;
 use std::ffi::CString;
 
 const SIGKILL: c_int = 9;
@@ -38,14 +38,12 @@ pub fn os_proc_tree_kill(pid: c_int, sig: c_int) -> bool {
     // through `%s` rather than becoming the format string itself; both
     // pointers outlive the call. `uv_kill` takes no pointers.
     unsafe {
-        logmsg_c!(
+        logmsg!(
             LOGLVL_INF,
-            ptr::null(),
-            c"os_proc_tree_kill".as_ptr(),
+            c"os_proc_tree_kill",
             103,
-            true,
-            c"%s".as_ptr(),
-            text.as_ptr(),
+            "{}",
+            c_str(text.as_ptr())
         );
         uv_kill(-pid, sig) == 0
     }

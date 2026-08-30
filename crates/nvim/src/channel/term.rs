@@ -7,14 +7,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_void};
-use core::ptr;
 
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_stop;
 use crate::event::rstream::{rstream_start_inner, rstream_stop_inner};
 use crate::event::wstream::{wstream_new_buffer, wstream_write};
-use crate::log::{LOGLVL_INF, logmsg_c};
+use crate::log::{LOGLVL_INF, logmsg};
 use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{pty_proc_resize, pty_proc_resume};
 use crate::terminal::{terminal_alloc, terminal_destroy};
@@ -65,16 +64,12 @@ unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
     // `buf` is `size` readable bytes for the duration of the call.
     let in_0 = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.in_0 };
     if unsafe { (*in_0).closed } {
-        unsafe {
-            logmsg_c!(
-                LOGLVL_INF,
-                ptr::null(),
-                c"term_write".as_ptr(),
-                918,
-                true,
-                c"write failed: stream is closed".as_ptr(),
-            )
-        };
+        logmsg!(
+            LOGLVL_INF,
+            c"term_write",
+            918,
+            "write failed: stream is closed"
+        );
         return;
     }
     let wbuf = wstream_new_buffer(

@@ -31,6 +31,7 @@ use crate::main::{
     State, curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, mod_mask,
     motion_force, must_redraw, need_wait_return, restart_VIsual_select, restart_edit, virtual_op,
 };
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
@@ -105,8 +106,9 @@ pub unsafe fn state_enter(s: *mut VimState) {
                 keyname_buf = get_special_key_name(key, mod_mask.get());
                 keyname_buf.as_ptr()
             };
-            // SAFETY: `keyname` is NUL-terminated and outlives the call.
-            unsafe { logmsg!(LOGLVL_DBG, c"state_enter", 97, c"input: %s", keyname) };
+            // SAFETY: the name just rendered into this frame's buffer.
+            let keyname = unsafe { c_str(keyname) };
+            logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
             // SAFETY: the caller's `VimState`; `execute` is the state's own.
             let execute_result =
                 unsafe { (*s).execute.expect("non-null function pointer")(s, key) };
@@ -505,8 +507,8 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
         } else {
             c"SafeState: Stop triggering"
         };
-        // SAFETY: `what` is a literal, and carries no format directives.
-        unsafe { logmsg!(LOGLVL_DBG, c"may_trigger_safestate", 305, what) };
+        let what = msg_cstr(what);
+        logmsg!(LOGLVL_DBG, c"may_trigger_safestate", 305, "{what}");
     }
     if is_safe {
         // SAFETY: the editor is initialized, so `curbuf` is live.
@@ -524,8 +526,13 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
 pub unsafe fn state_no_longer_safe(reason: *const c_char) {
     if was_safe.get() && !reason.is_null() {
         // SAFETY: the caller's NUL-terminated string.
-        let fmt = c"SafeState reset: %s";
-        unsafe { logmsg!(LOGLVL_DBG, c"state_no_longer_safe", 319, fmt, reason) };
+        logmsg!(
+            LOGLVL_DBG,
+            c"state_no_longer_safe",
+            319,
+            "SafeState reset: {}",
+            unsafe { c_str(reason) }
+        );
     }
     was_safe.set(false);
 }

@@ -23,6 +23,7 @@
 //! [`packer`]: crate::msgpack_rpc::packer
 
 use crate::cstr;
+use crate::message_fmt::{c_str, msg_addr};
 use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -226,17 +227,15 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     // streams; `receive_msgpack` is handed the same pointer back.
     let out = unsafe { channel_outstream(channel) };
     let in_0 = unsafe { channel_instream(channel) };
-    unsafe {
-        logmsg!(
-            LOGLVL_DBG,
-            c"rpc_start",
-            93,
-            c"rpc ch %lu in-stream=%p out-stream=%p",
-            id,
-            in_0.cast::<c_void>(),
-            out.cast::<c_void>(),
-        )
-    };
+    logmsg!(
+        LOGLVL_DBG,
+        c"rpc_start",
+        93,
+        "rpc ch {} in-stream={} out-stream={}",
+        id,
+        msg_addr(in_0.cast::<c_void>()),
+        msg_addr(out.cast::<c_void>())
+    );
     unsafe { rstream_start(out, Some(receive_msgpack), channel.cast::<c_void>()) };
 }
 
@@ -351,7 +350,9 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
         }
     }
     unsafe { channel_close(chan.id, kChannelPartRpc, ptr::null_mut()) };
-    unsafe { logmsg!(loglevel, c"chan_close_on_err", 545, c"RPC: %s", msg) };
+    // SAFETY: the caller's message, NUL-terminated.
+    let msg = unsafe { c_str(msg) };
+    logmsg!(loglevel, c"chan_close_on_err", 545, "RPC: {msg}");
 }
 
 // ---------------------------------------------------------------------------

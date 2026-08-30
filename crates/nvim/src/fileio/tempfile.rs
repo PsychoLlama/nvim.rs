@@ -14,8 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use crate::log::logmsg_c;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::msg_schedule_semsg;
 use crate::smsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -43,16 +42,8 @@ static VIM_TEMPDIR_DP: GlobalCell<*mut DIR> = GlobalCell::new(ptr::null_mut::<DI
 /// The line numbers are the ones upstream's `__LINE__` produces in
 /// `fileio.c`, so that moving this code does not move the log output.
 macro_rules! log_at {
-    ($level:expr, $func:literal, $line:literal, $fmt:literal $(, $arg:expr)* $(,)?) => {
-        unsafe { logmsg_c!(
-            $level,
-            core::ptr::null(),
-            concat!($func, "\0").as_ptr().cast::<c_char>(),
-            $line,
-            true,
-            concat!($fmt, "\0").as_ptr().cast::<c_char>(),
-            $($arg,)*
-        ) }
+    ($level:expr, $line:literal, $($fmt:tt)*) => {
+        $crate::logmsg!($level, c"vim_mktempdir", $line, $($fmt)*)
     };
 }
 
@@ -134,14 +125,14 @@ unsafe fn vim_mktempdir() {
         if !unsafe { os_isdir(tmp.as_ptr()) } {
             if root == c"$TMPDIR" {
                 if !unsafe { os_env_exists(c"TMPDIR".as_ptr(), true) } {
-                    log_at!(LOGLVL_DBG, "vim_mktempdir", 3323, "$TMPDIR is unset");
+                    log_at!(LOGLVL_DBG, 3323, "$TMPDIR is unset");
                 } else {
+                    // SAFETY: `tmp` is this frame's NUL-terminated path.
+                    let at = unsafe { c_str(tmp.as_ptr()) };
                     log_at!(
                         LOGLVL_WRN,
-                        "vim_mktempdir",
                         3325,
-                        "$TMPDIR tempdir not a directory (or does not exist): \"%s\"",
-                        tmp.as_ptr(),
+                        "$TMPDIR tempdir not a directory (or does not exist): \"{at}\""
                     );
                 }
             }
@@ -164,32 +155,23 @@ unsafe fn vim_mktempdir() {
                 tmp.push(b"/");
             }
         } else {
+            // SAFETY: `tmp` is this frame's NUL-terminated path.
+            let at = unsafe { c_str(tmp.as_ptr()) };
             if !owned {
+                let who = msg_bytes(user);
                 log_at!(
                     LOGLVL_ERR,
-                    "vim_mktempdir",
                     3355,
-                    "tempdir root not owned by current user (%s): %s",
-                    user.as_ptr(),
-                    tmp.as_ptr(),
+                    "tempdir root not owned by current user ({who}): {at}"
                 );
             } else if !isdir {
-                log_at!(
-                    LOGLVL_ERR,
-                    "vim_mktempdir",
-                    3357,
-                    "tempdir root not a directory: %s",
-                    tmp.as_ptr(),
-                );
+                log_at!(LOGLVL_ERR, 3357, "tempdir root not a directory: {at}");
             }
             if perm & 0o777 != 0o700 {
                 log_at!(
                     LOGLVL_ERR,
-                    "vim_mktempdir",
                     3361,
-                    "tempdir root has invalid permissions (%o): %s",
-                    perm,
-                    tmp.as_ptr(),
+                    "tempdir root has invalid permissions ({perm:o}): {at}"
                 );
             }
             // If our "root" tempdir is invalid or fails, proceed without
@@ -204,14 +186,10 @@ unsafe fn vim_mktempdir() {
         let mut path = Template::new();
         let r = unsafe { os_mkdtemp(tmp.as_ptr(), path.as_mut_ptr()) };
         if r != 0 {
-            log_at!(
-                LOGLVL_WRN,
-                "vim_mktempdir",
-                3377,
-                "tempdir create failed: %s: %s",
-                uv_strerror(r),
-                tmp.as_ptr(),
-            );
+            // SAFETY: libuv's error strings are static; `tmp` is this
+            // frame's NUL-terminated path.
+            let (why, at) = unsafe { (c_str(uv_strerror(r)), c_str(tmp.as_ptr())) };
+            log_at!(LOGLVL_WRN, 3377, "tempdir create failed: {why}: {at}");
             continue;
         }
 
@@ -382,12 +360,12 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
             let notfound = NOTFOUND.get() + 1;
             NOTFOUND.set(notfound);
             if notfound == 1 {
-                log_at!(
+                let gone = msg_cstr(&gone);
+                crate::logmsg!(
                     LOGLVL_ERR,
-                    "vim_gettempdir",
+                    c"vim_gettempdir",
                     3534,
-                    "tempdir disappeared (antivirus or broken cleanup job?): %s",
-                    gone.as_ptr(),
+                    "tempdir disappeared (antivirus or broken cleanup job?): {gone}"
                 );
             }
             if notfound > 1 {

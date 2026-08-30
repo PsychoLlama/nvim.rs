@@ -30,12 +30,13 @@ use crate::keycodes::{
     KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, MOD_MASK_2CLICK, MOD_MASK_3CLICK,
     MOD_MASK_4CLICK, MOD_MASK_CTRL, trans_special,
 };
-use crate::log::{LOGLVL_DBG, logmsg_c};
+use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
     Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
     did_cursorhold, do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid,
     mouse_row, p_mouset, p_ut, preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
 };
+use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::time::os_hrtime;
 use crate::profile::{prof_input_end, prof_input_start};
@@ -694,18 +695,16 @@ fn inbuf_poll(ms: c_int, events: *mut MultiQueue) -> InputAvail {
             blocking.set(true);
             multiqueue_process_events(ch_before_blocking_events.get());
         }
-        logmsg_c!(
+        logmsg!(
             LOGLVL_DBG,
-            ptr::null(),
-            c"inbuf_poll".as_ptr(),
+            c"inbuf_poll",
             514,
-            true,
-            c"blocking... events=%s".as_ptr(),
-            if events.is_null() {
+            "blocking... events={}",
+            c_str(if events.is_null() {
                 c"false".as_ptr()
             } else {
                 c"true".as_ptr()
-            },
+            })
         );
         // Upstream polls with a NULL queue here, so the macro's "drain this
         // queue instead" branch is dead: `events` is only read by

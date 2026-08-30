@@ -29,10 +29,11 @@ use crate::event::libuv::{
     uv_err_name, uv_os_getenv, uv_os_homedir, uv_os_setenv, uv_os_unsetenv, uv_strerror,
 };
 use crate::global_cell::GlobalCell;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::main::{didset_vim, didset_vimruntime, nvim_testing};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
+use crate::message_fmt::c_str;
 use crate::os::cshim::{environ, strchr};
 use crate::os::fs::{os_dirname, os_realpath};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
@@ -76,28 +77,23 @@ pub fn env_init() {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-unsafe fn log_uv_failure(func: &CStr, fmt: &CStr, name: *const c_char, r: c_int) {
-    // SAFETY: the caller's contract; `logmsg` is printf-shaped, and
-    // `uv_err_name` answers a static string.
-    unsafe {
-        logmsg_c!(
-            LOGLVL_ERR,
-            ptr::null(),
-            func.as_ptr(),
-            0,
-            true,
-            fmt.as_ptr(),
-            name,
-            r,
-            uv_err_name(r),
-        );
-    }
+unsafe fn log_uv_failure(func: &'static CStr, call: &str, name: *const c_char, r: c_int) {
+    // SAFETY: the caller's contract -- `name` is NUL-terminated; libuv's
+    // error names are static.
+    let (name, why) = unsafe { (c_str(name), c_str(uv_err_name(r))) };
+    logmsg!(
+        LOGLVL_ERR,
+        func,
+        0,
+        "uv_os_{call}({name}) failed: {r} {why}"
+    );
 }
 
 /// The three messages, spelled as upstream spells them.
-const GETENV_FAILED: &CStr = c"uv_os_getenv(%s) failed: %d %s";
-const SETENV_FAILED: &CStr = c"uv_os_setenv(%s) failed: %d %s";
-const UNSETENV_FAILED: &CStr = c"uv_os_unsetenv(%s) failed: %d %s";
+/// Which libuv call failed, for [`log_uv_failure`]'s line.
+const GETENV_FAILED: &str = "getenv";
+const SETENV_FAILED: &str = "setenv";
+const UNSETENV_FAILED: &str = "unsetenv";
 
 /// `getenv()`, but NULL for an empty value. The result is newly allocated.
 ///
@@ -413,15 +409,13 @@ fn os_uv_homedir(buf: &mut EnvBuf) -> *mut c_char {
         if ret_value == 0 && homedir_size < MAXPATHL as usize {
             return buf;
         }
-        logmsg_c!(
+        logmsg!(
             LOGLVL_ERR,
-            ptr::null(),
-            c"os_uv_homedir".as_ptr(),
+            c"os_uv_homedir",
             0,
-            true,
-            c"uv_os_homedir() failed %d: %s".as_ptr(),
+            "uv_os_homedir() failed {}: {}",
             ret_value,
-            uv_strerror(ret_value),
+            c_str(uv_strerror(ret_value))
         );
         *buf = 0;
         ptr::null_mut()

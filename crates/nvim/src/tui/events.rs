@@ -11,9 +11,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::main::{stdin_isatty, ui_client_channel_id};
 use crate::memory::{strequal, xfree};
+use crate::message_fmt::c_str;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::tui::cursor::{
     cursor_style_enabled, decode_cursor_entry, reset_style as cursor_reset_style,
@@ -122,18 +123,13 @@ pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
             // SAFETY: the handle is the TUI's own and libuv owns its state.
             let ret = unsafe { uv_tty_set_mode(&raw mut tui.output_handle.tty, mode) };
             if ret != 0 {
-                // SAFETY: the format string holds the one `%s` filled here.
-                unsafe {
-                    logmsg_c!(
-                        LOGLVL_ERR,
-                        core::ptr::null(),
-                        c"tui_mode_change".as_ptr(),
-                        0,
-                        true,
-                        c"uv_tty_set_mode failed: %s".as_ptr(),
-                        uv_strerror(ret),
-                    )
-                };
+                logmsg!(
+                    LOGLVL_ERR,
+                    c"tui_mode_change",
+                    0,
+                    "uv_tty_set_mode failed: {}",
+                    unsafe { c_str(uv_strerror(ret)) }
+                );
             }
         }
     }
@@ -196,14 +192,12 @@ pub unsafe fn tui_ui_send(tui: &mut TUIData, content: String_0) {
             None,
         );
         if ret != 0 {
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                core::ptr::null(),
-                c"tui_ui_send".as_ptr(),
+                c"tui_ui_send",
                 0,
-                true,
-                c"uv_write failed: %s".as_ptr(),
-                uv_strerror(ret),
+                "uv_write failed: {}",
+                c_str(uv_strerror(ret))
             );
         }
         uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
@@ -224,17 +218,12 @@ pub unsafe fn tui_set_title(tui: &mut TUIData, title: String_0) {
     }
     let too_long = title.len() > MAX_TITLE;
     if too_long {
-        // SAFETY: the format string takes no arguments.
-        unsafe {
-            logmsg_c!(
-                LOGLVL_ERR,
-                core::ptr::null(),
-                c"tui_set_title".as_ptr(),
-                0,
-                true,
-                c"set_title: title string too long!".as_ptr(),
-            )
-        };
+        logmsg!(
+            LOGLVL_ERR,
+            c"tui_set_title",
+            0,
+            "set_title: title string too long!"
+        );
     }
     if !title.is_empty() && !too_long {
         if !tui.title_enabled {
@@ -326,15 +315,13 @@ pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
     unsafe {
         let err = uv_chdir(path.data());
         if err != 0 {
-            logmsg_c!(
+            logmsg!(
                 LOGLVL_ERR,
-                core::ptr::null(),
-                c"tui_chdir".as_ptr(),
+                c"tui_chdir",
                 0,
-                true,
-                c"Failed to chdir to %s: %s".as_ptr(),
-                path.data(),
-                uv_strerror(err),
+                "Failed to chdir to {}: {}",
+                c_str(path.data()),
+                c_str(uv_strerror(err))
             );
         }
     }

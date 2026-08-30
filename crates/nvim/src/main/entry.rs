@@ -38,7 +38,7 @@ use crate::getchar::{open_scriptin, stuff_readbuf_char};
 use crate::highlight::highlight_init;
 use crate::highlight_group::init_highlight;
 use crate::keycodes::KE_NOP;
-use crate::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg_c};
+use crate::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
 use crate::lua::executor::{nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script};
 use crate::main::args::{
     check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
@@ -510,8 +510,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if !params.luaf.is_null() {
         // `-l`: run the script and leave, with its status.
         msg_scroll.set(1);
-        let (site, what) = (c"main".as_ptr(), c"executing Lua -l script".as_ptr());
-        unsafe { logmsg_c!(LOGLVL_DBG, ptr::null(), site, 678, true, what) };
+        logmsg!(LOGLVL_DBG, c"main", 678, "executing Lua -l script");
         let lua_ok = unsafe { nlua_exec_file(params.luaf) };
         time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
@@ -522,8 +521,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     time_msg_at(c"before starting main loop");
-    let (site, what) = (c"main".as_ptr(), c"starting main loop".as_ptr());
-    unsafe { logmsg_c!(LOGLVL_INF, ptr::null(), site, 689, true, what) };
+    logmsg!(LOGLVL_INF, c"main", 689, "starting main loop");
 
     // Never returns.
     normal_enter(false, false);

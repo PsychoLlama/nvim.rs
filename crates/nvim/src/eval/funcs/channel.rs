@@ -23,7 +23,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
-use crate::log::{LOGLVL_ERR, logmsg_c};
+use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
 use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
@@ -434,13 +434,14 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         if err.is_set() {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.
-            let what = c"vim._core.serverlist failed: %s".as_ptr();
-            let here = c"f_serverlist".as_ptr();
-            let nul = ptr::null();
-            let why = err.message_or_empty().as_ptr();
-            // SAFETY: the log macro's `fprintf` takes the two `'static`
-            // format strings and the error's own message.
-            unsafe { logmsg_c!(LOGLVL_ERR, nul, here, 6338, true, what, why) };
+            // SAFETY: the error's own message, NUL-terminated.
+            let why = unsafe { c_str(err.message_or_empty().as_ptr()) };
+            logmsg!(
+                LOGLVL_ERR,
+                c"f_serverlist",
+                6338,
+                "vim._core.serverlist failed: {why}"
+            );
         } else {
             for i in 0..unsafe { rv.data.array }.size {
                 let item = unsafe { rv.data.array.items.add(i) };
