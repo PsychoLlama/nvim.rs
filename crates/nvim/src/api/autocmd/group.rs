@@ -10,9 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_expected;
+use crate::api::private::validate::{err_bad_number, err_bad_value_ptr, err_expected};
 use crate::winlayer::Live;
 
 pub unsafe fn nvim_create_augroup(
@@ -40,7 +38,7 @@ pub unsafe fn nvim_create_augroup(
         // The guard restores on the way out regardless -- upstream's
         // `WITH_SCRIPT_CONTEXT` puts the restore *after* the block, so
         // this `return` skips it there.
-        error = Error::from_message(kErrorTypeException, c"Failed to set augroup");
+        error = Error::exception(c"Failed to set augroup");
         return (-1 as Integer).reported(error);
     }
     if clear_autocmds {
@@ -103,7 +101,7 @@ pub(crate) unsafe fn get_augroup_from_object(
         kObjectTypeString => {
             au_group = unsafe { augroup_find(group.data.string.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_bad_value_ptr(c"group", group.data.string.data()) };
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }

@@ -187,7 +187,7 @@ pub unsafe fn nvim_input_mouse(
             return ().reported(error);
         }
     }
-    error = Error::from_message(kErrorTypeValidation, c"invalid button or action");
+    error = Error::validation(c"invalid button or action");
     ().reported(error)
 }
 

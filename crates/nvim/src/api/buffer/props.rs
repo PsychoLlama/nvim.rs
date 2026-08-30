@@ -12,7 +12,6 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
 
-use crate::api::private::validate::err_exception;
 use crate::winlayer::Buf;
 
 pub unsafe fn nvim_buf_get_var(
@@ -160,7 +159,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     }
     if ren_ret == FAIL {
         let why = c"Failed to rename buffer";
-        error = err_exception(why);
+        error = Error::exception(why);
     }
     ().reported(error)
 }
@@ -193,7 +192,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
     );
     if result == FAIL {
         let why = c"Failed to unload buffer.";
-        error = err_exception(why);
+        error = Error::exception(why);
         return ().reported(error);
     }
     ().reported(error)

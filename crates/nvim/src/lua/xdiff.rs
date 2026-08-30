@@ -30,9 +30,8 @@ use crate::lua::ffi::{
 use crate::memory::strequal;
 use crate::types::{
     Arena, Error, KeyDict_xdl_diff, Object, OptionalKeys, String_0, int64_t, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, linenr_T,
-    lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t, xdemitcb_t,
-    xdemitconf_t, xpparam_t,
+    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_Integer, lua_State,
+    luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -422,7 +421,7 @@ unsafe fn apply_opts(
         if unsafe { strequal(c"indices".as_ptr(), opts.result_type.data()) } {
             had_result_type_indices = true;
         } else {
-            *err = Error::from_message(kErrorTypeValidation, c"not a valid result_type");
+            *err = Error::validation(c"not a valid result_type");
             return Mode::Unified;
         }
     }
@@ -444,7 +443,7 @@ unsafe fn apply_opts(
         match algorithm {
             Some((_, flag)) => params.flags |= flag,
             None => {
-                *err = Error::from_message(kErrorTypeValidation, c"not a valid algorithm");
+                *err = Error::validation(c"not a valid algorithm");
                 return Mode::Unified;
             }
         }
@@ -499,7 +498,7 @@ unsafe fn apply_opts(
             lua_type(lstate, -1) == LUA_TFUNCTION
         };
         if !is_function {
-            *err = Error::from_message(kErrorTypeValidation, c"on_hunk is not a function");
+            *err = Error::validation(c"on_hunk is not a function");
         }
         return Mode::OnHunk;
     }

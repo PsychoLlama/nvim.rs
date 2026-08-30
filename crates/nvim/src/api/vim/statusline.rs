@@ -20,8 +20,7 @@ use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_expected, err_invalid_ptr};
 use crate::api_error;
 use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
@@ -69,7 +68,7 @@ pub unsafe fn nvim_eval_statusline(
         // checker's own static text.
         let errmsg = unsafe { check_stl_option(str.data()) };
         if let Some(errmsg) = errmsg {
-            error = Error::from_message(kErrorTypeValidation, &errmsg);
+            error = Error::validation(&errmsg);
             return empty.reported(error);
         }
     }
@@ -202,7 +201,7 @@ impl Context {
             if !(statuscol_lnum > 0 && statuscol_lnum as linenr_T <= win.buffer().line_count()) {
                 let key = c"use_statuscol_lnum".as_ptr();
                 let why = c"out of range".as_ptr();
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(key, why, 0, false) };
                 return None;
             }
@@ -211,7 +210,7 @@ impl Context {
         if use_bools > 1 {
             const E: &CStr =
                 c"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'";
-            *err = Error::from_message(kErrorTypeValidation, E);
+            *err = Error::validation(E);
             return None;
         }
 
@@ -407,10 +406,7 @@ pub unsafe fn nvim__complete_set(
     let opts = unsafe { &*opts };
     // SAFETY: reads the 'completeopt' flags.
     if unsafe { get_cot_flags() } & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
-        error = Error::from_message(
-            kErrorTypeException,
-            c"completeopt option does not include popup",
-        );
+        error = Error::exception(c"completeopt option does not include popup");
         return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {

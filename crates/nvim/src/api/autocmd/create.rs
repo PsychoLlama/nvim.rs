@@ -10,12 +10,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_conflict_ptr;
-use crate::api::private::validate::err_exception;
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_required_ptr;
+use crate::api::private::validate::{
+    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected, err_required_ptr,
+};
 use crate::types::{FAIL, kObjectTypeLuaRef, kObjectTypeString};
 use crate::winlayer::Live;
 
@@ -202,7 +199,7 @@ pub unsafe fn nvim_create_autocmd(
                                             drop(sctx);
                                             if retval == 0 as ::core::ffi::c_int {
                                                 let why = c"Failed to set autocmd";
-                                                error = err_exception(why);
+                                                error = Error::exception(why);
                                                 break '_cleanup;
                                             } else {
                                                 pat_index = pat_index.wrapping_add(1);
@@ -238,7 +235,7 @@ pub unsafe fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
     }
     if !autocmd_delete_id(id as int64_t) {
         let why = c"Failed to delete autocmd";
-        error = err_exception(why);
+        error = Error::exception(why);
     }
     ().reported(error)
 }
@@ -355,7 +352,7 @@ unsafe fn clear_autocmd(
 ) -> bool {
     if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) } == FAIL {
         let why = c"Failed to clear autocmd";
-        *err = err_exception(why);
+        *err = Error::exception(why);
         return false;
     }
     true

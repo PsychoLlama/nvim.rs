@@ -211,5 +211,5 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
 fn report(err: &mut Error, msg: &CStr) {
     // SAFETY: `err` is the caller's own slot, and the format takes the one C
     // string it is given.
-    *err = Error::from_message(kErrorTypeValidation, msg);
+    *err = Error::validation(msg);
 }

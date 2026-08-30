@@ -92,7 +92,7 @@ pub unsafe fn nlua_pop_keydict(
 ) {
     unsafe {
         if lua_type(lstate, -1) != LUA_TTABLE {
-            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua table");
+            *err = Error::validation(c"Expected Lua table");
             // Upstream writes `lua_pop(L, -1)` here, which expands to
             // `lua_settop(L, 0)` -- it clears the *whole* stack rather than
             // popping the one value. Kept verbatim; see the divergence

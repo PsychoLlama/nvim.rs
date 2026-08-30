@@ -9,12 +9,10 @@
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
-use crate::api::private::validate::err_msg_ptr;
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::types::{
-    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone,
-    kErrorTypeValidation, size_t,
+    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone, size_t,
 };
 use crate::ui::ui_rgb_attached;
 
@@ -136,9 +134,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
 
     if id != -1 {
         if id < 1 || id > highlight_num_groups() {
-            let msg = c"Highlight id out of bounds".as_ptr();
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+            *err = Error::validation(c"Highlight id out of bounds");
             return NO_DICT;
         }
         let mut attrs = NO_DICT;

@@ -93,11 +93,9 @@ const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
     capacity: 0,
     items: ptr::null_mut(),
 };
-use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_msg_ptr;
+use crate::api::private::validate::{err_invalid_ptr, err_msg_ptr};
 use crate::api_error;
-use crate::message_fmt::c_str;
-use crate::message_fmt::msg_bytes;
+use crate::message_fmt::{c_str, msg_bytes};
 // -- Handles ---------------------------------------------------------------
 
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
@@ -121,7 +119,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: &mut Error) -> *
     let rv = handle_get_buffer(buffer);
     if rv.is_null() {
         let id = buffer as int64_t;
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"buffer id".as_ptr(), ptr::null(), id, false) };
     }
     rv
@@ -135,7 +133,7 @@ pub unsafe fn find_window_by_handle(window: Window, err: &mut Error) -> *mut win
     let rv = handle_get_window(window);
     if rv.is_null() {
         let id = window as int64_t;
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"window id".as_ptr(), ptr::null(), id, false) };
     }
     rv
@@ -149,7 +147,7 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: &mut Error) -> *m
     let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
     if rv.is_null() {
         let id = tabpage as int64_t;
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"tabpage id".as_ptr(), ptr::null(), id, false) };
     }
     rv
@@ -234,9 +232,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
             // SAFETY: `did_throw` says there is a current exception.
             unsafe { discard_current_exception() };
         }
-        let msg = c"Keyboard interrupt".as_ptr();
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
+        *err = Error::exception(c"Keyboard interrupt");
         got_int.set(false);
     } else if pending {
         let mut should_free = false;
@@ -246,7 +242,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
             let head = (*list).cast::<c_void>();
             get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
         };
-        // SAFETY: the caller's error slot.
+        // SAFETY: the message is a NUL-terminated string.
         unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         // SAFETY: the list has been rendered into `err`.
         unsafe { free_global_msglist() };
@@ -262,7 +258,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
         // script to name.
         let named = unsafe { *name } != NUL as c_char;
         if !named {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the message is a NUL-terminated string.
             unsafe { *err = err_msg_ptr(kErrorTypeException, value) };
         } else {
             // SAFETY: both are the exception's own NUL-terminated strings.
@@ -371,14 +367,14 @@ pub(crate) unsafe fn set_mark(
         deleting = true;
     } else {
         if col > MAXCOL as Integer {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"column".as_ptr(), out_of_range, 0, false) };
             return false;
         }
         // SAFETY: `buf` is the caller's buffer, or the current one.
         let line_count = unsafe { (*buf).b_ml.ml_line_count } as Integer;
         if line < 1 || line > line_count {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"line".as_ptr(), out_of_range, 0, false) };
             return false;
         }

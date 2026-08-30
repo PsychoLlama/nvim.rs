@@ -23,7 +23,6 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
-use crate::api::private::validate::err_msg_ptr;
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free};
 use crate::mpack::conv::{
     mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
@@ -33,10 +32,10 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
     Arena, Array, Dict, Error, Integer, KeyValuePair, MessageType, Object, ObjectType, String_0,
-    Unpacker, kErrorTypeException, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb,
-    object_data, size_t,
+    Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, object_data,
+    size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -135,8 +134,7 @@ pub unsafe extern "C" fn unpack(
     } else {
         return value;
     };
-    // SAFETY: the caller's error slot.
-    unsafe { *err = err_msg_ptr(kErrorTypeException, message.as_ptr()) };
+    *err = Error::exception(message);
     value
 }
 

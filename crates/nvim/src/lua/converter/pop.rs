@@ -28,8 +28,8 @@ use crate::memory::arena_memdupz;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
-    kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeNil, key_value_pair, lua_Number, lua_State, size_t,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
+    key_value_pair, lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
 
@@ -172,7 +172,7 @@ pub unsafe fn nlua_pop_string(
     unsafe {
         if lua_type(lstate, -1) != LUA_TSTRING {
             lua_pop(lstate, 1);
-            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua string");
+            *err = Error::validation(c"Expected Lua string");
             return String_0::NULL;
         }
         let mut ret = String_0::NULL;
@@ -197,7 +197,7 @@ pub unsafe fn nlua_pop_integer(
     unsafe {
         if lua_type(lstate, -1) != LUA_TNUMBER {
             lua_pop(lstate, 1);
-            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua number");
+            *err = Error::validation(c"Expected Lua number");
             return 0;
         }
         let n = lua_tonumber(lstate, -1);
@@ -206,7 +206,7 @@ pub unsafe fn nlua_pop_integer(
             || n < API_INTEGER_MIN as lua_Number
             || (n as Integer) as lua_Number != n
         {
-            *err = Error::from_message(kErrorTypeException, c"Number is not integral");
+            *err = Error::exception(c"Number is not integral");
             return 0;
         }
         n as Integer
@@ -241,7 +241,7 @@ pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: &mut Error) -
             LUA_TNUMBER => lua_tonumber(lstate, -1) != 0.0,
             LUA_TNIL => false,
             _ => {
-                *err = Error::from_message(kErrorTypeValidation, c"not a boolean");
+                *err = Error::validation(c"not a boolean");
                 false
             }
         };
@@ -460,7 +460,7 @@ pub unsafe fn nlua_pop_handle(
 ) -> handle_T {
     unsafe {
         let ret = if lua_type(lstate, -1) != LUA_TNUMBER {
-            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua number");
+            *err = Error::validation(c"Expected Lua number");
             -1
         } else {
             lua_tonumber(lstate, -1) as handle_T

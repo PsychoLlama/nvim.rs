@@ -36,15 +36,10 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
-use crate::api::private::validate::err_bad_value;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_validation;
-use crate::api::private::validate::{err_expected, err_required};
+use crate::api::private::validate::{err_bad_value, err_bad_value_ptr, err_expected, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
-use crate::message_fmt::msg_bytes;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -386,7 +381,7 @@ unsafe fn collect_args(
         _ => args.size == 0,
     };
     if !argc_valid {
-        *err = err_validation(c"Wrong number of arguments");
+        *err = Error::validation(c"Wrong number of arguments");
         return None;
     }
 
@@ -471,7 +466,7 @@ fn apply_count(
         return true;
     }
     if count_from_first_arg {
-        *err = err_validation(c"Cannot specify both 'count' and numeric argument");
+        *err = Error::validation(c"Cannot specify both 'count' and numeric argument");
         return false;
     }
     if !ea.argt.has(ExArgt::COUNT) {
@@ -505,7 +500,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
     // SAFETY: the size is 1, so byte 0 is in bounds.
     let regname = unsafe { *cmd.reg.data() };
     if regname as c_int == '=' as c_int {
-        *err = err_validation(c"Cannot use register \"=");
+        *err = Error::validation(c"Cannot use register \"=");
         return false;
     }
     // `:put`/`:iput` read the register, everything else writes it.
@@ -661,7 +656,7 @@ fn apply_mods(
     }
 
     if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && !ea.argt.has(ExArgt::SBOXOK) {
-        *err = err_validation(c"Command cannot be run in sandbox");
+        *err = Error::validation(c"Command cannot be run in sandbox");
         return false;
     }
 

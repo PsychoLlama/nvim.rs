@@ -860,7 +860,7 @@ pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int,
     let wp = unsafe { get_win_by_grid_handle(grid_handle) };
     if wp.is_null() {
         let (what, no_text) = (c"window handle".as_ptr(), core::ptr::null());
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(what, no_text, grid_handle as i64, false) };
         return;
     }

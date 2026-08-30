@@ -29,8 +29,7 @@ use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    Array, Error, ErrorType, String_0, int64_t, kErrorTypeException, kErrorTypeValidation,
-    kObjectTypeString,
+    Array, Error, ErrorType, String_0, int64_t, kErrorTypeValidation, kObjectTypeString,
 };
 use core::ffi::{CStr, c_char};
 
@@ -248,16 +247,6 @@ pub(crate) unsafe fn err_conflict_ptr(name: *const c_char, name2: *const c_char)
 pub(crate) unsafe fn err_msg_ptr(kind: ErrorType, msg: *const c_char) -> Error {
     // SAFETY: the caller's promise.
     Error::from_message(kind, unsafe { CStr::from_ptr(msg) })
-}
-
-/// A validation failure whose whole message is `why`.
-pub(crate) fn err_validation(why: &CStr) -> Error {
-    Error::from_message(kErrorTypeValidation, why)
-}
-
-/// An exception whose whole message is `why`.
-pub(crate) fn err_exception(why: &CStr) -> Error {
-    Error::from_message(kErrorTypeException, why)
 }
 
 /// Whether every element of `arr` is a String, and -- when `disallow_nl` --

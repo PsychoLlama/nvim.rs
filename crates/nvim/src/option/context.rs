@@ -16,8 +16,8 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, FAIL, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T,
-    kErrorTypeException, kErrorTypeNone, scid_T, switchwin_T, win_T,
+    Error, FAIL, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T, kErrorTypeNone,
+    scid_T, switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
@@ -198,7 +198,7 @@ pub(crate) unsafe fn set_option_value_for(
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
     if let Some(errmsg) = errmsg {
-        *err = Error::from_message(kErrorTypeException, &errmsg);
+        *err = Error::exception(&errmsg);
     }
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.

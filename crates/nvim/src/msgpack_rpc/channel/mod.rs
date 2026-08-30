@@ -466,7 +466,7 @@ unsafe fn report_call_error(err: &mut Error, result: &Object) {
     // below is guarded by the `type_0` it belongs to.
     if result.type_0 == kObjectTypeString {
         let text = unsafe { result.data.string }.data();
-        // SAFETY: the caller's error slot.
+        // SAFETY: the message is a NUL-terminated string.
         unsafe { *err = err_msg_ptr(kErrorTypeException, text) };
         return;
     }
@@ -481,15 +481,13 @@ unsafe fn report_call_error(err: &mut Error, result: &Object) {
                 && message.type_0 == kObjectTypeString
             {
                 let kind = crate::narrow::number_as_int(unsafe { kind.data.integer });
-                // SAFETY: the caller's error slot.
+                // SAFETY: the message is a NUL-terminated string.
                 unsafe { *err = err_msg_ptr(kind, message.data.string.data()) };
                 return;
             }
         }
     }
-    let unknown = c"unknown error".as_ptr();
-    // SAFETY: the caller's error slot.
-    unsafe { *err = err_msg_ptr(kErrorTypeException, unknown) };
+    *err = Error::exception(c"unknown error");
 }
 
 /// Hands an already-encoded message to a channel. Takes ownership of `buffer`.

@@ -154,7 +154,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
         return (0 as Integer).reported(error);
     };
     if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
-        error = Error::from_message(kErrorTypeValidation, c"Line number outside range");
+        error = Error::validation(c"Line number outside range");
         return (0 as Integer).reported(error);
     }
     let ns_id = src2ns(&mut src_id);

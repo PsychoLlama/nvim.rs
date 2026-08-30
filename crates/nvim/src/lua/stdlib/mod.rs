@@ -42,8 +42,3 @@ pub(crate) const TRY_STATE_INIT: TryState = TryState {
     need_rethrow: 0,
     did_emsg: 0,
 };
-
-/// Whether an API call left an error behind: C's `ERROR_SET`.
-pub(crate) fn error_set(err: &Error) -> bool {
-    err.is_set()
-}

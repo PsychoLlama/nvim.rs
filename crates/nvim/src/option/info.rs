@@ -90,7 +90,7 @@ pub(crate) unsafe fn get_vimoption(
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
     if opt_idx == kOptInvalid {
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"option (not found)".as_ptr(), name.data(), 0, true) };
         return Dict {
             size: 0 as size_t,

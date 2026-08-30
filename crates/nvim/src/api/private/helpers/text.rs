@@ -9,14 +9,12 @@
 
 use super::{CAR, NL, arena_string, arena_take_arraybuilder};
 use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_msg_ptr;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, kErrorTypeValidation,
-    linenr_T, size_t,
+    Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, linenr_T, size_t,
 };
 use ::libc::{strlen, strnlen};
 use core::ffi::c_char;
@@ -194,7 +192,7 @@ pub(crate) unsafe fn buf_get_text(
 ) -> String_0 {
     if lnum >= i64::from(MAXLNUM) {
         let out_of_range = c"out of range".as_ptr();
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"line index".as_ptr(), out_of_range, 0, false) };
         return String_0::NULL;
     }
@@ -208,9 +206,7 @@ pub(crate) unsafe fn buf_get_text(
     let start_col = relative(start_col).clamp(0, line_length);
     let end_col = relative(end_col).clamp(0, line_length);
     if start_col > end_col {
-        let msg = c"start_col must be less than or equal to end_col".as_ptr();
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+        *err = Error::validation(c"start_col must be less than or equal to end_col");
         return String_0::NULL;
     }
     // SAFETY: `start_col` was clamped into the line.

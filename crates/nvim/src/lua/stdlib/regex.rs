@@ -10,7 +10,7 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::{ERROR_INIT, TRY_STATE_INIT, error_set, nlua_push_errstr};
+use super::{ERROR_INIT, TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{handle_get_buffer, try_enter, try_leave};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
@@ -217,7 +217,7 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         let prog = vim_regcomp(text, RE_AUTO | RE_MAGIC | RE_STRICT);
         try_leave(&raw mut tstate, &mut err);
 
-        if error_set(&err) {
+        if err.is_set() {
             let why = err.message_or_empty().as_ptr();
             nlua_push_errstr(lstate, c"couldn't parse regex: %s".as_ptr(), why);
             err.clear();

@@ -21,9 +21,8 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Arena, Array, Dict, Error, Integer, Object, String_0, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
-    lua_Number, lua_State, size_t,
+    Arena, Array, Dict, Error, Integer, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
 
@@ -82,7 +81,7 @@ pub unsafe fn nlua_pop_object(
             stack.pop();
             if cur.container {
                 if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                    *err = Error::from_message(kErrorTypeException, c"Lua failed to grow stack");
+                    *err = Error::exception(c"Lua failed to grow stack");
                     break;
                 }
                 if (*cur.obj).type_0 == kObjectTypeDict {
@@ -181,10 +180,7 @@ pub unsafe fn nlua_pop_object(
                                 *cur.obj = Object::float(table_props.val);
                             }
                             kObjectTypeNil => {
-                                *err = Error::from_message(
-                                    kErrorTypeValidation,
-                                    c"Cannot convert given Lua table",
-                                );
+                                *err = Error::validation(c"Cannot convert given Lua table");
                             }
                             _ => abort(),
                         }
@@ -203,10 +199,7 @@ pub unsafe fn nlua_pop_object(
                         if is_nil {
                             *cur.obj = Object::NIL;
                         } else {
-                            *err = Error::from_message(
-                                kErrorTypeValidation,
-                                c"Cannot convert userdata",
-                            );
+                            *err = Error::validation(c"Cannot convert userdata");
                         }
                         break 'converted;
                     }

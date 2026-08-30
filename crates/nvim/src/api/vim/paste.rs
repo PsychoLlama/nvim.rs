@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try, array_add};
-use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active};

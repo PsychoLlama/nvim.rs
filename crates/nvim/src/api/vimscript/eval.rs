@@ -15,11 +15,9 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, api_try};
 use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_msg_ptr;
 use crate::api_error;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::message_fmt::c_str;
-use crate::message_fmt::c_str_len;
+use crate::message_fmt::{c_str, c_str_len};
 use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -65,9 +63,12 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
     if !error.is_set() {
         if ok == FAIL {
             // The expression is quoted back at the user, capped so a huge
-            // one does not become the whole message.
+            // one does not become the whole message. Upstream's `%.*s` stops
+            // at the terminator as well as the cap, which is what the `min`
+            // is: `expr` need not hold 256 bytes.
+            let shown = expr.len().min(256);
             // SAFETY: `expr` names its own bytes, per this call's contract.
-            let text = unsafe { c_str_len(expr.data(), 256) };
+            let text = unsafe { c_str_len(expr.data(), shown) };
             error = api_error!(
                 kErrorTypeException,
                 "Failed to evaluate expression: '{text}'"
@@ -96,9 +97,7 @@ unsafe fn call_function_with(
 ) -> Object {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     if args.size > MAX_FUNC_ARGS as size_t {
-        let msg = c"Function called with too many arguments".as_ptr();
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+        *err = Error::validation(c"Function called with too many arguments");
         return Object::NIL;
     }
     // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.

@@ -18,8 +18,7 @@
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, arena_dict};
-use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
 use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
@@ -456,7 +455,7 @@ pub unsafe fn dict2hlattrs(
     } else if is_set(dict, key::FOREGROUND) {
         fg = unsafe { object_to_color(dict.foreground, c"foreground", use_rgb, err) };
     }
-    if unsafe { error_set(err) } {
+    if err.is_set() {
         return HLATTRS_INIT;
     }
     if is_set(dict, key::BG) {
@@ -464,7 +463,7 @@ pub unsafe fn dict2hlattrs(
     } else if is_set(dict, key::BACKGROUND) {
         bg = unsafe { object_to_color(dict.background, c"background", use_rgb, err) };
     }
-    if unsafe { error_set(err) } {
+    if err.is_set() {
         return HLATTRS_INIT;
     }
     // A special colour is always an RGB one: cterm has no such thing.
@@ -473,7 +472,7 @@ pub unsafe fn dict2hlattrs(
     } else if is_set(dict, key::SPECIAL) {
         sp = unsafe { object_to_color(dict.special, c"special", true, err) };
     }
-    if unsafe { error_set(err) } {
+    if err.is_set() {
         return HLATTRS_INIT;
     }
 
@@ -541,13 +540,13 @@ pub unsafe fn dict2hlattrs(
 
     if is_set(dict, key::CTERMFG) {
         ctermfg = unsafe { object_to_color(dict.ctermfg, c"ctermfg", false, err) };
-        if unsafe { error_set(err) } {
+        if err.is_set() {
             return HLATTRS_INIT;
         }
     }
     if is_set(dict, key::CTERMBG) {
         ctermbg = unsafe { object_to_color(dict.ctermbg, c"ctermbg", false, err) };
-        if unsafe { error_set(err) } {
+        if err.is_set() {
             return HLATTRS_INIT;
         }
     }
@@ -579,14 +578,6 @@ pub unsafe fn dict2hlattrs(
     hlattrs
 }
 
-/// Has something already failed?
-///
-/// # Safety
-/// `err` points at a live [`Error`].
-unsafe fn error_set(err: &mut Error) -> bool {
-    err.is_set()
-}
-
 /// A colour key's value as a colour number: an integer verbatim, a name
 /// looked up, `""`/`"NONE"` as -1 (unset).
 ///
@@ -603,7 +594,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -
     }
     if val.type_0 != kObjectTypeString {
         let expected = c"String or Integer";
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_expected_ptr(key.as_ptr(), expected, None) };
         return 0;
     }
@@ -618,7 +609,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -
         name_to_ctermcolor(name)
     };
     if color < 0 {
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"highlight color".as_ptr(), str.data(), 0, true) };
     }
     color

@@ -11,7 +11,7 @@
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
-use super::{ERROR_INIT, TRY_STATE_INIT, error_set, nlua_push_errstr};
+use super::{ERROR_INIT, TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{handle_get_buffer, handle_get_window, try_enter, try_leave};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
@@ -162,7 +162,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
 
         if status != 0 {
             return lua_error(lstate);
-        } else if error_set(&err) {
+        } else if err.is_set() {
             nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
             err.clear();
             return lua_error(lstate);

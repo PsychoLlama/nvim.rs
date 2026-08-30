@@ -8,10 +8,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_conflict_ptr;
-use crate::api::private::validate::err_expected;
+use crate::api::private::validate::{
+    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected,
+};
 use crate::types::OptionSetFlags;
 use crate::winlayer::Live;
 

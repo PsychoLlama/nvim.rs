@@ -9,9 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
-use crate::api::private::validate::err_exception;
 use crate::api::private::validate::err_out_of_range;
-use crate::api::private::validate::err_validation;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
@@ -87,7 +85,7 @@ pub unsafe fn nvim_buf_set_text(
     }
     if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
         let why = c"'start' is higher than 'end'";
-        error = err_validation(why);
+        error = Error::validation(why);
         return ().reported(error);
     }
     let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
@@ -195,7 +193,7 @@ pub unsafe fn nvim_buf_set_text(
     's_652: {
         if unsafe { (*b).b_p_ma } == 0 {
             let why = c"Buffer is not 'modifiable'";
-            error = err_exception(why);
+            error = Error::exception(why);
         } else if u_save_buf(
             unsafe { Buf::new(b) },
             start_row as linenr_T - 1 as linenr_T,
@@ -203,7 +201,7 @@ pub unsafe fn nvim_buf_set_text(
         ) == 0 as ::core::ffi::c_int
         {
             let why = c"Failed to save undo information";
-            error = err_exception(why);
+            error = Error::exception(why);
         } else {
             let mut extra: ptrdiff_t = 0 as ptrdiff_t;
             let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
@@ -218,7 +216,7 @@ pub unsafe fn nvim_buf_set_text(
                     == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to delete line";
-                    error = err_exception(why);
+                    error = Error::exception(why);
                     break 's_652;
                 } else {
                     i_1 = i_1.wrapping_add(1);
@@ -233,14 +231,14 @@ pub unsafe fn nvim_buf_set_text(
                 let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
                 if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
-                    error = err_validation(why);
+                    error = Error::validation(why);
                     break 's_652;
                 } else if unsafe {
                     ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
                 } == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to replace line";
-                    error = err_exception(why);
+                    error = Error::exception(why);
                     break 's_652;
                 } else {
                     i_2 = i_2.wrapping_add(1);
@@ -251,14 +249,14 @@ pub unsafe fn nvim_buf_set_text(
                 let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
                 if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
-                    error = err_validation(why);
+                    error = Error::validation(why);
                     break 's_652;
                 } else if unsafe {
                     ml_append_buf(b, lnum_1 as linenr_T, *lines.add(i_3), 0 as colnr_T, false)
                 } == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to insert line";
-                    error = err_exception(why);
+                    error = Error::exception(why);
                     break 's_652;
                 } else {
                     extra += 1;

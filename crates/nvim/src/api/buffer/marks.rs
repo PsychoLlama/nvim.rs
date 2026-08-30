@@ -8,8 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_bad_value_ptr, err_invalid_ptr};
 
 pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;

@@ -13,11 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::validate;
-use crate::api::private::validate::Bad;
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid;
-use crate::api::private::validate::err_msg_ptr;
+use crate::api::private::validate::{self, Bad, err_expected, err_invalid, err_msg_ptr};
 use crate::kvec::Kvec;
 use crate::types::{ErrorType, NUL};
 use crate::winfloat::WIN_CONFIG_INIT;

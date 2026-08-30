@@ -11,10 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_msg_ptr;
+use crate::api::private::validate::{err_bad_number, err_expected_ptr, err_invalid_ptr};
 use crate::api_error;
 use crate::message_fmt::c_str;
 use crate::types::{ExArgt, ExpandContext};
@@ -124,14 +121,14 @@ pub unsafe fn create_user_command(
         // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
         let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
         if !named {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"command name".as_ptr(), cmd_name, 0, true) };
             break '_err;
         }
         // SAFETY: the name validated, so it has at least one byte.
         if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
             let what = c"command name (must start with uppercase)".as_ptr();
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(what, cmd_name, 0, true) };
             break '_err;
         }
@@ -139,9 +136,7 @@ pub unsafe fn create_user_command(
         if has_key(is_set, KEYSET_OPTIDX_user_command__range)
             && has_key(is_set, KEYSET_OPTIDX_user_command__count)
         {
-            let msg = c"Cannot use both 'range' and 'count'".as_ptr();
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+            *err = Error::validation(c"Cannot use both 'range' and 'count'");
             break '_err;
         }
 
@@ -157,7 +152,7 @@ pub unsafe fn create_user_command(
         } else if let Some(nargs) = opts.nargs.as_string() {
             let value = nargs.data();
             if nargs.len() > 1 {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
                 break '_err;
             }
@@ -169,21 +164,19 @@ pub unsafe fn create_user_command(
                 b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
                 b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
                 _ => {
-                    // SAFETY: the caller's error slot.
+                    // SAFETY: the names and values are NUL-terminated strings.
                     unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
                     break '_err;
                 }
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__nargs) {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
 
         if has_key(is_set, KEYSET_OPTIDX_user_command__complete) && argt == ExArgt::NONE {
-            let msg = c"'complete' used without 'nargs'".as_ptr();
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+            *err = Error::validation(c"'complete' used without 'nargs'");
             break '_err;
         }
 
@@ -196,7 +189,7 @@ pub unsafe fn create_user_command(
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
             let percent = unsafe { *range.data() } as u8 == b'%';
             if !(percent && range.len() == 1) {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
                 break '_err;
             }
@@ -207,7 +200,7 @@ pub unsafe fn create_user_command(
             def = range;
             addr_type_arg = CmdAddr::Lines;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__range) {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
@@ -223,7 +216,7 @@ pub unsafe fn create_user_command(
             addr_type_arg = CmdAddr::Other;
             def = count;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__count) {
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_invalid_ptr(c"count".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
@@ -232,7 +225,7 @@ pub unsafe fn create_user_command(
             let Some(addr) = opts.addr.as_string() else {
                 let expected = api_typename(kObjectTypeString);
                 let actual = api_typename(opts.addr.type_0);
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_expected_ptr(c"addr".as_ptr(), expected, Some(actual)) };
                 break '_err;
             };
@@ -243,7 +236,7 @@ pub unsafe fn create_user_command(
             // `vallen` readable bytes, and `slot` is this frame's.
             let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
             if parsed != 1 {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"addr".as_ptr(), value, 0, true) };
                 break '_err;
             }
@@ -290,13 +283,13 @@ pub unsafe fn create_user_command(
             let parsed =
                 unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
             if parsed != 1 {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"complete".as_ptr(), value, 0, true) };
                 break '_err;
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__complete) {
             let expected = c"Function or String";
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_expected_ptr(c"complete".as_ptr(), expected, None) };
             break '_err;
         }
@@ -305,7 +298,7 @@ pub unsafe fn create_user_command(
             let Some(preview) = opts.preview.as_luaref() else {
                 let expected = api_typename(kObjectTypeLuaRef);
                 let actual = api_typename(opts.preview.type_0);
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_expected_ptr(c"preview".as_ptr(), expected, Some(actual)) };
                 break '_err;
             };
@@ -327,7 +320,7 @@ pub unsafe fn create_user_command(
             rep = body.data().cast_const();
         } else {
             let expected = c"Function or String";
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_expected_ptr(c"command".as_ptr(), expected, None) };
             break '_err;
         }
@@ -355,9 +348,7 @@ pub unsafe fn create_user_command(
             )
         };
         if added != 1 {
-            let msg = c"Failed to create user command".as_ptr();
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
+            *err = Error::exception(c"Failed to create user command");
         }
         // `uc_add_command` owns what it was handed, so nothing below runs.
         return;
@@ -398,7 +389,7 @@ pub unsafe fn nvim_buf_get_commands(
     let builtin = unsafe { (*opts).builtin };
     if buf == -1 {
         if builtin {
-            error = Error::from_message(kErrorTypeValidation, c"builtin=true not implemented");
+            error = Error::validation(c"builtin=true not implemented");
             return Dict::EMPTY.reported(error);
         }
         // SAFETY: a null buffer names the global table, and `arena` is the

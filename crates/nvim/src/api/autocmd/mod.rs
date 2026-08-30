@@ -24,9 +24,9 @@ use crate::types::{
     Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Callback_data,
     Dict, Error, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, auto_event,
-    buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil,
-    kObjectTypeString, msglist_T, size_t, uint64_t,
+    buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeArray, kObjectTypeBuffer, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
+    msglist_T, size_t, uint64_t,
 };
 use ::libc::{abort, strlen};
 

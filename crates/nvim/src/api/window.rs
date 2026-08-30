@@ -19,9 +19,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
 
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_out_of_range;
+use crate::api::private::validate::{err_expected, err_invalid_ptr, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_close, e_cmdwin};
 use crate::message::emsg;

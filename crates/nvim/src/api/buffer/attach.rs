@@ -18,7 +18,7 @@ pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, err: &mut Error) -> *mut bu
         return ::core::ptr::null_mut::<buf_T>();
     }
     if unsafe { (*b).b_ml.ml_mfp }.is_null() && !buf_ensure_loaded(unsafe { Buf::new(b) }) {
-        *err = Error::from_message(kErrorTypeException, c"Failed to load buffer");
+        *err = Error::exception(c"Failed to load buffer");
         return ::core::ptr::null_mut::<buf_T>();
     }
     b

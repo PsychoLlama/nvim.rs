@@ -45,7 +45,7 @@ pub unsafe fn nvim_set_hl(
         unsafe { (*val).is_set__highlight_ },
         KEYSET_OPTIDX_highlight__url,
     ) {
-        error = Error::from_message(kErrorTypeValidation, c"Invalid key: 'url'");
+        error = Error::validation(c"Invalid key: 'url'");
         return ().reported(error);
     }
     let mut update: bool = has_key(

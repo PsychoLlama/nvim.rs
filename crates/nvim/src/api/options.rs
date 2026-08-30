@@ -27,14 +27,12 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_expected, err_invalid_ptr};
 use crate::api_error;
 use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
 use crate::memory::xstrdup;
-use crate::message_fmt::c_str;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{
     find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,

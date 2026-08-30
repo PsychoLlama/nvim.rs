@@ -11,10 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_out_of_range;
-use crate::api::private::validate::err_validation;
+use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::kvec::Kvec;
 
 pub unsafe fn nvim_buf_del_extmark(
@@ -172,7 +169,7 @@ pub unsafe fn parse_virt_text(
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
-                *err = err_validation(why);
+                *err = Error::validation(why);
                 break '_free_exit;
             }
             let mut str: String_0 = unsafe { (*chunk.items).data.string };

@@ -150,7 +150,7 @@ pub unsafe fn nvim__get_runtime(
     // SAFETY: the Lua state exists from startup to exit.
     let deferred_safe = unsafe { nlua_is_deferred_safe() };
     if opts.do_source && !deferred_safe {
-        error = Error::from_message(kErrorTypeValidation, c"'do_source' used in fast callback");
+        error = Error::validation(c"'do_source' used in fast callback");
         return Array::EMPTY.reported(error);
     }
     // SAFETY: `pat` is the caller's array and `arena` its own.

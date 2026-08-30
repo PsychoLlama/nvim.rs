@@ -10,9 +10,7 @@
 
 use super::{EMPTY_HL_MESSAGE, NIL, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;
-use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_msg_ptr;
+use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::kvec::InitVec;
@@ -25,10 +23,10 @@ use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Boolean, Dict, Error, Float, HlMessage, HlMessageChunk,
-    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, size_t,
+    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    key_value_pair, size_t,
 };
 use ::libc::{abort, memcpy};
 use core::ffi::{CStr, c_char, c_int};
@@ -417,7 +415,7 @@ pub(crate) unsafe fn api_object_to_bool(
     if obj.type_0 == kObjectTypeNil {
         return nil_value;
     }
-    // SAFETY: the caller's error slot.
+    // SAFETY: the names and values are NUL-terminated strings.
     unsafe { *err = err_expected_ptr(what, c"boolean", None) };
     false
 }
@@ -437,7 +435,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut
         let id = number as c_int;
         return if (1..=known).contains(&id) { id } else { 0 };
     }
-    // SAFETY: the caller's error slot.
+    // SAFETY: the names and values are NUL-terminated strings.
     unsafe { *err = err_invalid_ptr(c"hl_group".as_ptr(), what, 0, true) };
     0
 }
@@ -469,7 +467,7 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) 
         let item = unsafe { *chunks.items.add(i) };
         let Some(chunk) = item.as_array() else {
             let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_expected_ptr(c"chunk".as_ptr(), want, Some(got)) };
             // SAFETY: `hl_msg` is this frame's, and owns its chunks.
             unsafe { hl_msg_free(hl_msg) };
@@ -480,9 +478,7 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) 
             .contains(&chunk.size)
             .then(|| unsafe { *chunk.items });
         let Some(text) = head.and_then(Object::as_string) else {
-            let msg = c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr();
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
+            *err = Error::validation(c"Invalid chunk: expected Array with 1 or 2 Strings");
             // SAFETY: as above.
             unsafe { hl_msg_free(hl_msg) };
             return EMPTY_HL_MESSAGE;

@@ -9,9 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_required_ptr;
+use crate::api::private::validate::{err_expected, err_invalid_ptr, err_required_ptr};
 use crate::api_error;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;

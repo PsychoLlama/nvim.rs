@@ -11,10 +11,9 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, NIL, Reported, array_add, dict_put, dict_put_str, has_key,
 };
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_conflict_ptr;
-use crate::api::private::validate::err_expected;
+use crate::api::private::validate::{
+    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected,
+};
 use crate::api_error;
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::kvec::InitVec;

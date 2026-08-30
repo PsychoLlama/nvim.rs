@@ -9,8 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::NIL;
-use crate::api::private::helpers::array_add;
+use crate::api::private::helpers::{NIL, array_add};
 use crate::api::private::validate::err_expected;
 use crate::kvec::InitVec;
 

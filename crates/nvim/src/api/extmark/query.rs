@@ -11,8 +11,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_expected;
+use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Live;
 
 pub unsafe fn virt_text_to_array(

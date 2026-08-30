@@ -24,9 +24,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::api::private::helpers::array_add;
-use crate::api::private::validate::err_conflict_ptr;
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_conflict_ptr, err_expected, err_invalid_ptr};
 use crate::api_error;
 
 /// "Invalid 'border': expected `want`", the shape every rejection here takes.
@@ -337,7 +335,7 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
             // time any window can be configured.
             Some(style) => Some(unsafe { style_slots(style) }),
             None => {
-                // SAFETY: the caller's error slot.
+                // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"border".as_ptr(), str.data(), 0, true) };
                 None
             }
@@ -372,7 +370,7 @@ pub(crate) unsafe fn generate_api_error(
         );
         *err = e;
     } else {
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_conflict_ptr(attribute, c"non-float window".as_ptr()) };
     }
 }

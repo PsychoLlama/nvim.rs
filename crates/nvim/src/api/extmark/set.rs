@@ -11,12 +11,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::err_bad_number;
-use crate::api::private::validate::err_bad_value_ptr;
-use crate::api::private::validate::err_exception;
-use crate::api::private::validate::err_expected;
-use crate::api::private::validate::err_out_of_range;
-use crate::api::private::validate::err_validation;
+use crate::api::private::validate::{
+    err_bad_number, err_bad_value_ptr, err_expected, err_out_of_range,
+};
 use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
 use crate::winlayer::{Buf, Live};
@@ -107,7 +104,7 @@ pub unsafe fn nvim_buf_set_extmark(
                 ) {
                     if has_key(opts.is_set__set_extmark_, 10 as ::core::ffi::c_int) {
                         let why = c"cannot use both 'end_row' and 'end_line'";
-                        error = err_validation(why);
+                        error = Error::validation(why);
                         break '_error;
                     }
                     let end_line = opts.end_line;
@@ -229,7 +226,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             && unsafe { vim_isprintc(ch) } as ::core::ffi::c_int != 0)
                         {
                             let why = c"conceal char has to be printable";
-                            error = err_validation(why);
+                            error = Error::validation(why);
                             break '_error;
                         }
                     }
@@ -247,7 +244,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             == '\0' as ::core::ffi::c_int)
                     {
                         let why = c"conceal_lines has to be an empty string";
-                        error = err_validation(why);
+                        error = Error::validation(why);
                         break '_error;
                     }
                 }
@@ -322,7 +319,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             && true
                         {
                             let why = c"cannot use 'blend' hl_mode with inline virtual text";
-                            error = err_validation(why);
+                            error = Error::validation(why);
                             break '_error;
                         }
                         virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
@@ -446,7 +443,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     && has_key(opts.is_set__set_extmark_, 30 as ::core::ffi::c_int)
                 {
                     let why = c"cannot set end_right_gravity without end_row or end_col";
-                    error = err_validation(why);
+                    error = Error::validation(why);
                 } else {
                     len = 0 as colnr_T;
                     if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__spell) {
@@ -597,7 +594,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         } else if opts.ephemeral {
                             let why =
                                 c"cannot set emphemeral mark outside of a decoration provider";
-                            error = err_exception(why);
+                            error = Error::exception(why);
                             break '_error;
                         } else {
                             let mut decor_flags: uint16_t = 0 as uint16_t;

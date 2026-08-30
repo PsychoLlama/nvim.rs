@@ -331,7 +331,7 @@ pub unsafe fn modify_keymap(
             break 'fail_and_free;
         }
         if parsed_args.lhs_len == 0 {
-            *err = Error::from_message(kErrorTypeValidation, c"Invalid (empty) LHS");
+            *err = Error::validation(c"Invalid (empty) LHS");
             break 'fail_and_free;
         }
 

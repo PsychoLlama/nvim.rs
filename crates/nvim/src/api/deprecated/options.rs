@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, buffer_by_handle, window_by_handle};
-use crate::api::private::validate::err_expected_ptr;
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
 use crate::option::NIL_OPTVAL;
 use crate::types::OptionSetFlags;
 use core::ffi::{CStr, c_char, c_void};
@@ -104,7 +103,7 @@ pub unsafe fn nvim_win_set_option(
 unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_char, OptIndex)> {
     if name.is_empty() {
         let empty = c"<empty>".as_ptr();
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), empty, 0, true) };
         return None;
     }
@@ -112,7 +111,7 @@ unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_ch
     // SAFETY: an API string is NUL-terminated.
     let opt_idx: OptIndex = find_option(unsafe { CStr::from_ptr(opt_name) });
     if opt_idx == kOptInvalid as OptIndex {
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), opt_name, 0, true) };
         return None;
     }
@@ -150,7 +149,7 @@ unsafe fn get_option_from(
     // An option the scope does not have reads as the unset value, which is
     // the same answer as a name that is not an option's at all.
     if value.type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), opt_name, 0, true) };
         return NIL;
     }
@@ -176,7 +175,7 @@ unsafe fn set_option_to(
     let Some(optval) = object_as_optval(value) else {
         let want = c"valid option type";
         let got = api_typename(value.type_0);
-        // SAFETY: the caller's error slot.
+        // SAFETY: the names and values are NUL-terminated strings.
         unsafe { *err = err_expected_ptr(c"value".as_ptr(), want, Some(got)) };
         return;
     };

@@ -132,7 +132,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // the same string.
         let mut wrong_type = |want: ObjectType| {
             let (want, got) = (api_typename(want), api_typename(given.type_0));
-            // SAFETY: the caller's error slot.
+            // SAFETY: the names and values are NUL-terminated strings.
             unsafe { *err = err_expected_ptr(field.str, want, Some(got)) };
         };
 

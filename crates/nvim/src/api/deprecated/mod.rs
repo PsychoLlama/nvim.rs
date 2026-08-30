@@ -28,8 +28,8 @@ use crate::types::{
     DecorPriority, DecorVirtText, DecorVirtText_data, Dict, Error, Integer, KeyDict_empty,
     KeyDict_exec_opts, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex, OptScope, OptVal,
     OptValType, String_0, StringBuilder, Tabpage, VirtText, Window, buf_T, colnr_T, int64_t,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeString, lua_State, schar_T,
-    size_t, uint8_t, uint16_t, uint32_t, uint64_t,
+    kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, schar_T, size_t, uint8_t,
+    uint16_t, uint32_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
