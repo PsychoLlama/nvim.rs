@@ -59,7 +59,7 @@ use crate::types::{
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
-use ::libc::{fclose, qsort, strcasecmp, strcmp, strlen};
+use ::libc::{fclose, qsort, strcasecmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -502,11 +502,12 @@ unsafe extern "C" fn help_compare(s1: *const c_void, s2: *const c_void) -> c_int
     // SAFETY: caller contract.
     let t1 = unsafe { *s1.cast::<*mut c_char>() };
     let t2 = unsafe { *s2.cast::<*mut c_char>() };
-    let cmp = unsafe { strcmp(t1.add(strlen(t1)).offset(1), t2.add(strlen(t2)).offset(1)) };
+    let cmp =
+        unsafe { cstr::cmp(t1.add(strlen(t1)).offset(1), t2.add(strlen(t2)).offset(1)) as c_int };
     if cmp != 0 {
         return cmp;
     }
-    unsafe { strcmp(t1, t2) }
+    unsafe { cstr::cmp(t1, t2) as c_int }
 }
 
 /// Find every help tag matching `arg`, best match first, and hand the list
@@ -600,7 +601,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     for i in 0..num_file {
         let tag = unsafe { *file.offset(i as isize) };
         let len = unsafe { strlen(tag) } as c_int - 3;
-        if len <= 0 || unsafe { strcmp(tag.offset(len as isize), c"@en".as_ptr()) } != 0 {
+        if len <= 0 || unsafe { cstr::bytes_at(tag.offset(len as isize)) != b"@en" } {
             continue;
         }
         // Sorting on priority means the same item in another language
@@ -627,7 +628,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
         for i in 0..num_file {
             let tag = unsafe { *file.offset(i as isize) };
             let len = unsafe { strlen(tag) } as c_int - 3;
-            if len > 0 && unsafe { strcmp(tag.offset(len as isize), suffix.as_ptr()) } == 0 {
+            if len > 0 && unsafe { cstr::eq(tag.offset(len as isize), suffix.as_ptr()) } {
                 unsafe { *tag.offset(len as isize) = NUL as c_char };
             }
         }
@@ -651,7 +652,7 @@ pub(crate) unsafe fn prepare_help_buffer() {
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
-    if unsafe { strcmp((*curbuf.get()).b_p_isk, isk.as_ptr()) } != 0 {
+    if !unsafe { cstr::eq((*curbuf.get()).b_p_isk, isk.as_ptr()) } {
         set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
         unsafe { check_buf_options(curbuf.get()) };
         unsafe { buf_init_chartab(curbuf.get(), false) };

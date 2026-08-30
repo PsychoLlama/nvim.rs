@@ -45,7 +45,6 @@ use crate::types::{
     EvalFuncData, NUL, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
     VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
-use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -243,7 +242,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
         // Any prefix of "silent" silences; only the exact "silent!"
         // also silences errors.
         silence = unsafe { cstr::starts_with(s, b"silent") };
-        if unsafe { strcmp(s, c"silent!".as_ptr()) } == 0 {
+        if unsafe { cstr::bytes_at(s) == b"silent!" } {
             emsg_silent.set(1);
             emsg_noredir.set(true);
         }

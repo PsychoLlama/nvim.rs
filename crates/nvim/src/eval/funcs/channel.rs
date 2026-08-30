@@ -14,6 +14,7 @@ use crate::api::private::helpers::{arena_array, cstr_as_string};
 use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
+use crate::cstr;
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
     NumBuf, kCallbackNone, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
@@ -46,7 +47,6 @@ use crate::types::{
     funccall_T, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object, sctx_T, typval_T,
     uint64_t, varnumber_T,
 };
-use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -127,7 +127,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let stream = arg_string(&mut numbuf, args.get(1));
         let found = CHANNEL_PARTS
             .iter()
-            .find(|(name, _)| unsafe { strcmp(stream, name.as_ptr()) } == 0);
+            .find(|(name, _)| unsafe { cstr::eq(stream, name.as_ptr()) });
         match found {
             Some(&(_, p)) => part = p,
             None => {
@@ -542,9 +542,9 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
     let mode = arg_string(&mut numbuf, args.get(0));
     let address = arg_string(&mut numbuf2, args.get(1));
-    let tcp = if unsafe { strcmp(mode, c"tcp".as_ptr()) } == 0 {
+    let tcp = if unsafe { cstr::bytes_at(mode) == b"tcp" } {
         true
-    } else if unsafe { strcmp(mode, c"pipe".as_ptr()) } == 0 {
+    } else if unsafe { cstr::bytes_at(mode) == b"pipe" } {
         false
     } else {
         let arg0 = "invalid mode";

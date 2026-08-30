@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
 use crate::types::{VAR_NUMBER, VAR_STRING};
@@ -37,7 +38,7 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
                 .find(|b| {
                     !b.b_fname.is_null()
                         && (unsafe { path_with_url(b.b_fname) } != 0 || buf_is_nofilename(Some(*b)))
-                        && unsafe { strcmp(b.b_fname, name) } == 0
+                        && unsafe { cstr::eq(b.b_fname, name) }
                 })
                 .map_or(ptr::null_mut(), Buf::raw)
         }

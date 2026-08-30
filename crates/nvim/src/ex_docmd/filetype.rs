@@ -89,7 +89,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         }
     }
 
-    if strcmp(arg, c"on".as_ptr()) == 0 || strcmp(arg, c"detect".as_ptr()) == 0 {
+    if equals(arg, b"on") || equals(arg, b"detect") {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
         if byte(arg) == 'o' as c_int || filetype_detect.get() != Some(true) {
@@ -114,7 +114,7 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
             );
             do_modelines(OptionSetFlags::NONE);
         }
-    } else if strcmp(arg, c"off".as_ptr()) == 0 {
+    } else if equals(arg, b"off") {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
@@ -354,8 +354,9 @@ fn byte(p: *const c_char) -> c_int {
     unsafe { *p as c_int }
 }
 
-/// `strcmp()` as checked code.
-fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { ::libc::strcmp(a, b) }
+/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
+/// as checked code.
+fn equals(p: *const c_char, lit: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string.
+    unsafe { cstr::bytes_at(p) == lit }
 }

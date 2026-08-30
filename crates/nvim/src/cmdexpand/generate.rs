@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::syntax::EXPAND_BUF_LEN;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -247,7 +248,7 @@ pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_xp_line.get().is_null()
-        || unsafe { strcmp(last_xp_line.get(), xp.xp_line) } != 0
+        || !unsafe { cstr::eq(last_xp_line.get(), xp.xp_line) }
         || last_gen.get() != get_cmdline_last_prompt_id()
     {
         unsafe { xfree(last_xp_line.get() as *mut c_void) };

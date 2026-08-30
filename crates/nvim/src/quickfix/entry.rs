@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::cstr;
 use crate::file_search::Name;
 use crate::types::{CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo};
 use core::ffi::{c_char, c_int, c_uint};
@@ -39,7 +40,7 @@ pub(crate) fn forget_last_buffer() {
 unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
     // SAFETY: forwarded from the caller; `bufref_valid` only reads.
     let cached = last_bufname.with(|name| match name {
-        Some(name) => unsafe { strcmp(bufname, name.as_ptr()) == 0 },
+        Some(name) => unsafe { cstr::eq(bufname, name.as_ptr()) },
         None => false,
     });
     if cached && last_bufref.get().valid() {

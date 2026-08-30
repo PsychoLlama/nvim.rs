@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::fileio::Loaded;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
@@ -310,7 +311,7 @@ pub(crate) unsafe fn readfile(
             conv.flags = 0;
             converted = unsafe { need_conversion(fenc) };
             if converted {
-                if unsafe { strcmp(fenc, ENC_UCSBOM.as_ptr()) } == 0 {
+                if unsafe { cstr::eq(fenc, ENC_UCSBOM.as_ptr()) } {
                     // "ucs-bom" means the first bytes of the file decide.
                     conv.flags = FIO_UCSBOM;
                 } else {

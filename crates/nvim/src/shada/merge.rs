@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::cmp::Ordering;
 use core::ffi::{c_int, c_uint, c_void};
 
@@ -527,7 +528,7 @@ pub(crate) unsafe fn shada_read_when_writing(
                 unsafe {
                     insert_mark_list(jumps, jumps_size, entry, |existing| {
                         marks_equal(existing.data.filemark.mark, mark)
-                            && strcmp(existing.data.filemark.fname, fname) == 0
+                            && cstr::eq(existing.data.filemark.fname, fname)
                     })
                 };
             }
@@ -614,7 +615,7 @@ unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry)
                 unsafe { existing.data.filemark }.mark,
                 unsafe { entry.data.filemark }.mark,
             )
-            && unsafe { strcmp(existing.data.filemark.fname, entry.data.filemark.fname) } == 0
+            && unsafe { cstr::eq(existing.data.filemark.fname, entry.data.filemark.fname) }
         {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;

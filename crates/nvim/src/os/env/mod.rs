@@ -38,7 +38,7 @@ use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
 use crate::types::{IOSIZE, MAXPATHL, expand_T, int64_t, size_t};
-use ::libc::{getpid, strcasecmp, strcmp, strcpy, strlen, strpbrk, uname, utsname};
+use ::libc::{getpid, strcasecmp, strcpy, strlen, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 

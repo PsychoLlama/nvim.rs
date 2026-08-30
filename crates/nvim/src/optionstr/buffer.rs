@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
 
@@ -48,7 +49,6 @@ use crate::types::{
     fmark_T, fmarkv_T, linenr_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
-use ::libc::strcmp;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
@@ -143,7 +143,7 @@ pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_c
             value
         }
     };
-    if unsafe { strcmp(undotted(p_bex.get()), undotted(p_pm.get())) } == 0 {
+    if unsafe { cstr::eq(undotted(p_bex.get()), undotted(p_pm.get())) } {
         return e_backupext_and_patchmode_are_equal.as_ptr();
     }
     ptr::null()
@@ -355,7 +355,7 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     unsafe { xfree((*varp).cast::<c_void>()) };
     unsafe { *varp = canonical };
     if idx == kOptEncoding {
-        if unsafe { strcmp(p_enc.get(), c"utf-8".as_ptr()) } != 0 {
+        if unsafe { cstr::bytes_at(p_enc.get()) != b"utf-8" } {
             return e_unsupportedoption.as_ptr();
         }
         unsafe { spell_reload() };
@@ -410,7 +410,7 @@ pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
     if !valid_filetype(unsafe { CStr::from_ptr(value) }) {
         return invalid();
     }
-    unsafe { (*args).os_value_changed = strcmp(old_value(args), value) != 0 };
+    unsafe { (*args).os_value_changed = !cstr::eq(old_value(args), value) };
     unsafe { (*args).os_value_checked = true };
     ptr::null()
 }
@@ -574,8 +574,8 @@ pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
     let value = unsafe { *varp(args) };
     if c_int::from(unsafe { *value }) != NUL
-        && unsafe { strcmp(value, c"expr:0".as_ptr()) } != 0
-        && unsafe { strcmp(value, c"expr:1".as_ptr()) } != 0
+        && unsafe { cstr::bytes_at(value) != b"expr:0" }
+        && unsafe { cstr::bytes_at(value) != b"expr:1" }
     {
         return invalid();
     }

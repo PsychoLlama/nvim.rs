@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -47,7 +48,7 @@ use crate::types::{
     Directory, Failed, FileComparison, FileID, FileInfo, MAXPATHL, PATHSEPSTR, file_comparison,
     garray_T, regmatch_T, size_t,
 };
-use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen};
+use ::libc::{qsort, strcasecmp, strcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod names;
@@ -483,7 +484,7 @@ pub unsafe fn append_path(
     let sep_len = PATHSEPSTR.count_bytes();
 
     // Do not append an empty string, or a dot.
-    if to_append_length == 0 || unsafe { strcmp(to_append, c".".as_ptr()) } == 0 {
+    if to_append_length == 0 || unsafe { cstr::bytes_at(to_append) == b"." } {
         return Ok(());
     }
 

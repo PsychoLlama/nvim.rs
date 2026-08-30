@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -126,7 +127,7 @@ unsafe fn scl_name2id(name: *const c_char) -> c_int {
             break 0;
         }
         let stored = unsafe { cur_cluster(i).scl_name_u };
-        if !stored.is_null() && unsafe { strcmp(name_u, stored) } == 0 {
+        if !stored.is_null() && unsafe { cstr::eq(name_u, stored) } {
             break i + SYNID_CLUSTER;
         }
     };

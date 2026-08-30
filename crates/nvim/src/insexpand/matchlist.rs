@@ -199,7 +199,7 @@ pub(crate) unsafe fn ins_compl_add(
     if !fname.is_null()
         && !curr_fname.is_null()
         // SAFETY: both are NUL-terminated file names.
-        && unsafe { strcmp(fname, curr_fname) } == 0
+        && unsafe { cstr::eq(fname, curr_fname) }
     {
         match_0.cp_fname = curr_fname;
     } else if !fname.is_null() {

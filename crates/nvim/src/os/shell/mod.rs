@@ -22,6 +22,7 @@ pub mod expand;
 pub mod system;
 mod throttle;
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 pub use expand::os_expand_wildcards;
@@ -58,7 +59,7 @@ use crate::types::{
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
-use ::libc::{fclose, fopen, fread, fseek, ftell, strcmp, strcpy, strlen};
+use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -550,16 +551,16 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
         }
 
         let mut ecmd = cmd;
-        if *p_sxe.get() != NUL as c_char && strcmp(p_sxq.get(), c"(".as_ptr()) == 0 {
+        if *p_sxe.get() != NUL as c_char && cstr::bytes_at(p_sxq.get()) == b"(" {
             ecmd = vim_strsave_escaped_ext(cmd, p_sxe.get(), '^' as c_char, false);
         }
         let ncmd_size = strlen(ecmd) + strlen(p_sxq.get()) * 2 + 1;
         let ncmd = xmalloc(ncmd_size) as *mut c_char;
 
         // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
-        if strcmp(p_sxq.get(), c"(".as_ptr()) == 0 {
+        if cstr::bytes_at(p_sxq.get()) == b"(" {
             vim_snprintf(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
-        } else if strcmp(p_sxq.get(), c"\"(".as_ptr()) == 0 {
+        } else if cstr::bytes_at(p_sxq.get()) == b"\"(" {
             vim_snprintf(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
         } else {
             vim_snprintf(

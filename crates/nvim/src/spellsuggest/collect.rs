@@ -35,7 +35,7 @@ use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs};
 use crate::types::{__compar_fn_t, garray_T, hlf_T, size_t, slang_T};
-use ::libc::{qsort, strcasecmp, strcmp, strlen};
+use ::libc::{qsort, strcasecmp, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr, slice};
 
@@ -599,5 +599,5 @@ pub(super) unsafe fn score_combine(su: *mut suginfo_T) {
 /// Both pointers must be NUL-terminated.
 unsafe fn same_word(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: the caller guarantees both strings.
-    unsafe { strcmp(a, b) == 0 }
+    unsafe { cstr::eq(a, b) }
 }

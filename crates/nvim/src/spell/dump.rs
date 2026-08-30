@@ -49,7 +49,7 @@ use crate::types::{
     Direction, IOSIZE, NUL, OK, OptVal, OptValData, OptionSetFlags, exarg_T, hashitem_T, idx_T,
     langp_T, linenr_T, size_t, slang_T, wordcount_T,
 };
-use ::libc::{strcat, strcmp, strcpy, strlen};
+use ::libc::{strcat, strcpy, strlen};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
@@ -191,7 +191,7 @@ pub unsafe fn spell_dump_compl(
         if unsafe { *p } != 0 {
             if region_names.is_null() {
                 region_names = p;
-            } else if unsafe { strcmp(region_names, p) } != 0 {
+            } else if !unsafe { cstr::eq(region_names, p) } {
                 do_region = false;
                 break;
             }

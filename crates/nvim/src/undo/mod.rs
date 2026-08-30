@@ -17,6 +17,7 @@ use crate::buffer_updates::{buf_updates_changedtick, buf_updates_unload};
 use crate::change::{
     change_warning, changed, changed_bytes, changed_lines, file_ff_differs, unchanged,
 };
+use crate::cstr;
 use crate::cursor::{
     check_cursor, check_cursor_col, check_cursor_lnum, check_pos, coladvance, getviscol,
 };
@@ -66,9 +67,7 @@ use crate::strings::vim_snprintf;
 use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::Win;
-use ::libc::{
-    close, fclose, fdopen, fflush, fread, fwrite, getuid, strcmp, strftime, strlen, time,
-};
+use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, strlen, time};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
@@ -699,13 +698,8 @@ pub fn u_find_first_changed() {
     }
     let mut lnum: linenr_T = 1;
     while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
-        if unsafe {
-            strcmp(
-                ml_get_buf(b.raw(), lnum),
-                *(*uep).ue_array.offset((lnum - 1) as isize),
-            )
-        } != 0
-        {
+        let saved = unsafe { *(*uep).ue_array.offset((lnum - 1) as isize) };
+        if !unsafe { cstr::eq(ml_get_buf(b.raw(), lnum), saved) } {
             clearpos(&mut uhp.uh_cursor);
             uhp.uh_cursor.lnum = lnum;
             return;

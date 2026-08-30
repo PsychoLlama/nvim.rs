@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
@@ -215,7 +216,7 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     // to the same file but the spelling differs we have to go through a
     // temp file.
     if unsafe { path_fnamecmp(from, to) } == 0 {
-        if p_fic.get() != 0 && unsafe { strcmp(path_tail(from), path_tail(to)) } != 0 {
+        if p_fic.get() != 0 && !unsafe { cstr::eq(path_tail(from), path_tail(to)) } {
             use_tmp_file = true;
         } else {
             return 0;

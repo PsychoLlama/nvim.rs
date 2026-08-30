@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -35,7 +36,7 @@ use crate::types::{
     intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use crate::ui::ui_has;
-use ::libc::{strcmp, strlen};
+use ::libc::strlen;
 
 /// The message kind `print()`'s output is reported under.
 const LUA_PRINT_KIND: &CStr = c"lua_print";
@@ -257,7 +258,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
             let done = input.v_type != VAR_STRING
                 || input.vval.v_string.is_null()
                 || *input.vval.v_string == 0
-                || strcmp(input.vval.v_string, c"cont".as_ptr()) == 0;
+                || cstr::bytes_at(input.vval.v_string) == b"cont";
             if done {
                 tv_clear(&raw mut input);
                 if ui_has(kUICmdline) {

@@ -6,6 +6,7 @@
 //! is what keeps the three in step after any of them changes.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Lock;
 use crate::semsg;
 use crate::smsg;
@@ -45,7 +46,6 @@ use crate::types::{
     VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
-use ::libc::strcmp;
 
 /// The parsed `'findfunc'`.
 ///
@@ -281,7 +281,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if new_dir.is_null() || unsafe { allbuf_locked() } {
         return false;
     }
-    if unsafe { strcmp(new_dir, c"-".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(new_dir) == b"-" } {
         let pdir = get_prevdir(scope);
         if pdir.is_null() {
             emsg(gettext(c"E186: No previous directory".as_ptr()));

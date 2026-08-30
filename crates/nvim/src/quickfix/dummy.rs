@@ -17,6 +17,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::buffer::BufRef;
+use crate::cstr;
 use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
 use crate::winlayer::{Buf, windows};
 use core::ffi::{c_char, c_int};
@@ -33,7 +34,7 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     let mut dirname_now = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the caller's directory name, and one owned MAXPATHL buffer.
     let _ = unsafe { os_dirname(dirname_now.as_mut_ptr(), MAXPATHL as size_t) };
-    if unsafe { strcmp(dirname_start, dirname_now.as_ptr()) } == 0 {
+    if unsafe { cstr::eq(dirname_start, dirname_now.as_ptr()) } {
         return;
     }
     // Return to the original directory, ignoring any error.

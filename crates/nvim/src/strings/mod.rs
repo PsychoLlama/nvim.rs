@@ -8,7 +8,7 @@ use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
 use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
-use ::libc::{qsort, strcasecmp, strcmp, strlen};
+use ::libc::{qsort, strcasecmp, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -158,7 +158,7 @@ unsafe extern "C" fn sort_compare(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
 ) -> c_int {
-    unsafe { strcmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char)) }
+    unsafe { cstr::cmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char)) as c_int }
 }
 
 pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {

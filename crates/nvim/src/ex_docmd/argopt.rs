@@ -296,9 +296,9 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
             tab_number = unsafe { getdigits(&raw mut p, false, tab_number as intmax_t) } as c_int;
 
             if relative == 0 {
-                if strcmp(p, c"$".as_ptr()) == 0 {
+                if equals(p, b"$") {
                     tab_number = last_tab();
-                } else if strcmp(p, c"#".as_ptr()) == 0 {
+                } else if equals(p, b"#") {
                     if !valid_tabpage(lastused_tabpage.get()) {
                         ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
                         tab_number = 0;
@@ -582,10 +582,11 @@ fn ubyte_at(p: *const c_char, i: isize) -> u8 {
     unsafe { *p.offset(i) as u8 }
 }
 
-/// `strcmp()` as checked code.
-fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { ::libc::strcmp(a, b) }
+/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
+/// as checked code.
+fn equals(p: *const c_char, lit: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string.
+    unsafe { cstr::bytes_at(p) == lit }
 }
 
 /// `strcasecmp()` as checked code.

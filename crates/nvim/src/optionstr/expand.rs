@@ -38,7 +38,6 @@ use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
     CompleteListItemGetter, Failed, NUL, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
 };
-use ::libc::strcmp;
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,
@@ -139,7 +138,7 @@ pub(crate) unsafe fn expand_set_opt_string(
         // it.
         // SAFETY: both are C strings.
         if let Some(value) = original
-            && unsafe { strcmp(word, value) } == 0
+            && unsafe { cstr::eq(word, value) }
         {
             continue;
         }

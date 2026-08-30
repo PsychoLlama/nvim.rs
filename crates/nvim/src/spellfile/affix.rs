@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use core::ffi::{c_char, c_int};
@@ -32,7 +33,7 @@ use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
-use ::libc::{atoi, strcmp, strcpy, strlen};
+use ::libc::{atoi, strcpy, strlen};
 
 use super::aff::{AffState, str_equal};
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
@@ -124,7 +125,7 @@ pub(super) unsafe fn handle_affix_header(
 
     // An "S" after the count says another block for this affix follows.
     let mut lasti = 4;
-    if items.len() > lasti && unsafe { strcmp(items[lasti], c"S".as_ptr()) } == 0 {
+    if items.len() > lasti && unsafe { cstr::bytes_at(items[lasti]) == b"S" } {
         lasti += 1;
         unsafe { (*st.cur_aff).ah_follows = 1 };
     } else {
@@ -138,9 +139,7 @@ pub(super) unsafe fn handle_affix_header(
         let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
-    if unsafe { strcmp(items[2], c"Y".as_ptr()) } != 0
-        && unsafe { strcmp(items[2], c"N".as_ptr()) } != 0
-    {
+    if unsafe { cstr::bytes_at(items[2]) != b"Y" } && unsafe { cstr::bytes_at(items[2]) != b"N" } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (fname, arg2) = unsafe { (c_str(fname), c_str(items[2])) };
         smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
@@ -181,7 +180,7 @@ pub(super) unsafe fn handle_affix_entry(
     // A lone "-" is Hunspell's morphological field separator.
     if items.len() > lasti
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
-        && (unsafe { strcmp(items[lasti], c"-".as_ptr()) } != 0 || items.len() != lasti + 1)
+        && (unsafe { cstr::bytes_at(items[lasti]) != b"-" } || items.len() != lasti + 1)
     {
         // SAFETY: the affix file's name and the trailing item.
         let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
@@ -190,10 +189,10 @@ pub(super) unsafe fn handle_affix_entry(
     st.aff_todo -= 1;
 
     let entry = unsafe { (*spin).si_arena.alloc::<affentry_T>() };
-    if unsafe { strcmp(items[2], c"0".as_ptr()) } != 0 {
+    if unsafe { cstr::bytes_at(items[2]) != b"0" } {
         unsafe { (*entry).ae_chop = (*spin).si_arena.save_str(items[2]) };
     }
-    if unsafe { strcmp(items[3], c"0".as_ptr()) } != 0 {
+    if unsafe { cstr::bytes_at(items[3]) != b"0" } {
         unsafe { (*entry).ae_add = (*spin).si_arena.save_str(items[3]) };
         // Flags the added form itself carries follow a "/".
         unsafe { (*entry).ae_flags = vim_strchr((*entry).ae_add, b'/' as c_int) };
@@ -215,7 +214,7 @@ pub(super) unsafe fn handle_affix_entry(
     unsafe { (*st.cur_aff).ah_first = entry };
 
     let is_prefix = unsafe { *items[0] } as c_int == b'P' as c_int;
-    if unsafe { strcmp(items[4], c".".as_ptr()) } != 0 {
+    if unsafe { cstr::bytes_at(items[4]) != b"." } {
         unsafe { (*entry).ae_cond = (*spin).si_arena.save_str(items[4]) };
         let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
         // A prefix condition anchors at the start, a suffix at the end.

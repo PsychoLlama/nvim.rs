@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::CStr;
 
 use super::*;
@@ -17,7 +18,6 @@ use crate::option::{get_flp_value, get_showbreak_value};
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::winlayer::Win;
-use ::libc::strcmp;
 
 /// 'breakindentopt', parsed: the five values [`briopt_check`] writes onto a
 /// window as `w_briopt_*`.
@@ -210,9 +210,9 @@ impl BreakindentCache {
         // and the caller's two strings are as well.
         self.key == *key
             && !self.flp.is_null()
-            && unsafe { strcmp(self.flp, flp) } == 0
+            && unsafe { cstr::eq(self.flp, flp) }
             && !self.line.is_null()
-            && unsafe { strcmp(self.line, line) } == 0
+            && unsafe { cstr::eq(self.line, line) }
     }
 
     /// Measures `line`'s indent and stores it against `key`.

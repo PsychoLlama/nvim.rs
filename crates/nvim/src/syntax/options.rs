@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -240,7 +241,7 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
     }
     let gname = unsafe { xstrnsave(gname_start, arg.offset_from(gname_start) as size_t) };
 
-    if unsafe { strcmp(gname, c"NONE".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(gname) == b"NONE" } {
         unsafe { *opt.sync_idx = NONE_IDX };
     } else {
         // The named group has to already have a region START item: this is

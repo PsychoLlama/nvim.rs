@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -511,7 +512,7 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const dictitem_T) -> Resu
     let mut newidx = unsafe {
         if (*di).di_tv.v_type == VAR_STRING
             && !(*di).di_tv.vval.v_string.is_null()
-            && strcmp((*di).di_tv.vval.v_string, c"$".as_ptr()) == 0
+            && cstr::bytes_at((*di).di_tv.vval.v_string) == b"$"
         {
             // Select the last entry in the list.
             qfl.qf_count

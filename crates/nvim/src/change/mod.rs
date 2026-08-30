@@ -89,7 +89,7 @@ use crate::types::{
 };
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
-use ::libc::{strcat, strcmp, strlen};
+use ::libc::{strcat, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod flag;

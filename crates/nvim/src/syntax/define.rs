@@ -273,7 +273,7 @@ unsafe fn region_item(key: *const c_char) -> Option<c_int> {
         (c"END", ITEM_END),
         (c"SKIP", ITEM_SKIP),
     ] {
-        if unsafe { strcmp(key, name.as_ptr()) } == 0 {
+        if unsafe { cstr::eq(key, name.as_ptr()) } {
             return Some(item);
         }
     }

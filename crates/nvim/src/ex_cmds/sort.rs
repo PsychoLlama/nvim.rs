@@ -25,6 +25,7 @@ use super::{
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{skiptobin, skiptodigit, skiptohex, skipwhite, vim_str2nr};
+use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
@@ -45,7 +46,7 @@ use crate::types::{
 };
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
-use ::libc::{memcpy, qsort, strcasecmp, strcmp, strcoll, strcpy, strtod};
+use ::libc::{memcpy, qsort, strcasecmp, strcoll, strcpy, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -107,7 +108,7 @@ unsafe fn string_compare(s1: *const c_char, s2: *const c_char) -> c_int {
     } else if order.ignore_case {
         unsafe { strcasecmp(s1.cast_mut(), s2.cast_mut()) }
     } else {
-        unsafe { strcmp(s1, s2) }
+        unsafe { cstr::cmp(s1, s2) as c_int }
     }
 }
 

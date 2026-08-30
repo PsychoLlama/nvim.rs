@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
 use crate::types::Failed;
@@ -64,7 +65,7 @@ pub unsafe fn win_execute_before(
         do_autochdir();
         let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if unsafe { os_dirname(autocwd.as_mut_ptr(), size_of_val(&autocwd)) }.is_ok() {
-            args.apply_acd = unsafe { strcmp(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) } == 0;
+            args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
         }
     }
     if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tp, true) }.is_ok() {

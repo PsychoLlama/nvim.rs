@@ -30,6 +30,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::tr_c;
@@ -48,7 +49,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::spell::init_spell_chartab;
 use crate::types::{CONV_NONE, NUL, uint8_t};
-use ::libc::{atoi, fclose, strcat, strcmp, strcpy, strlen};
+use ::libc::{atoi, fclose, strcat, strcpy, strlen};
 
 use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};
@@ -242,7 +243,7 @@ const CASE_RULES: &[(&CStr, CaseTable)] = &[
 unsafe fn is_aff_rule(items: &[*mut c_char], rulename: &CStr, mincount: usize) -> bool {
     // SAFETY: the caller promises the items.
     unsafe {
-        strcmp(items[0], rulename.as_ptr()) == 0
+        cstr::eq(items[0], rulename.as_ptr())
             && (items.len() == mincount
                 || (items.len() > mincount && *items[mincount] as c_int == b'#' as c_int))
     }
@@ -264,7 +265,7 @@ unsafe fn spell_info_item(s: *mut c_char) -> bool {
         c"COPYRIGHT",
     ]
     .into_iter()
-    .any(|name| unsafe { strcmp(s, name.as_ptr()) } == 0)
+    .any(|name| unsafe { cstr::eq(s, name.as_ptr()) })
 }
 
 /// Read a `.aff` file and return what it describes, or null if it could not
@@ -598,14 +599,14 @@ unsafe fn handle_line(
         return true;
     }
 
-    let is_affix = unsafe { strcmp(items[0], c"PFX".as_ptr()) } == 0
-        || unsafe { strcmp(items[0], c"SFX".as_ptr()) } == 0;
+    let is_affix = unsafe { cstr::bytes_at(items[0]) == b"PFX" }
+        || unsafe { cstr::bytes_at(items[0]) == b"SFX" };
     if is_affix && st.aff_todo == 0 && items.len() >= 4 {
         return unsafe { handle_affix_header(spin, aff, st, items, fname, lnum) };
     }
     if is_affix
         && st.aff_todo > 0
-        && unsafe { strcmp(affheader_T::key(st.cur_aff), items[1]) } == 0
+        && unsafe { cstr::eq(affheader_T::key(st.cur_aff), items[1]) }
         && items.len() >= 5
     {
         unsafe { handle_affix_entry(spin, aff, st, items, fname, lnum) };
@@ -637,8 +638,8 @@ unsafe fn handle_line(
         }
         return true;
     }
-    let is_rep = unsafe { strcmp(items[0], c"REP".as_ptr()) } == 0
-        || unsafe { strcmp(items[0], c"REPSAL".as_ptr()) } == 0;
+    let is_rep = unsafe { cstr::bytes_at(items[0]) == b"REP" }
+        || unsafe { cstr::bytes_at(items[0]) == b"REPSAL" };
     if is_rep && items.len() >= 3 {
         unsafe { add_rep_entry(spin, st, items, fname, lnum) };
         return true;
@@ -665,7 +666,7 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { strcmp(items[0], c"COMMON".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(items[0]) == b"COMMON" } {
         for &item in &items[1..] {
             let hi = unsafe { hash_find(&raw mut (*spin).si_commonwords, item) };
             if unsafe { (*hi).hi_key }.is_null()
@@ -713,11 +714,11 @@ unsafe fn handle_flag_type(
     lnum: c_int,
 ) {
     // SAFETY: the caller promises the items.
-    if unsafe { strcmp(items[1], c"long".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(items[1]) == b"long" } {
         unsafe { (*aff).af_flagtype = AFT_LONG };
-    } else if unsafe { strcmp(items[1], c"num".as_ptr()) } == 0 {
+    } else if unsafe { cstr::bytes_at(items[1]) == b"num" } {
         unsafe { (*aff).af_flagtype = AFT_NUM };
-    } else if unsafe { strcmp(items[1], c"caplong".as_ptr()) } == 0 {
+    } else if unsafe { cstr::bytes_at(items[1]) == b"caplong" } {
         unsafe { (*aff).af_flagtype = AFT_CAPLONG };
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -863,7 +864,7 @@ unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
 /// Both values must be null or NUL-terminated.
 unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CStr) {
     // SAFETY: the caller promises the strings.
-    if !spinval.is_null() && unsafe { strcmp(spinval, affval) } != 0 {
+    if !spinval.is_null() && !unsafe { cstr::eq(spinval, affval) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(name.as_ptr()) };
         smsg!(
@@ -883,5 +884,5 @@ pub(super) unsafe fn str_equal(s1: *mut c_char, s2: *mut c_char) -> bool {
     if s1.is_null() || s2.is_null() {
         return s1 == s2;
     }
-    unsafe { strcmp(s1, s2) == 0 }
+    unsafe { cstr::eq(s1, s2) }
 }

@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -22,7 +23,7 @@ use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, fromto_T, garray_T};
-use ::libc::{strcat, strcmp, strcpy, strlen};
+use ::libc::{strcat, strcpy, strlen};
 
 use super::aff::{AffState, is_digit_byte};
 use super::{MAXWLEN, spellinfo_T};
@@ -64,8 +65,8 @@ pub(super) unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) 
     let mut i = 0;
     while i < unsafe { (*gap).ga_len } - 1 {
         let entries = unsafe { (*gap).ga_data }.cast::<*mut c_char>();
-        if unsafe { strcmp(*entries.offset(i as isize), items[1]) } == 0
-            && unsafe { strcmp(*entries.offset(i as isize + 1), items[2]) } == 0
+        if unsafe { cstr::eq(*entries.offset(i as isize), items[1]) }
+            && unsafe { cstr::eq(*entries.offset(i as isize + 1), items[2]) }
         {
             break;
         }
@@ -183,13 +184,13 @@ pub(super) unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
         }),
     ];
     for (name, slot) in settings {
-        if unsafe { strcmp(items[1], name.as_ptr()) } == 0 {
+        if unsafe { cstr::eq(items[1], name.as_ptr()) } {
             unsafe { *slot = sal_to_bool(items[2]) as c_int };
             return;
         }
     }
     // "_" means the rule deletes what it matched.
-    let to = if unsafe { strcmp(items[2], c"_".as_ptr()) } == 0 {
+    let to = if unsafe { cstr::bytes_at(items[2]) == b"_" } {
         c"".as_ptr().cast_mut()
     } else {
         items[2]
@@ -229,5 +230,5 @@ pub(super) unsafe fn add_fromto(
 /// `s` must be NUL-terminated.
 pub(super) unsafe fn sal_to_bool(s: *mut c_char) -> bool {
     // SAFETY: the caller promises the string.
-    unsafe { strcmp(s, c"1".as_ptr()) == 0 || strcmp(s, c"true".as_ptr()) == 0 }
+    unsafe { cstr::bytes_at(s) == b"1" || cstr::bytes_at(s) == b"true" }
 }

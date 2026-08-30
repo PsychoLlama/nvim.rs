@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cstr;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Keys, Lock};
 use crate::keycodes::{
@@ -524,7 +525,7 @@ pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
 
     if !cc.cmdbuff_replaced
         && (cc.cmdpos != s.prev_cmdpos
-            || (!s.prev_cmdbuff.is_null() && unsafe { strcmp(s.prev_cmdbuff, cc.text()) } != 0))
+            || (!s.prev_cmdbuff.is_null() && !unsafe { cstr::eq(s.prev_cmdbuff, cc.text()) }))
     {
         unsafe {
             do_autocmd_cmdlinechanged(if s.firstc > 0 {

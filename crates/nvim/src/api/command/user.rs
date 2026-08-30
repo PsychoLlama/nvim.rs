@@ -13,6 +13,7 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::api::private::validate::{err_bad_number, err_expected_ptr, err_invalid_ptr};
 use crate::api_error;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::types::{ExArgt, ExpandContext};
 use crate::winlayer::Live;
@@ -83,7 +84,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
         table
             .list()
             .iter()
-            .position(|cmd| strcmp(name.data(), cmd.uc_name) == 0)
+            .position(|cmd| cstr::eq(name.data(), cmd.uc_name))
     };
     if let Some(idx) = found {
         // SAFETY: `idx` indexes the table the search just walked.

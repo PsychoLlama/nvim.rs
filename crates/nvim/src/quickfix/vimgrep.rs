@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::buffer::BufFlags;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::message_fmt::c_str;
@@ -564,7 +565,7 @@ unsafe fn keep_or_drop_dummy(
     if out.first_match_buf == Some(buf)
         && out.target_dir.is_none()
         // SAFETY: the caller's two NUL-terminated directories.
-        && unsafe { strcmp(dirname_start, dirname_now) } != 0
+        && !unsafe { cstr::eq(dirname_start, dirname_now) }
     {
         // SAFETY: as above.
         out.target_dir = Some(unsafe { Name::from_ptr(dirname_now) });

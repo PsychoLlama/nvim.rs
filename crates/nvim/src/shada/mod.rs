@@ -75,7 +75,7 @@ use crate::types::{
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
-use ::libc::{atoi, getgid, getuid, qsort, strcmp, strlen};
+use ::libc::{atoi, getgid, getuid, qsort, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod file;

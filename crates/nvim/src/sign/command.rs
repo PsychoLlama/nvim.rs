@@ -154,7 +154,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
     unsafe { *end_cmd = 0 };
     let idx = CMDS
         .iter()
-        .position(|cmd| unsafe { strcmp(begin_cmd, cmd.as_ptr()) } == 0)
+        .position(|cmd| unsafe { cstr::eq(begin_cmd, cmd.as_ptr()) })
         .map_or(SIGNCMD_LAST, |i| {
             c_int::try_from(i).expect("six subcommands")
         });

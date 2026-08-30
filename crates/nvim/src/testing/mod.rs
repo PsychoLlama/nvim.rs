@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -41,7 +42,7 @@ use crate::types::{
     VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
     kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
-use ::libc::{fclose, fgetc, strcmp};
+use ::libc::{fclose, fgetc};
 
 /// Which `assert_*()` is reporting. Decides the wording of the message.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -413,7 +414,7 @@ unsafe fn assert_equalfile(argvars: *mut typval_T) -> c_int {
         diff.line2[idx] = 0;
         unsafe { ga_concat_lit(gap, c" after \"") };
         unsafe { ga_concat_len(gap, diff.line1.as_ptr(), idx) };
-        if unsafe { strcmp(diff.line1.as_ptr(), diff.line2.as_ptr()) } != 0 {
+        if !unsafe { cstr::eq(diff.line1.as_ptr(), diff.line2.as_ptr()) } {
             unsafe { ga_concat_lit(gap, c"\" vs \"") };
             unsafe { ga_concat_len(gap, diff.line2.as_ptr(), idx) };
         }

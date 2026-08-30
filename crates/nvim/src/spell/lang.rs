@@ -54,7 +54,7 @@ use crate::types::{
     synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
-use ::libc::{strcasecmp, strcmp, strcpy, strlen};
+use ::libc::{strcasecmp, strcpy, strlen};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
@@ -78,7 +78,7 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// to `latin1`.
 pub unsafe fn spell_enc() -> *mut c_char {
     if unsafe { strlen(p_enc.get()) } < 60
-        && unsafe { strcmp(p_enc.get(), c"iso-8859-15".as_ptr()) } != 0
+        && unsafe { cstr::bytes_at(p_enc.get()) != b"iso-8859-15" }
     {
         return p_enc.get();
     }
@@ -261,7 +261,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
             continue;
         }
 
-        if unsafe { strcmp(lang.as_ptr(), c"cjk".as_ptr()) } == 0 {
+        if unsafe { cstr::bytes_at(lang.as_ptr()) == b"cjk" } {
             unsafe { (*(*wp).w_s).b_cjk = 1 };
             continue;
         }
@@ -320,7 +320,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         if !region.is_null() {
             // A region that disagrees with an earlier one disqualifies
             // regions for 'spellfile'.
-            if !use_region.is_null() && unsafe { strcmp(region, use_region) } != 0 {
+            if !use_region.is_null() && !unsafe { cstr::eq(region, use_region) } {
                 dont_use_region = true;
             }
             use_region = region;
@@ -635,7 +635,7 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
         let l = unsafe { copy_option_part(&raw mut spf, buf, room, sep) };
         if l >= MAXPATHL as size_t - 4
             || l < 4
-            || unsafe { strcmp(spf_name.as_ptr().add(l - 4), c".add".as_ptr()) } != 0
+            || unsafe { cstr::bytes_at(spf_name.as_ptr().add(l - 4)) != b".add" }
         {
             return false;
         }

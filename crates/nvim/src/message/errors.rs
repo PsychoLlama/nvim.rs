@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::log::logmsg_c;
 use crate::message_fmt::c_str;
@@ -47,7 +48,7 @@ pub unsafe fn reset_last_sourcing() {
 unsafe fn other_sourcing_name() -> bool {
     if exestack_has_name() {
         if !last_sourcing_name.get().is_null() {
-            return unsafe { strcmp(sourcing_top().es_name, last_sourcing_name.get()) } != 0;
+            return !unsafe { cstr::eq(sourcing_top().es_name, last_sourcing_name.get()) };
         }
         return true;
     }

@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
@@ -467,7 +468,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
             let same_file = if buf.is_null() {
                 // SAFETY: both names are NUL-terminated: the list's own, and
                 // the caller's, which it promised.
-                !existing.fname.is_null() && unsafe { strcmp(fm.fname, existing.fname) } == 0
+                !existing.fname.is_null() && unsafe { cstr::eq(fm.fname, existing.fname) }
             } else {
                 fm.fmark.fnum == existing.fmark.fnum
             };

@@ -73,7 +73,7 @@ use crate::types::{
     typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strcmp, strlen, strpbrk};
+use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strlen, strpbrk};
 
 // The carve of the transpiled module; see each child's docs.
 mod table;

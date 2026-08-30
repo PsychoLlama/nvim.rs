@@ -27,7 +27,6 @@ use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
 use crate::winlayer::Win;
-use ::libc::strcmp;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
 /// current indent when the expression failed.
@@ -421,9 +420,7 @@ pub unsafe fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
     let buf = curbuf.get();
     unsafe {
-        (*buf).b_p_lisp != 0
-            && *(*buf).b_p_inde != 0
-            && strcmp((*buf).b_p_lop, c"expr:1".as_ptr()) == 0
+        (*buf).b_p_lisp != 0 && *(*buf).b_p_inde != 0 && cstr::bytes_at((*buf).b_p_lop) == b"expr:1"
     }
 }
 

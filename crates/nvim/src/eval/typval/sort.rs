@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, NUL};
@@ -104,7 +105,7 @@ pub(crate) unsafe fn item_compare(
             } else if sort_info.item_compare_ic != 0 {
                 unsafe { strcasecmp(p1, p2) }
             } else {
-                unsafe { strcmp(p1, p2) }
+                unsafe { cstr::cmp(p1, p2) as ::core::ffi::c_int }
             };
         } else {
             // `strtod` moves p1/p2 past the number; nothing reads them

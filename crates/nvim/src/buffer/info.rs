@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -55,7 +56,7 @@ use crate::types::{
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
-use ::libc::{qsort, strcmp, strcpy, strlen};
+use ::libc::{qsort, strcpy, strlen};
 
 use super::list::buf_time_compare;
 
@@ -518,7 +519,7 @@ impl Msg {
 
     /// The message written so far, as the string it is.
     fn as_cstr(&self) -> &CStr {
-        crate::cstr::in_bytes(&self.buf)
+        cstr::in_bytes(&self.buf)
     }
 
     fn as_mut_ptr(&mut self) -> *mut c_char {
@@ -716,7 +717,7 @@ fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
     let old = last.get();
     let differs = str.is_null() != old.is_null() || {
         // SAFETY: two NUL-terminated titles, neither null.
-        !str.is_null() && !old.is_null() && unsafe { strcmp(str, old) } != 0
+        !str.is_null() && !old.is_null() && !unsafe { cstr::eq(str, old) }
     };
     if !differs {
         return false;

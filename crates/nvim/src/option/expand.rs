@@ -38,7 +38,7 @@ use crate::types::{
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
 use crate::winlayer::Live;
-use ::libc::{strcmp, strlen};
+use ::libc::strlen;
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
@@ -96,7 +96,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
         _ => ptr::null_mut(),
     };
     unsafe { expand_env_esc(val, expanded.as_mut_ptr(), MAXPATHL, esc, false, one_prefix) };
-    if unsafe { strcmp(expanded.as_ptr(), val) } == 0 {
+    if unsafe { cstr::eq(expanded.as_ptr(), val) } {
         return None;
     }
     Some(cstr::in_chars(&expanded).to_owned())

@@ -12,6 +12,7 @@
 
 use super::Jumped;
 use super::*;
+use crate::cstr;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::message::msg_ptr;
@@ -310,7 +311,7 @@ impl DoTag {
         // SAFETY: the caller's promise; every entry owns its own name.
         if g_do_tagpreview.get() != 0 {
             let previous = ptag_entry_handle().tagname();
-            if !previous.is_null() && unsafe { strcmp(previous, self.tag) } == 0 {
+            if !previous.is_null() && unsafe { cstr::eq(previous, self.tag) } {
                 // Jumping to the same tag again: keep the current
                 // match, so that the CursorHold example works.
                 (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
@@ -677,7 +678,7 @@ impl DoTag {
     /// `name` must be NUL-terminated.
     unsafe fn other_name(&self, name: *const c_char) -> bool {
         // SAFETY: the caller's promise.
-        unsafe { tagmatchname.get().is_null() || strcmp(tagmatchname.get(), name) != 0 }
+        unsafe { tagmatchname.get().is_null() || !cstr::eq(tagmatchname.get(), name) }
     }
 
     /// Settle on which match to jump to, listing them and asking when the
@@ -897,7 +898,7 @@ unsafe fn reorder_matches(new_matches: *mut *mut c_char, new_num_matches: c_int)
         unsafe { parse_match(*matches.get().offset(j as isize), &mut old) };
         for i in at..new_num_matches {
             unsafe { parse_match(*new_matches.offset(i as isize), &mut new) };
-            if unsafe { strcmp(old.tagname, new.tagname) } != 0 {
+            if !unsafe { cstr::eq(old.tagname, new.tagname) } {
                 continue;
             }
             let found = unsafe { *new_matches.offset(i as isize) };

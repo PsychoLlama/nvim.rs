@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use crate::types::{BackslashEscape, ExpandContext};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -74,7 +75,7 @@ pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const 
     ) {
         (false, true) => -1,
         (true, false) => 1,
-        _ => unsafe { strcmp(p1, p2) },
+        _ => unsafe { cstr::cmp(p1, p2) as c_int },
     }
 }
 

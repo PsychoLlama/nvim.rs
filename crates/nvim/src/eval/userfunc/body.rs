@@ -160,7 +160,7 @@ pub(crate) unsafe fn get_function_body(
                     } else {
                         unsafe { theline.add(heredoc_trimmedlen) }
                     };
-                    if unsafe { strcmp(p, skip_until) } == 0 {
+                    if unsafe { cstr::eq(p, skip_until) } {
                         unsafe { xfree(skip_until as *mut c_void) };
                         skip_until = ptr::null_mut();
                         unsafe { xfree(heredoc_trimmed as *mut c_void) };

@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
@@ -163,7 +164,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut dict_T) {
     let di_refresh = find("refresh");
     if !di_refresh.is_null() && unsafe { (*di_refresh).di_tv.v_type } == VAR_STRING {
         let v = unsafe { (*di_refresh).di_tv.vval.v_string };
-        if !v.is_null() && unsafe { strcmp(v, c"always".as_ptr()) } == 0 {
+        if !v.is_null() && unsafe { cstr::bytes_at(v) == b"always" } {
             compl_opt_refresh_always.set(true);
         }
     }

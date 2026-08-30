@@ -36,7 +36,7 @@ use crate::types::{
     OptionSetFlags, ShmFlag, VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
     uint8_t,
 };
-use ::libc::{strcmp, strlen};
+use ::libc::strlen;
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
@@ -267,7 +267,7 @@ pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
     if local.is_null() || unsafe { *local } == 0 {
         return p_sbr.get();
     }
-    if unsafe { strcmp(local, c"NONE".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(local) == b"NONE" } {
         return empty_option();
     }
     local

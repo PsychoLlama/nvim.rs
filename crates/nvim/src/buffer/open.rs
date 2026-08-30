@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::memline::MlFlags;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
@@ -46,7 +47,6 @@ use crate::types::{
     StringBuilder, aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
 };
 use crate::winlayer::buffers;
-use ::libc::strcmp;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -150,7 +150,7 @@ fn set_option_false(id: c_int) {
 fn lines_differ(mut buf: Buf, lnum: linenr_T) -> bool {
     // SAFETY: two live buffers and a line number inside both, the caller
     // having compared the line counts.
-    unsafe { strcmp(ml_get_buf(buf.raw(), lnum), ml_get(lnum)) != 0 }
+    unsafe { !(cstr::eq(ml_get_buf(buf.raw(), lnum), ml_get(lnum))) }
 }
 
 /// Line `lnum` of `buf` as bytes, its terminating NUL excluded.

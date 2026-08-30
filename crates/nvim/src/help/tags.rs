@@ -40,7 +40,7 @@ use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
 };
-use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
+use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strlen};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -61,7 +61,7 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
         unsafe { (*eap).arg = skipwhite((*eap).arg.offset(3)) };
     }
 
-    if unsafe { strcmp((*eap).arg, c"ALL".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at((*eap).arg) == b"ALL" } {
         let (rtp, none, doc) = (p_rtp.get(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
         let flag = (&raw mut add_help_tags).cast::<c_void>();

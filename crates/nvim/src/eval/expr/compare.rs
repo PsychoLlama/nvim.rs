@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_ushort};
 
 use crate::eval::typval::{
@@ -25,7 +26,6 @@ use crate::types::{
     Failed, NUL, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     dict_T, exprtype_T, float_T, typval_T, varnumber_T,
 };
-use ::libc::strcmp;
 
 /// The scratch a Number or Float is rendered into for a String comparison.
 const NUMBUFLEN: usize = 65;
@@ -114,7 +114,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
         if s1 != s2 {
             return false;
         }
-    } else if unsafe { strcmp(s1, s2) } != 0 {
+    } else if !unsafe { cstr::eq(s1, s2) } {
         return false;
     }
 

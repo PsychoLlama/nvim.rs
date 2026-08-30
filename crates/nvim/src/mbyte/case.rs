@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::os::cshim::{towlower, towupper, wint_t};
 use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_uint};
@@ -225,7 +226,7 @@ pub unsafe fn mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_
     if ic {
         unsafe { mb_stricmp(s1, s2) }
     } else {
-        unsafe { strcmp(s1, s2) }
+        unsafe { cstr::cmp(s1, s2) as c_int }
     }
 }
 

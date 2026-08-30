@@ -31,6 +31,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -44,7 +45,7 @@ use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
 use crate::types::{FILE, Failed, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
-use ::libc::{fclose, fputc, fwrite, qsort, strcmp, strlen, time};
+use ::libc::{fclose, fputc, fwrite, qsort, strlen, time};
 
 use super::wordtree::wordnode_T;
 use super::{
@@ -117,13 +118,9 @@ impl SplWriter {
 /// defined order, so which of them ends up first is the sort's choice, and
 /// a Rust sort would be free to choose differently.
 pub(super) unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void) -> c_int {
+    let (a, b) = (s1.cast::<fromto_T>(), s2.cast::<fromto_T>());
     // SAFETY: qsort passes elements of the `fromto_T` array it was given.
-    unsafe {
-        strcmp(
-            (*s1.cast::<fromto_T>()).ft_from,
-            (*s2.cast::<fromto_T>()).ft_from,
-        )
-    }
+    unsafe { cstr::cmp((*a).ft_from, (*b).ft_from) as c_int }
 }
 
 /// Write the whole `.spl` file.

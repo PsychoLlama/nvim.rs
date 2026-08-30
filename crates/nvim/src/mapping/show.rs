@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
 use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
@@ -436,7 +437,7 @@ pub unsafe fn expand_mappings(
             let items = core::slice::from_raw_parts_mut(*matches, count as usize);
             let mut kept = 0;
             for read in 1..items.len() {
-                if strcmp(items[kept], items[read]) != 0 {
+                if !cstr::eq(items[kept], items[read]) {
                     kept += 1;
                     items[kept] = items[read];
                 } else {

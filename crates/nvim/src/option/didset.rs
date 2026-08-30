@@ -66,7 +66,6 @@ use crate::window::{
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
-use ::libc::strcmp;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,
@@ -171,7 +170,7 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
             unsafe { redraw_all_later(UPD_NOT_VALID) };
         }
     }
-    if unsafe { strcmp(p_enc.get(), c"utf-8".as_ptr()) } != 0 {
+    if unsafe { cstr::bytes_at(p_enc.get()) != b"utf-8" } {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         unsafe { msg_source(HLF_W) };
         msg(gettext(warning), HLF_W);

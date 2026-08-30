@@ -189,7 +189,7 @@ use crate::types::{
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
-use ::libc::{memcpy, strcmp, strlen};
+use ::libc::{memcpy, strlen};
 
 // The carve of the transpiled module; see each child's docs.
 mod bs;

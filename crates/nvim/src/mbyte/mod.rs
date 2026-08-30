@@ -70,8 +70,8 @@ use crate::utf8proc::{
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
 use ::libc::{
-    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcmp, strcpy, strlen,
-    tolower, toupper,
+    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcpy, strlen, tolower,
+    toupper,
 };
 
 // The carve of the transpiled module; see each child's docs.

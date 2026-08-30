@@ -5,6 +5,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -37,7 +38,6 @@ use crate::types::{
     kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
-use ::libc::strcmp;
 
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
@@ -249,7 +249,7 @@ pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_highlight(args: *mut optset_T) -> *const c_char {
     // SAFETY: both are C strings.
-    if unsafe { strcmp(*varp(args), HIGHLIGHT_INIT.as_ptr()) } != 0 {
+    if !unsafe { cstr::eq(*varp(args), HIGHLIGHT_INIT.as_ptr()) } {
         return e_unsupportedoption.as_ptr();
     }
     ptr::null()
@@ -449,7 +449,7 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     };
     store(mask);
     // SAFETY: the frame's old value and window.
-    if unsafe { strcmp(value, old_value(args)) } != 0 {
+    if !unsafe { cstr::eq(value, old_value(args)) } {
         // What column the cursor may sit in just changed.
         validate_virtcol(unsafe { Win::new(wp) });
         coladvance(unsafe { Win::new(wp) }, unsafe { (*wp).w_virtcol });

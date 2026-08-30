@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -51,7 +52,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
-use ::libc::{strcmp, strcpy, strlen};
+use ::libc::{strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is
@@ -637,8 +638,8 @@ unsafe fn build_keywordprg_cmd(
     // `man` and `man -s` take the count as a section number, which goes
     // in front of the word rather than becoming a line range.
     // SAFETY: 'keywordprg' is a NUL-terminated option string.
-    let isman = unsafe { strcmp(kp, c"man".as_ptr()) } == 0;
-    let isman_s = unsafe { strcmp(kp, c"man -s".as_ptr()) } == 0;
+    let isman = unsafe { cstr::bytes_at(kp) == b"man" };
+    let isman_s = unsafe { cstr::bytes_at(kp) == b"man -s" };
     if count0 != 0 && !(isman || isman_s) {
         out.push_num(c".,.+%ld", (count0 - 1) as int64_t);
     }
@@ -680,7 +681,7 @@ fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
     }
     // A help tag may contain any of these, so nothing is escaped.
     // SAFETY: 'filetype' is a NUL-terminated option string.
-    if unsafe { strcmp(cur_buf().b_p_ft, c"help".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(cur_buf().b_p_ft) == b"help" } {
         c""
     } else {
         c"\\|\"\n["

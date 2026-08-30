@@ -134,6 +134,28 @@ pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
     unsafe { slice::from_raw_parts(p.cast::<u8>(), len) }
 }
 
+/// Whether two NUL-terminated strings are equal -- `strcmp(a, b) == 0`.
+///
+/// Where one side is a literal, write `bytes_at(p) == b"..."` instead: it
+/// says which operand is the constant.
+///
+/// # Safety
+/// [`bytes_at`]'s contract, for both.
+pub(crate) unsafe fn eq(a: *const c_char, b: *const c_char) -> bool {
+    // SAFETY: caller's contract.
+    unsafe { bytes_at(a) == bytes_at(b) }
+}
+
+/// How two NUL-terminated strings order -- `strcmp(a, b)`, as an
+/// [`Ordering`] rather than a sign.
+///
+/// # Safety
+/// [`bytes_at`]'s contract, for both.
+pub(crate) unsafe fn cmp(a: *const c_char, b: *const c_char) -> Ordering {
+    // SAFETY: caller's contract.
+    unsafe { bytes_at(a).cmp(bytes_at(b)) }
+}
+
 /// Whether two NUL-terminated strings agree over their first `n` bytes --
 /// `strncmp(a, b, n) == 0`.
 ///

@@ -62,7 +62,7 @@ use crate::types::{
     colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
     tasave_T, typval_T, uint8_t,
 };
-use ::libc::{atoi, strcmp, strcpy, strlen};
+use ::libc::{atoi, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -541,7 +541,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
             let matches = unsafe {
                 let bpi = list.entry(i);
                 (*bp).dbg_type == (*bpi).dbg_type
-                    && strcmp((*bp).dbg_name, (*bpi).dbg_name) == 0
+                    && cstr::eq((*bp).dbg_name, (*bpi).dbg_name)
                     && ((*bp).dbg_lnum == (*bpi).dbg_lnum
                         || ((*bp).dbg_lnum == 0 as linenr_T
                             && (best_lnum == 0 as linenr_T || (*bpi).dbg_lnum < best_lnum)))

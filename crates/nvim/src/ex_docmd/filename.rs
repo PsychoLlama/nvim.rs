@@ -460,7 +460,7 @@ pub unsafe fn eval_vars(
                     valid = 0;
                 } else {
                     result = cur_buf().b_fname;
-                    tilde_file = strcmp(result, c"~".as_ptr()) == 0;
+                    tilde_file = equals(result, b"~");
                 }
             }
             SPEC_HASH => {
@@ -519,7 +519,7 @@ pub unsafe fn eval_vars(
                             valid = 0;
                         } else {
                             result = buf.b_fname;
-                            tilde_file = strcmp(result, c"~".as_ptr()) == 0;
+                            tilde_file = equals(result, b"~");
                         }
                     }
                 }
@@ -834,8 +834,9 @@ fn strlen(s: *const c_char) -> usize {
     unsafe { ::libc::strlen(s) }
 }
 
-/// `strcmp()` as checked code.
-fn strcmp(a: *const c_char, b: *const c_char) -> c_int {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { ::libc::strcmp(a, b) }
+/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
+/// as checked code.
+fn equals(p: *const c_char, lit: &[u8]) -> bool {
+    // SAFETY: a NUL-terminated string.
+    unsafe { cstr::bytes_at(p) == lit }
 }

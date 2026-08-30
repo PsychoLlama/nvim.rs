@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::Keys;
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
@@ -80,11 +81,11 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
 
         let cursor = unsafe { numbuf.dict_string(d, c"cursor".as_ptr()) };
         if !cursor.is_null() {
-            opts.cursor = if unsafe { strcmp(cursor, c"hide".as_ptr()) } == 0 {
+            opts.cursor = if unsafe { cstr::bytes_at(cursor) == b"hide" } {
                 CursorFlag::Hide
-            } else if unsafe { strcmp(cursor, c"keep".as_ptr()) } == 0 {
+            } else if unsafe { cstr::bytes_at(cursor) == b"keep" } {
                 CursorFlag::Keep
-            } else if unsafe { strcmp(cursor, c"msg".as_ptr()) } == 0 {
+            } else if unsafe { cstr::bytes_at(cursor) == b"msg" } {
                 CursorFlag::Msg
             } else {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.

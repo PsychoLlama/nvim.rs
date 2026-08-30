@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::types::Failed;
 use ::libc::{EILSEQ, EINVAL};
@@ -279,7 +280,7 @@ pub unsafe fn convert_setup_ext(
         || unsafe { *from } == 0
         || to.is_null()
         || unsafe { *to } == 0
-        || unsafe { strcmp(from, to) } == 0
+        || unsafe { cstr::eq(from, to) }
     {
         return Ok(());
     }

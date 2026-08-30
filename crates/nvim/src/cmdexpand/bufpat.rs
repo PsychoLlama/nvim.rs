@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::types::{FAIL, Failed, NUL};
 use crate::winlayer::Buf;
@@ -120,7 +121,7 @@ pub(crate) unsafe fn copy_substring_from_pos(
 ///
 /// Honours `'ignorecase'` and `'smartcase'` to decide case sensitivity.
 pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool {
-    if unsafe { strcmp(pat, str) } == 0 {
+    if unsafe { cstr::eq(pat, str) } {
         return true;
     }
 
@@ -366,13 +367,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
 
             // Include this match if it is not a duplicate.
             for i in 0..ga.ga_len {
-                if unsafe {
-                    strcmp(
-                        match_out,
-                        *(ga.ga_data as *mut *mut c_char).offset(i as isize),
-                    )
-                } == 0
-                {
+                let kept = unsafe { *(ga.ga_data as *mut *mut c_char).offset(i as isize) };
+                if unsafe { cstr::eq(match_out, kept) } {
                     unsafe { xfree(match_out as *mut c_void) };
                     match_out = ptr::null_mut();
                     break;

@@ -25,7 +25,7 @@ use crate::types::{
     time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
-use ::libc::{strcmp, strlen};
+use ::libc::strlen;
 use core::ffi::CStr;
 mod add;
 mod aff;
@@ -626,7 +626,7 @@ unsafe fn output_name(
     let first = unsafe { *fnames };
     let len = unsafe { strlen(first) };
     let ends_with = |ext: &::core::ffi::CStr| {
-        len > 4 && unsafe { strcmp(first.add(len).sub(4), ext.as_ptr()) } == 0
+        len > 4 && unsafe { cstr::eq(first.add(len).sub(4), ext.as_ptr()) }
     };
     let enc = if ascii {
         c"ascii".as_ptr()

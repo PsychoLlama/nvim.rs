@@ -169,7 +169,7 @@ use crate::window::{
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 use crate::winlayer::Cc;
-use ::libc::{abort, memcpy, memset, strcmp, strcpy, strlen, strrchr};
+use ::libc::{abort, memcpy, memset, strcpy, strlen, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod incsearch;

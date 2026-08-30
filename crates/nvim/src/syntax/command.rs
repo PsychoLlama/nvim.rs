@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::optionstr::is_empty_option;
@@ -312,7 +313,7 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
     let _skipping = (unsafe { (*eap).skip } != 0).then(Suppress::emsg_skip);
     match SUBCOMMANDS
         .iter()
-        .find(|sub| unsafe { strcmp(subcmd_name, sub.name.as_ptr()) } == 0)
+        .find(|sub| unsafe { cstr::eq(subcmd_name, sub.name.as_ptr()) })
     {
         Some(sub) => {
             unsafe { (*eap).arg = skipwhite(subcmd_end) };

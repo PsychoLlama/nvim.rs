@@ -26,6 +26,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -384,7 +385,7 @@ pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
     // SAFETY: the caller's buffer, indexed inside the length just tested.
     buflen >= 5
         && (buflen < 6 || vim_ispathsep(unsafe { *buf.add(buflen - 6) } as c_int))
-        && unsafe { strcmp(buf.add(buflen - 5), c"after".as_ptr()) } == 0
+        && unsafe { cstr::bytes_at(buf.add(buflen - 5)) == b"after" }
 }
 
 /// Free a kvec's buffer and reset it to empty.

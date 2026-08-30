@@ -53,7 +53,7 @@ pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> b
         return false;
     }
     match unsafe { (*cb1).type_0 } {
-        kCallbackFuncref => (unsafe { strcmp((*cb1).data.funcref, (*cb2).data.funcref) }) == 0,
+        kCallbackFuncref => unsafe { cstr::eq((*cb1).data.funcref, (*cb2).data.funcref) },
         kCallbackPartial => (unsafe { (*cb1).data.partial }) == unsafe { (*cb2).data.partial },
         kCallbackLua => (unsafe { (*cb1).data.luaref }) == unsafe { (*cb2).data.luaref },
         kCallbackNone => true,
@@ -221,7 +221,7 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
     {
         return unsafe { cstr::prefix_eq(key, (*watcher).key_pattern, len - 1) };
     }
-    unsafe { strcmp(key, (*watcher).key_pattern) == 0 }
+    unsafe { cstr::eq(key, (*watcher).key_pattern) }
 }
 
 /// Fire every watcher of `dict` that matches `key`, handing each

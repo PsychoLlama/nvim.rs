@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CStr;
 
@@ -113,7 +114,7 @@ pub(crate) unsafe fn readfile_charconvert(
 /// Does file encoding `fenc` need converting from or to `'encoding'`?
 pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
     let fenc_flags;
-    let same_encoding = if unsafe { *fenc } == 0 || unsafe { strcmp(p_enc.get(), fenc) } == 0 {
+    let same_encoding = if unsafe { *fenc } == 0 || unsafe { cstr::eq(p_enc.get(), fenc) } {
         fenc_flags = 0;
         true
     } else {

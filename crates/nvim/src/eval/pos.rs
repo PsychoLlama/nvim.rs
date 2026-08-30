@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::eval::Tv;
 use crate::eval::window::{cur_buf, cur_win};
 use crate::winlayer::{Buf, Live};
@@ -22,7 +23,6 @@ use crate::types::{
     pos_T, typval_T, uint8_t, win_T,
 };
 use crate::winlayer::Win;
-use ::libc::strcmp;
 
 /// The character index of byte index `byteidx` in a buffer line.
 ///
@@ -162,7 +162,7 @@ pub unsafe fn var2fpos(
         let dollar = !li.is_null()
             && unsafe { (*li).li_tv.v_type } == VAR_STRING
             && !unsafe { (*li).li_tv.vval.v_string }.is_null()
-            && unsafe { strcmp((*li).li_tv.vval.v_string, c"$".as_ptr()) } == 0;
+            && unsafe { cstr::bytes_at((*li).li_tv.vval.v_string) == b"$" };
         if dollar {
             pos.col = len + 1;
         }

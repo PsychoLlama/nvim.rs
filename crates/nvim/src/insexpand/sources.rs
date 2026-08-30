@@ -96,7 +96,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 // `LSIZE` writable bytes.
                 unsafe { copy_option_part(&raw mut dict, buf, LSIZE as size_t, comma) };
                 // SAFETY: `buf` now holds one NUL-terminated file pattern.
-                if !thesaurus && unsafe { strcmp(buf, c"spell".as_ptr()) } == 0 {
+                if !thesaurus && unsafe { cstr::bytes_at(buf) == b"spell" } {
                     count = -1;
                 } else {
                     // SAFETY: as above.
@@ -643,7 +643,7 @@ pub(crate) unsafe fn get_next_default_completion(
         }
         if ptr.is_null()
             || (unsafe { ins_compl_has_preinsert() }
-                && unsafe { strcmp(ptr, ins_compl_leader()) } == 0)
+                && unsafe { cstr::eq(ptr, ins_compl_leader()) })
         {
             continue;
         }

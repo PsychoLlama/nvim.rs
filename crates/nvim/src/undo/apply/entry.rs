@@ -10,6 +10,7 @@
 
 use super::super::store::Header;
 use super::super::*;
+use crate::cstr;
 use crate::edit::BeginlineOpts;
 use crate::memline::MlFlags;
 use crate::pos::MAXLNUM;
@@ -65,7 +66,7 @@ impl CursorPick {
             let was = unsafe { *(*uep).ue_array.offset(same as isize) };
             // SAFETY: as above, and every line compared is one the buffer
             // still holds.
-            if unsafe { strcmp(was, ml_get(top + 1 + same)) } != 0 {
+            if !unsafe { cstr::eq(was, ml_get(top + 1 + same)) } {
                 break;
             }
             same += 1;

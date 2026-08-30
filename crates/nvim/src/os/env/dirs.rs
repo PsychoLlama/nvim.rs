@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::fs::modify_fname;
 use crate::eval::vars::get_vim_var_str;
 use crate::main::{didset_vim, didset_vimruntime, p_hf};
@@ -172,8 +173,8 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
             return kos_env_path;
         }
 
-        let vimruntime = strcmp(name, c"VIMRUNTIME".as_ptr()) == 0;
-        if !vimruntime && strcmp(name, c"VIM".as_ptr()) != 0 {
+        let vimruntime = cstr::bytes_at(name) == b"VIMRUNTIME";
+        if !vimruntime && cstr::bytes_at(name) != b"VIM" {
             return ptr::null_mut();
         }
 

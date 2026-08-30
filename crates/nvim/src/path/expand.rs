@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cmdexpand::WildOpts;
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -501,7 +502,7 @@ pub unsafe fn expand_wildcards_eval(
         drop(no_emsg);
         if !eval_pat.is_null() {
             let rest = unsafe { exp_pat.add(usedlen as usize) };
-            star_follows = unsafe { strcmp(rest, c"*".as_ptr()) } == 0;
+            star_follows = unsafe { cstr::bytes_at(rest) == b"*" };
             exp_pat = unsafe { concat_str(eval_pat, rest) };
         }
     }

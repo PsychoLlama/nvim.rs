@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
@@ -858,7 +859,7 @@ unsafe fn recov_file_names(
         if extra > 0 {
             p = unsafe { p.offset(extra) }; // the name was expanded to a full path
         }
-        if unsafe { strcmp(p, names[num_names]) } != 0 {
+        if !unsafe { cstr::eq(p, names[num_names]) } {
             num_names += 1;
         } else {
             unsafe { xfree(names[num_names].cast()) };

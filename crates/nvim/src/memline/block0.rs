@@ -534,14 +534,14 @@ pub(crate) unsafe fn files_differ(
     let ok_s =
         unsafe { vim_full_name(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) }.is_ok();
     if ok_c && ok_s {
-        return unsafe { strcmp(buf_c.as_ptr(), buf_s.as_ptr()) } != 0;
+        return !unsafe { cstr::eq(buf_c.as_ptr(), buf_s.as_ptr()) };
     }
 
     // Neither inodes nor full paths. If neither file appears to exist,
     // the names as given are all there is to go on; otherwise guess that
     // they are different.
     if ino_s == 0 && ino_c == 0 && !ok_c && !ok_s {
-        return unsafe { strcmp(fname_c, fname_s) } != 0;
+        return !unsafe { cstr::eq(fname_c, fname_s) };
     }
     true
 }

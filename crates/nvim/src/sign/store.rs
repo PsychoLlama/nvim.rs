@@ -20,6 +20,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::Failed;
@@ -189,7 +190,7 @@ pub(crate) unsafe fn group_get_ns(group: *const c_char) -> int64_t {
         return 0;
     }
     // SAFETY: the caller's group name.
-    if unsafe { strcmp(group, c"*".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(group) == b"*" } {
         return ALL_GROUPS;
     }
     // SAFETY: as above.
@@ -322,7 +323,7 @@ unsafe fn update_placements(name: *const c_char, def: Sign) {
     let mut did_redraw = false;
     for mut sh in decor_items() {
         // SAFETY: the caller's name, and a store item's own name string.
-        if sh.sign_name.is_null() || unsafe { strcmp(sh.sign_name, name) } != 0 {
+        if sh.sign_name.is_null() || !unsafe { cstr::eq(sh.sign_name, name) } {
             continue;
         }
         sh.text = def.sn_text;

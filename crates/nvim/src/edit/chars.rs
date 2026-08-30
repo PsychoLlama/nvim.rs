@@ -24,6 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -321,7 +322,7 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
 
     let mut res = ::core::ptr::null_mut();
     if unsafe { ins_apply_autocmds(EVENT_INSERTCHARPRE) } != 0
-        && unsafe { strcmp(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) } != 0
+        && !unsafe { cstr::eq(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) }
     {
         res = unsafe { xstrdup(get_vim_var_str(Vv::Char)) };
     }

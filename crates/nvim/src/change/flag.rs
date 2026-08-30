@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -192,7 +193,7 @@ pub fn save_file_ff(mut buf: Buf) {
     let (recorded, current) = (buf.b_start_fenc, buf.b_p_fenc);
     // SAFETY: both are NUL-terminated option strings, and `b_start_fenc` is
     // this buffer's own allocation to replace.
-    if recorded.is_null() || unsafe { strcmp(recorded, current) } != 0 {
+    if recorded.is_null() || !unsafe { cstr::eq(recorded, current) } {
         unsafe { xfree(recorded as *mut c_void) };
         buf.b_start_fenc = unsafe { xstrdup(current) };
     }
@@ -238,5 +239,5 @@ pub fn file_ff_differs(buf: Buf, ignore_empty: bool) -> bool {
         return c_int::from(unsafe { *current }) != NUL;
     }
     // SAFETY: both are the buffer's own NUL-terminated option strings.
-    unsafe { strcmp(recorded, current) != 0 }
+    unsafe { !cstr::eq(recorded, current) }
 }

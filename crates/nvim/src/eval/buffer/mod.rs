@@ -71,7 +71,7 @@ use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
-use ::libc::{strcmp, strlen};
+use ::libc::strlen;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};

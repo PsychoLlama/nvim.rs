@@ -285,7 +285,7 @@ pub unsafe fn heredoc_get(
         if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, *ea.cmdlinep, indent) } {
             mi = marker_indent_len;
         }
-        if unsafe { strcmp(marker, theline.offset(mi as isize)) } == 0 {
+        if unsafe { cstr::eq(marker, theline.offset(mi as isize)) } {
             break;
         }
 

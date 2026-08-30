@@ -327,7 +327,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 // One of the two lines has to be copied: fetching the
                 // other may flush it.
                 let p = unsafe { xstrnsave(ml_get(idx), ml_get_len(idx) as size_t) };
-                let same = unsafe { strcmp(p, ml_get(idx + lnum)) } == 0;
+                let same = unsafe { cstr::eq(p, ml_get(idx + lnum)) };
                 unsafe { xfree(p.cast()) };
                 if !same {
                     changed_internal(cur_buf());

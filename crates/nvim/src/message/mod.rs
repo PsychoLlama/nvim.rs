@@ -10,6 +10,7 @@ use crate::charset::{
     byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
     vim_isprintc, vim_strsize,
 };
+use crate::cstr;
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_later, set_must_redraw,
 };
@@ -99,7 +100,7 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strcmp, strlen, strnlen};
+use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strlen, strnlen};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -505,7 +506,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
         && (s != keep_msg.get().cast_const()
             || (unsafe { *s as u8 } != b'<'
                 && !msg_hist_last.get().is_null()
-                && unsafe { strcmp(s, (*(*msg_hist_last.get()).msg.items).text.data()) } != 0))
+                && !unsafe { cstr::eq(s, (*(*msg_hist_last.get()).msg.items).text.data()) }))
     {
         unsafe { msg_hist_add(s, -1, hl_id) };
     }

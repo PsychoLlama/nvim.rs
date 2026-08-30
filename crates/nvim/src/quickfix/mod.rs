@@ -126,7 +126,7 @@ use crate::window::{
     win_setheight, win_split, win_valid,
 };
 use ::libc::{
-    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, strcmp, strlen, time,
+    __errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, strlen, time,
 };
 use core::ffi::{CStr, c_int, c_uint};
 

@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
@@ -205,10 +206,10 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
 unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win> {
     // SAFETY: the caller's obligation; `endp` is a live local that `strtol`
     // leaves pointing into `arg`.
-    if unsafe { strcmp(arg, c"$".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(arg) == b"$" } {
         return Some(tp.lastwin());
     }
-    if unsafe { strcmp(arg, c"#".as_ptr()) } == 0 {
+    if unsafe { cstr::bytes_at(arg) == b"#" } {
         return tp.prevwin();
     }
     let mut endp: *mut c_char = ptr::null_mut();
