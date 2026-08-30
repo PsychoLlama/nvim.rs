@@ -71,8 +71,8 @@ use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, MAXPATHL, NUL, OK, OptionSetFlags,
-    Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OK,
+    OptionSetFlags, Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy, strlen};
@@ -213,24 +213,43 @@ impl SessionFile {
 ///
 /// # Safety
 /// `fd` is open for writing.
-pub(crate) unsafe fn put_eol(fd: *mut FILE) -> c_int {
+pub(crate) unsafe fn put_eol(fd: *mut FILE) -> Result<(), Failed> {
     // SAFETY: caller contract.
     if unsafe { putc(b'\n' as c_int, fd) } < 0 {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
+}
+
+/// [`put_eol`] with the write error dropped, answering `true` regardless --
+/// which is the value the check upstream writes has always had.
+///
+/// `option.c` and `mapping.c` spell their newline check `put_eol(fd) < 0`,
+/// and `put_eol` answers `OK` or `FAIL`, 1 or 0: never negative. So those
+/// seven sites have never reported a failed newline, and `:mkexrc`,
+/// `:mkvimrc`, `:mksession` and `:mkview` claim success even when the file
+/// could not be written. That is upstream's bug and reporting it would be a
+/// behaviour change, so the sites keep it -- through a name that says what
+/// they do, rather than a comparison that looks like it checks something.
+///
+/// # Safety
+/// `fd` is open for writing.
+pub(crate) unsafe fn put_eol_unchecked(fd: *mut FILE) -> bool {
+    // SAFETY: caller contract.
+    let _ = unsafe { put_eol(fd) };
+    true
 }
 
 /// `put_line()`: `s` followed by a newline.
 ///
 /// # Safety
 /// `fd` is open for writing and `s` NUL-terminated.
-pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> c_int {
+pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Failed> {
     // SAFETY: caller contract.
     if unsafe { fprintf(fd, c"%s\n".as_ptr(), s) } < 0 {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 // -- File names ------------------------------------------------------------
@@ -567,7 +586,7 @@ unsafe fn write_rc(
         }
         // SAFETY: both writers take the open handle and nothing else.
         failed |=
-            unsafe { makemap(out.raw(), None) == FAIL || makeset(out.raw(), flags, 0) == FAIL };
+            unsafe { makemap(out.raw(), None).is_err() || makeset(out.raw(), flags, 0).is_err() };
     }
 
     if !failed && view_session {

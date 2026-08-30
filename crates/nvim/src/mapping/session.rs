@@ -10,7 +10,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
 use crate::types::MB_MAXCHAR;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -134,20 +134,23 @@ impl Out {
     }
 
     /// End the line, honouring `'sessionoptions'`'s line-ending choice.
+    ///
+    /// The one method that never answers `false`: see
+    /// [`put_eol_unchecked`] for the upstream check this preserves.
     fn eol(self) -> bool {
         // SAFETY: as [`Out::puts`].
-        unsafe { put_eol(self.0) >= 0 }
+        unsafe { put_eol_unchecked(self.0) }
     }
 }
 
 /// Write map commands for the current mappings to an `.exrc` file.
 ///
 /// `buf` names the buffer whose local mappings to write, or is `None` for
-/// the global ones.  Answers `FAIL` on a write error, `OK` otherwise.
+/// the global ones.  Answers `Err` on a write error.
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
+pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
     // SAFETY: the caller's promise — `fd` is an open stream for the whole of
     // this body.
     let out = unsafe { Out::new(fd) };
@@ -179,7 +182,7 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
             let Some(&(_, letters)) = MODE_COMMANDS.iter().find(|(mode, _)| *mode == mp.m_mode)
             else {
                 iemsg(gettext(c"E228: makemap: Illegal mode"));
-                return Some(FAIL);
+                return Some(Failed);
             };
 
             let mut letters = letters.iter().copied();
@@ -207,43 +210,43 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
                             && out.printf(c"set cpo&vim")
                             && out.eol())
                     {
-                        return Some(FAIL);
+                        return Some(Failed);
                     }
                 }
 
                 if c1 != 0 && !out.putc(c_int::from(c1)) {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if mp.m_noremap != REMAP_YES && !out.printf(c"nore") {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if !out.puts(cmd) {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if buf.is_some() && !out.puts(c" <buffer>") {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if mp.m_nowait != 0 && !out.puts(c" <nowait>") {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if mp.m_silent != 0 && !out.puts(c" <silent>") {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
                 if mp.m_expr != 0 && !out.puts(c" <expr>") {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
 
                 // SAFETY: `m_keys` and `m_str` are the mapping's own
                 // NUL-terminated strings and `out` an open stream.
                 let wrote = unsafe {
                     out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_keys, EscTarget::MapLhs) != FAIL
+                        && put_escstr(fd, mp.m_keys, EscTarget::MapLhs).is_ok()
                         && out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_str, EscTarget::MapRhs) != FAIL
+                        && put_escstr(fd, mp.m_str, EscTarget::MapRhs).is_ok()
                         && out.eol()
                 };
                 if !wrote {
-                    return Some(FAIL);
+                    return Some(Failed);
                 }
 
                 c1 = letters.next().unwrap_or(0);
@@ -255,8 +258,8 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
         };
         // SAFETY: the tables are live, and `write` neither unlinks nor frees
         // an entry.
-        if unsafe { map_walk(table, abbr, write) }.is_some() {
-            return FAIL;
+        if let Some(failed) = unsafe { map_walk(table, abbr, write) } {
+            return Err(failed);
         }
     }
 
@@ -266,9 +269,9 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> c_int {
             && out.printf(c"unlet s:cpo_save")
             && out.eol())
     {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// What [`put_escstr`] is writing, which decides how much escaping it needs.
@@ -285,11 +288,15 @@ pub enum EscTarget {
 
 /// Write `strstart` to `fd` with the escaping `what` calls for.
 ///
-/// Answers `FAIL` on a write error, `OK` otherwise.
+/// Answers `Err` on a write error.
 ///
 /// # Safety
 /// `fd` must be an open stream and `strstart` live and NUL-terminated.
-pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget) -> c_int {
+pub unsafe fn put_escstr(
+    fd: *mut FILE,
+    strstart: *const c_char,
+    what: EscTarget,
+) -> Result<(), Failed> {
     let mut ch = [0 as c_char; MB_MAXCHAR];
     // SAFETY: the caller's promise -- `fd` is an open stream.
     let out = unsafe { Out::new(fd) };
@@ -300,9 +307,9 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
     // SAFETY: the caller's promise -- `strstart` is live and NUL-terminated.
     if unsafe { c_int::from(*str) } == NUL && what == EscTarget::MapRhs {
         if !out.printf(c"<Nop>") {
-            return FAIL;
+            return Err(Failed);
         }
-        return OK;
+        return Ok(());
     }
 
     loop {
@@ -324,7 +331,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                         break;
                     }
                     if !out.fputc(c) {
-                        return FAIL;
+                        return Err(Failed);
                     }
                     // SAFETY: as above.
                     p = unsafe { p.add(1) };
@@ -376,7 +383,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                     // SAFETY: a NUL-terminated rendering that outlives the
                     // call, written to the open stream.
                     if unsafe { fputs(name.as_ptr(), fd) } < 0 {
-                        return FAIL;
+                        return Err(Failed);
                     }
                     break 'next;
                 }
@@ -391,7 +398,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                     c"<NL>"
                 };
                 if !out.printf(form) {
-                    return FAIL;
+                    return Err(Failed);
                 }
                 break 'next;
             }
@@ -406,7 +413,7 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                 && (ascii_iswhite(c) || c == c_int::from(b'"') || c == c_int::from(b'\\'))
             {
                 if !out.putc(c_int::from(b'\\')) {
-                    return FAIL;
+                    return Err(Failed);
                 }
             } else if (!(c_int::from(b' ')..=c_int::from(b'~')).contains(&c)
                 || c == c_int::from(b'|')
@@ -415,15 +422,15 @@ pub unsafe fn put_escstr(fd: *mut FILE, strstart: *const c_char, what: EscTarget
                 || (what != EscTarget::SetValue && c == c_int::from(b'<')))
                 && !out.putc(Ctrl_V)
             {
-                return FAIL;
+                return Err(Failed);
             }
             if !out.putc(c) {
-                return FAIL;
+                return Err(Failed);
             }
         }
         // SAFETY: `str` is on a non-NUL byte, so the next one is in the
         // caller's string.
         str = unsafe { str.add(1) };
     }
-    OK
+    Ok(())
 }

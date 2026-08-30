@@ -28,7 +28,7 @@ use crate::eval::userfunc::find_func;
 use crate::eval::vars::set_vim_var_char;
 use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
-use crate::ex_session::put_eol;
+use crate::ex_session::put_eol_unchecked;
 use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
 use crate::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::getchar::{ins_typebuf, noremap_keys};

@@ -17,7 +17,7 @@ use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
-use crate::ex_session::{put_eol, put_line};
+use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::keycodes::{get_special_key_name, has_key_name};
 use crate::main::{Columns, curbuf, curwin, got_int, info_message, p_mouse, silent_mode};
 use crate::mapping::{EscTarget, put_escstr};
@@ -37,8 +37,7 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, FILE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, size_t,
-    uint32_t,
+    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, size_t, uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
@@ -233,7 +232,11 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
 /// # Safety
 ///
 /// `fd` must be an open file, and the current window and buffer live.
-pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_only: c_int) -> c_int {
+pub(crate) unsafe fn makeset(
+    fd: *mut FILE,
+    opt_flags: OptionSetFlags,
+    local_only: c_int,
+) -> Result<(), Failed> {
     // SAFETY: the caller's file, and the option table.
     for priority_pass in [true, false] {
         for opt_idx in all_options() {
@@ -302,22 +305,22 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
                 let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
                 if guarded
                     && (unsafe { fprintf(fd, guard, name, *varp.string_var()) } < 0
-                        || unsafe { put_eol(fd) } < 0)
+                        || !unsafe { put_eol_unchecked(fd) })
                 {
-                    return FAIL;
+                    return Err(Failed);
                 }
-                if unsafe { put_set(fd, cmd, opt_idx, varp) } == FAIL {
-                    return FAIL;
+                if unsafe { put_set(fd, cmd, opt_idx, varp) }.is_err() {
+                    return Err(Failed);
                 }
-                if guarded && unsafe { put_line(fd, c"endif".as_ptr() as *mut c_char) } == FAIL {
-                    return FAIL;
+                if guarded && unsafe { put_line(fd, c"endif".as_ptr() as *mut c_char) }.is_err() {
+                    return Err(Failed);
                 }
                 varp = varp_local;
                 round += 1;
             }
         }
     }
-    OK
+    Ok(())
 }
 
 /// Write the current window's fold settings, for `:mksession`.
@@ -325,7 +328,7 @@ pub(crate) unsafe fn makeset(fd: *mut FILE, opt_flags: OptionSetFlags, local_onl
 /// # Safety
 ///
 /// `fd` must be an open file and the current window live.
-pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> c_int {
+pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> Result<(), Failed> {
     // SAFETY: the caller's file, and `curwin` is live.
     let wo = unsafe { &raw mut (*curwin.get()).w_onebuf_opt };
     let fields: [(OptIndex, OptSlot); 8] = [
@@ -363,11 +366,9 @@ pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> c_int {
         ),
     ];
     for (opt_idx, varp) in fields {
-        if unsafe { put_set(fd, c"setlocal".as_ptr() as *mut c_char, opt_idx, varp) } == FAIL {
-            return FAIL;
-        }
+        unsafe { put_set(fd, c"setlocal".as_ptr() as *mut c_char, opt_idx, varp) }?;
     }
-    OK
+    Ok(())
 }
 
 /// Write one `<cmd> <option>=<value>` line.
@@ -381,7 +382,7 @@ pub(crate) unsafe fn put_set(
     cmd: *mut c_char,
     opt_idx: OptIndex,
     varp: OptSlot,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's file and variable, and the option table.
     let value: OptVal = unsafe { optval_from_varp(opt_idx, varp) };
     let opt = get_option(opt_idx);
@@ -393,7 +394,7 @@ pub(crate) unsafe fn put_set(
         && varp != option_var(opt_idx)
         && optval_equal(value, get_option_unset_value(opt_idx))
     {
-        return OK;
+        return Ok(());
     }
 
     match value.type_0 {
@@ -405,34 +406,34 @@ pub(crate) unsafe fn put_set(
                 c"no".as_ptr()
             };
             if unsafe { fprintf(fd, c"%s %s%s".as_ptr(), cmd, prefix, name) } < 0 {
-                return FAIL;
+                return Err(Failed);
             }
         }
         kOptValTypeNumber => {
             if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
-                return FAIL;
+                return Err(Failed);
             }
             // 'wildchar' and 'wildcharm' hold a key, which reads back
             // as its name.
             let mut wc: OptInt = 0;
             if unsafe { wc_use_keyname(opt_idx, varp, &mut wc) } {
                 if unsafe { fputs(get_special_key_name(wc as c_int, 0).as_ptr(), fd) } < 0 {
-                    return FAIL;
+                    return Err(Failed);
                 }
             } else if unsafe { fprintf(fd, c"%ld".as_ptr(), value.data.number) } < 0 {
-                return FAIL;
+                return Err(Failed);
             }
         }
         kOptValTypeString => {
             if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
-                return FAIL;
+                return Err(Failed);
             }
             let value_str = unsafe { value.data.string }.data();
             if !value_str.is_null() {
                 match unsafe { put_string_value(fd, cmd, name, value_str, flags) } {
-                    Written::Failed => return FAIL,
+                    Written::Failed => return Err(Failed),
                     // Each `+=` line already carries its terminator.
-                    Written::Lines => return OK,
+                    Written::Lines => return Ok(()),
                     Written::Value => {}
                 }
             }
@@ -440,10 +441,9 @@ pub(crate) unsafe fn put_set(
         _ => unreachable!("an option with no type has no value to write"),
     }
 
-    if unsafe { put_eol(fd) } < 0 {
-        return FAIL;
-    }
-    OK
+    // The newline's write error is dropped, as upstream drops it.
+    unsafe { put_eol_unchecked(fd) };
+    Ok(())
 }
 
 /// What [`put_string_value`] managed to write.
@@ -483,7 +483,7 @@ unsafe fn put_string_value(
 ) -> Written {
     // SAFETY: the caller's file and strings.
     if flags & kOptFlagExpand as uint32_t == 0 {
-        return if unsafe { put_escstr(fd, value_str, EscTarget::SetValue) } == FAIL {
+        return if unsafe { put_escstr(fd, value_str, EscTarget::SetValue) }.is_err() {
             Written::Failed
         } else {
             Written::Value
@@ -495,7 +495,7 @@ unsafe fn put_string_value(
     unsafe { home_replace(ptr::null::<buf_T>(), value_str, buf, size, false) };
 
     if !unsafe { needs_splitting(value_str, flags) } {
-        let failed = unsafe { put_escstr(fd, buf, EscTarget::SetValue) } == FAIL;
+        let failed = unsafe { put_escstr(fd, buf, EscTarget::SetValue) }.is_err();
         unsafe { xfree(buf.cast::<c_void>()) };
         return if failed {
             Written::Failed
@@ -507,7 +507,7 @@ unsafe fn put_string_value(
     // Too long for one line: end this one and write an item per `+=`.
     let part = unsafe { xmalloc(size) }.cast::<c_char>();
     let mut result = Written::Lines;
-    if unsafe { put_eol(fd) } == FAIL {
+    if unsafe { put_eol(fd) }.is_err() {
         result = Written::Failed;
     } else {
         let mut p = buf;
@@ -517,8 +517,8 @@ unsafe fn put_string_value(
                 break;
             }
             unsafe { copy_option_part(&raw mut p, part, size, c",".as_ptr() as *mut c_char) };
-            if unsafe { put_escstr(fd, part, EscTarget::SetValue) } == FAIL
-                || unsafe { put_eol(fd) } == FAIL
+            if unsafe { put_escstr(fd, part, EscTarget::SetValue) }.is_err()
+                || unsafe { put_eol(fd) }.is_err()
             {
                 result = Written::Failed;
                 break;

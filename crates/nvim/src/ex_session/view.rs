@@ -35,7 +35,7 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, NUL, OK, OptionSetFlags, int64_t, tabpage_T, win_T};
+use crate::types::{NUL, OptionSetFlags, int64_t, tabpage_T, win_T};
 use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
@@ -113,7 +113,7 @@ pub(crate) unsafe fn put_view(
 
     // Local mappings and abbreviations.
     if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-        && unsafe { makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) } == FAIL
+        && unsafe { makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) }.is_err()
     {
         return false;
     }
@@ -127,7 +127,7 @@ pub(crate) unsafe fn put_view(
     if opts.has(kOptSsopFlagFolds)
         && !buf.b_ffname.is_null()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
-        && unsafe { put_folds(out.raw(), Win::new(wp)) } == FAIL
+        && unsafe { put_folds(out.raw(), Win::new(wp)) }.is_err()
     {
         return false;
     }
@@ -257,11 +257,11 @@ unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts)
     } else if opts.has(kOptSsopFlagFolds) {
         unsafe { makefoldset(out.raw()) }
     } else {
-        OK
+        Ok(())
     };
     curwin.set(save_curwin);
     curbuf.set(unsafe { (*curwin.get()).w_buffer });
-    f != FAIL
+    f.is_ok()
 }
 
 /// Restore the cursor line -- both in the file and relative to the top of

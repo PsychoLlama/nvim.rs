@@ -14,39 +14,41 @@ use super::*;
 
 /// Write commands to "fd" to restore the manual folds in window "wp".
 ///
-/// Returns FAIL if writing fails.
+/// Answers `Err` if writing fails.
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> c_int {
+pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- an open stream.
     if foldmethod_is_manual(wp)
-        && (unsafe { put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) } == FAIL
-            || unsafe { put_folds_recurse(fd, window_folds(wp), 0) } == FAIL
-            || unsafe { put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) } == FAIL)
+        && (unsafe { put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) }.is_err()
+            || unsafe { put_folds_recurse(fd, window_folds(wp), 0) }.is_err()
+            || unsafe { put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) }.is_err())
     {
-        return FAIL;
+        return Err(Failed);
     }
     if wp.w_fold_manual {
         return unsafe { put_foldopen_recurse(fd, wp, window_folds(wp), 0) };
     }
-    OK
+    Ok(())
 }
 
 /// Write commands to "fd" to recreate manually created folds.
 ///
-/// Returns FAIL when writing failed.
+/// Answers `Err` when writing failed.
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub(super) unsafe fn put_folds_recurse(fd: *mut FILE, folds: FoldList, off: linenr_T) -> c_int {
+pub(super) unsafe fn put_folds_recurse(
+    fd: *mut FILE,
+    folds: FoldList,
+    off: linenr_T,
+) -> Result<(), Failed> {
     for fold in folds.folds() {
         // The nested folds are written first, because `:fold` over a range
         // that already holds folds swallows them.
         // SAFETY: the caller's promise.
-        if unsafe { put_folds_recurse(fd, fold.nested(), off + fold.top()) } == FAIL {
-            return FAIL;
-        }
+        unsafe { put_folds_recurse(fd, fold.nested(), off + fold.top()) }?;
         // SAFETY: the caller's promise; the format string matches the two
         // `int64_t` arguments.
         let wrote = unsafe {
@@ -58,16 +60,16 @@ pub(super) unsafe fn put_folds_recurse(fd: *mut FILE, folds: FoldList, off: line
             )
         };
         // SAFETY: the caller's promise.
-        if wrote < 0 || unsafe { put_eol(fd) } == FAIL {
-            return FAIL;
+        if wrote < 0 || unsafe { put_eol(fd) }.is_err() {
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Write commands to "fd" to open and close manually opened/closed folds.
 ///
-/// Returns FAIL when writing failed.
+/// Answers `Err` when writing failed.
 ///
 /// # Safety
 /// `fd` must be an open stream.
@@ -76,7 +78,7 @@ pub(super) unsafe fn put_foldopen_recurse(
     wp: Win,
     folds: FoldList,
     off: linenr_T,
-) -> c_int {
+) -> Result<(), Failed> {
     for fold in folds.folds() {
         if fold.is(FD_LEVEL) {
             // It follows 'foldlevel', so there is nothing to remember.
@@ -88,18 +90,18 @@ pub(super) unsafe fn put_foldopen_recurse(
             let wrote = unsafe { fprintf(fd, c"%ld".as_ptr(), (fold.top() + off) as int64_t) };
             // SAFETY: the caller's promise.
             if wrote < 0
-                || unsafe { put_eol(fd) } == FAIL
-                || unsafe { put_line(fd, c"sil! normal! zo".as_ptr() as *mut c_char) } == FAIL
+                || unsafe { put_eol(fd) }.is_err()
+                || unsafe { put_line(fd, c"sil! normal! zo".as_ptr() as *mut c_char) }.is_err()
             {
-                return FAIL;
+                return Err(Failed);
             }
             // SAFETY: the caller's promise.
-            if unsafe { put_foldopen_recurse(fd, wp, fold.nested(), off + fold.top()) } == FAIL {
-                return FAIL;
+            if unsafe { put_foldopen_recurse(fd, wp, fold.nested(), off + fold.top()) }.is_err() {
+                return Err(Failed);
             }
             // SAFETY: the caller's promise.
-            if fold.is(FD_CLOSED) && unsafe { put_fold_open_close(fd, fold, off) } == FAIL {
-                return FAIL;
+            if fold.is(FD_CLOSED) && unsafe { put_fold_open_close(fd, fold, off) }.is_err() {
+                return Err(Failed);
             }
             continue;
         }
@@ -113,23 +115,27 @@ pub(super) unsafe fn put_foldopen_recurse(
             foldlevel < level as OptInt
         };
         // SAFETY: the caller's promise.
-        if differs && unsafe { put_fold_open_close(fd, fold, off) } == FAIL {
-            return FAIL;
+        if differs && unsafe { put_fold_open_close(fd, fold, off) }.is_err() {
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Write the open or close command to "fd".
 ///
-/// Returns FAIL when writing failed.
+/// Answers `Err` when writing failed.
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub(super) unsafe fn put_fold_open_close(fd: *mut FILE, fold: Fold, off: linenr_T) -> c_int {
+pub(super) unsafe fn put_fold_open_close(
+    fd: *mut FILE,
+    fold: Fold,
+    off: linenr_T,
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise; both formats match their arguments.
     if unsafe { fprintf(fd, c"%d".as_ptr(), fold.top() + off) } < 0
-        || unsafe { put_eol(fd) } == FAIL
+        || unsafe { put_eol(fd) }.is_err()
         || unsafe {
             fprintf(
                 fd,
@@ -141,9 +147,9 @@ pub(super) unsafe fn put_fold_open_close(fd: *mut FILE, fold: Fold, off: linenr_
                 },
             )
         } < 0
-        || unsafe { put_eol(fd) } == FAIL
+        || unsafe { put_eol(fd) }.is_err()
     {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
