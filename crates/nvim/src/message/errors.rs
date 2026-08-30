@@ -8,11 +8,11 @@
 //! The `s`-prefixed entry points (`semsg`, `siemsg`, `swmsg`,
 //! `msg_schedule_semsg` and friends) were C variadics, called ~700 times
 //! across the tree as `printf`-style forwarders. They are macros now
-//! ([`semsg_c!`](crate::semsg_c) and friends, defined in
-//! [`crate::message_fmt`]): each expands to a `vim_snprintf` into
-//! the scratch buffer the wrapper owned, then the `*_finish` tail below that
-//! reports it. Same bytes, same buffer sizes, same truncation — and no
-//! C-variadic definition, which only a nightly compiler can write.
+//! ([`semsg!`](crate::semsg) and friends, defined in
+//! [`crate::message_fmt`]): each renders a `format_args!` the compiler has
+//! checked, truncates it to the buffer size the C wrapper owned, and hands
+//! the bytes to the reporting functions here. Same bytes, same truncation --
+//! and no C-variadic definition, which only a nightly compiler can write.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -327,54 +327,14 @@ pub unsafe fn emsg_invreg(name: c_int) {
     unsafe { crate::semsg!("E354: Invalid register name: '{}'", c_str(display.as_ptr())) };
 }
 
-/// How much of an error message [`semsg_c!`](crate::semsg_c) keeps.
+/// How much of an error message [`semsg!`](crate::semsg) keeps: the size of
+/// the buffer the C wrapper formatted into, so the truncation point is the
+/// one upstream's `vim_snprintf` chose.
 pub const SEMSG_ERRBUF_LEN: size_t = 1025;
 
-/// How much of an error message [`semsg_multiline_c!`](crate::semsg_multiline_c)
-/// keeps.
-pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
-
-/// Where [`semsg_c!`](crate::semsg_c) formats: a buffer belonging to the
-/// expansion, not the shared one upstream reuses. Formatting an error can
-/// run an autocommand -- `emsg` does -- and that autocommand can raise an
-/// error of its own, which used to overwrite the message being assembled.
-/// The macro's first half; not meant to be called directly.
-#[doc(hidden)]
-pub fn semsg_errbuf() -> [c_char; SEMSG_ERRBUF_LEN] {
-    [0; SEMSG_ERRBUF_LEN]
-}
-
-/// [`semsg_errbuf`] for [`semsg_multiline_c!`](crate::semsg_multiline_c). A
+/// [`SEMSG_ERRBUF_LEN`] for [`semsg_multiline!`](crate::semsg_multiline). A
 /// multiline error can be much longer than one line's worth.
-#[doc(hidden)]
-pub fn semsg_multiline_errbuf() -> [c_char; SEMSG_MULTILINE_ERRBUF_LEN] {
-    [0; SEMSG_MULTILINE_ERRBUF_LEN]
-}
-
-/// Report what was formatted into `buf` as an error. The second half of
-/// [`semsg_c!`](crate::semsg_c); not meant to be called directly. The macro
-/// has already established that errors are on.
-///
-/// # Safety
-/// Only that the message state is the main thread's.
-#[doc(hidden)]
-pub unsafe fn semsg_report(buf: &[c_char; SEMSG_ERRBUF_LEN]) -> bool {
-    emsg(crate::cstr::in_chars(buf))
-}
-
-/// Report what was formatted into `buf` as a multiline error of kind
-/// `kind`. The second half of
-/// [`semsg_multiline_c!`](crate::semsg_multiline_c).
-///
-/// # Safety
-/// `kind` must be a valid C string.
-#[doc(hidden)]
-pub unsafe fn semsg_multiline_report(
-    buf: &[c_char; SEMSG_MULTILINE_ERRBUF_LEN],
-    kind: *const c_char,
-) -> bool {
-    unsafe { emsg_multiline(buf.as_ptr(), kind, HLF_E, true) }
-}
+pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
 
 /// [`iemsg`] for a message still held as a raw pointer.
 ///
@@ -451,17 +411,6 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
     unsafe { xfree(s.cast()) };
 }
 
-/// Hand whatever was formatted into [`msg_iobuff`] to the main loop as an
-/// error. The second half of
-/// [`msg_schedule_semsg_c!`](crate::msg_schedule_semsg_c).
-///
-/// # Safety
-/// Only that the main loop is live.
-#[doc(hidden)]
-pub unsafe fn msg_schedule_semsg_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
-    msg_schedule_semsg_text(crate::cstr::in_chars(buf), false);
-}
-
 /// Deferred-event handler for [`msg_schedule_semsg_multiline`].
 ///
 /// # Safety
@@ -470,17 +419,6 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
     let s: *mut c_char = unsafe { (*argv).cast() };
     unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, true) };
     unsafe { xfree(s.cast()) };
-}
-
-/// Hand whatever was formatted into [`msg_iobuff`] to the main loop as a
-/// multiline error. The second half of
-/// [`msg_schedule_semsg_multiline_c!`](crate::msg_schedule_semsg_multiline_c).
-///
-/// # Safety
-/// Only that the main loop is live.
-#[doc(hidden)]
-pub unsafe fn msg_schedule_semsg_multiline_finish(buf: &[c_char; MSG_IOBUFF_LEN]) {
-    msg_schedule_semsg_text(crate::cstr::in_chars(buf), true);
 }
 
 /// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick

@@ -76,7 +76,7 @@ pub unsafe fn spell_add_word(
     idx: c_int,
     undo: bool,
 ) {
-    // `smsg_c!` runs autocommands, so the path it reports is this frame's.
+    // `smsg!` runs autocommands, so the path it reports is this frame's.
     let mut shown = [0 as c_char; MAXPATHL as usize];
     if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
         unsafe { emsg(gettext_ptr(e_illegal_character_in_word.get())) };
