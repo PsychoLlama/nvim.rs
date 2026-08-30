@@ -80,7 +80,7 @@ struct OptionTarget {
 ///
 /// # Safety
 /// `opts` must point at a filled-in `KeyDict_option`, `name` must be a C
-/// string, and `err` must be the caller's error slot.
+/// string.
 unsafe fn option_target(
     opts: *mut KeyDict_option,
     name: *mut c_char,
@@ -204,7 +204,7 @@ unsafe fn option_target(
 ///
 /// # Safety
 /// `filetype` must be null or a C string, `aco` and `aco_used` must be the
-/// caller's, and `err` must be the caller's error slot.
+/// caller's.
 unsafe fn do_ft_buf(
     filetype: *const c_char,
     aco: *mut aco_save_T,

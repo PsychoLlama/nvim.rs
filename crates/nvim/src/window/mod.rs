@@ -499,7 +499,7 @@ fn first_tab() -> TabPage {
     crate::winlayer::first_tab().expect("the editor always has a tab page")
 }
 
-/// `api_set_error(err, kErrorTypeException, "%s", msg)`.
+/// An exception whose whole message is the string at `msg`.
 fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
     // SAFETY: the message the caller handed over, live for this call.
     *err = unsafe { err_msg_ptr(kErrorTypeException, msg) };

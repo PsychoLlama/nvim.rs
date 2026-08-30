@@ -163,7 +163,7 @@ pub unsafe fn nvim_parse_expression(
 /// character was not one.
 ///
 /// # Safety
-/// `err` must be the caller's error slot.
+/// `flags` must name its own bytes.
 unsafe fn parse_flags(flags: String_0, err: &mut Error) -> Option<c_int> {
     let mut pflags: c_int = 0;
     for i in 0..flags.len() {

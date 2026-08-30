@@ -122,10 +122,9 @@ unsafe fn remote_ui_destroy(ui: *mut RemoteUI) {
 
 /// Detaches the UI on `channel_id`, optionally telling it why.
 ///
-/// # Safety
-///
-/// `err` must be writable or null.
-pub unsafe fn remote_ui_disconnect(channel_id: u64, err: &mut Error, send_error_exit: bool) {
+/// Safe: every `unsafe` below rests on the attach table, which this function
+/// reads and updates itself, rather than on anything the caller promised.
+pub fn remote_ui_disconnect(channel_id: u64, err: &mut Error, send_error_exit: bool) {
     let ui = get_ui_or_err(channel_id, err);
     if ui.is_null() {
         return;
@@ -343,10 +342,10 @@ pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), 
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// The editor must be running.
 pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    unsafe { remote_ui_disconnect(channel_id, &mut error, false) };
+    remote_ui_disconnect(channel_id, &mut error, false);
     ().reported(error)
 }
 
@@ -357,7 +356,7 @@ pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 ///
 /// # Safety
 ///
-/// `err` must be writable and `server_addr` a valid C string.
+/// `server_addr` a valid C string.
 pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: &mut Error) {
     let ui = get_ui_or_err(channel_id, err);
     if ui.is_null() {
@@ -375,7 +374,7 @@ pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: 
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// The editor must be running.
 pub unsafe fn nvim_ui_try_resize(
     channel_id: u64,
     width: Integer,
@@ -582,7 +581,7 @@ unsafe fn ui_set_option(
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// `name` must be a C string.
 unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
     let got = value.as_boolean();
     if got.is_none() {
@@ -624,7 +623,7 @@ unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<Str
 ///
 /// # Safety
 ///
-/// `err` must be writable and `name` a valid C string.
+/// `name` a valid C string.
 unsafe fn wrong_type(err: &mut Error, name: *const c_char, expected: ObjectType, value: Object) {
     let expected = api_typename(expected);
     let actual = api_typename(value.type_0);
@@ -636,7 +635,7 @@ unsafe fn wrong_type(err: &mut Error, name: *const c_char, expected: ObjectType,
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// The editor must be running.
 pub unsafe fn nvim_ui_try_resize_grid(
     channel_id: u64,
     grid: Integer,
@@ -654,8 +653,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
         return unsafe { nvim_ui_try_resize(channel_id, width, height) };
     }
     let (grid, width, height) = (grid as handle_T, width as c_int, height as c_int);
-    // SAFETY: `error` is this frame's slot.
-    unsafe { ui_grid_resize(grid, width, height, &mut error) };
+    ui_grid_resize(grid, width, height, &mut error);
     ().reported(error)
 }
 
@@ -663,7 +661,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// The editor must be running.
 pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     let ui = get_ui_or_err(channel_id, &mut error);
@@ -689,7 +687,7 @@ pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result
 ///
 /// # Safety
 ///
-/// `err` must be writable.
+/// The editor must be running.
 pub unsafe fn nvim_ui_pum_set_bounds(
     channel_id: u64,
     width: Float,

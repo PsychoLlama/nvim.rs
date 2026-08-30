@@ -144,8 +144,7 @@ impl Context {
     /// the width. Answers `None` with `err` set when something is wrong.
     ///
     /// # Safety
-    /// `err` must be the caller's error slot, and `statuscol`/`sattrs` must
-    /// outlive the expansion.
+    /// `statuscol`/`sattrs` must outlive the expansion.
     unsafe fn of(
         opts: &KeyDict_eval_statusline,
         err: &mut Error,

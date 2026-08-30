@@ -32,10 +32,7 @@ use crate::api_error;
 ///
 /// The name and the four-argument call are spelled once so that each of the
 /// six call sites is one line rather than six.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_border(err: &mut Error, want: &CStr, got: Option<&CStr>) {
+fn err_border(err: &mut Error, want: &CStr, got: Option<&CStr>) {
     *err = err_expected(c"border", want, got);
 }
 
@@ -190,15 +187,13 @@ unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, 
         // SAFETY: the tag says the array arm is live.
         let arr = unsafe { item.data.array };
         if arr.size == 0 || arr.size > 2 {
-            // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"1 or 2-item Array", None) };
+            err_border(err, c"1 or 2-item Array", None);
             return None;
         }
         // SAFETY: a non-empty array has an item at index 0.
         let first = unsafe { *arr.items };
         if first.type_0 != kObjectTypeString {
-            // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"Array of Strings", None) };
+            err_border(err, c"Array of Strings", None);
             return None;
         }
         // SAFETY: the tag says the string arm is live.
@@ -219,8 +214,7 @@ unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, 
         // SAFETY: the tag says the string arm is live.
         return Some((unsafe { item.data.string }, 0));
     }
-    // SAFETY: the caller's error slot.
-    unsafe { err_border(err, c"String or Array", Some(api_typename(item.type_0))) };
+    err_border(err, c"String or Array", Some(api_typename(item.type_0)));
     None
 }
 
@@ -255,8 +249,7 @@ type Slots = ([BorderChar; 8], [c_int; 8]);
 unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
     let size = arr.size;
     if size == 0 || size > 8 || !size.is_power_of_two() {
-        // SAFETY: the caller's error slot.
-        unsafe { err_border(err, c"1, 2, 4, or 8 chars", None) };
+        err_border(err, c"1, 2, 4, or 8 chars", None);
         return None;
     }
 
@@ -269,8 +262,7 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
         let (string, hl_id) = unsafe { parse_border_item(item, err) }?;
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
-            // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"only one-cell chars", None) };
+            err_border(err, c"only one-cell chars", None);
             return None;
         }
         // SAFETY: as above.
@@ -294,8 +286,7 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
         || corner_gap(&chars, 3, 5, 4)
         || corner_gap(&chars, 5, 7, 6)
     {
-        // SAFETY: the caller's error slot.
-        unsafe { err_border(err, c"corner char between edge chars", None) };
+        err_border(err, c"corner char between edge chars", None);
     }
     Some((chars, hl_ids))
 }
@@ -304,8 +295,7 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
 /// `fconfig`'s eight border slots.
 ///
 /// # Safety
-/// `fconfig` must be writable, `style` a live API object and `err` a
-/// writable error slot.
+/// `fconfig` must be writable and `style` a live API object.
 pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &mut Error) {
     // The config is written a field at a time rather than through one
     // long-lived `&mut`: everything below can re-enter the editor, which owns

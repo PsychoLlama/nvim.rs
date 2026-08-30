@@ -16,6 +16,12 @@ and this project adheres to [CalVer](https://calver.org/).
   is reported and checked against its arguments when the editor is built.
   Translation still applies; messages that quote text keep its bytes
   exactly, and every message still reads exactly as before.
+- Reworked how a failing API call reports why: the error now owns its own
+  message and releases it on its own, rather than being a pointer the caller
+  had to remember to free, and every one of the API's refusal messages is
+  written out where it is raised and checked against its arguments when the
+  editor is built. The message a client receives, and the kind it is
+  classified as, are unchanged.
 
 ## [2026.08.29-f6c6cf531e]
 

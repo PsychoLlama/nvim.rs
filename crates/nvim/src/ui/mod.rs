@@ -849,10 +849,9 @@ fn ext_name(widget: usize) -> *const core::ffi::c_char {
 
 /// Resizes the grid a UI asked about, for `nvim_ui_try_resize_grid`.
 ///
-/// # Safety
-///
-/// `err` must be writable.
-pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: &mut Error) {
+/// Safe: the grid handle is looked up here, and every `unsafe` below rests on
+/// that lookup rather than on anything the caller promised.
+pub fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: &mut Error) {
     if grid_handle == DEFAULT_GRID_HANDLE {
         unsafe { screen_resize(width, height) };
         return;

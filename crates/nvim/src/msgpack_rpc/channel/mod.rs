@@ -273,7 +273,7 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     unsafe { channel_decref(chan.as_ptr()) };
     // Nothing reads the reason a closing channel's UI could not be found.
     let mut ignored = Error::none();
-    unsafe { remote_ui_disconnect(chan.id, &mut ignored, false) };
+    remote_ui_disconnect(chan.id, &mut ignored, false);
 
     if ui_client_channel_id.get() != 0 && chan.id == ui_client_channel_id.get() {
         // A `--remote-ui` client whose server went away: try to reconnect

@@ -139,12 +139,12 @@ impl Error {
 
 /// Build an [`Error`] from a checked format literal.
 ///
-/// `api_error!(kErrorTypeValidation, "Invalid buffer id: {id}")` is the
-/// replacement for `api_set_error(err, kErrorTypeValidation, "Invalid buffer
-/// id: %d", id)`: `format_args!` checks the placeholders against the
-/// arguments, and the `const` block rejects a literal that still holds a C
-/// conversion, so a half-finished conversion fails the build rather than
-/// printing itself.
+/// `api_error!(kErrorTypeValidation, "Invalid buffer id: {id}")` replaces
+/// upstream's `api_set_error(err, kErrorTypeValidation, "Invalid buffer id:
+/// %d", id)`: `format_args!` checks the placeholders against the arguments,
+/// and the `const` block rejects a literal that still holds a C conversion,
+/// so a half-finished conversion fails the build rather than printing
+/// itself.
 ///
 /// Unlike the message macros this does *not* consult the catalogue. Upstream
 /// never translated an API error -- a client reads it, not a user -- and the

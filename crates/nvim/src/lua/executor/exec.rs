@@ -302,7 +302,7 @@ pub unsafe fn nlua_exec(
 /// Report the Lua error on top of the stack through `err`.
 ///
 /// # Safety
-/// `err` must be writable and the error value be on top of the stack.
+/// the error value be on top of the stack.
 unsafe fn set_lua_error(err: &mut Error, type_0: ErrorType, lstate: *mut lua_State) {
     unsafe {
         let mut len: size_t = 0;

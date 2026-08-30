@@ -179,7 +179,7 @@ pub(crate) unsafe fn get_option_value_for(
 /// # Safety
 ///
 /// `name` must be NUL-terminated, `from` the live window or buffer `scope`
-/// names, and `err` a valid error slot.
+/// names.
 pub(crate) unsafe fn set_option_value_for(
     name: *const c_char,
     opt_idx: OptIndex,

@@ -19,7 +19,7 @@ use core::ptr;
 /// `None` -- with `err` set -- when it is neither, or is not one character.
 ///
 /// # Safety
-/// `name` must name its own bytes and `err` must be the caller's error slot.
+/// `name` must name its own bytes.
 unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
     if name.len() != 1 {
         // SAFETY: the caller's promise about `name` and `err`.
@@ -39,7 +39,7 @@ unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
 /// "Invalid `what`: '`name`'".
 ///
 /// # Safety
-/// `name` must be NUL-terminated and `err` must be the caller's error slot.
+/// `name` must be NUL-terminated.
 unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
     let (what, got) = (what.as_ptr(), name.data());
     // SAFETY: the names and values are NUL-terminated strings.

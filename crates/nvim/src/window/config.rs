@@ -481,7 +481,7 @@ pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     // SAFETY: the caller's promise -- a live window; `err` is ours.
     let ok = unsafe { check_split_disallowed_err(wp, &mut err) };
     if err.is_set() {
-        // SAFETY: the message `api_set_error` just wrote.
+        // SAFETY: the message the check just wrote, owned by `err`.
         unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
         // SAFETY: as above.
         err.clear();

@@ -87,7 +87,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
 ///
 /// # Safety
 /// `fn_0`/`args` must name their own storage, `self_0` must be null or a
-/// live dictionary, and `err` must be the caller's error slot.
+/// live dictionary.
 unsafe fn call_function_with(
     fn_0: String_0,
     args: Array,

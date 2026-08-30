@@ -99,7 +99,7 @@ pub unsafe fn nvim_win_set_option(
 /// reporting through `err` why it is not the name of one.
 ///
 /// # Safety
-/// `err` must be the caller's error slot.
+/// `name` must name its own bytes.
 unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_char, OptIndex)> {
     if name.is_empty() {
         let empty = c"<empty>".as_ptr();
@@ -121,8 +121,7 @@ unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_ch
 /// The value of `name` in `scope`, read out of `from`.
 ///
 /// # Safety
-/// `from` must be null, a live buffer or a live window, as `scope` says, and
-/// `err` must be the caller's error slot.
+/// `from` must be null, a live buffer or a live window, as `scope` says.
 unsafe fn get_option_from(
     from: *mut c_void,
     scope: OptScope,

@@ -302,7 +302,8 @@ unsafe extern "C" fn call_on_hunk_cb(
         (fidx, lua_pcall(lstate, 4, 1, 0) != 0)
     };
     if failed {
-        // SAFETY: the error message is on top; `api_set_error` copies it.
+        // SAFETY: the error message is on top, and `err` is the caller's
+        // slot -- the one the `HunkContext` above promised is live.
         unsafe {
             let why = c_str(lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()));
             *err = api_error!(kErrorTypeException, "on_hunk: {why}");

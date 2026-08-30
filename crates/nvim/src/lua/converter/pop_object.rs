@@ -63,8 +63,7 @@ const CANNOT_CONVERT: &CStr = c"Cannot convert given Lua type";
 /// otherwise they are separately allocated and the caller frees them.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state with a value on top, and `err` the
-/// caller's error slot.
+/// `lstate` must be a live Lua state with a value on top.
 pub unsafe fn nlua_pop_object(
     lstate: *mut lua_State,
     ref_0: bool,
