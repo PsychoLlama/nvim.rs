@@ -22,7 +22,7 @@ use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::plines::getvvcol;
 use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
@@ -31,7 +31,6 @@ use crate::types::{
     EvalFuncData, MotionType, NUL, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
     kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
-use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -334,13 +333,15 @@ unsafe fn block_def2str(bd: &block_def) -> String_0 {
     // SAFETY throughout: `data` has room for the three runs written below, which is
     // what `size` was computed from, plus the terminator.
     let space = b' ' as c_int;
-    unsafe { memset(data.cast::<c_void>(), space, bd.startspaces as usize) };
+    let into = data.cast::<u8>();
+    unsafe { into.write_bytes((space) as u8, bd.startspaces as usize) };
     let mut at = bd.startspaces as usize;
-    let (dst, src) = unsafe { (data.add(at).cast::<c_void>(), bd.textstart.cast()) };
-    unsafe { memmove(dst, src, bd.textlen as usize) };
+    let (dst, src) = unsafe { (data.add(at), bd.textstart) };
+    unsafe { dst.cast::<u8>().copy_from(src.cast(), bd.textlen as usize) };
     at += bd.textlen as usize;
     let dst = unsafe { data.add(at).cast::<c_void>() };
-    unsafe { memset(dst, space, bd.endspaces as usize) };
+    let into = dst.cast::<u8>();
+    unsafe { into.write_bytes((space) as u8, bd.endspaces as usize) };
     at += bd.endspaces as usize;
     unsafe { *data.add(at) = NUL as c_char };
     String_0::from_raw_parts(data, at)

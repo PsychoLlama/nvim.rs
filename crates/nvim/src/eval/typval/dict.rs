@@ -53,7 +53,8 @@ pub unsafe fn tv_dict_item_alloc_len(
     let size = ::core::mem::size_of::<dictitem_T>().max(key_offset + key_len + 1);
     let di = unsafe { xmalloc(size) } as *mut dictitem_T;
     let di_key = tv_dict_item_key(di);
-    unsafe { memcpy(di_key.cast(), key.cast(), key_len) };
+    let into = di_key.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(key.cast(), key_len) };
     unsafe { *di_key.add(key_len) = NUL as ::core::ffi::c_char };
     // SAFETY: freshly allocated just above.
     let mut item = unsafe { Di::new(di) };

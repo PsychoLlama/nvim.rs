@@ -305,11 +305,8 @@ pub unsafe fn expand_env_esc(
 
                     if !prefix.is_null()
                         && src.offset(-(prefix_len as isize)) >= srcp
-                        && strncmp(
-                            src.offset(-(prefix_len as isize)),
-                            prefix,
-                            prefix_len as size_t,
-                        ) == 0
+                        && cstr::prefix_at(src.offset(-(prefix_len as isize)), prefix_len as size_t)
+                            == cstr::prefix_at(prefix, prefix_len as size_t)
                     {
                         at_start = true;
                     }

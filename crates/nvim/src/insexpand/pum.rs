@@ -265,17 +265,10 @@ pub(crate) unsafe fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startc
     unsafe {
         let line = ml_get(cur_win().w_cursor.lnum);
         let head = line.offset(startcol as isize);
-        memmove(
-            buf.cast::<c_void>(),
-            head.cast::<c_void>(),
-            prepend_len as size_t,
-        );
+        buf.cast::<u8>()
+            .copy_from(head.cast(), prepend_len as size_t);
         let tail = buf.offset(prepend_len as isize);
-        memmove(
-            tail.cast::<c_void>(),
-            src.data().cast::<c_void>(),
-            src.len(),
-        );
+        tail.cast::<u8>().copy_from(src.data().cast(), src.len());
         *buf.offset(new_length as isize) = NUL as c_char;
     }
 }

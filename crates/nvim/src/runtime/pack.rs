@@ -231,7 +231,7 @@ unsafe fn splice_rtp(
     // the same three lengths. `insp` points into 'runtimepath'.
     let mut keep = unsafe { points.insp.offset_from(p_rtp.get()) } as size_t;
     let mut first_pos = keep;
-    unsafe { memmove(new_rtp.cast(), p_rtp.get().cast(), keep) };
+    unsafe { new_rtp.cast::<u8>().copy_from(p_rtp.get().cast(), keep) };
     let mut len = keep;
     if unsafe { *points.insp } == 0 {
         // Appending at the end: the comma goes before.
@@ -239,7 +239,12 @@ unsafe fn splice_rtp(
         len += 1;
         first_pos += 1;
     }
-    unsafe { memmove(new_rtp.add(len).cast(), fname.cast(), addlen - 1) };
+    unsafe {
+        new_rtp
+            .add(len)
+            .cast::<u8>()
+            .copy_from(fname.cast(), addlen - 1)
+    };
     len += addlen - 1;
     if unsafe { *points.insp } != 0 {
         unsafe { *new_rtp.add(len) = b',' as c_char };
@@ -250,14 +255,18 @@ unsafe fn splice_rtp(
     if afterlen > 0 && !points.after_insp.is_null() {
         let keep_after = unsafe { points.after_insp.offset_from(p_rtp.get()) } as size_t;
         unsafe {
-            memmove(
-                new_rtp.add(len).cast(),
-                p_rtp.get().add(keep).cast(),
-                keep_after - keep,
-            )
+            new_rtp
+                .add(len)
+                .cast::<u8>()
+                .copy_from(p_rtp.get().add(keep).cast(), keep_after - keep)
         };
         len += keep_after - keep;
-        unsafe { memmove(new_rtp.add(len).cast(), afterdir.cast(), afterlen - 1) };
+        unsafe {
+            new_rtp
+                .add(len)
+                .cast::<u8>()
+                .copy_from(afterdir.cast(), afterlen - 1)
+        };
         len += afterlen - 1;
         unsafe { *new_rtp.add(len) = b',' as c_char };
         len += 1;
@@ -267,11 +276,10 @@ unsafe fn splice_rtp(
 
     if unsafe { *p_rtp.get().add(keep) } != 0 {
         unsafe {
-            memmove(
-                new_rtp.add(len).cast(),
-                p_rtp.get().add(keep).cast(),
-                oldlen - keep + 1,
-            )
+            new_rtp
+                .add(len)
+                .cast::<u8>()
+                .copy_from(p_rtp.get().add(keep).cast(), oldlen - keep + 1)
         };
     } else {
         unsafe { *new_rtp.add(len) = 0 };

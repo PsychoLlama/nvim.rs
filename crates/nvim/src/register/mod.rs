@@ -85,7 +85,7 @@ use crate::normal::find_ident_under_cursor;
 use crate::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char};
 use crate::option::get_ve_flags;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
-use crate::os::cshim::{gettext, memmove, ngettext, snprintf};
+use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::os_breakcheck;
 use crate::os::time::os_time;
 use crate::plines::{getvcol, init_charsize_arg, win_charsize};
@@ -105,7 +105,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
-use ::libc::{abort, atoi, memcpy, memset, strcpy};
+use ::libc::{abort, atoi, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod contents;

@@ -135,7 +135,7 @@ unsafe fn iconv_string(
             len = len + fromlen * 2 + 40;
             let p = unsafe { xmalloc(len) } as *mut c_char;
             if done > 0 {
-                unsafe { memmove(p as *mut c_void, result as *const c_void, done) };
+                unsafe { p.cast::<u8>().copy_from(result.cast(), done) };
             }
             unsafe { xfree(result as *mut c_void) };
             result = p;

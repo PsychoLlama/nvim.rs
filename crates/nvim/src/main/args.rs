@@ -58,7 +58,7 @@ use crate::types::{
     aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
 };
 use crate::winlayer::Live;
-use ::libc::{atoi, fprintf, memset, strcasecmp};
+use ::libc::{atoi, fprintf, strcasecmp};
 
 /// A bare `-V` is "a little bit verbose".
 const DEFAULT_VERBOSE: c_int = 10;
@@ -688,7 +688,7 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
 /// not zero.
 pub(crate) unsafe fn init_params(paramp: *mut mparm_T, argc: c_int, argv: *mut *mut c_char) {
     // SAFETY: `paramp` points at one live `mparm_T`.
-    unsafe { memset(paramp as *mut c_void, 0, size_of::<mparm_T>()) };
+    unsafe { paramp.cast::<u8>().write_bytes(0, size_of::<mparm_T>()) };
     unsafe { (*paramp).argc = argc };
     unsafe { (*paramp).argv = argv };
     unsafe { (*paramp).use_debug_break_level = -1 };

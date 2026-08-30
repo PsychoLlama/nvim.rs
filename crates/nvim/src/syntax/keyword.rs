@@ -217,7 +217,7 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
         // Shift the next character left over the NUL, lengthening the
         // keyword by one, and look again from there.
         let l = unsafe { utfc_ptr2len(p.add(1)) };
-        unsafe { memmove(p as *mut c_void, p.add(1) as *const c_void, l as size_t) };
+        unsafe { p.cast::<u8>().copy_from(p.add(1).cast(), l as size_t) };
         p = unsafe { p.add(l as usize) };
     }
     Some(unsafe { kw.add(kwlen + 1) })

@@ -40,7 +40,7 @@ use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
 use crate::options::{
     kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
 };
-use crate::os::cshim::{gettext_ptr, memmove};
+use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
@@ -681,7 +681,7 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
         let room = (IOSIZE - at + 2) as size_t;
         unsafe { xstrlcpy(buf.offset(at as isize - 2), c": ".as_ptr(), room) };
         let dst = unsafe { buf.offset(at as isize) }.cast::<c_void>();
-        unsafe { memmove(dst, start.cast::<c_void>(), arglen as size_t) };
+        unsafe { dst.cast::<u8>().copy_from(start.cast(), arglen as size_t) };
         unsafe { *buf.offset(at as isize + arglen) = NUL as c_char };
     }
     unsafe { trans_characters(buf, IOSIZE) };

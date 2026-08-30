@@ -31,7 +31,6 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};
 use crate::memory::xfree;
 use crate::option::magic_isset;
-use crate::os::cshim::memmove;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
 use crate::types::{NUL, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
@@ -74,13 +73,8 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
             st.sublen -= 1;
             // SAFETY: moving the tail, terminator included, one byte down.
             let n_len = unsafe { cstr::bytes_at(p1.add(1)) }.len();
-            unsafe {
-                memmove(
-                    p1 as *mut c_void,
-                    p1.add(1) as *const c_void,
-                    n_len.wrapping_add(1 as size_t),
-                )
-            };
+            let into = p1.cast::<u8>();
+            unsafe { into.copy_from(p1.add(1).cast(), n_len.wrapping_add(1 as size_t)) };
         } else if here == CAR {
             // Prepare for undo of the line about to be split.
             // SAFETY: `lnum` is a line of the buffer.
@@ -124,13 +118,8 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 // Copy the rest.
                 // SAFETY: both point into the replacement buffer.
                 let n_len = unsafe { cstr::bytes_at(p1.add(1)) }.len();
-                unsafe {
-                    memmove(
-                        st.new_start as *mut c_void,
-                        p1.add(1) as *const c_void,
-                        n_len.wrapping_add(1 as size_t),
-                    )
-                };
+                let into = st.new_start.cast::<u8>();
+                unsafe { into.copy_from(p1.add(1).cast(), n_len.wrapping_add(1 as size_t)) };
                 // Restart from the beginning of what is left; the step below
                 // puts `p1` back on `new_start`.
                 p1 = st.new_start.wrapping_offset(-1);
@@ -222,10 +211,10 @@ pub(super) unsafe fn build_replacement(
     // Copy the text up to the part that matched.
     // SAFETY: `copy_len` bytes from `copycol` are inside the copied line, and
     // the growth above made room for them.
+    let into = new_end.cast::<u8>();
     unsafe {
-        memmove(
-            new_end as *mut c_void,
-            st.sub_firstline.add(st.copycol as usize) as *const c_void,
+        into.copy_from(
+            (st.sub_firstline.add(st.copycol as usize)).cast(),
             copy_len as size_t,
         )
     };

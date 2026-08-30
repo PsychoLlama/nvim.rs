@@ -342,8 +342,9 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
                         }
                         // SAFETY: as above -- `byte2len(b1)` bytes of a
                         // character that starts at both pointers.
+                        let n = byte2len(b1) as size_t;
                         let differ = byte2len(b1) != byte2len(b2)
-                            || unsafe { memcmp(s1.cast(), s2.cast(), byte2len(b1) as size_t) } != 0;
+                            || unsafe { cstr::slice_at(s1, n) != cstr::slice_at(s2, n) };
                         if differ {
                             break;
                         }
@@ -376,12 +377,9 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
             if text_len > 0
                 && text_len < len - ins_compl_leader_len() as c_int
                 && unsafe {
-                    strncmp(
-                        first.offset((len - text_len) as isize),
-                        p,
-                        text_len as size_t,
-                    )
-                } == 0
+                    cstr::prefix_at(first.offset((len - text_len) as isize), text_len as size_t)
+                        == cstr::prefix_at(p, text_len as size_t)
+                }
             {
                 len -= text_len;
             }

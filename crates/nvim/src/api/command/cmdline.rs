@@ -13,7 +13,7 @@ use crate::ascii::ascii_iswhite;
 use crate::cstr;
 use crate::types::ExArgt;
 use crate::winlayer::Ea;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// Nothing but spaces and tabs.
@@ -59,7 +59,8 @@ unsafe fn cmdline_concat(cmdline: &mut StringBuilder, src: *const c_char, len: s
     let size = cmdline.size;
     // SAFETY: the grow above left room for `len` bytes past `size`, and the
     // caller promised `src` holds that many.
-    unsafe { memcpy(dest.add(size).cast(), src.cast::<c_void>(), len) };
+    let into = unsafe { dest.add(size) }.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(src.cast(), len) };
     cmdline.size += len;
 }
 

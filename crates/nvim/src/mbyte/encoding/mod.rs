@@ -140,7 +140,7 @@ pub unsafe fn remove_bom(s: *mut c_char) {
             // Move the rest of the string down over the mark, NUL included.
             let rest = unsafe { p.offset(3) };
             let rest_len = unsafe { cstr::bytes_at(rest) }.len();
-            unsafe { memmove(p as *mut c_void, rest as *const c_void, rest_len + 1) };
+            unsafe { p.cast::<u8>().copy_from(rest.cast(), rest_len + 1) };
         } else {
             p = unsafe { p.offset(1) };
         }

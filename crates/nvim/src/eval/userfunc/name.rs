@@ -279,11 +279,10 @@ unsafe fn mangle_function_name(
     let mut len;
     if !lv.ll_exp_name.is_null() {
         len = unsafe { cstr::bytes_at(lv.ll_exp_name) }.len() as c_int;
-        let script_local = c"s:".as_ptr() as *const c_void;
         if lead <= 2
             && core::ptr::eq(lv.ll_name, lv.ll_exp_name)
             && lv.ll_name_len >= 2
-            && unsafe { memcmp(lv.ll_name as *const c_void, script_local, 2) } == 0
+            && unsafe { cstr::starts_with(lv.ll_name, b"s:") }
         {
             // When there was "s:" already, or the name expanded to get a
             // leading "s:", remove it.
@@ -364,11 +363,13 @@ unsafe fn mangle_function_name(
         if sid_buflen > 0 {
             // It's "<SID>", so the script id goes in as well.
             let (into, from) = (unsafe { name.add(3) }, sid_buf.as_ptr());
-            unsafe { memcpy(into as *mut c_void, from as *const c_void, sid_buflen) };
+            let into = into.cast::<u8>();
+            unsafe { into.copy_from_nonoverlapping(from.cast(), sid_buflen) };
         }
     }
     let into = unsafe { name.offset(lead as isize) } as *mut c_void;
-    unsafe { memmove(into, lv.ll_name as *const c_void, len as size_t) };
+    let into = into.cast::<u8>();
+    unsafe { into.copy_from(lv.ll_name.cast(), len as size_t) };
     unsafe { *name.offset((lead + len) as isize) = NUL as c_char };
     unsafe { *pp = end as *mut c_char };
     name
@@ -392,7 +393,7 @@ pub unsafe fn trans_function_name(
     let mut lv = LVAL_INITIAL_VALUE;
 
     if !fdp.is_null() {
-        unsafe { memset(fdp as *mut c_void, 0, size_of::<funcdict_T>()) };
+        unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<funcdict_T>()) };
     }
     let mut start: *const c_char = unsafe { *pp };
 
@@ -474,7 +475,8 @@ pub unsafe fn trans_function_name(
                     }
                     name = unsafe { xmallocz(len as size_t) } as *mut c_char;
                     let from = unsafe { end.add(1) } as *const c_void;
-                    unsafe { memcpy(name as *mut c_void, from, len as size_t) };
+                    let into = name.cast::<u8>();
+                    unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
                     unsafe { *pp = (end as *mut c_char).add(1).offset(len as isize) };
                 } else {
                     name = unsafe { xstrdup(partial_name((*lv.ll_tv).vval.v_partial)) };
@@ -533,7 +535,7 @@ pub unsafe fn trans_function_name(
                 unsafe { *name.add(2) = KE_SNR as c_char };
                 let (into, from) = unsafe { (name.add(3), name.add(5)) };
                 let len = unsafe { cstr::bytes_at(from) }.len() + 1;
-                unsafe { memmove(into as *mut c_void, from as *const c_void, len) };
+                unsafe { into.cast::<u8>().copy_from(from.cast(), len) };
             }
             break 'theend;
         }
@@ -604,7 +606,7 @@ pub unsafe fn save_function_name(
         saved = unsafe { xmemdupz(*name as *const c_void, p.offset_from(*name) as size_t) }
             as *mut c_char;
         if !fudi.is_null() {
-            unsafe { memset(fudi as *mut c_void, 0, size_of::<funcdict_T>()) };
+            unsafe { fudi.cast::<u8>().write_bytes(0, size_of::<funcdict_T>()) };
         }
     } else {
         saved = unsafe { trans_function_name(&raw mut p, skip, flags, fudi, ptr::null_mut()) };

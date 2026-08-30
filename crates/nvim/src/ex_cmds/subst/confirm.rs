@@ -45,7 +45,6 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::winlayer::Win;
-use ::libc::memset;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -126,12 +125,10 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     // `ec + 2` byte zeroed allocation.
     let typed = unsafe {
         let prompt = xmallocz((ec as size_t).wrapping_add(1 as size_t)) as *mut c_char;
-        memset(prompt as *mut c_void, ' ' as c_int, sc as size_t);
-        memset(
-            prompt.offset(sc as isize) as *mut c_void,
-            '^' as c_int,
-            ((ec - sc) as size_t).wrapping_add(1 as size_t),
-        );
+        prompt.cast::<u8>().write_bytes(b' ', sc as size_t);
+        (prompt.offset(sc as isize))
+            .cast::<u8>()
+            .write_bytes(b'^', ((ec - sc) as size_t).wrapping_add(1 as size_t));
         let resp = getcmdline_prompt(
             -1 as c_int,
             prompt,

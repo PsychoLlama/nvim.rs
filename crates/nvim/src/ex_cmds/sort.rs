@@ -46,7 +46,7 @@ use crate::types::{
 };
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
-use ::libc::{memcpy, qsort, strcasecmp, strcoll, strcpy, strtod};
+use ::libc::{qsort, strcasecmp, strcoll, strcpy, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -178,10 +178,10 @@ unsafe fn copy_key(buf: *mut c_char, line: SortLine) {
     let len = (end - start) as usize;
     // SAFETY: caller's contract.  Upstream copies the byte past the range as
     // well and then overwrites it with the NUL.
+    let into = buf.cast::<u8>();
     unsafe {
-        memcpy(
-            buf.cast(),
-            ml_get(line.lnum).add(start as usize).cast(),
+        into.copy_from_nonoverlapping(
+            (ml_get(line.lnum).add(start as usize)).cast(),
             len as size_t,
         )
     };

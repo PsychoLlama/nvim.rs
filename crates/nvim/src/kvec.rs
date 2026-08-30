@@ -18,7 +18,6 @@ use core::{ptr, slice};
 
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::types::size_t;
-use ::libc::memcpy;
 
 pub struct InitVec<'a, T> {
     size: &'a mut usize,
@@ -221,7 +220,7 @@ pub(crate) unsafe fn _memcpy_free(
     size: size_t,
 ) -> *mut ::core::ffi::c_void {
     unsafe {
-        memcpy(dest, src, size);
+        dest.cast::<u8>().copy_from_nonoverlapping(src.cast(), size);
         xfree(src);
     }
     dest

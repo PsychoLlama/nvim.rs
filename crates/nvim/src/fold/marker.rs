@@ -19,10 +19,10 @@ use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace_buf};
 use crate::memory::{xmalloc, xmemcpyz};
 use crate::message::emsg;
 use crate::ops::skip_comment;
-use crate::os::cshim::{gettext, strncmp, strstr};
+use crate::os::cshim::{gettext, strstr};
 use crate::strings::vim_strchr;
 use crate::undo::u_save;
-use ::libc::{atoi, memcpy, strcpy};
+use ::libc::{atoi, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -95,11 +95,11 @@ pub(super) unsafe fn fold_add_marker(
     } else {
         unsafe { strcpy(newline.add(line_len), cms) };
         unsafe {
-            memcpy(
-                newline.add(line_len).offset(p.offset_from(cms)) as *mut c_void,
-                marker as *const c_void,
-                markerlen,
-            )
+            newline
+                .add(line_len)
+                .offset(p.offset_from(cms))
+                .cast::<u8>()
+                .copy_from_nonoverlapping(marker.cast(), markerlen)
         };
         unsafe {
             strcpy(
@@ -201,12 +201,11 @@ pub(super) unsafe fn fold_del_marker(
             if !cms2.is_null()
                 && unsafe { p.offset_from(line) } >= unsafe { cms2.offset_from(cms) }
                 && unsafe {
-                    strncmp(
+                    cstr::prefix_at(
                         p.offset(-(cms2.offset_from(cms))),
-                        cms,
                         cms2.offset_from(cms) as size_t,
-                    )
-                } == 0
+                    ) == cstr::prefix_at(cms, cms2.offset_from(cms) as size_t)
+                }
                 && unsafe { cstr::starts_with(p.add(len), cstr::bytes_at(cms2.offset(2))) }
             {
                 p = unsafe { p.offset(-(cms2.offset_from(cms))) };
@@ -222,13 +221,8 @@ pub(super) unsafe fn fold_del_marker(
                 )
             } as *mut c_char;
             debug_assert!(p >= line, "p >= line");
-            unsafe {
-                memcpy(
-                    newline as *mut c_void,
-                    line as *const c_void,
-                    p.offset_from(line) as size_t,
-                )
-            };
+            let into = newline.cast::<u8>();
+            unsafe { into.copy_from_nonoverlapping(line.cast(), p.offset_from(line) as size_t) };
             unsafe { strcpy(newline.offset(p.offset_from(line)), p.add(len)) };
             let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
             unsafe {
@@ -289,12 +283,12 @@ pub(super) unsafe fn foldlevel_marker(line: FLine) {
     while unsafe { *s } != 0 {
         if unsafe { *s } as c_int == cstart as c_int
             && unsafe {
-                strncmp(
-                    s.offset(1),
-                    startmarker.offset(1),
-                    foldstartmarkerlen.get().wrapping_sub(1),
-                )
-            } == 0
+                cstr::prefix_at(s.offset(1), foldstartmarkerlen.get().wrapping_sub(1))
+                    == cstr::prefix_at(
+                        startmarker.offset(1),
+                        foldstartmarkerlen.get().wrapping_sub(1),
+                    )
+            }
         {
             s = unsafe { s.add(foldstartmarkerlen.get()) };
             if ascii_isdigit(unsafe { *s } as c_int) {
@@ -312,12 +306,12 @@ pub(super) unsafe fn foldlevel_marker(line: FLine) {
             }
         } else if unsafe { *s } as c_int == cend as c_int
             && unsafe {
-                strncmp(
-                    s.offset(1),
-                    foldendmarker.get().offset(1),
-                    foldendmarkerlen.get().wrapping_sub(1),
-                )
-            } == 0
+                cstr::prefix_at(s.offset(1), foldendmarkerlen.get().wrapping_sub(1))
+                    == cstr::prefix_at(
+                        foldendmarker.get().offset(1),
+                        foldendmarkerlen.get().wrapping_sub(1),
+                    )
+            }
         {
             s = unsafe { s.add(foldendmarkerlen.get()) };
             if ascii_isdigit(unsafe { *s } as c_int) {

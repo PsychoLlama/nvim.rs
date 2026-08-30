@@ -29,11 +29,11 @@
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::{skiptowhite, skipwhite};
+use crate::cstr;
 use crate::hashtab::{hash_find, hash_removed};
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xmemcpyz;
-use crate::os::cshim::strncmp;
 use crate::spell::{
     can_compound, captype, make_case_word, match_checkcompoundpattern, nofold_len, spell_iswordp,
     spell_iswordp_nmw, spell_valid_case, valid_word_prefix,
@@ -424,14 +424,16 @@ impl Walk {
         // of them have.
         taken == self.stack[level].good_len as c_int - self.stack[level].split_off as c_int
             && unsafe {
-                strncmp(
+                cstr::prefix_at(
                     self.fword_ptr(self.stack[level].split_bad_idx as usize),
+                    taken as size_t,
+                ) == cstr::prefix_at(
                     self.tword
                         .as_ptr()
                         .add(self.stack[level].split_off as usize),
                     taken as size_t,
                 )
-            } == 0
+            }
     }
 
     /// For a `NOBREAK` language whose previous word was already correct:

@@ -296,20 +296,20 @@ pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
     if is_empty_option(syn_block().b_syn_isk) {
         return;
     }
+    let into = chartab.cast::<u8>();
     unsafe {
-        memmove(
-            chartab as *mut ::core::ffi::c_void,
-            &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *const ::core::ffi::c_void,
+        into.copy_from(
+            (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t).cast(),
             32,
         )
     };
     unsafe {
-        memmove(
-            &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
-            &raw mut (*(*syn_win.get()).w_s).b_syn_chartab as *mut uint8_t
-                as *const ::core::ffi::c_void,
-            32,
-        )
+        (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t)
+            .cast::<u8>()
+            .copy_from(
+                (&raw mut (*(*syn_win.get()).w_s).b_syn_chartab as *mut uint8_t).cast(),
+                32,
+            )
     };
 }
 
@@ -317,11 +317,9 @@ pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
 pub(crate) unsafe fn restore_chartab(chartab: *mut c_char) {
     if !is_empty_option(unsafe { (*(*syn_win.get()).w_s).b_syn_isk }) {
         unsafe {
-            memmove(
-                &raw mut (*syn_buf.get()).b_chartab as *mut uint64_t as *mut ::core::ffi::c_void,
-                chartab as *const ::core::ffi::c_void,
-                32,
-            )
+            (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t)
+                .cast::<u8>()
+                .copy_from(chartab.cast(), 32)
         };
     }
 }

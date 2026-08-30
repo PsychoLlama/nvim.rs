@@ -33,7 +33,6 @@ use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{Failed, NUL, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
 use crate::winlayer::{Buf, Win};
-use ::libc::memset;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -212,11 +211,10 @@ pub(crate) unsafe fn sub_grow_buf(
         *new_start =
             unsafe { xrealloc(*new_start as *mut c_void, *new_start_len as size_t) } as *mut c_char;
         unsafe {
-            memset(
-                (*new_start).add(prev_new_start_len) as *mut c_void,
-                0 as c_int,
-                added_len,
-            )
+            (*new_start)
+                .add(prev_new_start_len)
+                .cast::<u8>()
+                .write_bytes((0 as c_int) as u8, added_len)
         };
     }
     // SAFETY: `len` is the buffer's own string length.

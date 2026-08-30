@@ -40,7 +40,7 @@ use crate::types::{
     FILE, NUL, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
     size_t, slang_T, uint8_t,
 };
-use ::libc::{memset, ungetc};
+use ::libc::ungetc;
 
 use super::read::read_nonnul_bytes;
 use super::{
@@ -640,7 +640,12 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
     let gap = unsafe { &raw mut (*lp).sl_sal };
     unsafe { ga_init(gap, size_of::<*mut c_int>() as c_int, 1) };
     unsafe { ga_grow(gap, 256) };
-    unsafe { memset((*gap).ga_data, 0, size_of::<*mut c_int>() * 256) };
+    unsafe {
+        (*gap)
+            .ga_data
+            .cast::<u8>()
+            .write_bytes(0, size_of::<*mut c_int>() * 256)
+    };
     unsafe { (*gap).ga_len = 256 };
 
     // First pass: how many high characters share each low byte.
@@ -667,8 +672,9 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
             unsafe { *list = 0 };
         }
     }
-    let first = unsafe { &raw mut (*lp).sl_sal_first }.cast();
-    unsafe { memset(first, 0, size_of::<salfirst_T>() * 256) };
+    let first = unsafe { &raw mut (*lp).sl_sal_first };
+    let into = first.cast::<u8>();
+    unsafe { into.write_bytes(0, size_of::<salfirst_T>() * 256) };
 
     // Second pass: fill the lists and the direct table.
     let mut p = from;

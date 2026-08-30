@@ -515,7 +515,7 @@ pub(crate) unsafe fn copy_id_list(list: *const int16_t) -> *mut int16_t {
     }
     let len = (count + 1) * ::core::mem::size_of::<int16_t>();
     let retval = unsafe { xmalloc(len) } as *mut int16_t;
-    unsafe { memmove(retval as *mut c_void, list as *const c_void, len) };
+    unsafe { retval.cast::<u8>().copy_from(list.cast(), len) };
     retval
 }
 

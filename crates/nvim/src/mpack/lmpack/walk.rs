@@ -43,7 +43,7 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::parent_of;
 use crate::types::{lua_Number, lua_State, mpack_node_t, mpack_parser_t, size_t};
-use ::libc::{free, malloc, memcpy};
+use ::libc::{free, malloc};
 
 /// A decoded token becomes a Lua value.
 ///
@@ -68,11 +68,11 @@ pub unsafe extern "C-unwind" fn parse_enter(parser: *mut mpack_parser_t, node: *
                 // token, which is the frame below this one.
                 debug_assert!(!(*unpacker).string_buffer.is_null());
                 let offset = (*parent_of(node)).pos;
-                memcpy(
-                    (*unpacker).string_buffer.add(offset).cast(),
-                    tok.data.chunk_ptr.cast(),
-                    tok.length as size_t,
-                );
+                (*unpacker)
+                    .string_buffer
+                    .add(offset)
+                    .cast::<u8>()
+                    .copy_from_nonoverlapping(tok.data.chunk_ptr.cast(), tok.length as size_t);
             }
             MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
                 // Only the header is known here; `parse_exit` pushes the

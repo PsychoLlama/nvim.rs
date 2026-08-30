@@ -171,33 +171,24 @@ pub(crate) unsafe fn concat_pattern_with_buffer_match(
     // +1 for NUL.
     let match_out = unsafe { xmalloc(match_len as size_t + pat_len as size_t + 1) } as *mut c_char;
 
-    unsafe {
-        memmove(
-            match_out as *mut c_void,
-            pat as *const c_void,
-            pat_len as size_t,
-        )
-    };
+    let into = match_out.cast::<u8>();
+    unsafe { into.copy_from(pat.cast(), pat_len as size_t) };
     if match_len > 0 {
         if lowercase {
             let mword = unsafe { xstrnsave(word, match_len as size_t) };
             let lower = unsafe { strcase_save(mword, false) };
             unsafe { xfree(mword as *mut c_void) };
             unsafe {
-                memmove(
-                    match_out.offset(pat_len as isize) as *mut c_void,
-                    lower as *const c_void,
-                    match_len as size_t,
-                )
+                (match_out.offset(pat_len as isize))
+                    .cast::<u8>()
+                    .copy_from(lower.cast(), match_len as size_t)
             };
             unsafe { xfree(lower as *mut c_void) };
         } else {
             unsafe {
-                memmove(
-                    match_out.offset(pat_len as isize) as *mut c_void,
-                    word as *const c_void,
-                    match_len as size_t,
-                )
+                (match_out.offset(pat_len as isize))
+                    .cast::<u8>()
+                    .copy_from(word.cast(), match_len as size_t)
             };
         }
     }

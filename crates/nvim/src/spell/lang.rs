@@ -43,7 +43,7 @@ use crate::main::{curbuf, curwin, e_invarg, p_enc, starting};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::option::{copy_option_part, valid_name};
-use crate::os::cshim::{memmove, snprintf};
+use crate::os::cshim::snprintf;
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
@@ -285,7 +285,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 unsafe { xstrlcpy(region_cp.as_mut_ptr(), p.offset(1), 3) };
                 let after = unsafe { p.offset(3) } as *const c_void;
                 let rest = unsafe { len as isize - p.offset_from(lang.as_ptr()) - 2 };
-                unsafe { memmove(p as *mut c_void, after, rest as size_t) };
+                unsafe { p.cast::<u8>().copy_from(after.cast(), rest as size_t) };
                 region = region_cp.as_mut_ptr();
             } else {
                 dont_use_region = true;

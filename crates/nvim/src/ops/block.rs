@@ -136,14 +136,14 @@ pub(crate) unsafe fn block_insert(
         // SAFETY: `newp` was allocated for exactly what is written here, and
         // `oldp` is a NUL-terminated buffer line at least `offset` bytes long.
         // Up to the shifted part.
-        unsafe { memmove(newp as *mut c_void, oldp as *const c_void, offset as size_t) };
+        unsafe { newp.cast::<u8>().copy_from(oldp.cast(), offset as size_t) };
         oldp = unsafe { oldp.offset(offset as isize) };
 
         // Pre-padding, then the new text.
         let pad = unsafe { newp.offset(offset as isize) } as *mut c_void;
-        unsafe { memset(pad, ' ' as c_int, spaces as size_t) };
+        unsafe { pad.cast::<u8>().write_bytes(b' ', spaces as size_t) };
         let at = unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
-        unsafe { memmove(at, s as *const c_void, slen) };
+        unsafe { at.cast::<u8>().copy_from(s.cast(), slen) };
         offset += slen as colnr_T;
 
         if spaces > 0 && bdp.is_short == 0 {
@@ -152,7 +152,8 @@ pub(crate) unsafe fn block_insert(
                 // then dropped rather than copied.
                 let tail =
                     unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
-                unsafe { memset(tail, ' ' as c_int, (ts_val - spaces) as size_t) };
+                let into = tail.cast::<u8>();
+                unsafe { into.write_bytes(b' ', (ts_val - spaces) as size_t) };
                 oldp = unsafe { oldp.offset(1) };
                 count += 1;
                 skipped = 1;

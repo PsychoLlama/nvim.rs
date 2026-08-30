@@ -33,7 +33,6 @@ use crate::types::{
     typval_T,
 };
 use crate::undo::u_save;
-use ::libc::memcpy;
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";
@@ -123,13 +122,14 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
         } else {
             xmalloc(lcmd_len + 1).cast::<c_char>()
         };
-        memcpy(lcmd.cast::<c_void>(), DOSTART.as_ptr().cast(), head);
-        memcpy(lcmd.add(head).cast::<c_void>(), cmd.cast(), cmd_len);
-        memcpy(
-            lcmd.add(head + cmd_len).cast::<c_void>(),
-            DOEND.as_ptr().cast(),
-            tail,
-        );
+        lcmd.cast::<u8>()
+            .copy_from_nonoverlapping(DOSTART.as_ptr().cast(), head);
+        lcmd.add(head)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(cmd.cast(), cmd_len);
+        (lcmd.add(head + cmd_len))
+            .cast::<u8>()
+            .copy_from_nonoverlapping(DOEND.as_ptr().cast(), tail);
 
         let loaded = luaL_loadbuffer(lstate, lcmd, lcmd_len, c":luado".as_ptr());
         if lcmd_len >= IOSIZE as size_t {
@@ -321,7 +321,10 @@ impl StringBuf {
                 sb.items = xrealloc(sb.items.cast::<c_void>(), sb.capacity).cast::<c_char>();
             }
             debug_assert!(!sb.items.is_null());
-            memcpy(sb.items.add(sb.size).cast::<c_void>(), src.cast(), len);
+            sb.items
+                .add(sb.size)
+                .cast::<u8>()
+                .copy_from_nonoverlapping(src.cast(), len);
             sb.size += len;
         }
     }

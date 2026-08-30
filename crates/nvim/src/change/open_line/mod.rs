@@ -77,7 +77,8 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     // SAFETY: the prompt is the first `prompt_len` bytes of the line, so the
     // rest of it -- including the NUL -- fits where the prompt was.
     let rest_len = unsafe { cstr::bytes_at(rest) }.len();
-    unsafe { memmove(prompt_line.cast(), rest.cast(), rest_len + 1) };
+    let into = prompt_line.cast::<u8>();
+    unsafe { into.copy_from(rest.cast(), rest_len + 1) };
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
     let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, prompt_line, true) };
     unsafe { concat_str(prompt, p_extra) }

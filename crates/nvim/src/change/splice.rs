@@ -191,7 +191,8 @@ fn record_change_mark(mut buf: Buf, lnum: linenr_T, col: colnr_T) {
                 let bytes = one.wrapping_mul((JUMPLISTSIZE - 1) as size_t);
                 // SAFETY: `b_changelist` holds `JUMPLISTSIZE` marks, so its
                 // last `JUMPLISTSIZE - 1` fit at its head.
-                unsafe { memmove(head, head.wrapping_byte_add(one).cast_const(), bytes) };
+                let into = head.cast::<u8>();
+                unsafe { into.copy_from(head.wrapping_byte_add(one).cast_const().cast(), bytes) };
                 for mut wp in tab_windows() {
                     if wp.w_buffer == buf.raw() && wp.w_changelistidx > 0 {
                         wp.w_changelistidx -= 1;

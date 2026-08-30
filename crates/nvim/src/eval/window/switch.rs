@@ -162,7 +162,8 @@ pub unsafe fn switch_win_noblock(
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
     // storage and nothing below can reach it, so the exclusive borrow is
     // sound; all-zero is a valid `switchwin_T`.
-    unsafe { memset(switchwin.cast(), 0, size_of::<switchwin_T>()) };
+    let into = switchwin.cast::<u8>();
+    unsafe { into.write_bytes(0, size_of::<switchwin_T>()) };
     let switchwin = unsafe { &mut *switchwin };
     switchwin.sw_curwin = curwin.get();
     if win == curwin.get() {

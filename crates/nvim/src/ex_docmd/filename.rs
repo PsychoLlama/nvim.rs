@@ -292,20 +292,11 @@ pub(crate) fn repl_cmdline(
     let new_cmdline = xmalloc(size) as *mut c_char;
 
     let offset = unsafe { src.offset_from(*cmdlinep) } as size_t;
-    unsafe {
-        memmove(
-            new_cmdline as *mut c_void,
-            *cmdlinep as *const c_void,
-            offset,
-        )
-    };
-    unsafe {
-        memmove(
-            new_cmdline.add(offset as usize) as *mut c_void,
-            repl as *const c_void,
-            len,
-        )
-    };
+    // SAFETY: `src` points into the command line, and `new_cmdline` has
+    // `size` bytes, of which the first `offset` are the head.
+    let (old, past) = unsafe { (*cmdlinep, new_cmdline.add(offset)) };
+    move_bytes(new_cmdline, old, offset);
+    move_bytes(past, repl, len);
     let tail = offset + len;
     unsafe { strcpy(new_cmdline.add(tail), src.add(srclen)) };
     let resume = unsafe { new_cmdline.add(tail) };
@@ -430,13 +421,8 @@ pub unsafe fn eval_vars(
     // backslash and answer nothing.
     if src > srcstart as *mut c_char && byte_at(src, -1) == '\\' as c_int {
         unsafe { *usedlen = 0 };
-        unsafe {
-            memmove(
-                src.offset(-1) as *mut c_void,
-                src as *const c_void,
-                len_of(src) + 1,
-            )
-        };
+        // SAFETY: the byte before `src` is the backslash just tested for.
+        move_bytes(unsafe { src.offset(-1) }, src, len_of(src) + 1);
         return ptr::null_mut();
     }
 
@@ -740,13 +726,9 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
         }
         let size = len_of(result) - srclen + len_of(repl) + 1;
         let newres = xmalloc(size) as *mut c_char;
-        unsafe {
-            memmove(
-                newres as *mut c_void,
-                result as *const c_void,
-                p.offset_from(result) as size_t,
-            )
-        };
+        // SAFETY: `p` points into `result`.
+        let head = unsafe { p.offset_from(result) } as size_t;
+        move_bytes(newres, result, head);
         unsafe { strcpy(newres.offset(p.offset_from(result)), repl) };
         let used = len_of(newres);
         unsafe { strcat(newres, p.add(srclen as usize)) };
@@ -776,14 +758,10 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
-/// `memmove()` as checked code.
-fn memmove(
-    __dest: *mut ::core::ffi::c_void,
-    __src: *const ::core::ffi::c_void,
-    __n: size_t,
-) -> *mut ::core::ffi::c_void {
+/// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.
+fn move_bytes(dest: *mut c_char, src: *const c_char, n: size_t) {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::os::cshim::memmove(__dest, __src, __n) }
+    unsafe { dest.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// `path_has_wildcard()` as checked code.

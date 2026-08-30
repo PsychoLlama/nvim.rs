@@ -186,8 +186,8 @@ pub unsafe fn tv_dict_watcher_remove(
         if unsafe { tv_callback_equal(&raw const (*watcher).callback, callback) }
             && wd.key_pattern_len == key_pattern_len
             && {
-                let pat = wd.key_pattern.cast();
-                unsafe { memcmp(pat, key_pattern.cast(), key_pattern_len) == 0 }
+                let n = key_pattern_len;
+                unsafe { cstr::slice_at(wd.key_pattern, n) == cstr::slice_at(key_pattern, n) }
             }
         {
             matched = true;

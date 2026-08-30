@@ -98,7 +98,9 @@ pub unsafe fn exec_impl(
         // SAFETY: the capture holds `ga_len` bytes, at least two of them.
         unsafe {
             if *s.data() == '\n' as c_char {
-                memmove(s.data().cast(), s.data().add(1).cast(), s.len() - 1);
+                s.data()
+                    .cast::<u8>()
+                    .copy_from(s.data().add(1).cast(), s.len() - 1);
                 *s.data().add(s.len() - 1) = NUL as c_char;
                 s.set_len(s.len() - 1);
             }

@@ -28,7 +28,6 @@ use crate::types::{
     virt_line, win_T,
 };
 use crate::winlayer::{Buf, Win};
-use ::libc::memcpy;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -295,9 +294,10 @@ unsafe fn append_virt_lines(dst: &mut VirtLines, src: VirtLines) {
     }
     assert!(!dst.items.is_null());
     let bytes = size_of::<virt_line>() * src.size;
-    let end = dst.items.wrapping_add(dst.size).cast();
+    let end = dst.items.wrapping_add(dst.size);
     // SAFETY: `dst` now has room for `src`'s entries, and the two vectors
     // never overlap — `src` belongs to a decoration, `dst` to the caller.
-    unsafe { memcpy(end, src.items.cast(), bytes) };
+    let into = end.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(src.items.cast(), bytes) };
     dst.size = wanted;
 }

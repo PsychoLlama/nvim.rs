@@ -41,7 +41,7 @@ use crate::options::{
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
 use crate::optionstr::{check_buf_options, free_string_option};
-use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, memmove, snprintf, strncasecmp};
+use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, snprintf, strncasecmp};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
@@ -300,9 +300,10 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     let backupdir =
         unsafe { xrealloc(subpath.cast::<c_void>(), len.wrapping_add(3)) }.cast::<c_char>();
     let after = unsafe { backupdir.add(2) }.cast::<c_void>();
-    unsafe { memmove(after, backupdir.cast::<c_void>(), len.wrapping_add(1)) };
+    let into = after.cast::<u8>();
+    unsafe { into.copy_from(backupdir.cast(), len.wrapping_add(1)) };
     let dot = c".,".as_ptr().cast::<c_void>();
-    unsafe { memmove(backupdir.cast::<c_void>(), dot, 2) };
+    unsafe { backupdir.cast::<u8>().copy_from(dot.cast(), 2) };
     unsafe { set_string_default(kOptBackupdir, backupdir, true) };
 
     for (opt_idx, name) in [

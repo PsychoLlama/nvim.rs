@@ -50,7 +50,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{NUL, ShmFlag, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T};
-use ::libc::{memset, strcpy};
+use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
 use super::{MAXWLEN, SMT_BAD, SMT_RARE};
@@ -357,7 +357,11 @@ pub unsafe fn spell_cat_line(buf: *mut c_char, line: *mut c_char, maxlen: c_int)
     // append.
     let n = unsafe { p.offset_from(line) } as c_int + 1;
     if n < maxlen - 1 {
-        unsafe { memset(buf as *mut core::ffi::c_void, ' ' as c_int, n as usize) };
+        unsafe {
+            (buf as *mut core::ffi::c_void)
+                .cast::<u8>()
+                .write_bytes(b' ', n as usize)
+        };
         unsafe { xstrlcpy(buf.offset(n as isize), p, (maxlen - n) as usize) };
     }
 }

@@ -65,7 +65,6 @@ use crate::types::{
     dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T,
 };
-use ::libc::memset;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -594,7 +593,7 @@ pub unsafe fn get_lval(
     // SAFETY: the caller's promise; every field is written before it is read.
     let mut lp = unsafe { Lv::new(lp) };
     // SAFETY: as above -- the whole record is the caller's.
-    unsafe { memset(lp.raw() as *mut c_void, 0, size_of::<lval_T>()) };
+    unsafe { lp.raw().cast::<u8>().write_bytes(0, size_of::<lval_T>()) };
 
     if skip {
         // Only the name matters; nothing is resolved.

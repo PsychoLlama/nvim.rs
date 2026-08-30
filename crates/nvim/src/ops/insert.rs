@@ -424,19 +424,15 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
             let size = old_len + vpos.coladd as size_t + ins_len as size_t + 1;
             let newp = unsafe { xmalloc(size) } as *mut c_char;
             // Up to the block's column, then the pad, then the text.
-            unsafe {
-                memmove(
-                    newp as *mut c_void,
-                    oldp as *const c_void,
-                    bd.textcol as size_t,
-                )
-            };
+            let into = newp.cast::<u8>();
+            unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
             let mut newlen = bd.textcol;
             let pad = unsafe { newp.offset(newlen as isize) } as *mut c_void;
-            unsafe { memset(pad, ' ' as c_int, vpos.coladd as size_t) };
+            unsafe { pad.cast::<u8>().write_bytes(b' ', vpos.coladd as size_t) };
             newlen += vpos.coladd;
             let at = unsafe { newp.offset(newlen as isize) } as *mut c_void;
-            unsafe { memmove(at, ins_text as *const c_void, ins_len as size_t) };
+            let into = at.cast::<u8>();
+            unsafe { into.copy_from(ins_text.cast(), ins_len as size_t) };
             newlen += ins_len;
             unsafe {
                 strcpy(

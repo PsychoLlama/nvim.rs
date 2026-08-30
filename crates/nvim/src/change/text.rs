@@ -17,7 +17,7 @@
 use crate::cstr;
 use crate::memline::MlFlags;
 use crate::siemsg;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::option::cpo_has;
@@ -31,7 +31,7 @@ use crate::winlayer::{Buf, Win};
 fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
     // SAFETY: the caller sized `dst` for `n` bytes read from `src`; the two
     // may overlap, which is what `memmove` is for.
-    unsafe { memmove(dst.cast::<c_void>(), src.cast::<c_void>(), n) };
+    unsafe { dst.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// The line the cursor is on, and its length.

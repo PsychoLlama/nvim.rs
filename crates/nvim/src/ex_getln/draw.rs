@@ -202,9 +202,8 @@ pub unsafe fn put_on_cmdline(
 
     if cc.overstrike == 0 {
         unsafe {
-            memmove(
-                cc.at(cc.cmdpos + len) as *mut ::core::ffi::c_void,
-                cc.text().offset(cc.cmdpos as isize) as *const ::core::ffi::c_void,
+            (cc.at(cc.cmdpos + len)).cast::<u8>().copy_from(
+                (cc.text().offset(cc.cmdpos as isize)).cast(),
                 (cc.len() - cc.cmdpos) as size_t,
             )
         };
@@ -226,11 +225,9 @@ pub unsafe fn put_on_cmdline(
         }
         if i < cc.len() {
             unsafe {
-                memmove(
-                    cc.at(cc.cmdpos + len) as *mut ::core::ffi::c_void,
-                    cc.at(i) as *const ::core::ffi::c_void,
-                    (cc.len() - i) as size_t,
-                )
+                (cc.at(cc.cmdpos + len))
+                    .cast::<u8>()
+                    .copy_from(cc.at(i).cast(), (cc.len() - i) as size_t)
             };
             cc.set_len(cc.len() + (cc.cmdpos + len - i));
         } else {
@@ -238,11 +235,9 @@ pub unsafe fn put_on_cmdline(
         }
     }
     unsafe {
-        memmove(
-            cc.text().offset(cc.cmdpos as isize) as *mut ::core::ffi::c_void,
-            str as *const ::core::ffi::c_void,
-            len as size_t,
-        )
+        (cc.text().offset(cc.cmdpos as isize))
+            .cast::<u8>()
+            .copy_from(str.cast(), len as size_t)
     };
     unsafe { *cc.text().offset(cc.len() as isize) = NUL as ::core::ffi::c_char };
 

@@ -47,7 +47,6 @@ use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::magic_isset;
-use crate::os::cshim::memmove;
 use crate::os::input::os_breakcheck;
 use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
@@ -522,7 +521,7 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
         let al2 = arg(after + count) as *mut c_void;
         let fname2 = arg(after) as *const c_void;
         let set_fnum2 = ((argcount() - after) as size_t).wrapping_mul(size_of::<aentry_T>());
-        unsafe { memmove(al2, fname2, set_fnum2) };
+        unsafe { al2.cast::<u8>().copy_from(fname2.cast(), set_fnum2) };
     }
     ARGLIST_LOCKED.set(true);
     wp.w_locked = true;
@@ -553,7 +552,7 @@ unsafe fn remove_arg(idx: c_int) {
     let al2 = arg(idx) as *mut c_void;
     let fname2 = arg(idx + 1) as *const c_void;
     let set_fnum2 = ((argcount() - idx - 1) as size_t).wrapping_mul(size_of::<aentry_T>());
-    unsafe { memmove(al2, fname2, set_fnum2) };
+    unsafe { al2.cast::<u8>().copy_from(fname2.cast(), set_fnum2) };
     set_argcount(argcount() - 1);
 }
 

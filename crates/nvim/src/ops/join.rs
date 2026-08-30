@@ -372,10 +372,10 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         let (at, spaces_removed) = unsafe {
             cend = cend.offset(-(plan.currsize as isize));
             let n = plan.currsize as size_t;
-            memmove(cend as *mut c_void, plan.curr as *const c_void, n);
+            cend.cast::<u8>().copy_from(plan.curr.cast(), n);
             if spaces_t > 0 {
                 cend = cend.offset(-(spaces_t as isize));
-                memset(cend as *mut c_void, ' ' as c_int, spaces_t as size_t);
+                cend.cast::<u8>().write_bytes(b' ', spaces_t as size_t);
             }
             let removed = (plan.curr.offset_from(plan.curr_start) - spaces_t as isize) as c_int;
             (

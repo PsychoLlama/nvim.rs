@@ -51,7 +51,7 @@ use crate::types::{
     FILE, NUL, OptInt, colnr_T, garray_T, idx_T, int16_t, langp_T, linenr_T, size_t, slang_T,
     time_t, uint8_t,
 };
-use ::libc::{fclose, feof, ferror, fread, memcmp, strcpy, strerror, strrchr};
+use ::libc::{fclose, feof, ferror, fread, strcpy, strerror, strrchr};
 
 use super::sections::{
     read_charflags_section, read_compound, read_prefcond_section, read_region_section,
@@ -119,8 +119,7 @@ unsafe fn spell_check_magic_string(fd: *mut FILE) -> c_int {
     if let Err(e) = unsafe { read_bytes(fd, buf.as_mut_ptr(), VIMSPELLMAGICL) } {
         return e;
     }
-    let (got, want) = (buf.as_ptr().cast(), VIMSPELLMAGIC.as_ptr().cast());
-    if unsafe { memcmp(got, want, VIMSPELLMAGICL) } != 0 {
+    if cstr::as_bytes(&buf) != VIMSPELLMAGIC.to_bytes() {
         return SP_FORMERROR;
     }
     0

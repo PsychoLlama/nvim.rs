@@ -50,7 +50,7 @@ use crate::message::{
 };
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::options::kOptBoFlagSpell;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::search::FORWARD;
 use crate::smsg;
 use crate::spell::{
@@ -420,7 +420,7 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
         + stp.st_wordlen as usize;
     let newline = unsafe { xmalloc(size + 1) } as *mut c_char;
     let col = unsafe { sug.su_badptr.offset_from(line) } as c_int;
-    unsafe { memmove(newline as *mut c_void, line as *const c_void, col as usize) };
+    unsafe { newline.cast::<u8>().copy_from(line.cast(), col as usize) };
     unsafe { strcpy(newline.offset(col as isize), stp.st_word) };
     unsafe { strcat(newline, sug.su_badptr.offset(stp.st_orglen as isize)) };
 

@@ -359,8 +359,10 @@ unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
 unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut typval_T) {
     let varname_len = unsafe { cstr::bytes_at(varname) }.len();
     let name = unsafe { xmalloc(varname_len + 3) } as *mut c_char;
-    unsafe { memcpy(name.cast(), scope.as_ptr().cast(), 2) };
-    unsafe { memcpy(name.add(2).cast(), varname.cast(), varname_len + 1) };
+    let into = name.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(scope.as_ptr().cast(), 2) };
+    let into = unsafe { name.add(2) }.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(varname.cast(), varname_len + 1) };
     unsafe { set_var(name, varname_len + 2, varp, true) };
     unsafe { xfree(name.cast()) };
 }

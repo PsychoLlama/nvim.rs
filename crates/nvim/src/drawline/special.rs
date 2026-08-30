@@ -127,13 +127,8 @@ impl Cells {
         {
             let at = self.byte_col();
             let lnume = wlv.lnum + wlv.foldinfo.fi_lines - 1;
-            unsafe {
-                memset(
-                    f.fold_buf.cast::<::core::ffi::c_void>(),
-                    ' ' as ::core::ffi::c_int,
-                    FOLD_TEXT_LEN as size_t,
-                )
-            };
+            let into = f.fold_buf.cast::<u8>();
+            unsafe { into.write_bytes(b' ', FOLD_TEXT_LEN as size_t) };
             wlv.extra_text = unsafe {
                 get_foldtext(
                     Win::new(wp.raw()),
@@ -336,13 +331,7 @@ impl Cells {
                 self.cell_char = lcs_tab1;
                 self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
                 let mut p = unsafe { get_extra_buf(len + 1) };
-                unsafe {
-                    memset(
-                        p.cast::<::core::ffi::c_void>(),
-                        ' ' as ::core::ffi::c_int,
-                        len,
-                    )
-                };
+                unsafe { p.cast::<u8>().write_bytes(b' ', len) };
                 unsafe { *p.add(len) = NUL as ::core::ffi::c_char };
                 wlv.extra_text = p;
                 for i in 0..tab_len {
@@ -433,21 +422,10 @@ impl Cells {
             // width the character would have had.
             self.char_code = unsafe { *wlv.extra_text } as uint8_t as ::core::ffi::c_int;
             let p = unsafe { get_extra_buf(wlv.extra_todo as size_t + 1) };
-            unsafe {
-                memset(
-                    p.cast::<::core::ffi::c_void>(),
-                    ' ' as ::core::ffi::c_int,
-                    wlv.extra_todo as size_t,
-                )
-            };
+            unsafe { p.cast::<u8>().write_bytes(b' ', wlv.extra_todo as size_t) };
             let text_len = unsafe { cstr::bytes_at(wlv.extra_text) }.len();
-            unsafe {
-                memcpy(
-                    p.cast::<::core::ffi::c_void>(),
-                    wlv.extra_text.offset(1).cast::<::core::ffi::c_void>(),
-                    text_len - 1,
-                )
-            };
+            let into = p.cast::<u8>();
+            unsafe { into.copy_from_nonoverlapping(wlv.extra_text.offset(1).cast(), text_len - 1) };
             unsafe { *p.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
             wlv.extra_text = p;
         } else {

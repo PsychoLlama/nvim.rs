@@ -48,7 +48,7 @@ use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
@@ -165,7 +165,7 @@ pub(super) unsafe fn spell_read_dic(
                     || unsafe { *p.add(1) } as c_int == b'/' as c_int)
             {
                 let n_len = unsafe { cstr::bytes_at(p.add(1)) }.len();
-                unsafe { memmove(p.cast(), p.add(1).cast(), n_len + 1) };
+                unsafe { p.cast::<u8>().copy_from(p.add(1).cast(), n_len + 1) };
             } else if unsafe { *p } as c_int == b'/' as c_int {
                 unsafe { *p = NUL as c_char };
                 afflist = unsafe { p.add(1) };

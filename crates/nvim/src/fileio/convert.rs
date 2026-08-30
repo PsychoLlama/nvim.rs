@@ -556,7 +556,8 @@ impl Conv {
             // Skip ASCII bytes quickly, a machine word at a time.
             while unsafe { end.offset_from(p) } >= size_of::<u64>() as isize {
                 let mut word = 0u64;
-                unsafe { memcpy((&raw mut word).cast(), p.cast(), size_of::<u64>() as size_t) };
+                let into = (&raw mut word).cast::<u8>();
+                unsafe { into.copy_from_nonoverlapping(p.cast(), size_of::<u64>() as size_t) };
                 if word & NONASCII_MASK != 0 {
                     break;
                 }

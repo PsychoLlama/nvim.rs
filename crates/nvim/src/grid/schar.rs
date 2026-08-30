@@ -115,7 +115,8 @@ pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
     debug_assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
     if len <= 4 {
         let mut sc: schar_T = 0;
-        unsafe { memcpy((&raw mut sc).cast::<c_void>(), buf.cast::<c_void>(), len) };
+        let into = (&raw mut sc).cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(buf.cast(), len) };
         return sc;
     }
 
@@ -183,7 +184,8 @@ pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
         let inline = (&raw const sc).cast::<c_char>();
         (inline, unsafe { strnlen(inline, 4) })
     };
-    unsafe { memcpy((*buf_out).cast::<c_void>(), src.cast::<c_void>(), len) };
+    let into = unsafe { *buf_out }.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(src.cast(), len) };
     unsafe { *buf_out = (*buf_out).add(len) };
     len
 }
@@ -350,11 +352,10 @@ unsafe fn reshape(sc: schar_T, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int)
         rest -= unsafe { utf_cp_bounds(tail, tail.add(rest - 1)) }.begin_off as size_t + 1;
     }
     unsafe {
-        memcpy(
-            new.as_mut_ptr().add(len).cast::<c_void>(),
-            tail.cast::<c_void>(),
-            rest,
-        )
+        new.as_mut_ptr()
+            .add(len)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(tail.cast(), rest)
     };
     unsafe { schar_from_buf(new.as_ptr(), len + rest) }
 }

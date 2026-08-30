@@ -40,7 +40,7 @@ use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
 };
-use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp};
+use ::libc::{fclose, fprintf, fputs, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -285,10 +285,10 @@ unsafe fn helptags_one(
 
     // Open the tags file for writing before scanning, so that a directory
     // we cannot write to costs nothing.
-    let (into, from, n) = (namebuff.cast::<c_void>(), dir.cast(), dirlen as size_t + 1);
+    let (into, from, n) = (namebuff, dir, dirlen as size_t + 1);
     // SAFETY: `dir` is `dirlen` bytes plus its NUL, so the copy fits;
     // `namebuff` stays NUL-terminated for the two appends after it.
-    unsafe { memcpy(into, from, n) };
+    unsafe { into.cast::<u8>().copy_from_nonoverlapping(from.cast(), n) };
     let too_long = !unsafe { add_pathsep(namebuff) }
         || unsafe { xstrlcat(namebuff, tagfname, MAXPATHL as usize) } >= MAXPATHL as usize;
     if too_long {

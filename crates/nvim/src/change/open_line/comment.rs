@@ -27,7 +27,7 @@ use crate::winlayer::{Buf, Win};
 fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
     // SAFETY: both ends are inside the leader's own allocation, which was
     // sized for the longest form it takes; the two may overlap.
-    unsafe { memmove(dst.cast::<c_void>(), src.cast::<c_void>(), n) };
+    unsafe { dst.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// How many bytes are between `to` and `from`, both inside one leader.

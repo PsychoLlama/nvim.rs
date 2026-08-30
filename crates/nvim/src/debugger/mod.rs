@@ -49,7 +49,7 @@ use crate::main::{
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{memmove, strstr};
+use crate::os::cshim::strstr;
 use crate::os::env::{expand_env_save, home_replace};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
@@ -581,9 +581,8 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
             // SAFETY: both ranges are inside the array, and the entries are
             // plain aggregates.
             unsafe {
-                memmove(
-                    list.entry(todel).cast(),
-                    list.entry(todel + 1).cast::<c_void>(),
+                list.entry(todel).cast::<u8>().copy_from(
+                    (list.entry(todel + 1)).cast(),
                     ((len - todel) as size_t) * ::core::mem::size_of::<debuggy>(),
                 )
             };

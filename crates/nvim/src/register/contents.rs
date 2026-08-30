@@ -396,12 +396,14 @@ unsafe fn str_to_reg(
             if extra > 0 {
                 // SAFETY: `extra` is the length of the line at `lnum`, and
                 // `s` was sized to take it first.
-                unsafe { memcpy(s as *mut c_void, (*pp.add(lnum)).data().cast(), extra) };
+                let into = s.cast::<u8>();
+                unsafe { into.copy_from_nonoverlapping((*pp.add(lnum)).data().cast(), extra) };
             }
             if line_len > 0 {
                 // SAFETY: `line_len` bytes from `start` lie inside `str`, and
                 // `s` was sized to take them after `extra`.
-                unsafe { memcpy(s.add(extra).cast(), start as *const c_void, line_len) };
+                let into = unsafe { s.add(extra) }.cast::<u8>();
+                unsafe { into.copy_from_nonoverlapping(start.cast(), line_len) };
             }
             let s_len = extra.wrapping_add(line_len);
             if append {
@@ -597,13 +599,8 @@ pub unsafe fn write_reg_contents_ex(
         let dst = expr_line.get();
         // SAFETY: as above -- `offset + len` is `totlen`, and `str` holds
         // those `len` bytes.
-        unsafe {
-            memcpy(
-                dst.add(offset) as *mut c_void,
-                str as *const c_void,
-                len as size_t,
-            )
-        };
+        let into = unsafe { dst.add(offset) }.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(str.cast(), len as size_t) };
         // SAFETY: `totlen` is the last byte of the allocation.
         unsafe { *dst.add(totlen) = NUL as c_char };
         return;

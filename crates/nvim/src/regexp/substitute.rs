@@ -40,7 +40,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{emsg, iemsg};
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
@@ -200,9 +200,9 @@ impl Out {
         if self.copy {
             // SAFETY: `room` cleared `tail` bytes at `at + 1`, and `first`
             // has `totlen` valid bytes because `utfc_ptr2len` said so.
-            let dest = unsafe { self.at.offset(1) }.cast();
-            let src = unsafe { first.offset(clen as isize) }.cast();
-            unsafe { memmove(dest, src, tail as usize) };
+            let dest = unsafe { self.at.offset(1) };
+            let src = unsafe { first.offset(clen as isize) };
+            unsafe { dest.cast::<u8>().copy_from(src.cast(), tail as usize) };
         }
         self.skip(tail);
         true
@@ -269,7 +269,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         if tmpsublen == 0 || reg_prev_sub.get().is_null() {
             // Nothing to expand into: drop the tilde, NUL included, and
             // rescan from where it was.
-            unsafe { memmove(p.cast(), postfix.cast(), postfixlen + 1) };
+            unsafe { p.cast::<u8>().copy_from(postfix.cast(), postfixlen + 1) };
             continue;
         }
         // Text longer than MAXCOL causes trouble further downstream.
@@ -280,9 +280,10 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         }
 
         let tmpsub: *mut c_char = unsafe { xmalloc(tmpsublen + 1) }.cast();
-        unsafe { memmove(tmpsub.cast(), newsub.cast(), prefixlen) };
-        let dest = unsafe { tmpsub.add(prefixlen) }.cast();
-        unsafe { memmove(dest, reg_prev_sub.get().cast(), reg_prev_sublen.get()) };
+        unsafe { tmpsub.cast::<u8>().copy_from(newsub.cast(), prefixlen) };
+        let dest = unsafe { tmpsub.add(prefixlen) };
+        let into = dest.cast::<u8>();
+        unsafe { into.copy_from(reg_prev_sub.get().cast(), reg_prev_sublen.get()) };
         let expanded = prefixlen + reg_prev_sublen.get();
         unsafe { strcpy(tmpsub.add(expanded), postfix) };
 

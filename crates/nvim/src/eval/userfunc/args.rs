@@ -355,7 +355,7 @@ pub(crate) unsafe fn argv_add_base(
         // `*argcount + 1` values and the out-parameters are writable.
         let bytes = unsafe { size_of::<typval_T>().wrapping_mul(*argcount as size_t) };
         let (into, from) = unsafe { (new_argvars.add(1) as *mut c_void, *argvars) };
-        unsafe { memmove(into, from as *const c_void, bytes) };
+        unsafe { into.cast::<u8>().copy_from(from.cast(), bytes) };
         unsafe { *new_argvars = *basetv };
         unsafe { *argcount += 1 };
         unsafe { *argvars = new_argvars };

@@ -74,7 +74,7 @@ use crate::message::{
 };
 use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
-use crate::os::cshim::{gettext, memmove, snprintf, strncasecmp, strstr};
+use crate::os::cshim::{gettext, snprintf, strncasecmp, strstr};
 use crate::os::env::{
     default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save, os_setenv,
     vim_get_prefix_from_exepath, vim_getenv,

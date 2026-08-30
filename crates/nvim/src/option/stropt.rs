@@ -35,7 +35,6 @@ use crate::ascii::ascii_iswhite;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::options::kOptKeywordprg;
-use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, OptIndex, size_t, uint32_t};
 use ::libc::strcpy;
@@ -54,7 +53,7 @@ use super::{
 /// `dst` and `src` must be `n` bytes of one live buffer.
 unsafe fn shift(dst: *mut c_char, src: *const c_char, n: size_t) {
     // SAFETY: the caller's buffer.
-    unsafe { memmove(dst.cast::<c_void>(), src.cast::<c_void>(), n) };
+    unsafe { dst.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// How much room the assembled value needs: the argument, plus the current

@@ -36,7 +36,6 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::memory::{alloc_block, free_block};
-use crate::os::cshim::memmove;
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use crate::types::{
     Loop, RStream, Stream, size_t, ssize_t, stream_read_cb, uv_buf_t, uv_fs_t, uv_handle_t,
@@ -385,11 +384,10 @@ fn consume_bytes(mut stream: Reader, consumed: size_t) {
         // SAFETY: both spans are inside the one block, and `memmove` is
         // defined for overlapping ones.
         unsafe {
-            memmove(
-                stream.buffer.cast::<c_void>(),
-                stream.read_pos.cast::<c_void>(),
-                remaining,
-            );
+            stream
+                .buffer
+                .cast::<u8>()
+                .copy_from(stream.read_pos.cast(), remaining);
         }
         stream.read_pos = stream.buffer;
         // SAFETY: `remaining` bytes of the block, just moved to its front.

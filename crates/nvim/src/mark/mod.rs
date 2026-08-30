@@ -35,7 +35,6 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xstrlcpy};
 use crate::r#move::set_topline;
 use crate::options::kOptJopFlagStack;
-use crate::os::cshim::memmove;
 use crate::os::env::expand_env;
 use crate::os::fs::os_dirname;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
@@ -348,9 +347,8 @@ pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
         // length is what is left above `i`, so the move stays in the array.
         let stack = unsafe { &raw mut (*wp.raw()).w_tagstack }.cast::<taggy_T>();
         unsafe {
-            memmove(
-                stack.offset(i as isize).cast(),
-                stack.offset(i as isize + 1).cast(),
+            (stack.offset(i as isize)).cast::<u8>().copy_from(
+                (stack.offset(i as isize + 1)).cast(),
                 size_t::try_from(wp.w_tagstacklen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<taggy_T>()),

@@ -22,7 +22,6 @@
 use crate::eval::typval::{NumBuf, tv_clear, tv_get_number, tv_list_extend};
 use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
-use crate::os::cshim::memmove;
 use crate::strings::concat_str;
 use crate::types::{
     Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
@@ -88,7 +87,7 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result
         let at = unsafe { (*ga).ga_len } as isize;
         let end = unsafe { (*ga).ga_data.cast::<uint8_t>().offset(at) };
         let n = len.unsigned_abs() as usize;
-        unsafe { memmove(end.cast(), (*b2).bv_ga.ga_data, n) };
+        unsafe { end.cast::<u8>().copy_from((*b2).bv_ga.ga_data.cast(), n) };
         unsafe { (*ga).ga_len += len };
     }
     Ok(())

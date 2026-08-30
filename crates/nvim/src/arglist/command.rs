@@ -429,7 +429,7 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
     let dest = arg(line1 - 1) as *mut c_void;
     let src2 = arg(line2) as *const c_void;
     let n = ((argcount() - line2) as size_t).wrapping_mul(size_of::<aentry_T>());
-    unsafe { memmove(dest, src2, n) };
+    unsafe { dest.cast::<u8>().copy_from(src2.cast(), n) };
     set_argcount(argcount() - count);
     let idx = cur_arg_idx();
     if idx >= line2 {

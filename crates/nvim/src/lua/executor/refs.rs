@@ -10,7 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use super::get_global_lstate;
 use crate::lua::ffi::{
@@ -19,7 +19,6 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{LuaRef, lua_State, nlua_ref_state_t};
-use ::libc::memset;
 
 /// The registry key the per-state reference table is parked under.
 const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";
@@ -36,7 +35,9 @@ pub(crate) unsafe fn nlua_new_ref_state(
     unsafe {
         let ref_state =
             lua_newuserdata(lstate, size_of::<nlua_ref_state_t>()).cast::<nlua_ref_state_t>();
-        memset(ref_state.cast::<c_void>(), 0, size_of::<nlua_ref_state_t>());
+        ref_state
+            .cast::<u8>()
+            .write_bytes(0, size_of::<nlua_ref_state_t>());
         (*ref_state).nil_ref = LUA_NOREF;
         (*ref_state).empty_dict_ref = LUA_NOREF;
         if !is_thread {

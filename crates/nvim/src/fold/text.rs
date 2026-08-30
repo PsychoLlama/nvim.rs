@@ -19,7 +19,7 @@ use crate::guard::Suppress;
 use crate::main::{curbuf, current_sctx, curwin, did_emsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
-use crate::os::cshim::{memmove, ngettext, strstr};
+use crate::os::cshim::{ngettext, strstr};
 use crate::strings::vim_snprintf;
 use crate::types::{Vv, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
 use crate::winlayer::{Buf, Win};
@@ -250,11 +250,8 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
             // its terminator included -- fits where `s` is.
             unsafe {
                 let tail = s.add(len);
-                memmove(
-                    s as *mut c_void,
-                    tail as *const c_void,
-                    cstr::bytes_at(tail).len() + 1,
-                )
+                s.cast::<u8>()
+                    .copy_from(tail.cast(), cstr::bytes_at(tail).len() + 1)
             };
         } else {
             // SAFETY: `s` is on a character of `str`.

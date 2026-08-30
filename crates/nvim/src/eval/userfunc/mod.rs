@@ -61,7 +61,7 @@ use crate::message::{
     msg_prt_line, msg_putchar, msg_puts, msg_start, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
-use crate::os::cshim::{gettext, memmove, snprintf, strstr};
+use crate::os::cshim::{gettext, snprintf, strstr};
 use crate::os::input::line_breakcheck;
 use crate::path::path_fnamecmp;
 use crate::profile::{
@@ -87,7 +87,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
-use ::libc::{abort, memcmp, memcpy, memset, strcpy};
+use ::libc::{abort, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
 mod args;

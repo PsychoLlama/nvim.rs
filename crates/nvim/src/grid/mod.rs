@@ -63,7 +63,7 @@ use crate::ui::{
     ui_line,
 };
 use crate::winlayer::{Win, windows};
-use ::libc::{abort, memcpy, strnlen};
+use ::libc::{abort, strnlen};
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;

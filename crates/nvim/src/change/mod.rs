@@ -73,7 +73,6 @@ use crate::r#move::{
 };
 use crate::option::{copy_option_part, get_ve_flags};
 use crate::options::kOptVeFlagOnemore;
-use crate::os::cshim::memmove;
 use crate::os::time::os_time;
 use crate::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::pos::{MAXCOL, MAXLNUM};

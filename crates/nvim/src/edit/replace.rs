@@ -162,10 +162,10 @@ pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
     let p = unsafe { stack.items.add(stack.size).offset(below) };
     if replace_offset.get() != 0 {
         let above = replace_offset.get() as size_t;
-        unsafe { memmove(p.add(len).cast(), p.cast(), above) };
+        unsafe { p.add(len).cast::<u8>().copy_from(p.cast(), above) };
     }
     // SAFETY: the caller promises `str` holds `len` readable bytes.
-    unsafe { memcpy(p.cast(), str.cast(), len) };
+    unsafe { p.cast::<u8>().copy_from_nonoverlapping(str.cast(), len) };
     stack.size += len;
 }
 
@@ -222,7 +222,7 @@ pub(crate) unsafe fn replace_join(mut off: c_int) {
             let gap = unsafe { stack.items.offset(i as isize) };
             let rest = unsafe { stack.items.offset(i + 1) };
             let rest_len = stack.size - i as size_t;
-            unsafe { memmove(gap.cast(), rest.cast(), rest_len) };
+            unsafe { gap.cast::<u8>().copy_from(rest.cast(), rest_len) };
             return;
         }
     }

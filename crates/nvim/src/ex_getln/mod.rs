@@ -115,7 +115,7 @@ use crate::options::{
     kOptBoFlagError, kOptBoFlagWildmode, kOptBufhidden, kOptFiletype, kOptInccommand,
     kOptWimFlagFull, kOptWimFlagLastused, kOptWimFlagList, kOptWimFlagLongest, kOptWimFlagNoselect,
 };
-use crate::os::cshim::{gettext, memmove, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, strncasecmp, strncmp};
 use crate::os::env::home_replace_save;
 use crate::os::input::line_breakcheck;
 use crate::path::vim_ispathsep;
@@ -169,7 +169,7 @@ use crate::window::{
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 use crate::winlayer::Cc;
-use ::libc::{abort, memcpy, memset, strcpy, strrchr};
+use ::libc::{abort, strcpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod incsearch;

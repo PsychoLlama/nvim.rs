@@ -31,7 +31,7 @@ use crate::garray::ga_grow;
 use crate::main::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::memory::{xfree, xmemdupz, xrealloc};
 use crate::message_fmt::{c_str, emsg_text};
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::tr_c;
@@ -39,7 +39,7 @@ use crate::types::{
     EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VarLock, blob_T, int64_t, kListLenUnknown,
     list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
 };
-use ::libc::{fclose, fileno, fread, fseeko, memcpy};
+use ::libc::{fclose, fileno, fread, fseeko};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -239,7 +239,7 @@ impl Carry {
         let (dst, src) = (self.buf.wrapping_offset(self.len), bytes.as_ptr());
         // SAFETY: `len + n` bytes fit, by the growth above, and `bytes` is a
         // live slice of that length.
-        unsafe { memmove(dst.cast::<c_void>(), src.cast::<c_void>(), n as size_t) };
+        unsafe { dst.cast::<u8>().copy_from(src.cast(), n as size_t) };
         self.len += n;
     }
 
@@ -254,11 +254,9 @@ impl Carry {
         // bytes already written, `tail`, and the terminator after them.
         let s = unsafe {
             let s = xrealloc(self.buf.cast::<c_void>(), (len + n + 1) as size_t).cast::<c_char>();
-            memcpy(
-                s.add(len).cast::<c_void>(),
-                tail.as_ptr().cast::<c_void>(),
-                n,
-            );
+            s.add(len)
+                .cast::<u8>()
+                .copy_from_nonoverlapping(tail.as_ptr().cast(), n);
             *s.add(len + n) = 0;
             s
         };

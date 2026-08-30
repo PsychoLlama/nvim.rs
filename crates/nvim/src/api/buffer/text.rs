@@ -128,10 +128,12 @@ pub unsafe fn nvim_buf_set_text(
     // within the line it was measured against.
     let head = unsafe { first.offset(start_col as isize) } as *mut ::core::ffi::c_void;
     // SAFETY: `first` holds `start_col` bytes of the old line's head.
-    unsafe { memcpy(first.cast(), str_at_start.cast(), start_col as size_t) };
+    let into = first.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(str_at_start.cast(), start_col as size_t) };
     let src = first_item.data() as *const ::core::ffi::c_void;
     // SAFETY: `head` has `first_item.len()` writable bytes after `start_col`.
-    unsafe { memcpy(head, src, first_item.len()) };
+    let into = head.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(src.cast(), first_item.len()) };
     // SAFETY: as above.
     unsafe { memchrsub(head, nul, nl, first_item.len()) };
     // SAFETY: `end_col` is within the line `str_at_end` copied.
@@ -141,20 +143,23 @@ pub unsafe fn nvim_buf_set_text(
         let after = unsafe { first.offset(start_col as isize).add(first_item.len()) };
         let after = after as *mut ::core::ffi::c_void;
         // SAFETY: `after` has `last_part_len` writable bytes.
-        unsafe { memcpy(after, tail, last_part_len) };
+        let into = after.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(tail.cast(), last_part_len) };
     } else {
         let lastlen = last_item.len().wrapping_add(last_part_len);
         // SAFETY: the arena hands back `lastlen` writable bytes.
         last = unsafe { arena_allocz(arena, lastlen) };
         let src = last_item.data() as *const ::core::ffi::c_void;
         // SAFETY: `last` has `lastlen` writable bytes.
-        unsafe { memcpy(last.cast(), src, last_item.len()) };
+        let into = last.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(src.cast(), last_item.len()) };
         // SAFETY: as above.
         unsafe { memchrsub(last.cast(), nul, nl, last_item.len()) };
         // SAFETY: the tail sits after the item, still inside `lastlen`.
         let after = unsafe { last.add(last_item.len()) } as *mut ::core::ffi::c_void;
         // SAFETY: `after` has `last_part_len` writable bytes.
-        unsafe { memcpy(after, tail, last_part_len) };
+        let into = after.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(tail.cast(), last_part_len) };
     }
     let mut lines: *mut *mut ::core::ffi::c_char = unsafe {
         arena_alloc(

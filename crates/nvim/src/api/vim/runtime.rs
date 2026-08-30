@@ -184,11 +184,9 @@ pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     }
     let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
     unsafe {
-        memcpy(
-            &raw mut string as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            dir.data() as *const ::core::ffi::c_void,
-            dir.len(),
-        )
+        (&raw mut string as *mut ::core::ffi::c_char)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(dir.data().cast(), dir.len())
     };
     string[dir.len()] = NUL as ::core::ffi::c_char;
     api_try(&mut error, |_| {

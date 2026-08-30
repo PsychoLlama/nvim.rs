@@ -52,7 +52,7 @@ use crate::message::{emsg, msg, msg_ptr};
 use crate::r#move::changed_window_setting_all;
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::check_chars_options;
-use crate::os::cshim::{__ctype_b_loc, gettext, memmove, snprintf, strchr, strncasecmp};
+use crate::os::cshim::{__ctype_b_loc, gettext, snprintf, strchr, strncasecmp};
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::pos::MAXCOL;
 use crate::strings::vim_strchr;
@@ -71,7 +71,7 @@ use crate::utf8proc::{
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
 use ::libc::{
-    __errno_location, iconv, iconv_close, iconv_open, memcmp, setlocale, strcpy, tolower, toupper,
+    __errno_location, iconv, iconv_close, iconv_open, setlocale, strcpy, tolower, toupper,
 };
 
 // The carve of the transpiled module; see each child's docs.

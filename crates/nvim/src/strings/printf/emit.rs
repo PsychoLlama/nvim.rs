@@ -34,7 +34,7 @@ use crate::ascii::ascii_isdigit;
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{xfree, xmemscan, xstrchrnul, xstrlcpy};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, memmove, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::strings::vim_strchr;
 use crate::types::{
     VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
@@ -88,7 +88,12 @@ impl Sink {
     unsafe fn copy(&mut self, src: *const c_char, n: size_t) {
         if self.fits {
             let avail = self.avail();
-            unsafe { memmove(self.buf.add(self.produced).cast(), src.cast(), n.min(avail)) };
+            unsafe {
+                self.buf
+                    .add(self.produced)
+                    .cast::<u8>()
+                    .copy_from(src.cast(), n.min(avail))
+            };
             self.fits = n < avail;
         }
         self.advance(n);
@@ -675,7 +680,8 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
         } else {
             c"nan"
         };
-        unsafe { memmove(tmp.as_mut_ptr().cast(), nan.as_ptr().cast(), 4) };
+        let into = tmp.as_mut_ptr().cast::<u8>();
+        unsafe { into.copy_from(nan.as_ptr().cast(), 4) };
         c.zero_padding = false;
         return Body::Tmp(3);
     }
@@ -727,7 +733,7 @@ unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; T
 /// Delete one byte at `at`, terminator included, and report the new length.
 unsafe fn delete_byte(at: *mut c_char, len: size_t) -> size_t {
     let n_len = unsafe { cstr::bytes_at(at.add(1)) }.len();
-    unsafe { memmove(at.cast(), at.add(1).cast(), n_len + 1) };
+    unsafe { at.cast::<u8>().copy_from(at.add(1).cast(), n_len + 1) };
     len - 1
 }
 

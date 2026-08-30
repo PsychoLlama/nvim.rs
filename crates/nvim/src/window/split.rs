@@ -37,7 +37,6 @@ use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
 use crate::winlayer::{Frame, Win, WinId, frames, tabs};
-use ::libc::memset;
 
 pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
     split(size, flags)
@@ -495,7 +494,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     // SAFETY: the window's own config.
     unsafe { clear_float_config(&raw mut wp.w_config, true) };
     // SAFETY: the window's own border array.
-    unsafe { memset(adj, 0, size_of::<[c_int; 4]>()) };
+    unsafe { adj.cast::<u8>().write_bytes(0, size_of::<[c_int; 4]>()) };
     Some(wp)
 }
 

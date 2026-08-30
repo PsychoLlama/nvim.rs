@@ -23,7 +23,7 @@ use crate::types::{
     lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t, uint32_t,
     uint64_t, uv_lib_t,
 };
-use ::libc::{abort, memcmp, memcpy};
+use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.
 mod cursor;

@@ -79,7 +79,7 @@ use crate::types::*;
 use crate::winlayer::{
     Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
-use ::libc::{memset, strtol};
+use ::libc::strtol;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 pub const FR_LEAF: c_int = 0;

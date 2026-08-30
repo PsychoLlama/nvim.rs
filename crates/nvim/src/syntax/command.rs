@@ -177,7 +177,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
         // SAFETY: the editor's current buffer.
         let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
         // SAFETY: both tables are 32 bytes wide.
-        unsafe { memmove(chartab.cast::<c_void>(), src, 32) };
+        unsafe { chartab.cast::<u8>().copy_from(src.cast(), 32) };
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     } else {
         let mut save_chartab: [c_char; 32] = [0; 32];
@@ -185,7 +185,7 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
         // SAFETY: the editor's current buffer.
         let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
         // SAFETY: both tables are 32 bytes wide.
-        unsafe { memmove(dst, src, 32) };
+        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
         let save_isk = unsafe { (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = xstrdup(arg) };
 
@@ -195,12 +195,12 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
         // SAFETY: the editor's current buffer.
         let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
         // SAFETY: both tables are 32 bytes wide.
-        unsafe { memmove(dst, src, 32) };
+        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
         // SAFETY: the editor's current buffer.
         let dst = unsafe { &raw mut (*curbuf.get()).b_chartab }.cast::<c_void>();
         let src = (&raw const save_chartab).cast::<c_void>();
         // SAFETY: both tables are 32 bytes wide.
-        unsafe { memmove(dst, src, 32) };
+        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
         unsafe { cur_syn_block().b_syn_isk = (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = save_isk };

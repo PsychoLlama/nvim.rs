@@ -33,13 +33,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
             p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
         }
         let buf = unsafe { arena_alloc(&raw mut arena, len, false) } as *mut ::core::ffi::c_char;
-        unsafe {
-            memset(
-                buf as *mut ::core::ffi::c_void,
-                '*' as ::core::ffi::c_int,
-                len,
-            )
-        };
+        unsafe { buf.cast::<u8>().write_bytes(b'*', len) };
 
         let mut item = arena_array(&raw mut arena, 3);
         push(&mut item, Object::integer(0));
@@ -152,21 +146,10 @@ impl Drop for CmdlineBlock {
 /// `:function` accumulates while it is being typed.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
     let buf = unsafe { xmallocz(indent + cstr::bytes_at(line).len()) } as *mut ::core::ffi::c_char;
-    unsafe {
-        memset(
-            buf as *mut ::core::ffi::c_void,
-            ' ' as ::core::ffi::c_int,
-            indent,
-        )
-    };
+    unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
     let line_len = unsafe { cstr::bytes_at(line) }.len();
-    unsafe {
-        memcpy(
-            buf.add(indent) as *mut ::core::ffi::c_void,
-            line as *const ::core::ffi::c_void,
-            line_len,
-        )
-    };
+    let into = unsafe { buf.add(indent) }.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(line.cast(), line_len) };
 
     // C's `ADD`: `kv_push` onto a heap array, doubling from 8.
     let push = |arr: &mut Array, value: Object| {

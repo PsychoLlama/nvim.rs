@@ -40,7 +40,6 @@ use crate::charset::getdigits_int;
 use crate::hashtab::{hash_add, hash_clear, hash_find, hash_removed};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
-use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, hashitem_T, size_t, uint8_t};
 use ::libc::{strcat, strcpy};
@@ -194,7 +193,8 @@ pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affen
         {
             // Remove the flag from the list and stay put, so the next
             // flag is read from where this one was.
-            unsafe { memmove(prevp.cast(), p.cast(), cstr::bytes_at(p).len() + 1) };
+            let into = prevp.cast::<u8>();
+            unsafe { into.copy_from(p.cast(), cstr::bytes_at(p).len() + 1) };
             p = prevp;
             if flag == unsafe { (*affile).af_comppermit } {
                 unsafe { (*entry).ae_comppermit = 1 };

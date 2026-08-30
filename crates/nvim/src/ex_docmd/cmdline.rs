@@ -52,8 +52,6 @@ use crate::main::{
 
 use crate::message::{msg_start, wait_return};
 
-use crate::os::cshim::memmove;
-
 use crate::os::input::line_breakcheck;
 use crate::profile::{func_line_end, func_line_start, script_line_end, script_line_start};
 use crate::runtime::{
@@ -65,7 +63,6 @@ use crate::types::{
     Failed, LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
 };
 use crate::ui::ui_has;
-use ::libc::memset;
 
 /// The top of the execution stack: the script or function whose line is
 /// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
@@ -214,13 +211,8 @@ pub unsafe fn do_cmdline(
     if flags.has(DoCmdOpts::EXCRESET) {
         unsafe { save_dbg_stuff(&raw mut debug_saved) };
     } else {
-        unsafe {
-            memset(
-                &raw mut debug_saved as *mut c_void,
-                0,
-                size_of::<dbg_stuff>(),
-            )
-        };
+        let into = (&raw mut debug_saved).cast::<u8>();
+        unsafe { into.write_bytes(0, size_of::<dbg_stuff>()) };
     }
 
     let initial_trylevel = trylevel.get();
@@ -464,13 +456,8 @@ pub unsafe fn do_cmdline(
             // Move what follows the `|` to the front of the buffer, for
             // the next `do_one_cmd`.
             let cmdline_len = unsafe { cstr::bytes_at(next_cmdline) }.len();
-            unsafe {
-                memmove(
-                    cmdline_copy as *mut c_void,
-                    next_cmdline as *const c_void,
-                    cmdline_len + 1,
-                )
-            };
+            let into = cmdline_copy.cast::<u8>();
+            unsafe { into.copy_from(next_cmdline.cast(), cmdline_len + 1) };
             next_cmdline = cmdline_copy;
         }
 

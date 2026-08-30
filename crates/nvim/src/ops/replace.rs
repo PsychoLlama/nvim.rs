@@ -195,16 +195,11 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     let newp = unsafe { xmallocz(newp_size) } as *mut c_char;
 
     // Up to the replaced part, then the pre-spaces.
-    unsafe {
-        memmove(
-            newp as *mut c_void,
-            oldp as *const c_void,
-            bd.textcol as size_t,
-        )
-    };
+    let into = newp.cast::<u8>();
+    unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
     oldp = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
     let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
-    unsafe { memset(at, ' ' as c_int, bd.startspaces as size_t) };
+    unsafe { at.cast::<u8>().write_bytes(b' ', bd.startspaces as size_t) };
 
     // What is left of the line after the block, NUL included.
     let col = oldlen - bd.textcol - bd.textlen + 1;
@@ -222,17 +217,17 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
         }
         if bd.is_short == 0 {
             let at = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
-            unsafe { memset(at, ' ' as c_int, bd.endspaces as size_t) };
+            unsafe { at.cast::<u8>().write_bytes(b' ', bd.endspaces as size_t) };
             newp_len += bd.endspaces;
             let tail = unsafe { newp.offset(newp_len as isize) } as *mut c_void;
-            unsafe { memmove(tail, oldp as *const c_void, col as size_t) };
+            unsafe { tail.cast::<u8>().copy_from(oldp.cast(), col as size_t) };
         }
         newcols = newp_len - bd.textcol;
     } else {
         // The tail becomes the next line.
         after_p_len = col as size_t;
         after_p = unsafe { xmalloc(after_p_len) } as *mut c_char;
-        unsafe { memmove(after_p as *mut c_void, oldp as *const c_void, after_p_len) };
+        unsafe { after_p.cast::<u8>().copy_from(oldp.cast(), after_p_len) };
         newrows = 1;
     }
 

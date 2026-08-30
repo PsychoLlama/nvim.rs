@@ -143,13 +143,7 @@ pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi
 
     // Autoindent for :insert and :append.
     if firstc <= 0 {
-        unsafe {
-            memset(
-                cc.text() as *mut ::core::ffi::c_void,
-                ' ' as ::core::ffi::c_int,
-                indent as size_t,
-            )
-        };
+        unsafe { cc.text().cast::<u8>().write_bytes(b' ', indent as size_t) };
         unsafe { *cc.at(indent) = NUL as ::core::ffi::c_char };
         cc.cmdpos = indent;
         cc.cmdspos = indent;

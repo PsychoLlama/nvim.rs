@@ -103,16 +103,17 @@ impl Put {
                 // SAFETY: as above; `oldp` is `oldlen` bytes plus a NUL and
                 // `col` is within it, and the register's line is `yanklen`.
                 let ptr = unsafe {
-                    memmove(newp as *mut c_void, oldp as *const c_void, col as size_t);
+                    newp.cast::<u8>().copy_from(oldp.cast(), col as size_t);
                     let mut ptr = newp.offset(col as isize);
                     let put = (*self.y_array).data() as *const c_void;
                     for _ in 0..self.count {
-                        memmove(ptr as *mut c_void, put, yanklen as size_t);
+                        ptr.cast::<u8>().copy_from(put.cast(), yanklen as size_t);
                         ptr = ptr.offset(yanklen as isize);
                     }
                     // +1 for the NUL.
                     let tail = oldp.offset(col as isize) as *const c_void;
-                    memmove(ptr as *mut c_void, tail, (oldlen - col) as size_t + 1);
+                    ptr.cast::<u8>()
+                        .copy_from(tail.cast(), (oldlen - col) as size_t + 1);
                     ptr
                 };
                 // SAFETY: `newp` is a NUL-terminated line the buffer takes
@@ -206,11 +207,12 @@ impl Put {
             let yanklen = (*self.y_array).len() as c_int;
             let oldp = ml_get(lnum);
             let newp = xmalloc((col + yanklen + 1) as size_t) as *mut c_char;
-            memmove(newp as *mut c_void, oldp as *const c_void, col as size_t);
+            newp.cast::<u8>().copy_from(oldp.cast(), col as size_t);
             // +1 to bring the NUL across.
             let put = (*self.y_array).data() as *const c_void;
             let at = newp.offset(col as isize) as *mut c_void;
-            memmove(at, put, (yanklen + 1) as size_t);
+            at.cast::<u8>()
+                .copy_from(put.cast(), (yanklen + 1) as size_t);
             let _ = ml_replace(lnum, newp, false);
         }
     }

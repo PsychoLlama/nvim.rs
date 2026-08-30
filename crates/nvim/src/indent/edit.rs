@@ -31,7 +31,7 @@ use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
-use crate::os::cshim::{gettext, memmove, ngettext, snprintf};
+use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
@@ -41,7 +41,6 @@ use crate::strings::xstrnsave;
 use crate::types::CmdModFlags;
 use crate::undo::{u_clearline, u_save, u_savecommon};
 use crate::winlayer::{Buf, Win};
-use ::libc::memset;
 
 /// Whether the cursor is before (or, with `extra` zero, on) the first
 /// non-blank of the line.
@@ -402,7 +401,7 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     unsafe { (*win).w_cursor.col = new_cursor_col as colnr_T };
     let ptrlen = (unsafe { (*win).w_virtcol } as c_int - vcol) as size_t;
     let spaces: *mut c_char = unsafe { xmallocz(ptrlen) }.cast();
-    unsafe { memset(spaces.cast(), ' ' as c_int, ptrlen) };
+    unsafe { spaces.cast::<u8>().write_bytes(b' ', ptrlen) };
     unsafe { ins_str(spaces, ptrlen) };
     unsafe { xfree(spaces.cast()) };
     new_cursor_col + ptrlen as c_int
@@ -635,11 +634,9 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
     let line: *mut c_char = unsafe { xmalloc((ind_len + line_len) as size_t) }.cast();
     unsafe { ptr::copy_nonoverlapping(indent.as_ptr(), line.cast::<u8>(), indent.len()) };
     unsafe {
-        memmove(
-            line.add(indent.len()).cast(),
-            get_cursor_line_ptr().cast(),
-            line_len as size_t,
-        )
+        line.add(indent.len())
+            .cast::<u8>()
+            .copy_from(get_cursor_line_ptr().cast(), line_len as size_t)
     };
     let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, line, false) };
     unsafe { (*curwin.get()).w_cursor.col = ind_len as colnr_T };
@@ -795,14 +792,16 @@ impl Retab {
         }
         let new_line: *mut c_char = unsafe { xmalloc(new_len as size_t) }.cast();
         if self.start_col > 0 {
-            unsafe { memmove(new_line.cast(), scan.ptr.cast(), self.start_col as size_t) };
+            let into = new_line.cast::<u8>();
+            unsafe { into.copy_from(scan.ptr.cast(), self.start_col as size_t) };
         }
         unsafe {
-            memmove(
-                new_line.offset((self.start_col + len) as isize).cast(),
-                scan.ptr.offset(scan.col as isize).cast(),
-                (scan.old_len - scan.col + 1) as size_t,
-            )
+            (new_line.offset((self.start_col + len) as isize))
+                .cast::<u8>()
+                .copy_from(
+                    (scan.ptr.offset(scan.col as isize)).cast(),
+                    (scan.old_len - scan.col + 1) as size_t,
+                )
         };
         let run = unsafe { new_line.offset(self.start_col as isize) };
         for i in 0..len {

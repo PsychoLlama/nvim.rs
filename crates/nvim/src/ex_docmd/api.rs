@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -59,7 +59,6 @@ use crate::types::{
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
-use ::libc::memset;
 
 /// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
 /// nothing.
@@ -81,7 +80,8 @@ pub unsafe fn parse_cmdline(
     let save_cursor: pos_T = cur_win().w_cursor;
     save_last_search_pattern();
 
-    unsafe { memset(cmdinfo as *mut c_void, 0, size_of::<CmdParseInfo>()) };
+    let into = cmdinfo.cast::<u8>();
+    unsafe { into.write_bytes(0, size_of::<CmdParseInfo>()) };
     unsafe { *eap = fresh_exarg() };
     let mut ea = unsafe { Ea::new(eap) };
     ea.cmd = unsafe { *cmdline };

@@ -150,7 +150,8 @@ unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_in
     s = unsafe { s.add(1) };
     if s != matched {
         debug_assert!(unsafe { e.offset_from(s) } + 1 >= 0, "(e - s) + 1 >= 0");
-        unsafe { memmove(matched.cast(), s.cast(), (e.offset_from(s) as size_t) + 1) };
+        let into = matched.cast::<u8>();
+        unsafe { into.copy_from(s.cast(), (e.offset_from(s) as size_t) + 1) };
     }
 }
 
@@ -342,7 +343,8 @@ pub unsafe fn expand_packadd_dir(
     // Offer the package name, not the path it was found at.
     for &matched in unsafe { ga_strings(&raw mut ga) } {
         let tail = unsafe { path_tail(matched) };
-        unsafe { memmove(matched.cast(), tail.cast(), cstr::bytes_at(tail).len() + 1) };
+        let into = matched.cast::<u8>();
+        unsafe { into.copy_from(tail.cast(), cstr::bytes_at(tail).len() + 1) };
     }
 
     if ga.ga_len <= 0 {

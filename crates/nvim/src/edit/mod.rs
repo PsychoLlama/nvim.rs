@@ -154,7 +154,7 @@ use crate::options::{
     kOptBoFlagBackspace, kOptBoFlagCopy, kOptBoFlagCtrlg, kOptBoFlagCursor, kOptBoFlagRegister,
     kOptFdoFlagAll, kOptFdoFlagHor, kOptFdoFlagInsert, kOptVeFlagAll, kOptVeFlagOnemore,
 };
-use crate::os::cshim::{__ctype_b_loc, gettext, memmove};
+use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::plines::{
@@ -189,7 +189,6 @@ use crate::types::{
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
-use ::libc::memcpy;
 
 // The carve of the transpiled module; see each child's docs.
 mod bs;

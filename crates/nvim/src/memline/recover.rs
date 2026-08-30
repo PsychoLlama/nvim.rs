@@ -193,7 +193,8 @@ pub unsafe fn ml_recover(checkext: bool) {
 
             // Block zero's own buffer was allocated at the guessed size.
             let bigger = unsafe { xmalloc((*mfp).mf_page_size as size_t) };
-            unsafe { memmove(bigger, (*hp).bh_data, previous_page_size as size_t) };
+            let into = bigger.cast::<u8>();
+            unsafe { into.copy_from((*hp).bh_data.cast(), previous_page_size as size_t) };
             unsafe { xfree((*hp).bh_data) };
             unsafe { (*hp).bh_data = bigger };
             b0p = bigger as *mut ZeroBlock;

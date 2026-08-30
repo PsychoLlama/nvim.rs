@@ -64,13 +64,8 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
                 || ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
             {
                 // Remove the path that was prepended (+1 for the NUL).
-                unsafe {
-                    memmove(
-                        name as *mut c_void,
-                        name.add(pathlen) as *const c_void,
-                        namelen - pathlen + 1,
-                    )
-                };
+                let into = name.cast::<u8>();
+                unsafe { into.copy_from(name.add(pathlen).cast(), namelen - pathlen + 1) };
                 unsafe {
                     ((*gap).ga_data as *mut *mut c_char)
                         .offset((*gap).ga_len as isize)
@@ -112,13 +107,8 @@ pub(crate) unsafe fn expand_shellcmd(
         if unsafe { *s } as c_int == '\\' as c_int {
             let p = unsafe { s.add(1) };
             if unsafe { *p } as c_int == ' ' as c_int {
-                unsafe {
-                    memmove(
-                        s as *mut c_void,
-                        p as *const c_void,
-                        e.offset_from(p) as size_t + 1, // +1 for NUL
-                    )
-                };
+                let into = s.cast::<u8>();
+                unsafe { into.copy_from(p.cast(), e.offset_from(p) as size_t + 1) };
                 e = unsafe { e.sub(1) };
             }
         }

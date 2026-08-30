@@ -61,7 +61,7 @@ use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
 
 use crate::message::emsg;
-use crate::os::cshim::{gettext, memmove};
+use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
 use crate::types::{
@@ -505,13 +505,8 @@ pub(crate) unsafe fn do_one_cmd(
             let mut s = ea.arg;
             while unsafe { *s } != 0 {
                 if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
-                    unsafe {
-                        memmove(
-                            s as *mut c_void,
-                            s.add(1) as *const c_void,
-                            len_of(s.add(1)) + 1,
-                        )
-                    };
+                    let into = s.cast::<u8>();
+                    unsafe { into.copy_from(s.add(1).cast(), len_of(s.add(1)) + 1) };
                 } else if byte(s) == '\n' as c_int {
                     ea.nextcmd = unsafe { s.add(1) };
                     unsafe { *s = NUL as c_char };

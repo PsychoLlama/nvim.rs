@@ -264,7 +264,8 @@ pub unsafe fn tv_blob_remove(
         unsafe { (*rettv).vval.v_number = varnumber_T::from(*p.offset(idx as isize)) };
         let at = unsafe { p.offset(idx as isize) };
         let after = unsafe { at.add(1) };
-        unsafe { memmove(at.cast(), after.cast(), (len - idx - 1) as size_t) };
+        let into = at.cast::<u8>();
+        unsafe { into.copy_from(after.cast(), (len - idx - 1) as size_t) };
         blob.bv_ga.ga_len -= 1;
         return;
     }
@@ -293,14 +294,15 @@ pub unsafe fn tv_blob_remove(
     // Read `ga_data` after the allocation above, as upstream does.
     let p = blob.bv_ga.ga_data.cast::<uint8_t>();
     let dst = taken_blob.bv_ga.ga_data;
-    let src = unsafe { p.offset(idx as isize) }.cast();
-    unsafe { memmove(dst, src, taken as size_t) };
+    let src = unsafe { p.offset(idx as isize) };
+    unsafe { dst.cast::<u8>().copy_from(src.cast(), taken as size_t) };
     unsafe { tv_blob_set_ret(rettv, taken_raw) };
 
     if len - end - 1 > 0 {
-        let at = unsafe { p.offset(idx as isize) }.cast();
-        let after = unsafe { p.offset(end as isize).add(1) }.cast();
-        unsafe { memmove(at, after, (len - end - 1) as size_t) };
+        let at = unsafe { p.offset(idx as isize) };
+        let after = unsafe { p.offset(end as isize).add(1) };
+        let into = at.cast::<u8>();
+        unsafe { into.copy_from(after.cast(), (len - end - 1) as size_t) };
     }
     blob.bv_ga.ga_len -= taken;
 }

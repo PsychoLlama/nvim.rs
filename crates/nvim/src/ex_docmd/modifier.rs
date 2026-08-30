@@ -401,24 +401,16 @@ unsafe fn restore_visual_range(
     if ea.cmd > cmd_start {
         if use_plus_cmd {
             let len = unsafe { cstr::bytes_at(cmd_start) }.len();
-            memmove(orig_cmd as *mut c_void, cmd_start as *const c_void, len);
+            move_bytes(orig_cmd, cmd_start, len);
             unsafe { xmemcpyz(orig_cmd.add(len) as *mut c_void, c" *+".as_ptr().cast(), 3) };
         } else {
-            unsafe {
-                memmove(
-                    cmd_start.offset(-5) as *mut c_void,
-                    cmd_start as *const c_void,
-                    ea.cmd.offset_from(cmd_start) as size_t,
-                )
-            };
+            // SAFETY: the five bytes before `cmd_start` are the `:'<,'>` this
+            // is making room for, and both ends are inside the command line.
+            let (into, kept) = unsafe { (cmd_start.offset(-5), ea.cmd.offset_from(cmd_start)) };
+            move_bytes(into, cmd_start, kept as size_t);
             ea.cmd = unsafe { ea.cmd.offset(-5) };
-            unsafe {
-                memmove(
-                    ea.cmd.offset(-1) as *mut c_void,
-                    c":'<,'>".as_ptr() as *const c_void,
-                    6,
-                )
-            };
+            let at = unsafe { ea.cmd.offset(-1) };
+            move_bytes(at, c":'<,'>".as_ptr(), 6);
         }
     } else if use_plus_cmd {
         ea.cmd = c"'<,'>+".as_ptr() as *mut c_char;
@@ -807,14 +799,10 @@ fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
     unsafe { crate::ex_docmd::lookup::checkforcmd(pp, cmd, len) }
 }
 
-/// `memmove()` as checked code.
-fn memmove(
-    __dest: *mut ::core::ffi::c_void,
-    __src: *const ::core::ffi::c_void,
-    __n: size_t,
-) -> *mut ::core::ffi::c_void {
+/// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.
+fn move_bytes(dest: *mut c_char, src: *const c_char, n: size_t) {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::os::cshim::memmove(__dest, __src, __n) }
+    unsafe { dest.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// `skip_vimgrep_pat()` as checked code.

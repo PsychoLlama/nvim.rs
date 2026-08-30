@@ -35,7 +35,6 @@ use crate::types::{
     VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
     lua_State, size_t, typval_T, varnumber_T,
 };
-use ::libc::memcpy;
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
 /// `)` closed after it, so the expression is evaluated with `_A` bound to
@@ -82,12 +81,11 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut t
         let head = EVALHEADER.count_bytes();
         let lcmd_len = head + str.len() + 1;
         let lcmd = chunk_buffer(scratch, lcmd_len);
-        memcpy(lcmd.cast::<c_void>(), EVALHEADER.as_ptr().cast(), head);
-        memcpy(
-            lcmd.add(head).cast::<c_void>(),
-            str.data().cast(),
-            str.len(),
-        );
+        lcmd.cast::<u8>()
+            .copy_from_nonoverlapping(EVALHEADER.as_ptr().cast(), head);
+        lcmd.add(head)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(str.data().cast(), str.len());
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
         nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, 1, true, ret_tv);
         free_chunk_buffer(scratch, lcmd);
@@ -112,13 +110,14 @@ pub unsafe fn nlua_typval_call(
         let tail = CALLSUFFIX.count_bytes();
         let lcmd_len = head + len + tail;
         let lcmd = chunk_buffer(scratch, lcmd_len);
-        memcpy(lcmd.cast::<c_void>(), CALLHEADER.as_ptr().cast(), head);
-        memcpy(lcmd.add(head).cast::<c_void>(), str.cast(), len);
-        memcpy(
-            lcmd.add(head + len).cast::<c_void>(),
-            CALLSUFFIX.as_ptr().cast(),
-            tail,
-        );
+        lcmd.cast::<u8>()
+            .copy_from_nonoverlapping(CALLHEADER.as_ptr().cast(), head);
+        lcmd.add(head)
+            .cast::<u8>()
+            .copy_from_nonoverlapping(str.cast(), len);
+        (lcmd.add(head + len))
+            .cast::<u8>()
+            .copy_from_nonoverlapping(CALLSUFFIX.as_ptr().cast(), tail);
         nlua_typval_exec(
             lcmd,
             lcmd_len,

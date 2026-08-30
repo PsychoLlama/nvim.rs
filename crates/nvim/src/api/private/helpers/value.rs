@@ -28,7 +28,7 @@ use crate::types::{
     kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
     key_value_pair, size_t,
 };
-use ::libc::{abort, memcpy};
+use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -139,7 +139,8 @@ pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayB
     ret.size = items.len();
     let (dest, src) = (ret.items, items.as_slice().as_ptr());
     // SAFETY: `ret` was sized for exactly this many objects.
-    unsafe { memcpy(dest.cast(), src.cast(), size_of::<Object>() * ret.size) };
+    let into = dest.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(src.cast(), size_of::<Object>() * ret.size) };
     // The vector is the builder's inline array or one heap block; only the
     // second has anything to free.
     let heap = items.take_heap();

@@ -35,7 +35,6 @@ use crate::lua::executor::nlua_do_ucmd;
 use crate::main::{cmdmod, curtab};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
-use crate::os::cshim::memmove;
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_USER, CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
@@ -777,7 +776,7 @@ unsafe fn expand_pass(
         if buf.is_null() {
             totlen += len;
         } else {
-            unsafe { memmove(q.cast(), p.cast(), len) };
+            unsafe { q.cast::<u8>().copy_from(p.cast(), len) };
             q = unsafe { q.add(len) };
         }
 
@@ -831,7 +830,7 @@ unsafe fn unescape_k_special(
     }
     let len = unsafe { ksp.offset_from(*p) } as size_t;
     if len > 0 {
-        unsafe { memmove((*q).cast(), (*p).cast(), len) };
+        unsafe { (*q).cast::<u8>().copy_from((*p).cast(), len) };
         *q = unsafe { (*q).add(len) };
     }
     unsafe { **q = K_SPECIAL as c_char };

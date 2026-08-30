@@ -425,15 +425,14 @@ fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
         let kept = old_line_len - bd.textstart.offset_from(old_p) as c_int;
         let new_line_len = bd.textcol + tabs + spaces + kept;
         let newp = xmalloc(new_line_len as size_t + 1) as *mut c_char;
-        memmove(
-            newp as *mut c_void,
-            old_p as *const c_void,
-            bd.textcol as size_t,
-        );
+        newp.cast::<u8>()
+            .copy_from(old_p.cast(), bd.textcol as size_t);
         let at_tabs = newp.offset(bd.textcol as isize) as *mut c_void;
-        memset(at_tabs, TAB, tabs as size_t);
+        at_tabs
+            .cast::<u8>()
+            .write_bytes((TAB) as u8, tabs as size_t);
         let at_spaces = newp.offset((bd.textcol + tabs) as isize) as *mut c_void;
-        memset(at_spaces, ' ' as c_int, spaces as size_t);
+        at_spaces.cast::<u8>().write_bytes(b' ', spaces as size_t);
         strcpy(
             newp.offset((bd.textcol + tabs + spaces) as isize),
             bd.textstart,
@@ -527,13 +526,10 @@ fn shift_block_left(oap: Op, bd: &mut block_def, total: c_int) -> ShiftedLine {
         let kept = old_line_len - non_white.offset_from(old_p) as c_int;
         let new_line_len = fixedlen + fill + kept;
         let newp = xmalloc(new_line_len as size_t + 1) as *mut c_char;
-        memmove(
-            newp as *mut c_void,
-            old_p as *const c_void,
-            fixedlen as size_t,
-        );
+        newp.cast::<u8>()
+            .copy_from(old_p.cast(), fixedlen as size_t);
         let at = newp.offset(fixedlen as isize) as *mut c_void;
-        memset(at, ' ' as c_int, fill as size_t);
+        at.cast::<u8>().write_bytes(b' ', fill as size_t);
         strcpy(newp.offset((fixedlen + fill) as isize), non_white);
         let moved = non_white.offset_from(bd.textstart) as c_int;
         (newp, new_line_len, fixedlen, bd.textcol + moved - fixedlen)

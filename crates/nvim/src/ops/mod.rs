@@ -72,7 +72,7 @@ use crate::normal::{
 };
 use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func};
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};
-use crate::os::cshim::{__ctype_b_loc, gettext, memmove, ngettext};
+use crate::os::cshim::{__ctype_b_loc, gettext, ngettext};
 use crate::os::input::{line_breakcheck, os_breakcheck};
 use crate::plines::{getvcols, init_charsize_arg, linetabsize_str, win_charsize};
 use crate::pos::{MAXCOL, equalpos, lt, ltoreq};
@@ -96,7 +96,7 @@ use crate::types::{
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
 use crate::winlayer::{Live, Pos};
-use ::libc::{abort, memset, strcpy};
+use ::libc::{abort, strcpy};
 use core::mem::offset_of;
 
 // The carve of the transpiled module; see each child's docs.

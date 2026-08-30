@@ -255,15 +255,10 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
             // padding, which is exactly what is written into it.
             let oldp = ml_get(lnum);
             let newp = unsafe { xmalloc((ml_get_len(lnum) - n + 1) as size_t) } as *mut c_char;
-            unsafe {
-                memmove(
-                    newp as *mut c_void,
-                    oldp as *const c_void,
-                    bd.textcol as size_t,
-                )
-            };
+            let into = newp.cast::<u8>();
+            unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
             let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
-            unsafe { memset(at, ' ' as c_int, pad as size_t) };
+            unsafe { at.cast::<u8>().write_bytes(b' ', pad as size_t) };
             let tail = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
             unsafe { strcpy(newp.offset((bd.textcol + pad) as isize), tail) };
             let _ = unsafe { ml_replace(lnum, newp, false) };

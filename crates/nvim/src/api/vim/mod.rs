@@ -105,7 +105,7 @@ use crate::types::{
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
-use ::libc::{labs, memcpy};
+use ::libc::labs;
 
 // The carve of the transpiled module; see each child's docs.
 mod client;

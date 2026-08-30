@@ -43,7 +43,7 @@ use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, memmove, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
     colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
@@ -318,7 +318,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
         {
             let p = unsafe { xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) }
                 as *mut c_char;
-            unsafe { memmove(p as *mut c_void, line as *const c_void, col as size_t) };
+            unsafe { p.cast::<u8>().copy_from(line.cast(), col as size_t) };
             unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
             unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
             let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };

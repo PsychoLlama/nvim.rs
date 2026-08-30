@@ -41,7 +41,6 @@ use crate::types::{
     size_t, uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
-use ::libc::memcpy;
 
 // The carve of the transpiled module; see each child's docs.
 mod attach;

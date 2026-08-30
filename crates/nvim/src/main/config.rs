@@ -32,7 +32,7 @@ use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::types::{FAIL, OK, lua_State, qf_info_T, scid_T, size_t};
-use ::libc::{fprintf, memcpy};
+use ::libc::fprintf;
 
 /// The parameter block `main` filled in, which outlives every call here.
 type Mp = Live<mparm_T>;
@@ -125,17 +125,20 @@ unsafe fn config_subpath(
     // and the allocation below is large enough for the worst case (a `dir`
     // that does not end in a separator).
     let path = unsafe { xmalloc(dir_len + 1 + appname_len + tail.len()) } as *mut c_char;
-    unsafe { memcpy(path as *mut c_void, dir as *const c_void, dir_len) };
+    let into = path.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(dir.cast(), dir_len) };
     let mut at = dir_len;
     if !dedup_sep || unsafe { *path.add(at - 1) } as c_int != PATHSEP {
         unsafe { *path.add(at) = PATHSEP as c_char };
         at += 1;
     }
     let into = unsafe { path.add(at) } as *mut c_void;
-    unsafe { memcpy(into, appname as *const c_void, appname_len) };
+    let into = into.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(appname.cast(), appname_len) };
     at += appname_len;
     let into = unsafe { path.add(at) } as *mut c_void;
-    unsafe { memcpy(into, tail.as_ptr() as *const c_void, tail.len()) };
+    let into = into.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(tail.as_ptr().cast(), tail.len()) };
     path
 }
 

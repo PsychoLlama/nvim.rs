@@ -291,11 +291,12 @@ fn tab_spaces_to_tabs() {
                 let col = unsafe { ptr.offset_from(cur_buf().b_ml.cached_text()) };
                 if col > 0 {
                     let head = unsafe { ptr.offset(-col) };
-                    unsafe { memmove(newp.cast(), head.cast(), col as size_t) };
+                    unsafe { newp.cast::<u8>().copy_from(head.cast(), col as size_t) };
                 }
                 let tail = unsafe { ptr.offset(i as isize) };
                 let tail_len = (newp_len as ptrdiff_t - col) as size_t;
-                unsafe { memmove(newp.offset(col).cast(), tail.cast(), tail_len) };
+                let into = unsafe { newp.offset(col) }.cast::<u8>();
+                unsafe { into.copy_from(tail.cast(), tail_len) };
                 if let Some(old) = cur_buf().b_ml.swap_cached_text(newp, newp_len) {
                     unsafe { xfree(old.cast()) };
                 }
@@ -308,7 +309,7 @@ fn tab_spaces_to_tabs() {
                 // `i` spaces in front of it, terminator included.
                 let tail = unsafe { ptr.offset(i as isize) };
                 let tail_len = unsafe { cstr::bytes_at(tail) }.len() + 1;
-                unsafe { memmove(ptr.cast(), tail.cast(), tail_len) };
+                unsafe { ptr.cast::<u8>().copy_from(tail.cast(), tail_len) };
             }
 
             // Each deleted space had an entry on the replace stack.

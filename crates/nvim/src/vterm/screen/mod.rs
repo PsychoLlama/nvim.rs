@@ -27,7 +27,6 @@ use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
 use self::resize::{realloc_sb_buffer, resize};
-use crate::os::cshim::memmove;
 use crate::types::{
     ScreenCell, ScreenPen, VTerm, VTermAttr, VTermColor, VTermDamageSize, VTermGlyphInfo,
     VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
@@ -641,7 +640,7 @@ impl Screen {
             // `memmove` is the overlap-tolerant copy the two rows need.
             let to = unsafe { getcell(self.0, row, dest.start_col) } as *mut c_void;
             let from = unsafe { getcell(self.0, row + downward, src.start_col) } as *const c_void;
-            unsafe { memmove(to, from, bytes) };
+            unsafe { to.cast::<u8>().copy_from(from.cast(), bytes) };
             row += step;
         }
     }

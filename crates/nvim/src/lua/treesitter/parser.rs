@@ -111,11 +111,9 @@ unsafe extern "C" fn input_cb(
         } else {
             256 as size_t
         };
-        memcpy(
-            buf.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
-            line.add(position.column as usize) as *const ::core::ffi::c_void,
-            tocopy,
-        );
+        (buf.ptr() as *mut ::core::ffi::c_char)
+            .cast::<u8>()
+            .copy_from_nonoverlapping((line.add(position.column as usize)).cast(), tocopy);
         memchrsub(
             buf.ptr() as *mut ::core::ffi::c_char as *mut ::core::ffi::c_void,
             '\n' as ::core::ffi::c_char,

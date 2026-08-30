@@ -350,11 +350,8 @@ unsafe fn parse_history(
 
     // The text, a NUL, then the separator byte after it.
     let stored = unsafe { xmalloc(text.len() + 2) }.cast::<c_char>();
-    unsafe {
-        stored
-            .cast::<u8>()
-            .copy_from_nonoverlapping(text.as_ptr(), text.len())
-    };
+    let into = stored.cast::<u8>();
+    unsafe { into.copy_from_nonoverlapping(text.as_ptr(), text.len()) };
     unsafe { stored.add(text.len()).write(0) };
     unsafe { stored.add(text.len() + 1).write((*history).sep) };
     unsafe { (*history).string = stored };

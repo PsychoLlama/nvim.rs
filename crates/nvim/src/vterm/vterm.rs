@@ -19,7 +19,6 @@ use crate::types::{
 };
 use crate::vterm::screen::vterm_screen_free;
 use crate::vterm::state::entry::vterm_state_free;
-use ::libc::memset;
 
 /// How much of the screen a single damaged cell is reported as.
 pub const VTERM_DAMAGE_CELL: VTermDamageSize = 0;
@@ -185,7 +184,7 @@ pub unsafe fn vterm_alloc(size: size_t) -> *mut c_void {
     let ptr = unsafe { xmalloc(size) };
     if !ptr.is_null() {
         // SAFETY: exactly the run just allocated.
-        unsafe { memset(ptr, 0, size) };
+        unsafe { ptr.cast::<u8>().write_bytes(0, size) };
     }
     ptr
 }

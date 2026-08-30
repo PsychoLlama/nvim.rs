@@ -26,9 +26,8 @@ use crate::memory::xstrdup;
 use crate::types::{
     Arena, Callback, CallbackReader, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, funcexe_T, ht_stack_T,
-    kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
+    kObjectTypeBoolean, list_stack_T, partial_T, typval_T, typval_vval_union,
 };
-use ::libc::memcmp;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -158,9 +157,8 @@ pub unsafe fn callback_call(
             // and it holds a NUL-terminated name.
             name = unsafe { cb.data.funcref };
             let len = unsafe { cstr::bytes_at(name) }.len() as c_int;
-            let vlua = VLUA.as_ptr().cast();
-            // SAFETY: `len >= 6` promises six readable bytes on both sides.
-            if len >= 6 && unsafe { memcmp(name.cast(), vlua, 6 as size_t) } == 0 {
+            // SAFETY: `len >= 6` promises six readable bytes.
+            if len >= 6 && unsafe { cstr::starts_with(name, VLUA.to_bytes()) } {
                 // SAFETY: the six bytes just compared are behind us, so what
                 // is left is still inside the name.
                 name = unsafe { name.add(6) };

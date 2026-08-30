@@ -16,7 +16,6 @@ use crate::main::{
     capture_ga, curwin, did_emsg, did_throw, force_abort, msg_col, redir_off, suppress_errthrow,
 };
 use crate::memory::xfree;
-use crate::os::cshim::memmove;
 use crate::runtime::do_source_str;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,

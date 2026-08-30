@@ -64,7 +64,7 @@ pub unsafe fn nvim_set_client_info(
                 .wrapping_mul(::core::mem::size_of::<KeyValuePair>());
             // SAFETY: `v` is the arena block just sized for one more pair
             // than `version` holds, and `version` is the caller's.
-            unsafe { memcpy(dst, src, bytes) };
+            unsafe { dst.cast::<u8>().copy_from_nonoverlapping(src.cast(), bytes) };
             v.size = version.size;
         }
         unsafe { dict_put(&mut v, c"major", Object::integer(0 as Integer)) };

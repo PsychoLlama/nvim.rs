@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::mem::MaybeUninit;
 use core::ptr;
 
@@ -44,7 +44,7 @@ use crate::types::{
     varnumber_T,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, memcpy};
+use ::libc::abort;
 
 /// A live `mpack_node_t`: the parser stack entry a callback is standing on.
 type Nd = Live<mpack_node_t>;
@@ -157,9 +157,9 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         }
         MPACK_TOKEN_CHUNK => {
             let data: *mut c_char = unsafe { (*parent).data[1].p }.cast();
-            let dst = unsafe { data.add((*parent).pos) }.cast();
-            let src = unsafe { (*node).tok.data.chunk_ptr }.cast::<c_void>();
-            unsafe { memcpy(dst, src, len) };
+            let dst = unsafe { data.add((*parent).pos) };
+            let src = unsafe { (*node).tok.data.chunk_ptr };
+            unsafe { dst.cast::<u8>().copy_from_nonoverlapping(src.cast(), len) };
         }
         MPACK_TOKEN_ARRAY => {
             let list = unsafe { tv_list_alloc(len as ptrdiff_t) };

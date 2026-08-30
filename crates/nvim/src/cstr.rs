@@ -61,8 +61,12 @@
 //! | `strncmp(a, b, n)` | [`prefix_at(a, n)`](prefix_at)` == prefix_at(b, n)` |
 //! | `strchr(s, c)` | `bytes_at(s).iter().position(…)` |
 //! | `strstr(h, n)` | `bytes_at(h).windows(n.len()).position(…)` |
+//! | `memcmp(a, b, n)` | [`slice_at(a, n)`](slice_at)` == slice_at(b, n)` |
+//! | `memcpy(d, s, n)` | `d.cast::<u8>().copy_from_nonoverlapping(…)` |
+//! | `memmove(d, s, n)` | `d.cast::<u8>().copy_from(s.cast::<u8>(), n)` |
+//! | `memset(d, b, n)` | `d.cast::<u8>().write_bytes(b, n)` |
 //!
-//! Three differences bite, and each has cost this tree a bug:
+//! Four differences bite, and each has cost this tree a bug:
 //!
 //! 1. **`strlen` is not `len()`.** `strlen` stops at the first NUL; a
 //!    slice's `len()` counts every byte it was given, terminator included.
@@ -73,7 +77,11 @@
 //!    asks whether `p` is exactly `"ab"`. [`prefix_at`] reproduces that by
 //!    stopping at the NUL as well; a plain `p[..5]` would panic or compare
 //!    bytes past the end.
-//! 3. **`strchr(s, 0)` is an idiom**, and it answers a pointer to the
+//! 3. **`memcmp` does not care about lengths, and `==` does.** Two slices
+//!    of different lengths are simply unequal in Rust; `memcmp` compares
+//!    `n` bytes of both and would read past the shorter one. Where the two
+//!    lengths differ on purpose, compare explicit [`slice_at`]s.
+//! 4. **`strchr(s, 0)` is an idiom**, and it answers a pointer to the
 //!    terminator rather than null. `bytes_at(s).iter().position(…)` cannot
 //!    find a NUL at all, because the terminator is not in the slice; such a
 //!    site wants `bytes_at(s).len()`.
@@ -190,6 +198,22 @@ pub(crate) unsafe fn prefix_cmp(a: *const c_char, b: *const c_char, n: usize) ->
 pub(crate) unsafe fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
     // SAFETY: caller's contract.
     unsafe { prefix_at(p, prefix.len()) == prefix }
+}
+
+/// Exactly `n` bytes at `p`, terminator or not.
+///
+/// The `mem*` calls' operand: a length the caller already knows, with no
+/// scan and no NUL rule. A null `p` with `n == 0` answers the empty slice,
+/// which [`slice::from_raw_parts`] itself refuses.
+///
+/// # Safety
+/// `p` has `n` readable bytes, live and unwritten for `'a`.
+pub(crate) unsafe fn slice_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
+    if n == 0 {
+        return &[];
+    }
+    // SAFETY: caller's contract.
+    unsafe { slice::from_raw_parts(p.cast::<u8>(), n) }
 }
 
 /// The string `buf` starts with.

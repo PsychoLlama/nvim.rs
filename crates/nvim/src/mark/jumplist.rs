@@ -27,7 +27,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,
 };
-use crate::os::cshim::{gettext, memmove, snprintf};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;
 use crate::winlayer::{Buf, Win};
@@ -76,9 +76,9 @@ pub fn setpcmark() {
         // length is the constant `JUMPLISTSIZE - 1`, so the move ends exactly
         // at the array's last element. Raising it writes past the array.
         let list = unsafe { &raw mut (*win.raw()).w_jumplist }.cast::<xfmark_T>();
+        let into = list.cast::<u8>();
         unsafe {
-            memmove(
-                list.cast(),
+            into.copy_from(
                 list.offset(1).cast(),
                 ((JUMPLISTSIZE - 1) as size_t).wrapping_mul(size_of::<xfmark_T>()),
             )
@@ -232,9 +232,8 @@ pub unsafe fn mark_jumplist_forget_file(wp: *mut win_T, fnum: c_int) {
         // length is what is left above `i`, so the move stays in the array.
         let list = unsafe { &raw mut (*wp.raw()).w_jumplist }.cast::<xfmark_T>();
         unsafe {
-            memmove(
-                list.offset(i as isize).cast(),
-                list.offset(i as isize + 1).cast(),
+            (list.offset(i as isize)).cast::<u8>().copy_from(
+                (list.offset(i as isize + 1)).cast(),
                 size_t::try_from(wp.w_jumplistlen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<xfmark_T>()),

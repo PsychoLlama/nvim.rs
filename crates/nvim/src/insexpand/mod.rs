@@ -86,7 +86,7 @@ use crate::options::{
     kOptCotFlagNearest, kOptCotFlagNoinsert, kOptCotFlagNoselect, kOptCotFlagNosort,
     kOptCotFlagPreinsert,
 };
-use crate::os::cshim::{gettext, memmove, strchr, strncasecmp, strncmp};
+use crate::os::cshim::{gettext, strchr, strncasecmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::time::{os_delay, os_hrtime};
@@ -121,7 +121,7 @@ use crate::undo::undo_allowed;
 use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{atoi, fclose, memcmp, qsort, strcat, strcpy, strncpy, strrchr};
+use ::libc::{atoi, fclose, qsort, strcat, strcpy, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;

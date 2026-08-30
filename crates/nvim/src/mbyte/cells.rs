@@ -22,7 +22,7 @@ use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
 
 /// Variation Selector 16: "draw the character before me as an emoji".
 const VS16: c_int = 0xfe0f;
@@ -246,13 +246,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
     }
     // Safe against a NUL: `memcmp` stops at the first difference, and the
     // NUL differs from VS-16's first byte.
-    unsafe {
-        memcmp(
-            p.offset(info.len as isize) as *const c_void,
-            c"\xef\xb8\x8f".as_ptr() as *const c_void,
-            3,
-        ) == 0
-    }
+    unsafe { cstr::starts_with(p.offset(info.len as isize), b"\xef\xb8\x8f") }
 }
 
 /// `setcellwidths({list})` — override the width of chosen codepoint ranges.

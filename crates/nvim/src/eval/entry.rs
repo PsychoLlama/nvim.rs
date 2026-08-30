@@ -55,7 +55,7 @@ use crate::types::{
     win_T,
 };
 use crate::winlayer::{Ea, Live};
-use ::libc::{atol, memcmp, memset};
+use ::libc::atol;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -631,9 +631,8 @@ pub unsafe fn call_vim_function(
     let mut ret = Err(Failed);
 
     'fail: {
-        let vlua = c"v:lua.".as_ptr().cast();
-        // SAFETY: `len >= 6` promises six readable bytes on both sides.
-        if len >= 6 && unsafe { memcmp(func.cast(), vlua, 6 as size_t) } == 0 {
+        // SAFETY: `len >= 6` promises six readable bytes.
+        if len >= 6 && unsafe { cstr::starts_with(func, b"v:lua.") } {
             // SAFETY: the six bytes just compared are behind us, so what is
             // left is still inside the NUL-terminated name.
             func = unsafe { func.add(6) };
@@ -872,6 +871,6 @@ pub unsafe fn typval_tostring(arg: *mut typval_T, quotes: bool) -> *mut c_char {
 #[inline]
 pub(crate) unsafe fn tv_init(tv: *mut typval_T) {
     if !tv.is_null() {
-        unsafe { memset(tv as *mut c_void, 0, size_of::<typval_T>()) };
+        unsafe { tv.cast::<u8>().write_bytes(0, size_of::<typval_T>()) };
     }
 }

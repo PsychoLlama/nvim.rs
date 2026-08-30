@@ -38,7 +38,6 @@ use crate::types::{
     NUL, OK, buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T,
     uint8_t, uint16_t, wordcount_T,
 };
-use ::libc::memcpy;
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
 
@@ -196,7 +195,8 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
     {
         let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut wordcount_T;
         let key = unsafe { &raw mut (*wc).wc_word } as *mut c_char;
-        unsafe { memcpy(key as *mut c_void, p as *const c_void, p_len + 1) };
+        let into = key.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(p.cast(), p_len + 1) };
         unsafe { (*wc).wc_count = count as uint16_t };
         unsafe { hash_add_item(&raw mut (*lp).sl_wordcount, hi, key, hash) };
     } else {

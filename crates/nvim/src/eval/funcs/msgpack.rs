@@ -20,7 +20,6 @@ use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::message_fmt::c_str_len;
 use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
-use crate::os::cshim::memmove;
 use crate::semsg;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
@@ -203,7 +202,7 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
             // Shuffle the partial object back to the front so the next
             // read tops it up.
             if buf_size != 0 && cursor > buf as *const c_char {
-                unsafe { memmove(buf as *mut c_void, cursor as *const c_void, buf_size) };
+                unsafe { buf.cast::<u8>().copy_from(cursor.cast(), buf_size) };
             }
         } else if status != MPACK_OK as c_int {
             break;

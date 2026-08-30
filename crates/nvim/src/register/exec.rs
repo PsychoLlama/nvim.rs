@@ -57,8 +57,13 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
         let pp = unsafe { (*reg).y_array.add(last) };
         let tmplen = unsafe { *pp }.len().wrapping_add(plen);
         let tmp = unsafe { xmalloc(tmplen.wrapping_add(1)) } as *mut c_char;
-        unsafe { memcpy(tmp as *mut c_void, (*pp).data().cast(), (*pp).len()) };
-        unsafe { memcpy(tmp.add((*pp).len()).cast(), p as *const c_void, plen) };
+        let into = tmp.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping((*pp).data().cast(), (*pp).len()) };
+        unsafe {
+            tmp.add((*pp).len())
+                .cast::<u8>()
+                .copy_from_nonoverlapping(p.cast(), plen)
+        };
         unsafe { *tmp.add(tmplen) = NUL as c_char };
         unsafe { xfree(p as *mut c_void) };
         unsafe { xfree((*pp).data() as *mut c_void) };

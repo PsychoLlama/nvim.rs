@@ -42,7 +42,6 @@ use crate::types::{
     var_flavour_T,
 };
 use crate::ui::ui_has;
-use ::libc::memcpy;
 
 /// A freshly declared typval.
 const UNSET_TV: typval_T = typval_T {
@@ -236,7 +235,8 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             // SAFETY: as above -- `ga_len` is inside the array.
             let end = unsafe { (ga.ga_data as *mut c_char).offset(ga.ga_len as isize) };
             // SAFETY: as above -- `len + 1` bytes fit past `ga_len`.
-            unsafe { memcpy(end as *mut c_void, argstr as *const c_void, len + 1) };
+            let into = end.cast::<u8>();
+            unsafe { into.copy_from_nonoverlapping(argstr.cast(), len + 1) };
             if owned {
                 // SAFETY: the two encoders hand back an owned string.
                 unsafe { xfree(argstr as *mut c_void) };

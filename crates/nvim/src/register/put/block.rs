@@ -243,36 +243,34 @@ impl Put {
         // delcount` is within it; and `put` is `yanklen` bytes.
         let mut ptr = newp;
         unsafe {
-            memmove(
-                ptr as *mut c_void,
-                oldp as *const c_void,
-                land.textcol as size_t,
-            );
+            ptr.cast::<u8>()
+                .copy_from(oldp.cast(), land.textcol as size_t);
             ptr = ptr.offset(land.textcol as isize);
-            memset(ptr as *mut c_void, ' ' as c_int, land.startspaces as size_t);
+            ptr.cast::<u8>()
+                .write_bytes(b' ', land.startspaces as size_t);
             ptr = ptr.offset(land.startspaces as isize);
 
             for j in 0..self.count {
-                memmove(ptr as *mut c_void, put as *const c_void, yanklen as size_t);
+                ptr.cast::<u8>().copy_from(put.cast(), yanklen as size_t);
                 ptr = ptr.offset(yanklen as isize);
                 // The block's right padding only goes in if there is text
                 // behind it; otherwise it would be trailing white space.
                 if (j < self.count - 1 || !land.shortline) && spaces > 0 {
-                    memset(ptr as *mut c_void, ' ' as c_int, spaces as size_t);
+                    ptr.cast::<u8>().write_bytes(b' ', spaces as size_t);
                     ptr = ptr.offset(spaces as isize);
                 } else {
                     *totlen -= spaces as size_t;
                 }
             }
 
-            memset(ptr as *mut c_void, ' ' as c_int, land.endspaces as size_t);
+            ptr.cast::<u8>().write_bytes(b' ', land.endspaces as size_t);
             ptr = ptr.offset(land.endspaces as isize);
 
             // The rest of the old line, including its NUL.
             let columns = oldlen - land.textcol - land.delcount + 1;
             debug_assert!(columns >= 0);
             let rest = oldp.offset((land.textcol + land.delcount) as isize) as *const c_void;
-            memmove(ptr as *mut c_void, rest, columns as size_t);
+            ptr.cast::<u8>().copy_from(rest.cast(), columns as size_t);
         }
         // SAFETY: `newp` is a NUL-terminated line the buffer takes over.
         let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newp, false) };

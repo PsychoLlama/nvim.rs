@@ -28,7 +28,6 @@ use crate::charset::{getdigits_int, hex2nr};
 use crate::global_cell::GlobalCell;
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::os::cshim::memmove;
 use crate::strings::xstrnsave;
 use crate::types::Failed;
 
@@ -187,9 +186,9 @@ pub unsafe fn skip_regexp_ex(
                 if !dropped.is_null() {
                     unsafe { *dropped += 1 };
                 }
+                let into = p.cast::<u8>();
                 unsafe {
-                    memmove(
-                        p.cast(),
+                    into.copy_from(
                         p.add(1).cast(),
                         startplen - p.add(1).offset_from(startp) as usize + 1,
                     )

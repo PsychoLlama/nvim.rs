@@ -21,7 +21,7 @@
 
 use core::ffi::{c_int, c_void};
 
-use crate::os::cshim::{memmove, stderr};
+use crate::os::cshim::stderr;
 use crate::types::{
     ScreenCell, VTermLineInfo, VTermPos, VTermScreenCell, VTermStateFields, size_t,
 };
@@ -79,8 +79,9 @@ impl NewBuffer {
         // inside their blocks; `memmove` tolerates the overlap.
         let cells = unsafe { self.cells.offset((downwards * self.cols) as isize) };
         let lineinfo = unsafe { self.lineinfo.offset(downwards as isize) };
-        unsafe { memmove(cells.cast(), self.cells.cast(), cell_bytes) };
-        unsafe { memmove(lineinfo.cast(), self.lineinfo.cast(), info_bytes) };
+        unsafe { cells.cast::<u8>().copy_from(self.cells.cast(), cell_bytes) };
+        let into = lineinfo.cast::<u8>();
+        unsafe { into.copy_from(self.lineinfo.cast(), info_bytes) };
     }
 
     /// Slides the `count` rows starting at row `from` up to row 0.
@@ -90,8 +91,9 @@ impl NewBuffer {
         // SAFETY: as for `shift_down`; `from + count <= rows`.
         let cells = unsafe { self.cells.offset((from * self.cols) as isize) };
         let lineinfo = unsafe { self.lineinfo.offset(from as isize) };
-        unsafe { memmove(self.cells.cast(), cells.cast(), cell_bytes) };
-        unsafe { memmove(self.lineinfo.cast(), lineinfo.cast(), info_bytes) };
+        unsafe { self.cells.cast::<u8>().copy_from(cells.cast(), cell_bytes) };
+        let into = self.lineinfo.cast::<u8>();
+        unsafe { into.copy_from(lineinfo.cast(), info_bytes) };
     }
 }
 

@@ -414,11 +414,8 @@ unsafe extern "C-unwind" fn __has_ancestor(mut L: *mut lua_State) -> ::core::ffi
                     let mut check_str: *const ::core::ffi::c_char =
                         lua_tolstring(L, -1 as ::core::ffi::c_int, &raw mut check_len);
                     if node_type_len == check_len
-                        && memcmp(
-                            node_type_0 as *const ::core::ffi::c_void,
-                            check_str as *const ::core::ffi::c_void,
-                            check_len,
-                        ) == 0 as ::core::ffi::c_int
+                        && cstr::slice_at(node_type_0, check_len)
+                            == cstr::slice_at(check_str, check_len)
                     {
                         lua_pushboolean(L, 1);
                         return 1 as ::core::ffi::c_int;

@@ -33,7 +33,7 @@ use crate::log::{LOGLVL_ERR, logmsg_c};
 use crate::main::{didset_vim, didset_vimruntime, nvim_testing};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::internal_error;
-use crate::os::cshim::{environ, strchr, strncmp};
+use crate::os::cshim::{environ, strchr};
 use crate::os::fs::{os_dirname, os_realpath};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};

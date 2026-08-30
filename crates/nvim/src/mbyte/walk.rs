@@ -275,7 +275,7 @@ pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
 /// the character.
 pub unsafe fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char) {
     let l = unsafe { utfc_ptr2len(*fp) } as size_t;
-    unsafe { memmove(*tp as *mut c_void, *fp as *const c_void, l) };
+    unsafe { (*tp).cast::<u8>().copy_from((*fp).cast(), l) };
     unsafe { *tp = (*tp).add(l) };
     unsafe { *fp = (*fp).add(l) };
 }

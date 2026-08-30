@@ -28,13 +28,12 @@ use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::memory::{xrealloc, xstrlcat};
-use crate::os::cshim::memmove;
 use crate::path::{
     add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
     path_tail_with_sep, shorten_dir_len, simplify_filename,
 };
 use crate::types::{EvalFuncData, MAXPATHL, VAR_STRING, size_t, typval_T, varnumber_T};
-use ::libc::{memcpy, readlink};
+use ::libc::readlink;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -51,7 +50,8 @@ impl Owned {
         let rest = self.len() - n + 1;
         // SAFETY: source and destination are both inside the allocation and
         // the two overlap, which is what `memmove` is for.
-        unsafe { memmove(self.0.cast(), self.0.add(n).cast(), rest as size_t) };
+        let into = self.0.cast::<u8>();
+        unsafe { into.copy_from(self.0.add(n).cast(), rest as size_t) };
     }
 
     /// Replace the last component with `name`, growing the allocation.
@@ -65,7 +65,11 @@ impl Owned {
         self.0 = unsafe { xrealloc(self.0.cast(), (len + name_len + 1) as size_t).cast() };
         // SAFETY: `path_tail` answers a pointer inside the block just grown,
         // at most `len` bytes in, so `name` and its terminator fit after it.
-        unsafe { memcpy(path_tail(self.0).cast(), name.as_ptr().cast(), name_len + 1) };
+        unsafe {
+            path_tail(self.0)
+                .cast::<u8>()
+                .copy_from_nonoverlapping(name.as_ptr().cast(), name_len + 1)
+        };
     }
 
     /// `self` with the first `n` bytes of `tail` appended.
@@ -75,7 +79,8 @@ impl Owned {
         // SAFETY: `out` holds `len + n` bytes and a terminator; the copy is
         // `self` and its NUL, and `xstrlcat` then writes at most `n` bytes
         // and a NUL of its own after them.
-        unsafe { memcpy(out.0.cast(), self.0.cast(), len + 1) };
+        let into = out.0.cast::<u8>();
+        unsafe { into.copy_from_nonoverlapping(self.0.cast(), len + 1) };
         unsafe { xstrlcat(out.0.add(len), tail.as_ptr(), (n + 1) as size_t) };
         out
     }

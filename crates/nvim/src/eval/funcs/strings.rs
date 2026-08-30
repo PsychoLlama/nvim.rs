@@ -27,7 +27,7 @@ use crate::mbyte::{
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::{emsg, str2special_save};
 use crate::optionstr::empty_option;
-use crate::os::cshim::{gettext, gettext_ptr, memmove};
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::regexp::{
     RE_MAGIC, RE_STRING, reg_submatch, reg_submatch_list, vim_regcomp, vim_regexec_nl, vim_regfree,
@@ -283,7 +283,7 @@ unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     }
     let r = unsafe { xmallocz(len) }.cast::<c_char>();
     for i in 0..n as usize {
-        unsafe { memmove(r.add(i * slen).cast::<c_void>(), p.cast::<c_void>(), slen) };
+        unsafe { (r.add(i * slen)).cast::<u8>().copy_from(p.cast(), slen) };
     }
     rettv.vval.v_string = r;
 }

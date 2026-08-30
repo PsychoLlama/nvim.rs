@@ -62,12 +62,14 @@ unsafe fn yank_copy_line(
     // SAFETY: the three runs are together exactly the `size` bytes `start`
     // owns, and `textstart` points at `textlen` bytes of the current line.
     let mut pnew = start;
-    unsafe { memset(pnew as *mut c_void, ' ' as c_int, def.startspaces as size_t) };
+    let into = pnew.cast::<u8>();
+    unsafe { into.write_bytes(b' ', def.startspaces as size_t) };
     pnew = unsafe { pnew.offset(def.startspaces as isize) };
     let text = def.textstart as *const c_void;
-    unsafe { memmove(pnew as *mut c_void, text, def.textlen as size_t) };
+    let into = pnew.cast::<u8>();
+    unsafe { into.copy_from(text.cast(), def.textlen as size_t) };
     pnew = unsafe { pnew.offset(def.textlen as isize) };
-    unsafe { memset(pnew as *mut c_void, ' ' as c_int, def.endspaces as size_t) };
+    unsafe { pnew.cast::<u8>().write_bytes(b' ', def.endspaces as size_t) };
     pnew = unsafe { pnew.offset(def.endspaces as isize) };
 
     if exclude_trailing_space {
