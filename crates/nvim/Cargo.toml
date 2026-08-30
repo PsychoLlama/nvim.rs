@@ -28,9 +28,29 @@ path = "src/bin/nvim.rs"
 # second full nvim just to run zero tests.
 test = false
 
+# The dependency policy. A crate enters this table only when all three hold:
+#
+#  1. it is pure Rust, or its `-sys` build is owned by `nix/deps.json` (the
+#     nix build reads `Cargo.lock` directly, so a pure-Rust crate costs
+#     nothing beyond the lock entry);
+#  2. it replaces a *shape* — an error derive, a flag set, a C library's
+#     whole API — and not a behaviour the editor is observed on; and
+#  3. the swap is gated by an oracle that already passes.
+#
+# Each entry says which shape it replaced.
 [dependencies]
+# The libc bindings the transpiled tree calls through. Not a shape: this is
+# the C standard library, and it predates the policy.
 libc = "0.2"
+# The main-thread assertion behind `GlobalCell`; a crate of this repo's own.
 nvim-mainthread = { path = "../mainthread" }
+# The error derive. It replaces hand-written `Display`/`std::error::Error`
+# impls — starting with `api::Error`, whose message an editor shows rather
+# than reports, which is why no report-style error crate (`anyhow`,
+# `eyre`, `miette`) enters here: an editor-internal error is a Vim message,
+# not a diagnostic with a backtrace and a source chain. Pure Rust, proc-macro
+# only, nothing of it survives into the binary but the impls it wrote.
+thiserror = { version = "2", default-features = false, features = ["std"] }
 
 # Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
 # an explicit `unsafe {}` block. The transpiled tree has thousands of such
