@@ -28,6 +28,22 @@ and this project adheres to [CalVer](https://calver.org/).
   comparison, a search or a copy cannot run past the end of what it was
   given. Every command reads and writes exactly the same bytes as before,
   including for text that is not valid UTF-8.
+- Reworked how the editor turns its own behaviour off for the duration of an
+  operation — suppressing messages, holding the buffer list still, keeping
+  autocommands from firing while a window is swapped out. Every such
+  suppression is now released by the language when the operation ends,
+  whichever way it ends. Five cases where an error part way through an
+  operation left the suppression in force for the rest of the session are
+  fixed as a result: `:all` after a window could not be split, opening a line
+  when the buffer would not take it, `CTRL-A`/`CTRL-X` on a block, an error
+  inside a `:s///c` prompt, and an error inside a Lua callback from the event
+  loop.
+- Reworked the `$NVIM_LOG_FILE` log: each line is now written out with its
+  values where it is logged and checked against them when the editor is
+  built, and a line the current log level would discard no longer costs
+  anything to prepare. The lines say the same thing, with two exceptions: a
+  missing string prints as `[NULL]` rather than `(null)`, and one over-long
+  server address is cut to the same forty bytes by a different route.
 - Reworked how the editor's internals say whether an operation worked: the
   several hundred functions that answered a plain success/failure number now
   answer a result the compiler can check, so an unread answer is a build
