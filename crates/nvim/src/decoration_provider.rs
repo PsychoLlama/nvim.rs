@@ -22,9 +22,7 @@
 //!   flood the message area on every redraw.
 
 use crate::api::extmark::describe_ns;
-use crate::api::private::helpers::{
-    api_clear_error, api_free_array, api_free_object, api_object_to_bool,
-};
+use crate::api::private::helpers::{api_free_array, api_free_object, api_object_to_bool};
 use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_count};
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
@@ -38,8 +36,7 @@ use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
-    buf_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T,
-    win_T,
+    buf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T, win_T,
 };
 use crate::winlayer::Win;
 
@@ -66,10 +63,7 @@ const kRetMulti: LuaRetMode = 3;
 /// Ask `nlua_call_ref` for one value, interpreted as a boolean.
 const kRetNilBool: LuaRetMode = 1;
 
-const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+const ERROR_INIT: Error = Error::none();
 
 /// The registered providers, in registration order — which is the order every
 /// callback runs in. Entries are never removed: unregistering clears the
@@ -151,7 +145,7 @@ unsafe fn decor_provider_invoke(
     let ret = unsafe { nlua_call_ref(callback, name, args, mode, no_arena, slot) };
     drop(locked);
 
-    if err.type_0 == kErrorTypeNone {
+    if !err.is_set() {
         with_provider(idx, |p| p.error_count = 0);
         if let Some(res) = res {
             debug_assert!(ret.type_0 == kObjectTypeArray);
@@ -165,10 +159,10 @@ unsafe fn decor_provider_invoke(
         }
     }
 
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         let (ns_id, count) = with_provider(idx, |p| (p.ns_id, p.error_count));
         if count < CB_MAX_ERROR {
-            unsafe { decor_provider_error(ns_id, name, err.msg) };
+            unsafe { decor_provider_error(ns_id, name, err.message_or_empty().as_ptr()) };
             // The report can reach Lua through the message area, so the
             // count is bumped through a fresh borrow.
             with_provider(idx, |p| {
@@ -180,7 +174,7 @@ unsafe fn decor_provider_invoke(
         }
     }
 
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     // TODO(bfredl): wants to be on an arena
     unsafe { api_free_object(ret) };
     false

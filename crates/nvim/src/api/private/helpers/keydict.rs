@@ -147,7 +147,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     // SAFETY: `given` is live and `err` the caller's slot.
                     hl_id = unsafe { object_to_hl_id(given, key.data(), err) };
                     // SAFETY: `err` is the caller's slot.
-                    if unsafe { (*err).type_0 } != kErrorTypeNone {
+                    if unsafe { (*err).kind() } != kErrorTypeNone {
                         return false;
                     }
                 }
@@ -179,7 +179,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 // SAFETY: the row says a `Boolean` lives at `mem`.
                 unsafe { *mem.cast::<Boolean>() = on };
                 // SAFETY: `err` is the caller's slot.
-                if unsafe { (*err).type_0 } != kErrorTypeNone {
+                if unsafe { (*err).kind() } != kErrorTypeNone {
                     return false;
                 }
             }

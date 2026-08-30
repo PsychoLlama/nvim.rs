@@ -10,7 +10,7 @@
 use super::*;
 use crate::guard::Keys;
 use crate::keycodes::key_unescape;
-use crate::types::{NUL, kErrorTypeNone};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -156,10 +156,7 @@ pub unsafe fn paste_repeat(count: c_int) {
 
     let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
     let mut arena: Arena = ARENA_EMPTY;
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let mut i = 0;
     while !aborted && i < count {
         if let Err(e) =
@@ -167,10 +164,10 @@ pub unsafe fn paste_repeat(count: c_int) {
         {
             err = e;
         }
-        aborted = err.type_0 != kErrorTypeNone;
+        aborted = err.is_set();
         i += 1;
     }
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { ga_clear(&raw mut ga) };
 }

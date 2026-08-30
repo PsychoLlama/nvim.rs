@@ -67,7 +67,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     if set(KEYSET_OPTIDX_redraw__win) {
         // SAFETY: `err` is this frame's own slot.
         win = unsafe { find_window_by_handle(opts.win, err) };
-        if error.type_0 != kErrorTypeNone {
+        if error.is_set() {
             return ().reported(error);
         }
     }
@@ -78,7 +78,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         }
         // SAFETY: `err` is this frame's own slot.
         buf = unsafe { find_buffer_by_handle(opts.buf, err) };
-        if error.type_0 != kErrorTypeNone {
+        if error.is_set() {
             return ().reported(error);
         }
     }

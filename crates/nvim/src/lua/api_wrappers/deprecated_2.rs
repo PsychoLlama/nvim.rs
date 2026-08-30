@@ -31,7 +31,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_option(lstate: *mut lua_St
         } = call;
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_object(lstate, true, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"value".as_ptr().cast_mut();
             return;
         }
@@ -40,13 +40,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_option(lstate: *mut lua_St
         let arg_3 = unsafe { ObjectArg::new(arg_3) };
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"name".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"window".as_ptr().cast_mut();
             return;
         }

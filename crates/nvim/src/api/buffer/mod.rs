@@ -1,9 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_clear_error, api_set_error, arena_array, arena_dict, arena_string, buf_get_text,
-    cstr_as_string, dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark,
-    try_enter, try_leave,
+    api_set_error, arena_array, arena_dict, arena_string, buf_get_text, cstr_as_string,
+    dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark, try_enter,
+    try_leave,
 };
 use crate::api::private::validate::{api_err_invalid, check_string_array};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};

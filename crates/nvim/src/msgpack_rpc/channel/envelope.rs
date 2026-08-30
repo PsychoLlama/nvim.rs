@@ -14,13 +14,13 @@
 //! block early when a message outgrows it, so a large notification travels as
 //! a series of writes rather than one big allocation.
 
-use core::ffi::{CStr, c_char, c_void};
-use core::{ptr, slice};
-
 use crate::api::private::dispatch_wrappers::handle_nvim_paste;
-use crate::api::private::helpers::{api_clear_error, cstr_as_string};
 use crate::api::ui::remote_ui_flush_pending_data;
 use crate::event::wstream::wstream_new_buffer;
+use core::ffi::{c_char, c_void};
+use core::{ptr, slice};
+
+use crate::api::private::helpers::cstr_as_string;
 use crate::memory::{alloc_block, free_block};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
@@ -82,7 +82,7 @@ pub unsafe fn serialize_response(
     arg: *mut Object,
 ) {
     // SAFETY: the caller's error slot.
-    let err_type = unsafe { (*err).type_0 };
+    let err_type = unsafe { (*err).kind() };
     let errored = err_type != kErrorTypeNone;
 
     if errored && type_0 == kMessageTypeNotification {
@@ -102,7 +102,10 @@ pub unsafe fn serialize_response(
     if errored {
         mpack_array(&mut packer.ptr, 2);
         mpack_integer(&mut packer.ptr, Integer::from(err_type));
-        unsafe { mpack_str(cstr_as_string((*err).msg), &mut packer) };
+        // SAFETY: the caller's error slot, whose message is a live string.
+        let why = unsafe { cstr_as_string((*err).message_or_empty().as_ptr()) };
+        // SAFETY: `packer` is this frame's own.
+        unsafe { mpack_str(why, &mut packer) };
         unsafe { put_byte(&mut packer, wire::NIL) };
     } else {
         unsafe { put_byte(&mut packer, wire::NIL) };
@@ -128,11 +131,11 @@ unsafe fn report_failed_notification(
         )
     });
     if is_paste {
-        // SAFETY: the caller's error slot, whose message is a live string.
-        let msg = unsafe { CStr::from_ptr((*err).msg) }.to_string_lossy();
+        // SAFETY: the caller's error slot.
+        let msg = unsafe { (*err).message_or_empty() }.to_string_lossy();
         crate::semsg!("paste: {msg}");
         // SAFETY: as above.
-        unsafe { api_clear_error(err) };
+        unsafe { (*err).clear() };
         return;
     }
 
@@ -142,13 +145,13 @@ unsafe fn report_failed_notification(
         Object {
             type_0: kObjectTypeInteger,
             data: crate::types::object_data {
-                integer: Integer::from(unsafe { (*err).type_0 }),
+                integer: Integer::from(unsafe { (*err).kind() }),
             },
         },
         Object {
             type_0: kObjectTypeString,
             data: crate::types::object_data {
-                string: unsafe { cstr_as_string((*err).msg) },
+                string: unsafe { cstr_as_string((*err).message_or_empty().as_ptr()) },
             },
         },
     ];

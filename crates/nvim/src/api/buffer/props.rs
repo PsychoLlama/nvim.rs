@@ -174,7 +174,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
         p_acd.set(save_acd);
     }
     unsafe { try_leave(&raw mut tstate, err) };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     if ren_ret == FAIL {
@@ -187,12 +187,9 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
 }
 
 pub unsafe fn nvim_buf_is_loaded(buf: Buffer) -> Boolean {
-    let mut stub: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+    let mut stub: Error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &raw mut stub) };
-    unsafe { api_clear_error(&raw mut stub) };
+    stub.clear();
     !b.is_null() && !unsafe { (*b).b_ml.ml_mfp }.is_null()
 }
 
@@ -200,7 +197,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     let mut force: bool = unsafe { (*opts).force };
@@ -227,11 +224,8 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
 }
 
 pub unsafe fn nvim_buf_is_valid(buf: Buffer) -> Boolean {
-    let mut stub: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    };
+    let mut stub: Error = Error::none();
     let mut ret: Boolean = !unsafe { find_buffer_by_handle(buf, &raw mut stub) }.is_null();
-    unsafe { api_clear_error(&raw mut stub) };
+    stub.clear();
     ret
 }

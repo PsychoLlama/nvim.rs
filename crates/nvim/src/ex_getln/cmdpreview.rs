@@ -10,7 +10,7 @@
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
-use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags, kErrorTypeNone};
+use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -99,8 +99,8 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
     );
     unsafe { try_leave(&raw mut tstate, &raw mut err) };
 
-    if err.type_0 != kErrorTypeNone || result == FAIL {
-        unsafe { api_clear_error(&raw mut err) };
+    if err.is_set() || result == FAIL {
+        err.clear();
         return ::core::ptr::null_mut::<win_T>();
     }
 
@@ -469,8 +469,8 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         unsafe { try_enter(&raw mut tstate) };
         cmdpreview_type = unsafe { execute_cmd(&raw mut ea, &raw mut cmdinfo, true) };
         unsafe { try_leave(&raw mut tstate, &raw mut err) };
-        if err.type_0 != kErrorTypeNone {
-            unsafe { api_clear_error(&raw mut err) };
+        if err.is_set() {
+            err.clear();
             cmdpreview_type = 0;
         }
 

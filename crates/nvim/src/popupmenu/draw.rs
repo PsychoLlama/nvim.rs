@@ -17,7 +17,7 @@
 use super::*;
 use crate::grid::linebuf;
 use crate::message::emsg_ptr;
-use crate::types::{kErrorTypeNone, kFloatRelativeEditor};
+use crate::types::kFloatRelativeEditor;
 
 /// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
 ///
@@ -300,18 +300,15 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         });
     }
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut(),
-    };
+    let mut err = Error::none();
     if !unsafe { parse_winborder(&raw mut *config, p_pumborder.get(), &raw mut err) } {
-        if err.type_0 != kErrorTypeNone {
-            unsafe { emsg_ptr(err.msg) };
+        if err.is_set() {
+            unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
         }
-        unsafe { api_clear_error(&raw mut err) };
+        err.clear();
         return None;
     }
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 
     // The shadow style is not a box: it darkens the cells to the right
     // and below instead, in two dedicated highlight groups.

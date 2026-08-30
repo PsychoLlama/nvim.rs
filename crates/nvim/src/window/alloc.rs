@@ -40,7 +40,7 @@ use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Error, FAIL, Integer, OK, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T, handle_T,
-    kErrorTypeNone, linenr_T, tabpage_T, win_T, winopt_T,
+    linenr_T, tabpage_T, win_T, winopt_T,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -95,10 +95,7 @@ pub unsafe fn win_alloc_first() {
 }
 
 pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut::<c_char>(),
-    };
+    let mut err = Error::none();
     let fconfig = WinConfig {
         width: Columns.get(),
         height: 5,

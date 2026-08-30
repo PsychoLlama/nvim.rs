@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::{ERROR_INIT, TRY_STATE_INIT, error_set, nlua_push_errstr};
-use crate::api::private::helpers::{api_clear_error, handle_get_buffer, try_enter, try_leave};
+use crate::api::private::helpers::{handle_get_buffer, try_enter, try_leave};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_error, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger,
@@ -218,8 +218,9 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         try_leave(&raw mut tstate, &raw mut err);
 
         if error_set(&err) {
-            nlua_push_errstr(lstate, c"couldn't parse regex: %s".as_ptr(), err.msg);
-            api_clear_error(&raw mut err);
+            let why = err.message_or_empty().as_ptr();
+            nlua_push_errstr(lstate, c"couldn't parse regex: %s".as_ptr(), why);
+            err.clear();
             return lua_error(lstate);
         } else if prog.is_null() {
             nlua_push_errstr(lstate, c"couldn't parse regex".as_ptr());

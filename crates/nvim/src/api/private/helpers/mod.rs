@@ -31,7 +31,7 @@ use crate::main::{
     got_int, msg_list, need_rethrow, trylevel,
 };
 use crate::mark::setmark_pos;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::os::cshim::vsnprintf;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
@@ -42,6 +42,7 @@ use crate::types::{
     size_t, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
+use std::ffi::CString;
 
 mod keydict;
 mod text;
@@ -314,6 +315,10 @@ pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) ->
 
 /// Set `err` from a printf-style message. The message is measured first and
 /// then formatted, so it is never truncated below 1 MiB.
+///
+/// The last variadic in `api/`. Its call sites convert to
+/// [`api_error!`](crate::api_error) -- a checked `format_args!` -- and it
+/// goes with the last of them.
 pub(crate) unsafe extern "C" fn api_set_error(
     err: *mut Error,
     err_type: ErrorType,
@@ -322,38 +327,24 @@ pub(crate) unsafe extern "C" fn api_set_error(
 ) {
     // SAFETY: `format` and the variadic arguments are the caller's, and are
     // a valid printf call by construction — every call site is in-tree.
-    unsafe {
-        debug_assert!(err_type != kErrorTypeNone);
+    let text = unsafe {
         let measure: VaList = args.clone();
         let write: VaList = args.clone();
         let len = vsnprintf(ptr::null_mut(), 0, format, measure);
         debug_assert!(len >= 0);
         let bufsize = (len as size_t + 1).min(1024 * 1024);
-        (*err).msg = xmalloc(bufsize).cast();
-        vsnprintf((*err).msg, bufsize, format, write);
-        (*err).type_0 = err_type;
-    }
-}
-
-/// Free `err`'s message and mark it as carrying no error.
-pub(crate) unsafe fn api_clear_error(value: *mut Error) {
-    // SAFETY: `value` is the caller's error slot.
-    let slot = unsafe { &mut *value };
-    if slot.type_0 == kErrorTypeNone {
-        return;
-    }
-    // SAFETY: a set error owns its message.
-    unsafe { xfree(slot.msg.cast()) };
-    slot.msg = ptr::null_mut();
-    slot.type_0 = kErrorTypeNone;
+        let mut buf = vec![0u8; bufsize];
+        vsnprintf(buf.as_mut_ptr().cast(), bufsize, format, write);
+        buf.truncate(buf.iter().position(|&b| b == 0).unwrap_or(0));
+        CString::new(buf).unwrap_or_default()
+    };
+    // SAFETY: `err` is the caller's error slot, live and initialized.
+    unsafe { *err = Error::from_message(err_type, &text) };
 }
 
 /// A fresh, unset error, to lend to a helper that still reports through an
 /// out-parameter. C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+pub(crate) const ERROR_INIT: Error = Error::none();
 
 /// Answering with what a helper that still reports through an `*mut Error`
 /// out-parameter produced.
@@ -381,7 +372,7 @@ pub(crate) trait Reported: Sized {
 
 impl<T> Reported for T {
     fn reported(self, err: Error) -> Result<Self, Error> {
-        match err.type_0 {
+        match err.kind() {
             kErrorTypeNone => Ok(self),
             _ => Err(err),
         }

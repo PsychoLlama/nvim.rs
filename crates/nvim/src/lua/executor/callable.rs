@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
-use crate::api::private::helpers::{api_clear_error, cstr_as_string};
+use crate::api::private::helpers::cstr_as_string;
 use crate::eval::userfunc::register_luafunc;
 use crate::ex_getln::ERROR_INIT;
 use crate::global_cell::GlobalCell;
@@ -233,7 +233,7 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
             &raw mut err,
         );
         xfree(str.cast::<c_void>());
-        api_clear_error(&raw mut err);
+        err.clear();
         result.type_0 == kObjectTypeBoolean && result.data.boolean
     }
 }

@@ -37,7 +37,7 @@
 use core::ffi::c_int;
 use core::ptr;
 
-use crate::api::private::helpers::{api_clear_error, api_set_error};
+use crate::api::private::helpers::api_set_error;
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
 use crate::buffer::{buf_hide, buf_is_quickfix};
 use crate::cursor::check_cursor;
@@ -59,8 +59,8 @@ use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CMD_tabnew, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType,
     Set_uint32_t, WinSplit, WinStyle, bln_values, buf_T, cmdidx_T, dobuf_action_values,
-    dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException, kErrorTypeNone,
-    size_t, tabpage_T, uint32_t, win_T,
+    dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException, size_t, tabpage_T,
+    uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -240,10 +240,10 @@ pub fn window_layout_locked(cmd: cmdidx_T) -> bool {
 fn layout_locked(cmd: cmdidx_T) -> bool {
     let mut e = ERROR_INIT;
     let locked = locked_err(cmd, &mut e);
-    if e.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        err(e.msg);
+    if e.is_set() {
+        err(e.message_or_empty().as_ptr());
         // SAFETY: an error this call filled in, which owns its message.
-        unsafe { api_clear_error(&raw mut e) };
+        e.clear();
     }
     locked
 }

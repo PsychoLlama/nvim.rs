@@ -38,7 +38,7 @@ pub unsafe fn nvim_echo(
     let mut id = Object::integer(-1);
     // SAFETY: the caller's chunk array, and `err` is this frame's own slot.
     let hl_msg: HlMessage = unsafe { parse_hl_msg(chunks, opts.err, err) };
-    if error.type_0 != kErrorTypeNone {
+    if error.is_set() {
         // SAFETY: the message this frame just built and nothing else owns.
         unsafe { hl_msg_free(hl_msg) };
         return id.reported(error);

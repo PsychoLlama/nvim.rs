@@ -45,7 +45,7 @@ use crate::popupmenu::pum_drawn;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object, kErrorTypeNone, kObjectTypeDict, win_T,
+    LuaRetMode, NS, Object, kObjectTypeDict, win_T,
 };
 use crate::winlayer::Win;
 use ::libc::strlen;
@@ -227,10 +227,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         }));
         args.push(Object::boolean(link));
 
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ::core::ptr::null_mut(),
-        };
+        let mut err = Error::none();
         RECURSIVE.set(RECURSIVE.get() + 1);
         let name = c"hl_def".as_ptr();
         let (args, arena) = (args.array(), ::core::ptr::null_mut());

@@ -279,7 +279,7 @@ unsafe fn win_config_split(
                 // SAFETY: the caller's window and the frame the removal left.
                 unsafe { winframe_restore(win, dir, unflat_altfr) };
             }
-            if err.type_0 == kErrorTypeNone {
+            if !err.is_set() {
                 // SAFETY: the caller's window.
                 let handle = unsafe { (*win).handle };
                 let fmt = c"Failed to move window %d into split";

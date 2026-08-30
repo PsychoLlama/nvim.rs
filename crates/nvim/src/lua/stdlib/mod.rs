@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::{Error, TryState, kErrorTypeNone};
+use crate::types::{Error, TryState};
 
 mod regex;
 mod register;
@@ -28,10 +28,7 @@ pub use self::vars::*;
 pub(crate) use self::with::*;
 
 /// An all-zero [`Error`], C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ::core::ptr::null_mut(),
-};
+pub(crate) const ERROR_INIT: Error = Error::none();
 
 /// An all-zero [`TryState`], which [`try_enter`] fills.
 ///
@@ -48,5 +45,5 @@ pub(crate) const TRY_STATE_INIT: TryState = TryState {
 
 /// Whether an API call left an error behind: C's `ERROR_SET`.
 pub(crate) fn error_set(err: &Error) -> bool {
-    err.type_0 != kErrorTypeNone
+    err.is_set()
 }

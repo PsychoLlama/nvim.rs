@@ -24,9 +24,7 @@ use crate::lua::ffi::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::os::cshim::gettext;
-use crate::types::{
-    Arena, FAIL, OK, expand_T, kErrorTypeNone, kObjectTypeString, ptrdiff_t, size_t,
-};
+use crate::types::{Arena, FAIL, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_get_matches`] to take ownership of them. Each entry is an
@@ -80,10 +78,10 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
         let mut arena: Arena = ARENA_EMPTY;
         let prefix_len = nlua_pop_integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
         let mut matches: Vec<*mut c_char> = Vec::new();
-        if err.type_0 == kErrorTypeNone && prefix_len <= patlen {
+        if !err.is_set() && prefix_len <= patlen {
             let completions = nlua_pop_array(lstate, &raw mut arena, &raw mut err);
             'cleanup_array: {
-                if err.type_0 != kErrorTypeNone {
+                if err.is_set() {
                     break 'cleanup_array;
                 }
                 matches.reserve(completions.size);

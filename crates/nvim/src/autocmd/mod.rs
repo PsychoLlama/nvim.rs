@@ -5,7 +5,7 @@ use core::ffi::CStr;
 
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::{
-    api_clear_error, api_free_object, api_free_string, copy_object, cstr_as_string, cstr_to_string,
+    api_free_object, api_free_string, copy_object, cstr_as_string, cstr_to_string,
     find_buffer_by_handle,
 };
 use crate::ascii::ascii_iswhite;
@@ -66,8 +66,8 @@ use crate::types::{
     Event, Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal,
     OptValData, OptValType, Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T,
     auto_event, buf_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t,
-    kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, proftime_T, save_redo_T, save_v_event_T,
-    sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
+    kObjectTypeBoolean, kObjectTypeDict, proftime_T, save_redo_T, save_v_event_T, sctx_T, size_t,
+    uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

@@ -17,7 +17,6 @@
 use super::sinks::log_event;
 use super::{ui_at, ui_count, ui_refresh};
 use crate::api::extmark::describe_ns;
-use crate::api::private::helpers::api_clear_error;
 use crate::api::ui::remote_ui_event;
 use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
@@ -28,9 +27,7 @@ use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{
-    Arena, Array, Error, LuaRef, LuaRetMode, NS, kErrorTypeNone, kObjectTypeBoolean,
-};
+use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS, kObjectTypeBoolean};
 use core::ffi::{CStr, c_char};
 
 const kRetNilBool: LuaRetMode = 1;
@@ -188,10 +185,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         }) else {
             continue;
         };
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: core::ptr::null_mut(),
-        };
+        let mut err = Error::none();
         ui_event_ns_id.set(ns_id);
         // SAFETY: `args` is the event's own array, per this call's contract.
         let fast = unsafe { is_fast(name, args) };
@@ -206,11 +200,11 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         if res.type_0 == kObjectTypeBoolean && unsafe { res.data.boolean } {
             handled = true;
         }
-        if err.type_0 != kErrorTypeNone {
-            unsafe { report_error(ns_id, name.as_ptr(), err.msg) };
+        if err.is_set() {
+            unsafe { report_error(ns_id, name.as_ptr(), err.message_or_empty().as_ptr()) };
             unsafe { ui_remove_cb(ns_id, true) };
         }
-        unsafe { api_clear_error(&raw mut err) };
+        err.clear();
     }
 
     handled

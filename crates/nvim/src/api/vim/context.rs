@@ -88,7 +88,7 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
     unsafe { ctx_from_dict(dict, &raw mut ctx, err) };
-    if error.type_0 == kErrorTypeNone {
+    if !error.is_set() {
         // SAFETY: `ctx` is this frame's own, filled in above.
         unsafe { ctx_restore(&raw mut ctx, kCtxAll.get()) };
     }

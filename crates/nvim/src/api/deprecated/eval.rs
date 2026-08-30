@@ -100,14 +100,14 @@ pub unsafe fn nvim_call_atomic(
             let handler: MsgpackRpcRequestHandler = unsafe {
                 msgpack_rpc_get_handler_for(name.data(), name.len(), &raw mut nested_error)
             };
-            if nested_error.type_0 != kErrorTypeNone {
+            if nested_error.is_set() {
                 break;
             }
             let dispatch = handler.fn_0.expect("non-null function pointer");
             // SAFETY: the handler is the generated wrapper for `name`, which
             // reads `args` and reports through the slot it is given.
             let result = unsafe { dispatch(channel_id, args, arena, &raw mut nested_error) };
-            if nested_error.type_0 != kErrorTypeNone {
+            if nested_error.is_set() {
                 break;
             }
             // SAFETY: `results` was sized for one item per call, and the
@@ -122,14 +122,15 @@ pub unsafe fn nvim_call_atomic(
         }
         // SAFETY: `rv` was sized for exactly these two pushes.
         unsafe { array_add(&mut rv, Object::array(results)) };
-        if nested_error.type_0 != kErrorTypeNone {
+        if nested_error.is_set() {
             let mut errval: Array = arena_array(arena, 3 as size_t);
             // SAFETY: `errval` was sized for these three, and the message is
             // `nested_error`'s own NUL-terminated string.
             unsafe {
                 array_add(&mut errval, Object::integer(i as Integer));
-                array_add(&mut errval, Object::integer(nested_error.type_0 as Integer));
-                let msg = copy_string(cstr_as_string(nested_error.msg), arena);
+                array_add(&mut errval, Object::integer(nested_error.kind() as Integer));
+                let why = nested_error.message_or_empty().as_ptr();
+                let msg = copy_string(cstr_as_string(why), arena);
                 array_add(&mut errval, Object::string(msg));
                 array_add(&mut rv, Object::array(errval));
             }
@@ -139,6 +140,6 @@ pub unsafe fn nvim_call_atomic(
         }
     }
     // SAFETY: `nested_error` is this frame's slot.
-    unsafe { api_clear_error(&raw mut nested_error) };
+    nested_error.clear();
     rv.reported(error)
 }

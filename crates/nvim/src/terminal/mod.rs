@@ -37,9 +37,7 @@ pub(crate) mod refresh;
 pub(crate) mod scrollback;
 pub(crate) mod termrequest;
 
-use crate::api::private::helpers::{
-    api_clear_error, api_free_object, cstr_as_string, dict_get_value,
-};
+use crate::api::private::helpers::{api_free_object, cstr_as_string, dict_get_value};
 use crate::autocmd::{
     EVENT_TERMCLOSE, EVENT_TERMOPEN, apply_autocmds, apply_autocmds_group, aucmd_prepbuf,
     aucmd_restbuf, block_autocmds, is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
@@ -66,8 +64,8 @@ use crate::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, MarkAdjustMode, Object, OptVal, OptValData,
     OptValType, OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor,
     VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
-    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kErrorTypeNone, kObjectTypeNil,
-    kObjectTypeString, linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString,
+    linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -908,16 +906,13 @@ fn is_focused(term: Term) -> bool {
 /// # Safety
 /// `dict` must be a live dictionary and `key` NUL-terminated.
 unsafe fn dict_lookup(dict: *mut dict_T, key: *const c_char) -> Object {
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let no_arena = ::core::ptr::null_mut::<Arena>();
     // SAFETY: forwarded to this function's own caller; `err` is this
     // function's and is released before it returns.
     unsafe {
         let obj = dict_get_value(dict, cstr_as_string(key), no_arena, &raw mut err);
-        api_clear_error(&raw mut err);
+        err.clear();
         obj
     }
 }

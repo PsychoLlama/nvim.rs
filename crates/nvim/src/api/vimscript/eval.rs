@@ -57,7 +57,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
         unsafe { clear_evalarg(ea, no_eap) };
         ok
     });
-    if error.type_0 == kErrorTypeNone {
+    if !error.is_set() {
         if ok == FAIL {
             // The expression is quoted back at the user, capped so a huge
             // one does not become the whole message.
@@ -128,7 +128,7 @@ unsafe fn call_function_with(
         // `err` is the caller's slot.
         unsafe { try_leave(&raw mut tstate, err) };
         // SAFETY: the caller's promise about `err`.
-        if unsafe { (*err).type_0 } == kErrorTypeNone {
+        if unsafe { (*err).kind() } == kErrorTypeNone {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
             rv = unsafe { vim_to_object(ret, arena, false) };
         }
@@ -182,7 +182,7 @@ pub unsafe fn nvim_call_dict_function(
         unsafe { clear_evalarg(ea, no_eap) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.
         unsafe { try_leave(&raw mut tstate, err) };
-        if error.type_0 != kErrorTypeNone {
+        if error.is_set() {
             return Object::NIL.reported(error);
         }
         if eval_ret != OK {

@@ -31,19 +31,19 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_dict_function(lstate: *mut lu
         } = call;
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_array(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"args".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"fn".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_object(lstate, true, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"dict".as_ptr().cast_mut();
             return;
         }
@@ -93,13 +93,13 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_call_function(lstate: *mut lua_Sta
         } = call;
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_array(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"args".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"fn".as_ptr().cast_mut();
             return;
         }
@@ -146,7 +146,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_command(lstate: *mut lua_State) ->
         } = call;
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"cmd".as_ptr().cast_mut();
             return;
         }
@@ -188,7 +188,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_eval(lstate: *mut lua_State) -> c_
         } = call;
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"expr".as_ptr().cast_mut();
             return;
         }
@@ -236,12 +236,12 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec2(lstate: *mut lua_State) -> c
         let mut arg_2 = KeyDictArg::<KeyDict_exec_opts>::zeroed();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err, err_param) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             return;
         }
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"src".as_ptr().cast_mut();
             return;
         }
@@ -290,19 +290,19 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_parse_expression(lstate: *mut lua_
         } = call;
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_boolean(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"hl".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"flags".as_ptr().cast_mut();
             return;
         }
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena, err) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             *err_param = c"expr".as_ptr().cast_mut();
             return;
         }

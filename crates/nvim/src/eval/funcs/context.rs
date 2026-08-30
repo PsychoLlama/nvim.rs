@@ -4,7 +4,6 @@
 use super::args::frame;
 use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
-use crate::api::private::helpers::api_clear_error;
 use crate::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
 };
@@ -15,16 +14,13 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
     Context, Error, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    kErrorTypeNone, kObjectTypeDict, object, object_data, typval_T, varnumber_T,
+    kObjectTypeDict, object, object_data, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// A cleared API error, the shape every `api_*` out-parameter starts in.
-const NO_ERROR: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+const NO_ERROR: Error = Error::none();
 
 /// The `{index}` argument the `ctxget`/`ctxset` pair share: absent means 0,
 /// a Number is taken as-is, anything else is rejected with `what`.
@@ -79,7 +75,7 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     };
     unsafe { object_to_vim(dict, rettv, &raw mut err) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }
 
 /// `ctxpop()` — restore and drop the context on top of the stack.
@@ -155,11 +151,11 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let mut tmp = CONTEXT_INIT;
     let mut err = NO_ERROR;
     unsafe { ctx_from_dict(dict, &raw mut tmp, &raw mut err) };
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         // The message is whatever the API layer produced, so it keeps
         // the variadic call rather than assuming UTF-8.
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let msg = unsafe { c_str(err.msg) };
+        let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
         semsg!("{msg}");
         unsafe { ctx_free(&raw mut tmp) };
     } else {
@@ -167,7 +163,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         unsafe { *ctx = tmp };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     did_emsg.set(save_did_emsg);
 }
 

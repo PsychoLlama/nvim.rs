@@ -26,8 +26,8 @@ use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
-    dict_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, object_data, size_t, uint64_t,
+    dict_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeString, object_data, size_t, uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -190,10 +190,7 @@ pub(crate) unsafe fn remote_request(
         items: call_args.as_mut_ptr(),
     };
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let script =
         String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
     let (no_arena, at_err) = (ptr::null_mut::<Arena>(), &raw mut err);
@@ -204,8 +201,8 @@ pub(crate) unsafe fn remote_request(
     args.capacity = 0;
     args.items = ptr::null_mut();
 
-    if err.type_0 != kErrorTypeNone {
-        unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.msg) };
+    if err.is_set() {
+        unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
         unsafe { os_exit(2) };
     }
     if reply.type_0 != kObjectTypeDict {

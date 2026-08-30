@@ -14,11 +14,11 @@
 //! here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-
-use crate::api::private::helpers::{api_clear_error, dict_set_var};
 use crate::channel::main_loop_events;
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
+
+use crate::api::private::helpers::dict_set_var;
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_string,
 };
@@ -29,8 +29,8 @@ use crate::options::kOptBoFlagTerm;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, kErrorTypeNone,
-    list_T, ptrdiff_t, ssize_t,
+    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, list_T,
+    ptrdiff_t, ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::vterm::vterm::{
@@ -115,10 +115,7 @@ pub(crate) fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
     let Some(mut buf) = buf else {
         return;
     };
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let title = Object::string(String_0::from_raw_parts(
         title.as_ptr().cast::<c_char>().cast_mut(),
         title.len(),
@@ -135,8 +132,7 @@ pub(crate) fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
     // outlives the call, which copies it.
     unsafe { dict_set_var(vars, key, title, false, false, arena, &mut err) };
     buf.b_locked -= 1;
-    // SAFETY: an error this function owns, cleared exactly once.
-    unsafe { api_clear_error(&mut err) };
+    err.clear();
     // SAFETY: a live buffer, whose status line names the title.
     unsafe { status_redraw_buf(buf.raw()) };
 }

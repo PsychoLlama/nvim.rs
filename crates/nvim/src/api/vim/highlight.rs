@@ -72,7 +72,7 @@ pub unsafe fn nvim_set_hl(
         base = Some(&base_attrs);
     }
     let mut attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, err) };
-    if !(unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+    if !(unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let _sctx = api_set_sctx(channel_id);
         unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
     }

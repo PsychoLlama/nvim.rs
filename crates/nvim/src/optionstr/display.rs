@@ -8,7 +8,6 @@
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
-use crate::api::private::helpers::api_clear_error;
 use crate::api::win_config::parse_winborder;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, init_chartab, ptr2cells};
@@ -35,7 +34,7 @@ use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
     BreakAt, Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig,
-    colnr_T, kErrorTypeNone, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
+    colnr_T, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
 use ::libc::strcmp;
@@ -538,14 +537,11 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
         hide: false,
         _cmdline_offset: INT_MAX,
     };
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     // SAFETY: the caller's C string, and two locals the parser writes into.
     let ok = unsafe { parse_winborder(&raw mut fconfig, border_opt, &raw mut err) };
-    // SAFETY: the error slot just used; clearing it frees any message.
-    unsafe { api_clear_error(&raw mut err) };
+    // Whatever the call left behind is dropped rather than reported.
+    err.clear();
     ok
 }
 

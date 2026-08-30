@@ -595,7 +595,7 @@ pub(crate) unsafe fn parse_win_config(
             // arrays.
             let placed = unsafe {
                 parse_bordertext(config.title, kBorderTextTitle, fconfig, err);
-                err.type_0 == kErrorTypeNone
+                !err.is_set()
                     && parse_bordertext_pos(wp, config.title_pos, kBorderTextTitle, fconfig, err)
             };
             if !placed {
@@ -613,7 +613,7 @@ pub(crate) unsafe fn parse_win_config(
             // SAFETY: as the title above.
             let placed = unsafe {
                 parse_bordertext(config.footer, kBorderTextFooter, fconfig, err);
-                err.type_0 == kErrorTypeNone
+                !err.is_set()
                     && parse_bordertext_pos(wp, config.footer_pos, kBorderTextFooter, fconfig, err)
             };
             if !placed {
@@ -633,7 +633,7 @@ pub(crate) unsafe fn parse_win_config(
                 // SAFETY: the caller's promise about the keyset's strings and
                 // arrays, and `fconfig` and `err` are live.
                 unsafe { parse_border_style(border_style, fconfig.raw(), err.raw()) };
-                if err.type_0 != kErrorTypeNone {
+                if err.is_set() {
                     break '_fail;
                 }
             }

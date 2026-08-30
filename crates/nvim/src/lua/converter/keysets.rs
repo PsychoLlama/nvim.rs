@@ -24,10 +24,10 @@ use crate::lua::ffi::{
 };
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
-    OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, lua_Integer, lua_Number, lua_State, size_t,
+    OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeValidation, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    lua_Integer, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
 
@@ -152,7 +152,7 @@ pub unsafe fn nlua_pop_keydict(
                 _ => abort(),
             }
 
-            if (*err).type_0 != kErrorTypeNone {
+            if (*err).is_set() {
                 *err_opt = (*field).str;
                 break;
             }

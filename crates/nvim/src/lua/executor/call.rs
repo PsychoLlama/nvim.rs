@@ -14,7 +14,7 @@ use super::{
     FUNCEXE_INIT, LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast,
 };
 use crate::api::private::helpers::{
-    api_clear_error, api_set_error, api_set_sctx, arena_array, try_enter, try_leave,
+    api_set_error, api_set_sctx, arena_array, try_enter, try_leave,
 };
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
@@ -31,8 +31,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Arena, ArenaMem, Array, Object, consumed_blk, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, lua_State, size_t, uint64_t,
+    Arena, ArenaMem, Array, Object, consumed_blk, kErrorTypeException, kErrorTypeValidation,
+    lua_State, size_t, uint64_t,
 };
 use ::libc::strlen;
 
@@ -118,7 +118,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             try_leave(&raw mut tstate, &raw mut err);
             drop(sctx);
 
-            if err.type_0 == kErrorTypeNone {
+            if !err.is_set() {
                 nlua_push_typval(lstate, &raw mut rettv, 0);
             }
             tv_clear(&raw mut rettv);
@@ -129,9 +129,9 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             tv_clear(vim_args.as_mut_ptr().offset(i as isize));
         }
 
-        if err.type_0 != kErrorTypeNone {
-            lua_pushstring(lstate, err.msg);
-            api_clear_error(&raw mut err);
+        if err.is_set() {
+            lua_pushstring(lstate, err.message_or_empty().as_ptr());
+            err.clear();
             return lua_error(lstate);
         }
         1
@@ -196,7 +196,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                 *args.items.add(args.size) =
                     nlua_pop_object(lstate, false, &raw mut arena, &raw mut err);
                 args.size = args.size.wrapping_add(1);
-                if err.type_0 != kErrorTypeNone {
+                if err.is_set() {
                     break 'check_err;
                 }
             }
@@ -204,7 +204,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
             if request {
                 let mut res_mem: ArenaMem = ptr::null_mut::<consumed_blk>();
                 let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &raw mut err);
-                if err.type_0 == kErrorTypeNone {
+                if !err.is_set() {
                     nlua_push_object(lstate, &raw mut result, 0);
                     arena_mem_free(res_mem);
                 }
@@ -219,9 +219,9 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
         }
         arena_mem_free(arena_finish(&raw mut arena));
 
-        if err.type_0 != kErrorTypeNone {
-            lua_pushstring(lstate, err.msg);
-            api_clear_error(&raw mut err);
+        if err.is_set() {
+            lua_pushstring(lstate, err.message_or_empty().as_ptr());
+            err.clear();
             return lua_error(lstate);
         }
         if request { 1 } else { 0 }

@@ -240,7 +240,7 @@ pub unsafe fn parse_virt_text(
                             let what = c"virt_text highlight".as_ptr();
                             // SAFETY: `err` is the caller's error slot.
                             hl_id = unsafe { object_to_hl_id(item, what, err) };
-                            if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                            if unsafe { (*err).kind() } as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
                                 break '_free_exit;
@@ -262,7 +262,7 @@ pub unsafe fn parse_virt_text(
                         let what = c"virt_text highlight".as_ptr();
                         // SAFETY: `err` is the caller's error slot.
                         hl_id = unsafe { object_to_hl_id(hl, what, err) };
-                        if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                        if unsafe { (*err).kind() } as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
                             break '_free_exit;

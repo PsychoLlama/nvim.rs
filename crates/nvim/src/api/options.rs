@@ -123,7 +123,7 @@ unsafe fn option_target(
         let win = unsafe { window_by_handle((*opts).win, &mut *err) };
         from = win.map_or(ptr::null_mut(), |w| w.raw().cast());
         // SAFETY: `err` is the caller's.
-        if unsafe { (*err).type_0 } != kErrorTypeNone {
+        if unsafe { (*err).kind() } != kErrorTypeNone {
             return None;
         }
     }
@@ -138,7 +138,7 @@ unsafe fn option_target(
         let buf = unsafe { buffer_by_handle((*opts).buf, &mut *err) };
         from = buf.map_or(ptr::null_mut(), |b| b.raw().cast());
         // SAFETY: `err` is the caller's.
-        if unsafe { (*err).type_0 } != kErrorTypeNone {
+        if unsafe { (*err).kind() } != kErrorTypeNone {
             return None;
         }
     }
@@ -182,7 +182,7 @@ unsafe fn option_target(
         unsafe { api_set_error(err, kErrorTypeValidation, fmt, tgt, global, req, name) };
     }
     // SAFETY: `err` is the caller's.
-    if unsafe { (*err).type_0 } != kErrorTypeNone {
+    if unsafe { (*err).kind() } != kErrorTypeNone {
         return None;
     }
 
@@ -273,13 +273,13 @@ unsafe fn do_ft_buf(
     });
     if !bufref.valid() {
         // SAFETY: `err` is the caller's.
-        if unsafe { (*err).type_0 } == kErrorTypeNone {
+        if unsafe { (*err).kind() } == kErrorTypeNone {
             fail(c"Internal buffer was deleted");
         }
         return ptr::null_mut::<buf_T>();
     }
     // SAFETY: `err` is the caller's.
-    if !did_au_ft && unsafe { (*err).type_0 } == kErrorTypeNone {
+    if !did_au_ft && unsafe { (*err).kind() } == kErrorTypeNone {
         fail(c"Could not execute FileType autocommands");
     }
     ftbuf
@@ -349,7 +349,7 @@ pub unsafe fn nvim_get_option_value(
             wipe_ft_buf(ftbuf);
         }
     };
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         leave_ft_buf(ftbuf);
         return NIL.reported(err);
     }
@@ -369,7 +369,7 @@ pub unsafe fn nvim_get_option_value(
     if !ftbuf.is_null() {
         leave_ft_buf(ftbuf);
     }
-    if err.type_0 == kErrorTypeNone {
+    if !err.is_set() {
         if value.type_0 != kOptValTypeNil {
             return optval_as_object(value).reported(err);
         }

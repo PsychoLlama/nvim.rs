@@ -259,7 +259,7 @@ pub unsafe fn nvim_get_autocmds(
                 {
                     let mut b: *mut buf_T =
                         unsafe { find_buffer_by_handle(buf.data.integer as Buffer, err) };
-                    if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                    if unsafe { (*err).kind() } as ::core::ffi::c_int
                         != kErrorTypeNone as ::core::ffi::c_int
                     {
                         break '_cleanup;
@@ -299,7 +299,7 @@ pub unsafe fn nvim_get_autocmds(
                         }
                         let mut b_0: *mut buf_T =
                             unsafe { find_buffer_by_handle(bufnr.data.integer as Buffer, err) };
-                        if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                        if unsafe { (*err).kind() } as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
                             break '_cleanup;

@@ -32,9 +32,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{
-    Arena, Array, Error, OptInt, ShmFlag, exarg_T, kErrorTypeNone, kObjectTypeString, tabpage_T,
-};
+use crate::types::{Arena, Array, Error, OptInt, ShmFlag, exarg_T, kObjectTypeString, tabpage_T};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
@@ -305,10 +303,7 @@ pub(crate) unsafe fn list_lua_version() {
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
     // `String_0`; `nlua_exec` only reads it.
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let no_args = Array {
         size: 0,
         capacity: 0,
@@ -317,7 +312,7 @@ pub(crate) unsafe fn list_lua_version() {
     let (chunk, name) = (static_cstring(CODE), ptr::null());
     let (arena, slot) = (ptr::null_mut::<Arena>(), &raw mut err);
     let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, slot) };
-    debug_assert!(err.type_0 == kErrorTypeNone, "a literal chunk cannot fail");
+    debug_assert!(!err.is_set(), "a literal chunk cannot fail");
     // Not a debug assertion: the union field read below depends on it.
     assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
     unsafe { msg_puts(ret.data.string.data()) };

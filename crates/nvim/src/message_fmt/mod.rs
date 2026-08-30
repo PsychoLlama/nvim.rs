@@ -295,7 +295,7 @@ pub(crate) const fn check_template(template: &str) {
 ///
 /// `cap` is that buffer's size, terminator included. An interior NUL from an
 /// argument ends the message there, as it did in the C caller.
-fn to_message(text: String, cap: usize) -> CString {
+pub(crate) fn to_message(text: String, cap: usize) -> CString {
     let mut bytes = Vec::with_capacity(text.len());
     for ch in text.chars() {
         // A byte [`write_bytes`] could not put through a `&str`.

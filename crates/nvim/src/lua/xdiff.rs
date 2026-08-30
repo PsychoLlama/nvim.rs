@@ -13,11 +13,11 @@
 //! *string* (the default, assembled in a `luaL_Buffer`), *nothing* with an
 //! `on_hunk` callback run per hunk, or a *list* of `{start_a, count_a, //! start_b, count_b}` tuples (`result_type = 'indices'`).
 
+use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};
 
-use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
-use crate::api::private::helpers::{api_clear_error, api_free_string, api_set_error};
+use crate::api::private::helpers::{api_free_string, api_set_error};
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::converter::nlua_pop_keydict;
 use crate::lua::executor::{api_free_luaref, nlua_pushref};
@@ -30,9 +30,9 @@ use crate::lua::ffi::{
 use crate::memory::strequal;
 use crate::types::{
     Arena, Error, KeyDict_xdl_diff, Object, OptionalKeys, String_0, int64_t, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil,
-    linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t,
-    xdemitcb_t, xdemitconf_t, xpparam_t,
+    kErrorTypeValidation, kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, linenr_T,
+    lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t, xdemitcb_t,
+    xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -547,10 +547,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
     // SAFETY: as above; both stay on the stack for the whole call.
     let (mut ma, mut mb) = unsafe { (get_string_arg(lstate, 1), get_string_arg(lstate, 2)) };
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut::<c_char>(),
-    };
+    let mut err = Error::none();
     let mut cfg = xdemitconf_t {
         ctxlen: 0,
         interhunkctxlen: 0,
@@ -602,7 +599,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
         out_line: None,
     };
 
-    if err.type_0 == kErrorTypeNone {
+    if !err.is_set() {
         match mode {
             Mode::Unified => {
                 // SAFETY: `lstate` is live and `buf` outlives the walk.
@@ -634,7 +631,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
                 &raw mut ecb,
             ) == -1
         };
-        if failed && err.type_0 == kErrorTypeNone {
+        if failed && !err.is_set() {
             // SAFETY: `err` is this frame's.
             unsafe {
                 api_set_error(
@@ -646,13 +643,13 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
         }
     }
 
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         // SAFETY: `lstate` is live; `luaL_where` and the message become one
         // string, and `lua_error` raises it and does not return.
         return unsafe {
             luaL_where(lstate, 1);
-            lua_pushstring(lstate, err.msg);
-            api_clear_error(&raw mut err);
+            lua_pushstring(lstate, err.message_or_empty().as_ptr());
+            err.clear();
             lua_concat(lstate, 2);
             lua_error(lstate)
         };

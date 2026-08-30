@@ -5,11 +5,10 @@
 //! takes msgpack goes through, with an emphasis on inputs that are not valid
 //! msgpack at all.
 
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::c_char;
 
 use neovim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use neovim::msgpack_rpc::unpacker::unpack;
-use neovim::types::api::kErrorTypeNone;
 use neovim::types::{
     Arena, Error, Object, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
@@ -17,6 +16,9 @@ use neovim::types::{
 };
 
 /// What one decode produced: the object plus whatever error was reported.
+///
+/// The error owns its message and releases it when the `Decoded` drops, so
+/// the only thing this has to free by hand is the arena.
 struct Decoded {
     object: Object,
     arena: Arena,
@@ -24,11 +26,15 @@ struct Decoded {
 }
 
 impl Decoded {
-    fn message(&self) -> Option<&str> {
-        if self.error.type_0 == kErrorTypeNone {
-            return None;
-        }
-        Some(unsafe { CStr::from_ptr(self.error.msg) }.to_str().unwrap())
+    /// The reported message, or `None` for a decode that reported nothing.
+    ///
+    /// `Error`'s `Display` -- what this crate reaches it through from
+    /// outside -- is the message and nothing else, so an unset error and a
+    /// set one are told apart by whether there is any text. Every message
+    /// the decoder produces has some.
+    fn message(&self) -> Option<String> {
+        let text = self.error.to_string();
+        (!text.is_empty()).then_some(text)
     }
 }
 
@@ -36,19 +42,13 @@ impl Drop for Decoded {
     fn drop(&mut self) {
         unsafe {
             arena_mem_free(arena_finish(&raw mut self.arena));
-            if !self.error.msg.is_null() {
-                neovim::memory::xfree(self.error.msg.cast::<c_void>());
-            }
         }
     }
 }
 
 fn decode(bytes: &[u8]) -> Decoded {
     let mut arena: Arena = ARENA_EMPTY;
-    let mut error: Error = Error {
-        type_0: kErrorTypeNone,
-        msg: std::ptr::null_mut(),
-    };
+    let mut error = Error::default();
     let object = unsafe {
         unpack(
             bytes.as_ptr().cast::<c_char>(),
@@ -74,7 +74,7 @@ fn text(object: &Object) -> Vec<u8> {
 fn decodes_scalars() {
     let nil = decode(&[0xc0]);
     assert_eq!(nil.object.type_0, kObjectTypeNil);
-    assert_eq!(nil.message(), None);
+    assert_eq!(nil.message().as_deref(), None);
 
     assert_eq!(decode(&[0xc3]).object.type_0, kObjectTypeBoolean);
     assert!(unsafe { decode(&[0xc3]).object.data.boolean });
@@ -140,7 +140,7 @@ fn decodes_handles() {
 fn unknown_extensions_decode_as_nil() {
     let unknown_type = decode(&[0xd4, 9, 1]);
     assert_eq!(unknown_type.object.type_0, kObjectTypeNil);
-    assert_eq!(unknown_type.message(), None);
+    assert_eq!(unknown_type.message().as_deref(), None);
 
     let negative_type = decode(&[0xd4, 0xff, 1]);
     assert_eq!(negative_type.object.type_0, kObjectTypeNil);
@@ -158,15 +158,18 @@ fn unknown_extensions_decode_as_nil() {
 #[test]
 #[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_truncated_input() {
-    assert_eq!(decode(&[]).message(), Some("incomplete msgpack string"));
+    assert_eq!(
+        decode(&[]).message().as_deref(),
+        Some("incomplete msgpack string")
+    );
     // An array header promising two elements, with one.
     assert_eq!(
-        decode(&[0x92, 0x01]).message(),
+        decode(&[0x92, 0x01]).message().as_deref(),
         Some("incomplete msgpack string")
     );
     // A five-byte string header with three bytes behind it.
     assert_eq!(
-        decode(&[0xa5, b'a', b'b', b'c']).message(),
+        decode(&[0xa5, b'a', b'b', b'c']).message().as_deref(),
         Some("incomplete msgpack string")
     );
 }
@@ -175,14 +178,17 @@ fn rejects_truncated_input() {
 #[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_bytes_that_are_not_msgpack() {
     // 0xc1 is the one byte msgpack leaves undefined.
-    assert_eq!(decode(&[0xc1]).message(), Some("invalid msgpack string"));
+    assert_eq!(
+        decode(&[0xc1]).message().as_deref(),
+        Some("invalid msgpack string")
+    );
 }
 
 #[test]
 #[cfg_attr(miri, ignore = "api_set_error formats the message through vsnprintf")]
 fn rejects_trailing_data() {
     assert_eq!(
-        decode(&[0xc0, 0xc0]).message(),
+        decode(&[0xc0, 0xc0]).message().as_deref(),
         Some("trailing data in msgpack string")
     );
 }
@@ -195,12 +201,12 @@ fn rejects_objects_that_nest_too_deep() {
     let shallow = vec![0x91_u8; 16];
     let mut ok = shallow.clone();
     ok.push(0xc0);
-    assert_eq!(decode(&ok).message(), None);
+    assert_eq!(decode(&ok).message().as_deref(), None);
 
     let mut deep = vec![0x91_u8; 4096];
     deep.push(0xc0);
     assert_eq!(
-        decode(&deep).message(),
+        decode(&deep).message().as_deref(),
         Some("object was too deep to unpack")
     );
 }
@@ -213,12 +219,14 @@ fn rejects_objects_that_nest_too_deep() {
 fn rejects_a_container_longer_than_its_contents() {
     // array32 claiming 0x10000 elements, with none.
     assert_eq!(
-        decode(&[0xdd, 0x00, 0x01, 0x00, 0x00]).message(),
+        decode(&[0xdd, 0x00, 0x01, 0x00, 0x00]).message().as_deref(),
         Some("incomplete msgpack string")
     );
     // map16 claiming 4096 pairs, with one.
     assert_eq!(
-        decode(&[0xde, 0x10, 0x00, 0xa1, b'a', 0xc0]).message(),
+        decode(&[0xde, 0x10, 0x00, 0xa1, b'a', 0xc0])
+            .message()
+            .as_deref(),
         Some("incomplete msgpack string")
     );
 }

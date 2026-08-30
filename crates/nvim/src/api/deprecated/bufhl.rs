@@ -166,7 +166,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     // SAFETY: `chunks` is the caller's array, and `err`/`width` are this
     // frame's.
     let virt_text: VirtText = unsafe { parse_virt_text(chunks, err, &raw mut width) };
-    if error.type_0 != kErrorTypeNone {
+    if error.is_set() {
         return (0 as Integer).reported(error);
     }
 

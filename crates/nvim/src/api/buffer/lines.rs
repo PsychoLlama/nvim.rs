@@ -379,7 +379,7 @@ pub unsafe fn nvim_buf_get_text(
         let (from, to) = (start_col as int64_t, end_col as int64_t);
         // SAFETY: `b` is the live buffer and `err` this call's error slot.
         let line: String_0 = unsafe { buf_get_text(b, first, from, to, err) };
-        if error.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+        if !error.is_set() {
             let (data, len) = (line.data(), line.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
             unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
@@ -390,7 +390,7 @@ pub unsafe fn nvim_buf_get_text(
         let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
         // SAFETY: `b` is the live buffer and `err` this call's error slot.
         str = unsafe { buf_get_text(b, first, from, to, err) };
-        if error.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+        if !error.is_set() {
             let (data, len) = (str.data(), str.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
             unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
@@ -404,7 +404,7 @@ pub unsafe fn nvim_buf_get_text(
             let to = end_col as int64_t;
             // SAFETY: `b` is the live buffer and `err` this call's error slot.
             str = unsafe { buf_get_text(b, last, 0 as int64_t, to, err) };
-            if error.type_0 as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+            if !error.is_set() {
                 let (data, len) = (str.data(), str.len());
                 let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
                 // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -412,7 +412,7 @@ pub unsafe fn nvim_buf_get_text(
             }
         }
     }
-    if error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if error.is_set() {
         return Err(error);
     }
     rv.reported(error)

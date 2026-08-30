@@ -4,6 +4,7 @@ typedef struct lua_State lua_State;
 typedef struct Arena Arena;
 typedef struct AutoPatCmd_S AutoPatCmd_S;
 typedef struct DecorVirtText DecorVirtText;
+typedef struct Error Error;
 typedef struct KeySetLink KeySetLink;
 typedef struct MsgpackRpcRequestHandler MsgpackRpcRequestHandler;
 typedef struct ParserLine ParserLine;
@@ -112,7 +113,6 @@ typedef struct VirtLines VirtLines;
 typedef struct VirtText VirtText;
 typedef union DecorVirtText_data DecorVirtText_data;
 typedef struct Dict Dict;
-typedef struct Error Error;
 typedef union EvalFuncData EvalFuncData;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
@@ -987,10 +987,6 @@ struct Dict {
   size_t size;
   size_t capacity;
   KeyValuePair *items;
-};
-struct Error {
-  ErrorType type;
-  char *msg;
 };
 union EvalFuncData {
   FloatFunc float_func;
@@ -4632,6 +4628,7 @@ static const int MATCH_CHAR_MAX_LEN = 800;
 static const int MATCH_FOLLOWS_DEPTH = 10;
 static const int MAXITEMCNT = 30;
 static const int MAXKEYWLEN = 80;
+static const int MAXLEN = 1048576;
 static const int MAXLINELEN = 500;
 static const int MAXLNUM = 2147483647;
 static const int MAXMAPLEN = 50;

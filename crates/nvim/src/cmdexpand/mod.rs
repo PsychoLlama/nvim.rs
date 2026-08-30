@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
-
-use crate::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
 use crate::arglist::get_arglist_name;
+
+use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd};
 use crate::buffer::expand_buf_names;

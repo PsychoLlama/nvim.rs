@@ -179,7 +179,7 @@ pub unsafe fn nvim_open_win(
             wp = unsafe { win_new_float(::core::ptr::null_mut::<win_T>(), false, fconfig, err) };
         }
         if wp.is_null() {
-            if report.type_0 == kErrorTypeNone {
+            if !report.is_set() {
                 err_msg(report, kErrorTypeException, c"Failed to create window");
             }
             break '_cleanup;
@@ -242,7 +242,7 @@ pub unsafe fn nvim_open_win(
         }
         if tp.is_null() {
             // SAFETY: `err` is this frame's own slot.
-            unsafe { api_clear_error(err) };
+            unsafe { (*err).clear() };
             err_msg(
                 report,
                 kErrorTypeException,

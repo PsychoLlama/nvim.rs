@@ -91,7 +91,7 @@ pub unsafe fn nvim_create_autocmd(
         )
     };
     '_cleanup: {
-        if unsafe { (*err).type_0 } as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+        if unsafe { (*err).kind() } as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             if !(!(has_key(opts.is_set__create_autocmd_, 9 as ::core::ffi::c_int))
                 || !(has_key(opts.is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
             {
@@ -180,7 +180,7 @@ pub unsafe fn nvim_create_autocmd(
                                 err,
                             )
                         };
-                        if unsafe { (*err).type_0 } as ::core::ffi::c_int
+                        if unsafe { (*err).kind() } as ::core::ffi::c_int
                             == kErrorTypeNone as ::core::ffi::c_int
                         {
                             if has_key(
@@ -300,7 +300,7 @@ pub unsafe fn nvim_clear_autocmds(
             err,
         )
     };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     let mut has_buf: bool = has_key(
@@ -342,7 +342,7 @@ pub unsafe fn nvim_clear_autocmds(
             err,
         )
     };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     if event_array.size == 0 as size_t {

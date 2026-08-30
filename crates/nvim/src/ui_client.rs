@@ -62,7 +62,7 @@ use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
     KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T, garray_T,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
+    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeString, proftime_T, uint16_t,
 };
 use ::libc::{close, dup};
@@ -748,10 +748,7 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 ///
 /// `d` must be a valid dict.
 unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: core::ptr::null_mut(),
-    };
+    let mut err = Error::none();
     // Every field of a keyset is zero when nothing is set: the flags
     // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
     // whose null is their empty value.

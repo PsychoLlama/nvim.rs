@@ -821,7 +821,7 @@ unsafe fn run_cmd(
     unsafe { try_leave(&raw mut tstate, err) };
 
     let mut retv = String_0::NULL;
-    let failed = err.type_0 as c_int != kErrorTypeNone as c_int;
+    let failed = err.is_set();
     if !failed && capture && capture_local.ga_len > 1 {
         let captured =
             String_0::from_raw_parts(capture_local.ga_data.cast(), capture_local.ga_len as size_t);

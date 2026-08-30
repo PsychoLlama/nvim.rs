@@ -166,7 +166,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         }
     } else if has_buf {
         let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
-        if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,

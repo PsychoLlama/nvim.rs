@@ -607,20 +607,17 @@ unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
         capacity: items.len(),
         items: items.as_mut_ptr(),
     };
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let src = c"return require('vim._core.util').source_is_lua(...)";
     let script = String_0::from_raw_parts(src.as_ptr().cast_mut(), src.count_bytes());
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither; the result's union is read under its own tag.
     let nil = ptr::null_mut();
     let result = unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &raw mut err) };
-    let is_lua = err.type_0 == kErrorTypeNone
+    let is_lua = !err.is_set()
         && result.type_0 == kObjectTypeBoolean as ObjectType
         && unsafe { result.data.boolean };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     is_lua
 }
 

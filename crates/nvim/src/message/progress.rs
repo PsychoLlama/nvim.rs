@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::api_clear_error;
 use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;
@@ -149,7 +148,7 @@ pub unsafe fn msg_progress(
     // Nothing here can report: the chunks are strings and the options
     // are this frame's. The message is freed if one ever does.
     if let Err(mut e) = unsafe { nvim_echo(chunks.array(), false, &raw mut opts) } {
-        unsafe { api_clear_error(&raw mut e) };
+        e.clear();
     }
     unsafe { ui_flush() };
     s

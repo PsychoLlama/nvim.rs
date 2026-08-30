@@ -13,7 +13,7 @@ use crate::getchar::typeahead;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
-use crate::types::{MB_MAXBYTES, NUL, kErrorTypeNone};
+use crate::types::{MB_MAXBYTES, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -257,10 +257,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
 
     let mut p: *mut c_char = ptr::null_mut();
     if luaref != LUA_NOREF {
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
+        let mut err = Error::none();
         let out = &raw mut err;
         // SAFETY: `luaref` is the mapping's own reference, and `err` is a
         // live, initialised slot for the call's error.
@@ -281,11 +278,11 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
         }
         // SAFETY: the object is ours to release once its string is copied.
         unsafe { api_free_object(ret) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             // SAFETY: `err.msg` is the NUL-terminated text the call set.
             unsafe {
-                semsg_multiline!(c"emsg", "E5108: {}", c_str(err.msg));
-                api_clear_error(out);
+                semsg_multiline!(c"emsg", "E5108: {}", c_str(err.message_or_empty().as_ptr()));
+                (*out).clear();
             }
         }
     } else {

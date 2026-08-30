@@ -27,7 +27,7 @@
 
 mod tags;
 
-use crate::api::private::helpers::{api_clear_error, api_free_object, cstr_as_string};
+use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, cur_win, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
@@ -54,8 +54,7 @@ use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
-    OptValData, OptionSetFlags, exarg_T, file_comparison, kErrorTypeNone, kObjectTypeString,
-    linenr_T, size_t,
+    OptValData, OptionSetFlags, exarg_T, file_comparison, kObjectTypeString, linenr_T, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
@@ -102,10 +101,7 @@ use flag::{
 };
 
 /// An error slot with nothing in it: C's `ERROR_INIT`.
-const NO_ERROR: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+const NO_ERROR: Error = Error::none();
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
 /// be changed.
@@ -304,7 +300,7 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetObject, arena, slot) };
     // SAFETY: `res` is the chunk's answer and `err` our slot; both are
     // consumed here.
-    let tag = if err.type_0 == kErrorTypeNone
+    let tag = if !err.is_set()
         && res.type_0 == kObjectTypeString
         && !unsafe { res.data.string }.is_empty()
     {
@@ -313,7 +309,7 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
         ptr::null_mut()
     };
     unsafe { api_free_object(res) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     tag
 }
 
@@ -541,12 +537,13 @@ pub(crate) unsafe fn find_help_tags(
     let res = unsafe { nlua_exec(chunk, name, args.array(), kRetObject, arena, slot) };
 
     // SAFETY: `err` is our slot and `res` the chunk's answer.
-    if err.type_0 != kErrorTypeNone {
-        unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
-        unsafe { api_clear_error(&raw mut err) };
+    if err.is_set() {
+        let why = err.message_or_empty().as_ptr();
+        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
+        err.clear();
         return FAIL;
     }
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     debug_assert!(
         res.type_0 == kObjectTypeString,
         "res.type == kObjectTypeString"
@@ -695,9 +692,10 @@ pub(crate) unsafe fn get_local_additions() {
     let chunk = static_cstring(c"return require'vim._core.help'.local_additions()");
     let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
     let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetNilBool, arena, slot) };
-    if err.type_0 != kErrorTypeNone {
-        unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
+    if err.is_set() {
+        let why = err.message_or_empty().as_ptr();
+        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
     }
     unsafe { api_free_object(res) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }

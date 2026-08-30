@@ -1,11 +1,11 @@
 //! `:terminal` and `:lsp`, which both hand a buffer to a process.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use crate::api::private::helpers::{api_clear_error, cstr_as_string};
-use crate::ex_docmd::cmdline::do_cmdline_cmd;
+use crate::api::private::helpers::cstr_as_string;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
@@ -17,9 +17,7 @@ use crate::os::cshim::{gettext, snprintf};
 
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 
-use crate::types::{
-    Array, Error, NUL, Object, String_0, exarg_T, kErrorTypeNone, kObjectTypeString, size_t,
-};
+use crate::types::{Array, Error, NUL, Object, String_0, exarg_T, kObjectTypeString, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::Ea;
 
@@ -131,10 +129,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
 pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let mut items: [Object; 1] = [Object {
         type_0: kObjectTypeString,
         data: crate::types::object_data {
@@ -160,10 +155,11 @@ pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
             &raw mut err,
         )
     };
-    if err.type_0 as c_int != kErrorTypeNone as c_int {
-        unsafe { emsg_multiline(err.msg, c"lua_error".as_ptr(), HLF_E, true) };
+    if err.is_set() {
+        let why = err.message_or_empty().as_ptr();
+        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
     }
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }
 
 /// `vim_strsave_escaped()` as checked code.

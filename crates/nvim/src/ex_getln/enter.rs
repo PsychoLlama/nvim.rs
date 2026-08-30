@@ -16,7 +16,6 @@ use crate::guard::Allow;
 use crate::message::emsg_ptr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
-    kErrorTypeNone,
 };
 use crate::winlayer::Live;
 use crate::winlayer::{Buf, Win};
@@ -327,13 +326,13 @@ pub(crate) unsafe fn command_line_enter(
             unsafe { restore_v_event(dict, &raw mut save_v_event) };
             unsafe { try_leave(&raw mut tstate, &raw mut err) };
 
-            if err.type_0 != kErrorTypeNone {
+            if err.is_set() {
                 if !ui_has(kUIMessages) {
                     unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
                 }
                 msg_scroll.set(1);
-                unsafe { msg_puts_hl(err.msg, HLF_E, true) };
-                unsafe { api_clear_error(&raw mut err) };
+                unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
+                err.clear();
                 unsafe { redrawcmd() };
             }
             err = ERROR_INIT;
@@ -484,18 +483,18 @@ pub(crate) unsafe fn command_line_enter(
         msg_scroll.set(s.save_msg_scroll);
         redir_off.set(false);
 
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             if !ui_has(kUIMessages) {
                 unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
             }
-            unsafe { emsg_ptr(err.msg) };
+            unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
             did_emsg.set(0);
-            unsafe { api_clear_error(&raw mut err) };
+            err.clear();
         }
 
         // When the command line was typed, no need for a wait-return
         // prompt.
-        if s.some_key_typed && err.type_0 == kErrorTypeNone {
+        if s.some_key_typed && !err.is_set() {
             need_wait_return.set(false);
         }
 

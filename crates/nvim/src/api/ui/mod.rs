@@ -51,8 +51,8 @@ use crate::types::ui::{
 };
 use crate::types::{
     Boolean, Dict, Error, Float, Integer, Object, ObjectType, PackerBuffer, RemoteUI, String_0,
-    UIExtension, handle_T, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeString,
+    UIExtension, handle_T, kErrorTypeException, kErrorTypeValidation, kObjectTypeBoolean,
+    kObjectTypeInteger, kObjectTypeString,
 };
 use crate::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
@@ -227,7 +227,7 @@ pub unsafe fn nvim_ui_attach(
         // SAFETY: `raw` is live, `err` is this frame's slot, and the value
         // lives as long as the caller's dictionary.
         unsafe { ui_set_option(raw, true, option.key, option.value, err) };
-        if error.type_0 != kErrorTypeNone {
+        if error.is_set() {
             // Nothing has been published yet, so the half-configured UI
             // can simply be dropped. `term_name` is the only owned
             // field an option sets, and not on an error path.

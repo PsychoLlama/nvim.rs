@@ -19,7 +19,7 @@ use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::{
-    api_clear_error, api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
+    api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
 };
 use crate::buffer::do_buffer;
 use crate::decoration::clear_virttext;
@@ -37,9 +37,9 @@ use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Boolean, Error, FAIL, Float, Integer, OK, ScreenGrid, TryState, WinConfig, WinStyle, Window,
-    buf_T, colnr_T, int64_t, kErrorTypeException, kErrorTypeNone, kFloatAnchorEast,
-    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
-    linenr_T, pos_T, size_t, switchwin_T, win_T,
+    buf_T, colnr_T, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, linenr_T, pos_T, size_t,
+    switchwin_T, win_T,
 };
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
@@ -105,7 +105,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     }
     // SAFETY: `tstate` is the state `try_enter` saved, and `err` is live.
     unsafe { try_leave(&raw mut tstate, err) };
-    if win_result == FAIL && err.type_0 as c_int == kErrorTypeNone as c_int {
+    if win_result == FAIL && !err.is_set() {
         let fmt = c"Failed to switch to window %d".as_ptr();
         // SAFETY: a live `Error` and a static format string.
         unsafe { api_set_error(err, kErrorTypeException, fmt, win_id.handle()) };
@@ -318,14 +318,11 @@ fn ext_win_position(wp: Win, validate: bool) {
 
 /// The window a `relative='win'` float is anchored to, if it is still there.
 fn parent_window(handle: Window) -> Option<Win> {
-    let mut dummy = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut::<c_char>(),
-    };
+    let mut dummy = Error::none();
     // SAFETY: a live `Error` of ours; the answer is a live window or null.
     unsafe {
         let win = find_window_by_handle(handle, &raw mut dummy);
-        api_clear_error(&raw mut dummy);
+        dummy.clear();
         Win::from_raw(win)
     }
 }
@@ -482,17 +479,14 @@ fn text_height(
 // May the layout change at all?
 
 pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut::<c_char>(),
-    };
+    let mut err = Error::none();
     // SAFETY: the caller's promise -- a live window; `err` is ours.
     let ok = unsafe { check_split_disallowed_err(wp, &raw mut err) };
-    if err.type_0 as c_int != kErrorTypeNone as c_int {
+    if err.is_set() {
         // SAFETY: the message `api_set_error` just wrote.
-        unsafe { emsg(gettext_ptr(err.msg)) };
+        unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
         // SAFETY: as above.
-        unsafe { api_clear_error(&raw mut err) };
+        err.clear();
     }
     if ok { OK } else { FAIL }
 }

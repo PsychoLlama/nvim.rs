@@ -30,8 +30,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
-    VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    lua_Integer, lua_State, size_t, typval_T, varnumber_T,
+    VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
+    lua_State, size_t, typval_T, varnumber_T,
 };
 use ::libc::{memcpy, strlen};
 
@@ -421,7 +421,7 @@ unsafe fn nlua_call_pop_retval(
                 for i in 0..nres {
                     *res.items.offset((nres - i - 1) as isize) =
                         nlua_pop_object(lstate, false, arena, perr);
-                    if (*perr).type_0 != kErrorTypeNone {
+                    if (*perr).is_set() {
                         return Object::NIL;
                     }
                 }

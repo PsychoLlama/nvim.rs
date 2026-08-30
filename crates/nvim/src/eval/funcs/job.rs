@@ -6,7 +6,7 @@ use super::{
     Callback_data, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc,
     kProcTypePty, object_data,
 };
-use crate::api::private::helpers::{api_clear_error, cstr_as_string, dict_set_var};
+use crate::api::private::helpers::{cstr_as_string, dict_set_var};
 use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::{
@@ -46,8 +46,8 @@ use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, IOSIZE,
     Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, Vv,
-    buf_T, dict_T, dictitem_T, kErrorTypeNone, kObjectTypeInteger, list_T, listitem_T, object,
-    typval_T, typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    buf_T, dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
+    typval_vval_union, uint16_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -644,10 +644,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         unsafe { apply_autocmds(EVENT_BUFFILEPOST, noname, noname, false, buf) };
 
         if unsafe { terminal_live(chan) } {
-            let mut err = Error {
-                type_0: kErrorTypeNone,
-                msg: ptr::null_mut(),
-            };
+            let mut err = Error::none();
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
             unsafe { (*buf).b_locked += 1 };
@@ -688,5 +685,5 @@ unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Er
     let vars = unsafe { (*buf).b_vars };
     let name = unsafe { cstr_as_string(name.as_ptr()) };
     unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
-    unsafe { api_clear_error(err) };
+    unsafe { (*err).clear() };
 }

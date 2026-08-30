@@ -23,7 +23,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Arena, Array, Dict, Error, Integer, Object, String_0, kErrorTypeException, kErrorTypeNone,
+    Arena, Array, Dict, Error, Integer, Object, String_0, kErrorTypeException,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
     lua_Number, lua_State, size_t,
 };
@@ -79,7 +79,7 @@ pub unsafe fn nlua_pop_object(
         let initial_size = lua_gettop(lstate);
         let mut stack = ObjPopStack::new();
         stack.push(ObjPopStackItem::leaf(&raw mut ret));
-        while (*err).type_0 == kErrorTypeNone && !stack.is_empty() {
+        while !(*err).is_set() && !stack.is_empty() {
             let mut cur = stack.last();
             stack.pop();
             if cur.container {
@@ -226,7 +226,7 @@ pub unsafe fn nlua_pop_object(
                 lua_pop(lstate, 1);
             }
         }
-        if (*err).type_0 != kErrorTypeNone {
+        if (*err).is_set() {
             if arena.is_null() {
                 api_free_object(ret);
             }

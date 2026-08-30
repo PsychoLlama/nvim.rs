@@ -23,7 +23,7 @@ use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, ArenaMem, Array, ArrayBuilder, Boolean, Dict, Error, Float, HlMessage, HlMessageChunk,
-    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk, kErrorTypeNone,
+    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
     kObjectTypeTabpage, kObjectTypeWindow, key_value_pair, size_t,
@@ -289,16 +289,13 @@ pub(crate) unsafe fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(NIL);
     if METADATA.with(|m| m.type_0) == kObjectTypeNil {
         let mut arena = ARENA_EMPTY;
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
+        let mut err = Error::none();
         let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
         let (len, ar, e) = (PACKED_API_METADATA.len(), &raw mut arena, &raw mut err);
         // SAFETY: the blob is a compile-time constant of `len` bytes and a
         // valid msgpack map; `arena` and `err` are this frame's.
         METADATA.set(unsafe { unpack(blob, len, ar, e) });
-        if err.type_0 != kErrorTypeNone || METADATA.with(|m| m.type_0) != kObjectTypeDict {
+        if err.is_set() || METADATA.with(|m| m.type_0) != kObjectTypeDict {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };
         }

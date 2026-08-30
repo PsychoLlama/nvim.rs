@@ -24,9 +24,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
-use crate::api::private::helpers::{
-    api_clear_error, api_set_error, find_buffer_by_handle, find_window_by_handle,
-};
+use crate::api::private::helpers::{api_set_error, find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
@@ -44,9 +42,8 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptValData,
     OptValType, OptionSetFlags, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
-    kErrorTypeException, kErrorTypeNone, kFloatRelativeCursor, kFloatRelativeEditor,
-    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T,
-    schar_T, tabpage_T, win_T,
+    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
+    kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T, schar_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -76,10 +73,7 @@ const NO_VIRT_TEXT: VirtText = VirtText {
     capacity: 0,
     items: ptr::null_mut(),
 };
-const NO_ERROR: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+const NO_ERROR: Error = Error::none();
 
 /// `WIN_CONFIG_INIT`, the config a float starts from before the caller sets
 /// the fields it cares about. (`popupmenu/draw.rs` keeps its own copy of the
@@ -327,12 +321,11 @@ fn set_error_str(err: &mut Error, s: *const c_char) {
     unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), s) };
 }
 fn clear_error(err: &mut Error) {
-    // SAFETY: the caller's error slot.
-    unsafe { api_clear_error(err) };
+    err.clear();
 }
 fn report_error(err: &Error) {
     // SAFETY: a set error's message is a string the API allocated.
-    unsafe { emsg_ptr(err.msg) };
+    unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
 }
 fn suppress_autocmds() {
     // SAFETY: `block_autocmds` touches only the global block counter.
@@ -815,7 +808,7 @@ pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: Option<TabPage
 /// Report and clear `err`, release a half-built float and let autocommands run
 /// again: `win_float_create_preview`'s one failure path.
 fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> Option<Win> {
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         report_error(err);
         clear_error(err);
     }
@@ -859,7 +852,7 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
         buf.b_p_bl = 0; // unlist
         set_bufhidden_wipe(buf);
         set_window_buf(win, buf, &mut err);
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             return handle_error_and_cleanup(Some(win), &mut err);
         }
     }

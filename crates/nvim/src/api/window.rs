@@ -10,8 +10,8 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_clear_error, api_set_error, api_try, arena_array, arena_dict,
-    array_add, buffer_by_handle, dict_get_value, dict_put, dict_set_var, has_key, normalize_index,
+    ERROR_INIT, NIL, Reported, api_set_error, api_try, arena_array, arena_dict, array_add,
+    buffer_by_handle, dict_get_value, dict_put, dict_set_var, has_key, normalize_index,
     window_by_handle,
 };
 use crate::api::private::validate::{api_err_exp, api_err_invalid};
@@ -290,9 +290,9 @@ pub fn nvim_win_get_number(win: Window) -> Result<Integer, Error> {
 pub fn nvim_win_is_valid(win: Window) -> Boolean {
     let mut stub: Error = ERROR_INIT;
     let ret = window_by_handle(win, &mut stub).is_some();
-    // SAFETY: `stub` is this frame's own; the message the lookup may have
-    // left behind is freed here rather than reported.
-    unsafe { api_clear_error(&raw mut stub) };
+    // The message the lookup may have left behind is dropped rather than
+    // reported.
+    stub.clear();
     ret
 }
 

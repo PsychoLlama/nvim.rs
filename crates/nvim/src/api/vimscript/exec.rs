@@ -25,7 +25,7 @@ pub unsafe fn nvim_exec2(
     let output: String_0 = unsafe { exec_impl(channel_id, src, opts, err) };
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let wanted = unsafe { (*opts).output };
-    if error.type_0 != kErrorTypeNone || !wanted {
+    if error.is_set() || !wanted {
         return Dict::EMPTY.reported(error);
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
@@ -88,7 +88,7 @@ pub unsafe fn exec_impl(
     unsafe { try_leave(&raw mut tstate, err) };
 
     // SAFETY: `err` is the caller's slot.
-    let caught = unsafe { (*err).type_0 } != kErrorTypeNone;
+    let caught = unsafe { (*err).kind() } != kErrorTypeNone;
     // The capture always starts with the newline that separated the first
     // message from whatever was on screen; drop it. A one-byte capture is
     // that newline alone, i.e. nothing was printed.

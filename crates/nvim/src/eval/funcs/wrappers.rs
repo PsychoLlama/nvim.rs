@@ -13,7 +13,7 @@ use super::{
     FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL, object_data,
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
-use crate::api::private::helpers::{api_clear_error, api_free_object};
+use crate::api::private::helpers::api_free_object;
 use crate::buffer::{buflist_findpat, find_buf};
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
@@ -38,7 +38,7 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
-    float_T, kBoolVarTrue, kErrorTypeNone, kObjectTypeNil, linenr_T, list_T, ptrdiff_t, typval_T,
+    float_T, kBoolVarTrue, kObjectTypeNil, linenr_T, list_T, ptrdiff_t, typval_T,
     typval_vval_union, varnumber_T, win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
@@ -467,17 +467,14 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
         i += 1;
     }
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let call = handler.fn_0.expect("non-null function pointer");
     let (mem, out) = (&raw mut arena, &raw mut err);
     // SAFETY: `args` is the Array built above and both are locals.
     let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, out) };
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let msg = unsafe { c_str(err.msg) };
+        let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
         semsg_multiline!(c"emsg", "E5555: API call: {msg}");
     } else {
         unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true, &raw mut err) };
@@ -488,7 +485,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
         unsafe { api_free_object(result) };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }
 
 /// The buffer a typval names: a buffer number, or a name matched as a

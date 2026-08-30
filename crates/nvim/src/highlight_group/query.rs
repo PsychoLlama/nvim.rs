@@ -152,7 +152,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
         return attrs;
     }
 
-    if unsafe { (*err).type_0 } != kErrorTypeNone {
+    if unsafe { (*err).kind() } != kErrorTypeNone {
         return NO_DICT;
     }
 

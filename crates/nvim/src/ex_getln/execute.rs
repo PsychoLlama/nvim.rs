@@ -16,7 +16,7 @@ use crate::keycodes::{
     Ctrl_Y, Ctrl_Z,
 };
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, ExpandContext, NUL, OK, kErrorTypeNone};
+use crate::types::{CpoFlag, ExpandContext, NUL, OK};
 use crate::winlayer::Win;
 
 /// What `CTRL-\` did with the key typed after it.
@@ -487,13 +487,13 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
     unsafe { try_leave(&raw mut tstate, &raw mut err) };
 
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         if !ui_has(kUIMessages) {
             unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
         }
         msg_scroll.set(1);
-        unsafe { msg_puts_hl(err.msg, HLF_E, true) };
-        unsafe { api_clear_error(&raw mut err) };
+        unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
+        err.clear();
         unsafe { redrawcmd() };
     }
 }

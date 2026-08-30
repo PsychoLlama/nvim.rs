@@ -108,7 +108,7 @@ pub(crate) unsafe fn dict_set_var(
     // SAFETY: as `dict_get_value`.
     let mut di = unsafe { dict_check_writable(dict, key, del, err) };
     // SAFETY: `err` is the caller's slot.
-    if unsafe { (*err).type_0 } != kErrorTypeNone {
+    if unsafe { (*err).kind() } != kErrorTypeNone {
         return rv;
     }
     // SAFETY: `dict` is live.

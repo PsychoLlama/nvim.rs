@@ -15,7 +15,6 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::api_clear_error;
 use crate::autocmd::EVENT_TABNEWENTERED;
 use crate::buffer::{buflist_findname_exp, buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
@@ -647,9 +646,9 @@ fn detach_window() {
     // SAFETY: a live window, its own size, and an error slot of ours.
     let made = unsafe { win_new_float(curwin.get(), false, config, &raw mut error) };
     if made.is_null() {
-        err_raw(error.msg);
+        err_raw(error.message_or_empty().as_ptr());
         // SAFETY: an error the call above filled in, which owns its message.
-        unsafe { api_clear_error(&raw mut error) };
+        error.clear();
         beep();
     }
 }

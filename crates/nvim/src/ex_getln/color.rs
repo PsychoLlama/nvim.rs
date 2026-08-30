@@ -10,10 +10,10 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
 use crate::tr_plural;
-use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kErrorTypeNone};
+use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock};
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
@@ -234,7 +234,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
             unsafe { color_expr_cmdline(colored_ccline, ccline_colors) };
         }
-        if err.type_0 != kErrorTypeNone || !dgc_ret {
+        if err.is_set() || !dgc_ret {
             break 'body Label::Error;
         }
 
@@ -275,7 +275,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         }
         unsafe { try_leave(&raw mut tstate, &raw mut err) };
 
-        if err.type_0 != kErrorTypeNone || !cbcall_ret {
+        if err.is_set() || !cbcall_ret {
             break 'body Label::Error;
         }
         if tv.v_type != VAR_LIST {
@@ -381,11 +381,12 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
 
     // color_cmdline_error:
     if matches!(outcome, Label::Error) {
-        if err.type_0 != kErrorTypeNone {
-            // SAFETY: the API error's own NUL-terminated message.
-            let (template, why) = unsafe { (gettext_ptr(err_errmsg), c_str(err.msg)) };
+        if err.is_set() {
+            let why = msg_cstr(err.message_or_empty());
+            // SAFETY: `err_errmsg` is a static NUL-terminated message.
+            let template = unsafe { gettext_ptr(err_errmsg) };
             print_errmsg!("{}", tr_plural!(template, why));
-            unsafe { api_clear_error(&raw mut err) };
+            err.clear();
         }
         debug_assert!(printed_errmsg);
         prev_prompt_errors.set(prev_prompt_errors.get() + 1);
@@ -396,7 +397,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     }
 
     // color_cmdline_end:
-    debug_assert!(err.type_0 == kErrorTypeNone);
+    debug_assert!(!err.is_set());
     if can_free_cb {
         unsafe { callback_free(&raw mut color_cb) };
     }

@@ -18,7 +18,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::api::private::helpers::{api_clear_error, api_free_object, api_set_error};
+use crate::api::private::helpers::{api_free_object, api_set_error};
 use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
@@ -29,8 +29,7 @@ use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::types::{
     Arena, Array, Channel, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream, Unpacker,
-    kErrorTypeException, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, size_t, uint32_t,
-    uint64_t,
+    kErrorTypeException, kObjectTypeArray, kObjectTypeNil, size_t, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_event_raw_line;
 
@@ -119,8 +118,10 @@ pub(super) unsafe fn parse_msgpack(chan: Chan) {
         }
     }
     if p.state < 0 {
-        unsafe { chan_close_on_err(chan, p.unpack_error.msg, LOGLVL_INF) };
-        unsafe { api_clear_error(&raw mut p.unpack_error) };
+        let why = p.unpack_error.message_or_empty().as_ptr().cast_mut();
+        // SAFETY: the channel is live and the message is the decoder's own.
+        unsafe { chan_close_on_err(chan, why, LOGLVL_INF) };
+        p.unpack_error.clear();
     }
 }
 
@@ -227,9 +228,11 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
 
     // The decoder could not resolve a handler, so `unpack_error` says why.
     let Some(handler_fn) = p.handler.fn_0 else {
+        let why = p.unpack_error.message_or_empty().as_ptr().cast_mut();
+        let (handler, kind, id) = (p.handler, p.type_0, p.request_id);
         // SAFETY: the channel is live and the message is the decoder's own.
-        unsafe { send_error(chan, p.handler, p.type_0, p.request_id, p.unpack_error.msg) };
-        unsafe { api_clear_error(&raw mut p.unpack_error) };
+        unsafe { send_error(chan, handler, kind, id, why) };
+        p.unpack_error.clear();
         unsafe { arena_mem_free(arena_finish(&raw mut p.arena)) };
         return;
     };
@@ -314,10 +317,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     // SAFETY: as above.
     let (handler, type_0, request_id, args) =
         unsafe { ((*e).handler, (*e).type_0, (*e).request_id, (*e).args) };
-    let mut error = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut error = Error::none();
 
     // A channel closed while the request sat on a queue is simply dropped —
     // there is nowhere left to send the answer.
@@ -330,7 +330,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         };
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
-        if type_0 == kMessageTypeRequest || error.type_0 != kErrorTypeNone {
+        if type_0 == kMessageTypeRequest || error.is_set() {
             let mut answer = result;
             // SAFETY: the channel is live and both slots are stack locals.
             let (to, err, out) = (chan.as_ptr(), &raw mut error, &raw mut answer);
@@ -345,7 +345,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
     unsafe { arena_mem_free(arena_finish(&raw mut (*e).used_mem)) };
     unsafe { channel_decref(chan.as_ptr()) };
     unsafe { xfree(e.cast::<c_void>()) };
-    unsafe { api_clear_error(&raw mut error) };
+    error.clear();
 }
 
 /// Answers a request that never reached a handler.
@@ -359,14 +359,11 @@ unsafe fn send_error(
     id: uint32_t,
     err: *mut c_char,
 ) {
-    let mut e = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut e = Error::none();
     let mut answer = NIL;
     // SAFETY: the caller's message, and two stack locals.
     unsafe { api_set_error(&raw mut e, kErrorTypeException, c"%s".as_ptr(), err) };
     let (to, err, out) = (chan.as_ptr(), &raw mut e, &raw mut answer);
     unsafe { serialize_response(to, handler, type_0, id, err, out) };
-    unsafe { api_clear_error(&raw mut e) };
+    e.clear();
 }

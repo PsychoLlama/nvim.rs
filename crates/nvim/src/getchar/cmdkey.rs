@@ -11,7 +11,7 @@ use crate::guard::Keys;
 use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
-use crate::types::{NUL, kErrorTypeNone};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -151,10 +151,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
         repeat_luaref.set(luaref);
     }
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     unsafe {
         nlua_call_ref(
             luaref,
@@ -165,11 +162,11 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
             &raw mut err,
         )
     };
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let msg = unsafe { c_str(err.msg) };
+        let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
         semsg_multiline!(c"emsg", "E5108: {msg}");
-        unsafe { api_clear_error(&raw mut err) };
+        err.clear();
     }
 
     unsafe { ga_clear(&raw mut line_ga) };

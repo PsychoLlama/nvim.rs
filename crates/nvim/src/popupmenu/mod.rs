@@ -3,9 +3,7 @@
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::api::buffer::nvim_buf_set_lines;
-use crate::api::private::helpers::{
-    api_clear_error, api_free_array, arena_array, cstr_as_string, cstr_to_string,
-};
+use crate::api::private::helpers::{api_free_array, arena_array, cstr_as_string, cstr_to_string};
 use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};

@@ -12,8 +12,7 @@ use core::ptr;
 
 use super::{ERROR_INIT, error_set, nlua_push_errstr};
 use crate::api::private::helpers::{
-    api_clear_error, dict_check_writable, find_buffer_by_handle, find_tab_by_handle,
-    find_window_by_handle,
+    dict_check_writable, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 use crate::eval::typval::{
     TV_INITIAL_VALUE, tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched,
@@ -77,8 +76,9 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
             }
         };
         if error_set(&err) {
-            nlua_push_errstr(lstate, c"scoped variable: %s".as_ptr(), err.msg);
-            api_clear_error(&raw mut err);
+            let why = err.message_or_empty().as_ptr();
+            nlua_push_errstr(lstate, c"scoped variable: %s".as_ptr(), why);
+            err.clear();
             lua_error(lstate);
             return ptr::null_mut();
         }
@@ -104,8 +104,8 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         let mut err = ERROR_INIT;
         let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, &raw mut err);
         if error_set(&err) {
-            nlua_push_errstr(lstate, c"%s".as_ptr(), err.msg);
-            api_clear_error(&raw mut err);
+            nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
+            err.clear();
             lua_error(lstate);
             return 0;
         }

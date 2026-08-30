@@ -26,8 +26,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_clear_error, arena_array, arena_dict, arena_string, array_add, cstr_as_string,
-    cstr_to_string, dict_put,
+    arena_array, arena_dict, arena_string, array_add, cstr_as_string, cstr_to_string, dict_put,
 };
 use crate::autocmd::{
     EVENT_SOURCECMD, EVENT_SOURCEPOST, EVENT_SOURCEPRE, apply_autocmds, has_autocmd,
@@ -101,10 +100,10 @@ use crate::types::{
     MapHash, Object, ObjectType, OptVal, OptValData, OptValType, Set_String, String_0,
     UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_T_es_info, estack_arg_T,
     etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse,
-    kErrorTypeNone, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    linenr_T, list_T, object_data, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T,
-    scriptitem_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t,
-    uv_mutex_t, varnumber_T, vimconv_T,
+    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T, list_T,
+    object_data, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
+    vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcmp, strcpy, strlen};

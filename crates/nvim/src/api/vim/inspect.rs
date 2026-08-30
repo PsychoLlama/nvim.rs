@@ -115,7 +115,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 rvobj = unsafe { o.data.array };
-            } else if !(unsafe { (*err).type_0 } as ::core::ffi::c_int
+            } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
                 != kErrorTypeNone as ::core::ffi::c_int)
             {
                 let fmt = c"Failed to get process children. pid=%ld error=%d";
@@ -180,7 +180,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         rvobj = o;
-    } else if !(unsafe { (*err).type_0 } as ::core::ffi::c_int
+    } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
         != kErrorTypeNone as ::core::ffi::c_int)
     {
         let fmt = c"Failed to get process info. pid=%ld";

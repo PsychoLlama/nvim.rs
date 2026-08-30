@@ -135,8 +135,8 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
     };
     drop(unlocked);
     if let Err(mut err) = set {
-        unsafe { emsg_ptr(err.msg) };
-        unsafe { api_clear_error(&raw mut err) };
+        unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
+        err.clear();
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { api_free_array(replacement) };

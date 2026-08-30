@@ -9,8 +9,6 @@ use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use crate::api::private::helpers::api_clear_error;
-
 use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd};
 
 use crate::buffer::do_modelines;
@@ -32,7 +30,7 @@ use crate::runtime::RuntimeOpts;
 
 use crate::types::{
     Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
-    kErrorTypeNone, kObjectTypeString, size_t,
+    kObjectTypeString, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -222,10 +220,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let mut env = env_buf();
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let mut items: [Object; 2] = unsafe { core::mem::zeroed() };
     let mut args = Array {
         size: 0,
@@ -270,7 +265,7 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
             &raw mut err,
         )
     };
-    if err.type_0 as c_int == kErrorTypeNone as c_int {
+    if !err.is_set() {
         return;
     }
 
@@ -290,9 +285,9 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }
     // SAFETY: the API error's own NUL-terminated message.
-    let msg = unsafe { c_str(err.msg) };
+    let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
     semsg_multiline!(c"emsg", "{msg}");
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }
 
 /// A `'static` Lua source string as the API's counted string.

@@ -10,8 +10,8 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_clear_error, api_set_error, api_try, arena_array, array_add,
-    buffer_by_handle, dict_get_value, dict_set_var, has_key, tabpage_by_handle, window_by_handle,
+    ERROR_INIT, NIL, Reported, api_set_error, api_try, arena_array, array_add, buffer_by_handle,
+    dict_get_value, dict_set_var, has_key, tabpage_by_handle, window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
 
@@ -19,7 +19,7 @@ use crate::main::{autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, c
 use crate::narrow::number_as_int;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object, String_0,
-    Tabpage, Window, kErrorTypeException, kErrorTypeNone, size_t, tabpage_T, win_T,
+    Tabpage, Window, kErrorTypeException, size_t, tabpage_T, win_T,
 };
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
@@ -170,9 +170,9 @@ pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
 pub fn nvim_tabpage_is_valid(tabpage: Tabpage) -> Boolean {
     let mut stub: Error = ERROR_INIT;
     let ret = tabpage_by_handle(tabpage, &mut stub).is_some();
-    // SAFETY: `stub` is this frame's own; the message the lookup may have
-    // left behind is freed here rather than reported.
-    unsafe { api_clear_error(&raw mut stub) };
+    // The message the lookup may have left behind is dropped rather than
+    // reported.
+    stub.clear();
     ret
 }
 
@@ -219,7 +219,7 @@ pub unsafe fn nvim_open_tabpage(
         unsafe { win_new_tabpage(after + 1, filename, enter, &raw mut wp) }
     });
     if tp.is_null() {
-        if err.type_0 == kErrorTypeNone {
+        if !err.is_set() {
             set_msg(&mut err, c"Failed to create new tabpage");
         }
         return Err(err);
@@ -260,7 +260,7 @@ pub unsafe fn nvim_open_tabpage(
 /// have closed what it just opened.
 fn tabpage_closed(mut err: Error) -> Error {
     // SAFETY: `err` is the caller's, moved in.
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     set_msg(&mut err, c"Tabpage was closed immediately");
     err
 }

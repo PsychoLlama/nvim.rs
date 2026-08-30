@@ -146,7 +146,7 @@ unsafe fn get_option_from(
         // SAFETY: the caller's promise about `from` and `err`.
         value = unsafe { get_option_value_for(opt_idx, flags, scope, from, err) };
         // SAFETY: as above.
-        if unsafe { (*err).type_0 } != kErrorTypeNone {
+        if unsafe { (*err).kind() } != kErrorTypeNone {
             return NIL;
         }
     }

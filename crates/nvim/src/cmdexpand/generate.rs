@@ -15,9 +15,7 @@ use crate::syntax::EXPAND_BUF_LEN;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{
-    ArrayBuf, BackslashEscape, ExpandContext, FAIL, OK, kErrorTypeNone, static_cstring,
-};
+use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, FAIL, OK, static_cstring};
 
 /// Expand a file or directory pattern.
 ///
@@ -206,10 +204,7 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
 
 /// Replace the cached answer with a fresh one, dropping the old.
 unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let res = unsafe {
         nlua_exec(
             static_cstring(script),
@@ -220,7 +215,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
             &raw mut err,
         )
     };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
     // `replace` rather than a `get`/`set` pair: the old answer must not
     // be reachable through the cell while it is being freed.
     unsafe { api_free_object(names.replace(res)) };

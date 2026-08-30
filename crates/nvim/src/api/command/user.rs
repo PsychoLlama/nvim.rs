@@ -50,7 +50,7 @@ pub unsafe fn nvim_buf_create_user_command(
     let err = &raw mut error;
     // SAFETY: `err` is this frame's slot.
     let target_buf = unsafe { find_buffer_by_handle(buf, err) };
-    if error.type_0 != kErrorTypeNone {
+    if error.is_set() {
         return ().reported(error);
     }
     // The command is added to whichever buffer is current, so the lookup's
@@ -72,7 +72,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
     } else {
         // SAFETY: `err` is this frame's slot.
         let b = unsafe { find_buffer_by_handle(buf, err) };
-        if error.type_0 != kErrorTypeNone {
+        if error.is_set() {
             return ().reported(error);
         }
         Table::Buffer(b)
@@ -279,7 +279,7 @@ pub unsafe fn create_user_command(
         // Everything above reports through `err` without stopping, so a
         // failure that fell through to here still has to skip the rest.
         // SAFETY: `err` is the caller's slot.
-        if unsafe { (*err).type_0 } != kErrorTypeNone {
+        if unsafe { (*err).kind() } != kErrorTypeNone {
             break '_err;
         }
 

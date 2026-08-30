@@ -33,10 +33,10 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
     Arena, Array, Dict, Error, Integer, KeyValuePair, MessageType, Object, ObjectType, String_0,
-    Unpacker, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, mpack_node_t, mpack_parser_t,
-    mpack_token_t, mpack_uint32_t, mpack_walk_cb, object_data, size_t,
+    Unpacker, kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
+    kObjectTypeString, kObjectTypeTabpage, mpack_node_t, mpack_parser_t, mpack_token_t,
+    mpack_uint32_t, mpack_walk_cb, object_data, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -438,17 +438,18 @@ unsafe fn ext_object(p: *mut Unpacker, ext_type: c_int, length: mpack_uint32_t) 
 }
 
 /// # Safety
-/// `p` points at writable `Unpacker`-sized storage.
+/// `p` points at writable `Unpacker`-sized storage, which nothing has yet
+/// initialized -- `rpc_start`'s `xcalloc`.
 pub unsafe fn unpacker_init(p: *mut Unpacker) {
     // SAFETY: the caller's storage.
     unsafe { mpack_parser_init(&raw mut (*p).parser, 0) };
     unsafe { (*p).parser.data.p = p.cast::<c_void>() };
     unsafe { mpack_tokbuf_init(&raw mut (*p).reader) };
-    let no_error = Error {
-        type_0: kErrorTypeNone,
-        msg: core::ptr::null_mut(),
-    };
-    unsafe { (*p).unpack_error = no_error };
+    // `write`, not an assignment: `Error` owns its message and dropping one
+    // is a real drop, so assigning here would drop whatever the uninitialized
+    // storage happens to look like.
+    // SAFETY: as above; the field is inside the caller's storage.
+    unsafe { core::ptr::write(&raw mut (*p).unpack_error, Error::none()) };
     unsafe { (*p).arena = ARENA_EMPTY };
     unsafe { (*p).has_grid_line_event = false };
 }
@@ -459,6 +460,11 @@ pub unsafe fn unpacker_init(p: *mut Unpacker) {
 pub unsafe fn unpacker_teardown(p: *mut Unpacker) {
     // SAFETY: the arena is the unpacker's own.
     unsafe { arena_mem_free(arena_finish(&raw mut (*p).arena)) };
+    // The unpacker is `xfree`d rather than dropped, so a message left in its
+    // error slot -- a refused message the reader never got to report -- has to
+    // be released here.
+    // SAFETY: as above.
+    unsafe { (*p).unpack_error.clear() };
 }
 
 /// Reads `[type, id?, method?, ...]` and leaves the cursor on the body.
@@ -474,7 +480,7 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
     // SAFETY: the caller's unpacker. Nothing this function calls re-enters
     // it, so one borrow serves the whole body.
     let u = unsafe { &mut *p };
-    debug_assert!(u.unpack_error.type_0 == kErrorTypeNone);
+    debug_assert!(!u.unpack_error.is_set());
     let mut data: *const c_char = u.read_ptr;
     let mut size: size_t = u.read_size;
     // SAFETY: a token is a plain value with no invalid bit patterns.

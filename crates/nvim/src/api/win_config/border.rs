@@ -211,7 +211,7 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         let hl_id =
             unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr(), err) };
         // SAFETY: as above.
-        if unsafe { (*err).type_0 } != kErrorTypeNone {
+        if unsafe { (*err).kind() } != kErrorTypeNone {
             return None;
         }
         return Some((string, hl_id));
@@ -412,7 +412,7 @@ pub unsafe fn parse_winborder(
         api_free_object(style);
         ErrSlot::new(err)
     };
-    slot.type_0 == kErrorTypeNone
+    !slot.is_set()
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when

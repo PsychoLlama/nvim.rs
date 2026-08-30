@@ -26,8 +26,8 @@ use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeNil, key_value_pair, lua_Number, lua_State, size_t,
+    kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeNil, key_value_pair, lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
 
@@ -338,7 +338,7 @@ unsafe fn nlua_pop_array_unchecked(
         for i in 1..=table_props.maxidx {
             lua_rawgeti(lstate, -1, i as c_int);
             let val = nlua_pop_object(lstate, false, arena, err);
-            if (*err).type_0 != kErrorTypeNone {
+            if (*err).is_set() {
                 lua_pop(lstate, 1);
                 if arena.is_null() {
                     api_free_array(ret);
@@ -394,14 +394,14 @@ unsafe fn nlua_pop_dict_unchecked(
             // The key is popped from a copy, so lua_next still has its own.
             lua_pushvalue(lstate, -2);
             let key = nlua_pop_string(lstate, arena, err);
-            if (*err).type_0 == kErrorTypeNone {
+            if !(*err).is_set() {
                 let value = nlua_pop_object(lstate, ref_0, arena, err);
                 *ret.items.add(ret.size) = key_value_pair { key, value };
                 ret.size = ret.size.wrapping_add(1);
             } else {
                 lua_pop(lstate, 1);
             }
-            if (*err).type_0 != kErrorTypeNone {
+            if (*err).is_set() {
                 if arena.is_null() {
                     api_free_dict(ret);
                 }

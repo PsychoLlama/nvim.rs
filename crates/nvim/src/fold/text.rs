@@ -6,9 +6,9 @@
 //! sanitising whatever it answers.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-
 use crate::api::extmark::parse_virt_text;
-use crate::api::private::helpers::{api_clear_error, api_free_object};
+
+use crate::api::private::helpers::api_free_object;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
 use crate::eval::eval_foldtext;
@@ -20,7 +20,7 @@ use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::os::cshim::{memmove, ngettext, strncmp, strstr};
 use crate::strings::vim_snprintf;
-use crate::types::{Vv, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
+use crate::types::{Vv, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
 use crate::winlayer::{Buf, Win};
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
@@ -91,16 +91,13 @@ pub unsafe fn get_foldtext(
             if obj.type_0 as c_uint == kObjectTypeArray as c_uint {
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
-                let mut err = Error {
-                    type_0: kErrorTypeNone,
-                    msg: ptr::null_mut(),
-                };
+                let mut err = Error::none();
                 unsafe { *vt = parse_virt_text(obj.data.array, &raw mut err, ptr::null_mut()) };
-                if err.type_0 as c_int == kErrorTypeNone as c_int {
+                if !err.is_set() {
                     unsafe { *buf = NUL as c_char };
                     text = buf;
                 }
-                unsafe { api_clear_error(&raw mut err) };
+                err.clear();
             } else if obj.type_0 as c_uint == kObjectTypeString as c_uint {
                 text = unsafe { obj.data.string }.data();
                 obj = object {

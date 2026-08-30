@@ -2,7 +2,7 @@
 
 use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::{
-    api_clear_error, api_free_array, arena_array, cstr_as_string, try_enter, try_leave,
+    api_free_array, arena_array, cstr_as_string, try_enter, try_leave,
 };
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_isspace, ascii_iswhite};
@@ -149,10 +149,10 @@ use crate::types::{
     RemapValues, Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T,
     buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
     dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
-    hashtab_T, kErrorTypeNone, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
-    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
-    searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t, uint32_t,
-    uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T,
+    pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
+    time_t, typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
+    xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -499,10 +499,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
 };
 
 /// An all-zero [`Error`], C's `ERROR_INIT`.
-pub(crate) const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
+pub(crate) const ERROR_INIT: Error = Error::none();
 
 /// An all-zero [`pos_T`].
 pub(crate) const POS_INIT: pos_T = pos_T {

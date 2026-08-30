@@ -25,7 +25,7 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Boolean, Dict, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
     KeyDict_highlight_cterm, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
+    kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
 };
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
@@ -580,7 +580,7 @@ pub unsafe fn dict2hlattrs(
 /// `err` points at a live [`Error`].
 unsafe fn error_set(err: *mut Error) -> bool {
     // SAFETY: the caller's error slot.
-    unsafe { (*err).type_0 != kErrorTypeNone }
+    unsafe { (*err).is_set() }
 }
 
 /// A colour key's value as a colour number: an integer verbatim, a name

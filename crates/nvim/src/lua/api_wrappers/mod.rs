@@ -117,7 +117,7 @@ use crate::api::private::dispatch::{
     win_text_height_table,
 };
 use crate::api::private::helpers::{
-    api_clear_error, api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
+    api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
     api_luarefs_free_object, api_set_error,
 };
 use crate::api::tabpage::{
@@ -193,16 +193,13 @@ use core::ptr;
 /// `pub(crate)`, not `pub`: `known` is private, so a `pub` item in it is
 /// unreachable from outside the crate and `unreachable_pub` says so.
 mod known {
-    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
+    pub(crate) use crate::types::{kErrorTypeException, kErrorTypeValidation};
 }
 
 use known::*;
 
 /// A fresh, unset error.
-const ERROR_INIT: Error = Error {
-    type_0: kErrorTypeNone,
-    msg: ptr::null_mut(),
-};
+const ERROR_INIT: Error = Error::none();
 
 /// Flags for handing a result back to Lua.
 ///
@@ -428,7 +425,7 @@ unsafe fn run(
     // SAFETY: the arena is this frame's own, and every argument that borrowed
     // from it has been released.
     unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
-    if call.err.type_0 == kErrorTypeNone {
+    if !call.err.is_set() {
         return nret;
     }
     // SAFETY: as above; `call.err` carries a message.
@@ -485,12 +482,12 @@ unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
             lua_pushstring(lstate, c"Invalid '".as_ptr());
             lua_pushstring(lstate, call.err_param);
             lua_pushstring(lstate, c"': ".as_ptr());
-            lua_pushstring(lstate, (*err).msg);
-            api_clear_error(err);
+            lua_pushstring(lstate, (*err).message_or_empty().as_ptr());
+            (*err).clear();
             lua_concat(lstate, 5);
         } else {
-            lua_pushstring(lstate, (*err).msg);
-            api_clear_error(err);
+            lua_pushstring(lstate, (*err).message_or_empty().as_ptr());
+            (*err).clear();
             lua_concat(lstate, 2);
         }
     }

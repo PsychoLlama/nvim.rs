@@ -113,7 +113,7 @@ impl OptionContext {
                     == FAIL
                 {
                     unsafe { restore_win_noblock(switchwin, true) };
-                    if unsafe { (*err).type_0 } == kErrorTypeNone {
+                    if unsafe { (*err).kind() } == kErrorTypeNone {
                         let why = c"Problem while switching windows".as_ptr();
                         unsafe { api_set_error(err, kErrorTypeException, why) };
                     }
@@ -165,7 +165,7 @@ pub(crate) unsafe fn get_option_value_for(
     // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
     let switched = unsafe { ctx.enter(from, err) };
     // SAFETY: `err` is valid.
-    if unsafe { (*err).type_0 } != kErrorTypeNone {
+    if unsafe { (*err).kind() } != kErrorTypeNone {
         return NIL_OPTVAL;
     }
     let value = get_option_value(opt_idx, opt_flags);
@@ -196,7 +196,7 @@ pub(crate) unsafe fn set_option_value_for(
     // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
     let switched = unsafe { ctx.enter(from, err) };
     // SAFETY: `err` is valid.
-    if unsafe { (*err).type_0 } != kErrorTypeNone {
+    if unsafe { (*err).kind() } != kErrorTypeNone {
         return;
     }
     // SAFETY: the caller's `name` is NUL-terminated.

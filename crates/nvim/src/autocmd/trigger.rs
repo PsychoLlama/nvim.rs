@@ -229,10 +229,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     let eap = unsafe { (*e).eap };
     let data = unsafe { (*e).data };
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ::core::ptr::null_mut(),
-    };
+    let mut err = Error::none();
     // The buffer may well have gone since the event was queued, which is
     // why the *handle* was stored and is resolved here.
     // SAFETY: `err` is this frame's own.
@@ -252,7 +249,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 // SAFETY: `tv` and `err` are this frame's own.
                 unsafe { object_to_vim(item.value, &raw mut tv, &raw mut err) };
                 // A value `v:event` cannot hold is dropped, not fatal.
-                if err.type_0 == kErrorTypeNone {
+                if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is
                     // the dict entry's own name of the length given.
                     unsafe {
@@ -260,7 +257,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                     };
                     unsafe { tv_clear(&raw mut tv) };
                 } else {
-                    unsafe { api_clear_error(&raw mut err) };
+                    err.clear();
                 }
             }
         }

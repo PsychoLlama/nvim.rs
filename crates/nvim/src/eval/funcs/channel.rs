@@ -10,7 +10,7 @@ use super::{
     kRetObject, object_data,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
-use crate::api::private::helpers::{api_clear_error, arena_array, cstr_as_string};
+use crate::api::private::helpers::{arena_array, cstr_as_string};
 use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
@@ -31,7 +31,7 @@ use crate::main::{
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::on_print_cb;
 use crate::message::{emsg, emsg_ptr};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::{get_client_info, rpc_send_call, rpc_send_event};
 use crate::msgpack_rpc::server::{
     server_address_list, server_address_new, server_start, server_stop,
@@ -43,8 +43,8 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
     String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
-    funccall_T, kErrorTypeNone, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object,
-    sctx_T, typval_T, uint64_t, varnumber_T,
+    funccall_T, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object, sctx_T, typval_T,
+    uint64_t, varnumber_T,
 };
 use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -339,10 +339,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
     let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
 
-    let mut err = Error {
-        type_0: kErrorTypeNone,
-        msg: ptr::null_mut(),
-    };
+    let mut err = Error::none();
     let chan_id = unsafe { args.get(0).vval.v_number } as uint64_t;
     let method = arg_string(&mut numbuf, args.get(1));
     let mut res_mem: ArenaMem = ptr::null_mut();
@@ -354,7 +351,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         unsafe { scope.leave() };
     }
 
-    if err.type_0 != kErrorTypeNone {
+    if err.is_set() {
         // Name the peer when it told us what it is called.
         let chan = find_channel(chan_id);
         let name = if chan.is_null() {
@@ -363,16 +360,20 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             unsafe { get_client_info(chan, c"name".as_ptr()) }
         };
         if name.is_null() {
-            // SAFETY: the method name and the API error's message are both
-            // NUL-terminated.
-            let (method, msg) = unsafe { (c_str(method), c_str(err.msg)) };
+            let why = err.message_or_empty();
+            // SAFETY: the method name is NUL-terminated.
+            let method = unsafe { c_str(method) };
+            let msg = msg_cstr(why);
             semsg_multiline!(
                 c"rpc_error",
                 "Invoking '{method}' on channel {chan_id}:\n{msg}"
             );
         } else {
             // SAFETY: as above, plus the client name the channel answered.
-            let (method, name, msg) = unsafe { (c_str(method), c_str(name), c_str(err.msg)) };
+            let why = err.message_or_empty();
+            // SAFETY: both names are NUL-terminated.
+            let (method, name) = unsafe { (c_str(method), c_str(name)) };
+            let msg = msg_cstr(why);
             semsg_multiline!(
                 c"rpc_error",
                 "Invoking '{method}' on channel {chan_id} ({name}):\n{msg}"
@@ -382,7 +383,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         unsafe { object_to_vim(result, rettv, &raw mut err) };
     }
     unsafe { arena_mem_free(res_mem) };
-    unsafe { api_clear_error(&raw mut err) };
+    err.clear();
 }
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
@@ -425,24 +426,22 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         unsafe { *lua_args.items = entry };
         lua_args.size = 1;
 
-        let mut err = Error {
-            type_0: kErrorTypeNone,
-            msg: ptr::null_mut(),
-        };
+        let mut err = Error::none();
         const PEERS: &str = "return require('vim._core.server').serverlist(...)";
         let code = PEERS.as_ptr() as *mut c_char;
         let code = String_0::from_raw_parts(code, PEERS.len());
         let (mem, out) = (&raw mut arena, &raw mut err);
         let rv = unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem, out) };
-        if err.type_0 != kErrorTypeNone {
+        if err.is_set() {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.
             let what = c"vim._core.serverlist failed: %s".as_ptr();
             let here = c"f_serverlist".as_ptr();
             let nul = ptr::null();
+            let why = err.message_or_empty().as_ptr();
             // SAFETY: the log macro's `fprintf` takes the two `'static`
             // format strings and the error's own message.
-            unsafe { logmsg_c!(LOGLVL_ERR, nul, here, 6338, true, what, err.msg) };
+            unsafe { logmsg_c!(LOGLVL_ERR, nul, here, 6338, true, what, why) };
         } else {
             for i in 0..unsafe { rv.data.array }.size {
                 let item = unsafe { rv.data.array.items.add(i) };

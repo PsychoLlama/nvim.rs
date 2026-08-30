@@ -64,7 +64,7 @@ pub unsafe fn nvim_exec_autocmds(
             err,
         )
     };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -129,7 +129,7 @@ pub unsafe fn nvim_exec_autocmds(
             return ().reported(error);
         }
         b = unsafe { find_buffer_by_handle(buf, err) };
-        if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return ().reported(error);
         }
     }
@@ -143,7 +143,7 @@ pub unsafe fn nvim_exec_autocmds(
             err,
         )
     };
-    if unsafe { (*err).type_0 } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     if has_key(

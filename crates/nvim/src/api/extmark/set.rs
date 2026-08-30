@@ -227,9 +227,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         err,
                                     )
                                 };
-                                if error.type_0 as ::core::ffi::c_int
-                                    != kErrorTypeNone as ::core::ffi::c_int
-                                {
+                                if error.is_set() {
                                     break '_error;
                                 }
                             }
@@ -245,9 +243,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         err,
                                     )
                                 };
-                                if error.type_0 as ::core::ffi::c_int
-                                    != kErrorTypeNone as ::core::ffi::c_int
-                                {
+                                if error.is_set() {
                                     break '_error;
                                 }
                                 if hl_id != 0 {
@@ -259,9 +255,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             hl.hl_id = unsafe {
                                 object_to_hl_id(opts.hl_group, c"hl_group".as_ptr(), err)
                             };
-                            if error.type_0 as ::core::ffi::c_int
-                                != kErrorTypeNone as ::core::ffi::c_int
-                            {
+                            if error.is_set() {
                                 break '_error;
                             }
                         }
@@ -326,7 +320,7 @@ pub unsafe fn nvim_buf_set_extmark(
                 ) {
                     virt_text.data.virt_text =
                         unsafe { parse_virt_text(opts.virt_text, err, &raw mut virt_text.width) };
-                    if error.type_0 as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+                    if error.is_set() {
                         break '_error;
                     }
                 }
@@ -451,9 +445,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             };
                             // SAFETY: `items` is this vector's own allocation.
                             unsafe { vl.push(line) };
-                            if error.type_0 as ::core::ffi::c_int
-                                != kErrorTypeNone as ::core::ffi::c_int
-                            {
+                            if error.is_set() {
                                 break '_error;
                             }
                             j = j.wrapping_add(1);
@@ -795,9 +787,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     err,
                                 )
                             };
-                            if error.type_0 as ::core::ffi::c_int
-                                != kErrorTypeNone as ::core::ffi::c_int
-                            {
+                            if error.is_set() {
                                 unsafe { decor_free(decor) };
                                 return (0 as Integer).reported(error);
                             }

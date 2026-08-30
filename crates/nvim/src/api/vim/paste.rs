@@ -78,7 +78,7 @@ pub unsafe fn nvim_paste(
         let rv = unsafe { nlua_exec(handler, name, args, kRetNilBool, arena, err) };
         // SAFETY: the tag says the boolean arm is the live one.
         let refused = rv.type_0 == kObjectTypeBoolean && !unsafe { rv.data.boolean };
-        if error.type_0 != kErrorTypeNone || refused {
+        if error.is_set() || refused {
             cancelled.set(true);
         }
         let terminal = cur_buf_terminal();

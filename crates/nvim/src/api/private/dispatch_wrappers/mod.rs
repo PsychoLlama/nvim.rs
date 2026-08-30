@@ -170,7 +170,6 @@ mod known {
     use core::ffi::c_int;
 
     pub(crate) use crate::types::kErrorTypeException;
-    pub(crate) use crate::types::kErrorTypeNone;
     pub(crate) use crate::types::kObjectTypeArray;
     pub(crate) use crate::types::kObjectTypeBoolean;
     pub(crate) use crate::types::kObjectTypeBuffer;
