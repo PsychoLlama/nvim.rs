@@ -323,7 +323,7 @@ unsafe fn copy_redo(old_redo: bool) {
 /// Stuff the redo buffer into `readbuf2`, replacing its count with `count`.
 ///
 /// With `old_redo` set the last command but one is repeated instead of the
-/// last one, which is what `CTRL-O .` in Insert mode wants. Answers `FAIL`
+/// last one, which is what `CTRL-O .` in Insert mode wants. Answers `Err`
 /// when there is nothing to redo.
 ///
 /// # Safety
@@ -384,7 +384,7 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 }
 
 /// Repeat the last insert (`R`, `o`, `O`, `a`, `A`, `i` or `I`) by stuffing
-/// the redo buffer into `readbuf2`. Answers `FAIL` when there is nothing to
+/// the redo buffer into `readbuf2`. Answers `Err` when there is nothing to
 /// repeat.
 ///
 /// # Safety

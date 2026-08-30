@@ -207,7 +207,7 @@ pub(crate) unsafe fn concat_pattern_with_buffer_match(
 /// Search for strings matching `pat` in the specified range and return them.
 ///
 /// `dir` is `FORWARD` or `BACKWARD`; `matches` and `numMatches` return the
-/// answer.  Returns `OK` on success, `FAIL` otherwise.
+/// answer.  Returns `Ok` on success, `Err` otherwise.
 pub(crate) unsafe fn expand_pattern_in_buf(
     pat: *mut c_char,
     dir: Direction,

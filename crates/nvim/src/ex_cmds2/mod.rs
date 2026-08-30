@@ -646,8 +646,8 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
     }
 }
 
-/// `FAIL` and an error message when the current buffer has no file name,
-/// `OK` when it has one.
+/// `Err` and an error message when the current buffer has no file name,
+/// `Ok` when it has one.
 ///
 /// # Safety
 /// Module contract.

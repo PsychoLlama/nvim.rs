@@ -131,7 +131,7 @@ pub unsafe fn make_percent_swname(
 /// the result into `buf[MAXPATHL]`.
 ///
 /// `resolve()` in Vimscript does this for every part of the path; this does
-/// not. Returns `OK` when `buf` holds a resolved name, `FAIL` when the caller
+/// not. Returns `Ok` when `buf` holds a resolved name, `Err` when the caller
 /// should keep the name it already has.
 pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<(), Failed> {
     if fname.is_null() {

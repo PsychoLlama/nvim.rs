@@ -220,7 +220,7 @@ unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
 
 /// `'messagesopt'` was set: validate it and adopt it.
 ///
-/// Answers `FAIL` without changing anything if the value is not usable.
+/// Answers `Err` without changing anything if the value is not usable.
 ///
 /// # Safety
 /// Only that `p_mopt` holds a valid string.

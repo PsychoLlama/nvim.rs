@@ -587,7 +587,7 @@ unsafe fn show_one(
 /// The whole of a `:set` command line: a list of arguments, `all`, `all&`,
 /// or nothing at all.
 ///
-/// Returns `FAIL` on the first argument that is rejected, having reported
+/// Answers `Err` on the first argument that is rejected, having reported
 /// it; the rest of the line is not looked at.
 ///
 /// # Safety

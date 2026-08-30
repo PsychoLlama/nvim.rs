@@ -122,7 +122,7 @@ pub const JUMPLISTSIZE: c_int = 100;
 use crate::quickfix::qf_mark_adjust;
 
 /// Set named mark "c" at current cursor position.
-/// Returns OK on success, FAIL if bad name given.
+/// Answers `Ok` on success, `Err` if bad name given.
 ///
 /// # Safety
 /// The editor's globals must be live, which they are from startup to exit.
@@ -247,7 +247,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
 
 /// Set named mark "c" to position "pos".
 /// When "c" is upper case use file "fnum".
-/// Returns OK on success, FAIL if bad name given.
+/// Answers `Ok` on success, `Err` if bad name given.
 ///
 /// # Safety
 /// `pos` must point at a live position; `view_pt` must be null or point at a

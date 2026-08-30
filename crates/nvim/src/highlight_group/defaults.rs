@@ -552,9 +552,9 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
     unsafe { syn_init_cmdline_highlight(false, false) };
 }
 
-/// Sources the colour scheme `name`, answering `OK` or `FAIL`.
+/// Sources the colour scheme `name`, answering whether it worked.
 ///
-/// A recursive call answers `OK` without doing anything: it means the scheme
+/// A recursive call answers `Ok` without doing anything: it means the scheme
 /// being sourced set `'background'`, which reloaded the highlighting, which
 /// is proof enough that it is working.
 ///

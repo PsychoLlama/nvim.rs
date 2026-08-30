@@ -74,7 +74,7 @@ pub(crate) struct Opened {
 /// Open what `readfile` was asked to read.
 ///
 /// `Err` carries the answer `readfile` should give: a failure, or a
-/// directory, or OK when an autocommand did the reading itself.
+/// directory, or `Ok` when an autocommand did the reading itself.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn open_source(
     fname: *mut c_char,

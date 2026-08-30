@@ -128,7 +128,7 @@ pub unsafe fn tv_dict_has_key(d: *const dict_T, key: *const ::core::ffi::c_char)
     unsafe { !tv_dict_find(d, key, -1).is_null() }
 }
 
-/// Copy `d[key]` into `rettv`.  `FAIL` when there is no such key.
+/// Copy `d[key]` into `rettv`.  `Err` when there is no such key.
 ///
 /// # Safety
 /// `d` is null or points at a live dictionary, `key` must be a

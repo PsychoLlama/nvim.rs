@@ -133,7 +133,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
 /// `q`: start recording into register `c`, or stop and store what was
 /// recorded.
 ///
-/// Answers `FAIL` for an invalid register name, or when the recording
+/// Answers `Err` for an invalid register name, or when the recording
 /// produced nothing.
 ///
 /// # Safety

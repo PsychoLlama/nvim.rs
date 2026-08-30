@@ -285,7 +285,7 @@ struct IdListPass {
 /// Turn a `contains=`-style group list into a list of ids.
 ///
 /// `arg` points at the keyword and is advanced past the list. The argument is
-/// modified in passing (the parse writes NULs into it). Answers `FAIL` on any
+/// modified in passing (the parse writes NULs into it). Answers `Err` on any
 /// error; an existing `*list` is kept and the new one discarded.
 pub(crate) unsafe fn get_id_list(
     arg: &mut *mut c_char,

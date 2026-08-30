@@ -524,7 +524,7 @@ fn take_digits(default: c_int) -> c_int {
 }
 
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving
-/// the cursor past the closing brace. Returns `FAIL` after reporting a
+/// the cursor past the closing brace. Answers `Err` after reporting a
 /// syntax error.
 pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> Result<(), Failed> {
     // `{-n,m}` asks for the shortest match, which the caller reads back

@@ -824,7 +824,7 @@ pub unsafe fn source_in_path_vim_lua(
 
 /// Expand the wildcards in `pats` and invoke `callback` for the matches.
 ///
-/// Answers OK when files were found, FAIL otherwise.  `all` is passed through
+/// Answers `Ok` when files were found, `Err` otherwise.  `all` is passed through
 /// to the callback, which decides whether to act on more than the first.
 ///
 /// # Safety

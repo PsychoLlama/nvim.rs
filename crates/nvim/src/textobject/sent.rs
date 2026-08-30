@@ -29,7 +29,7 @@ use crate::types::{CpoFlag, Direction, Failed, NUL, oparg_T, pos_T};
 type StepFn = unsafe fn(&mut pos_T) -> c_int;
 
 /// Move to the start of the `count`th next sentence in `dir`, leaving the
-/// cursor there. Answers OK when one was found.
+/// cursor there. Answers `Ok` when one was found.
 ///
 /// The definition (`:h sentence`): a sentence ends at `.`, `!` or `?`
 /// followed by end of line, or by a space or tab -- two of them when

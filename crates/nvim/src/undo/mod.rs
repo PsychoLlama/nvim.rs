@@ -186,7 +186,7 @@ pub fn u_save_cursor() -> Result<(), Failed> {
 /// [`u_save_buf`] for the current buffer.
 ///
 /// Safe: the only promise is that the editor exists; `u_save_buf` validates
-/// the line range itself and answers `FAIL` when it is out of range.
+/// the line range itself and answers `Err` when it is out of range.
 pub fn u_save(top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
     u_save_buf(cur_buf(), top, bot)
 }
@@ -194,7 +194,7 @@ pub fn u_save(top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
 /// Saves the lines strictly between `top` and `bot` — the lines a change
 /// about to be made would destroy.
 ///
-/// Safe: the line range is validated here, and `FAIL` is the answer for one
+/// Safe: the line range is validated here, and `Err` is the answer for one
 /// that is out of range.
 pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
     if top >= bot || bot > buf.line_count() + 1 {

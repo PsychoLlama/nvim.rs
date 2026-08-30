@@ -106,7 +106,7 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 }
 
 /// Parse 'cursorlineopt' into `wp->w_p_culopt_flags`, from `val` or from the
-/// window's own value. `FAIL` for a value that does not parse; the flags are
+/// window's own value. `Err` for a value that does not parse; the flags are
 /// only stored on success.
 ///
 /// # Safety

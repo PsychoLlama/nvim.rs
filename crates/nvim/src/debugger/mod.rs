@@ -306,7 +306,7 @@ unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into the
 /// scratch entry just past the end of `list`.
 ///
-/// `dbg_name` comes out allocated. `FAIL` means nothing was written that the
+/// `dbg_name` comes out allocated. `Err` means nothing was written that the
 /// caller has to clean up.
 ///
 /// # Safety

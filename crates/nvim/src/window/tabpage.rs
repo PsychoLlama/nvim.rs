@@ -295,7 +295,7 @@ fn clone_dir(dir: *mut c_char) -> *mut c_char {
 }
 
 /// Open a new tab page if `:tab cmd` was used. It edits the same buffer, as
-/// with `:split`. `OK` when a tab page was created.
+/// with `:split`. `Ok` when a tab page was created.
 pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
     let n = match cmdmod.with(|m| m.cmod_tab) {
         0 => postponed_split_tab.get(),
@@ -420,8 +420,8 @@ fn index_of_tab(ftp: *mut tabpage_T) -> c_int {
 /// Prepare for leaving the current tab page, `new_curbuf` being what is going
 /// to be the new `curbuf` (`None` when that is not known yet).
 ///
-/// `FAIL` when autocommands changed `curtab`, in which case the tab page is
-/// not left. Careful: after `OK` a new tab page must be entered very soon.
+/// `Err` when autocommands changed `curtab`, in which case the tab page is
+/// not left. Careful: after `Ok` a new tab page must be entered very soon.
 fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Failed> {
     let mut tp = cur_tab();
     leave_window(cur_win());

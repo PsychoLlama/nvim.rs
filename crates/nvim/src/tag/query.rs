@@ -101,7 +101,7 @@ unsafe fn reshape_match(entry: *mut c_char, head: &mut Vec<c_char>) {
 /// `taglist()` — append a dictionary per match of `pat` to `list`.
 ///
 /// `buf_fname` names the buffer whose matches sort first, or is NULL.
-/// Answers `OK`, or `FAIL` when a field could not be recorded.
+/// Answers `Ok`, or `Err` when a field could not be recorded.
 ///
 /// # Safety
 /// `list` must be live and `pat` NUL-terminated.
@@ -317,7 +317,7 @@ impl Scan {
 ///
 /// `start` and `end` bracket the value; a NULL `end` means "to the end of
 /// the string", less any trailing CR/NL. A NULL `start` records an empty
-/// value. Answers `OK` or `FAIL`.
+/// value. Answers `Err` on failure.
 ///
 /// # Safety
 /// `dict` must be live, `field_name` NUL-terminated, and `start` either

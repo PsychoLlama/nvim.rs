@@ -297,7 +297,7 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// Find all mapping/abbreviation names matching `regmatch`, for command-line
 /// completion of `:[un]map` and `:[un]abbrev` in all modes.
 ///
-/// Answers `OK` if any matched, `FAIL` otherwise.
+/// Answers `Ok` if any matched, `Err` otherwise.
 ///
 /// # Safety
 /// Every pointer argument must be live; `matches` and `numMatches` are

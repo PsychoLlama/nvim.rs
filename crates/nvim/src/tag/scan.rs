@@ -671,8 +671,8 @@ unsafe fn lang_is(at: *const c_char, lang: [u8; 2], whole: bool) -> bool {
 
 /// Search the tags files that apply for tags matching `pat`.
 ///
-/// Answers `FAIL` if the search failed completely — `num_matches` is then
-/// zero and `matchesp` NULL — and `OK` otherwise.
+/// Answers `Err` if the search failed completely — `num_matches` is then
+/// zero and `matchesp` NULL — and `Ok` otherwise.
 ///
 /// There is a priority in which a kind of match is recognised:
 ///

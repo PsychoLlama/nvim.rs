@@ -235,12 +235,12 @@ pub unsafe fn tv_dict_unref(d: *mut dict_T) {
     }
 }
 
-/// Add `item` to `d`.  `FAIL` when the key is already there, or when it would
+/// Add `item` to `d`.  `Err` when the key is already there, or when it would
 /// shadow a builtin function in a scope dictionary.
 ///
 /// # Safety
 /// `d` must point at a live dictionary and `item` at a fresh item that is
-/// in no hashtab. On `OK` the dictionary owns `item`; on `FAIL` it is
+/// in no hashtab. On `Ok` the dictionary owns `item`; on `Err` it is
 /// still the caller's to free.
 pub unsafe fn tv_dict_add(d: *mut dict_T, item: *mut dictitem_T) -> Result<(), Failed> {
     let key = tv_dict_item_key(item);

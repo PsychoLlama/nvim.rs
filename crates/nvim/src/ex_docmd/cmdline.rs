@@ -133,8 +133,8 @@ crate::flag_set! {
 
 /// Run Ex commands, from `cmdline` and then from `fgetline`.
 ///
-/// May be called recursively. Answers `FAIL` when the line could not be
-/// run, `OK` otherwise.
+/// May be called recursively. Answers `Err` when the line could not be
+/// run, `Ok` otherwise.
 pub unsafe fn do_cmdline(
     cmdline: *mut c_char,
     fgetline: LineGetter,

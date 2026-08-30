@@ -23,7 +23,7 @@ const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
 /// `:doautocmd [group] {event} [fname]`, for each of the comma-separated
 /// events named.
 ///
-/// `OK` unless the argument was malformed or an autocommand aborted;
+/// `Ok` unless the argument was malformed or an autocommand aborted;
 /// `did_something` (when given) says whether any autocommand ran.
 pub unsafe fn do_doautocmd(
     arg_start: *mut ::core::ffi::c_char,

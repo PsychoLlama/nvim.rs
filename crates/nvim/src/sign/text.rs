@@ -73,7 +73,7 @@ fn unescape(text: &mut [u8]) -> usize {
     end
 }
 
-/// Parses a sign's `text=` into `sign_text`; `FAIL` when it does not fit.
+/// Parses a sign's `text=` into `sign_text`; `Err` when it does not fit.
 ///
 /// `from_define` distinguishes the `:sign define` / `sign_define()` caller,
 /// which unescapes backslashes (see [`unescape`]) and diagnoses a bad value,

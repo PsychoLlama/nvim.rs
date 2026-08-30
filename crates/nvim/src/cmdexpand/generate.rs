@@ -325,7 +325,7 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
 
 /// Do the expansion based on `xp->xp_context` and `rmp`.
 ///
-/// Answers `FAIL` for a context that is not in the table, which is how
+/// Answers `Err` for a context that is not in the table, which is how
 /// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
 pub(crate) unsafe fn expand_other(
     pat: *mut c_char,

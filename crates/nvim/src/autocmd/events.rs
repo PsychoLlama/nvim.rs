@@ -108,8 +108,8 @@ pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) ->
     ignored
 }
 
-/// `OK` when `ei` -- a value of 'eventignore' or 'eventignorewin' -- is a
-/// list of event names, `FAIL` otherwise.
+/// `Ok` when `ei` -- a value of 'eventignore' or 'eventignorewin' -- is a
+/// list of event names, `Err` otherwise.
 ///
 /// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
 /// the window-local events.

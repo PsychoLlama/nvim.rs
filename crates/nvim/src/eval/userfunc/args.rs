@@ -241,7 +241,7 @@ pub(crate) unsafe fn get_func_arguments(
 }
 
 /// How many arguments `name` takes: required, optional, and whether it also
-/// takes a `...`.  Answers `FAIL` when there is no such function.
+/// takes a `...`.  Answers `Err` when there is no such function.
 ///
 /// # Safety
 /// `name` is NUL-terminated and the three out-parameters are writable.

@@ -58,7 +58,7 @@ impl CompleteFuncCb {
     }
 
     /// Compile `value` into this callback, freeing what was there. C's
-    /// `option_set_callback_func`; answers `OK` or `FAIL`.
+    /// `option_set_callback_func`, answering whether the value was accepted.
     ///
     /// # Safety
     /// `value` must be a live NUL-terminated option string, or null.

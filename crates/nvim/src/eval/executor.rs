@@ -219,8 +219,8 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Resul
     Ok(())
 }
 
-/// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`. Returns `OK` or `FAIL`; on
-/// `FAIL` the "wrong variable type" error has already been reported.
+/// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`. Returns `Ok` or `Err`; on
+/// `Err` the "wrong variable type" error has already been reported.
 ///
 /// # Safety
 ///

@@ -231,7 +231,7 @@ unsafe fn vim_mktempdir() {
 /// `checkitem` filters the entries; it returns zero to skip one and a
 /// negative number to stop the walk.
 ///
-/// @return  OK for success, FAIL for failure.
+/// @return  `Ok` for success, `Err` for failure.
 pub unsafe fn readdir_core(
     gap: *mut garray_T,
     path: *const c_char,

@@ -585,7 +585,7 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
 }
 
 /// Do Insert mode completion, called when the character `c` was typed and it
-/// means something for completion; answers OK, or FAIL if something failed.
+/// means something for completion; answers `Ok`, or `Err` if something failed.
 pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     // Milliseconds of `'autocompletelinger'` elapsed since collection began.
     let elapsed_ms = |start: uint64_t| os_hrtime().wrapping_sub(start) / 1_000_000;

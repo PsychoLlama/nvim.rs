@@ -222,7 +222,7 @@ fn new_string_garray() -> garray_T {
     ga
 }
 
-/// Hand a completed garray to an out-parameter pair, or answer FAIL when it
+/// Hand a completed garray to an out-parameter pair, or answer `Err` when it
 /// is empty.
 ///
 /// # Safety

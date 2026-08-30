@@ -344,7 +344,7 @@ unsafe fn update_placements(name: *const c_char, def: Sign) {
     }
 }
 
-/// Forgets the definition named `name`, or answers `FAIL` with E155.
+/// Forgets the definition named `name`, or answers `Err` with E155.
 ///
 /// Placements survive: they carry their own copy, and [`sign_get_name`]
 /// starts reporting them as `[Deleted]`.

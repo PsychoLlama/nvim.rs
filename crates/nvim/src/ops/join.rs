@@ -206,7 +206,7 @@ pub unsafe fn do_join(
 
 /// First pass: measure the joined line without moving anything.
 ///
-/// Answers `FAIL` when the user interrupted it, which is why the walk calls
+/// Answers `Err` when the user interrupted it, which is why the walk calls
 /// `line_breakcheck` -- a join can be over a very large count.
 ///
 /// `plan.spaces` (and `plan.comments`, when non-null) must have `count`

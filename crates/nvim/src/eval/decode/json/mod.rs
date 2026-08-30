@@ -87,7 +87,7 @@ const fn bool_tv(value: bool) -> typval_T {
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `rettv`.
 ///
-/// Answers `OK`, or `FAIL` with the error already reported.
+/// Answers `Err` with the error already reported.
 ///
 /// # Safety
 /// `buf` is a live, non-NULL buffer of `buf_len` bytes and `rettv` is

@@ -15,7 +15,7 @@ use std::ffi::CStr;
 
 /// Diff two one-line files and see whether the answer is recognisable.
 ///
-/// Answers `OK` if the host has a usable `diff`, and leaves `diff_a_works`
+/// Answers `Ok` if the host has a usable `diff`, and leaves `diff_a_works`
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.

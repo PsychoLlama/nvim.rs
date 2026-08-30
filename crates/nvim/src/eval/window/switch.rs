@@ -128,7 +128,7 @@ pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// Make `win` the current window and `tp` the current tab page.
 ///
-/// [`restore_win`] MUST be called to undo this, `FAIL` included. No
+/// [`restore_win`] MUST be called to undo this, `Err` included. No
 /// autocommands run until it is.
 ///
 /// `no_display` keeps the display untouched: no redraw is triggered and

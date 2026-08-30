@@ -657,7 +657,7 @@ pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -
 }
 
 /// Make the list with the given id current again, after autocommands may
-/// have pushed others. Answers `FAIL` when it is gone.
+/// have pushed others. Answers `Err` when it is gone.
 ///
 /// # Safety
 ///

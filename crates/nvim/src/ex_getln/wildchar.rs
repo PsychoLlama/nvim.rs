@@ -181,7 +181,7 @@ const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
     (b"noselect", kOptWimFlagNoselect),
 ];
 
-/// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `FAIL` on a
+/// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `Err` on a
 /// malformed value, leaving `wim_flags` alone.
 pub unsafe fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];

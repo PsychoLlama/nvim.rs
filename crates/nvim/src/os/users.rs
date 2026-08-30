@@ -132,7 +132,7 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
 }
 
 /// Initialize `users` and fill it with every user name on the system.
-/// FAIL only when `users` is NULL.
+/// `Err` only when `users` is NULL.
 ///
 /// The names are `xstrdup`ed rather than moved out of the `CString`s: the
 /// garray is a C array of `char *` that callers release with
@@ -164,7 +164,7 @@ pub unsafe fn os_get_usernames(users: *mut garray_T) -> Result<(), Failed> {
 }
 
 /// Write the name of the user running this process into `s` (`len` bytes,
-/// always NUL-terminated). OK when a name was found.
+/// always NUL-terminated). `Ok` when a name was found.
 ///
 /// # Safety
 ///
@@ -177,7 +177,7 @@ pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> Result<(), Failed>
 
 /// Write the name of the user owning `uid` into `s` (`len` bytes, always
 /// NUL-terminated). When the database has no name for it, the decimal uid
-/// is written instead and the result is FAIL — a number is not a name.
+/// is written instead and the result is `Err` — a number is not a name.
 ///
 /// # Safety
 ///

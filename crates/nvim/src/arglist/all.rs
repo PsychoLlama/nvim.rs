@@ -344,7 +344,7 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
 }
 
 /// Split a window — or re-use the first one — and edit argument `i` in it.
-/// Answers `FAIL` when the split failed, after which nothing more is opened.
+/// Answers `Err` when the split failed, after which nothing more is opened.
 ///
 /// # Safety
 ///

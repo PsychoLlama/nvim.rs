@@ -15,8 +15,8 @@ use crate::tr_plural;
 use crate::types::Failed;
 use crate::types::NUL;
 
-/// The tail every `tv_check_for_*_arg` shares: answer `OK`, or raise `errmsg`
-/// naming the argument's one-based position and answer `FAIL`.
+/// The tail every `tv_check_for_*_arg` shares: answer `Ok`, or raise `errmsg`
+/// naming the argument's one-based position and answer `Err`.
 ///
 /// Private to this module, and the obligation its format string carries is
 /// discharged by construction: every caller passes one of the module's own

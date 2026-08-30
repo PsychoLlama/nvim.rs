@@ -96,7 +96,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
 ///
 /// Caller must call `shorten_fnames()`.
 ///
-/// @return  OK or FAIL
+/// @return  `Ok` or `Err`
 pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result<(), Failed> {
     let mut cwd = [0 as c_char; MAXPATHL as usize];
     let mut dir = [0 as c_char; MAXPATHL as usize];

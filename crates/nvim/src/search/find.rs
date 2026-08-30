@@ -692,7 +692,7 @@ unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
 /// # Safety
 /// `pos` must be writable and `pat` a NUL-terminated string.
 ///
-/// @return  OK for success, FAIL if no line was found.
+/// @return  `Ok` for success, `Err` if no line was found.
 pub unsafe fn search_for_exact_line(
     buf: Buf,
     pos: *mut pos_T,

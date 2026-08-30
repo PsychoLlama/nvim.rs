@@ -340,7 +340,7 @@ pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
 /// `settagstack()` — replace, append to or truncate the tag stack of `wp`.
 ///
 /// `action` is `'a'` to append, `'r'` to replace and `'t'` to truncate.
-/// Answers `OK`, or `FAIL` with the error already reported.
+/// Answers `Err` with the error already reported.
 ///
 /// # Safety
 /// `d` must be a live dict.

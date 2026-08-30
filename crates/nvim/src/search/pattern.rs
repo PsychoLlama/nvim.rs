@@ -133,7 +133,7 @@ unsafe fn clone_spat(idx: c_int) -> SearchPattern {
 /// - `options & SEARCH_KEEP`: do not remember the pattern at all.
 ///
 /// `regmatch` is an out parameter: the compiled pattern and the
-/// ignore-case flag to match it with. Answers `OK`, or `FAIL` when the
+/// ignore-case flag to match it with. Answers `Ok`, or `Err` when the
 /// pattern does not compile or there is no remembered one to fall back on.
 ///
 /// # Safety

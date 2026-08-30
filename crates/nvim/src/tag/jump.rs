@@ -306,7 +306,7 @@ pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
 
 /// Jump to the tag one stored match describes.
 ///
-/// Answers `OK`, `FAIL`, or `NOTAGFILE` when the file the match names does
+/// Answers [`Jumped::NoSuchFile`] when the file the match names does
 /// not exist — the caller reports that one, reading [`nofile_fname`].
 ///
 /// With `keep_help` the destination keeps the help-buffer flag of wherever

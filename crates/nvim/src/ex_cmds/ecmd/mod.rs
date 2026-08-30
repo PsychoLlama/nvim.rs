@@ -188,7 +188,7 @@ enum Target {
 /// to the buffer list), `ECMD_ALTBUF` (as `ECMD_ADDBUF`, and set the alternate
 /// file) and `ECMD_NOWINENTER` (do not trigger BufWinEnter).
 ///
-/// Returns `FAIL` for failure, `OK` otherwise.
+/// Answers `Err` for failure.
 ///
 /// # Safety
 /// The names, `eap` and `oldwin` must be live, or NULL where that is allowed

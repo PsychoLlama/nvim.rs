@@ -259,7 +259,7 @@ pub unsafe fn os_chdir(path: *const c_char) -> c_int {
 /// Reads the name of the current directory into `buf`, which holds `len`
 /// bytes. On failure the *error message* is left there instead.
 ///
-/// Answers `OK` or `FAIL`.
+/// Answers `Err` on failure.
 ///
 /// # Safety
 /// `buf` must address `len` writable bytes.

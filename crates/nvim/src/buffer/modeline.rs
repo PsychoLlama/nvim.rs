@@ -146,7 +146,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
     entered.set(entered.get() - 1);
 }
 
-/// Check one line for a mode string, and apply it. `FAIL` when an error was
+/// Check one line for a mode string, and apply it. `Err` when an error was
 /// encountered, which stops the whole pass.
 fn chk_modeline(lnum: linenr_T, flags: OptionSetFlags) -> Result<(), Failed> {
     let line = buffer_line(lnum);

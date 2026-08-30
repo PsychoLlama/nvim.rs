@@ -35,7 +35,7 @@ use core::ptr;
 
 /// `:move` -- move lines `line1`..`line2` to sit after line `dest`.
 ///
-/// Returns `FAIL` for failure, `OK` otherwise.
+/// Answers `Err` for failure.
 ///
 /// # Safety
 /// The range and the destination must be lines of the current buffer, or one

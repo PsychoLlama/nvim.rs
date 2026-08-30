@@ -487,7 +487,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 ///
 /// Searches `st->ins_buf` from `start_pos` in the `compl_direction` direction;
 /// with `st->set_match_pos` set, `st->first_match_pos` and `st->last_match_pos`
-/// are set too. Answers OK if a new match was found, otherwise FAIL.
+/// are set too. Answers `Ok` if a new match was found, otherwise `Err`.
 pub(crate) unsafe fn get_next_default_completion(
     st: *mut ins_compl_next_state_T,
     start_pos: *mut pos_T,

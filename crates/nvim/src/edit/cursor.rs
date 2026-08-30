@@ -64,7 +64,7 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
     adjust_skipcol_now();
 }
 
-/// Move one character right, answering `OK` or `FAIL` at the end of the line.
+/// Move one character right; answers `Err` at the end of the line.
 ///
 /// # Safety
 /// Must run with a live `curwin` whose cursor is on a valid position.
@@ -117,7 +117,7 @@ pub(crate) unsafe fn oneright() -> Result<(), Failed> {
     Ok(())
 }
 
-/// Move one character left, answering `OK` or `FAIL` at column 0.
+/// Move one character left; answers `Err` at column 0.
 ///
 /// # Safety
 /// Must run with a live `curwin` whose cursor is on a valid position.
@@ -218,7 +218,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool)
 
 /// `k`: move the cursor up `n` lines and back to the wanted column.
 ///
-/// `FAIL` when the cursor is already on line 1.
+/// `Err` when the cursor is already on line 1.
 ///
 /// # Safety
 /// Must run with a live `curwin`.
@@ -274,7 +274,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
 
 /// `j`: move the cursor down `n` lines and back to the wanted column.
 ///
-/// `FAIL` when the cursor is already in the last line -- or in the fold that
+/// `Err` when the cursor is already in the last line -- or in the fold that
 /// ends on it, which is why the bound is measured from the fold's end.
 ///
 /// # Safety

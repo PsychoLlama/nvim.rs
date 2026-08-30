@@ -88,7 +88,7 @@ pub(crate) fn check_spell_redraw() {
 /// Called before any change in Insert mode: if an arrow key was used, start a
 /// new insertion here.
 ///
-/// `FAIL` when undo is impossible, in which case the caller must not insert.
+/// `Err` when undo is impossible, in which case the caller must not insert.
 ///
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
@@ -291,7 +291,7 @@ fn char_at_cursor() -> c_int {
     gchar_cursor()
 }
 
-/// Save the cursor's line for undo, answering `OK` when it was saved.
+/// Save the cursor's line for undo, answering `Ok` when it was saved.
 #[inline(always)]
 fn save_cursor_line() -> Result<(), Failed> {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.

@@ -239,7 +239,7 @@ unsafe fn handle_mkdir_p_arg(eap: *mut exarg_T, fname: *mut c_char) -> Result<()
 /// Write the current buffer to the file `eap->arg` names, or to its own file
 /// when that argument is empty.  `eap->append` appends instead of replacing.
 ///
-/// Returns `FAIL` for failure, `OK` otherwise.
+/// Answers `Err` for failure.
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
@@ -475,11 +475,11 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
 /// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
 ///
-/// May set `eap->forceit` if a dialog says it's OK to overwrite.  `fname` is
+/// May set `eap->forceit` if a dialog says it is fine to overwrite.  `fname` is
 /// the file name to be used (which can differ from `buf`'s), `ffname` its full
 /// path version, and `other` says the write goes under another name.
 ///
-/// Returns `OK` if it's OK, `FAIL` if it is not.
+/// Answers `Err` when the write must not go ahead.
 ///
 /// # Safety
 /// `eap` and the two names must be live.

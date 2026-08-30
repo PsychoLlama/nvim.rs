@@ -106,8 +106,8 @@ pub fn cmd_has_expr_args(cmdidx: cmdidx_T) -> bool {
 /// Read the run of modifiers at the head of the command line into `cmod`,
 /// advancing `eap->cmd` past them.
 ///
-/// Returns `FAIL` when there is no command at all — a comment, a bare
-/// newline, or an empty line — and `OK` otherwise, including when the line
+/// Answers `Err` when there is no command at all — a comment, a bare
+/// newline, or an empty line — and `Ok` otherwise, including when the line
 /// carried no modifier.
 ///
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate

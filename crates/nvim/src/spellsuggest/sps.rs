@@ -40,7 +40,7 @@ fn is_timeout_value(value: &[u8]) -> bool {
 
 /// Check `'spellsuggest'` and set [`sps_flags`] and [`sps_limit`] from it.
 ///
-/// Returns `FAIL` for a value the option should not take, having put both
+/// Answers `Err` for a value the option should not take, having put both
 /// back to their defaults.
 ///
 /// # Safety

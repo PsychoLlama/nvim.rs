@@ -107,7 +107,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
 /// `zg`, `zG`, `zw`, `zW` and the `zug` family: add the word under the cursor
 /// to the spellfile as good or as bad, or take it back out again.
 ///
-/// Answers `FAIL` when there was no word to act on, which stops `nv_zet`
+/// Answers `Err` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
 pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<(), Failed> {
     // SAFETY (throughout): `cap` is the caller's live command argument.

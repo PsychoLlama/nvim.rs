@@ -244,7 +244,7 @@ fn calc_hist_idx(histype: c_int, num: c_int) -> c_int {
     HISTORY.with(|h| h[histype as usize].calc_idx(num))
 }
 
-/// Clear history `histype`. Returns OK/FAIL.
+/// Clear history `histype`. Returns `Ok`/`Err`.
 fn clr_history(histype: c_int) -> Result<(), Failed> {
     if get_hislen() != 0 && valid_histype(histype) {
         HISTORY.with_mut(|h| h[histype as usize].clear());

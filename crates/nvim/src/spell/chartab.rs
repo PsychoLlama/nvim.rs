@@ -202,7 +202,7 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], wp: *const win_T) -> bool {
 /// Case-fold `str[..len]` into `buf`, NUL terminated, using the character
 /// definitions from the `.spl` file. Folding may change the length.
 ///
-/// Returns `FAIL` when the result does not fit, having still terminated
+/// Answers `Err` when the result does not fit, having still terminated
 /// what was written.
 pub unsafe fn spell_casefold(
     wp: *const win_T,

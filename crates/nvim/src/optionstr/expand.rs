@@ -76,7 +76,7 @@ impl Matches {
         self.count += 1;
     }
 
-    /// Hand the array to the caller, or free it and report `FAIL` when
+    /// Hand the array to the caller, or free it and report `Err` when
     /// nothing matched — in which case the out-parameter is left null.
     ///
     /// # Safety

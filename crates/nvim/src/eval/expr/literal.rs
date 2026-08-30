@@ -655,7 +655,7 @@ pub(crate) unsafe fn eval_lit_string(
 /// `$"..."` or `$'...'`, with the cursor on the `$`: alternating literal
 /// pieces and `{expr}` substitutions, joined into one String.
 ///
-/// Answers `OK` even for a piece that failed — upstream's; `rettv` then
+/// Answers `Ok` even for a piece that failed — upstream's; `rettv` then
 /// holds whatever was assembled before the error, which may be null.
 ///
 /// # Safety

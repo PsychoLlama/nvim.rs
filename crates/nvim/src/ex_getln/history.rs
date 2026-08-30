@@ -171,7 +171,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
 /// Parse a `[N][,[M]]` range argument, as `:history` and `:clist` take.
 ///
 /// `str` is advanced past what was parsed; `num1` and `num2` are only written
-/// when the corresponding number was present.  Answers `FAIL` on a malformed
+/// when the corresponding number was present.  Answers `Err` on a malformed
 /// range or one whose numbers do not fit an `int`.
 pub unsafe fn get_list_range(
     str: *mut *mut ::core::ffi::c_char,

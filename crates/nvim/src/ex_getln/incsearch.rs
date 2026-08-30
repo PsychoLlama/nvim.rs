@@ -483,7 +483,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 /// CTRL-L: add the character under the match to the pattern, and say so in
 /// `*c`.
 ///
-/// Answers `OK` when the caller should treat the key as unchanged.
+/// Answers `Ok` when the caller should treat the key as unchanged.
 pub(crate) unsafe fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
@@ -592,7 +592,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 /// CTRL-G / CTRL-T: move the `'incsearch'` preview to the next or previous
 /// match.
 ///
-/// Answers `OK` when there was no incremental search to move, `FAIL`
+/// Answers `Ok` when there was no incremental search to move, `Err`
 /// otherwise (which is what tells the key loop the line did not change).
 pub(crate) unsafe fn may_do_command_line_next_incsearch(
     firstc: ::core::ffi::c_int,

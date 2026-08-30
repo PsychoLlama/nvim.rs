@@ -89,7 +89,7 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 /// `count` how many times, and `no_esc` says to leave the insert open at the
 /// end.
 ///
-/// `FAIL` -- with `E29` -- when there is nothing to insert.
+/// `Err` -- with `E29` -- when there is nothing to insert.
 ///
 /// # Safety
 /// Must run with a live `curwin`.

@@ -387,7 +387,7 @@ unsafe fn error_number_at(p: *const c_char) -> bool {
 /// string for a user or interrupt exception and a message list for an error
 /// one.
 ///
-/// Answers `FAIL` when out of memory or when a user exception tried to fake
+/// Answers `Err` when out of memory or when a user exception tried to fake
 /// a `Vim` one.
 ///
 /// # Safety

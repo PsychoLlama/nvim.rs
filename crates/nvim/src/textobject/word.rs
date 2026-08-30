@@ -90,7 +90,7 @@ unsafe fn back_in_line() {
     }
 }
 
-/// `w` / `W`: move forward `count` words. Answers FAIL when the cursor was
+/// `w` / `W`: move forward `count` words. Answers `Err` when the cursor was
 /// already on the last character of the file.
 ///
 /// With `eol`, the last word stops at end of line, which is what an operator
@@ -154,7 +154,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
     Ok(())
 }
 
-/// `b` / `B`: move back `count` words. Answers FAIL when the top of the file
+/// `b` / `B`: move back `count` words. Answers `Err` when the top of the file
 /// was reached.
 ///
 /// With `stop`, a cursor already on the start of a word moves one word less,
@@ -212,7 +212,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
     Ok(())
 }
 
-/// `e` / `E`: move to the end of the `count`th word. Answers FAIL when the
+/// `e` / `E`: move to the end of the `count`th word. Answers `Err` when the
 /// end of the file was reached.
 ///
 /// With `stop`, a cursor already on the end of a word moves one word less;
@@ -296,7 +296,7 @@ pub unsafe fn end_word(
 }
 
 /// `ge` / `gE`: move back to the end of the `count`th previous word. Answers
-/// FAIL when the start of the file was reached.
+/// `Err` when the start of the file was reached.
 ///
 /// With `eol`, an end of line stops the motion.
 ///

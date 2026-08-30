@@ -291,8 +291,8 @@ pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
 /// line; with `use_delcombine`, 'delcombine' applies, so that deleting a
 /// character that carries combining marks takes only the last mark.
 ///
-/// Answers `FAIL` on the NUL past the end of the line or for a negative
-/// `count`, `OK` otherwise.
+/// Answers `Err` on the NUL past the end of the line or for a negative
+/// `count`, `Ok` otherwise.
 ///
 /// # Safety
 /// The caller must have prepared for undo.

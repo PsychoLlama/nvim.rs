@@ -322,7 +322,7 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
 /// Most code should not call this directly: [`redraw_later`] and
 /// [`redraw_all_later`] mark what changed and the main loop gets here.
 ///
-/// Answers `FAIL` when nothing was drawn -- the screen is not ready, redrawing
+/// Answers `Err` when nothing was drawn -- the screen is not ready, redrawing
 /// is disabled, or this is a recursive call.
 pub unsafe fn update_screen() -> Result<(), Failed> {
     // The intro message is shown until something else claims the screen.

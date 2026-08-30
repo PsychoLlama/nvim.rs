@@ -233,7 +233,7 @@ unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
 /// as in `"/path\\ with\\ spaces/my\\*star*"`. `flags` is the `EW_*` set
 /// [`expand_wildcards`] documents.
 ///
-/// Answers OK when names were found, and FAIL otherwise — in which case
+/// Answers `Ok` when names were found, and `Err` otherwise — in which case
 /// `num_file` and `file` are either untouched or set to zero and NULL. What
 /// lands in `file` is the caller's, to be freed with [`free_wild`].
 ///
@@ -527,8 +527,8 @@ pub unsafe fn expand_wildcards_eval(
 /// [`gen_expand_wildcards`], then drop the names `'wildignore'` matches and
 /// move the ones `'suffixes'` matches to the end.
 ///
-/// Answers OK when `file` is set to an allocated array of matches and
-/// `num_file` to how many there are, and FAIL otherwise — in which case
+/// Answers `Ok` when `file` is set to an allocated array of matches and
+/// `num_file` to how many there are, and `Err` otherwise — in which case
 /// `num_file` and `file` are either untouched or set to zero and NULL.
 ///
 /// # Safety

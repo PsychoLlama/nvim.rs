@@ -778,7 +778,7 @@ fn env_script() -> SavedSctx {
 
 /// Run the commands in `$VIMINIT` or `$EXINIT`, if it is set.
 ///
-/// Answers `OK` when the variable existed -- which is what makes it count as
+/// Answers `Ok` when the variable existed -- which is what makes it count as
 /// a config source, whether or not the commands in it worked.
 pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `env` names an environment variable; `os_getenv` hands over an

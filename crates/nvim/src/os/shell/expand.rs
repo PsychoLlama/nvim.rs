@@ -338,7 +338,7 @@ static did_find_nul: GlobalCell<bool> = GlobalCell::new(false);
 /// the
 /// patterns themselves are copied through instead.
 ///
-/// Answers `OK` or `FAIL`; on `FAIL`, `*file` is NULL.
+/// Answers `Ok` or `Err`; on `Err`, `*file` is NULL.
 ///
 /// # Safety
 /// `pat[0..num_pat]` must be NUL-terminated strings; `num_file` and `file`

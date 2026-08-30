@@ -394,7 +394,7 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
 /// it is a URL or cannot be made absolute, and the absolute path otherwise.
 /// `force` asks for the expansion even when `fname` is already absolute.
 ///
-/// Answers FAIL when `buf` holds anything but a full path.
+/// Answers `Err` when `buf` holds anything but a full path.
 ///
 /// # Safety
 /// `buf` must be writable for `len` bytes; `fname` must be a NUL-terminated
@@ -467,7 +467,7 @@ pub unsafe fn path_full_dir_name(
 }
 
 /// Append `to_append` to `path`, with a separator between them, answering
-/// FAIL when `max_len` bytes are not enough for the result.
+/// `Err` when `max_len` bytes are not enough for the result.
 ///
 /// # Safety
 /// `path` must be a NUL-terminated string writable for `max_len` bytes, and

@@ -529,7 +529,7 @@ impl TypeAhead {
 ///
 /// With `nottyped` the string does not set `KeyTyped` — do not use it with a
 /// non-zero `offset`. With `silent`, `cmd_silent` is set when the characters
-/// are read back. Answers `FAIL` when the buffer would overflow an `int`.
+/// are read back. Answers `Err` when the buffer would overflow an `int`.
 ///
 /// # Safety
 /// `str` must point at a NUL-terminated string, and `offset` must be within
