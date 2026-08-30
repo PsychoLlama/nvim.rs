@@ -242,11 +242,9 @@ pub unsafe fn nvim_get_autocmds(
                     == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     if !(unsafe { buf.data.array }.size <= 256 as size_t) {
-                        let fmt = c"Too many buffers (maximum of %d)".as_ptr();
                         let max = 256 as ::core::ffi::c_int;
-                        // SAFETY: `err` is this call's own error slot, and the
-                        // `%d` takes the one `c_int` it is given.
-                        unsafe { api_set_error(err, kErrorTypeValidation, fmt, max) };
+                        error =
+                            api_error!(kErrorTypeValidation, "Too many buffers (maximum of {max})");
                         break '_cleanup;
                     }
                     buffers = arena_array(arena, unsafe { buf.data.array }.size);

@@ -42,8 +42,9 @@ use core::{ptr, slice};
 
 // Every generated wrapper; the handler table names most of them.
 use crate::api::private::dispatch_wrappers::*;
-use crate::api::private::helpers::api_set_error;
+use crate::api_error;
 use crate::global_cell::ConstTable;
+use crate::message_fmt::c_str_len;
 use crate::types::{
     Arena, Array, Error, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
@@ -140,7 +141,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// arena.
 const fn handler(
     name: &'static CStr,
-    f: unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+    f: unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
     fast: bool,
     ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
@@ -164,33 +165,27 @@ const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
 /// Look a method up by name.
 ///
 /// # Safety
-/// `name` points at `name_len` readable bytes; `error` at a live `Error`.
+/// `name` points at `name_len` readable bytes.
 pub unsafe fn msgpack_rpc_get_handler_for(
     name: *const c_char,
     name_len: size_t,
-    error: *mut Error,
+    error: &mut Error,
 ) -> MsgpackRpcRequestHandler {
     // SAFETY: the caller passes a method name of `name_len` bytes.
     if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
         return method_handlers[index];
     }
-    // `%.*s`: the name is not NUL-terminated, so its length goes along. The
-    // stand-in for an empty one is, and upstream passed `sizeof("<empty>")`.
+    // The name is not NUL-terminated, so its length goes along. The stand-in
+    // for an empty one is, and upstream measured it with `sizeof`, terminator
+    // included -- so the rendered name keeps that trailing NUL.
     let (len, text) = if name_len > 0 {
-        (name_len as c_int, name)
+        (name_len, name)
     } else {
         let empty = c"<empty>";
-        (empty.to_bytes_with_nul().len() as c_int, empty.as_ptr())
+        (empty.to_bytes_with_nul().len(), empty.as_ptr())
     };
-    // SAFETY: `error` is live and the format string matches its arguments.
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Invalid method: %.*s".as_ptr(),
-            len,
-            text,
-        );
-    }
+    // SAFETY: the caller vouches for `name_len` bytes at `name`.
+    let text = unsafe { c_str_len(text, len) };
+    *error = api_error!(kErrorTypeException, "Invalid method: {text}");
     NO_HANDLER
 }

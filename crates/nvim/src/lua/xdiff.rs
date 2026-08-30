@@ -17,7 +17,7 @@ use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::{api_free_string, api_set_error};
+use crate::api::private::helpers::api_free_string;
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::converter::nlua_pop_keydict;
 use crate::lua::executor::{api_free_luaref, nlua_pushref};
@@ -130,6 +130,8 @@ pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
     ignore_blank_lines: false,
     indent_heuristic: false,
 };
+use crate::api_error;
+use crate::message_fmt::c_str;
 
 /// Append one `{start_a, count_a, start_b, count_b}` tuple to the list on top
 /// of the stack. A zero count keeps its start where it is; a non-empty side
@@ -303,12 +305,8 @@ unsafe extern "C" fn call_on_hunk_cb(
     if failed {
         // SAFETY: the error message is on top; `api_set_error` copies it.
         unsafe {
-            api_set_error(
-                err,
-                kErrorTypeException,
-                c"on_hunk: %s".as_ptr(),
-                lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()),
-            );
+            let why = c_str(lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()));
+            *err = api_error!(kErrorTypeException, "on_hunk: {why}");
         }
         return -1;
     }
@@ -424,14 +422,7 @@ unsafe fn apply_opts(
         if unsafe { strequal(c"indices".as_ptr(), opts.result_type.data()) } {
             had_result_type_indices = true;
         } else {
-            // SAFETY: `err` is the caller's.
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"not a valid result_type".as_ptr(),
-                )
-            };
+            *err = Error::from_message(kErrorTypeValidation, c"not a valid result_type");
             return Mode::Unified;
         }
     }
@@ -453,10 +444,7 @@ unsafe fn apply_opts(
         match algorithm {
             Some((_, flag)) => params.flags |= flag,
             None => {
-                // SAFETY: `err` is the caller's.
-                unsafe {
-                    api_set_error(err, kErrorTypeValidation, c"not a valid algorithm".as_ptr())
-                };
+                *err = Error::from_message(kErrorTypeValidation, c"not a valid algorithm");
                 return Mode::Unified;
             }
         }
@@ -481,13 +469,7 @@ unsafe fn apply_opts(
             kObjectTypeInteger => *linematch = unsafe { opts.linematch.data.integer },
             _ => {
                 // SAFETY: `err` is the caller's.
-                unsafe {
-                    api_set_error(
-                        err,
-                        kErrorTypeValidation,
-                        c"linematch must be a boolean or integer".as_ptr(),
-                    );
-                }
+                *err = Error::validation(c"linematch must be a boolean or integer");
                 return Mode::Unified;
             }
         }
@@ -517,14 +499,7 @@ unsafe fn apply_opts(
             lua_type(lstate, -1) == LUA_TFUNCTION
         };
         if !is_function {
-            // SAFETY: `err` is the caller's.
-            unsafe {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"on_hunk is not a function".as_ptr(),
-                )
-            };
+            *err = Error::from_message(kErrorTypeValidation, c"on_hunk is not a function");
         }
         return Mode::OnHunk;
     }
@@ -632,14 +607,7 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
             ) == -1
         };
         if failed && !err.is_set() {
-            // SAFETY: `err` is this frame's.
-            unsafe {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeException,
-                    c"diff operation failed".as_ptr(),
-                );
-            }
+            err = Error::exception(c"diff operation failed");
         }
     }
 

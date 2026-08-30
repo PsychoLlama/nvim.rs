@@ -25,7 +25,7 @@
 
 use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{
-    api_dict_to_keydict, api_free_array, api_metadata, api_set_error, copy_array, cstr_as_string,
+    api_dict_to_keydict, api_free_array, api_metadata, copy_array, cstr_as_string,
 };
 use crate::channel::{channel_connect, channel_job_start};
 use crate::eval::typval::kCallbackNone;
@@ -62,8 +62,8 @@ use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
     KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T, garray_T,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, proftime_T, uint16_t,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
+    proftime_T, uint16_t,
 };
 use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -421,20 +421,14 @@ pub(crate) unsafe fn ui_client_get_redraw_handler(
 ///
 /// # Safety
 ///
-/// `error` must be writable.
+/// Takes the dispatcher's contract, which it uses none of.
 pub(crate) unsafe fn handle_ui_client_redraw(
     _channel_id: u64,
     _args: Array,
     _arena: *mut Arena,
-    error: *mut Error,
+    error: &mut Error,
 ) -> Object {
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeValidation,
-            c"'redraw' cannot be sent as a request".as_ptr(),
-        )
-    };
+    *error = Error::validation(c"'redraw' cannot be sent as a request");
     Object::NIL
 }
 

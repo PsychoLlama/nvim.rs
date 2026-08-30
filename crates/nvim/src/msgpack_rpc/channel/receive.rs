@@ -264,7 +264,7 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
         // about to wait for input.
         let is_get_mode = ptr::fn_addr_eq(
             handler_fn,
-            handle_nvim_get_mode as unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+            handle_nvim_get_mode as unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
         );
         // SAFETY: either queue is live, and running the event here consumes
         // `evdata` exactly once.
@@ -281,7 +281,7 @@ unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     // first, and run only once; a one-shot event does exactly that.
     let is_resize = ptr::fn_addr_eq(
         handler_fn,
-        handle_nvim_ui_try_resize as unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+        handle_nvim_ui_try_resize as unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
     );
     if is_resize {
         // SAFETY: both queues are live, and the one-shot runs the event once
@@ -327,7 +327,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         // arena and error slot are this call's own.
         let mem = unsafe { &raw mut (*e).used_mem };
         let result = unsafe {
-            handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem, &raw mut error)
+            handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem, &mut error)
         };
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.

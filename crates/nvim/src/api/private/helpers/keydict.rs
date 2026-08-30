@@ -11,10 +11,12 @@
 
 use super::{
     EMPTY_DICT, NIL, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool,
-    api_set_error, api_typename, arena_dict, cstr_as_string, object_to_hl_id,
+    api_typename, arena_dict, cstr_as_string, object_to_hl_id,
 };
 use crate::api::private::validate::err_expected_ptr;
+use crate::api_error;
 use crate::lua::executor::api_free_luaref;
+use crate::message_fmt::c_str_len;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
     ObjectType, OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
@@ -105,11 +107,10 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // `key` names its own bytes.
         let field = unsafe { hashy.expect("non-null function pointer")(key.data(), key.len()) };
         if field.is_null() {
-            let fmt = c"Invalid key: '%.*s'".as_ptr();
-            let (len, data) = (key.len() as c_int, key.data());
-            // SAFETY: `err` is the caller's slot; the format takes the
-            // length and the string it is given.
-            unsafe { api_set_error(err, kErrorTypeValidation, fmt, len, data) };
+            // SAFETY: `key` names its own bytes.
+            let key = unsafe { c_str_len(key.data(), key.len()) };
+            // SAFETY: `err` is the caller's slot.
+            unsafe { *err = api_error!(kErrorTypeValidation, "Invalid key: '{key}'") };
             return false;
         }
         // SAFETY: the lookup answered a row of the generated table, which is
@@ -224,11 +225,14 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 unsafe { *mem.cast::<handle_T>() = given.data.integer as handle_T };
             }
             kObjectTypeLuaRef => {
-                let fmt = c"Invalid key: '%.*s' is only allowed from Lua".as_ptr();
-                let (len, data) = (key.len() as c_int, key.data());
-                // SAFETY: `err` is the caller's slot; the format takes the
-                // length and the string it is given.
-                unsafe { api_set_error(err, kErrorTypeValidation, fmt, len, data) };
+                // SAFETY: `key` names its own bytes.
+                let key = unsafe { c_str_len(key.data(), key.len()) };
+                let e = api_error!(
+                    kErrorTypeValidation,
+                    "Invalid key: '{key}' is only allowed from Lua"
+                );
+                // SAFETY: `err` is the caller's slot.
+                unsafe { *err = e };
                 return false;
             }
             // SAFETY: the generated tables name no other type.

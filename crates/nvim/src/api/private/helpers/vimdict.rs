@@ -6,7 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL, api_set_error};
+use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api_error;
 use crate::eval::typval::{
@@ -178,9 +178,14 @@ pub(crate) unsafe fn dict_set_var(
             // SAFETY: `tv` is this frame's.
             unsafe { tv_clear(&raw mut tv) };
             if type_error {
-                let fmt = c"Setting v:%s to value with wrong type".as_ptr();
+                // SAFETY: `key` borrows the caller's NUL-terminated text.
+                let key = unsafe { c_str(key.data()) };
+                let e = api_error!(
+                    kErrorTypeValidation,
+                    "Setting v:{key} to value with wrong type"
+                );
                 // SAFETY: `err` is the caller's slot.
-                unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+                unsafe { *err = e };
             }
             return rv;
         }

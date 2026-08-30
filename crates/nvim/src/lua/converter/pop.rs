@@ -14,8 +14,9 @@ use core::ffi::{c_int, c_void};
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_object};
 use crate::api::private::helpers::{
-    api_free_array, api_free_dict, api_set_error, api_typename, arena_array, arena_dict,
+    api_free_array, api_free_dict, api_typename, arena_array, arena_dict,
 };
+use crate::api_error;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, lua_checkstack, lua_getmetatable,
@@ -24,6 +25,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
+use crate::message_fmt::msg_cstr;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
     kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
@@ -170,7 +172,7 @@ pub unsafe fn nlua_pop_string(
     unsafe {
         if lua_type(lstate, -1) != LUA_TSTRING {
             lua_pop(lstate, 1);
-            api_set_error(err, kErrorTypeValidation, c"Expected Lua string".as_ptr());
+            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua string");
             return String_0::NULL;
         }
         let mut ret = String_0::NULL;
@@ -195,7 +197,7 @@ pub unsafe fn nlua_pop_integer(
     unsafe {
         if lua_type(lstate, -1) != LUA_TNUMBER {
             lua_pop(lstate, 1);
-            api_set_error(err, kErrorTypeValidation, c"Expected Lua number".as_ptr());
+            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua number");
             return 0;
         }
         let n = lua_tonumber(lstate, -1);
@@ -204,7 +206,7 @@ pub unsafe fn nlua_pop_integer(
             || n < API_INTEGER_MIN as lua_Number
             || (n as Integer) as lua_Number != n
         {
-            api_set_error(err, kErrorTypeException, c"Number is not integral".as_ptr());
+            *err = Error::from_message(kErrorTypeException, c"Number is not integral");
             return 0;
         }
         n as Integer
@@ -239,7 +241,7 @@ pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: *mut Error) -
             LUA_TNUMBER => lua_tonumber(lstate, -1) != 0.0,
             LUA_TNIL => false,
             _ => {
-                api_set_error(err, kErrorTypeValidation, c"not a boolean".as_ptr());
+                *err = Error::from_message(kErrorTypeValidation, c"not a boolean");
                 false
             }
         };
@@ -267,12 +269,8 @@ unsafe fn nlua_check_type(
                 } else {
                     c"table"
                 };
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"Expected Lua %s".as_ptr(),
-                    wanted.as_ptr(),
-                );
+                let wanted = msg_cstr(wanted);
+                *err = api_error!(kErrorTypeValidation, "Expected Lua {wanted}");
             }
             return LuaTableProps::NIL;
         }
@@ -287,12 +285,8 @@ unsafe fn nlua_check_type(
             table_props.type_0 = kObjectTypeDict;
         }
         if table_props.type_0 != type_0 && !err.is_null() {
-            api_set_error(
-                err,
-                kErrorTypeValidation,
-                c"Expected %s-like Lua table".as_ptr(),
-                api_typename(type_0),
-            );
+            let want = msg_cstr(api_typename(type_0));
+            *err = api_error!(kErrorTypeValidation, "Expected {want}-like Lua table");
         }
         table_props
     }
@@ -463,7 +457,7 @@ pub unsafe fn nlua_pop_handle(
 ) -> handle_T {
     unsafe {
         let ret = if lua_type(lstate, -1) != LUA_TNUMBER {
-            api_set_error(err, kErrorTypeValidation, c"Expected Lua number".as_ptr());
+            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua number");
             -1
         } else {
             lua_tonumber(lstate, -1) as handle_T

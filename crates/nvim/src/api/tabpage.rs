@@ -10,11 +10,12 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_set_error, api_try, arena_array, array_add, buffer_by_handle,
-    dict_get_value, dict_set_var, has_key, tabpage_by_handle, window_by_handle,
+    ERROR_INIT, NIL, Reported, api_try, arena_array, array_add, buffer_by_handle, dict_get_value,
+    dict_set_var, has_key, tabpage_by_handle, window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
 
+use crate::api_error;
 use crate::main::{autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
 use crate::narrow::number_as_int;
 use crate::types::{
@@ -140,11 +141,11 @@ pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> 
     };
     // SAFETY: both handles named a live object, which is all these ask.
     if !unsafe { tabpage_win_valid(tp.raw(), wp.raw()) } {
-        let fmt = c"Window does not belong to tabpage %d".as_ptr();
-        let (slot, handle) = (&raw mut err, tp.handle);
-        // SAFETY: `err` is this frame's own and the format takes one `int`.
-        unsafe { api_set_error(slot, kErrorTypeException, fmt, handle) };
-        return Err(err);
+        let handle = tp.handle;
+        return Err(api_error!(
+            kErrorTypeException,
+            "Window does not belong to tabpage {handle}"
+        ));
     }
     if tp.is_current() {
         // SAFETY: `wp` is live, and `err` is this frame's own.
@@ -195,12 +196,7 @@ pub unsafe fn nvim_open_tabpage(
         return (0 as Tabpage).reported(err);
     };
     if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
-        let msg = e_cmdwin.as_ptr();
-        let (slot, fmt) = (&raw mut err, c"%s".as_ptr());
-        // SAFETY: `err` is this frame's own and `e_cmdwin` is a static
-        // message.
-        unsafe { api_set_error(slot, kErrorTypeException, fmt, msg) };
-        return Err(err);
+        return Err(Error::exception(e_cmdwin));
     }
     // SAFETY: `config` is the caller's, per this function's contract.
     let after = unsafe {
@@ -265,11 +261,7 @@ fn tabpage_closed(mut err: Error) -> Error {
     err
 }
 
-/// `api_set_error` with a message that takes no arguments. The message goes
-/// through a `%s` rather than being the format itself, which is the same text
-/// for every literal here and cannot become anything else.
+/// An exception whose whole message is `msg`.
 fn set_msg(err: &mut Error, msg: &CStr) {
-    // SAFETY: `err` is the caller's own slot, and the format takes the one C
-    // string it is given.
-    *err = Error::from_message(kErrorTypeException, msg);
+    *err = Error::exception(msg);
 }

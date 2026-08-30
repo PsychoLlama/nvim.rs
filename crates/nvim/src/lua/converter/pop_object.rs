@@ -11,9 +11,7 @@
 use core::ffi::CStr;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, nlua_traverse_table};
-use crate::api::private::helpers::{
-    api_free_object, api_set_error, arena_array, arena_dict, arena_string,
-};
+use crate::api::private::helpers::{api_free_object, arena_array, arena_dict, arena_string};
 use crate::eval::typval_encode::InlineStack;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
@@ -84,11 +82,7 @@ pub unsafe fn nlua_pop_object(
             stack.pop();
             if cur.container {
                 if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                    api_set_error(
-                        err,
-                        kErrorTypeException,
-                        c"Lua failed to grow stack".as_ptr(),
-                    );
+                    *err = Error::from_message(kErrorTypeException, c"Lua failed to grow stack");
                     break;
                 }
                 if (*cur.obj).type_0 == kObjectTypeDict {
@@ -187,10 +181,9 @@ pub unsafe fn nlua_pop_object(
                                 *cur.obj = Object::float(table_props.val);
                             }
                             kObjectTypeNil => {
-                                api_set_error(
-                                    err,
+                                *err = Error::from_message(
                                     kErrorTypeValidation,
-                                    c"Cannot convert given Lua table".as_ptr(),
+                                    c"Cannot convert given Lua table",
                                 );
                             }
                             _ => abort(),
@@ -210,17 +203,16 @@ pub unsafe fn nlua_pop_object(
                         if is_nil {
                             *cur.obj = Object::NIL;
                         } else {
-                            api_set_error(
-                                err,
+                            *err = Error::from_message(
                                 kErrorTypeValidation,
-                                c"Cannot convert userdata".as_ptr(),
+                                c"Cannot convert userdata",
                             );
                         }
                         break 'converted;
                     }
                     _ => {}
                 }
-                api_set_error(err, kErrorTypeValidation, CANNOT_CONVERT.as_ptr());
+                *err = Error::validation(CANNOT_CONVERT);
             }
             if !cur.container {
                 lua_pop(lstate, 1);

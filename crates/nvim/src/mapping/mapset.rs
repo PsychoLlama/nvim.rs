@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api_error;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -21,7 +22,6 @@ const NUMBUFLEN: usize = 65;
 /// The two `nvim_set_keymap` validation messages that carry a quote, hoisted
 /// out of the bodies that raise them.
 const REQUIRES_EXPR: &CStr = c"\"replace_keycodes\" requires \"expr\"";
-const INVALID_SHORTNAME: &CStr = c"Invalid mode shortname: \"%s\"";
 
 /// `mapset()`: replace a mapping from a `maparg()`-shaped dict.
 ///
@@ -289,12 +289,8 @@ pub unsafe fn modify_keymap(
 
     'fail_and_free: {
         if parsed_args.replace_keycodes && !parsed_args.expr {
-            // SAFETY: `err` is the caller's slot, and the text is a static
-            // literal with no conversion in it.
-            unsafe {
-                let text = REQUIRES_EXPR.as_ptr();
-                api_set_error(err, kErrorTypeValidation, text);
-            }
+            // SAFETY: `err` is the caller's slot.
+            unsafe { *err = Error::validation(REQUIRES_EXPR) };
             break 'fail_and_free;
         }
 
@@ -311,12 +307,15 @@ pub unsafe fn modify_keymap(
             || parsed_args.lhs_len > MAXMAPLEN as size_t
             || parsed_args.alt_lhs_len > MAXMAPLEN as size_t
         {
-            // SAFETY: `err` is the caller's slot and `lhs` a live API string,
-            // which is what the format's one conversion names.
+            // SAFETY: `lhs` is a live API string.
+            let lhs = unsafe { c_str(lhs.data()) };
+            // SAFETY: `err` is the caller's slot.
             unsafe {
-                let text = c"LHS exceeds maximum map length: %s".as_ptr();
-                api_set_error(err, kErrorTypeValidation, text, lhs.data());
-            }
+                *err = api_error!(
+                    kErrorTypeValidation,
+                    "LHS exceeds maximum map length: {lhs}"
+                );
+            };
             break 'fail_and_free;
         }
 
@@ -330,11 +329,12 @@ pub unsafe fn modify_keymap(
         // of it was consumed.
         let consumed = unsafe { p.offset_from(mode.data()) } as size_t;
         if !mode.is_empty() && consumed != mode.len() {
-            // SAFETY: as the message above.
+            // SAFETY: `mode` is a live API string.
+            let mode = unsafe { c_str(mode.data()) };
+            // SAFETY: `err` is the caller's slot.
             unsafe {
-                let text = INVALID_SHORTNAME.as_ptr();
-                api_set_error(err, kErrorTypeValidation, text, mode.data());
-            }
+                *err = api_error!(kErrorTypeValidation, "Invalid mode shortname: \"{mode}\"")
+            };
             break 'fail_and_free;
         }
         if parsed_args.lhs_len == 0 {
@@ -359,16 +359,18 @@ pub unsafe fn modify_keymap(
                 unsafe { abort() }; // should never happen
             }
         } else if is_unmap && (parsed_args.rhs_len != 0 || parsed_args.rhs_lua != LUA_NOREF) {
-            // SAFETY: as the messages above; `parsed_args.rhs` is this frame's
-            // own NUL-terminated string.
+            // SAFETY: `parsed_args.rhs` is this frame's own NUL-terminated
+            // string, and `err` the caller's slot.
             unsafe {
-                if parsed_args.rhs_len != 0 {
-                    let text = c"Gave nonempty RHS in unmap command: %s".as_ptr();
-                    api_set_error(err, kErrorTypeValidation, text, parsed_args.rhs);
+                *err = if parsed_args.rhs_len != 0 {
+                    let rhs = c_str(parsed_args.rhs);
+                    api_error!(
+                        kErrorTypeValidation,
+                        "Gave nonempty RHS in unmap command: {rhs}"
+                    )
                 } else {
-                    let text = c"Gave nonempty RHS for unmap".as_ptr();
-                    api_set_error(err, kErrorTypeValidation, text);
-                }
+                    Error::validation(c"Gave nonempty RHS for unmap")
+                };
             }
             break 'fail_and_free;
         }
@@ -388,34 +390,35 @@ pub unsafe fn modify_keymap(
             let target = Buf::new(target_buf);
             buf_do_map(maptype_val, parsed, mode_val, is_abbrev, target)
         };
-        // SAFETY: `err` is the caller's slot; each text is a static message
-        // whose only conversion, where it has one, is the live `lhs`.
-        unsafe {
-            match answer {
-                1 => api_set_error(err, kErrorTypeException, e_invarg.as_ptr(), 0),
-                2 => api_set_error(err, kErrorTypeException, e_nomap.as_ptr(), 0),
-                5 => api_set_error(
-                    err,
-                    kErrorTypeException,
-                    if is_abbrev {
-                        E_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
-                    } else {
-                        E_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
-                    },
-                    lhs.data(),
-                ),
-                6 => api_set_error(
-                    err,
-                    kErrorTypeException,
-                    if is_abbrev {
-                        E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR.as_ptr()
-                    } else {
-                        E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR.as_ptr()
-                    },
-                    lhs.data(),
-                ),
-                _ => {}
-            }
+        // The four "already exists" texts hold a `%s`, so their literals are
+        // written out here rather than shared with `domap`'s copies, which
+        // still hand them to a `printf`.
+        // SAFETY: `lhs` is a live API string.
+        let lhs = unsafe { c_str(lhs.data()) };
+        let refused = match (answer, is_abbrev) {
+            (1, _) => Some(Error::exception(e_invarg)),
+            (2, _) => Some(Error::exception(e_nomap)),
+            (5, true) => Some(api_error!(
+                kErrorTypeException,
+                "E226: Abbreviation already exists for {lhs}"
+            )),
+            (5, false) => Some(api_error!(
+                kErrorTypeException,
+                "E227: Mapping already exists for {lhs}"
+            )),
+            (6, true) => Some(api_error!(
+                kErrorTypeException,
+                "E224: Global abbreviation already exists for {lhs}"
+            )),
+            (6, false) => Some(api_error!(
+                kErrorTypeException,
+                "E225: Global mapping already exists for {lhs}"
+            )),
+            _ => None,
+        };
+        if let Some(e) = refused {
+            // SAFETY: `err` is the caller's slot.
+            unsafe { *err = e };
         }
     }
 

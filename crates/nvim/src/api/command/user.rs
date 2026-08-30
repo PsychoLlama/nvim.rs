@@ -15,6 +15,8 @@ use crate::api::private::validate::err_bad_number;
 use crate::api::private::validate::err_expected_ptr;
 use crate::api::private::validate::err_invalid_ptr;
 use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
+use crate::message_fmt::c_str;
 use crate::types::{ExArgt, ExpandContext};
 use crate::winlayer::Live;
 
@@ -94,10 +96,9 @@ pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(
         unsafe { uc_del_command(table, idx) };
         return ().reported(error);
     }
-    let fmt = c"Invalid command (not found): %s".as_ptr();
-    let data = name.data();
-    // SAFETY: `err` is this frame's slot; the format takes the one C string.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, data) };
+    // SAFETY: `name` names its own NUL-terminated bytes.
+    let name = unsafe { c_str(name.data()) };
+    error = api_error!(kErrorTypeException, "Invalid command (not found): {name}");
     ().reported(error)
 }
 

@@ -2,7 +2,7 @@
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::private::helpers::{
-    NIL, api_free_array, api_free_object, api_set_error, api_typename, arena_array, cstr_as_string,
+    NIL, api_free_array, api_free_object, api_typename, arena_array, cstr_as_string,
     cstr_to_string, cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key,
     object_to_hl_id, try_enter, try_leave,
 };

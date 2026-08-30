@@ -118,8 +118,9 @@ use crate::api::private::dispatch::{
 };
 use crate::api::private::helpers::{
     api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
-    api_luarefs_free_object, api_set_error,
+    api_luarefs_free_object,
 };
+use crate::api::private::validate::err_msg_ptr;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -155,6 +156,7 @@ use crate::api::window::{
     nvim_win_set_cursor, nvim_win_set_height, nvim_win_set_hl_ns, nvim_win_set_var,
     nvim_win_set_width, nvim_win_text_height,
 };
+use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::global_cell::ConstTable;
@@ -371,13 +373,11 @@ impl Drop for LuaRefArg {
 /// Refuses a call that arrived with a different number of arguments than the
 /// API function declares.
 fn wrong_arity(err: &mut Error, argc: c_int) {
-    let fmt = if argc == 1 {
-        c"Expected %d argument".as_ptr()
+    *err = if argc == 1 {
+        api_error!(kErrorTypeValidation, "Expected {argc} argument")
     } else {
-        c"Expected %d arguments".as_ptr()
+        api_error!(kErrorTypeValidation, "Expected {argc} arguments")
     };
-    // SAFETY: `err` is live and the format string matches its one argument.
-    unsafe { api_set_error(err, kErrorTypeValidation, fmt, argc) };
 }
 
 // -- the shared half of every binding --------------------------------------
@@ -510,19 +510,15 @@ unsafe fn bind(
 
 /// Refuses a call made while the text is locked.
 fn text_locked_error(err: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `err` is live and `get_text_locked_msg` answers with a static
-    // NUL-terminated message, which is what `%s` takes.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, get_text_locked_msg()) };
+    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
+    // message.
+    *err = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error(err: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `err` is live and `e_textlock` is a static NUL-terminated
-    // message, which is what `%s` takes.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, e_textlock.as_ptr()) };
+    *err = Error::from_message(kErrorTypeException, e_textlock);
 }
 
 // The keysets the bindings name, each tied to its own generated table

@@ -1,9 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
-    arena_take_arraybuilder, cstr_as_string, find_buffer_by_handle, string_to_cstr, try_enter,
-    try_leave,
+    api_set_sctx, api_typename, arena_array, arena_dict, arena_string, arena_take_arraybuilder,
+    cstr_as_string, find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
 };
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::{

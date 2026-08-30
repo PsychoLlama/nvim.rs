@@ -11,4 +11,4 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type ApiDispatchWrapper = Option<unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object>;
+pub type ApiDispatchWrapper = Option<unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object>;

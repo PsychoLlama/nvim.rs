@@ -33,11 +33,12 @@ pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
 use crate::api::private::helpers::{
-    ERROR_INIT, Reported, api_set_error, api_typename, cstr_as_string, string_to_cstr,
+    ERROR_INIT, Reported, api_typename, cstr_as_string, string_to_cstr,
 };
 use crate::api::private::validate::err_expected_ptr;
 use crate::api::private::validate::err_invalid_ptr;
 use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
@@ -93,10 +94,8 @@ static connected_uis: GlobalCell<Vec<*mut RemoteUI>> = GlobalCell::new(Vec::new(
 unsafe fn get_ui_or_err(chan_id: u64, err: *mut Error) -> *mut RemoteUI {
     let ui = find_ui(chan_id).unwrap_or(core::ptr::null_mut());
     if ui.is_null() && !err.is_null() {
-        let fmt = c"UI not attached to channel: %ld".as_ptr();
-        // SAFETY: the caller's promise about `err`; the format takes the one
-        // integer it is given.
-        unsafe { api_set_error(err, kErrorTypeException, fmt, chan_id) };
+        // SAFETY: the caller's promise about `err`.
+        unsafe { *err = api_error!(kErrorTypeException, "UI not attached to channel: {chan_id}") };
     }
     ui
 }
@@ -196,10 +195,10 @@ pub unsafe fn nvim_ui_attach(
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     if find_ui(channel_id).is_some() {
-        let fmt = c"UI already attached to channel: %ld".as_ptr();
-        // SAFETY: `err` is this frame's slot; the format takes the one
-        // integer it is given.
-        unsafe { api_set_error(err, kErrorTypeException, fmt, channel_id) };
+        error = api_error!(
+            kErrorTypeException,
+            "UI already attached to channel: {channel_id}"
+        );
         return ().reported(error);
     }
     if !ui_can_attach_more() {

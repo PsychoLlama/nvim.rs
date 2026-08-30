@@ -19,7 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{VaList, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
@@ -31,17 +31,15 @@ use crate::main::{
 };
 use crate::mark::setmark_pos;
 use crate::memory::xfree;
-use crate::os::cshim::vsnprintf;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, Dict, Error, ErrorType, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState,
-    Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
-    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T, size_t, tabpage_T,
-    uint64_t, win_T,
+    Buffer, Dict, Error, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState, Window,
+    buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
+    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T, tabpage_T, uint64_t,
+    win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
-use std::ffi::CString;
 
 mod keydict;
 mod text;
@@ -97,6 +95,9 @@ const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
 };
 use crate::api::private::validate::err_invalid_ptr;
 use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
+use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 // -- Handles ---------------------------------------------------------------
 
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
@@ -263,14 +264,17 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
         if !named {
             // SAFETY: the caller's error slot.
             unsafe { *err = err_msg_ptr(kErrorTypeException, value) };
-        } else if lnum != 0 {
-            let fmt = c"%s, line %d: %s".as_ptr();
-            // SAFETY: as above, with two C strings and a line number.
-            unsafe { api_set_error(err, kErrorTypeException, fmt, name, lnum, value) };
         } else {
-            let fmt = c"%s: %s".as_ptr();
-            // SAFETY: as above, with two C strings.
-            unsafe { api_set_error(err, kErrorTypeException, fmt, name, value) };
+            // SAFETY: both are the exception's own NUL-terminated strings.
+            let (name, value) = unsafe { (c_str(name), c_str(value)) };
+            // SAFETY: the caller's error slot.
+            unsafe {
+                *err = if lnum != 0 {
+                    api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
+                } else {
+                    api_error!(kErrorTypeException, "{name}: {value}")
+                };
+            };
         }
         // SAFETY: the exception has been rendered into `err`.
         unsafe { discard_current_exception() };
@@ -310,35 +314,6 @@ pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) ->
     // the caller's own slot.
     unsafe { try_leave(&raw const tstate, err) };
     value
-}
-
-/// Set `err` from a printf-style message. The message is measured first and
-/// then formatted, so it is never truncated below 1 MiB.
-///
-/// The last variadic in `api/`. Its call sites convert to
-/// [`api_error!`](crate::api_error) -- a checked `format_args!` -- and it
-/// goes with the last of them.
-pub(crate) unsafe extern "C" fn api_set_error(
-    err: *mut Error,
-    err_type: ErrorType,
-    format: *const c_char,
-    mut args: ...
-) {
-    // SAFETY: `format` and the variadic arguments are the caller's, and are
-    // a valid printf call by construction — every call site is in-tree.
-    let text = unsafe {
-        let measure: VaList = args.clone();
-        let write: VaList = args.clone();
-        let len = vsnprintf(ptr::null_mut(), 0, format, measure);
-        debug_assert!(len >= 0);
-        let bufsize = (len as size_t + 1).min(1024 * 1024);
-        let mut buf = vec![0u8; bufsize];
-        vsnprintf(buf.as_mut_ptr().cast(), bufsize, format, write);
-        buf.truncate(buf.iter().position(|&b| b == 0).unwrap_or(0));
-        CString::new(buf).unwrap_or_default()
-    };
-    // SAFETY: `err` is the caller's error slot, live and initialized.
-    unsafe { *err = Error::from_message(err_type, &text) };
 }
 
 /// A fresh, unset error, to lend to a helper that still reports through an
@@ -426,14 +401,17 @@ pub(crate) unsafe fn set_mark(
     // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
     let res = unsafe { setmark_pos(mark, at, handle, no_view) } != 0;
     if !res {
-        let fmt = if deleting {
-            c"Failed to delete named mark: %c".as_ptr()
-        } else {
-            c"Failed to set named mark: %c".as_ptr()
+        // `%c` wrote the one byte, whatever it was.
+        let byte = mark as u8;
+        let mark = msg_bytes(core::slice::from_ref(&byte));
+        // SAFETY: `err` is the caller's slot.
+        unsafe {
+            *err = if deleting {
+                api_error!(kErrorTypeException, "Failed to delete named mark: {mark}")
+            } else {
+                api_error!(kErrorTypeException, "Failed to set named mark: {mark}")
+            };
         };
-        // SAFETY: `err` is the caller's slot; the format takes the one
-        // character it is given.
-        unsafe { api_set_error(err, kErrorTypeException, fmt, mark) };
     }
     res
 }

@@ -105,7 +105,8 @@ use crate::api::private::dispatch::{
     key_dict_user_command_get_field, key_dict_win_config_get_field,
     key_dict_win_text_height_get_field, ns_opts_table, win_config_table,
 };
-use crate::api::private::helpers::{api_dict_to_keydict, api_keydict_to_dict, api_set_error};
+use crate::api::private::helpers::{api_dict_to_keydict, api_keydict_to_dict};
+use crate::api::private::validate::err_msg_ptr;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -145,10 +146,12 @@ use crate::api::window::{
     nvim_win_set_height, nvim_win_set_hl_ns, nvim_win_set_var, nvim_win_set_width,
     nvim_win_text_height,
 };
+use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::log::logmsg_c;
 use crate::main::{e_textlock, textlock};
+use crate::message_fmt::msg_cstr;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
@@ -234,27 +237,20 @@ fn log_invoke(handler: &CStr, method: &CStr, line: c_int, channel_id: uint64_t) 
 
 /// Refuses a call that arrived with the wrong number of arguments.
 fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
-    let fmt = c"Wrong number of arguments: expecting %zu but got %zu".as_ptr();
-    // SAFETY: `error` is live and the format string matches its two arguments.
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            fmt,
-            expected as size_t,
-            got as size_t,
-        )
-    };
+    *error = api_error!(
+        kErrorTypeException,
+        "Wrong number of arguments: expecting {expected} but got {got}"
+    );
 }
 
 /// Refuses a call whose argument in `slot` carried a tag the parameter does
 /// not accept.
 fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
-    let fmt = c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr();
-    let (slot, func, expected) = (slot as size_t, func.as_ptr(), expected.as_ptr());
-    // SAFETY: `error` is live, the format string matches its three arguments,
-    // and both names are NUL-terminated and outlive the call.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, slot, func, expected) };
+    let (func, expected) = (msg_cstr(func), msg_cstr(expected));
+    *error = api_error!(
+        kErrorTypeException,
+        "Wrong type for argument {slot} when calling {func}, expecting {expected}"
+    );
 }
 
 /// A nonnegative integer is accepted as a boolean, truncated to C `int`
@@ -378,19 +374,15 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
 
 /// Refuses a call made while the text is locked.
 fn text_locked_error(error: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `error` is live and `get_text_locked_msg` answers with a static
-    // NUL-terminated message, which is what `%s` takes.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, get_text_locked_msg()) };
+    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
+    // message.
+    *error = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error(error: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
-    // message, which is what `%s` takes.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, e_textlock.as_ptr()) };
+    *error = Error::from_message(kErrorTypeException, e_textlock);
 }
 
 /// Hands the error an API function answered with to the dispatcher, which

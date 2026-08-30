@@ -10,9 +10,8 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_set_error, api_try, arena_array, arena_dict, array_add,
-    buffer_by_handle, dict_get_value, dict_put, dict_set_var, has_key, normalize_index,
-    window_by_handle,
+    ERROR_INIT, NIL, Reported, api_try, arena_array, arena_dict, array_add, buffer_by_handle,
+    dict_get_value, dict_put, dict_set_var, has_key, normalize_index, window_by_handle,
 };
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
@@ -33,8 +32,8 @@ use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef, Object,
-    String_0, Tabpage, Window, buf_T, int64_t, kErrorTypeException, kErrorTypeValidation,
-    kObjectTypeInteger, linenr_T, size_t, switchwin_T, tabpage_T, win_execute_T,
+    String_0, Tabpage, Window, buf_T, int64_t, kObjectTypeInteger, linenr_T, size_t, switchwin_T,
+    tabpage_T, win_execute_T,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -64,17 +63,7 @@ pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
         || w.raw() == cmdwin_old_curwin.get()
         || b.raw() == cmdwin_buf.get()
     {
-        // SAFETY: `err` is this frame's own and `e_cmdwin` is a static
-        // message.
-        unsafe {
-            api_set_error(
-                &raw mut err,
-                kErrorTypeException,
-                c"%s".as_ptr(),
-                e_cmdwin.as_ptr(),
-            )
-        };
-        return ().reported(err);
+        return Err(Error::exception(e_cmdwin));
     }
     // SAFETY: both handles named a live object, and `err` is this frame's own.
     unsafe { win_set_buf(w.raw(), b.raw(), &raw mut err) };
@@ -440,17 +429,16 @@ pub unsafe fn nvim_win_text_height(
         end_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
     }
     if oob {
-        return Err(validation(err, c"Line index out of bounds"));
+        return Err(Error::validation(c"Line index out of bounds"));
     }
     if start_lnum > end_lnum {
-        return Err(validation(err, c"'start_row' is higher than 'end_row'"));
+        return Err(Error::validation(c"'start_row' is higher than 'end_row'"));
     }
 
     let mut start_vcol: int64_t = -1;
     if set(OPTIDX_START_VCOL) {
         if !set(OPTIDX_START_ROW) {
-            return Err(validation(
-                err,
+            return Err(Error::validation(
                 c"'start_vcol' specified without 'start_row'",
             ));
         }
@@ -463,7 +451,7 @@ pub unsafe fn nvim_win_text_height(
     let mut end_vcol: int64_t = -1;
     if set(OPTIDX_END_VCOL) {
         if !set(OPTIDX_END_ROW) {
-            return Err(validation(err, c"'end_vcol' specified without 'end_row'"));
+            return Err(Error::validation(c"'end_vcol' specified without 'end_row'"));
         }
         // SAFETY: as above.
         end_vcol = unsafe { (*opts).end_vcol as int64_t };
@@ -482,7 +470,7 @@ pub unsafe fn nvim_win_text_height(
         int64_t::MAX
     };
     if start_lnum == end_lnum && start_vcol >= 0 && end_vcol >= 0 && start_vcol > end_vcol {
-        return Err(validation(err, c"'start_vcol' is higher than 'end_vcol'"));
+        return Err(Error::validation(c"'start_vcol' is higher than 'end_vcol'"));
     }
 
     let mut fill: int64_t = 0;
@@ -507,12 +495,4 @@ pub unsafe fn nvim_win_text_height(
     unsafe { dict_put(&mut rv, c"end_row", end_row) };
     unsafe { dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol)) };
     rv.reported(err)
-}
-
-/// `err` reporting `msg` verbatim as a validation failure.
-fn validation(mut err: Error, msg: &'static ::core::ffi::CStr) -> Error {
-    let (fmt, msg) = (c"%s".as_ptr(), msg.as_ptr());
-    // SAFETY: `err` is the caller's, moved in, and `msg` is static.
-    unsafe { api_set_error(&raw mut err, kErrorTypeValidation, fmt, msg) };
-    err
 }

@@ -27,6 +27,7 @@ use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_conflict_ptr;
 use crate::api::private::validate::err_expected;
 use crate::api::private::validate::err_invalid_ptr;
+use crate::api_error;
 
 /// "Invalid 'border': expected `want`", the shape every rejection here takes.
 /// `got` names what arrived when it is not null.
@@ -365,11 +366,14 @@ pub(crate) unsafe fn generate_api_error(
 ) {
     // SAFETY: the caller's window.
     if !wp.is_null() && unsafe { (*wp).w_floating } {
-        // SAFETY: the caller's error slot, and a format the message takes.
-        let fmt = c"Required: 'relative' when reconfiguring floating window %d".as_ptr();
-        // SAFETY: the caller's error slot and window; the one `%d` spends the
-        // window handle.
-        unsafe { api_set_error(err, kErrorTypeValidation, fmt, (*wp).handle) };
+        // SAFETY: the caller's window.
+        let handle = unsafe { (*wp).handle };
+        let e = api_error!(
+            kErrorTypeValidation,
+            "Required: 'relative' when reconfiguring floating window {handle}"
+        );
+        // SAFETY: the caller's error slot.
+        unsafe { *err = e };
     } else {
         // SAFETY: the caller's error slot.
         unsafe { *err = err_conflict_ptr(attribute, c"non-float window".as_ptr()) };

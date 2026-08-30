@@ -127,7 +127,7 @@ unsafe fn report_failed_notification(
     let is_paste = handler.fn_0.is_some_and(|f| {
         ptr::fn_addr_eq(
             f,
-            handle_nvim_paste as unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+            handle_nvim_paste as unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
         )
     });
     if is_paste {

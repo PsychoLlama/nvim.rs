@@ -953,9 +953,8 @@ fn emit_fn(
         out,
         "/// The dispatcher's contract, which is what every `unsafe` below rests\n\
          /// on: `args` is an `Array` of `size` initialized `Object`s that outlives\n\
-         /// the call and stays the caller's to free, `arena` is the caller's own\n\
-         /// and live for the call, and `error` points at an `Error` slot that is\n\
-         /// live and unaliased until this returns."
+         /// the call and stays the caller's to free, and `arena` is the caller's\n\
+         /// own and live for the call."
     )
     .unwrap();
     writeln!(out, "pub unsafe fn {handler}(").unwrap();
@@ -967,20 +966,15 @@ fn emit_fn(
         if takes_arena { "" } else { "_" }
     )
     .unwrap();
-    writeln!(out, "    error: *mut Error,").unwrap();
+    writeln!(out, "    error: &mut Error,").unwrap();
     writeln!(out, ") -> Object {{").unwrap();
     writeln!(
         out,
-        "    // SAFETY: the dispatcher hands over an argument array of `size` initialized\n\
-         \x20   // objects and an `Error` slot that is live and ours alone until we return;\n\
-         \x20   // both outlive the call."
+        "    // SAFETY: the dispatcher hands over an argument array of `size`\n\
+         \x20   // initialized objects that outlives the call."
     )
     .unwrap();
-    writeln!(
-        out,
-        "    let (args, error) = unsafe {{ (args_slice(&args), &mut *error) }};"
-    )
-    .unwrap();
+    writeln!(out, "    let args = unsafe {{ args_slice(&args) }};").unwrap();
     writeln!(
         out,
         "    log_invoke(c\"{handler}\", c\"{name}\", line!() as c_int, channel_id);"
@@ -1277,19 +1271,20 @@ fn log_invoke(handler: &CStr, method: &CStr, line: c_int, channel_id: uint64_t) 
 
 /// Refuses a call that arrived with the wrong number of arguments.
 fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
-    let fmt = c"Wrong number of arguments: expecting %zu but got %zu".as_ptr();
-    // SAFETY: `error` is live and the format string matches its two arguments.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, expected as size_t, got as size_t) };
+    *error = api_error!(
+        kErrorTypeException,
+        "Wrong number of arguments: expecting {expected} but got {got}"
+    );
 }
 
 /// Refuses a call whose argument in `slot` carried a tag the parameter does
 /// not accept.
 fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
-    let fmt = c"Wrong type for argument %zu when calling %s, expecting %s".as_ptr();
-    let (slot, func, expected) = (slot as size_t, func.as_ptr(), expected.as_ptr());
-    // SAFETY: `error` is live, the format string matches its three arguments,
-    // and both names are NUL-terminated and outlive the call.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, slot, func, expected) };
+    let (func, expected) = (msg_cstr(func), msg_cstr(expected));
+    *error = api_error!(
+        kErrorTypeException,
+        "Wrong type for argument {slot} when calling {func}, expecting {expected}"
+    );
 }
 "#;
 
@@ -1475,10 +1470,9 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
         r#"
 /// Refuses a call made while the text is locked.
 fn text_locked_error(error: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `error` is live and `get_text_locked_msg` answers with a static
-    // NUL-terminated message, which is what `%s` takes.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, get_text_locked_msg()) };
+    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
+    // message.
+    *error = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
 }
 "#,
     ),
@@ -1488,10 +1482,7 @@ fn text_locked_error(error: &mut Error) {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error(error: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `error` is live and `e_textlock` is a static NUL-terminated
-    // message, which is what `%s` takes.
-    unsafe { api_set_error(error, kErrorTypeException, fmt, e_textlock.as_ptr()) };
+    *error = Error::from_message(kErrorTypeException, e_textlock);
 }
 "#,
     ),
@@ -1735,18 +1726,17 @@ fn generate(
             dispatch.join(", ")
         ));
     }
-    let helpers: Vec<&str> = [
-        "api_dict_to_keydict",
-        "api_keydict_to_dict",
-        "api_set_error",
-    ]
-    .into_iter()
-    .filter(|n| referenced.contains(*n))
-    .collect();
+    let helpers: Vec<&str> = ["api_dict_to_keydict", "api_keydict_to_dict"]
+        .into_iter()
+        .filter(|n| referenced.contains(*n))
+        .collect();
     uses.push(format!(
         "use crate::api::private::helpers::{{{}}};",
         helpers.join(", ")
     ));
+    uses.push("use crate::api::private::validate::err_msg_ptr;".into());
+    uses.push("use crate::api_error;".into());
+    uses.push("use crate::message_fmt::msg_cstr;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
         uses.push("use crate::main::{e_textlock, textlock};".into());
@@ -1927,7 +1917,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// arena.
 const fn handler(
     name: &'static CStr,
-    f: unsafe fn(uint64_t, Array, *mut Arena, *mut Error) -> Object,
+    f: unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
     fast: bool,
     ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
@@ -1951,34 +1941,28 @@ const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
 /// Look a method up by name.
 ///
 /// # Safety
-/// `name` points at `name_len` readable bytes; `error` at a live `Error`.
+/// `name` points at `name_len` readable bytes.
 pub unsafe fn msgpack_rpc_get_handler_for(
     name: *const c_char,
     name_len: size_t,
-    error: *mut Error,
+    error: &mut Error,
 ) -> MsgpackRpcRequestHandler {
     // SAFETY: the caller passes a method name of `name_len` bytes.
     if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
         return method_handlers[index];
     }
-    // `%.*s`: the name is not NUL-terminated, so its length goes along. The
-    // stand-in for an empty one is, and upstream passed `sizeof("<empty>")`.
+    // The name is not NUL-terminated, so its length goes along. The stand-in
+    // for an empty one is, and upstream measured it with `sizeof`, terminator
+    // included -- so the rendered name keeps that trailing NUL.
     let (len, text) = if name_len > 0 {
-        (name_len as c_int, name)
+        (name_len, name)
     } else {
         let empty = c"<empty>";
-        (empty.to_bytes_with_nul().len() as c_int, empty.as_ptr())
+        (empty.to_bytes_with_nul().len(), empty.as_ptr())
     };
-    // SAFETY: `error` is live and the format string matches its arguments.
-    unsafe {
-        api_set_error(
-            error,
-            kErrorTypeException,
-            c"Invalid method: %.*s".as_ptr(),
-            len,
-            text,
-        );
-    }
+    // SAFETY: the caller vouches for `name_len` bytes at `name`.
+    let text = unsafe { c_str_len(text, len) };
+    *error = api_error!(kErrorTypeException, "Invalid method: {text}");
     NO_HANDLER
 }
 "#;
@@ -2266,7 +2250,8 @@ fn generate_tables(
     out.push('\n');
     out.push_str("// Every generated wrapper; the handler table names most of them.\n");
     out.push_str("use crate::api::private::dispatch_wrappers::*;\n");
-    out.push_str("use crate::api::private::helpers::api_set_error;\n");
+    out.push_str("use crate::api_error;\n");
+    out.push_str("use crate::message_fmt::c_str_len;\n");
     out.push_str("use crate::global_cell::ConstTable;\n");
     // Handlers the spec names outright, which live outside the generated
     // wrappers.
@@ -2551,13 +2536,11 @@ impl Drop for LuaRefArg {
 /// Refuses a call that arrived with a different number of arguments than the
 /// API function declares.
 fn wrong_arity(err: &mut Error, argc: c_int) {
-    let fmt = if argc == 1 {
-        c"Expected %d argument".as_ptr()
+    *err = if argc == 1 {
+        api_error!(kErrorTypeValidation, "Expected {argc} argument")
     } else {
-        c"Expected %d arguments".as_ptr()
+        api_error!(kErrorTypeValidation, "Expected {argc} arguments")
     };
-    // SAFETY: `err` is live and the format string matches its one argument.
-    unsafe { api_set_error(err, kErrorTypeValidation, fmt, argc) };
 }
 
 // -- the shared half of every binding --------------------------------------
@@ -2698,10 +2681,9 @@ const LUA_READERS: &[(&str, &str)] = &[
         r#"
 /// Refuses a call made while the text is locked.
 fn text_locked_error(err: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `err` is live and `get_text_locked_msg` answers with a static
-    // NUL-terminated message, which is what `%s` takes.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, get_text_locked_msg()) };
+    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
+    // message.
+    *err = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
 }
 "#,
     ),
@@ -2711,10 +2693,7 @@ fn text_locked_error(err: &mut Error) {
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
 fn expr_map_locked_error(err: &mut Error) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: `err` is live and `e_textlock` is a static NUL-terminated
-    // message, which is what `%s` takes.
-    unsafe { api_set_error(err, kErrorTypeException, fmt, e_textlock.as_ptr()) };
+    *err = Error::from_message(kErrorTypeException, e_textlock);
 }
 "#,
     ),
@@ -3339,10 +3318,11 @@ fn generate_lua(
             "api_free_string",
             "api_luarefs_free_keydict",
             "api_luarefs_free_object",
-            "api_set_error",
         ])
         .join(", ")
     ));
+    uses.push("use crate::api::private::validate::err_msg_ptr;".into());
+    uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
     }

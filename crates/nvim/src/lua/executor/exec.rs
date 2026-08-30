@@ -15,7 +15,7 @@ use super::{
     FCERR_NONE, FCERR_OTHER, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
     nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
 };
-use crate::api::private::helpers::{api_set_error, arena_array};
+use crate::api::private::helpers::arena_array;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::ERROR_INIT;
 use crate::garray::ga_concat_strings;
@@ -27,6 +27,7 @@ use crate::lua::ffi::{
     lua_toboolean, lua_tolstring, lua_type, luaL_loadbuffer,
 };
 use crate::memory::{xfree, xmalloc};
+use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
@@ -306,7 +307,8 @@ unsafe fn set_lua_error(err: *mut Error, type_0: ErrorType, lstate: *mut lua_Sta
     unsafe {
         let mut len: size_t = 0;
         let errstr = lua_tolstring(lstate, -1, &raw mut len);
-        api_set_error(err, type_0, c"Lua: %.*s".as_ptr(), len as c_int, errstr);
+        let text = c_str_len(errstr, len);
+        *err = Error::new(type_0, format_args!("Lua: {text}"));
     }
 }
 
@@ -364,7 +366,7 @@ pub unsafe fn nlua_call_ref_ctx(
 
         if fast {
             if nlua_fast_cfpcall(lstate, nargs, mode_ret(mode), -1) < 0 {
-                api_set_error(err, kErrorTypeException, c"fast context failure".as_ptr());
+                *err = Error::from_message(kErrorTypeException, c"fast context failure");
                 return Object::NIL;
             }
         } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {

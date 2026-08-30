@@ -560,8 +560,8 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
             } else {
                 c"".as_ptr()
             };
-            let (len, slot) = (tok.length as size_t, &raw mut u.unpack_error);
-            u.handler = unsafe { msgpack_rpc_get_handler_for(name, len, slot) };
+            let len = tok.length as size_t;
+            u.handler = unsafe { msgpack_rpc_get_handler_for(name, len, &mut u.unpack_error) };
         }
 
         u.read_ptr = data;
@@ -607,7 +607,7 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
         let is_redraw = unsafe { (*p).handler.fn_0 }.is_some_and(|f| {
             core::ptr::fn_addr_eq(
                 f,
-                handle_ui_client_redraw as unsafe fn(u64, Array, *mut Arena, *mut Error) -> Object,
+                handle_ui_client_redraw as unsafe fn(u64, Array, *mut Arena, &mut Error) -> Object,
             )
         });
         if unsafe { (*p).type_0 } == kMessageTypeNotification && is_redraw {

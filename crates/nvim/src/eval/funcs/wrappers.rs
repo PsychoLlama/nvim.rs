@@ -469,9 +469,9 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
 
     let mut err = Error::none();
     let call = handler.fn_0.expect("non-null function pointer");
-    let (mem, out) = (&raw mut arena, &raw mut err);
+    let mem = &raw mut arena;
     // SAFETY: `args` is the Array built above and both are locals.
-    let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, out) };
+    let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, &mut err) };
     if err.is_set() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };

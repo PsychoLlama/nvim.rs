@@ -27,7 +27,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::{api_free_dict, api_set_error, arena_string, cstr_as_string};
+use crate::api::private::helpers::{api_free_dict, arena_string, cstr_as_string};
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::{
     channel_close, channel_decref, channel_incref, channel_info_changed, channel_instream,
@@ -100,6 +100,7 @@ const NIL: Object = Object {
     type_0: kObjectTypeNil,
     data: crate::types::object_data { boolean: false },
 };
+use crate::api_error;
 
 /// A channel this module is working with, plus the promise that the pointer
 /// behind it stays live for as long as the handle does.
@@ -403,8 +404,7 @@ pub unsafe fn rpc_send_call(
     // SAFETY: the channel table is live whenever the editor is.
     let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
         // SAFETY: the caller's error slot.
-        let fmt = c"Invalid channel: %lu".as_ptr();
-        unsafe { api_set_error(err, kErrorTypeException, fmt, id) };
+        unsafe { *err = api_error!(kErrorTypeException, "Invalid channel: {id}") };
         return NIL;
     };
     // SAFETY: the channel is live; this reference is dropped below.
@@ -437,8 +437,7 @@ pub unsafe fn rpc_send_call(
 
     if !frame.returned {
         // SAFETY: the caller's error slot, and the reference taken above.
-        let fmt = c"Invalid channel: %lu".as_ptr();
-        unsafe { api_set_error(err, kErrorTypeException, fmt, id) };
+        unsafe { *err = api_error!(kErrorTypeException, "Invalid channel: {id}") };
         unsafe { channel_decref(chan.as_ptr()) };
         return NIL;
     }

@@ -18,9 +18,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::{
-    api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
-};
+use crate::api::private::helpers::{cstr_as_string, find_window_by_handle, try_enter, try_leave};
 use crate::api::private::validate::err_msg_ptr;
 use crate::buffer::do_buffer;
 use crate::decoration::clear_virttext;
@@ -60,6 +58,7 @@ const TRY_STATE: TryState = TryState {
     need_rethrow: 0,
     did_emsg: 0,
 };
+use crate::api_error;
 
 pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
@@ -107,9 +106,8 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     // SAFETY: `tstate` is the state `try_enter` saved, and `err` is live.
     unsafe { try_leave(&raw mut tstate, err) };
     if win_result == FAIL && !err.is_set() {
-        let fmt = c"Failed to switch to window %d".as_ptr();
-        // SAFETY: a live `Error` and a static format string.
-        unsafe { api_set_error(err, kErrorTypeException, fmt, win_id.handle()) };
+        let handle = win_id.handle();
+        *err = api_error!(kErrorTypeException, "Failed to switch to window {handle}");
     }
     cur_win().validate_cursor();
     // SAFETY: the state `switch_win_noblock` saved.

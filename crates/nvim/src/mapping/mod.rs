@@ -13,8 +13,8 @@ use core::ffi::CStr;
 
 use crate::api::private::converter::object_to_vim_take_luaref;
 use crate::api::private::helpers::{
-    api_free_object, api_set_error, api_set_sctx, arena_dict, arena_take_arraybuilder,
-    cstr_as_string, find_buffer_by_handle, string_to_cstr,
+    api_free_object, api_set_sctx, arena_dict, arena_take_arraybuilder, cstr_as_string,
+    find_buffer_by_handle, string_to_cstr,
 };
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::{skipwhite, transchar, vim_iswordp};

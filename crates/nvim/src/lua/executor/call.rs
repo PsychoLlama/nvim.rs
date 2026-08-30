@@ -13,9 +13,8 @@ use core::ptr;
 use super::{
     FUNCEXE_INIT, LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast,
 };
-use crate::api::private::helpers::{
-    api_set_error, api_set_sctx, arena_array, try_enter, try_leave,
-};
+use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_leave};
+use crate::api_error;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_getln::{ERROR_INIT, TRY_STATE_INIT};
@@ -80,12 +79,8 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             while i < nargs {
                 lua_pushvalue(lstate, i + 2);
                 if !nlua_pop_typval(lstate, vim_args.as_mut_ptr().offset(i as isize)) {
-                    api_set_error(
-                        &raw mut err,
-                        kErrorTypeException,
-                        c"error converting argument %d".as_ptr(),
-                        i + 1,
-                    );
+                    let n = i + 1;
+                    err = api_error!(kErrorTypeException, "error converting argument {n}");
                     break 'free_vim_args;
                 }
                 i += 1;
@@ -209,12 +204,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     arena_mem_free(res_mem);
                 }
             } else if !rpc_send_event(chan_id, name, args) {
-                api_set_error(
-                    &raw mut err,
-                    kErrorTypeValidation,
-                    c"Invalid channel: %lu".as_ptr(),
-                    chan_id,
-                );
+                err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");
             }
         }
         arena_mem_free(arena_finish(&raw mut arena));

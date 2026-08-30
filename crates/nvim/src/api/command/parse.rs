@@ -10,6 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api_error;
+use crate::message_fmt::msg_cstr;
 use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
 use core::ffi::{CStr, c_char, c_int};
@@ -220,7 +222,6 @@ pub unsafe fn nvim_parse_cmd(
     arena: *mut Arena,
 ) -> Result<KeyDict_cmd, Error> {
     let mut error = ERROR_INIT;
-    let err = &mut error;
     // SAFETY (all three): a plain C aggregate whose all-zero state is the
     // valid "nothing parsed yet" one, as the C original's CLEAR_FIELD relies
     // on.
@@ -244,11 +245,9 @@ pub unsafe fn nvim_parse_cmd(
             None => {
                 error = Error::from_message(kErrorTypeException, c"Parsing command-line");
             }
-            // SAFETY: `err` is live and `errormsg` is the parser's own
-            // NUL-terminated message, which the format's one `%s` takes.
             Some(msg) => {
-                let fmt = c"Parsing command-line: %s".as_ptr();
-                unsafe { api_set_error(err, kErrorTypeException, fmt, msg.as_ptr()) };
+                let msg = msg_cstr(msg);
+                error = api_error!(kErrorTypeException, "Parsing command-line: {msg}");
             }
         }
         return Err(error);

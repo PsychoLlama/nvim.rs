@@ -14,7 +14,7 @@ use super::{
     nlua_pop_integer, nlua_pop_luaref, nlua_pop_object, nlua_pop_string, nlua_push_array,
     nlua_push_dict, nlua_push_object, nlua_push_string, nlua_push_type_idx, nlua_push_val_idx,
 };
-use crate::api::private::helpers::api_set_error;
+use crate::api_error;
 use crate::highlight_group::syn_check_group;
 use crate::lua::executor::nlua_pushref;
 use crate::lua::ffi::{
@@ -22,6 +22,7 @@ use crate::lua::ffi::{
     lua_pushlstring, lua_pushnil, lua_pushnumber, lua_pushstring, lua_rawset, lua_settop,
     lua_tolstring, lua_type,
 };
+use crate::message_fmt::c_str_len;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
     OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeValidation, kObjectTypeArray,
@@ -91,7 +92,7 @@ pub unsafe fn nlua_pop_keydict(
 ) {
     unsafe {
         if lua_type(lstate, -1) != LUA_TTABLE {
-            api_set_error(err, kErrorTypeValidation, c"Expected Lua table".as_ptr());
+            *err = Error::from_message(kErrorTypeValidation, c"Expected Lua table");
             // Upstream writes `lua_pop(L, -1)` here, which expands to
             // `lua_settop(L, 0)` -- it clears the *whole* stack rather than
             // popping the one value. Kept verbatim; see the divergence
@@ -106,13 +107,8 @@ pub unsafe fn nlua_pop_keydict(
             let s = lua_tolstring(lstate, -2, &raw mut len);
             let field: *const KeySetLink = hashy.expect("non-null function pointer")(s, len);
             if field.is_null() {
-                api_set_error(
-                    err,
-                    kErrorTypeValidation,
-                    c"invalid key: %.*s".as_ptr(),
-                    len as c_int,
-                    s,
-                );
+                let key = c_str_len(s, len);
+                *err = api_error!(kErrorTypeValidation, "invalid key: {key}");
                 lua_pop(lstate, 3);
                 return;
             }
