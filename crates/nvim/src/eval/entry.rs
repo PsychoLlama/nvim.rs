@@ -291,9 +291,7 @@ pub(crate) unsafe fn eval_expr_partial(
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
-    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
     Ok(())
 }
 
@@ -322,9 +320,7 @@ pub(crate) unsafe fn eval_expr_func(
     }
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
-    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
     Ok(())
 }
 
@@ -342,9 +338,7 @@ pub(crate) unsafe fn eval_expr_string(
         return Err(Failed);
     }
     s = unsafe { skipwhite(s) };
-    if unsafe { eval1_emsg(&raw mut s, rettv, null_mut()) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { eval1_emsg(&raw mut s, rettv, null_mut()) }?;
     if unsafe { *skipwhite(s) } as c_int != NUL {
         unsafe { tv_clear(rettv) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

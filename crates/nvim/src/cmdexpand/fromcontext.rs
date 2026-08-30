@@ -94,9 +94,7 @@ pub(crate) unsafe fn expand_from_context(
             } else {
                 pat as *const c_char
             };
-            if unsafe { find_help_tags(arg, numMatches, matches, false) }.is_err() {
-                return Err(Failed);
-            }
+            unsafe { find_help_tags(arg, numMatches, matches, false) }?;
             unsafe { cleanup_help_tags(*numMatches, *matches) };
             return Ok(());
         }

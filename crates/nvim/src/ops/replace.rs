@@ -95,9 +95,7 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> Result<(), F
     unsafe { mb_adjust_opend(oap.raw()) };
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if u_save(above, below).is_err() {
-        return Err(Failed);
-    }
+    u_save(above, below)?;
 
     if oap.motion_type == kMTBlockWise {
         replace_block(oap, c, had_ctrl_v_cr);

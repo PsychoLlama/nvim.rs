@@ -332,9 +332,7 @@ pub unsafe fn buf_write(
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
-        if unsafe { set_rw_fname(fname, sfname) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { set_rw_fname(fname, sfname) }?;
         buf = curbuf.get(); // just in case autocmds made "buf" invalid
         // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
         b = unsafe { Buf::new(buf) };

@@ -130,9 +130,7 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { tv_check_for_string_arg(args, idx) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { tv_check_for_string_arg(args, idx) }?;
     let s = unsafe { (*args.offset(idx as isize)).vval.v_string };
     let nonempty = !s.is_null() && unsafe { *s } as ::core::ffi::c_int != NUL;
     arg_check(
@@ -320,9 +318,7 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
     args: *const typval_T,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { tv_check_for_dict_arg(args, idx) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { tv_check_for_dict_arg(args, idx) }?;
     let dict = unsafe { (*args.offset(idx as isize)).vval.v_dict };
     arg_check(
         !dict.is_null(),

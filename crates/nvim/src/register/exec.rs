@@ -541,9 +541,7 @@ pub unsafe fn do_execreg(
         // `ins_typebuf` copies again, leaving it ours to free.
         retval = unsafe { ins_typebuf(escaped, remap, 0, true, silent != 0) };
         unsafe { xfree(escaped as *mut c_void) };
-        if retval.is_err() {
-            return Err(Failed);
-        }
+        retval?;
         // SAFETY: a NUL-terminated literal, copied into the typeahead.
         if colon != 0
             && unsafe { ins_typebuf(c":".as_ptr().cast_mut(), remap, 0, true, silent != 0) }
@@ -631,9 +629,7 @@ pub unsafe fn insert_reg(
             if State.get() & REPLACE_FLAG != 0 {
                 // SAFETY: main thread with a current buffer; saves the
                 // cursor line for undo.
-                if u_save_cursor().is_err() {
-                    return Err(Failed);
-                }
+                u_save_cursor()?;
                 // SAFETY: a non-null `y_array` starts with a NUL-terminated
                 // line, whose character count is what is deleted.
                 let _ = unsafe { del_chars(mb_charlen((*(*reg).y_array).data()), 1) };

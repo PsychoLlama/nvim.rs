@@ -97,12 +97,10 @@ pub(super) unsafe fn put_foldopen_recurse(
                 return Err(Failed);
             }
             // SAFETY: the caller's promise.
-            if unsafe { put_foldopen_recurse(fd, wp, fold.nested(), off + fold.top()) }.is_err() {
-                return Err(Failed);
-            }
+            unsafe { put_foldopen_recurse(fd, wp, fold.nested(), off + fold.top()) }?;
             // SAFETY: the caller's promise.
-            if fold.is(FD_CLOSED) && unsafe { put_fold_open_close(fd, fold, off) }.is_err() {
-                return Err(Failed);
+            if fold.is(FD_CLOSED) {
+                unsafe { put_fold_open_close(fd, fold, off) }?;
             }
             continue;
         }
@@ -116,8 +114,8 @@ pub(super) unsafe fn put_foldopen_recurse(
             foldlevel < level as OptInt
         };
         // SAFETY: the caller's promise.
-        if differs && unsafe { put_fold_open_close(fd, fold, off) }.is_err() {
-            return Err(Failed);
+        if differs {
+            unsafe { put_fold_open_close(fd, fold, off) }?;
         }
     }
     Ok(())

@@ -311,11 +311,9 @@ pub(crate) unsafe fn makeset(
                 {
                     return Err(Failed);
                 }
-                if unsafe { put_set(fd, cmd, opt_idx, varp) }.is_err() {
-                    return Err(Failed);
-                }
-                if guarded && unsafe { put_line(fd, c"endif".as_ptr() as *mut c_char) }.is_err() {
-                    return Err(Failed);
+                unsafe { put_set(fd, cmd, opt_idx, varp) }?;
+                if guarded {
+                    unsafe { put_line(fd, c"endif".as_ptr() as *mut c_char) }?;
                 }
                 varp = varp_local;
                 round += 1;

@@ -172,8 +172,8 @@ pub unsafe fn do_join(
 
     let above = cur_win().w_cursor.lnum - 1;
     let past = cur_win().w_cursor.lnum + count as linenr_T;
-    if save_undo && u_save(above, past).is_err() {
-        return Err(Failed);
+    if save_undo {
+        u_save(above, past)?;
     }
 
     // The per-line space counts are wanted twice: to size the one

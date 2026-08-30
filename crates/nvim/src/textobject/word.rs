@@ -398,9 +398,7 @@ pub unsafe fn current_word(
         // Starting on white space that is to be included (" word"), or
         // off white space that is not ("word"): find the end of the word.
         if (cls() == 0) == include {
-            if unsafe { end_word(1, bigword, true, true) }.is_err() {
-                return Err(Failed);
-            }
+            unsafe { end_word(1, bigword, true, true) }?;
         } else {
             // Starting off white space that is to be included
             // ("word   "), or on white space that is not ("   "): find
@@ -441,13 +439,9 @@ pub unsafe fn current_word(
                 return Err(Failed);
             }
             if include != (cls() != 0) {
-                if unsafe { bck_word(1, bigword, true) }.is_err() {
-                    return Err(Failed);
-                }
+                unsafe { bck_word(1, bigword, true) }?;
             } else {
-                if unsafe { bckend_word(1, bigword, true) }.is_err() {
-                    return Err(Failed);
-                }
+                unsafe { bckend_word(1, bigword, true) }?;
                 unsafe { incl(&mut cur_win().cursor()) };
             }
         } else {

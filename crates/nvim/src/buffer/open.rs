@@ -542,9 +542,7 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<
     let none = ptr::null_mut::<c_char>();
     let one = ECMD_ONE as c_int as linenr_T;
     let hide = ECMD_HIDE as c_int;
-    if edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win()).is_err() {
-        return Err(Failed);
-    }
+    edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win())?;
     if !bufname.is_null() {
         fire(EVENT_BUFFILEPRE, cur_buf());
         // SAFETY: the current buffer, and the caller's NUL-terminated name.

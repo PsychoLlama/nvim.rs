@@ -203,9 +203,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<()
         let foldroot = spin.si_foldroot;
         let word = tsalword.as_ptr();
         let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
-        if unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) }?;
         words_done = words_done.wrapping_add(1);
         wordcount[depth] += 1;
 

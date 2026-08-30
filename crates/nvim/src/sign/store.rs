@@ -275,8 +275,8 @@ pub(crate) unsafe fn sign_define_by_name(
 
     // SAFETY: the caller's text, writable and NUL-terminated, and the
     // definition's own cells.
-    if !text.is_null() && unsafe { init_sign_text(text, def.cells(), true) }.is_err() {
-        return Err(Failed);
+    if !text.is_null() {
+        unsafe { init_sign_text(text, def.cells(), true) }?;
     }
 
     def.sn_priority = prio;

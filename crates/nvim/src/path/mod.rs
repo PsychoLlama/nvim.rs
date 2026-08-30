@@ -460,9 +460,7 @@ pub unsafe fn path_full_dir_name(
     }
     // A relative one is taken from the current directory.
     let mut old_dir = [0 as c_char; MAXPATHL as usize];
-    if unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) }?;
     unsafe { xstrlcpy(buffer, old_dir.as_ptr(), len) };
     unsafe { append_path(buffer, directory, len) }
 }
@@ -567,9 +565,7 @@ unsafe fn path_to_absolute(
             };
         }
 
-        if unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) }?;
     }
     unsafe { append_path(buf, end_of_path, len) }
 }

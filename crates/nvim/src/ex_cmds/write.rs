@@ -310,9 +310,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
     }
 
     // SAFETY: the names are live and `eap` is the caller's.
-    if unsafe { check_overwrite(eap, cur_buf(), fname, ffname, other) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { check_overwrite(eap, cur_buf(), fname, ffname, other) }?;
 
     if unsafe { (*eap).cmdidx } == CMD_saveas
         && let Some(alt_buf) = alt_buf
@@ -324,9 +322,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
     }
 
     // SAFETY: `eap` and `fname` are live.
-    if unsafe { handle_mkdir_p_arg(eap, fname) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { handle_mkdir_p_arg(eap, fname) }?;
 
     // SAFETY: `curbuf` is live.
     let name_was_missing = cur_buf().b_ffname.is_null();

@@ -312,9 +312,7 @@ pub(crate) unsafe fn eval1(
     // before anything reads it.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
     unsafe { write_bytes(rettv, 0, 1) };
-    if unsafe { eval2(arg, rettv, evalarg) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { eval2(arg, rettv, evalarg) }?;
     if cur.byte() != b'?' {
         return Ok(());
     }
@@ -420,9 +418,7 @@ unsafe fn eval_logical(
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` is the result being built.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    if unsafe { operand(arg, rettv, evalarg) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { operand(arg, rettv, evalarg) }?;
     // The second byte is read only once the first matched, which is what
     // proves the cursor is not on the terminating NUL.
     let is_op = |cur: Cur| cur.byte() == op && cur.at(1) == op;
@@ -459,9 +455,7 @@ unsafe fn eval_logical(
         let mut var2 = UNSET_TV;
         // SAFETY: `arg` is still the caller's cursor and `var2` this
         // frame's own.
-        if unsafe { operand(arg, &raw mut var2, used.raw()) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { operand(arg, &raw mut var2, used.raw()) }?;
         if evaluate && result != stop_at {
             let mut error = false;
             // SAFETY: `var2` is the operand just parsed.
@@ -522,9 +516,7 @@ pub(crate) unsafe fn eval4(
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, and `rettv`/`evalarg` are the caller's own.
     let cur = unsafe { Cur::new(arg) };
-    if unsafe { eval5(arg, rettv, evalarg) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { eval5(arg, rettv, evalarg) }?;
     let (op, mut len) = comparison_at(cur);
     if op == EXPR_UNKNOWN {
         return Ok(());
@@ -572,9 +564,7 @@ pub(crate) unsafe fn eval5(
     // expression, `rettv` the result being built and `evalarg` null or
     // valid. All three hold for every call below.
     let (cur, rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    if unsafe { eval6(arg, rettv, evalarg, false) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { eval6(arg, rettv, evalarg, false) }?;
     loop {
         let op = cur.byte();
         let concat = op == b'.';
@@ -643,9 +633,7 @@ pub(crate) unsafe fn eval6(
     // expression, `rettv` the result being built and `evalarg` null or
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
-    if unsafe { eval7(arg, rettv, evalarg, want_string) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { eval7(arg, rettv, evalarg, want_string) }?;
     loop {
         let op = cur.byte();
         if op != b'*' && op != b'/' && op != b'%' {
@@ -654,9 +642,7 @@ pub(crate) unsafe fn eval6(
         let evaluate = unsafe { evaluating(evalarg) };
         cur.skip(1);
         let mut var2 = UNSET_TV;
-        if unsafe { eval7(arg, &raw mut var2, evalarg, false) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { eval7(arg, &raw mut var2, evalarg, false) }?;
         if evaluate && unsafe { !eval_multdiv_number(rettv, &raw mut var2, op) } {
             return Err(Failed);
         }

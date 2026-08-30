@@ -88,9 +88,7 @@ pub(crate) unsafe fn jump_to_help_window(
     if share_loclist {
         flags |= WSP_NEWLOC as c_int;
     }
-    if win_split(0, flags).is_err() {
-        return Err(Failed);
-    }
+    win_split(0, flags)?;
     unsafe { *opened_window = true };
     if (cur_win().w_height as OptInt) < p_hh.get() {
         win_setheight(p_hh.get() as c_int);
@@ -269,9 +267,7 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     let only_the_quickfix_window =
         firstwin.get() == lastwin.get() && buf_is_quickfix(current_buf());
     if only_the_quickfix_window || !usable_win || newwin {
-        if unsafe { qf_open_new_file_win(ll_ref) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { qf_open_new_file_win(ll_ref) }?;
         // Close it again if the jump fails.
         unsafe { *opened_window = true };
     } else if !cur_win().w_llist_ref.is_null() {

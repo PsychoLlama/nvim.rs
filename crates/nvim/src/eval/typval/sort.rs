@@ -418,9 +418,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 
     if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
         // optional third argument: {dict}
-        if unsafe { tv_check_for_dict_arg(argvars, 2) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { tv_check_for_dict_arg(argvars, 2) }?;
         unsafe { (*info).item_compare_selfdict = (*argvars.add(2)).vval.v_dict };
     }
 

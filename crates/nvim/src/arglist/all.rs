@@ -375,9 +375,7 @@ unsafe fn open_window_for_arg(
         p_ea.set(c_int::from(true));
         let split_ret = win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int);
         p_ea.set(c_int::from(p_ea_save));
-        if split_ret.is_err() {
-            return Err(Failed);
-        }
+        split_ret?;
     }
     // SAFETY: curwin is the window just split (or the first one), and the
     // argument name outlives `do_ecmd`'s use of it.

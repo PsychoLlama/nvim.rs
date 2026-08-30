@@ -76,9 +76,7 @@ pub(crate) unsafe fn eval_index(
     let mut key: *const c_char = null();
     let mut keylen: ptrdiff_t = -1;
 
-    if unsafe { check_can_index(rettv, evaluate, verbose) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { check_can_index(rettv, evaluate, verbose) }?;
 
     let mut var1 = UNSET_TV;
     let mut var2 = UNSET_TV;
@@ -308,9 +306,7 @@ pub(crate) unsafe fn eval_index_inner(
             let sliced = unsafe {
                 tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
             };
-            if sliced.is_err() {
-                return Err(Failed);
-            }
+            sliced?;
         }
         VAR_DICT => {
             let mut key = key;

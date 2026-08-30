@@ -239,9 +239,8 @@ pub(crate) unsafe fn execute_cmd0(
     preview: bool,
 ) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
-    if ea.argt.has(ExArgt::XFILE) && unsafe { expand_filename(eap, ea.cmdlinep, errormsg) }.is_err()
-    {
-        return Err(Failed);
+    if ea.argt.has(ExArgt::XFILE) {
+        unsafe { expand_filename(eap, ea.cmdlinep, errormsg) }?;
     }
 
     // A buffer name may stand in for a buffer number, but not alongside

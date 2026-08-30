@@ -288,17 +288,13 @@ pub(crate) unsafe fn get_lval_blob(
     };
     let n1 = lp.ll_n1 as varnumber_T;
     // SAFETY: the index is checked against the length measured above.
-    if unsafe { tv_blob_check_index(bloblen, n1, quiet) }.is_err() {
-        return Err(Failed);
-    }
+    unsafe { tv_blob_check_index(bloblen, n1, quiet) }?;
     if lp.ll_range && !lp.ll_empty2 {
         // SAFETY: `var2` is the caller's second index expression.
         lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
         let n2 = lp.ll_n2 as varnumber_T;
         // SAFETY: as above.
-        if unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
     lp.ll_blob = unsafe { Tv::new(lp.ll_tv).vval.v_blob };
@@ -363,9 +359,7 @@ pub(crate) unsafe fn get_lval_list(
         // indexes are `lp`'s own fields.
         unsafe { *n2 = tv_get_number(var2) as c_int };
         // SAFETY: `li` is the item index one selected.
-        if unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }?;
     }
     // SAFETY: `ll_li` is a live item, whose typval is the target.
     unsafe { (*rec).ll_tv = &raw mut (*li).li_tv };

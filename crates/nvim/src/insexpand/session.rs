@@ -375,9 +375,7 @@ pub(crate) unsafe fn compl_get_info(
         || (ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0
             && !unsafe { thesaurus_func_complete(ctrl_x_mode.get()) })
     {
-        if unsafe { get_normal_compl_info(line, startcol, curs_col) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { get_normal_compl_info(line, startcol, curs_col) }?;
         unsafe { *line_invalid = true }; // 'cpt' func may have invalidated "line"
     } else if ctrl_x_mode_line_or_eval() {
         return unsafe { get_wholeline_compl_info(line, curs_col) };
@@ -396,9 +394,7 @@ pub(crate) unsafe fn compl_get_info(
         }
         unsafe { *line_invalid = true }; // "line" may have become invalid
     } else if ctrl_x_mode_spell() {
-        if unsafe { get_spell_compl_info(startcol, curs_col) }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { get_spell_compl_info(startcol, curs_col) }?;
         unsafe { *line_invalid = true }; // "line" may have become invalid
     } else {
         unsafe { internal_error(c"ins_complete()".as_ptr()) };
@@ -599,9 +595,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     let insert_match = ins_compl_use_match(c);
 
     if !compl_started.get() {
-        if unsafe { ins_compl_start() }.is_err() {
-            return Err(Failed);
-        }
+        unsafe { ins_compl_start() }?;
     } else if insert_match && unsafe { stop_arrow() }.is_err() {
         return Err(Failed);
     }

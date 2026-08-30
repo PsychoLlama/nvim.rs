@@ -311,9 +311,8 @@ pub unsafe fn ml_replace_buf_len(
         return Err(Failed); // just checking...
     }
     // During startup the memfile may still have to be created.
-    if b.b_ml.ml_mfp.is_null() && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) }.is_err()
-    {
-        return Err(Failed);
+    if b.b_ml.ml_mfp.is_null() {
+        unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) }?;
     }
 
     let line = if copy {

@@ -71,9 +71,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
     // First we copy the old text to its new location -- webb
     // Also copy the flag that ":global" command uses.
     // SAFETY: `dest` is a line of the current buffer, or zero.
-    if u_save(dest, dest + 1).is_err() {
-        return Err(Failed);
-    }
+    u_save(dest, dest + 1)?;
 
     // How many lines the copies added before `line1`.
     let mut extra = 0;
@@ -167,9 +165,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
-    if u_save(line1 + extra - 1, line2 + extra + 1).is_err() {
-        return Err(Failed);
-    }
+    u_save(line1 + extra - 1, line2 + extra + 1)?;
     for _ in line1..=line2 {
         // SAFETY: as above; each delete pulls the next line into place.
         let _ = unsafe { ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int) };
