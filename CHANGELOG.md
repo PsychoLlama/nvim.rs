@@ -22,6 +22,13 @@ and this project adheres to [CalVer](https://calver.org/).
   written out where it is raised and checked against its arguments when the
   editor is built. The message a client receives, and the kind it is
   classified as, are unchanged.
+- Reworked how the editor's internals say whether an operation worked: the
+  several hundred functions that answered a plain success/failure number now
+  answer a result the compiler can check, so an unread answer is a build
+  error rather than a bug, and the handful of operations that had a third
+  answer ("nothing was done, and nothing is wrong") now say so in their own
+  words. Every command behaves exactly as before, including in the corners
+  where that third answer decides what happens next.
 
 ## [2026.08.29-f6c6cf531e]
 
