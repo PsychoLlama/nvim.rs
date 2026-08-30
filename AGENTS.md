@@ -30,6 +30,15 @@
 - Never hand-edit generated output. `just apigen`/`just ffigen` rewrite it; the `--check` form of each fails on drift and runs in `just minimal-ci`.
 - `tools/ffigen/unit-cdefs.h` is a committed golden, not an input: the unit suite regenerates its own copy under `target/ffi`.
 
+# Sweeps
+
+- A tree-wide mechanical rewrite is a throwaway script in a scratchpad, not a
+  committed tool. `scripts/xform.py` is the library those scripts import: call
+  spans matched against masked text, byte-offset edits, `c"…"`/`b"…"` literals.
+  Read its docstring before writing a sweep — every piece of it is a mistake a
+  previous sweep shipped.
+- Nothing runs it, so it has no `--check`; `treefmt` formats it with `ruff`.
+
 # Testing
 
 Tests only run local, not in CI. Any failure, even out of scope, is your responsibility to fix.
