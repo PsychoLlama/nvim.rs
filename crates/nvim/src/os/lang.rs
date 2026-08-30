@@ -24,8 +24,7 @@ use crate::main::time_fd;
 use crate::memory::{xfree, xstrlcpy};
 use crate::message_fmt::c_str;
 use crate::option::{PROJECT_NAME, set_helplang_default};
-use crate::os::cshim::_nl_msg_cat_cntr;
-use crate::os::cshim::{bindtextdomain, textdomain};
+use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
 use crate::os::env::os_setenv;
 use crate::os::shell::{ShellOpts, get_cmd_output};
 use crate::path::{path_tail, path_tail_with_sep};
@@ -225,14 +224,12 @@ pub unsafe fn ex_language(eap: *mut exarg_T) {
         semsg!("E197: Cannot set language to \"{name}\"");
         return;
     }
-    // SAFETY: `_nl_msg_cat_cntr` is GNU gettext's "the catalogue selection
-    // changed" counter; bumping it is how upstream stops cached translations
-    // from being reused, and nothing else in the process touches it. Every
-    // environment variable name below is a static literal, and `name` is
-    // NUL-terminated.
+    // Stop cached translations from being reused: the catalogue selection
+    // has just changed.
+    bump_catalogue_epoch();
+    // SAFETY: every environment variable name below is a static literal, and
+    // `name` is NUL-terminated.
     unsafe {
-        _nl_msg_cat_cntr += 1;
-
         // $LC_ALL would overrule everything set below.
         os_setenv(c"LC_ALL".as_ptr(), c"".as_ptr(), 1);
         if what != LC_TIME && what != LC_COLLATE {

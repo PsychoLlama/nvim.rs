@@ -83,9 +83,11 @@ unsafe extern "C" {
     /// `<time.h>`, absent from the `libc` crate.
     pub fn tzset();
 
-    /// GNU gettext's "the catalogue selection changed" counter. Bumping it
+    /// GNU gettext's "the catalogue selection changed" counter. Read through
+    /// [`catalogue_epoch`] and bumped through [`bump_catalogue_epoch`], which
     /// is how `:language` stops cached translations from being reused.
-    pub static mut _nl_msg_cat_cntr: ::core::ffi::c_int;
+    #[cfg(not(miri))]
+    static mut _nl_msg_cat_cntr: ::core::ffi::c_int;
 
     // The environment block and the two stdio streams. The `libc` crate
     // declares none of the three.
@@ -360,6 +362,19 @@ struct Interned {
     texts: ::std::collections::BTreeMap<Box<[u8]>, &'static ::core::ffi::CStr>,
 }
 
+/// Every string [`intern`] has ever handed out, under the `just miri` lane.
+///
+/// [`INTERNED`] is a *cache* over storage that is leaked on purpose: an entry
+/// dropped when the epoch moves is still live, because a reference to it may
+/// be sitting in `v:errmsg` or the message history. Miri's leak check works
+/// by reachability from statics, so without a root that says so it reports
+/// every such entry as leaked memory -- four of them, in this file's own
+/// tests. Holding them here states the lifetime the doc comment above claims,
+/// and keeps the leak check armed for the rest of the tree.
+#[cfg(miri)]
+static INTERNED_FOREVER: ::std::sync::Mutex<Vec<&'static ::core::ffi::CStr>> =
+    ::std::sync::Mutex::new(Vec::new());
+
 /// `text` as a string that outlives the process, interned per [`INTERNED`].
 fn intern(epoch: ::core::ffi::c_int, text: &::core::ffi::CStr) -> &'static ::core::ffi::CStr {
     let mut interned = INTERNED
@@ -373,15 +388,56 @@ fn intern(epoch: ::core::ffi::c_int, text: &::core::ffi::CStr) -> &'static ::cor
         return held;
     }
     let held: &'static ::core::ffi::CStr = Box::leak(text.to_owned().into_boxed_c_str());
+    #[cfg(miri)]
+    INTERNED_FOREVER
+        .lock()
+        .unwrap_or_else(::std::sync::PoisonError::into_inner)
+        .push(held);
     interned.texts.insert(text.to_bytes().into(), held);
     held
 }
 
+/// The `just miri` lane's stand-in for `_nl_msg_cat_cntr`.
+///
+/// Reading a foreign static is a thing Miri cannot do at all -- it has no
+/// glibc image to read it out of -- so the counter that bounds [`INTERNED`]
+/// and [`TEMPLATES`] is a Rust one under that lane. Its whole contract is
+/// "a number that changes when the catalogue selection can have changed",
+/// which a counter of our own satisfies exactly, and the lane ships no
+/// catalogues in any case.
+#[cfg(miri)]
+static MIRI_CATALOGUE_EPOCH: ::core::sync::atomic::AtomicI32 =
+    ::core::sync::atomic::AtomicI32::new(0);
+
 /// GNU gettext's catalogue-selection counter.
+#[cfg(not(miri))]
 fn catalogue_epoch() -> ::core::ffi::c_int {
     // SAFETY: a plain `int` glibc exports and only ever increments. Nvim is
     // single-threaded wherever messages are, as `GlobalCell` documents.
     unsafe { _nl_msg_cat_cntr }
+}
+
+/// Tell gettext, and this file's two caches, that the catalogue selection has
+/// changed -- what `:language` does so that cached translations are not
+/// reused.
+#[cfg(not(miri))]
+pub(crate) fn bump_catalogue_epoch() {
+    // SAFETY: as [`catalogue_epoch`] -- the same plain `int`, which nothing
+    // else in the process touches, incremented from the single thread
+    // messages live on.
+    unsafe { _nl_msg_cat_cntr += 1 };
+}
+
+/// [`catalogue_epoch`] over [`MIRI_CATALOGUE_EPOCH`].
+#[cfg(miri)]
+fn catalogue_epoch() -> ::core::ffi::c_int {
+    MIRI_CATALOGUE_EPOCH.load(::core::sync::atomic::Ordering::Relaxed)
+}
+
+/// [`bump_catalogue_epoch`] over [`MIRI_CATALOGUE_EPOCH`].
+#[cfg(miri)]
+pub(crate) fn bump_catalogue_epoch() {
+    MIRI_CATALOGUE_EPOCH.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed);
 }
 
 /// The translation of `msgid` in the current message catalogue -- C's `_()`.
@@ -527,7 +583,7 @@ pub(crate) fn ngettext(
 
 #[cfg(test)]
 mod gettext_tests {
-    use super::{_nl_msg_cat_cntr, catalogue_epoch, gettext, gettext_owned, intern, ngettext};
+    use super::{bump_catalogue_epoch, catalogue_epoch, gettext, gettext_owned, intern, ngettext};
     use core::ffi::CStr;
     use std::ffi::CString;
 
@@ -600,14 +656,17 @@ mod gettext_tests {
         let before = gettext(c"E32: No file name");
         let epoch_before = catalogue_epoch();
 
-        // SAFETY: `setlocale` with a NUL-terminated name; "C" always exists,
-        // and it is the locale the test lane already runs in -- the call is
-        // here for its catalogue-epoch side effect.
-        let ok = unsafe { ::libc::setlocale(::libc::LC_ALL, c"C".as_ptr()) };
-        assert!(!ok.is_null(), "the C locale is always available");
-        // SAFETY: `:language`'s own bump, spelled the same way -- a single
-        // increment of a counter nothing else in the process touches.
-        unsafe { _nl_msg_cat_cntr += 1 };
+        // Miri has no C library to call, and the call is here only for its
+        // catalogue-epoch side effect -- which the explicit bump below is.
+        #[cfg(not(miri))]
+        {
+            // SAFETY: `setlocale` with a NUL-terminated name; "C" always
+            // exists, and it is the locale the test lane already runs in.
+            let ok = unsafe { ::libc::setlocale(::libc::LC_ALL, c"C".as_ptr()) };
+            assert!(!ok.is_null(), "the C locale is always available");
+        }
+        // `:language`'s own bump, spelled the same way.
+        bump_catalogue_epoch();
 
         let after = gettext(c"E32: No file name");
         assert!(catalogue_epoch() > epoch_before, "the epoch moved");
