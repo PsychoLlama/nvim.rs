@@ -12,7 +12,7 @@
 use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::getchar::typeahead;
-use crate::guard::Suppress;
+use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::undo::UNDO_HASH_SIZE;
@@ -241,11 +241,11 @@ unsafe fn file_changed_shell(buf: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     // SAFETY: a static reason string of `len` bytes.
     unsafe { set_vim_var_string(Vv::FcsReason, name.as_ptr(), len) };
     unsafe { set_vim_var_string(Vv::FcsChoice, c"".as_ptr(), 0) };
-    allbuf_lock.set(allbuf_lock.get() + 1);
+    let locked = Lock::all_buffers();
     let fname = buf.b_fname;
     // SAFETY: a live buffer and its own file name.
     let handled = unsafe { apply_autocmds(EVENT_FILECHANGEDSHELL, fname, fname, false, buf.raw()) };
-    allbuf_lock.set(allbuf_lock.get() - 1);
+    drop(locked);
     BUSY.set(false);
 
     if !handled {

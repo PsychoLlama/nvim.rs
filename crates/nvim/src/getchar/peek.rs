@@ -24,6 +24,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::guard::Depth;
 use crate::keycodes::{Ctrl_C, key_escape};
 use crate::types::NUL;
 use crate::winlayer::Win;
@@ -500,7 +501,7 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
     if vgetc_busy.get() > 0 && ex_normal_busy.get() == 0 {
         return NUL;
     }
-    vgetc_busy.set(vgetc_busy.get() + 1);
+    let _busy = Depth::of(&vgetc_busy);
 
     if advance {
         KeyStuffed.set(0);
@@ -577,7 +578,6 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
         unsafe { gotchars_ignore() };
     }
 
-    vgetc_busy.set(vgetc_busy.get() - 1);
     c
 }
 

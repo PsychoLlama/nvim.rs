@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -230,7 +231,7 @@ pub unsafe fn eval_call_provider(
     };
     // SAFETY: `funccal_entry` is this frame's and outlives the save.
     unsafe { save_funccal(&raw mut funccal_entry) };
-    provider_call_nesting.set(provider_call_nesting.get() + 1);
+    let nesting = Depth::of(&provider_call_nesting);
 
     let mut argvars: [typval_T; 3] = [
         typval_T {
@@ -265,7 +266,7 @@ pub unsafe fn eval_call_provider(
     // SAFETY: this undoes the save above.
     unsafe { restore_funccal() };
     provider_caller_scope.set(saved_provider_caller_scope);
-    provider_call_nesting.set(provider_call_nesting.get() - 1);
+    drop(nesting);
     debug_assert!(provider_call_nesting.get() >= 0);
 
     if discard {

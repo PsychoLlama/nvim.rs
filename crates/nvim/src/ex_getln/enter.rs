@@ -12,7 +12,7 @@ use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::drawscreen::windows_in_curtab;
 use crate::getchar::typeahead;
-use crate::guard::Allow;
+use crate::guard::{Allow, Depth};
 use crate::message::emsg_ptr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
@@ -195,7 +195,7 @@ pub(crate) unsafe fn command_line_enter(
 ) -> *mut uint8_t {
     // Can be invoked recursively; identify each level.
     static cmdline_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    cmdline_level.set(cmdline_level.get() + 1);
+    let level = Depth::of(&cmdline_level);
 
     let save_cmdpreview = cmdpreview.get();
     cmdpreview.set(false);
@@ -532,7 +532,7 @@ pub(crate) unsafe fn command_line_enter(
         unsafe { status_redraw_all() }; // redraw to show the mode change
     }
 
-    cmdline_level.set(cmdline_level.get() - 1);
+    drop(level);
 
     // The text leaves the command line here, which is what C's
     // `ccline.cmdbuff = NULL` meant. It has to come before the resume:

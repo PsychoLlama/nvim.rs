@@ -15,6 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -233,7 +234,7 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
 
     let baselnum = cur_win().w_cursor.lnum;
     let _ = unsafe { ml_replace(baselnum, newp, false) };
-    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    let splice = Suppress::splice();
     if !after_p.is_null() {
         let len = after_p_len as colnr_T;
         let _ = unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
@@ -242,7 +243,7 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
         oap.end.lnum += 1;
         unsafe { xfree(after_p as *mut c_void) };
     }
-    curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+    drop(splice);
     let old_bytes = bd.textlen as bcount_t;
     let new_bytes = (newrows + newcols) as bcount_t;
     let row = baselnum as c_int - 1;

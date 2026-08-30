@@ -11,6 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::getchar::typeahead;
+use crate::guard::Lock;
 use crate::keycodes::{Ctrl_H, Ctrl_RSB, Ctrl_V, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
@@ -248,7 +249,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
 
     // Forbid changing text or using ":normal", which rules out most of the bad
     // side effects, and restore the cursor position afterwards.
-    expr_map_lock.set(expr_map_lock.get() + 1);
+    let locked = Lock::expr_map();
     // SAFETY: sets `v:char`, which is a plain vim variable.
     unsafe { set_vim_var_char(c) }; // set v:char to the typed character
     // SAFETY: the caller's promise — `curwin` is a live window.
@@ -293,7 +294,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
         }
     }
 
-    expr_map_lock.set(expr_map_lock.get() - 1);
+    drop(locked);
     // SAFETY: `curwin` is live again — the evaluation above cannot close the
     // last window, and `w_cursor` is restored into whatever it now names.
     unsafe { (*curwin.get()).w_cursor = save_cursor };

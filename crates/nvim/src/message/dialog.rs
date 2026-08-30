@@ -314,12 +314,11 @@ unsafe fn copy_confirm_hotkeys(
 /// Only that [`confirm_msg`] is null or a valid C string.
 pub(crate) unsafe fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
-    confirm_msg_used.set(confirm_msg_used.get() + 1);
+    let _in_use = Suppress::counter(&confirm_msg_used);
     if !confirm_msg.get().is_null() {
         unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
         unsafe { msg_puts_hl(confirm_msg.get(), HLF_M, false) };
     }
-    confirm_msg_used.set(confirm_msg_used.get() - 1);
 }
 
 /// A yes/no dialog.

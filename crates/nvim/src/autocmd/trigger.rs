@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::types::{Failed, OptionSetFlags};
@@ -445,7 +446,7 @@ pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
 
     let secure_save = secure.get();
     secure.set(0);
-    ft_recursive.set(ft_recursive.get() + 1);
+    let ft_recursing = Depth::of(&ft_recursive);
 
     buf.b_did_filetype = true;
     // SAFETY: `b_p_ft` and `b_fname` are that buffer's own NUL-terminated
@@ -460,7 +461,7 @@ pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
         )
     };
 
-    ft_recursive.set(ft_recursive.get() - 1);
+    drop(ft_recursing);
     secure.set(secure_save);
     ret
 }

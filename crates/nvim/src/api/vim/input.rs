@@ -14,6 +14,7 @@ use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::api_error;
 use crate::cstr;
 use crate::getchar::typeahead;
+use crate::guard::Depth;
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
@@ -87,13 +88,9 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
     if execute {
         let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
         msg_scroll.set(0);
-        if !dangerous {
-            ex_normal_busy.set(ex_normal_busy.get() + 1);
-        }
+        let busy = (!dangerous).then(|| Depth::of(&ex_normal_busy));
         unsafe { exec_normal(true, lowlevel) };
-        if !dangerous {
-            ex_normal_busy.set(ex_normal_busy.get() - 1);
-        }
+        drop(busy);
         msg_scroll.set(msg_scroll.get() | save_msg_scroll);
     }
 }

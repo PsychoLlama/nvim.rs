@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::guard::Suppress;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -363,7 +364,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
 
     // The four edits below are one splice as far as extmarks and the
     // buffer-update RPC are concerned.
-    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    let splice = Suppress::splice();
 
     let mut t = last;
     loop {
@@ -428,7 +429,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     cur_win().w_cursor.lnum += 1;
     unsafe { del_lines(count as linenr_T - 1, false) };
     cur_win().w_cursor.lnum = joined_lnum;
-    curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+    drop(splice);
     cur_buf().deleted_bytes2 = 0;
 
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*

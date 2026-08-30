@@ -41,7 +41,7 @@ use crate::ex_eval::{
 use crate::ex_getln::{getexline, ui_ext_cmdline_block_leave};
 
 use crate::garray::{ga_clear, ga_init};
-use crate::guard::{Bump, Suppress};
+use crate::guard::{Bump, Depth, Suppress};
 use crate::main::{
     KeyTyped, check_cstack, current_exception, debug_break_level, debug_tick, did_emsg,
     did_emsg_syntax, did_endif, did_throw, do_profiling, e_command_too_recursive, e_endfor,
@@ -422,7 +422,7 @@ pub unsafe fn do_cmdline(
         // Run one `|`-separated command. `cmdline_copy` can change
         // under this call — `%` and `#` expansion reallocate it — and
         // the answer is null when nothing followed a `|`.
-        RECURSIVE.set(RECURSIVE.get() + 1);
+        let recursing = Depth::of(&RECURSIVE);
         next_cmdline = unsafe {
             do_one_cmd(
                 &raw mut cmdline_copy,
@@ -432,7 +432,7 @@ pub unsafe fn do_cmdline(
                 cmd_cookie,
             )
         };
-        RECURSIVE.set(RECURSIVE.get() - 1);
+        drop(recursing);
 
         if cmd_cookie == &raw mut cmd_loop_cookie as *mut c_void {
             // Defining a function reads further lines through the loop

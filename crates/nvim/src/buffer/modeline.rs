@@ -22,6 +22,7 @@ use super::*;
 use crate::ascii::ascii_isspace;
 use crate::charset::try_getdigits;
 use crate::global_cell::GlobalCell;
+use crate::guard::Depth;
 use crate::main::{current_sctx, p_mls, secure};
 use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
@@ -119,7 +120,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
     if entered.get() != 0 {
         return;
     }
-    entered.set(entered.get() + 1);
+    let _entered = Depth::of(&entered);
 
     let mut lnum: linenr_T = 1;
     while current_buf().b_p_ml != 0
@@ -143,7 +144,6 @@ pub fn do_modelines(flags: OptionSetFlags) {
         }
         lnum -= 1;
     }
-    entered.set(entered.get() - 1);
 }
 
 /// Check one line for a mode string, and apply it. `Err` when an error was

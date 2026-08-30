@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::guard::Depth;
 use crate::message_fmt::{c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
@@ -134,7 +135,7 @@ pub unsafe fn tv_item_lock(
     if deep == 0 {
         return;
     }
-    recurse.set(recurse.get() + 1);
+    let _recurse = Depth::of(&recurse);
 
     // lock/unlock the item itself
     unsafe { (*tv).v_lock = (*tv).v_lock.changed(lock) };
@@ -184,8 +185,6 @@ pub unsafe fn tv_item_lock(
         VAR_UNKNOWN => unsafe { abort() },
         _ => {}
     }
-
-    recurse.set(recurse.get() - 1);
 }
 
 /// Whether `tv` is locked, either itself or as the container it names.
@@ -296,21 +295,18 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
     // The three container arms bracket their call with the depth counter.
     // Written out rather than folded into a helper taking a closure: this
     // runs once per item of a list or dict comparison, and a `dyn FnMut`
-    // there would be an indirect call on a measured phase.
+    // there would be an indirect call on a measured phase. [`Depth`] costs
+    // nothing extra -- it is the same two `set`s, moved onto the scope.
     // SAFETY: the caller's promise: two live typvals.
     let (a, b) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
     match a.v_type {
         VAR_LIST => {
-            recursive_cnt.set(recursive_cnt.get() + 1);
-            let r = unsafe { tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic) };
-            recursive_cnt.set(recursive_cnt.get() - 1);
-            r
+            let _recursing = Depth::of(&recursive_cnt);
+            unsafe { tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic) }
         }
         VAR_DICT => {
-            recursive_cnt.set(recursive_cnt.get() + 1);
-            let r = unsafe { tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic) };
-            recursive_cnt.set(recursive_cnt.get() - 1);
-            r
+            let _recursing = Depth::of(&recursive_cnt);
+            unsafe { tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic) }
         }
         VAR_PARTIAL | VAR_FUNC => {
             if (a.v_type == VAR_PARTIAL && a.partial().is_null())
@@ -318,10 +314,8 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             {
                 return false;
             }
-            recursive_cnt.set(recursive_cnt.get() + 1);
-            let r = unsafe { func_equal(tv1, tv2, ic) };
-            recursive_cnt.set(recursive_cnt.get() - 1);
-            r
+            let _recursing = Depth::of(&recursive_cnt);
+            unsafe { func_equal(tv1, tv2, ic) }
         }
         VAR_BLOB => unsafe { tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob) },
         VAR_NUMBER => a.number() == b.number(),

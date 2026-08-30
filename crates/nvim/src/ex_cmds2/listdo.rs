@@ -29,7 +29,8 @@ use crate::autocmd::{
 };
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::main::{curbuf, curwin, got_int, listcmd_busy, msg_listdo_overwrite, prevwin};
+use crate::guard::Suppress;
+use crate::main::{curbuf, curwin, got_int, listcmd_busy, prevwin};
 use crate::mark::setpcmark;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
@@ -102,7 +103,7 @@ pub(crate) unsafe fn ex_listdo(eap: *mut exarg_T) {
 
     // Temporarily override ShmFlag::OVER and ShmFlag::OVERALL so that a file message
     // does not overwrite output from the command.
-    msg_listdo_overwrite.set(msg_listdo_overwrite.get() + 1);
+    let keep_messages = Suppress::message_overwrite();
 
     // Don't run Syntax autocommands: skipping the syntax file is a large
     // speed improvement.
@@ -130,7 +131,7 @@ pub(crate) unsafe fn ex_listdo(eap: *mut exarg_T) {
         unsafe { listdo_walk(eap, list) };
     }
 
-    msg_listdo_overwrite.set(msg_listdo_overwrite.get() - 1);
+    drop(keep_messages);
     if !save_ei.is_null() {
         // SAFETY: `save_ei` is what `au_event_disable` returned.
         unsafe { restore_syntax_events(save_ei) };

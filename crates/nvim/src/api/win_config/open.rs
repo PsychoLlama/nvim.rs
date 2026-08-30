@@ -12,6 +12,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::buffer::BufRef;
+use crate::guard::Suppress;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win};
@@ -225,20 +226,13 @@ pub unsafe fn nvim_open_win(
         // is what says the autocommands above did not close it.
         let other_buf = !tp.is_null() && bufref.valid() && b != unsafe { (*wp).w_buffer };
         if other_buf {
-            let au_no_enter_leave: bool = curwin.get() != wp && !noautocmd;
-            if au_no_enter_leave {
-                autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-                autocmd_no_leave.set(autocmd_no_leave.get() + 1);
-            }
+            let quiet = (curwin.get() != wp && !noautocmd).then(Suppress::win_enter_leave_autocmds);
             // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
             unsafe { win_set_buf(wp, b, &mut error) };
             if !noautocmd {
                 tp = win_find_tabpage(wp);
             }
-            if au_no_enter_leave {
-                autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-                autocmd_no_leave.set(autocmd_no_leave.get() - 1);
-            }
+            drop(quiet);
         }
         if tp.is_null() {
             error.clear();

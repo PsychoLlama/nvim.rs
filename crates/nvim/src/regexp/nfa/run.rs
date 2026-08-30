@@ -6,6 +6,7 @@
 
 use super::list::{op, out_of, out1_of};
 use crate::cstr;
+use crate::guard::Depth;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
 
@@ -225,23 +226,25 @@ pub(crate) fn recursive_regmatch(
     // Two generations of list ids are available. The first nested match
     // takes the second; a deeper one has to save and restore instead.
     let need_restore = nfa_ll_index.get() == 1;
-    if need_restore {
+    let generation = if need_restore {
         listids.clear();
         listids.resize(unsafe { (*prog).nstate } as usize, 0);
         nfa_save_listids(prog, listids);
+        None
     } else {
-        nfa_ll_index.set(nfa_ll_index.get() + 1);
+        let held = Depth::of(&nfa_ll_index);
         if rex.nfa_listid() <= rex.nfa_alt_listid() {
             rex.set_nfa_listid(rex.nfa_alt_listid());
         }
-    }
+        Some(held)
+    };
 
     nfa_endp.set(endposp);
     let result = nfa_regmatch(rex, prog, out_of(state), submatch, m);
     if need_restore {
         nfa_restore_listids(prog, listids);
     } else {
-        nfa_ll_index.set(nfa_ll_index.get() - 1);
+        drop(generation);
         rex.set_nfa_alt_listid(rex.nfa_listid());
     }
 

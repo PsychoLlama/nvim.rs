@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -396,10 +397,11 @@ pub(crate) fn peekchr() -> c_int {
                 prev_at_start.set(at_start.get());
                 at_start.set(0);
                 pat_seek(1);
-                AFTER_SLASH.set(AFTER_SLASH.get() + 1);
-                peekchr();
+                {
+                    let _after_slash = Depth::of(&AFTER_SLASH);
+                    peekchr();
+                }
                 pat_seek(-1);
-                AFTER_SLASH.set(AFTER_SLASH.get() - 1);
                 curchr.set(toggle_magic(curchr.get()));
             } else if is_abbr(c) {
                 curchr.set(backslash_abbr(c as c_int));

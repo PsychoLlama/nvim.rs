@@ -17,9 +17,10 @@ use crate::autocmd::is_aucmd_win;
 use crate::ex_cmds2::autowrite;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
+use crate::guard::Suppress;
 use crate::main::{
-    Columns, Rows, autocmd_no_enter, autocmd_no_leave, cmdmod, got_int, jop_flags, p_ch, p_ea,
-    p_tpm, swap_exists_action, swap_exists_did_quit,
+    Columns, Rows, cmdmod, got_int, jop_flags, p_ch, p_ea, p_tpm, swap_exists_action,
+    swap_exists_did_quit,
 };
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
@@ -218,10 +219,10 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     // for autocommands that delete buffers or windows.
     //
     // Don't execute Win/Buf Enter/Leave autocommands here.
-    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
+    let no_enter = Suppress::win_enter_autocmds();
     // `lastwin` may be the autocommand window.
     enter_win(last_nofloat());
-    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    let no_leave = Suppress::win_leave_autocmds();
 
     for b in buffers() {
         if (open_wins as linenr_T) >= count {
@@ -232,10 +233,12 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
         }
     }
 
-    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+    // The release order is load-bearing: the window entered below fires
+    // `WinEnter`/`BufEnter` but still no `WinLeave`/`BufLeave`.
+    drop(no_enter);
     // Back to the first window.
     enter_win(first_win().raw());
-    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+    drop(no_leave);
 
     close_extra_windows(count, &mut open_wins);
 }

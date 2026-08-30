@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::guard::{Allow, Lock, Suppress};
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
 use crate::types::Failed;
@@ -282,7 +283,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
         );
     }
     // Moving tab pages around in an autocommand may cause an endless loop.
-    tabpage_move_disallowed.set(tabpage_move_disallowed.get() + 1);
+    let _no_move = Lock::tabpage_move();
     loop {
         // SAFETY: caller contract; curtab is valid, and `tpnext` is
         // re-validated below because closing windows runs autocommands.
@@ -302,7 +303,6 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
         };
         goto_tab(tpnext, true, true);
     }
-    tabpage_move_disallowed.set(tabpage_move_disallowed.get() - 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -356,14 +356,20 @@ unsafe fn open_window_for_arg(
     tab_drop_empty_window: bool,
 ) -> Result<(), Failed> {
     // Trigger the events for a tab drop.
+    //
+    // Both lifts are guards: the `Err` return below sits between the C's
+    // decrement and its matching increment, so a failed split left the
+    // enclosing `do_arg_all`'s suppression one short for the rest of the
+    // session.
     let tab_drop_last = tab_drop_empty_window && i == count - 1;
-    if tab_drop_last {
-        autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-    }
-    if aall.use_firstwin {
+    let _enter = tab_drop_last.then(Allow::win_enter_autocmds);
+    let _leave = if aall.use_firstwin {
         // The first window: run the autocommands for leaving its buffer.
-        autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+        Some(Allow::win_leave_autocmds())
     } else {
+        None
+    };
+    if !aall.use_firstwin {
         // Split the current window, taking space from all of them.
         let p_ea_save = p_ea.get() != 0;
         p_ea.set(c_int::from(true));
@@ -391,12 +397,6 @@ unsafe fn open_window_for_arg(
     let eap2 = ptr::null_mut();
     let newlnum = ECMD_ONE as linenr_T;
     let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
-    if tab_drop_last {
-        autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-    }
-    if aall.use_firstwin {
-        autocmd_no_leave.set(autocmd_no_leave.get() + 1);
-    }
     aall.use_firstwin = false;
     Ok(())
 }
@@ -503,8 +503,8 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
         count
     };
     // Don't run the Win/Buf Enter/Leave autocommands here.
-    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    let no_enter = Suppress::win_enter_autocmds();
+    let no_leave = Suppress::win_leave_autocmds();
     let last_curwin = curwin.get();
     let last_curtab = curtab.get();
     // SAFETY: lastwin may be aucmd_win, which `lastwin_nofloating` skips.
@@ -513,7 +513,9 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // Remove the "lock" on the argument list.
     unsafe { alist_unlink(aall.alist) };
     ARGLIST_LOCKED.set(prev_arglist_locked);
-    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+    // The release order is load-bearing: the windows entered below fire
+    // `WinEnter`/`BufEnter` but still no `WinLeave`/`BufLeave`.
+    drop(no_enter);
     // SAFETY: every window and tab page recorded above is checked for still
     // being live before it is entered.
     // Restore the last referenced tab page's current window.
@@ -536,7 +538,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     if win_valid(aall.new_curwin) {
         unsafe { win_enter(aall.new_curwin, false) };
     }
-    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+    drop(no_leave);
     // SAFETY: `opened` is this frame's allocation and nothing refers to it.
     unsafe { xfree(aall.opened as *mut c_void) };
 }

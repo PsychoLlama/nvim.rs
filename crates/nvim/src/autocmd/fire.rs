@@ -22,7 +22,7 @@
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
-use crate::guard::{Script, Suppress};
+use crate::guard::{Depth, Script, Suppress};
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -384,8 +384,7 @@ pub unsafe fn apply_autocmds_group(
         // Some commands need to know autocommands are running.
         autocmd_busy.set(true);
         filechangeshell_busy.set(event == EVENT_FILECHANGEDSHELL);
-        // See the matching decrement below.
-        nesting.set(nesting.get() + 1);
+        let nested = Depth::of(&nesting);
 
         // Remembered for `did_filetype()`.
         if event == EVENT_FILETYPE {
@@ -503,8 +502,8 @@ pub unsafe fn apply_autocmds_group(
         KeyTyped.set(save_KeyTyped);
         unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
         unsafe { xfree(sfname.cast::<::core::ffi::c_void>()) };
-        // See the matching increment above.
-        nesting.set(nesting.get() - 1);
+        // The handlers below run at the enclosing level, not this one.
+        drop(nested);
 
         // The outermost firing puts the search patterns and the redo
         // buffer back, and frees what the handlers deferred.

@@ -27,7 +27,7 @@ use crate::garray::{
     ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, emsg_silent, got_int, p_cdpath, p_fic, p_path, p_su, p_wig};
+use crate::main::{curbuf, got_int, p_cdpath, p_fic, p_path, p_su, p_wig};
 use crate::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };

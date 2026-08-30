@@ -9,7 +9,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
-use crate::guard::Keys;
+use crate::guard::{Keys, Suppress};
 use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -211,16 +211,12 @@ pub(crate) unsafe fn getchar_common(
         ui_busy_start();
     }
     let raw_key = Keys::unmapped_with_codes();
-    if !opts.simplify {
-        no_reduce_keys.set(no_reduce_keys.get() + 1);
-    }
+    let unsimplified = (!opts.simplify).then(|| Suppress::counter(&no_reduce_keys));
 
     let n = unsafe { getchar_read(argvars, opts.cursor) };
 
     drop(raw_key);
-    if !opts.simplify {
-        no_reduce_keys.set(no_reduce_keys.get() - 1);
-    }
+    drop(unsimplified);
     if opts.cursor == CursorFlag::Hide {
         ui_busy_stop();
     }

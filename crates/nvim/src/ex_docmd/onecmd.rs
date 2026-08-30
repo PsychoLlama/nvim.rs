@@ -50,6 +50,7 @@ use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
 use crate::fold::has_folding;
+use crate::guard::Depth;
 use crate::input::ask_yesno;
 use crate::main::{
     check_cstack, cmdwin_type, did_emsg, did_emsg_syntax, did_throw, do_profiling, e_argreq,
@@ -199,7 +200,7 @@ pub(crate) unsafe fn do_one_cmd(
     let save_reg_executing = reg_executing.get();
     let save_pending_end_reg_executing = pending_end_reg_executing.get();
     let mut ea = fresh_exarg();
-    ex_nesting_level.set(ex_nesting_level.get() + 1);
+    let nesting = Depth::of(&ex_nesting_level);
 
     // When the last file has not been edited `:q` has to be typed twice.
     // A `'statusline'` function call and an autocommand (QuitPre) both
@@ -606,7 +607,7 @@ pub(crate) unsafe fn do_one_cmd(
         ea.nextcmd = ptr::null_mut();
     }
 
-    ex_nesting_level.set(ex_nesting_level.get() - 1);
+    drop(nesting);
     xfree(ea.cmdline_tofree as *mut c_void);
 
     ea.nextcmd

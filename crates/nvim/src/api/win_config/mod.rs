@@ -14,8 +14,8 @@ use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_w
 use crate::ex_docmd::expr_map_locked;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::main::{
-    autocmd_no_enter, autocmd_no_leave, cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type,
-    cmdwin_win, curbuf, curtab, curwin, e_cmdwin, e_textlock, p_sb, p_spr, p_winborder, textlock,
+    cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
+    e_cmdwin, e_textlock, p_sb, p_spr, p_winborder, textlock,
 };
 use crate::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::memory::{strequal, xstrdup};

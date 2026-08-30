@@ -16,7 +16,8 @@ use crate::api::private::helpers::{
 use crate::api::vim::nvim_get_current_win;
 
 use crate::api_error;
-use crate::main::{autocmd_no_enter, autocmd_no_leave, cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
+use crate::guard::Suppress;
+use crate::main::{cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
 use crate::narrow::number_as_int;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object, String_0,
@@ -233,17 +234,9 @@ pub unsafe fn nvim_open_tabpage(
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.
-        let au_no_enter_leave = curwin.get() != w.raw();
-        // SAFETY: the two counters are the editor's own `int` globals.
-        if au_no_enter_leave {
-            autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-            autocmd_no_leave.set(autocmd_no_leave.get() + 1);
-        }
+        let quiet = (curwin.get() != w.raw()).then(Suppress::win_enter_leave_autocmds);
         unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
-        if au_no_enter_leave {
-            autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-            autocmd_no_leave.set(autocmd_no_leave.get() - 1);
-        }
+        drop(quiet);
         if !valid_tabpage(tp.raw()) {
             return Err(tabpage_closed(err));
         }

@@ -433,7 +433,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // Block error reporting (the command may be incomplete), but
         // still update v:errmsg; block messages, namely ones that prompt;
         // block events.
-        emsg_silent.set(emsg_silent.get() + 1);
+        let errors_silent = Suppress::emsg_silent();
         let silenced = Suppress::messages();
         unsafe { block_autocmds() };
 
@@ -501,7 +501,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         unsafe { unblock_autocmds() };
         drop(silenced);
-        emsg_silent.set(emsg_silent.get() - 1);
+        drop(errors_silent);
         unsafe { redrawcmdline() };
     }
 

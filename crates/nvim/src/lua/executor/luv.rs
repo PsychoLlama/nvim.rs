@@ -20,6 +20,7 @@ use crate::api::private::helpers::api_free_array;
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::ERROR_INIT;
+use crate::guard::Depth;
 use crate::lua::converter::{kNluaPushSpecial, nlua_pop_array, nlua_push_array};
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_REGISTRYINDEX, LUA_TBOOLEAN, LUA_TTABLE, lua_close, lua_concat, lua_error,
@@ -54,10 +55,10 @@ pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
     flags: c_int,
 ) -> c_int {
     unsafe {
-        in_fast_callback.set(in_fast_callback.get() + 1);
+        let _fast = Depth::of(&in_fast_callback);
         let top = lua_gettop(lstate);
         let status = nlua_pcall(lstate, nargs, nresult);
-        let retval = if status != 0 {
+        if status != 0 {
             if status == LUA_ERRMEM && flags & LUVF_CALLBACK_NOEXIT == 0 {
                 preserve_exit(e_outofmem.as_ptr());
             }
@@ -74,9 +75,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_fast_cfpcall(
                 nresult = lua_gettop(lstate) - top + nargs + 1;
             }
             nresult
-        };
-        in_fast_callback.set(in_fast_callback.get() - 1);
-        retval
+        }
     }
 }
 

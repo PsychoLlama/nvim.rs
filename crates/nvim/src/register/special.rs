@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Depth;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -78,11 +79,11 @@ pub unsafe fn get_expr_line() -> *mut c_char {
     if nested.get() >= 10 {
         return expr_copy;
     }
-    nested.set(nested.get() + 1);
+    let nesting = Depth::of(&nested);
     // SAFETY: running Vimscript is the caller's promise, and `expr_copy` is a
     // NUL-terminated string this call owns for the duration.
     let rv = unsafe { eval_to_string(expr_copy, true, false) };
-    nested.set(nested.get() - 1);
+    drop(nesting);
     // SAFETY: `expr_copy` is ours and `eval_to_string` kept no pointer to it.
     unsafe { xfree(expr_copy as *mut c_void) };
     rv

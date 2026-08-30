@@ -18,10 +18,10 @@ use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
+use crate::guard::Suppress;
 use crate::input::prompt_for_input;
 use crate::main::{
-    Rows, cmdline_row, cmdline_star, e_invarg, got_int, lines_left, mouse_row, msg_row, msg_scroll,
-    p_verbose,
+    Rows, cmdline_row, e_invarg, got_int, lines_left, mouse_row, msg_row, msg_scroll, p_verbose,
 };
 use crate::memory::xstrdup;
 use crate::message::{
@@ -156,10 +156,10 @@ pub unsafe fn f_inputdialog(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
-    cmdline_star.set(cmdline_star.get() + 1);
+    let secret = Suppress::cmdline_echo();
     INPUTSECRET.set(true);
     unsafe { f_input(argvars, rettv, fptr) };
-    cmdline_star.set(cmdline_star.get() - 1);
+    drop(secret);
     INPUTSECRET.set(false);
 }
 

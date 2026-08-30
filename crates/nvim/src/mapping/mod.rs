@@ -42,9 +42,8 @@ use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
 use crate::main::{
-    State, curbuf, current_sctx, curwin, e_invarg, e_noabbr, e_nomap, expr_map_lock, got_int,
-    langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent, no_abbr, p_cpo, p_langmap,
-    p_verbose, secure,
+    State, curbuf, current_sctx, curwin, e_invarg, e_noabbr, e_nomap, got_int, langmap_mapchar,
+    mapped_ctrl_c, msg_col, msg_row, msg_silent, no_abbr, p_cpo, p_langmap, p_verbose, secure,
 };
 use crate::mbyte::{
     mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,

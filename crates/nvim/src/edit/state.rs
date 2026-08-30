@@ -26,7 +26,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::guard::Keys;
+use crate::guard::{Keys, Suppress};
 use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
 use crate::r#move::WinValid;
 use crate::types::NUL;
@@ -637,13 +637,13 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 pub(crate) fn insert_do_complete(s: &mut InsertState) {
     compl_busy.set(true);
     // Folds must not be updated while the popup menu is being built.
-    disable_fold_update.set(disable_fold_update.get() + 1);
+    let folds_frozen = Suppress::fold_update();
     // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all the
     // completion machine and 'smartindent' ask for.
     if unsafe { ins_complete(s.c, true) }.is_err() {
         compl_status_clear();
     }
-    disable_fold_update.set(disable_fold_update.get() - 1);
+    drop(folds_frozen);
     compl_busy.set(false);
     can_si.set(unsafe { may_do_si() });
 }

@@ -16,6 +16,7 @@ use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
+use crate::guard::Lock;
 use crate::main::{cmdline_win, first_tabpage, lastused_tabpage, p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
 use crate::types::{frame_T, tabpage_T, win_T};
@@ -94,7 +95,7 @@ fn remove(
         return (None, 0);
     };
     let frp_close = win.frame();
-    frame_locked.set(frame_locked.get() + 1);
+    let _locked = Lock::held(&frame_locked);
 
     // Save the position of the containing frame (which will also contain the
     // altframe) before we remove anything, to recompute window positions later.
@@ -127,7 +128,6 @@ fn remove(
         None => flatten(altfr),
         Some(slot) => *slot = altfr.raw(),
     }
-    frame_locked.set(frame_locked.get() - 1);
     (Some(alt.win), alt.dir)
 }
 

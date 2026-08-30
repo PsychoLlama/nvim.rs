@@ -16,7 +16,8 @@ use crate::cursor::check_pos;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
 use crate::fold::fold_move_range;
-use crate::main::{curbuf, curwin, disable_fold_update, global_busy, p_report};
+use crate::guard::Suppress;
+use crate::main::{curbuf, curwin, global_busy, p_report};
 use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
 use crate::memory::xfree;
@@ -230,10 +231,8 @@ fn last_moved_line(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> linenr_T
 /// `changed_lines` calls that only shuffle line numbers past each other must
 /// not have a fold update run over the half-moved buffer.
 fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
-    disable_fold_update.set(disable_fold_update.get() + 1);
-    let result = f();
-    disable_fold_update.set(disable_fold_update.get() - 1);
-    result
+    let _frozen = Suppress::fold_update();
+    f()
 }
 
 /// Move the folds of `line1`..`line2` to `dest` in every window showing the

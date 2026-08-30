@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
@@ -266,12 +267,11 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
         };
     }
 
-    RECURSIVE.set(RECURSIVE.get() + 1);
+    let _recursing = Depth::of(&RECURSIVE);
     let l = unsafe { (*list_arg).vval.v_list };
     if unsafe { set_errorlist(wp, l, action as c_int, title.cast_mut(), what) }.is_ok() {
         unsafe { (*rettv).vval.v_number = 0 };
     }
-    RECURSIVE.set(RECURSIVE.get() - 1);
 }
 
 /// `setloclist({winnr}, {list} [, {action} [, {what}]])`.

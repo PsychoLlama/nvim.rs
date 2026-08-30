@@ -20,6 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -451,7 +452,7 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     // Save the deleted and changed lines for undo.
     u_save(above, past)?;
 
-    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    let splice = Suppress::splice();
     let startpos = cur_win().w_cursor;
     let (lnum, col) = (startpos.lnum, startpos.col);
     let buf = cur_buf();
@@ -473,7 +474,7 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
 
     cur_win().w_cursor = curpos;
     let _ = unsafe { do_join(2, false, false, false, false) };
-    curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+    drop(splice);
 
     let rows = oap.line_count as c_int - 1;
     let row = startpos.lnum as c_int - 1;

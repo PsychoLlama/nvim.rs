@@ -65,7 +65,7 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, msg_col, msg_didany, msg_didout, msg_row,
-    no_check_timestamps, p_aw, p_awa, p_confirm, p_write, vgetc_busy,
+    p_aw, p_awa, p_confirm, p_write, vgetc_busy,
 };
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
@@ -782,8 +782,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
-    let save_no_check_timestamps = no_check_timestamps.get();
-    no_check_timestamps.set(0);
+    let _checked = Allow::timestamp_checks();
     // SAFETY: module contract.
     if unsafe { (*eap).addr_count } == 0 {
         // The default is all buffers.
@@ -794,7 +793,6 @@ pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
             unsafe { buf_check_timestamp(buf) };
         }
     }
-    no_check_timestamps.set(save_no_check_timestamps);
 }
 
 /// `:drop`: open the first argument in a window, redefining the argument

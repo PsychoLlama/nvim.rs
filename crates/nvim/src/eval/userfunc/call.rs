@@ -12,7 +12,7 @@
 use crate::cstr;
 use crate::eval::Parsed;
 use crate::ex_docmd::DoCmdOpts;
-use crate::guard::{Lock, Suppress};
+use crate::guard::{Depth, Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
@@ -67,7 +67,7 @@ pub unsafe fn call_user_func(
         rv.vval.v_number = -1;
         return;
     }
-    depth.set(depth.get() + 1);
+    let call_depth = Depth::of(&depth);
 
     // Save the search patterns and the redo buffer.
     let mut save_redo = save_redo_T::default();
@@ -344,9 +344,8 @@ pub unsafe fn call_user_func(
         // A lambda's body is one line, "return <expr>"; evaluate the
         // expression straight rather than going through `do_cmdline`.
         let mut p = unsafe { ga_strings(&f.uf_lines)[0].add(c"return ".count_bytes()) };
-        ex_nesting_level.set(ex_nesting_level.get() + 1);
+        let _nesting = Depth::of(&ex_nesting_level);
         let _ = unsafe { eval1(&raw mut p, rettv, &raw mut evalarg) };
-        ex_nesting_level.set(ex_nesting_level.get() - 1);
     } else {
         // Call do_cmdline() to execute the lines.
         type Getline = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
@@ -444,7 +443,8 @@ pub unsafe fn call_user_func(
     }
 
     did_emsg.set(did_emsg.get() | save_did_emsg);
-    depth.set(depth.get() - 1);
+    // The tear-down below is the caller's depth, not this call's.
+    drop(call_depth);
     for tv in &tv_to_free[..tv_to_free_len] {
         unsafe { tv_clear(*tv) };
     }

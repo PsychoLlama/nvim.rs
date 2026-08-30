@@ -41,6 +41,7 @@ use crate::eval::typval::{
     tv_list_append_dict, tv_list_append_string,
 };
 use crate::global_cell::GlobalCell;
+use crate::guard::Lock;
 use crate::main::{State, curbuf, e_cannot_change_menus_while_listing, finish_op, root_menu};
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
@@ -176,10 +177,8 @@ pub(crate) fn is_menus_locked() -> bool {
 
 /// Holds the menu tree still for the duration of `f`.
 pub(crate) fn with_menus_locked<R>(f: impl FnOnce() -> R) -> R {
-    MENUS_LOCKED.set(MENUS_LOCKED.get() + 1);
-    let result = f();
-    MENUS_LOCKED.set(MENUS_LOCKED.get() - 1);
-    result
+    let _locked = Lock::held(&MENUS_LOCKED);
+    f()
 }
 
 // ---------------------------------------------------------------------------

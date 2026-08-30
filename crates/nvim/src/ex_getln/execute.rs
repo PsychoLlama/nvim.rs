@@ -11,7 +11,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::ex_docmd::DoCmdOpts;
-use crate::guard::{Keys, Lock};
+use crate::guard::{Keys, Lock, Suppress};
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
     Ctrl_Y, Ctrl_Z,
@@ -393,13 +393,10 @@ pub(crate) unsafe fn command_line_execute(
         || s.c == K_WILD
         || s.c == Ctrl_Z
     {
-        if s.c == K_WILD {
-            emsg_silent.set(emsg_silent.get() + 1); // silence the bell
-        }
+        // Silence the bell.
+        let quiet_bell = (s.c == K_WILD).then(Suppress::emsg_silent);
         let res = unsafe { command_line_wildchar_complete(s.raw()) };
-        if s.c == K_WILD {
-            emsg_silent.set(emsg_silent.get() - 1);
-        }
+        drop(quiet_bell);
         if res == KeyOutcome::Changed {
             return unsafe { command_line_changed(s) };
         }

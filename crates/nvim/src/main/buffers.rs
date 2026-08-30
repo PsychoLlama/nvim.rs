@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Suppress;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -30,10 +31,10 @@ use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
-    SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, autocmd_no_enter,
-    autocmd_no_leave, curbuf, curwin, did_emsg, got_int, kOptErrorfile, kOptShortmess,
-    kOptValTypeString, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls,
-    p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg,
+    got_int, kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
+    no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action,
+    swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -267,8 +268,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
     // Open a buffer for the windows that do not have one yet. Commands in
     // the vimrc may have loaded a file or split the window, and an
     // autocommand may delete one while we walk -- hence the rewind.
-    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    let quiet = Suppress::win_enter_leave_autocmds();
 
     let mut dorewind = true;
     let mut passes = 0;
@@ -335,8 +335,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
         curwin.set(first_win().raw());
     }
     curbuf.set(cur_win().w_buffer);
-    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
-    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+    drop(quiet);
 }
 
 /// Load the remaining file arguments into the windows [`create_windows`]
@@ -345,8 +344,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     // SAFETY: `parmp` is the caller's live parameter block; the window list
     // is global and `do_ecmd` may close windows through autocommands.
     let parm = unsafe { Mp::new(parmp) };
-    autocmd_no_enter.set(autocmd_no_enter.get() + 1);
-    autocmd_no_leave.set(autocmd_no_leave.get() + 1);
+    let no_enter = Suppress::win_enter_autocmds();
+    let no_leave = Suppress::win_leave_autocmds();
 
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
@@ -433,7 +432,9 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
     if parm.window_layout == WIN_TABS as c_int {
         goto_tabpage(1);
     }
-    autocmd_no_enter.set(autocmd_no_enter.get() - 1);
+    // The release order is load-bearing: entering the first non-preview
+    // window below fires `WinEnter`/`BufEnter` but still no `WinLeave`.
+    drop(no_enter);
 
     // Start in the first window that is not a preview.
     let mut win = first_win();
@@ -445,7 +446,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
         win = next;
     }
     unsafe { win_enter(win.raw(), false) };
-    autocmd_no_leave.set(autocmd_no_leave.get() - 1);
+    drop(no_leave);
 
     time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {

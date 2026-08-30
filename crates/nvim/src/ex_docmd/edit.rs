@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::guard::Depth;
 use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -675,7 +676,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     }
 
     let arg = unsafe { escape_k_special(eap.arg) };
-    ex_normal_busy.set(ex_normal_busy.get() + 1);
+    let busy = Depth::of(&ex_normal_busy);
     let mut save_state = save_state_T::default();
     if unsafe { save_current_state(&raw mut save_state) } {
         loop {
@@ -705,7 +706,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
     }
     unsafe { update_topline_cursor() };
     unsafe { restore_current_state(&raw mut save_state) };
-    ex_normal_busy.set(ex_normal_busy.get() - 1);
+    drop(busy);
     setmouse();
     ui_cursor_shape();
     unsafe { xfree(arg as *mut c_void) };

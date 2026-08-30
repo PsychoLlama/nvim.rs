@@ -31,6 +31,7 @@ use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
 use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
+use crate::guard::Depth;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
@@ -228,12 +229,12 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         args.push(Object::boolean(link));
 
         let mut err = Error::none();
-        RECURSIVE.set(RECURSIVE.get() + 1);
+        let recursing = Depth::of(&RECURSIVE);
         let name = c"hl_def".as_ptr();
         let (args, arena) = (args.array(), ::core::ptr::null_mut());
         // SAFETY: the namespace's own callback reference.
         let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena, &mut err) };
-        RECURSIVE.set(RECURSIVE.get() - 1);
+        drop(recursing);
 
         // Anything but a dict means the callback declined; fall back.
         let mut fallback = true;

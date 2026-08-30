@@ -34,6 +34,7 @@ use crate::fold::{
     fold_update_all, foldmethod_is_diff, foldmethod_is_indent, foldmethod_is_syntax, new_fold_level,
 };
 use crate::global_cell::GlobalCell;
+use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
@@ -757,7 +758,7 @@ pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
 pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
     static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
-    syn_recursive.set(syn_recursive.get() + 1);
+    let _syn_recursive = Depth::of(&syn_recursive);
     // SAFETY: the caller's buffer is live.
     unsafe { (*buf).b_flags |= BufFlags::SYN_SET };
     unsafe {
@@ -769,7 +770,6 @@ pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
             buf,
         )
     };
-    syn_recursive.set(syn_recursive.get() - 1);
 }
 
 /// Source `spell/<lang>.vim` for a window whose 'spelllang' just changed.

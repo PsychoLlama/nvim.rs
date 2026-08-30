@@ -19,10 +19,11 @@ use crate::edit::{
 };
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_splice_cols;
+use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::main::{
-    Insstart, State, ai_col, can_si, can_si_back, curbuf_splice_pending, did_si, e_interr,
-    e_modifiable, e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
+    Insstart, State, ai_col, can_si, can_si_back, did_si, e_interr, e_modifiable,
+    e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
 };
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
@@ -464,11 +465,11 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
     unsafe { *new_line.offset(new_col as isize) = 0 };
     let _ = unsafe { ml_replace((*win).w_cursor.lnum, orig_line, false) };
     unsafe { (*win).w_cursor.col = orig_col };
-    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    let splice = Suppress::splice();
     unsafe { backspace_until_column(0) };
     unsafe { ins_bytes(new_line) };
     unsafe { xfree(new_line.cast()) };
-    curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+    drop(splice);
     let delta = orig_col as c_int - new_col as c_int;
     unsafe {
         extmark_splice_cols(

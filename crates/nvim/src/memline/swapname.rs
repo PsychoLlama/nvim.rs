@@ -15,7 +15,7 @@
 use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
-use crate::guard::Suppress;
+use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -339,11 +339,11 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
 
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
-    allbuf_lock.set(allbuf_lock.get() + 1);
+    let locked = Lock::all_buffers();
     let name = unsafe { (*buf).b_fname };
     let (no_io, no_buf) = (core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { apply_autocmds(EVENT_SWAPEXISTS, name, no_io, false, no_buf) };
-    allbuf_lock.set(allbuf_lock.get() - 1);
+    drop(locked);
 
     unsafe { set_vim_var_string(Vv::Swapname, core::ptr::null(), -1) };
 

@@ -23,6 +23,7 @@ pub mod system;
 mod throttle;
 
 use crate::cstr;
+use crate::guard::Suppress;
 use crate::semsg;
 use crate::smsg;
 pub use expand::os_expand_wildcards;
@@ -37,8 +38,8 @@ use crate::fileio::vim_tempname;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
 use crate::main::{
-    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop,
-    no_check_timestamps, p_sh, p_shcf, p_sxe, p_sxq, p_verbose,
+    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop, p_sh,
+    p_shcf, p_sxe, p_sxq, p_verbose,
 };
 use crate::memline::ml_append;
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
@@ -340,13 +341,13 @@ pub unsafe fn get_cmd_output(
         // Add the redirection, and run it. Errors are ignored, and timestamps
         // deliberately not checked.
         let command = make_filter_cmd(cmd, infile, tempname, false);
-        no_check_timestamps.set(no_check_timestamps.get() + 1);
+        let unchecked = Suppress::timestamp_checks();
         call_shell(
             command,
             ShellOpts::DO_OUT | ShellOpts::EXPAND | flags,
             ptr::null_mut(),
         );
-        no_check_timestamps.set(no_check_timestamps.get() - 1);
+        drop(unchecked);
         xfree(command.cast());
 
         let buffer = read_output(tempname, ret_len);

@@ -25,7 +25,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::typeahead;
-use crate::guard::Keys;
+use crate::guard::{Keys, Suppress};
 use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
@@ -99,7 +99,7 @@ pub(crate) fn ins_reg() {
 
     // Don't `u_sync()` while typing the expression, or while giving an
     // error message for it; only explicitly.
-    no_u_sync.set(no_u_sync.get() + 1);
+    let no_sync = Suppress::undo_sync();
     if regname == '=' as c_int {
         let curpos = cur_win().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
@@ -145,7 +145,7 @@ pub(crate) fn ins_reg() {
         }
     }
 
-    no_u_sync.set(no_u_sync.get() - 1);
+    drop(no_sync);
     if u_sync_once.get() == 1 {
         ins_need_undo.set(true);
     }

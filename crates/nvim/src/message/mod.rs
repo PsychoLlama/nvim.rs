@@ -33,7 +33,7 @@ use crate::grid::{
     grid_ins_lines, grid_line_cursor_goto, grid_line_flush, grid_line_flush_if_valid_row,
     grid_line_mirror, grid_line_puts, grid_line_start, schar_get,
 };
-use crate::guard::Suppress;
+use crate::guard::{Depth, Suppress};
 use crate::highlight::hl_combine_attr;
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
@@ -498,7 +498,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     if entered.get() >= 3 {
         return true;
     }
-    entered.set(entered.get() + 1);
+    let _entered = Depth::of(&entered);
 
     // Add the message to the history unless it is a multihl, or a repeat
     // of the kept message, or a truncated one.
@@ -545,7 +545,6 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     need_fileinfo.set(false);
 
     unsafe { xfree(buf.cast()) };
-    entered.set(entered.get() - 1);
     retval
 }
 

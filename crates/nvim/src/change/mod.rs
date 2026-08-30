@@ -48,10 +48,10 @@ use crate::insexpand::ins_compl_active;
 use crate::main::{
     Insstart, Rows, State, ai_col, autocmd_busy, can_si, can_si_back, curbuf,
     curbuf_splice_pending, curwin, did_ai, did_si, emsg_silent, end_comment_pending,
-    highlight_match, in_assert_fails, inhibit_delete_count, last_cursormoved, last_cursormoved_win,
-    msg_col, msg_row, msg_scroll, msg_silent, need_maketitle, need_wait_return, orig_line_count,
-    p_deco, p_paste, p_ri, p_sm, p_sr, redraw_cmdline, redraw_not_allowed, redraw_tabline,
-    restart_edit, search_hl_has_cursor_lnum, silent_mode, vr_lines_changed,
+    highlight_match, in_assert_fails, last_cursormoved, last_cursormoved_win, msg_col, msg_row,
+    msg_scroll, msg_silent, need_maketitle, need_wait_return, orig_line_count, p_deco, p_paste,
+    p_ri, p_sm, p_sr, redraw_cmdline, redraw_not_allowed, redraw_tabline, restart_edit,
+    search_hl_has_cursor_lnum, silent_mode, vr_lines_changed,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{

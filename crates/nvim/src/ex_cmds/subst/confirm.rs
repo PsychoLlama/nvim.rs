@@ -20,13 +20,13 @@ use crate::drawscreen::{
 use crate::eval::typval::kCallbackNone;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
-use crate::guard::Allow;
+use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
     State, curwin, ex_normal_busy, exmode_active, highlight_match, msg_didout, need_wait_return,
-    no_u_sync, p_lz, search_match_endcol, search_match_lines,
+    p_lz, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmallocz, xstrdup};
@@ -261,9 +261,10 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
     if cur_win().w_onebuf_opt.wo_crb != 0 {
         unsafe { do_check_cursorbind() };
     }
-    if cpo_no_undo_sync() {
-        no_u_sync.set(no_u_sync.get() + 1);
-    }
+    // Held for the whole prompt: `'cpoptions'` is read once, where the C
+    // read it again at the release and would have gone out of step with
+    // itself had the prompt's own `CTRL-R =` changed the option.
+    let no_sync = cpo_no_undo_sync().then(Suppress::undo_sync);
 
     // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y is typed.
     while subflags.with(|flags| flags.do_ask) {
@@ -305,9 +306,7 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
     State.set(save_state);
     // SAFETY: main thread.
     setmouse();
-    if cpo_no_undo_sync() {
-        no_u_sync.set(no_u_sync.get() - 1);
-    }
+    drop(no_sync);
 
     if typed == 'n' as c_int {
         // For a multi-line match, put matchcol at the NUL at the end of the

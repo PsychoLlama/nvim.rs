@@ -24,6 +24,7 @@ use crate::diff::diffopt_closeoff;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
+use crate::guard::Lock;
 use crate::main::{
     curbuf, curtab, curwin, e_autocmd_close, e_floatonly, first_tabpage, firstwin, getout, lastwin,
     p_ea, p_ead, p_ru, redraw_cmdline, redraw_tabline,
@@ -154,7 +155,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     // Now the window really is going to close. Disallow any autocommand from
     // splitting a window, to avoid trouble.
-    split_disallowed.set(split_disallowed.get() + 1);
+    let no_split = Lock::held(&split_disallowed);
     let was_floating = win.w_floating;
     if ui_has(kUIMultigrid) {
         ui_call_win_close(win.w_grid_alloc.handle as Integer);
@@ -251,7 +252,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // it is no longer safe to do so.
         fire(EVENT_TABLEAVE, cur_buf());
     }
-    split_disallowed.set(split_disallowed.get() - 1);
+    drop(no_split);
 
     // After closing the help or quickfix window, try restoring the layout from
     // before it was opened.

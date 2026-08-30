@@ -30,6 +30,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::guard::Suppress;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -509,7 +510,7 @@ pub unsafe fn open_line(
         end_comment_pending.set(NUL); // there was no leader after all
     }
 
-    curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
+    let splice = Suppress::splice();
     let old_cursor = cur_win().w_cursor;
     let old_cmod_flags = cmdmod_flags();
     let mut prompt_moved: *mut c_char = ::core::ptr::null_mut();
@@ -528,11 +529,11 @@ pub unsafe fn open_line(
             break 'theend;
         };
 
-        inhibit_delete_count.set(inhibit_delete_count.get() + 1);
+        let uncounted = Suppress::delete_count();
         if newindent != 0 || did_si.get() {
             unsafe { apply_new_indent(newindent, saved_line, &mut less_cols, &mut newcol, no_si) };
         }
-        inhibit_delete_count.set(inhibit_delete_count.get() - 1);
+        drop(uncounted);
 
         // One NUL on the replace stack per character of the leader, for
         // when BS deletes it.
@@ -577,7 +578,7 @@ pub unsafe fn open_line(
                 changed_lines(Buf::new(cb), at, 0, at, 1, true);
             }
         }
-        curbuf_splice_pending.set(curbuf_splice_pending.get() - 1);
+        drop(splice);
 
         cur_win().w_cursor.col = newcol;
         cur_win().w_cursor.coladd = 0;

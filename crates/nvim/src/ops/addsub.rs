@@ -26,6 +26,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdmod_has;
+use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
 use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
@@ -104,16 +105,15 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     let mut oap = unsafe { Op::new(oap) };
     // 'foldexpr' may be re-evaluated part way through, and it must not see
     // the buffer mid-operation.
-    disable_fold_update.set(disable_fold_update.get() + 1);
+    let folds_frozen = Suppress::fold_update();
 
     if !visual_active() {
         let mut pos = cur_win().w_cursor;
         if u_save_cursor().is_err() {
-            disable_fold_update.set(disable_fold_update.get() - 1);
             return;
         }
         let changed = unsafe { do_addsub(oap.op_type, &raw mut pos, 0, prenum1) };
-        disable_fold_update.set(disable_fold_update.get() - 1);
+        drop(folds_frozen);
         if changed {
             changed_lines(cur_buf(), pos.lnum, 0, pos.lnum + 1, 0, true);
         }
@@ -122,7 +122,6 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
     if u_save(above, below).is_err() {
-        disable_fold_update.set(disable_fold_update.get() - 1);
         return;
     }
 
@@ -151,7 +150,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
         pos.lnum += 1;
     }
 
-    disable_fold_update.set(disable_fold_update.get() - 1);
+    drop(folds_frozen);
     if change_cnt != 0 {
         let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
         changed_lines(cur_buf(), first, 0, last, 0, true);

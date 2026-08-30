@@ -322,7 +322,7 @@ unsafe fn pum_show_info(
     }
     let redraw_off = Suppress::redraw();
     // An autocommand that syncs undo here does weird things to the tree.
-    no_u_sync.set(no_u_sync.get() + 1);
+    let no_sync = Suppress::undo_sync();
 
     if !use_float {
         resized = unsafe { prepare_tagpreview(false) };
@@ -334,7 +334,7 @@ unsafe fn pum_show_info(
         }
     }
 
-    no_u_sync.set(no_u_sync.get() - 1);
+    drop(no_sync);
     drop(redraw_off);
     g_do_tagpreview.set(0);
 
@@ -351,7 +351,7 @@ unsafe fn pum_show_info(
             // Already a "wipeout" buffer: just empty it.
             buf_clear();
         } else {
-            no_u_sync.set(no_u_sync.get() + 1);
+            let no_sync = Suppress::undo_sync();
             res = unsafe {
                 do_ecmd(
                     0,
@@ -363,7 +363,7 @@ unsafe fn pum_show_info(
                     ::core::ptr::null_mut(),
                 )
             };
-            no_u_sync.set(no_u_sync.get() - 1);
+            drop(no_sync);
 
             if res.is_ok() {
                 // A new, empty, throwaway buffer.
@@ -471,9 +471,9 @@ unsafe fn pum_restore_window(
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.
     if resized && win_valid(curwin_save) {
-        no_u_sync.set(no_u_sync.get() + 1);
+        let no_sync = Suppress::undo_sync();
         unsafe { win_enter(curwin_save, true) };
-        no_u_sync.set(no_u_sync.get() - 1);
+        drop(no_sync);
         update_topline(unsafe { Win::current() });
     }
 
@@ -486,9 +486,8 @@ unsafe fn pum_restore_window(
     pum_is_visible.set(true);
 
     if !resized && win_valid(curwin_save) {
-        no_u_sync.set(no_u_sync.get() + 1);
+        let _no_sync = Suppress::undo_sync();
         unsafe { win_enter(curwin_save, true) };
-        no_u_sync.set(no_u_sync.get() - 1);
     }
 
     // Autocommands may have changed it again.

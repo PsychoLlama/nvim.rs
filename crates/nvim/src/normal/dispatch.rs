@@ -24,7 +24,7 @@ use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
     typeahead, ungetchars, vpeekc, vungetc,
 };
-use crate::guard::{Allow, Keys};
+use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::{
     Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT,
     K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT,
@@ -33,8 +33,8 @@ use crate::keycodes::{
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
     fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,
-    msg_col, msg_didout, msg_nowait, no_u_sync, no_zero_mapping, opcount, p_langmap, p_lrm, p_tm,
-    p_ttm, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    msg_col, msg_didout, msg_nowait, opcount, p_langmap, p_lrm, p_tm, p_ttm, restart_VIsual_select,
+    restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
@@ -309,9 +309,8 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
     ns.ca.nchar_composing[at] = NUL as c_char;
     drop(mapped);
     // The keys are recorded for a redo, not fed through undo syncing.
-    no_u_sync.set(no_u_sync.get() + 1);
+    let _no_sync = Suppress::undo_sync();
     unsafe { gotchars_ignore() };
-    no_u_sync.set(no_u_sync.get() - 1);
 }
 
 /// Read the second (and sometimes third) character of a command.
@@ -449,10 +448,10 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
         let raw_key = ns.ctrl_w.then(Keys::unmapped_with_codes);
         // A '0' here is a count digit, not the "go to column 0" command,
         // so it must not be mapped.
-        no_zero_mapping.set(no_zero_mapping.get() + 1);
+        let count_digit = Suppress::zero_mapping();
         ns.c = plain_vgetc();
         langmap_adjust(&mut ns.c, true);
-        no_zero_mapping.set(no_zero_mapping.get() - 1);
+        drop(count_digit);
         drop(raw_key);
         ns.need_flushbuf |= add_to_showcmd(ns.c);
     }

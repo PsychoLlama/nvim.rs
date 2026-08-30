@@ -41,6 +41,41 @@
 //! that exact point rather than inventing a block — the release point is
 //! load-bearing (an error raised after it is meant to be seen) and the
 //! guard is still what runs it on an early exit.
+//!
+//! # The counters that are still bumped by hand, and why
+//!
+//! Not every `x += 1` … `x -= 1` pair is a guard. These stay written out,
+//! and a reviewer who "finishes the job" by converting one changes
+//! behaviour:
+//!
+//! - **The restore is not the inverse of the bump.** `do_cmdline` raises
+//!   `ex_nesting_level` when the line came from a function and lowers it
+//!   again only if a *re-evaluated* test still says so; `open_scriptin`
+//!   and `openscript` raise `curscript` and lower it only on the failure
+//!   path, because on success the script stays on the stack past the
+//!   return.
+//! - **The scope is a state machine, not a block.** `RedrawingDisabled`
+//!   under `disabled_redraw` spans Insert mode's entry and its exit;
+//!   `debug_backtrace_level` is what `:up` and `:down` move; `compl_pending`
+//!   and `pum_selected` are positions, not depths.
+//! - **The lifetime belongs to a caller several frames up.** The
+//!   `enter`/`leave` pairs — `try_enter`/`try_leave`,
+//!   `block_autocmds`/`unblock_autocmds` (a C-ABI pair a plugin can call),
+//!   `apply_cmdmod`/`undo_cmdmod`, `do_cmdline_start`/`do_cmdline_end`,
+//!   `verbose_enter`/`verbose_leave`, `incr_quickfix_busy`/`decr_quickfix_busy`,
+//!   `save_last_search_pattern`/`restore_last_search_pattern`,
+//!   `ui_busy_start`/`ui_busy_stop`, `window_lock`/`window_unlock` — are
+//!   the *public* form of a guard already; wrapping the counter would just
+//!   move the pairing problem to their own callers.
+//! - **`buf_write` releases `no_wait_return` inside a callee.** The
+//!   contract is written on `buf_write_do_autocmds`; a guard here would
+//!   have to be handed across the call.
+//! - **Upstream leaks it on purpose.** `win_float_setup_preview` returns
+//!   with `RedrawingDisabled` and `no_u_sync` still raised and says so.
+//!
+//! Everything else — every counter whose release is the arithmetic inverse
+//! of its bump, taken and released inside one body — is a guard, and the
+//! ratchet's job is to keep it that way.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -53,8 +88,11 @@
 
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    RedrawingDisabled, allow_keys, current_sctx, emsg_off, emsg_skip, expr_map_lock, msg_silent,
-    no_mapping, no_wait_return, sandbox, textlock,
+    RedrawingDisabled, allbuf_lock, allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star,
+    curbuf_splice_pending, current_sctx, disable_fold_update, emsg_off, emsg_silent, emsg_skip,
+    expr_map_lock, inhibit_delete_count, msg_listdo_overwrite, msg_silent, no_check_timestamps,
+    no_mapping, no_u_sync, no_wait_return, no_zero_mapping, sandbox, tabpage_move_disallowed,
+    textlock,
 };
 use crate::types::{scid_T, sctx_T};
 use core::ffi::c_int;
@@ -209,15 +247,124 @@ impl Suppress {
             _messages: Self::messages(),
         }
     }
+
+    /// `emsg_silent` — an error raised in this scope still sets `v:errmsg`
+    /// and still aborts, it is only not *shown*.
+    ///
+    /// Weaker than [`Suppress::emsg`], which stops the error being raised
+    /// at all: `:silent!`, `'debug'` and `assert_fails()` all read this
+    /// counter rather than that one.
+    pub fn emsg_silent() -> Bump {
+        Bump::new(&emsg_silent)
+    }
+
+    /// `no_u_sync` — undo does not start a new change while this is held.
+    ///
+    /// Everything typed inside the scope joins the change that was already
+    /// open, which is what makes an expression register, a `CTRL-V` and a
+    /// `:s///c` prompt one undoable edit rather than several.
+    pub fn undo_sync() -> Bump {
+        Bump::new(&no_u_sync)
+    }
+
+    /// `curbuf_splice_pending` — the individual line edits in this scope do
+    /// not each announce themselves.
+    ///
+    /// The scope's caller sends one `extmark_splice` for the whole thing
+    /// afterwards, so extmarks and the buffer-update RPC see one change
+    /// where the code made three or four.
+    pub fn splice() -> Bump {
+        Bump::new(&curbuf_splice_pending)
+    }
+
+    /// `disable_fold_update` — folds are not recomputed in this scope.
+    ///
+    /// For the operation that leaves the buffer half-moved part way
+    /// through, where a `'foldexpr'` re-evaluated on it would see lines
+    /// that are about to move again.
+    pub fn fold_update() -> Bump {
+        Bump::new(&disable_fold_update)
+    }
+
+    /// `inhibit_delete_count` — a line deleted in this scope does not count
+    /// towards the "N fewer lines" report.
+    pub fn delete_count() -> Bump {
+        Bump::new(&inhibit_delete_count)
+    }
+
+    /// `msg_listdo_overwrite` — a file message in this scope does not
+    /// overwrite the line above it, whatever `'shortmess'` says.
+    ///
+    /// `:argdo` and its siblings hold this so that the per-file header
+    /// stays on screen above the command's own output.
+    pub fn message_overwrite() -> Bump {
+        Bump::new(&msg_listdo_overwrite)
+    }
+
+    /// `cmdline_star` — the command line shows `*` for each character
+    /// instead of what was typed, and nothing typed in the scope is
+    /// recorded, echoed or completed. `inputsecret()`'s guard.
+    pub fn cmdline_echo() -> Bump {
+        Bump::new(&cmdline_star)
+    }
+
+    /// `no_check_timestamps` — a file whose timestamp changed under the
+    /// editor during this scope raises no warning.
+    pub fn timestamp_checks() -> Bump {
+        Bump::new(&no_check_timestamps)
+    }
+
+    /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
+    /// the "go to column 0" command, so it must not resolve a mapping.
+    pub fn zero_mapping() -> Bump {
+        Bump::new(&no_zero_mapping)
+    }
+
+    /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
+    pub fn win_enter_autocmds() -> Bump {
+        Bump::new(&autocmd_no_enter)
+    }
+
+    /// `autocmd_no_leave` — no `WinLeave`/`BufLeave` fires in this scope.
+    pub fn win_leave_autocmds() -> Bump {
+        Bump::new(&autocmd_no_leave)
+    }
+
+    /// Both of the above: the scope walks the window list and enters
+    /// windows as bookkeeping, which the user's autocommands must not see.
+    ///
+    /// Where the two are released at *different* points — the release
+    /// order is load-bearing at three sites, which enter a window with one
+    /// of the pair already down — take them separately and `drop` each at
+    /// the point the C decremented it.
+    pub fn win_enter_leave_autocmds() -> WinAutocmds {
+        WinAutocmds {
+            _enter: Self::win_enter_autocmds(),
+            _leave: Self::win_leave_autocmds(),
+        }
+    }
+
+    /// A suppression counter that belongs to one module rather than to the
+    /// editor as a whole, named by its own `static`.
+    ///
+    /// The constructors above exist so that a *global* counter's intended
+    /// direction is greppable from one file; a `static` private to the
+    /// module that reads it is already that, and does not earn a name here.
+    pub fn counter(cell: &'static GlobalCell<c_int>) -> Bump {
+        Bump::new(cell)
+    }
 }
 
-/// A function's own recursion counter, held one higher for a scope.
+/// A recursion or nesting counter, held one higher for a scope.
 ///
-/// The odd guard out in two ways: the cell is the *caller's* rather than one
-/// of the editor's globals, and what it protects is not a suppression but a
-/// depth limit — the `static RECURSE: GlobalCell<c_int>` a recursive parser
-/// keeps inside itself so that a self-referential expression cannot exhaust
-/// the C stack. The shape is [`Bump`]'s; what it buys is that the un-bump
+/// The odd guard out: what it protects is not a suppression but a *count of
+/// how deep in this operation we are* — the `static RECURSE: GlobalCell<c_int>`
+/// a recursive parser keeps inside itself so that a self-referential
+/// expression cannot exhaust the C stack, the editor's `ex_nesting_level`,
+/// and the `..._busy` flags a callee reads to find out that it is being
+/// re-entered. The cell is usually the caller's own rather than one of the
+/// editor's globals, which is why this one constructor is generic where the
+/// rest are named. The shape is [`Bump`]'s; what it buys is that the un-bump
 /// can no longer be skipped by a `?` on the way out, which is exactly what
 /// happens the moment such a body starts answering `Result`.
 pub struct Depth;
@@ -300,6 +447,26 @@ impl Allow {
             _allow_keys: Bump::by(&allow_keys, -1),
         }
     }
+
+    /// `autocmd_no_enter -= 1` — the inverse of
+    /// [`Suppress::win_enter_autocmds`], for the callee that has to let one
+    /// `BufEnter` through a caller that had switched them off.
+    pub fn win_enter_autocmds() -> Bump {
+        Bump::by(&autocmd_no_enter, -1)
+    }
+
+    /// `autocmd_no_leave -= 1` — the inverse of
+    /// [`Suppress::win_leave_autocmds`].
+    pub fn win_leave_autocmds() -> Bump {
+        Bump::by(&autocmd_no_leave, -1)
+    }
+
+    /// `no_check_timestamps = 0` — this scope checks file timestamps even
+    /// inside an operation that had switched the check off, restoring the
+    /// level afterwards.
+    pub fn timestamp_checks() -> Saved {
+        Saved::new(&no_check_timestamps, 0)
+    }
 }
 
 /// Guards over the two locks that say what the code running inside them is
@@ -326,6 +493,36 @@ impl Lock {
     pub fn expr_map() -> Bump {
         Bump::new(&expr_map_lock)
     }
+
+    /// `allbuf_lock` — no buffer may be added, removed or renamed while
+    /// this is held, and `:cd` is refused.
+    ///
+    /// The scopes that take it hand control to an autocommand while
+    /// holding a raw `buf_T *`.
+    pub fn all_buffers() -> Bump {
+        Bump::new(&allbuf_lock)
+    }
+
+    /// `tabpage_move_disallowed` — an autocommand fired in this scope may
+    /// not reorder the tab pages the scope is walking.
+    pub fn tabpage_move() -> Bump {
+        Bump::new(&tabpage_move_disallowed)
+    }
+
+    /// A lock counter that belongs to one module rather than to the editor
+    /// as a whole, named by its own `static` — [`Suppress::counter`]'s
+    /// sibling, for a counter whose sense is "refuse this operation".
+    pub fn held(cell: &'static GlobalCell<c_int>) -> Bump {
+        Bump::new(cell)
+    }
+}
+
+/// Both halves of the "walk the windows without the user noticing" pair,
+/// released together.
+#[must_use = "the counters are released as soon as the guard is dropped"]
+pub struct WinAutocmds {
+    _enter: Bump,
+    _leave: Bump,
 }
 
 /// Guards over how the next key read is decoded.
@@ -468,6 +665,40 @@ mod tests {
         }
         assert_eq!(no_mapping.get(), 2);
         no_mapping.set(0);
+    }
+
+    #[test]
+    fn win_autocmds_releases_both() {
+        let _serial = counters();
+        {
+            let _guard = Suppress::win_enter_leave_autocmds();
+            assert_eq!((autocmd_no_enter.get(), autocmd_no_leave.get()), (1, 1));
+        }
+        assert_eq!((autocmd_no_enter.get(), autocmd_no_leave.get()), (0, 0));
+    }
+
+    #[test]
+    fn allow_is_the_inverse_of_suppress() {
+        let _serial = counters();
+        let _outer = Suppress::win_enter_autocmds();
+        assert_eq!(autocmd_no_enter.get(), 1);
+        {
+            let _lifted = Allow::win_enter_autocmds();
+            assert_eq!(autocmd_no_enter.get(), 0);
+        }
+        assert_eq!(autocmd_no_enter.get(), 1);
+    }
+
+    #[test]
+    fn a_module_counter_needs_no_name_here() {
+        let _serial = counters();
+        static PRIVATE: GlobalCell<c_int> = GlobalCell::new(0);
+        {
+            let _held = Lock::held(&PRIVATE);
+            let _deeper = Suppress::counter(&PRIVATE);
+            assert_eq!(PRIVATE.get(), 2);
+        }
+        assert_eq!(PRIVATE.get(), 0);
     }
 
     #[test]

@@ -116,16 +116,15 @@ use crate::keycodes::{
 use crate::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, ai_col, arrow_used,
     can_si, can_si_back, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curwin, did_ai,
-    did_check_timestamps, did_cursorhold, did_si, disable_fold_update, dollar_vcol, e_noinstext,
-    e_sandbox, e_textlock, edit_submode_extra, emsg_on_display, end_comment_pending,
-    ex_normal_busy, fdo_flags, force_restart_edit, got_int, ins_at_eol, km_startsel,
-    langmap_mapchar, last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent,
-    must_redraw, need_check_timestamps, need_highlight_changed, need_start_insertmode, no_abbr,
-    no_u_sync, old_indent, orig_line_count, p_ari, p_ch, p_deco, p_langmap, p_lrm, p_paste, p_ri,
-    p_smd, p_sol, p_sta, p_ww, pum_want, redraw_cmdline, redraw_mode, reg_recording,
-    replace_offset, restart_VIsual_select, restart_edit, sandbox, spell_redraw_lnum,
-    stop_insert_mode, test_disable_char_avail, textlock, u_sync_once, vgetc_busy, vr_lines_changed,
-    where_paste_started,
+    did_check_timestamps, did_cursorhold, did_si, dollar_vcol, e_noinstext, e_sandbox, e_textlock,
+    edit_submode_extra, emsg_on_display, end_comment_pending, ex_normal_busy, fdo_flags,
+    force_restart_edit, got_int, ins_at_eol, km_startsel, langmap_mapchar, last_cursormoved,
+    last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps,
+    need_highlight_changed, need_start_insertmode, no_abbr, old_indent, orig_line_count, p_ari,
+    p_ch, p_deco, p_langmap, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta, p_ww, pum_want,
+    redraw_cmdline, redraw_mode, reg_recording, replace_offset, restart_VIsual_select,
+    restart_edit, sandbox, spell_redraw_lnum, stop_insert_mode, test_disable_char_avail, textlock,
+    u_sync_once, vgetc_busy, vr_lines_changed, where_paste_started,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};

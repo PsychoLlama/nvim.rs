@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Depth;
 use crate::message_fmt::msg_cstr;
 use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
@@ -156,7 +157,7 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(menu: Menu, bit: usize) {
     let mut state = save_state_T::default();
-    ex_normal_busy.set(ex_normal_busy.get() + 1);
+    let _busy = Depth::of(&ex_normal_busy);
     // SAFETY: `state` is a live local for the whole call, and the rhs is a
     // NUL-terminated string owned by a node that outlives the run.
     unsafe {
@@ -165,7 +166,6 @@ fn run_now(menu: Menu, bit: usize) {
         }
         restore_current_state(&raw mut state);
     }
-    ex_normal_busy.set(ex_normal_busy.get() - 1);
 }
 
 /// Put the rhs into the typeahead, as if the user had typed it.

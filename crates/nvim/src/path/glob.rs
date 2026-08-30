@@ -13,6 +13,7 @@ use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
 use super::*;
+use crate::guard::{Depth, Suppress};
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
 use crate::types::MAXPATHL;
 
@@ -292,15 +293,12 @@ pub(crate) unsafe fn do_path_expand(
         rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
         ..Default::default()
     };
-    let silent = flags.has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD);
-    if silent {
-        emsg_silent.set(emsg_silent.get() + 1);
-    }
+    let silent = flags
+        .has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD)
+        .then(Suppress::emsg_silent);
     let nobreak = flags.has(ExpandFlags::NOBREAK);
     regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 }) };
-    if silent {
-        emsg_silent.set(emsg_silent.get() - 1);
-    }
+    drop(silent);
     unsafe { xfree(pat.cast()) };
     if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {
         return 0;
@@ -315,9 +313,9 @@ pub(crate) unsafe fn do_path_expand(
         && pattern.get(split.rest) == Some(&b'/')
     {
         write_at(&mut buf, dir_len, &[&pattern[split.rest + 1..]]);
-        STARDEPTH.set(STARDEPTH.get() + 1);
+        let stardepth = Depth::of(&STARDEPTH);
         unsafe { do_path_expand(gap, buf.as_ptr().cast(), dir_len, flags, true) };
-        STARDEPTH.set(STARDEPTH.get() - 1);
+        drop(stardepth);
     }
     // Back to the directory the component lives in.
     buf[dir_len] = 0;
@@ -353,18 +351,17 @@ pub(crate) unsafe fn do_path_expand(
             if split.starstar && STARDEPTH.get() < MAX_STAR_DEPTH {
                 // For "**" first go deeper in the tree to find matches.
                 write_at(&mut buf, len, &[b"/**", &pattern[split.rest..]]);
-                STARDEPTH.set(STARDEPTH.get() + 1);
+                let stardepth = Depth::of(&STARDEPTH);
                 unsafe { do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, true) };
-                STARDEPTH.set(STARDEPTH.get() - 1);
+                drop(stardepth);
             }
 
             write_at(&mut buf, len, &[&pattern[split.rest..]]);
             if unsafe { path_has_exp_wildcard(rest) } {
                 // Another component to expand.
                 if STARDEPTH.get() < MAX_STAR_DEPTH {
-                    STARDEPTH.set(STARDEPTH.get() + 1);
+                    let _stardepth = Depth::of(&STARDEPTH);
                     unsafe { do_path_expand(gap, buf.as_ptr().cast(), len + 1, flags, false) };
-                    STARDEPTH.set(STARDEPTH.get() - 1);
                 }
             } else {
                 // No more wildcards: the escaping in what is left is the
