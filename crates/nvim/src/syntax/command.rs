@@ -369,7 +369,7 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
 
     // Restore the value of b:current_syntax.
     if old_value.is_null() {
-        unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
+        let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
     } else {
         unsafe { set_internal_string_var(c"b:current_syntax".as_ptr(), old_value) };
         unsafe { xfree(old_value as *mut c_void) };

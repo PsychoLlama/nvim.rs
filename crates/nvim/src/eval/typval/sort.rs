@@ -20,7 +20,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, Failed, NUL};
+use crate::types::{Failed, NUL};
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,
 /// or a string comparison of their `string()` forms.
@@ -183,11 +183,12 @@ pub(crate) unsafe fn item_compare2(
     funcexe.fe_partial = partial;
     funcexe.fe_selfdict = sort_info.item_compare_selfdict;
     let argp = argv.as_mut_ptr();
-    let mut res = unsafe { call_func(func_name, -1, &raw mut rettv, 2, argp, &raw mut funcexe) };
+    let called = unsafe { call_func(func_name, -1, &raw mut rettv, 2, argp, &raw mut funcexe) };
     unsafe { tv_clear(&raw mut argv[0]) };
     unsafe { tv_clear(&raw mut argv[1]) };
 
-    if res == FAIL {
+    let mut res;
+    if called.is_err() {
         res = ITEM_COMPARE_FAIL;
         sort_info.item_compare_func_err = true;
     } else {

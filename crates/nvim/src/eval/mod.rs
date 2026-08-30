@@ -27,7 +27,7 @@ use crate::global_cell::GlobalCell;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, Callback, ChannelStreamType, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
+    Array, Callback, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
     OptValType, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T,
     partial_T, size_t, timer_T, typval_T, uint64_t,
 };
@@ -156,6 +156,31 @@ pub const FF: c_int = '\u{c}' as c_int;
 pub const CAR: c_int = '\r' as c_int;
 pub const ESC: c_int = '\u{1b}' as c_int;
 pub const NOTDONE: c_int = 2 as c_int;
+
+/// What a parser that is allowed to *decline* answers, in the shape `?`
+/// composes with: `Result<Parsed, Failed>`.
+///
+/// `NOTDONE` is the C's third status, and it is not a failure. It says the
+/// text at the cursor was not this kind of thing at all, so the caller
+/// should try the next one -- a `{` that opened a curly-braces name rather
+/// than a dictionary, a `{` that is a dictionary rather than a lambda, an
+/// expression that is not one bare function call. Keeping it out of the
+/// error half is what lets a real failure travel by `?` while the decline
+/// stays a value the caller is made to look at.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Parsed {
+    /// It was this, and the result value is built.
+    Done,
+    /// It was not this. The C's `NOTDONE`.
+    NotThis,
+}
+
+impl Parsed {
+    /// The answer of something that cannot decline, as a [`Parsed`] one.
+    pub fn done(answer: Result<(), Failed>) -> Result<Self, Failed> {
+        answer.map(|()| Parsed::Done)
+    }
+}
 pub const COPYID_INC: c_int = 2 as c_int;
 pub const COPYID_MASK: c_int = !(0x1 as c_int);
 pub const FNE_INCL_BR: c_int = 1 as c_int;

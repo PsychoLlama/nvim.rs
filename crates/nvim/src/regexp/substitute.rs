@@ -529,7 +529,7 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
         let rettv = &raw mut rettv;
         let argv = argv.as_mut_ptr();
         let funcexe = &raw mut funcexe;
-        unsafe { call_func(name, -1, rettv, 1, argv, funcexe) };
+        let _ = unsafe { call_func(name, -1, rettv, 1, argv, funcexe) };
     }
     if unsafe { tv_list_len(&raw mut match_list.sl_list) } > 0 {
         // A non-empty list means `fill_submatch_list` ran and allocated.

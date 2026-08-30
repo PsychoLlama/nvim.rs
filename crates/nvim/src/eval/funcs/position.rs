@@ -32,8 +32,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T,
-    list_T, pos_T, typval_T, varnumber_T, win_T,
+    Direction, EvalFuncData, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T,
+    pos_T, typval_T, varnumber_T, win_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -409,7 +409,7 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         let (out, want) = (&raw mut pos, &raw mut curswant);
         // SAFETY: argument 0 is a live typval and both are locals.
         let read = unsafe { list2fpos(args.ptr(0), out, ptr::null_mut(), want, charcol) };
-        if read == FAIL {
+        if read.is_err() {
             emsg(gettext(e_invarg));
             return;
         }
@@ -493,7 +493,7 @@ fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
     let mut curswant: colnr_T = -1;
     let (out, buf, want) = (&raw mut pos, &raw mut fnum, &raw mut curswant);
     // SAFETY: argument 1 is a live typval and the three are locals.
-    if unsafe { list2fpos(args.ptr(1), out, buf, want, charpos) } != OK {
+    if unsafe { list2fpos(args.ptr(1), out, buf, want, charpos) }.is_err() {
         return;
     }
     if pos.col != END_OF_LINE {

@@ -107,7 +107,7 @@ pub unsafe fn tv_list_assign_range(
     while !src_li.is_null() {
         debug_assert!(!dest_li.is_null());
         if !op.is_null() && unsafe { *op } as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
-            unsafe { eexe_mod_op(&raw mut (*dest_li).li_tv, &raw mut (*src_li).li_tv, op) };
+            let _ = unsafe { eexe_mod_op(&raw mut (*dest_li).li_tv, &raw mut (*src_li).li_tv, op) };
         } else {
             unsafe { tv_clear(&raw mut (*dest_li).li_tv) };
             unsafe { tv_copy(&raw mut (*src_li).li_tv, &raw mut (*dest_li).li_tv) };

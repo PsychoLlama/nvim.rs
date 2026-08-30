@@ -794,7 +794,7 @@ unsafe fn watch_changed(bp: *mut debuggy) -> bool {
     }
 
     // `EXPR_IS` answers "is the same value"; a false answer is a change.
-    let changed = unsafe { typval_compare(tv, previous, EXPR_IS, false) } == OK
+    let changed = unsafe { typval_compare(tv, previous, EXPR_IS, false) }.is_ok()
         && unsafe { (*tv).vval.v_number } == 0;
     if changed {
         // Render the old value before re-evaluating, because evaluating

@@ -89,7 +89,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
         try_enter(ts);
         switch_win_noblock(sw, win.raw(), tab, true)
     };
-    if win_result != 0 {
+    if win_result.is_ok() {
         // Do not trigger 'autochdir' in the window we switched to.
         let save_acd = p_acd.get();
         if !switchwin.sw_same_win {
@@ -104,7 +104,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     }
     // SAFETY: `tstate` is the state `try_enter` saved, and `err` is live.
     unsafe { try_leave(&raw mut tstate, err) };
-    if win_result == FAIL && !err.is_set() {
+    if win_result.is_err() && !err.is_set() {
         let handle = win_id.handle();
         *err = api_error!(kErrorTypeException, "Failed to switch to window {handle}");
     }

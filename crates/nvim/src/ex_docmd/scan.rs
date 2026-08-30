@@ -240,7 +240,7 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
             // evaluator, not by this scan: it may contain any of the
             // ending characters.
             p = unsafe { p.add(2) };
-            unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
+            let _ = unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
             if byte(p) == NUL {
                 break;
             }

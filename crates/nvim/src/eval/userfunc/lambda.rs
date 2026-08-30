@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -15,7 +16,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK, Refcount};
+use crate::types::{Failed, Refcount};
 
 /// Give `fp` the funccall that is running as its scope, so that the locals it
 /// closed over stay alive for as long as it does.
@@ -91,7 +92,7 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut u
 
 /// Parse a lambda expression at `*arg` into a partial in `rettv`.
 ///
-/// Answers `NOTDONE` when what is there is a dictionary or a `{expr}` rather
+/// Answers [`Parsed::NotThis`] when it is a dictionary or a `{expr}` rather
 /// than a lambda -- which is decided by whether an `->` follows a legal
 /// argument list.
 ///
@@ -101,7 +102,7 @@ pub unsafe fn get_lambda_tv(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
     let mut newargs = GARRAY_EMPTY;
@@ -117,8 +118,8 @@ pub unsafe fn get_lambda_tv(
     // SAFETY: `s` walks the caller's expression; nothing is written back.
     let (no_args, no_var, no_defs) = (ptr::null_mut(), ptr::null_mut(), ptr::null_mut());
     let looks_like = unsafe { get_function_args(sp, dash, no_args, no_var, no_defs, true) };
-    if looks_like == FAIL || unsafe { *s } != b'>' as c_char {
-        return NOTDONE;
+    if looks_like.is_err() || unsafe { *s } != b'>' as c_char {
+        return Ok(Parsed::NotThis);
     }
 
     // Neither `fp` nor `pt` escapes the arm that builds them, which is
@@ -136,7 +137,7 @@ pub unsafe fn get_lambda_tv(
         // SAFETY: `arg` is the caller's cursor and `varargs` is this
         // frame's local.
         let read = unsafe { get_function_args(arg, dash, pnewargs, varp, none, false) };
-        if read == FAIL || unsafe { **arg } != b'>' as c_char {
+        if read.is_err() || unsafe { **arg } != b'>' as c_char {
             break 'errret false;
         }
 
@@ -150,7 +151,7 @@ pub unsafe fn get_lambda_tv(
         let start = unsafe { *arg };
         let ret = unsafe { skip_expr(arg, evalarg) };
         let end = unsafe { *arg };
-        if ret == FAIL {
+        if ret.is_err() {
             break 'errret false;
         }
         if !evalarg.is_null() {
@@ -242,7 +243,11 @@ pub unsafe fn get_lambda_tv(
     } else {
         unsafe { xfree(tofree as *mut c_void) };
     }
-    if parsed { OK } else { FAIL }
+    if parsed {
+        Ok(Parsed::Done)
+    } else {
+        Err(Failed)
+    }
 }
 
 /// Turn `dict.Func` into a partial that binds `selfdict`, when `Func` was

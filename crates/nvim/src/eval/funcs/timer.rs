@@ -110,7 +110,7 @@ pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let done = || {
         let out = &raw mut exprval;
         let got = unsafe { eval_expr_typval(&raw const expr, false, &raw mut argv, 0, out) };
-        got != 1
+        got.is_err()
             || unsafe { tv_get_number_chk(out, &raw mut error) } != 0
             || called_emsg.get() > called_emsg_before
             || error

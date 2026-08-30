@@ -184,7 +184,8 @@ impl TagStack {
                     ptr::null_mut(),
                     false,
                 )
-            } != OK
+            }
+            .is_err()
             {
                 continue;
             }

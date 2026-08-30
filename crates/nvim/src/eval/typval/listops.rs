@@ -11,7 +11,6 @@
 
 use super::*;
 use crate::semsg;
-use crate::types::FAIL;
 use crate::types::Failed;
 
 /// Link `ni` into `l` in front of `item`, or at the tail when `item` is NULL.
@@ -211,7 +210,7 @@ pub unsafe fn tv_list_copy(
         if deep {
             let from = li_tv(item);
             let to = li_tv(ni);
-            if unsafe { var_item_copy(conv, from, to, deep, copyID) } == FAIL {
+            if unsafe { var_item_copy(conv, from, to, deep, copyID) }.is_err() {
                 // `tv_list_copy_error`: the partial copy goes too.
                 unsafe { xfree(ni.cast()) };
                 unsafe { tv_list_unref(copy) };

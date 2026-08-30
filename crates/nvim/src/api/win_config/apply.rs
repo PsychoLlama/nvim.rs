@@ -242,7 +242,7 @@ unsafe fn win_config_split(
                 // SAFETY: `switchwin` is this frame's own, and `parent`/
                 // `parent_tp` are the live window and tab page to split in.
                 let result = unsafe { switch_win(&raw mut switchwin, parent, parent_tp, true) };
-                debug_assert!(result == 1 as ::core::ffi::c_int, "result == OK");
+                debug_assert!(result.is_ok(), "the window was switched to");
             }
             // SAFETY: the caller's window, and `unflat_altfr` the frame the
             // removal above left behind.

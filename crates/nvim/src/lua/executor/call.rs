@@ -102,7 +102,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
-            call_func(
+            let _ = call_func(
                 name,
                 name_len as c_int,
                 &raw mut rettv,

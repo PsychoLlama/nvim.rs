@@ -41,9 +41,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, OK, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t,
-    varnumber_T,
+    EvalFuncData, NUL, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
 };
 use ::libc::strcmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -128,7 +127,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         Some(unsafe { args.get(2).vval.v_dict })
     };
     if let Some(selfdict) = selfdict {
-        unsafe { func_call(func, args.ptr(1), partial, selfdict, rettv) };
+        let _ = unsafe { func_call(func, args.ptr(1), partial, selfdict, rettv) };
     }
 
     if owned {
@@ -149,7 +148,7 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // Kept for the message: `eval1` advances `s` past what it consumed.
     let expr_start = s;
     if s.is_null()
-        || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) } == FAIL
+        || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) }.is_err()
     {
         if !expr_start.is_null() && !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -329,7 +328,7 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         }
         b'&' | b'+' => {
             // An option, and nothing may follow it.
-            (unsafe { eval_option(&raw mut p, ptr::null_mut(), true) } == OK
+            (unsafe { eval_option(&raw mut p, ptr::null_mut(), true) }.is_ok()
                 && unsafe { *skipwhite(p) } as c_int == NUL) as c_int
         }
         b'*' => {

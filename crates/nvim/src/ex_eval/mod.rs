@@ -65,8 +65,8 @@ use crate::memory::xfree;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
-    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, OK, VAR_UNKNOWN, VarLock, cstack_T,
-    eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
+    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, VAR_UNKNOWN, VarLock, cstack_T, eslist_T,
+    evalarg_T, exarg_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -247,7 +247,7 @@ pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
     };
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, (*eap).skip != 0) };
-    if unsafe { eval0((*eap).arg, &raw mut tv, eap, &raw mut evalarg) } == OK {
+    if unsafe { eval0((*eap).arg, &raw mut tv, eap, &raw mut evalarg) }.is_ok() {
         unsafe { tv_clear(&raw mut tv) };
     }
     unsafe { clear_evalarg(&raw mut evalarg, eap) };

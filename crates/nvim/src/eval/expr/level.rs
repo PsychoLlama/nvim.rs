@@ -24,7 +24,7 @@ use crate::eval::typval::{tv_check_num, tv_check_str, tv_clear, tv_get_number_ch
 use crate::eval::userfunc::{call_simple_func, call_simple_luafunc, get_lambda_tv};
 use crate::eval::vars::{check_vars, eval_variable, get_vim_var_partial};
 use crate::eval::{
-    EVAL_EVALUATE, EXPR_UNKNOWN, NOTDONE, Tv, comparison_at, eval_dict, eval_env_var, eval_func,
+    EVAL_EVALUATE, EXPR_UNKNOWN, Parsed, Tv, comparison_at, eval_dict, eval_env_var, eval_func,
     eval_interp_string, eval_list, eval_lit_dict, eval_lit_string, eval_number, eval_option,
     eval_string, get_name_len, handle_subscript, kGRegExprSrc, skip_luafunc_name, to_name_end,
     typval_compare,
@@ -32,6 +32,7 @@ use crate::eval::{
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
+use crate::guard::Depth;
 use crate::main::{called_emsg, did_emsg, p_ic};
 use crate::memory::{strnequal, xfree};
 use crate::message::emsg;
@@ -39,7 +40,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strncmp, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    FAIL, NUL, OK, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    Failed, NUL, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
     VAR_UNKNOWN, VarLock, Vv, dictitem_T, evalarg_T, exarg_T, float_T, kBoolVarFalse, kBoolVarTrue,
     size_t, typval_T, typval_vval_union, varnumber_T,
 };
@@ -193,7 +194,7 @@ pub unsafe fn eval0(
     rettv: *mut typval_T,
     eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let did_emsg_before = did_emsg.get();
     let called_emsg_before = called_emsg.get();
     // SAFETY: the caller's promise -- `arg` is a NUL-terminated expression,
@@ -203,10 +204,10 @@ pub unsafe fn eval0(
     // Anything left over is an error, but only once the expression
     // itself parsed.
     // SAFETY: `eval1` left `p` inside the expression.
-    let end_error = ret != FAIL && ends_excmd(unsafe { *p } as c_int) == 0;
+    let end_error = ret.is_ok() && ends_excmd(unsafe { *p } as c_int) == 0;
 
-    if ret == FAIL || end_error {
-        if ret != FAIL {
+    if ret.is_err() || end_error {
+        if ret.is_ok() {
             // SAFETY: the caller's promise -- `rettv` is valid.
             unsafe { tv_clear(rettv) };
         }
@@ -231,7 +232,7 @@ pub unsafe fn eval0(
                 unsafe { (*eap).nextcmd = nextcmd };
             }
         }
-        return FAIL;
+        return Err(Failed);
     }
     if !eap.is_null() {
         // SAFETY: as above.
@@ -242,23 +243,26 @@ pub unsafe fn eval0(
 
 /// Shortcut for a whole expression that is nothing but one call: `Foo()`.
 ///
-/// Answers `NOTDONE` when the expression is anything else.
+/// Answers [`Parsed::NotThis`] when the expression is anything else.
 ///
 /// # Safety
 /// `arg` must be a NUL-terminated expression.
-pub(crate) unsafe fn may_call_simple_func(arg: *const c_char, rettv: *mut typval_T) -> c_int {
+pub(crate) unsafe fn may_call_simple_func(
+    arg: *const c_char,
+    rettv: *mut typval_T,
+) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is a NUL-terminated expression,
     // so `parens` is inside it and the two bytes of `()` precede its tail.
     let parens = unsafe { strstr(arg, c"()".as_ptr()) };
     if parens.is_null() || unsafe { *skipwhite(parens.add(2)) } as c_int != NUL {
-        return NOTDONE;
+        return Ok(Parsed::NotThis);
     }
     // SAFETY: as above, for every walk of `arg` below.
     if unsafe { strnequal(arg, c"v:lua.".as_ptr(), 6) } {
         let p = unsafe { arg.add(6) };
         if p != parens && unsafe { skip_luafunc_name(p) } == parens {
             let len = unsafe { parens.offset_from(p) } as size_t;
-            return unsafe { call_simple_luafunc(p, len, rettv) };
+            return Parsed::done(unsafe { call_simple_luafunc(p, len, rettv) });
         }
     } else {
         // A script-local name arrives as `<SNR>123_name`.
@@ -273,7 +277,7 @@ pub(crate) unsafe fn may_call_simple_func(arg: *const c_char, rettv: *mut typval
             return unsafe { call_simple_func(arg, len, rettv) };
         }
     }
-    NOTDONE
+    Ok(Parsed::NotThis)
 }
 
 /// `eval0` with the single-call shortcut tried first.
@@ -285,13 +289,11 @@ pub(crate) unsafe fn eval0_simple_funccal(
     rettv: *mut typval_T,
     eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise, handed straight on to both.
-    let r = unsafe { may_call_simple_func(arg, rettv) };
-    if r == NOTDONE {
-        unsafe { eval0(arg, rettv, eap, evalarg) }
-    } else {
-        r
+    match unsafe { may_call_simple_func(arg, rettv) }? {
+        Parsed::NotThis => unsafe { eval0(arg, rettv, eap, evalarg) },
+        Parsed::Done => Ok(()),
     }
 }
 
@@ -303,17 +305,17 @@ pub(crate) unsafe fn eval1(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the result being built and is written whole
     // before anything reads it.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
     unsafe { write_bytes(rettv, 0, 1) };
-    if unsafe { eval2(arg, rettv, evalarg) } == FAIL {
-        return FAIL;
+    if unsafe { eval2(arg, rettv, evalarg) }.is_err() {
+        return Err(Failed);
     }
     if cur.byte() != b'?' {
-        return OK;
+        return Ok(());
     }
     let op_falsy = cur.at(1) == b'?';
 
@@ -346,7 +348,7 @@ pub(crate) unsafe fn eval1(
             unsafe { tv_clear(rettv) };
         }
         if error {
-            return FAIL;
+            return Err(Failed);
         }
     }
 
@@ -357,9 +359,9 @@ pub(crate) unsafe fn eval1(
     let mut var2 = UNSET_TV;
     // SAFETY: `cur` is still the caller's cursor, `var2` is this frame's own
     // and `used` is the `evalarg` settled above.
-    if unsafe { eval1(arg, &raw mut var2, used.raw()) } == FAIL {
+    if unsafe { eval1(arg, &raw mut var2, used.raw()) }.is_err() {
         used.eval_flags = orig_flags;
-        return FAIL;
+        return Err(Failed);
     }
     if !op_falsy || !result {
         *rv = var2;
@@ -372,17 +374,17 @@ pub(crate) unsafe fn eval1(
                 unsafe { tv_clear(rettv) };
             }
             used.eval_flags = orig_flags;
-            return FAIL;
+            return Err(Failed);
         }
         cur.skip(1);
         used.eval_flags = flags_evaluating(orig_flags, !result);
         // SAFETY: as the first branch.
-        if unsafe { eval1(arg, &raw mut var2, used.raw()) } == FAIL {
+        if unsafe { eval1(arg, &raw mut var2, used.raw()) }.is_err() {
             if evaluate && result {
                 unsafe { tv_clear(rettv) };
             }
             used.eval_flags = orig_flags;
-            return FAIL;
+            return Err(Failed);
         }
         if evaluate && !result {
             *rv = var2;
@@ -395,7 +397,7 @@ pub(crate) unsafe fn eval1(
     } else {
         used.eval_flags = orig_flags;
     }
-    OK
+    Ok(())
 }
 
 /// `||` and `&&`, which differ only in what settles the answer early.
@@ -410,21 +412,21 @@ unsafe fn eval_logical(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-    operand: unsafe fn(*mut *mut c_char, *mut typval_T, *mut evalarg_T) -> c_int,
+    operand: unsafe fn(*mut *mut c_char, *mut typval_T, *mut evalarg_T) -> Result<(), Failed>,
     op: u8,
     stop_at: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` is the result being built.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    if unsafe { operand(arg, rettv, evalarg) } == FAIL {
-        return FAIL;
+    if unsafe { operand(arg, rettv, evalarg) }.is_err() {
+        return Err(Failed);
     }
     // The second byte is read only once the first matched, which is what
     // proves the cursor is not on the terminating NUL.
     let is_op = |cur: Cur| cur.byte() == op && cur.at(1) == op;
     if !is_op(cur) {
-        return OK;
+        return Ok(());
     }
 
     let mut local_evalarg = BORROWED_EVALARG;
@@ -446,7 +448,7 @@ unsafe fn eval_logical(
         result = unsafe { tv_get_number_chk(rettv, &raw mut error) } != 0;
         unsafe { tv_clear(rettv) };
         if error {
-            return FAIL;
+            return Err(Failed);
         }
     }
 
@@ -456,8 +458,8 @@ unsafe fn eval_logical(
         let mut var2 = UNSET_TV;
         // SAFETY: `arg` is still the caller's cursor and `var2` this
         // frame's own.
-        if unsafe { operand(arg, &raw mut var2, used.raw()) } == FAIL {
-            return FAIL;
+        if unsafe { operand(arg, &raw mut var2, used.raw()) }.is_err() {
+            return Err(Failed);
         }
         if evaluate && result != stop_at {
             let mut error = false;
@@ -465,7 +467,7 @@ unsafe fn eval_logical(
             result = unsafe { tv_get_number_chk(&raw mut var2, &raw mut error) } != 0;
             unsafe { tv_clear(&raw mut var2) };
             if error {
-                return FAIL;
+                return Err(Failed);
             }
         }
         if evaluate {
@@ -480,7 +482,7 @@ unsafe fn eval_logical(
     } else {
         used.eval_flags = orig_flags;
     }
-    OK
+    Ok(())
 }
 
 /// `||`.
@@ -491,7 +493,7 @@ pub(crate) unsafe fn eval2(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval3, b'|', true) }
 }
 
@@ -503,7 +505,7 @@ pub(crate) unsafe fn eval3(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval4, b'&', false) }
 }
 
@@ -515,16 +517,16 @@ pub(crate) unsafe fn eval4(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, and `rettv`/`evalarg` are the caller's own.
     let cur = unsafe { Cur::new(arg) };
-    if unsafe { eval5(arg, rettv, evalarg) } == FAIL {
-        return FAIL;
+    if unsafe { eval5(arg, rettv, evalarg) }.is_err() {
+        return Err(Failed);
     }
     let (op, mut len) = comparison_at(cur);
     if op == EXPR_UNKNOWN {
-        return OK;
+        return Ok(());
     }
 
     // A trailing `?` or `#` overrides 'ignorecase' for this comparison.
@@ -543,9 +545,9 @@ pub(crate) unsafe fn eval4(
     cur.skip(len as usize);
     let mut var2 = UNSET_TV;
     // SAFETY: as above, with `var2` this frame's own.
-    if unsafe { eval5(arg, &raw mut var2, evalarg) } == FAIL {
+    if unsafe { eval5(arg, &raw mut var2, evalarg) }.is_err() {
         unsafe { tv_clear(rettv) };
-        return FAIL;
+        return Err(Failed);
     }
     if unsafe { evaluating(evalarg) } {
         // SAFETY: both operands are typvals the levels just parsed.
@@ -553,7 +555,7 @@ pub(crate) unsafe fn eval4(
         unsafe { tv_clear(&raw mut var2) };
         return ret;
     }
-    OK
+    Ok(())
 }
 
 /// `+`, `-` and the two spellings of string concatenation.
@@ -564,19 +566,19 @@ pub(crate) unsafe fn eval5(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` the result being built and `evalarg` null or
     // valid. All three hold for every call below.
     let (cur, rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    if unsafe { eval6(arg, rettv, evalarg, false) } == FAIL {
-        return FAIL;
+    if unsafe { eval6(arg, rettv, evalarg, false) }.is_err() {
+        return Err(Failed);
     }
     loop {
         let op = cur.byte();
         let concat = op == b'.';
         if op != b'+' && op != b'-' && !concat {
-            return OK;
+            return Ok(());
         }
         let evaluate = unsafe { evaluating(evalarg) };
 
@@ -593,7 +595,7 @@ pub(crate) unsafe fn eval5(
             };
             if !ok {
                 unsafe { tv_clear(rettv) };
-                return FAIL;
+                return Err(Failed);
             }
         }
 
@@ -601,9 +603,9 @@ pub(crate) unsafe fn eval5(
         cur.skip(if concat && cur.at(1) == b'.' { 2 } else { 1 });
 
         let mut var2 = UNSET_TV;
-        if unsafe { eval6(arg, &raw mut var2, evalarg, concat) } == FAIL {
+        if unsafe { eval6(arg, &raw mut var2, evalarg, concat) }.is_err() {
             unsafe { tv_clear(rettv) };
-            return FAIL;
+            return Err(Failed);
         }
         if evaluate {
             let (blob2, list2) = (var2.v_type == VAR_BLOB, var2.v_type == VAR_LIST);
@@ -619,7 +621,7 @@ pub(crate) unsafe fn eval5(
                 unsafe { eval_addsub_number(rettv, two, op) }
             };
             if !ok {
-                return FAIL;
+                return Err(Failed);
             }
             unsafe { tv_clear(two) };
         }
@@ -635,27 +637,27 @@ pub(crate) unsafe fn eval6(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     want_string: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` the result being built and `evalarg` null or
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
-    if unsafe { eval7(arg, rettv, evalarg, want_string) } == FAIL {
-        return FAIL;
+    if unsafe { eval7(arg, rettv, evalarg, want_string) }.is_err() {
+        return Err(Failed);
     }
     loop {
         let op = cur.byte();
         if op != b'*' && op != b'/' && op != b'%' {
-            return OK;
+            return Ok(());
         }
         let evaluate = unsafe { evaluating(evalarg) };
         cur.skip(1);
         let mut var2 = UNSET_TV;
-        if unsafe { eval7(arg, &raw mut var2, evalarg, false) } == FAIL {
-            return FAIL;
+        if unsafe { eval7(arg, &raw mut var2, evalarg, false) }.is_err() {
+            return Err(Failed);
         }
         if evaluate && unsafe { !eval_multdiv_number(rettv, &raw mut var2, op) } {
-            return FAIL;
+            return Err(Failed);
         }
     }
 }
@@ -669,7 +671,7 @@ pub(crate) unsafe fn eval7(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     want_string: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     /// How deep `eval7` is into itself. The guard is what stops a
     /// self-referential expression from exhausting the C stack.
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
@@ -680,7 +682,7 @@ pub(crate) unsafe fn eval7(
     // valid. All three hold for every call below.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
     let evaluate = unsafe { evaluating(evalarg) };
-    let mut ret = OK;
+    let mut ret = Ok(Parsed::Done);
     rv.v_type = VAR_UNKNOWN;
 
     // The prefixes are collected now and applied last, so that `-1` is
@@ -696,38 +698,42 @@ pub(crate) unsafe fn eval7(
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let at = unsafe { c_str(at) };
         semsg!("E1169: Expression too recursive: {at}");
-        return FAIL;
+        return Err(Failed);
     }
-    RECURSE.set(RECURSE.get() + 1);
+    // The un-bump is the guard's, so that an early exit cannot skip it.
+    let _depth = Depth::of(&RECURSE);
 
     match cur.byte() {
         b'0'..=b'9' => {
-            ret = unsafe { eval_number(arg, rettv, evaluate, want_string) };
+            ret = Parsed::done(unsafe { eval_number(arg, rettv, evaluate, want_string) });
             // A number applies its prefixes here, where `-` still means
             // arithmetic negation rather than "negate what follows".
-            if ret == OK && evaluate && end_leader > start_leader {
+            if ret.is_ok() && evaluate && end_leader > start_leader {
                 let endp = &raw mut end_leader;
-                ret = unsafe { eval7_leader(rettv, true, start_leader, endp) };
+                ret = Parsed::done(unsafe { eval7_leader(rettv, true, start_leader, endp) });
             }
         }
-        b'"' => ret = unsafe { eval_string(arg, rettv, evaluate, false) },
-        b'\'' => ret = unsafe { eval_lit_string(arg, rettv, evaluate, false) },
-        b'[' => ret = unsafe { eval_list(arg, rettv, evalarg) },
+        b'"' => ret = Parsed::done(unsafe { eval_string(arg, rettv, evaluate, false) }),
+        b'\'' => ret = Parsed::done(unsafe { eval_lit_string(arg, rettv, evaluate, false) }),
+        b'[' => ret = Parsed::done(unsafe { eval_list(arg, rettv, evalarg) }),
         b'#' => ret = unsafe { eval_lit_dict(arg, rettv, evalarg) },
         b'{' => {
             // A `{` is a lambda if it parses as one and a Dict if not.
             ret = unsafe { get_lambda_tv(arg, rettv, evalarg) };
-            if ret == NOTDONE {
+            if ret == Ok(Parsed::NotThis) {
                 ret = unsafe { eval_dict(arg, rettv, evalarg, false) };
             }
         }
-        b'&' => ret = unsafe { eval_option(arg as *mut *const c_char, rettv, evaluate) },
+        b'&' => {
+            let argp = arg as *mut *const c_char;
+            ret = Parsed::done(unsafe { eval_option(argp, rettv, evaluate) });
+        }
         b'$' => {
-            ret = if matches!(cur.at(1), b'"' | b'\'') {
+            ret = Parsed::done(if matches!(cur.at(1), b'"' | b'\'') {
                 unsafe { eval_interp_string(arg, rettv, evaluate) }
             } else {
                 unsafe { eval_env_var(arg, rettv, evaluate) }
-            };
+            });
         }
         b'@' => {
             cur.bump(1);
@@ -746,19 +752,19 @@ pub(crate) unsafe fn eval7(
         }
         b'(' => {
             cur.skip(1);
-            ret = unsafe { eval1(arg, rettv, evalarg) };
+            ret = Parsed::done(unsafe { eval1(arg, rettv, evalarg) });
             if cur.byte() == b')' {
                 cur.bump(1);
-            } else if ret == OK {
+            } else if ret.is_ok() {
                 emsg(gettext(c"E110: Missing ')'"));
                 unsafe { tv_clear(rettv) };
-                ret = FAIL;
+                ret = Err(Failed);
             }
         }
-        _ => ret = NOTDONE,
+        _ => ret = Ok(Parsed::NotThis),
     }
 
-    if ret == NOTDONE {
+    if ret == Ok(Parsed::NotThis) {
         // Not a literal: it must be a name, and then either a call or a
         // variable.
         let mut alias: *mut c_char = null_mut();
@@ -767,7 +773,7 @@ pub(crate) unsafe fn eval7(
         let len = unsafe { get_name_len(cur.raw().cast(), aliasp, evaluate, true) };
         let name = if alias.is_null() { start } else { alias };
         if len <= 0 {
-            ret = FAIL;
+            ret = Err(Failed);
         } else {
             // SAFETY: `evalarg` is null or valid.
             let flags = if evalarg.is_null() {
@@ -779,10 +785,11 @@ pub(crate) unsafe fn eval7(
             let call = unsafe { *skipwhite(cur.get()) } == b'(' as c_char;
             if call {
                 cur.skip(0);
-                ret = unsafe { eval_func(arg, evalarg, name, len, rettv, flags, null_mut()) };
+                let func = unsafe { eval_func(arg, evalarg, name, len, rettv, flags, null_mut()) };
+                ret = Parsed::done(func);
             } else if evaluate {
                 let none = null_mut::<*mut dictitem_T>();
-                ret = unsafe { eval_variable(name, len, rettv, none, true, false) };
+                ret = Parsed::done(unsafe { eval_variable(name, len, rettv, none, true, false) });
             } else {
                 unsafe { check_vars(name, len as size_t) };
                 // While skipping, `v:lua.x` still has to come out as
@@ -795,7 +802,7 @@ pub(crate) unsafe fn eval7(
                     // SAFETY: `get_vim_var_partial` answers a live partial.
                     unsafe { (*partial).pt_refcount.retain() };
                 }
-                ret = OK;
+                ret = Ok(Parsed::Done);
             }
         }
         // SAFETY: `alias` is null or the buffer `get_name_len` allocated.
@@ -803,15 +810,15 @@ pub(crate) unsafe fn eval7(
     }
 
     cur.skip(0);
-    if ret == OK {
-        ret = unsafe { handle_subscript(cur.raw().cast(), rettv, evalarg, true) };
+    if ret.is_ok() {
+        let sub = unsafe { handle_subscript(cur.raw().cast(), rettv, evalarg, true) };
+        ret = Parsed::done(sub);
     }
-    if ret == OK && evaluate && end_leader > start_leader {
+    if ret.is_ok() && evaluate && end_leader > start_leader {
         let endp = &raw mut end_leader;
-        ret = unsafe { eval7_leader(rettv, false, start_leader, endp) };
+        ret = Parsed::done(unsafe { eval7_leader(rettv, false, start_leader, endp) });
     }
-    RECURSE.set(RECURSE.get() - 1);
-    ret
+    ret.map(|_| ())
 }
 
 /// Apply the `!`/`-`/`+` prefixes an operand was preceded by, rightmost
@@ -829,12 +836,12 @@ pub(crate) unsafe fn eval7_leader(
     numeric_only: bool,
     start_leader: *const c_char,
     end_leaderp: *mut *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `rettv` is the operand just parsed,
     // and `end_leaderp` is the caller's own cursor over the prefixes.
     let mut rv = unsafe { Tv::new(rettv) };
     let mut end_leader = unsafe { *end_leaderp };
-    let mut ret = OK;
+    let mut ret = Ok(());
     let mut error = false;
     let mut val: varnumber_T = 0;
     let mut f: float_T = 0.0;
@@ -848,7 +855,7 @@ pub(crate) unsafe fn eval7_leader(
 
     if error {
         unsafe { tv_clear(rettv) };
-        ret = FAIL;
+        ret = Err(Failed);
     } else {
         while end_leader > start_leader {
             end_leader = end_leader.wrapping_sub(1);

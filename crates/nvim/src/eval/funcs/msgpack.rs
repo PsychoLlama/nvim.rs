@@ -9,7 +9,7 @@ use crate::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
 };
 use crate::eval::encode::{
-    encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2json,
+    ListRead, encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2json,
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
 use crate::eval::typval::{
@@ -22,8 +22,8 @@ use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::os::cshim::memmove;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    blob_T, kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
+    EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
+    kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
 };
 use ::libc::strlen;
 use core::ffi::{c_char, c_int, c_void};
@@ -70,7 +70,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         len = unsafe { strlen(s) };
         s
     };
-    if unsafe { json_decode_string(s, len, rettv) } == FAIL {
+    if unsafe { json_decode_string(s, len, rettv) }.is_err() {
         // SAFETY: `s` is the caller's string and `len` its length.
         let s = unsafe { c_str_len(s, len) };
         semsg!("E474: Failed to parse {s}");
@@ -181,7 +181,7 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
         // SAFETY: `buf` has `ARENA_BLOCK_SIZE` bytes and `buf_size` of them
         // are used; the reader state and the count are locals.
         let rlret = unsafe { encode_read_from_list(state, at, room, got) };
-        if rlret == FAIL {
+        if rlret.is_err() {
             semsg!("E475: Invalid argument: List item is not a string");
             break;
         }
@@ -196,7 +196,7 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
             unsafe { tv_list_append_owned_tv(ret_list, cur_item) };
             cur_item.v_type = VAR_UNKNOWN;
         }
-        if rlret == OK {
+        if rlret == Ok(ListRead::Drained) {
             break;
         }
         if status == MPACK_EOF as c_int {

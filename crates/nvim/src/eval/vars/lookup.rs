@@ -17,7 +17,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// The buffer [`cat_prefix_varname`] hands its answer back in, and its size.
 ///
@@ -146,7 +146,7 @@ pub unsafe fn eval_variable(
     dip: *mut *mut dictitem_T,
     verbose: bool,
     no_autoload: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- `len` readable bytes, and `rettv`
     // and `dip` writable or NULL.
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
@@ -156,7 +156,7 @@ pub unsafe fn eval_variable(
             let name = unsafe { c_str_len(name, len as usize) };
             semsg!("E121: Undefined variable: {name}");
         }
-        return FAIL;
+        return Err(Failed);
     }
     if !dip.is_null() {
         unsafe { *dip = v };
@@ -165,7 +165,7 @@ pub unsafe fn eval_variable(
         let item = unsafe { Di::new(v) };
         unsafe { tv_copy(item.field_ptr(offset_of!(dictitem_T, di_tv)), rettv) };
     }
-    OK
+    Ok(())
 }
 
 /// Note in `eval_lavars_used` that `name[0..len]` is a function-local
@@ -416,11 +416,11 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
         if !tofree.is_null() {
             name = tofree;
         }
-        n = unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) } == OK;
+        n = unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) }.is_ok();
         if n {
             // Handle `d.key`, `l[idx]` and `Func()`.
             n = unsafe { handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) }
-                == OK;
+                .is_ok();
             if n {
                 clear_local(&mut tv);
             }

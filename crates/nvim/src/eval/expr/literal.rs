@@ -34,9 +34,8 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    FAIL, NUL, OK, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t,
-    varnumber_T,
+    Failed, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{strlen, strtod, toupper};
 
@@ -159,7 +158,7 @@ pub(crate) unsafe fn eval_option(
     arg: *mut *const c_char,
     rettv: *mut typval_T,
     evaluate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
     // NUL-terminated expression, and `rettv` is null or valid.
     let working = unsafe { **arg } == b'+' as c_char; // has("+option")
@@ -176,11 +175,11 @@ pub(crate) unsafe fn eval_option(
             let name = unsafe { c_str(name) };
             semsg!("E112: Option name missing: {name}");
         }
-        return FAIL;
+        return Err(Failed);
     }
     if !evaluate {
         unsafe { *arg = option_end };
-        return OK;
+        return Ok(());
     }
 
     // The name is terminated in place for the lookup and put back
@@ -199,7 +198,7 @@ pub(crate) unsafe fn eval_option(
             let name = unsafe { c_str(name) };
             semsg!("E113: Unknown option: {name}");
         }
-        FAIL
+        Err(Failed)
     } else if !rettv.is_null() {
         let value: OptVal = if is_tty_opt {
             get_tty_option(opt_name)
@@ -208,11 +207,11 @@ pub(crate) unsafe fn eval_option(
         };
         debug_assert!(value.type_0 != kOptValTypeNil);
         unsafe { *rettv = optval_as_tv(value, true) };
-        OK
+        Ok(())
     } else if working && !is_tty_opt && is_option_hidden(opt_idx) {
-        FAIL
+        Err(Failed)
     } else {
-        OK
+        Ok(())
     };
 
     unsafe { *option_end = c };
@@ -232,7 +231,7 @@ pub(crate) unsafe fn eval_number(
     rettv: *mut typval_T,
     evaluate: bool,
     want_string: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
     // NUL-terminated expression and `rettv` is valid when `evaluate`.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
@@ -293,7 +292,7 @@ pub(crate) unsafe fn eval_number(
                     unsafe { ga_clear(&raw mut (*blob).bv_ga) };
                     unsafe { xfree(blob.cast()) };
                 }
-                return FAIL;
+                return Err(Failed);
             }
             if !blob.is_null() {
                 let pair = (hex2nr(c_int::from(bp.byte())) << 4) + hex2nr(c_int::from(bp.at(1)));
@@ -326,7 +325,7 @@ pub(crate) unsafe fn eval_number(
                 let text = unsafe { c_str(text) };
                 semsg!("E15: Invalid expression: \"{text}\"");
             }
-            return FAIL;
+            return Err(Failed);
         }
         cur.bump(len as usize);
         if evaluate {
@@ -334,7 +333,7 @@ pub(crate) unsafe fn eval_number(
             rv.vval.v_number = n;
         }
     }
-    OK
+    Ok(())
 }
 
 /// A double-quoted string, with the cursor on the quote — or, when
@@ -349,7 +348,7 @@ pub(crate) unsafe fn eval_string(
     rettv: *mut typval_T,
     evaluate: bool,
     interpolate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
     // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
     // walks below stay inside that expression: the measuring pass stops at
@@ -400,7 +399,7 @@ pub(crate) unsafe fn eval_string(
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let text = unsafe { c_str(text) };
                 semsg!("E1278: Stray '}}' without a matching '{{': {text}");
-                return FAIL;
+                return Err(Failed);
             }
             extra -= 1; // `{{` becomes `{`, `}}` becomes `}`
         }
@@ -412,11 +411,11 @@ pub(crate) unsafe fn eval_string(
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let text = unsafe { c_str(text) };
         semsg!("E114: Missing quote: {text}");
-        return FAIL;
+        return Err(Failed);
     }
     if !evaluate {
         cur.set(unsafe { p.raw().add(off) });
-        return OK;
+        return Ok(());
     }
 
     // Copy the string into allocated memory, resolving the escapes.
@@ -557,7 +556,7 @@ pub(crate) unsafe fn eval_string(
         p.step(1);
     }
     cur.set(p.raw());
-    OK
+    Ok(())
 }
 
 /// A single-quoted string, in which the only escape is a doubled quote —
@@ -571,7 +570,7 @@ pub(crate) unsafe fn eval_lit_string(
     rettv: *mut typval_T,
     evaluate: bool,
     interpolate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
     // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
     // walks below stay inside that expression: the measuring pass stops at
@@ -606,7 +605,7 @@ pub(crate) unsafe fn eval_lit_string(
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let text = unsafe { c_str(text) };
                     semsg!("E1278: Stray '}}' without a matching '{{': {text}");
-                    return FAIL;
+                    return Err(Failed);
                 }
                 reduce += 1;
             }
@@ -619,11 +618,11 @@ pub(crate) unsafe fn eval_lit_string(
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let text = unsafe { c_str(text) };
         semsg!("E115: Missing quote: {text}");
-        return FAIL;
+        return Err(Failed);
     }
     if !evaluate {
         cur.set(unsafe { p.raw().add(off) });
-        return OK;
+        return Ok(());
     }
 
     let size = (unsafe { p.since(cur.get()) } - reduce as isize) as size_t;
@@ -650,7 +649,7 @@ pub(crate) unsafe fn eval_lit_string(
     }
     str.set(NUL as c_char);
     cur.set(unsafe { p.raw().add(off) });
-    OK
+    Ok(())
 }
 
 /// `$"..."` or `$'...'`, with the cursor on the `$`: alternating literal
@@ -665,12 +664,12 @@ pub(crate) unsafe fn eval_interp_string(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evaluate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
     // NUL-terminated expression and `rettv` is valid when `evaluate`. `ga`
     // is this frame's own and is initialised before anything appends to it.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    let mut ret = OK;
+    let mut ret = Ok(());
     let mut ga = UNSET_GA;
     unsafe { ga_init(&raw mut ga, 1, 80) };
 
@@ -689,7 +688,7 @@ pub(crate) unsafe fn eval_interp_string(
         } else {
             unsafe { eval_lit_string(arg, two, evaluate, true) }
         };
-        if ret == FAIL {
+        if ret.is_err() {
             break;
         }
         if evaluate {
@@ -705,18 +704,18 @@ pub(crate) unsafe fn eval_interp_string(
         // SAFETY: the cursor is on the `{` of a substitution.
         let p = unsafe { eval_one_expr_in_str(cur.get(), &raw mut ga, evaluate) };
         if p.is_null() {
-            ret = FAIL;
+            ret = Err(Failed);
             break;
         }
         cur.set(p);
     }
 
     rv.v_type = VAR_STRING;
-    if ret != FAIL && evaluate {
+    if ret.is_ok() && evaluate {
         unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     }
     rv.vval.v_string = ga.ga_data as *mut c_char;
-    OK
+    Ok(())
 }
 
 /// Read a Float out of `text`, answering how many bytes it consumed. The
@@ -754,7 +753,7 @@ pub(crate) unsafe fn eval_env_var(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evaluate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
     // NUL-terminated expression and `rettv` is valid when `evaluate`.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
@@ -762,10 +761,10 @@ pub(crate) unsafe fn eval_env_var(
     let name = cur.get();
     let len = unsafe { get_env_len(cur.raw().cast()) };
     if !evaluate {
-        return OK;
+        return Ok(());
     }
     if len == 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     // The name is terminated in place across the two lookups.
@@ -791,5 +790,5 @@ pub(crate) unsafe fn eval_env_var(
     rv.v_type = VAR_STRING;
     rv.vval.v_string = string;
     rv.v_lock = VarLock::Unlocked;
-    OK
+    Ok(())
 }

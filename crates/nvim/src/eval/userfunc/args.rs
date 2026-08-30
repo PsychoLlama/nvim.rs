@@ -15,7 +15,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::Walk;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.
 ///
@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_function_args(
     varargs: *mut c_int,
     default_args: *mut garray_T,
     skip: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut mustend = false;
     let slot = size_of::<*mut c_char>() as c_int;
     // SAFETY: the caller's promise -- `*argp` is NUL-terminated and
@@ -130,7 +130,7 @@ pub(crate) unsafe fn get_function_args(
                     // `eval1` advances in place.
                     let parsed =
                         unsafe { eval1((&raw mut p).cast(), &raw mut rettv, ptr::null_mut()) };
-                    if parsed != FAIL {
+                    if parsed.is_ok() {
                         unsafe { ga_grow(default_args, 1) };
                         while p.raw() > expr && ascii_iswhite(c_int::from(p.behind(1))) {
                             p.step_back(1);
@@ -182,7 +182,7 @@ pub(crate) unsafe fn get_function_args(
     };
     if closed {
         unsafe { *argp = p.raw().add(1) };
-        return OK;
+        return Ok(());
     }
 
     if !newargs.is_null() {
@@ -191,7 +191,7 @@ pub(crate) unsafe fn get_function_args(
     if !default_args.is_null() {
         unsafe { ga_clear_strings(default_args) };
     }
-    FAIL
+    Err(Failed)
 }
 
 /// Evaluate the arguments of a call, from the `(` at `*arg` to its `)`.
@@ -207,11 +207,11 @@ pub(crate) unsafe fn get_func_arguments(
     partial_argc: c_int,
     argvars: *mut typval_T,
     argcount: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `*arg` is on the `(` of a
     // NUL-terminated argument list, and `argvars` has room past `*argcount`.
     let mut argp = unsafe { Walk::new(*arg) };
-    let mut ret = OK;
+    let mut ret = Ok(());
     while unsafe { *argcount } < MAX_FUNC_ARGS - partial_argc {
         // skip the '(' or ','
         argp = unsafe { Walk::new(skipwhite(argp.raw().add(1))) };
@@ -221,8 +221,8 @@ pub(crate) unsafe fn get_func_arguments(
         let slot = unsafe { argvars.offset(*argcount as isize) };
         // SAFETY: `&raw mut argp` is this frame's own walk, which `eval1`
         // advances in place.
-        if unsafe { eval1((&raw mut argp).cast(), slot, evalarg) } == FAIL {
-            ret = FAIL;
+        if unsafe { eval1((&raw mut argp).cast(), slot, evalarg) }.is_err() {
+            ret = Err(Failed);
             break;
         }
         unsafe { *argcount += 1 };
@@ -234,7 +234,7 @@ pub(crate) unsafe fn get_func_arguments(
     if argp.byte() == b')' {
         argp.step(1);
     } else {
-        ret = FAIL;
+        ret = Err(Failed);
     }
     unsafe { *arg = argp.raw() };
     ret
@@ -250,7 +250,7 @@ pub unsafe fn get_func_arity(
     required: *mut c_int,
     optional: *mut c_int,
     varargs: *mut bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let argcount;
     let min_argcount;
     // SAFETY: the caller's promise -- `name` is NUL-terminated and the three
@@ -277,7 +277,7 @@ pub unsafe fn get_func_arity(
         };
         unsafe { xfree(tofree as *mut c_void) };
         if ufunc.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `find_func` answers a live function.
         let f = unsafe { Uf::new(ufunc) };
@@ -287,7 +287,7 @@ pub unsafe fn get_func_arity(
     }
     unsafe { *required = min_argcount };
     unsafe { *optional = argcount - min_argcount };
-    OK
+    Ok(())
 }
 
 /// Add one of `a:`'s fixed numbers, into a slot of the funccall's own

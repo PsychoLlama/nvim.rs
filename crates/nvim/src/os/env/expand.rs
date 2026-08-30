@@ -216,7 +216,7 @@ pub unsafe fn expand_env_esc(
                 let var = src;
                 src = src.add(2);
                 let mut cursor = src.cast_mut();
-                skip_expr(&raw mut cursor, ptr::null_mut());
+                let _ = skip_expr(&raw mut cursor, ptr::null_mut());
                 src = cursor;
                 if *src == b'`' as c_char {
                     src = src.add(1);

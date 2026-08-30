@@ -140,7 +140,7 @@ pub unsafe fn nvim_open_win(
                 // SAFETY: `switchwin` is this frame's own, and `parent`/`tp`
                 // are the live window and tab page to split in.
                 let result = unsafe { switch_win(&raw mut switchwin, parent, tp, true) };
-                debug_assert!(result == 1 as ::core::ffi::c_int, "result == OK");
+                debug_assert!(result.is_ok(), "the window was switched to");
                 // SAFETY: the window switched to is live.
                 wp = unsafe { split_ins(size, flags) };
                 // SAFETY: the matching restore of the switch above.
@@ -199,7 +199,7 @@ pub unsafe fn nvim_open_win(
             // SAFETY: `switchwin_0` is this frame's own, and `wp`/`tp` name
             // the window just made and its tab page.
             let result_0 = unsafe { switch_win_noblock(&raw mut switchwin_0, wp, tp, true) };
-            debug_assert!(result_0 == 1 as ::core::ffi::c_int, "result == OK");
+            debug_assert!(result_0.is_ok(), "the window was switched to");
             // SAFETY: an autocommand with neither a file name nor a pattern.
             let switched = unsafe {
                 apply_autocmds(

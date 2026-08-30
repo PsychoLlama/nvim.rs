@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -158,12 +159,12 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
     let mut rettv = TV_INITIAL_VALUE;
     // A bare `Func(v:val)` call is evaluated without the expression
     // parser; anything else goes through it.
-    let mut r = unsafe { may_call_simple_func(p, &raw mut rettv) };
-    if r == NOTDONE {
-        r = unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) };
-    }
+    let r = match unsafe { may_call_simple_func(p, &raw mut rettv) } {
+        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) },
+        other => other.map(|_| ()),
+    };
     let mut list: *mut list_T = ptr::null_mut();
-    if r == OK {
+    if r.is_ok() {
         if rettv.v_type == VAR_LIST {
             list = unsafe { rettv.vval.v_list };
         } else {

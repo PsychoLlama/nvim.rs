@@ -165,7 +165,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         name = line.word_then_space();
         if name.is_empty() {
             // ":highlight clear": back to the compiled-in defaults.
-            unsafe { do_unlet(c"g:colors_name".as_ptr(), 13, true) };
+            let _ = unsafe { do_unlet(c"g:colors_name".as_ptr(), 13, true) };
             restore_cterm_colors();
             for id in 1..=highlight_num_groups() {
                 highlight_clear(id);

@@ -18,7 +18,7 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    FAIL, NUL, OK, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
+    Failed, NUL, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
     pos_T, typval_T, uint8_t, win_T,
 };
 use crate::winlayer::Win;
@@ -282,16 +282,16 @@ pub unsafe fn list2fpos(
     fnump: *mut c_int,
     curswantp: *mut colnr_T,
     charcol: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
     let (arg, mut posp) = unsafe { (Tv::new(arg), Live::<pos_T>::new(posp)) };
     if arg.v_type != VAR_LIST {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
     let l: *mut list_T = unsafe { arg.vval.v_list };
     if l.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // Without a buffer number the List is 2..4 items, with one 3..5.
     let least = if fnump.is_null() { 2 } else { 3 };
@@ -299,7 +299,7 @@ pub unsafe fn list2fpos(
     // SAFETY: `l` is a live List.
     let n_items = unsafe { tv_list_len(l) };
     if n_items < least || n_items > most {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut i = 0;
@@ -308,7 +308,7 @@ pub unsafe fn list2fpos(
         let mut n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
         i += 1;
         if n < 0 {
-            return FAIL;
+            return Err(Failed);
         }
         if n == 0 {
             n = cur_buf().handle as c_int; // buffer 0 is "current"
@@ -321,7 +321,7 @@ pub unsafe fn list2fpos(
     let n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
     i += 1;
     if n < 0 {
-        return FAIL;
+        return Err(Failed);
     }
     posp.lnum = n as linenr_T;
 
@@ -329,7 +329,7 @@ pub unsafe fn list2fpos(
     let mut n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
     i += 1;
     if n < 0 {
-        return FAIL;
+        return Err(Failed);
     }
     if charcol {
         // SAFETY: the caller's promise -- a non-null `fnump` is valid, and
@@ -340,7 +340,7 @@ pub unsafe fn list2fpos(
             unsafe { *fnump }
         };
         let Some(mut buf) = find_buf(handle).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
-            return FAIL;
+            return Err(Failed);
         };
         let lnum = if posp.lnum == 0 {
             cur_win().w_cursor.lnum
@@ -361,5 +361,5 @@ pub unsafe fn list2fpos(
         // SAFETY: `l` is a live List, and a non-null `curswantp` is valid.
         unsafe { *curswantp = tv_list_find_nr(l, i + 1, null_mut()) as colnr_T };
     }
-    OK
+    Ok(())
 }

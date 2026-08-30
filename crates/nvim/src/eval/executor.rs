@@ -25,11 +25,11 @@ use crate::garray::ga_grow;
 use crate::os::cshim::memmove;
 use crate::strings::concat_str;
 use crate::types::{
-    FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
     VAR_STRING, VAR_UNKNOWN, blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T,
 };
 use ::libc::abort;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
 /// Is `op` one of the arithmetic operators, i.e. everything but concatenation?
 ///
@@ -54,17 +54,17 @@ fn float_op(lhs: float_T, op: u8, rhs: float_T) -> float_T {
 }
 
 /// `blob1 += blob2`.
-unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias, which is why they are held as pointers and never as references.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     if op != b'+' || rhs.v_type != VAR_BLOB {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `VAR_BLOB` says `v_blob` is the union's live arm.
     let b2: *mut blob_T = unsafe { rhs.vval.v_blob };
     if b2.is_null() {
-        return OK;
+        return Ok(());
     }
     // SAFETY: `tv1` reached this helper under `VAR_BLOB` too.
     let b1: *mut blob_T = unsafe { lhs.vval.v_blob };
@@ -74,7 +74,7 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
         lhs.vval.v_blob = b2;
         // SAFETY: `b2` is the live Blob the right-hand typval holds.
         unsafe { (*b2).bv_refcount.retain() };
-        return OK;
+        return Ok(());
     }
     // SAFETY: `b2` is live.
     let len = unsafe { (*b2).bv_ga.ga_len };
@@ -91,21 +91,21 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
         unsafe { memmove(end.cast(), (*b2).bv_ga.ga_data, n) };
         unsafe { (*ga).ga_len += len };
     }
-    OK
+    Ok(())
 }
 
 /// `list1 += list2`.
-unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     if op != b'+' || rhs.v_type != VAR_LIST {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `VAR_LIST` says `v_list` is the union's live arm.
     let l2 = unsafe { rhs.vval.v_list };
     if l2.is_null() {
-        return OK;
+        return Ok(());
     }
     // SAFETY: `tv1` reached this helper under `VAR_LIST` too.
     let l1 = unsafe { lhs.vval.v_list };
@@ -119,14 +119,14 @@ unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int 
         // SAFETY: both Lists are live.
         unsafe { tv_list_extend(l1, l2, ::core::ptr::null_mut::<listitem_T>()) };
     }
-    OK
+    Ok(())
 }
 
 /// `nr += nr`, `nr -= nr`, `nr *= nr`, `nr /= nr`, `nr %= nr`.
 ///
 /// A float on the right promotes the result to a float, except for `%`, which
 /// has no float form and fails.
-unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias. Both operands are read out in full before `tv_clear` touches
     // `tv1`, which is what makes the aliasing case safe.
@@ -135,7 +135,7 @@ unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_in
     let n: varnumber_T = unsafe { tv_get_number(tv1) };
     if rhs.v_type == VAR_FLOAT {
         if op == b'%' {
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
         let f = float_op(n as float_T, op, unsafe { rhs.vval.v_float });
@@ -160,11 +160,11 @@ unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_in
         lhs.v_type = VAR_NUMBER;
         lhs.vval.v_number = n;
     }
-    OK
+    Ok(())
 }
 
 /// `str1 .= str2`.
-unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
+unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> Result<(), Failed> {
     // The two operands need a scratch each: `s2` is still live when `tv1`'s
     // own string form is rendered.
     let mut numbuf1 = NumBuf::new();
@@ -174,7 +174,7 @@ unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
     // `tv_clear` runs.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     if rhs.v_type == VAR_FLOAT {
-        return FAIL;
+        return Err(Failed);
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above.
@@ -182,7 +182,7 @@ unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
     // An owned string with room to spare is extended in place.
     // SAFETY: as above.
     if unsafe { grow_string_tv(tv1, s2) } {
-        return OK;
+        return Ok(());
     }
     // SAFETY: as above.
     let s = unsafe { concat_str(numbuf1.string(tv1), s2) };
@@ -190,11 +190,11 @@ unsafe fn tv_op_string(tv1: *mut typval_T, tv2: *const typval_T) -> c_int {
     unsafe { tv_clear(tv1) };
     lhs.v_type = VAR_STRING;
     lhs.vval.v_string = s;
-    OK
+    Ok(())
 }
 
 /// `f1 += f2`, `f1 -= f2`, `f1 *= f2`, `f1 /= f2`.
-unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int {
+unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias. The right operand is read before the left is written.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
@@ -203,7 +203,7 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int
         || op == b'.'
         || (rhs_type != VAR_FLOAT && rhs_type != VAR_NUMBER && rhs_type != VAR_STRING)
     {
-        return FAIL;
+        return Err(Failed);
     }
     let f = if rhs_type == VAR_FLOAT {
         // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
@@ -216,7 +216,7 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int
     // SAFETY: `tv1` reached this helper under `VAR_FLOAT`, so `v_float` is
     // its live arm.
     lhs.vval.v_float = float_op(unsafe { lhs.vval.v_float }, op, f);
-    OK
+    Ok(())
 }
 
 /// `tv1 += tv2`, `-=`, `*=`, `/=`, `%=`, `.=`. Returns `OK` or `FAIL`; on
@@ -226,7 +226,11 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> c_int
 ///
 /// `tv1` and `tv2` must point at initialised typvals; `op` must point at a
 /// NUL-terminated operator. The two typvals may alias.
-pub unsafe fn eexe_mod_op(tv1: *mut typval_T, tv2: *const typval_T, op: *const c_char) -> c_int {
+pub unsafe fn eexe_mod_op(
+    tv1: *mut typval_T,
+    tv2: *const typval_T,
+    op: *const c_char,
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- `op` is NUL-terminated.
     let op = unsafe { CStr::from_ptr(op) };
     let op_byte = op.to_bytes().first().copied().unwrap_or(0);
@@ -241,7 +245,7 @@ pub unsafe fn eexe_mod_op(tv1: *mut typval_T, tv2: *const typval_T, op: *const c
         || ((rhs_type == VAR_BOOL || rhs_type == VAR_SPECIAL) && op_byte == b'.')
     {
         report_wrong_type(op);
-        return FAIL;
+        return Err(Failed);
     }
     let retval = match lhs.v_type {
         // SAFETY: as above -- each helper takes the same two pointers.
@@ -249,7 +253,7 @@ pub unsafe fn eexe_mod_op(tv1: *mut typval_T, tv2: *const typval_T, op: *const c
         VAR_LIST => unsafe { tv_op_list(tv1, tv2, op_byte) },
         VAR_NUMBER | VAR_STRING => {
             if rhs_type == VAR_LIST {
-                FAIL
+                Err(Failed)
             } else if is_arithmetic(op_byte) {
                 unsafe { tv_op_number(tv1, tv2, op_byte) }
             } else {
@@ -259,10 +263,10 @@ pub unsafe fn eexe_mod_op(tv1: *mut typval_T, tv2: *const typval_T, op: *const c
         VAR_FLOAT => unsafe { tv_op_float(tv1, tv2, op_byte) },
         VAR_UNKNOWN => unsafe { abort() },
         // Dict, Funcref, Partial, Bool and Special have no compound form.
-        _ => FAIL,
+        _ => Err(Failed),
     };
 
-    if retval != OK {
+    if retval.is_err() {
         report_wrong_type(op);
     }
     retval

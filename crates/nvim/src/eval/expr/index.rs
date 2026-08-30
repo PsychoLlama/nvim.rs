@@ -32,9 +32,9 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
-    EvalFuncData, FAIL, OK, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
-    evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
+    EvalFuncData, Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, evalarg_T,
+    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn eval_index(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     verbose: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the value being subscripted and `evalarg` is
     // null or valid. All three hold for every call below.
@@ -76,8 +76,8 @@ pub(crate) unsafe fn eval_index(
     let mut key: *const c_char = null();
     let mut keylen: ptrdiff_t = -1;
 
-    if unsafe { check_can_index(rettv, evaluate, verbose) } == FAIL {
-        return FAIL;
+    if unsafe { check_can_index(rettv, evaluate, verbose) }.is_err() {
+        return Err(Failed);
     }
 
     let mut var1 = UNSET_TV;
@@ -92,7 +92,7 @@ pub(crate) unsafe fn eval_index(
             keylen += 1;
         }
         if keylen == 0 {
-            return FAIL;
+            return Err(Failed);
         }
         cur.skip(1 + keylen as usize);
     } else {
@@ -100,11 +100,11 @@ pub(crate) unsafe fn eval_index(
         cur.skip(1);
         if cur.byte() == b':' {
             empty1 = true;
-        } else if unsafe { eval1(arg, &raw mut var1, evalarg) } == FAIL {
-            return FAIL;
+        } else if unsafe { eval1(arg, &raw mut var1, evalarg) }.is_err() {
+            return Err(Failed);
         } else if evaluate && !unsafe { tv_check_str(&raw mut var1) } {
             unsafe { tv_clear(&raw mut var1) };
-            return FAIL;
+            return Err(Failed);
         }
 
         // The second index, from inside the `[ : ]`.
@@ -113,17 +113,17 @@ pub(crate) unsafe fn eval_index(
             cur.skip(1);
             if cur.byte() == b']' {
                 empty2 = true;
-            } else if unsafe { eval1(arg, &raw mut var2, evalarg) } == FAIL {
+            } else if unsafe { eval1(arg, &raw mut var2, evalarg) }.is_err() {
                 if !empty1 {
                     unsafe { tv_clear(&raw mut var1) };
                 }
-                return FAIL;
+                return Err(Failed);
             } else if evaluate && !unsafe { tv_check_str(&raw mut var2) } {
                 if !empty1 {
                     unsafe { tv_clear(&raw mut var1) };
                 }
                 unsafe { tv_clear(&raw mut var2) };
-                return FAIL;
+                return Err(Failed);
             }
         }
 
@@ -136,13 +136,13 @@ pub(crate) unsafe fn eval_index(
             if range {
                 unsafe { tv_clear(&raw mut var2) };
             }
-            return FAIL;
+            return Err(Failed);
         }
         cur.skip(1);
     }
 
     if !evaluate {
-        return OK;
+        return Ok(());
     }
     let one = if empty1 { null_mut() } else { &raw mut var1 };
     let two = if empty2 { null_mut() } else { &raw mut var2 };
@@ -160,26 +160,30 @@ pub(crate) unsafe fn eval_index(
 ///
 /// # Safety
 /// `rettv` must be valid.
-pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbose: bool) -> c_int {
+pub(crate) unsafe fn check_can_index(
+    rettv: *mut typval_T,
+    evaluate: bool,
+    verbose: bool,
+) -> Result<(), Failed> {
     let message = match unsafe { (*rettv).v_type } {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
         VAR_FLOAT => e_using_float_as_string.as_ptr(),
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
         // Not evaluating: the subscript is only being skipped over, and an
         // unset value is what an unevaluated operand looks like.
-        VAR_UNKNOWN if !evaluate => return OK,
+        VAR_UNKNOWN if !evaluate => return Ok(()),
         // Reported whether or not the caller asked to be verbose.
         VAR_UNKNOWN => {
             emsg(gettext(e_cannot_index_special_variable));
-            return FAIL;
+            return Err(Failed);
         }
-        _ => return OK,
+        _ => return Ok(()),
     };
     if verbose {
         // SAFETY: as above.
         unsafe { emsg(gettext_ptr(message)) };
     }
-    FAIL
+    Err(Failed)
 }
 
 /// `slice()`
@@ -187,7 +191,7 @@ pub(crate) unsafe fn check_can_index(rettv: *mut typval_T, evaluate: bool, verbo
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
 pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    if unsafe { check_can_index(argvars, true, false) } != OK {
+    if unsafe { check_can_index(argvars, true, false) }.is_err() {
         return;
     }
     unsafe { tv_copy(argvars, rettv) };
@@ -199,7 +203,7 @@ pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     } else {
         last
     };
-    unsafe { eval_index_inner(rettv, true, first, end, true, null(), 0, false) };
+    let _ = unsafe { eval_index_inner(rettv, true, first, end, true, null(), 0, false) };
 }
 
 /// Apply an index or a range to `rettv`, in place.
@@ -222,7 +226,7 @@ pub(crate) unsafe fn eval_index_inner(
     key: *const c_char,
     keylen: ptrdiff_t,
     verbose: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut n1: varnumber_T = 0;
@@ -238,7 +242,7 @@ pub(crate) unsafe fn eval_index_inner(
             if verbose {
                 emsg(gettext(e_cannot_slice_dictionary));
             }
-            return FAIL;
+            return Err(Failed);
         }
         n2 = if var2.is_null() {
             VARNUMBER_MAX
@@ -305,7 +309,7 @@ pub(crate) unsafe fn eval_index_inner(
                 tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
             };
             if sliced.is_err() {
-                return FAIL;
+                return Err(Failed);
             }
         }
         VAR_DICT => {
@@ -314,7 +318,7 @@ pub(crate) unsafe fn eval_index_inner(
                 // SAFETY: `numbuf2` is this frame's own scratch.
                 key = unsafe { numbuf2.string_chk(var1) };
                 if key.is_null() {
-                    return FAIL;
+                    return Err(Failed);
                 }
             }
             // SAFETY: the tag says the union holds a Dict, and `key` is the
@@ -333,7 +337,7 @@ pub(crate) unsafe fn eval_index_inner(
                 }
             }
             if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {
-                return FAIL;
+                return Err(Failed);
             }
             // The copy is taken before `rettv` — which owns the Dict the
             // item lives in — is cleared.
@@ -345,7 +349,7 @@ pub(crate) unsafe fn eval_index_inner(
         // Not evaluating: skipping over the subscript.
         _ => {}
     }
-    OK
+    Ok(())
 }
 
 /// `str[index]` by character index, composing characters included. Answers
@@ -472,13 +476,13 @@ pub(crate) unsafe fn handle_subscript(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     verbose: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the operand it follows and `evalarg` is null or
     // valid. All three hold for every call below.
     let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(rettv)) };
     let evaluate = unsafe { evaluating(evalarg) };
-    let mut ret = OK;
+    let mut ret = Ok(());
     let mut selfdict: *mut dict_T = null_mut();
     let mut lua_funcname: *const c_char = null();
 
@@ -488,14 +492,14 @@ pub(crate) unsafe fn handle_subscript(
         }
         if cur.byte() != b'.' {
             unsafe { tv_clear(rettv) };
-            ret = FAIL;
+            ret = Err(Failed);
         } else {
             cur.bump(1);
             lua_funcname = cur.get();
             let len = unsafe { check_luafunc_name(cur.get(), true) };
             if len == 0 {
                 unsafe { tv_clear(rettv) };
-                ret = FAIL;
+                ret = Err(Failed);
             }
             cur.bump(len as usize);
         }
@@ -515,7 +519,7 @@ pub(crate) unsafe fn handle_subscript(
             || (c == b'-' && cur.at(1) == b'>')
     };
 
-    while ret == OK && more() {
+    while ret.is_ok() && more() {
         if cur.byte() == b'(' {
             let (raw, lua) = (cur.raw(), lua_funcname);
             ret = unsafe {
@@ -524,10 +528,10 @@ pub(crate) unsafe fn handle_subscript(
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {
-                if ret == OK {
+                if ret.is_ok() {
                     unsafe { tv_clear(rettv) };
                 }
-                ret = FAIL;
+                ret = Err(Failed);
             }
             unsafe { tv_dict_unref(selfdict) };
             selfdict = null_mut();
@@ -553,9 +557,9 @@ pub(crate) unsafe fn handle_subscript(
             } else {
                 null_mut()
             };
-            if unsafe { eval_index(cur.raw(), rettv, evalarg, verbose) } == FAIL {
+            if unsafe { eval_index(cur.raw(), rettv, evalarg, verbose) }.is_err() {
                 unsafe { tv_clear(rettv) };
-                ret = FAIL;
+                ret = Err(Failed);
             }
         }
     }

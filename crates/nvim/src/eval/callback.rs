@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Depth;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr::{null, null_mut};
 
@@ -198,12 +199,13 @@ pub unsafe fn callback_call(
     funcexe.fe_lastline = cur_win().w_cursor.lnum;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
-    callback_depth.set(callback_depth.get() + 1);
+    // The un-bump is the guard's, so that an early exit cannot skip it.
+    let depth = Depth::of(&callback_depth);
     // SAFETY: `name` is a NUL-terminated function name, and the caller's
     // promise covers `argvars_in`, `argcount_in` and `rettv`.
     let ret = unsafe { call_func(name, -1, rettv, argcount_in, argvars_in, &raw mut funcexe) };
-    callback_depth.set(callback_depth.get() - 1);
-    ret != 0
+    drop(depth);
+    ret.is_ok()
 }
 
 /// Mark what a callback keeps alive for the collector.

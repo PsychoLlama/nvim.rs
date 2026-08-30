@@ -15,7 +15,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
 use super::decode_create_map_special_dict;
 use crate::eval::typval::{
@@ -24,7 +24,7 @@ use crate::eval::typval::{
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FAIL, OK, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock, kBoolVarFalse,
+    Failed, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock, kBoolVarFalse,
     kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union,
 };
@@ -96,7 +96,7 @@ pub unsafe fn json_decode_string(
     buf: *const c_char,
     buf_len: size_t,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: `buf`/`buf_len` are the caller's obligation, which upstream
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
     // owned by it until it is stored, and the failure path clears whatever is
@@ -109,12 +109,12 @@ pub unsafe fn json_decode_string(
     }
     if p == buf_len {
         emsg(gettext(E474_BLANK_STRING));
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { (*rettv).v_type = VAR_UNKNOWN };
     let mut dec = Decoder::new(bytes);
-    let mut ret = OK;
+    let mut ret = Ok(());
     // Whether a container holds nothing yet, which is what makes a comma
     // a leading one.
     let is_empty = |c: &Container| {
@@ -335,7 +335,7 @@ pub unsafe fn json_decode_string(
             }
             dec.emsg_rest(E474_UNEXPECTED_END, 0);
         }
-        ret = FAIL;
+        ret = Err(Failed);
         while let Some(mut left) = dec.stack.pop() {
             unsafe { tv_clear(&raw mut left.val) };
         }

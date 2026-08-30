@@ -16,7 +16,7 @@ use core::ptr;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
-use crate::types::{NUL, OK, OptionSetFlags};
+use crate::types::{NUL, OptionSetFlags};
 use crate::winlayer::{TabPage, Win, WinId, first_window};
 
 /// The zeroed `switchwin_T` [`switch_win`] fills in.
@@ -68,7 +68,7 @@ unsafe fn get_var_from(
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
         // SAFETY: `varname` is NUL-terminated and the handles are live.
         let lead = unsafe { *varname } as u8;
-        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) } == OK {
+        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) }.is_ok() {
             if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
                 let save_curbuf = curbuf.get();
@@ -82,7 +82,7 @@ unsafe fn get_var_from(
                         unsafe { tv_dict_set_ret(rettv, opts) };
                         done = true;
                     }
-                } else if unsafe { eval_option(&raw mut varname, rettv, true) } == OK {
+                } else if unsafe { eval_option(&raw mut varname, rettv, true) }.is_ok() {
                     done = true;
                 }
                 curbuf.set(save_curbuf);
@@ -334,7 +334,7 @@ unsafe fn setwinvar(argvars: *mut typval_T, off: c_int) {
 
     let need_switch_win = !(tp == curtab.get() && win == curwin.get());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
-    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) } == OK {
+    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };
         } else {

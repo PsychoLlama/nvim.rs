@@ -18,7 +18,6 @@ use crate::api::private::validate::err_expected_ptr;
 use crate::api_error;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
-use crate::types::{FAIL, OK};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -61,7 +60,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
         ok
     });
     if !error.is_set() {
-        if ok == FAIL {
+        if ok.is_err() {
             // The expression is quoted back at the user, capped so a huge
             // one does not become the whole message. Upstream's `%.*s` stops
             // at the terminator as well as the cap, which is what the `min`
@@ -128,7 +127,7 @@ unsafe fn call_function_with(
         let (ret, fe) = (&raw mut rettv, &raw mut funcexe);
         // SAFETY: `name` names `name_len` bytes, `argv` holds `argc`
         // converted arguments, and `rettv`/`funcexe` are this frame's.
-        unsafe { call_func(name, name_len, ret, argc, argv, fe) };
+        let _ = unsafe { call_func(name, name_len, ret, argc, argv, fe) };
         // SAFETY: `tstate` is what the `try_enter` above filled in, and
         // `err` is the caller's slot.
         unsafe { try_leave(&raw mut tstate, err) };
@@ -188,7 +187,7 @@ pub unsafe fn nvim_call_dict_function(
         if error.is_set() {
             return Object::NIL.reported(error);
         }
-        if eval_ret != OK {
+        if eval_ret.is_err() {
             // `eval0` answers `FAIL` only by throwing, which `try_leave`
             // would have turned into an error.
             // SAFETY: `abort` takes nothing.

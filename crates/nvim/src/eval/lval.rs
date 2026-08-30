@@ -60,8 +60,8 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, dict_T,
-    dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
+    FAIL, Failed, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock,
+    dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
     typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{memset, strlen};
@@ -275,7 +275,7 @@ pub(crate) unsafe fn get_lval_blob(
     var2: *mut typval_T,
     empty1: bool,
     quiet: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
     let mut lp = unsafe { Lv::new(lp) };
     // SAFETY: as above.
@@ -289,7 +289,7 @@ pub(crate) unsafe fn get_lval_blob(
     let n1 = lp.ll_n1 as varnumber_T;
     // SAFETY: the index is checked against the length measured above.
     if unsafe { tv_blob_check_index(bloblen, n1, quiet) }.is_err() {
-        return FAIL;
+        return Err(Failed);
     }
     if lp.ll_range && !lp.ll_empty2 {
         // SAFETY: `var2` is the caller's second index expression.
@@ -297,13 +297,13 @@ pub(crate) unsafe fn get_lval_blob(
         let n2 = lp.ll_n2 as varnumber_T;
         // SAFETY: as above.
         if unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }.is_err() {
-            return FAIL;
+            return Err(Failed);
         }
     }
     // SAFETY: as above -- the typval still holds the Blob.
     lp.ll_blob = unsafe { Tv::new(lp.ll_tv).vval.v_blob };
     lp.ll_tv = null_mut();
-    OK
+    Ok(())
 }
 
 /// Resolve a `[n]` or `[n:m]` subscript against the List in `lp->ll_tv`,
@@ -318,7 +318,7 @@ pub(crate) unsafe fn get_lval_list(
     empty1: bool,
     _flags: c_int,
     quiet: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // The two range callees write back through the addresses of `ll_n1` and
     // `ll_n2`, so those addresses are live across the rest of this body.
     // Every field written below therefore goes through the pointer rather
@@ -354,7 +354,7 @@ pub(crate) unsafe fn get_lval_list(
         (list, li)
     };
     if li.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `rec` is the caller's record.
     let ranged = unsafe { (*rec).ll_range && !(*rec).ll_empty2 };
@@ -364,12 +364,12 @@ pub(crate) unsafe fn get_lval_list(
         unsafe { *n2 = tv_get_number(var2) as c_int };
         // SAFETY: `li` is the item index one selected.
         if unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }.is_err() {
-            return FAIL;
+            return Err(Failed);
         }
     }
     // SAFETY: `ll_li` is a live item, whose typval is the target.
     unsafe { (*rec).ll_tv = &raw mut (*li).li_tv };
-    OK
+    Ok(())
 }
 
 /// Walk every `[idx]` and `.key` following the name, descending `lp->ll_tv`
@@ -477,7 +477,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     empty1 = true;
                 } else {
                     empty1 = false;
-                    if unsafe { eval1(&raw mut p, &raw mut var1, &raw mut evalarg) } == FAIL {
+                    if unsafe { eval1(&raw mut p, &raw mut var1, &raw mut evalarg) }.is_err() {
                         break 'done;
                     }
                     if !unsafe { tv_check_str(&raw mut var1) } {
@@ -513,7 +513,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     } else {
                         lp.ll_empty2 = false;
                         let ev = unsafe { eval1(&raw mut p, &raw mut var2, &raw mut evalarg) };
-                        if ev == FAIL {
+                        if ev.is_err() {
                             break 'done;
                         }
                         if !unsafe { tv_check_str(&raw mut var2) } {
@@ -549,14 +549,14 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
             } else if container.v_type == VAR_BLOB {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_blob(lp.raw(), a, b, empty1, quiet) } == FAIL {
+                if unsafe { get_lval_blob(lp.raw(), a, b, empty1, quiet) }.is_err() {
                     break 'done;
                 }
                 // A Blob byte is never a container, so this is the end.
                 break;
             } else {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_list(lp.raw(), a, b, empty1, flags, quiet) } == FAIL {
+                if unsafe { get_lval_list(lp.raw(), a, b, empty1, flags, quiet) }.is_err() {
                     break 'done;
                 }
             }
@@ -832,7 +832,7 @@ pub unsafe fn set_var_lval(
                 // `+=` and friends modify in place; there is nothing to
                 // assign afterwards.
                 // SAFETY: `ll_tv` is the live target and `rettv` the caller's value.
-                unsafe { eexe_mod_op(lp.ll_tv, rettv, op) };
+                let _ = unsafe { eexe_mod_op(lp.ll_tv, rettv, op) };
                 break 'notify;
             }
             unsafe { tv_clear(lp.ll_tv) };
@@ -913,7 +913,7 @@ unsafe fn set_whole_var(
         // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
         let (tvp, dip) = (&raw mut tv, &raw mut di);
         let found = unsafe { eval_variable(name, name_len as c_int, tvp, dip, true, false) };
-        if found == OK {
+        if found.is_ok() {
             // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
             let (n, dtv) = if di.is_null() {
                 (0, null_mut())
@@ -926,7 +926,7 @@ unsafe fn set_whole_var(
             let writable = di.is_null()
                 || (!unsafe { var_check_ro(n, name, TV_CSTRING as size_t) }
                     && !unsafe { tv_check_lock(dtv, name, TV_CSTRING as size_t) });
-            if writable && unsafe { eexe_mod_op(&raw mut tv, rettv, op) } == OK {
+            if writable && unsafe { eexe_mod_op(&raw mut tv, rettv, op) }.is_ok() {
                 // SAFETY: as above -- the folded value goes back by name.
                 unsafe { set_var(name, name_len, &raw mut tv, false) };
             }

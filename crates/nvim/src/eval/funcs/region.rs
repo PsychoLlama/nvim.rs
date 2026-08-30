@@ -28,7 +28,7 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, MotionType, NUL, OK, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
+    EvalFuncData, MotionType, NUL, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
     kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use ::libc::memset;
@@ -151,8 +151,8 @@ fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     // SAFETY: both arguments are live typvals and the four out-parameters
     // are locals. The second is only read when the first parsed, as
     // upstream's short-circuit has it.
-    if unsafe { list2fpos(args.ptr(0), out1, buf1, nul, false) } != OK
-        || unsafe { list2fpos(args.ptr(1), out2, buf2, nul, false) } != OK
+    if unsafe { list2fpos(args.ptr(0), out1, buf1, nul, false) }.is_err()
+        || unsafe { list2fpos(args.ptr(1), out2, buf2, nul, false) }.is_err()
         || fnum1 != fnum2
     {
         return None;

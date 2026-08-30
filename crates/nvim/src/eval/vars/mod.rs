@@ -76,8 +76,8 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
-    BoolVarValue, CMD_const, CMD_lockvar, EvalFuncData, GRegFlags, OptIndex, OptInt, OptVal,
-    OptValData, OptValType, QUEUE, Refcount, ScopeDictDictItem, ScopeType, SpecialVarValue,
+    BoolVarValue, CMD_const, CMD_lockvar, EvalFuncData, Failed, GRegFlags, OptIndex, OptInt,
+    OptVal, OptValData, OptValType, QUEUE, Refcount, ScopeDictDictItem, ScopeType, SpecialVarValue,
     VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
     VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
     VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
@@ -194,7 +194,8 @@ pub const kGRegExprSrc: GRegFlags = 2;
 /// What `ex_unletlock` does to each argument it resolves: `do_unlet_var` or
 /// `do_lock_var`.  The two are written together because the walk that finds
 /// the arguments is what makes `:unlet` and `:lockvar` agree.
-pub type ex_unletlock_callback = unsafe fn(*mut lval_T, *mut c_char, *mut exarg_T, c_int) -> c_int;
+pub type ex_unletlock_callback =
+    unsafe fn(*mut lval_T, *mut c_char, *mut exarg_T, c_int) -> Result<(), Failed>;
 
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;

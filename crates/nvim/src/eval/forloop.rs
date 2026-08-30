@@ -29,7 +29,7 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    NUL, OK, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
+    NUL, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
     listitem_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 
@@ -89,7 +89,7 @@ pub unsafe fn eval_for_line(
     let mut tv = UNSET_TV;
     // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `eap` and
     // `evalarg` are the caller's.
-    if unsafe { eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) } == OK {
+    if unsafe { eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) }.is_ok() {
         // SAFETY: the caller's promise about `errp`.
         unsafe { *errp = false };
         if !skip {
@@ -234,7 +234,7 @@ unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut typval_T) -> bool {
     let (semicolon, varcount) = (fi.fi_semicolon, fi.fi_varcount);
     // SAFETY: the caller's promise -- `arg` is the loop's variable list and
     // `tv` the item being assigned.
-    unsafe { ex_let_vars(arg, tv, true, semicolon, varcount, false, null_mut()) == OK }
+    unsafe { ex_let_vars(arg, tv, true, semicolon, varcount, false, null_mut()).is_ok() }
 }
 
 /// Release the iteration.

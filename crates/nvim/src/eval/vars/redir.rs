@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// Append the message in `gap` to `v:errors`, which the `assert_*` builtins
 /// report through.
@@ -66,11 +66,11 @@ unsafe fn resolve_redir_lval() -> *mut c_char {
 ///
 /// # Safety
 /// `name` is a NUL-terminated string.
-pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
+pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Failed> {
     // Catch a bad name early.
     if !eval_isnamec1(unsafe { *name } as c_int) {
         emsg_static(e_invarg);
-        return FAIL;
+        return Err(Failed);
     }
 
     // The name is used again in `var_redir_stop`, so it is copied for as
@@ -105,7 +105,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());
         unsafe { var_redir_stop() };
-        return FAIL;
+        return Err(Failed);
     }
 
     // Check the variable can be written, by setting it to -- or
@@ -127,9 +127,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> c_int {
     if called_emsg.get() > called_emsg_before {
         redir_endp.set(ptr::null_mut());
         unsafe { var_redir_stop() };
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Append `value[0..value_len]` to what `:redir =>` is capturing, or the

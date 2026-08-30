@@ -15,7 +15,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK, Refcount};
+use crate::types::{FAIL, Failed, NUL, OK, Refcount};
 
 /// Whether the function table changed under a listing, which means the
 /// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.
@@ -32,7 +32,11 @@ pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
 ///
 /// # Safety
 /// `fp` is a live function.
-pub(crate) unsafe fn list_func_head(fp: *mut ufunc_T, indent: bool, force: bool) -> c_int {
+pub(crate) unsafe fn list_func_head(
+    fp: *mut ufunc_T,
+    indent: bool,
+    force: bool,
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let mut f = unsafe { Uf::new(fp) };
     let prev_ht_changed = func_table().changed();
@@ -42,7 +46,7 @@ pub(crate) unsafe fn list_func_head(fp: *mut ufunc_T, indent: bool, force: bool)
     // Check no function was added or removed from a callback, as
     // `msg_start` may have invoked a redraw.
     if unsafe { function_list_modified(prev_ht_changed) } != 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     if indent {
@@ -97,7 +101,7 @@ pub(crate) unsafe fn list_func_head(fp: *mut ufunc_T, indent: bool, force: bool)
     if p_verbose.get() > 0 {
         unsafe { last_set_msg(f.uf_script_ctx) };
     }
-    OK
+    Ok(())
 }
 
 /// `:function`.
@@ -251,7 +255,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
             let close = b')' as c_char;
             // SAFETY: `p` walks the caller's command line and the three
             // out-parameters are this frame's locals.
-            if unsafe { get_function_args(argp, close, args, varp, defs, ea.skip != 0) } != FAIL {
+            if unsafe { get_function_args(argp, close, args, varp, defs, ea.skip != 0) }.is_ok() {
                 if KeyTyped.get() && ui_has(kUICmdline) {
                     show_block = true;
                     unsafe { ui_ext_cmdline_block_append(0, ea.cmd) };

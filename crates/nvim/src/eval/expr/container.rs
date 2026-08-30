@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -14,10 +15,10 @@ use crate::eval::typval::{
     tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
     tv_list_append_owned_tv, tv_list_free, tv_list_set_ret,
 };
-use crate::eval::{Cur, EVAL_EVALUATE, NOTDONE, Tv, eval1};
+use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{
-    FAIL, NUL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
+    Failed, NUL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
     ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use crate::winlayer::Live;
@@ -48,7 +49,7 @@ pub(crate) unsafe fn eval_list(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the result being built and `evalarg` is null or
     // valid. All three hold for every call below.
@@ -64,7 +65,7 @@ pub(crate) unsafe fn eval_list(
     let ok = 'items: {
         while cur.byte() != b']' && cur.byte() != NUL as u8 {
             let mut tv = UNSET_TV;
-            if unsafe { eval1(arg, &raw mut tv, evalarg) } == FAIL {
+            if unsafe { eval1(arg, &raw mut tv, evalarg) }.is_err() {
                 break 'items false;
             }
             if evaluate {
@@ -103,19 +104,22 @@ pub(crate) unsafe fn eval_list(
     };
 
     if ok {
-        return OK;
+        return Ok(());
     }
     if evaluate {
         unsafe { tv_list_free(list) };
     }
-    FAIL
+    Err(Failed)
 }
 
 /// The bare word a `#{}` literal uses as a key.
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression.
-pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut typval_T) -> c_int {
+pub(crate) unsafe fn get_literal_key(
+    arg: *mut *mut c_char,
+    tv: *mut typval_T,
+) -> Result<(), Failed> {
     /// Letters, digits, `_` and `-`: what a literal key may contain.
     fn is_key_char(c: c_char) -> bool {
         let b = c as u8;
@@ -127,7 +131,7 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut typval_T) -
     // first byte that cannot be in a key, which the NUL is not.
     let (cur, mut key) = unsafe { (Cur::new(arg), Tv::new(tv)) };
     if !is_key_char(cur.byte() as c_char) {
-        return FAIL;
+        return Err(Failed);
     }
     let mut len = 0;
     while is_key_char(cur.at(len) as c_char) {
@@ -136,12 +140,12 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut typval_T) -
     key.v_type = VAR_STRING;
     key.vval.v_string = unsafe { xmemdupz(cur.get().cast(), len as size_t) } as *mut c_char;
     cur.skip(len);
-    OK
+    Ok(())
 }
 
 /// `{k: v}` and, with `literal` set, `#{k: v}`.
 ///
-/// Answers `NOTDONE` when the `{` opened a curly-braces name rather than a
+/// Answers [`Parsed::NotThis`] when the `{` opened a curly-braces name rather than a
 /// dictionary, which the caller then re-reads as a name.
 ///
 /// # Safety
@@ -151,7 +155,7 @@ pub(crate) unsafe fn eval_dict(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     literal: bool,
-) -> c_int {
+) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the result being built and `evalarg` is null or
     // valid. All three hold for every call below.
@@ -167,10 +171,10 @@ pub(crate) unsafe fn eval_dict(
     let mut curly_expr = unsafe { skipwhite(cur.get().add(1)) };
     if unsafe { *curly_expr } != b'}' as c_char
         && !literal
-        && unsafe { eval1(&raw mut curly_expr, &raw mut tv, null_mut()) } == OK
+        && unsafe { eval1(&raw mut curly_expr, &raw mut tv, null_mut()) }.is_ok()
         && unsafe { *skipwhite(curly_expr) } == b'}' as c_char
     {
-        return NOTDONE;
+        return Ok(Parsed::NotThis);
     }
 
     let dict: *mut dict_T = if evaluate {
@@ -189,7 +193,7 @@ pub(crate) unsafe fn eval_dict(
             } else {
                 unsafe { eval1(arg, &raw mut tvkey, evalarg) }
             };
-            if read_key == FAIL {
+            if read_key.is_err() {
                 break 'items false;
             }
             if cur.byte() != b':' {
@@ -212,7 +216,7 @@ pub(crate) unsafe fn eval_dict(
                 }
             }
             cur.skip(1);
-            if unsafe { eval1(arg, &raw mut tv, evalarg) } == FAIL {
+            if unsafe { eval1(arg, &raw mut tv, evalarg) }.is_err() {
                 unsafe { tv_clear(&raw mut tvkey) };
                 break 'items false;
             }
@@ -267,12 +271,12 @@ pub(crate) unsafe fn eval_dict(
     };
 
     if ok {
-        return OK;
+        return Ok(Parsed::Done);
     }
     if !dict.is_null() {
         unsafe { tv_dict_free(dict) };
     }
-    FAIL
+    Err(Failed)
 }
 
 /// `#{...}`, with the cursor on the `#`.
@@ -283,11 +287,11 @@ pub(crate) unsafe fn eval_lit_dict(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor, on the `#`.
     let cur = unsafe { Cur::new(arg) };
     if cur.at(1) != b'{' {
-        return NOTDONE;
+        return Ok(Parsed::NotThis);
     }
     cur.bump(1);
     unsafe { eval_dict(arg, rettv, evalarg, true) }

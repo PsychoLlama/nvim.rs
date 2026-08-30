@@ -17,7 +17,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::{
-    OK, conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
+    conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
 };
 use crate::eval::typval::tv_blob_get;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
@@ -110,7 +110,7 @@ impl TypvalSink for JsonSink<'_> {
     /// which is what makes this the hook JSON most often refuses on.
     unsafe fn conv_string(&mut self, _tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
         let gap = self.gap.as_ptr();
-        if unsafe { convert_to_json_string(gap, buf, len) } == OK {
+        if unsafe { convert_to_json_string(gap, buf, len) }.is_ok() {
             Flow::Go
         } else {
             Flow::Fail

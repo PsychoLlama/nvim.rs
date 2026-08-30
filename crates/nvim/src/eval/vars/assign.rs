@@ -18,7 +18,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::{NIL_OPTVAL, boolean_optval};
 use crate::os::cshim::gettext_owned;
-use crate::types::{FAIL, NUL, OK, OptionSetFlags};
+use crate::types::{Failed, NUL, OptionSetFlags};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";
@@ -122,7 +122,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     let assign = |tv: *mut typval_T, op: *const c_char| {
         let a = ea.arg;
         // SAFETY: the command's own argument text, and a live value.
-        unsafe { ex_let_vars(a, tv, false, semicolon, var_count, is_const, op) };
+        let _ = unsafe { ex_let_vars(a, tv, false, semicolon, var_count, is_const, op) };
     };
 
     let mut rettv = TV_INITIAL_VALUE;
@@ -180,10 +180,10 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     drop(skipping);
     unsafe { clear_evalarg(&raw mut evalarg, eap) };
 
-    if ea.skip == 0 && eval_res != FAIL {
+    if ea.skip == 0 && eval_res.is_ok() {
         assign(&raw mut rettv, op.as_ptr());
     }
-    if eval_res != FAIL {
+    if eval_res.is_ok() {
         // SAFETY: a live local.
         clear_local(&mut rettv);
     }
@@ -206,16 +206,16 @@ pub unsafe fn ex_let_vars(
     var_count: c_int,
     is_const: bool,
     op: *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut arg = arg_start;
     // SAFETY: the caller's obligation -- `arg` is NUL-terminated and `tv` is
     // a live value.
     if unsafe { *arg } != b'[' as c_char {
         // ":let var = expr" or ":for var in list"
         if unsafe { ex_let_one(arg, tv, copy, is_const, op, op) }.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
-        return OK;
+        return Ok(());
     }
 
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
@@ -223,7 +223,7 @@ pub unsafe fn ex_let_vars(
     let tv = unsafe { Tv::new(tv) };
     if tv.v_type != VAR_LIST {
         emsg_static(e_listreq);
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the type tag says the union holds the List arm, and the list
     // is the caller's for the whole walk below.
@@ -231,11 +231,11 @@ pub unsafe fn ex_let_vars(
     let len = unsafe { tv_list_len(l) };
     if semicolon == 0 && var_count < len {
         emsg_static(c"E687: Less targets than List items");
-        return FAIL;
+        return Err(Failed);
     }
     if var_count - semicolon > len {
         emsg_static(c"E688: More targets than List items");
-        return FAIL;
+        return Err(Failed);
     }
     // `l` may really be NULL, but `:let [] = v:_null_list` fails with
     // E688 or earlier before it can get here.
@@ -252,7 +252,7 @@ pub unsafe fn ex_let_vars(
         let (next, itv) = unsafe { (skipwhite(arg.add(1)), &raw mut (*item).li_tv) };
         arg = unsafe { ex_let_one(next, itv, true, is_const, c",;]".as_ptr(), op) };
         if arg.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         rest_len -= 1;
         item = unsafe { (*item).li_next };
@@ -282,15 +282,15 @@ pub unsafe fn ex_let_vars(
             arg = unsafe { ex_let_one(rest_arg, ltvp, false, is_const, c"]".as_ptr(), op) };
             unsafe { tv_clear(ltvp) };
             if arg.is_null() {
-                return FAIL;
+                return Err(Failed);
             }
             break;
         } else if sep != b',' && sep != b']' {
             unsafe { internal_error(c"ex_let_vars()".as_ptr()) };
-            return FAIL;
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Skip an assignable variable, or the `[var, var]` list of them, answering

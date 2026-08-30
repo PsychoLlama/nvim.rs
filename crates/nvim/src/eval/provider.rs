@@ -258,7 +258,7 @@ pub unsafe fn eval_call_provider(
     let (name, args) = (func.as_mut_ptr(), argvars.as_mut_ptr());
     // SAFETY: `name` is the NUL-terminated name rendered above, `args` the
     // two argument typvals, and `rettv` and `funcexe` are this frame's.
-    unsafe { call_func(name, name_len, &raw mut rettv, 2, args, &raw mut funcexe) };
+    let _ = unsafe { call_func(name, name_len, &raw mut rettv, 2, args, &raw mut funcexe) };
 
     // SAFETY: this gives back the reference taken above.
     unsafe { tv_list_unref(arguments) };
@@ -341,14 +341,14 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
     // SAFETY (every call below): `bp` names this frame's `NAMEBUF` bytes,
     // `nm` the NUL-terminated provider name, and `tv` is this frame's.
     let mut len = unsafe { loaded_var(bp, nm) };
-    if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) } == FAIL {
+    if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) }.is_err() {
         // Not loaded yet: sourcing any function in the provider's
         // autoload namespace is what pulls the script in.
         len = unsafe { provider_fn(bp, nm, c"provider#%s#bogus") };
         unsafe { script_autoload(bp, len as size_t, false) };
 
         len = unsafe { loaded_var(bp, nm) };
-        if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) } == FAIL {
+        if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) }.is_err() {
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
             let defined = !unsafe { find_func(bp) }.is_null();

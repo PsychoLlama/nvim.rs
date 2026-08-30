@@ -272,7 +272,7 @@ fn in_window(tp: TabPage, body: impl FnOnce()) {
     let (slot, win, raw) = (&raw mut switchwin, tp.tp_curwin, tp.raw());
     // SAFETY: a slot of our own, and a live window of the live tab page.
     let sw_result = unsafe { switch_win_noblock(slot, win, raw, true) };
-    debug_assert!(sw_result == OK, "sw_result == OK");
+    debug_assert!(sw_result.is_ok(), "the window was switched to");
     body();
     // SAFETY: the slot `switch_win_noblock` just filled in.
     unsafe { restore_win_noblock(slot, true) };

@@ -46,7 +46,7 @@ use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
-    FAIL, IOSIZE, ListReaderState, MessagePackType, OK, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
+    Failed, IOSIZE, ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
     garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
 };
 use ::libc::{abort, strlen};
@@ -401,7 +401,7 @@ pub unsafe fn encode_vim_list_to_buf(
     let mut read_bytes: size_t = 0;
     // SAFETY: `buf` is `len` writable bytes and `lrstate` walks `list`.
     let ret = unsafe { encode_read_from_list(&raw mut lrstate, buf, len, &raw mut read_bytes) };
-    if ret != OK {
+    if ret.is_err() {
         // Every item was checked above, so the reader cannot refuse one.
         // SAFETY: unreachable.
         unsafe { abort() };
@@ -412,12 +412,26 @@ pub unsafe fn encode_vim_list_to_buf(
     true
 }
 
+/// Which of the two sides of [`encode_read_from_list`] ran out first.
+///
+/// The C answered `OK` for the list and `NOTDONE` for the buffer, and a
+/// caller that read `OK` as "it worked" would loop for ever on a list too
+/// long for one buffer -- which is why this is a value and not the `Ok`
+/// half of the `Result`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ListRead {
+    /// The list ran out: `buf` holds the last of it.
+    Drained,
+    /// The buffer ran out and the list has more. The C's `NOTDONE`.
+    More,
+}
+
 /// Read bytes out of a `readfile()`-style list into `buf`.
 ///
-/// `state` is advanced to where reading stopped.  Answers [`OK`] when the
-/// list ran out, [`NOTDONE`] when the buffer did, and [`FAIL`] on an item
-/// that is not a string — the stored newlines turning back into NULs on the
-/// way, which is what [`encode_list_write`] wrote them for.
+/// `state` is advanced to where reading stopped.  Answers which of the two
+/// ran out, or [`Failed`] on an item that is not a string — the stored
+/// newlines turning back into NULs on the way, which is what
+/// [`encode_list_write`] wrote them for.
 ///
 /// # Safety
 /// `state` must describe a position in a live list, `buf` must be writable
@@ -427,7 +441,7 @@ pub unsafe fn encode_read_from_list(
     buf: *mut c_char,
     nbuf: size_t,
     read_bytes: *mut size_t,
-) -> c_int {
+) -> Result<ListRead, Failed> {
     // SAFETY: the caller's promises about `buf`/`nbuf` and `state`.
     let out = unsafe { slice::from_raw_parts_mut(buf.cast::<u8>(), nbuf) };
     let state = unsafe { &mut *state };
@@ -455,14 +469,14 @@ pub unsafe fn encode_read_from_list(
             if state.li.is_null() {
                 // SAFETY: the caller's promise about `read_bytes`.
                 unsafe { *read_bytes = p };
-                return OK;
+                return Ok(ListRead::Drained);
             }
             out[p] = b'\n';
             p += 1;
             // SAFETY: as above.
             if unsafe { (*state.li).li_tv.v_type } != VAR_STRING {
                 unsafe { *read_bytes = p };
-                return FAIL;
+                return Err(Failed);
             }
             state.offset = 0;
             // SAFETY: the item was just checked to hold a string.
@@ -473,9 +487,9 @@ pub unsafe fn encode_read_from_list(
     unsafe { *read_bytes = nbuf };
     // SAFETY: `state.li` is a live item.
     if state.offset < state.li_length || !unsafe { (*state.li).li_next }.is_null() {
-        NOTDONE
+        Ok(ListRead::More)
     } else {
-        OK
+        Ok(ListRead::Drained)
     }
 }
 
@@ -674,12 +688,12 @@ pub(crate) unsafe fn convert_to_json_string(
     gap: *mut garray_T,
     buf: *const c_char,
     len: size_t,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise about `gap`.
     let mut gap = Gap(unsafe { &mut *gap });
     if buf.is_null() {
         gap.concat(b"\"\"");
-        return OK;
+        return Ok(());
     }
     let text = Utf8 {
         at: buf.cast::<u8>(),
@@ -687,7 +701,7 @@ pub(crate) unsafe fn convert_to_json_string(
     };
     // SAFETY: forwarded to the caller's promise about `buf`.
     let Some(str_len) = (unsafe { json_escaped_len(&text) }) else {
-        return FAIL;
+        return Err(Failed);
     };
     gap.append(b'"');
     gap.grow(str_len as c_int);
@@ -720,7 +734,7 @@ pub(crate) unsafe fn convert_to_json_string(
         i += shift;
     }
     gap.append(b'"');
-    OK
+    Ok(())
 }
 
 /// May `tv` be a key in `json_encode()`'s output?

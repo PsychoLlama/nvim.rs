@@ -134,7 +134,7 @@ pub(crate) unsafe fn expand_filename(
             // `` `=expr` `` is evaluated much later, by the shell
             // expansion; step over it without touching it.
             p = unsafe { p.add(2) };
-            unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
+            let _ = unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
             if byte(p) == '`' as c_int {
                 p = unsafe { p.add(1) };
             }

@@ -16,8 +16,8 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, FAIL, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T, kErrorTypeNone,
-    scid_T, switchwin_T, win_T,
+    Error, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T, kErrorTypeNone, scid_T,
+    switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
@@ -109,7 +109,7 @@ impl OptionContext {
                     return false;
                 }
                 if unsafe { switch_win_noblock(switchwin, win, win_find_tabpage(win), true) }
-                    == FAIL
+                    .is_err()
                 {
                     unsafe { restore_win_noblock(switchwin, true) };
                     if !err.is_set() {

@@ -14,7 +14,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// `:unlet`.
 ///
@@ -89,7 +89,7 @@ unsafe fn ex_unletlock(
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
-            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, eap, deep) } == FAIL {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, eap, deep) }.is_err() {
                 error = true;
             }
             name_end = arg;
@@ -117,7 +117,7 @@ unsafe fn ex_unletlock(
                 break;
             }
 
-            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, eap, deep) } == FAIL {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, eap, deep) }.is_err() {
                 error = true;
             }
             if ea.skip == 0 {
@@ -143,7 +143,7 @@ unsafe fn do_unlet_var(
     name_end: *mut c_char,
     eap: *mut exarg_T,
     _deep: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let lp = unsafe { Lv::new(lp) };
@@ -158,7 +158,7 @@ unsafe fn do_unlet_var(
         unsafe { *name_end = NUL as c_char };
         let ret = if unsafe { *lp.ll_name } == b'$' as c_char {
             unsafe { vim_unsetenv_ext(lp.ll_name.add(1)) };
-            OK
+            Ok(())
         } else {
             unsafe { do_unlet(lp.ll_name, lp.ll_name_len, ea.forceit != 0) }
         };
@@ -181,7 +181,7 @@ unsafe fn do_unlet_var(
         locked = unsafe { value_check_lock(lock, lp.ll_name, lp.ll_name_len) };
     }
     if locked {
-        return FAIL;
+        return Err(Failed);
     }
 
     if lp.ll_range {
@@ -216,7 +216,7 @@ unsafe fn do_unlet_var(
             unsafe { xfree(key.cast()) };
         }
     }
-    OK
+    Ok(())
 }
 
 /// Delete the items of `l` from `li_first` through the `n2`-th, or to the
@@ -250,7 +250,7 @@ unsafe fn tv_list_unlet_range(
 ///
 /// # Safety
 /// `name` points at `name_len` readable bytes and is NUL-terminated there.
-pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> c_int {
+pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> Result<(), Failed> {
     let mut varname: *const c_char = ptr::null();
     let mut dict: *mut dict_T = ptr::null_mut();
     let mut ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
@@ -270,7 +270,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             }
             if d.is_null() {
                 unsafe { internal_error(c"do_unlet()".as_ptr()) };
-                return FAIL;
+                return Err(Failed);
             }
         }
 
@@ -287,14 +287,14 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
                 || unsafe { var_check_ro(flags, name, len) }
                 || unsafe { value_check_lock(lock, name, len) }
             {
-                return FAIL;
+                return Err(Failed);
             }
             // Upstream asks the same question a second time here. It can
             // only answer the same way -- nothing above it changes
             // `dv_lock` -- so the repetition is dead; kept because
             // deleting it is a change no gate could confirm.
             if unsafe { value_check_lock((*d).dv_lock, name, len) } {
-                return FAIL;
+                return Err(Failed);
             }
 
             let mut oldtv = TV_INITIAL_VALUE;
@@ -310,17 +310,17 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
                 unsafe { tv_dict_watcher_notify(dict, varname, ptr::null_mut(), &raw mut oldtv) };
                 clear_local(&mut oldtv);
             }
-            return OK;
+            return Ok(());
         }
     }
 
     if forceit {
-        return OK;
+        return Ok(());
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
     let name = unsafe { c_str(name) };
     semsg!("E108: No such variable: \"{name}\"");
-    FAIL
+    Err(Failed)
 }
 
 /// `:lockvar`'s and `:unlockvar`'s callback: lock or unlock what `lp` names,
@@ -333,7 +333,7 @@ unsafe fn do_lock_var(
     _name_end: *mut c_char,
     eap: *mut exarg_T,
     deep: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let mut lp = unsafe { Lv::new(lp) };
@@ -349,13 +349,13 @@ unsafe fn do_lock_var(
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E940: Cannot lock or unlock variable {name}");
-            return FAIL;
+            return Err(Failed);
         }
         let nil = ptr::null_mut();
         // SAFETY: a resolved lvalue's name and its measured length.
         let di = unsafe { find_var(name, lp.ll_name_len, nil, true) };
         if di.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `find_var` answers a live item or NULL.
         let mut di = unsafe { Di::new(di) };
@@ -368,7 +368,7 @@ unsafe fn do_lock_var(
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E940: Cannot lock or unlock variable {name}");
-            return FAIL;
+            return Err(Failed);
         }
         if lock {
             di.di_flags |= DI_FLAGS_LOCK;
@@ -400,5 +400,5 @@ unsafe fn do_lock_var(
             unsafe { tv_item_lock(&raw mut (*lp.ll_di).di_tv, deep, lock, false) };
         }
     }
-    OK
+    Ok(())
 }

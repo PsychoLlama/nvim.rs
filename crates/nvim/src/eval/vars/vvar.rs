@@ -19,7 +19,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::types::{NUL, OK};
+use crate::types::NUL;
 
 /// Row `i` of the `v:` table, for the walks that visit every one.
 ///
@@ -648,7 +648,7 @@ pub(crate) unsafe fn set_vvar_item(
     let val = if compound {
         // SAFETY: this item's value, a live local, and the caller's `tv`.
         unsafe { tv_copy(cur, &raw mut tmp) };
-        if unsafe { eexe_mod_op(&raw mut tmp, tv, op) } != OK {
+        if unsafe { eexe_mod_op(&raw mut tmp, tv, op) }.is_err() {
             clear_local(&mut tmp);
             return;
         }

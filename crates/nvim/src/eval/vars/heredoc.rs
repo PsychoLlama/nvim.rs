@@ -12,7 +12,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// The comment character a marker line may carry after it.
 const COMMENT_CHAR: c_char = b'"' as c_char;
@@ -42,7 +42,7 @@ pub unsafe fn eval_one_expr_in_str(
         semsg!("E1279: Missing '}}': {p}");
         return ptr::null_mut();
     }
-    if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) } == FAIL {
+    if unsafe { skip_expr(&raw mut block_end, ptr::null_mut()) }.is_err() {
         return ptr::null_mut();
     }
     block_end = unsafe { skipwhite(block_end) };

@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
@@ -19,7 +20,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK, Refcount};
+use crate::types::{Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
 /// and terminated with a newline.
@@ -193,7 +194,7 @@ pub unsafe fn call_user_func(
                 def_rettv.vval.v_number = -1;
                 let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
                 if unsafe { eval1(&raw mut default_expr, &raw mut def_rettv, &raw mut evalarg) }
-                    == FAIL
+                    .is_err()
                 {
                     default_arg_err = true;
                     break;
@@ -343,7 +344,7 @@ pub unsafe fn call_user_func(
         // expression straight rather than going through `do_cmdline`.
         let mut p = unsafe { ga_strings(&f.uf_lines)[0].add(c"return ".count_bytes()) };
         ex_nesting_level.set(ex_nesting_level.get() + 1);
-        unsafe { eval1(&raw mut p, rettv, &raw mut evalarg) };
+        let _ = unsafe { eval1(&raw mut p, rettv, &raw mut evalarg) };
         ex_nesting_level.set(ex_nesting_level.get() - 1);
     } else {
         // Call do_cmdline() to execute the lines.
@@ -549,7 +550,7 @@ pub unsafe fn call_simple_luafunc(
     funcname: *const c_char,
     len: size_t,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `rettv` is the return value.
     let mut rv = unsafe { Tv::new(rettv) };
     rv.v_type = VAR_NUMBER; // the default is number zero
@@ -558,12 +559,12 @@ pub unsafe fn call_simple_luafunc(
     let mut argvars = [TV_INITIAL_VALUE; 1];
     argvars[0].v_type = VAR_UNKNOWN;
     unsafe { nlua_typval_call(funcname, len, argvars.as_mut_ptr(), 0, rettv) };
-    OK
+    Ok(())
 }
 
 /// Call a user function by name with no arguments, for the internal callers
-/// that know there is nothing else to pass.  Answers `NOTDONE` when there is
-/// no such function.
+/// that know there is nothing else to pass.  Answers [`Parsed::NotThis`]
+/// when there is no such function.
 ///
 /// # Safety
 /// `funcname` has `len` readable bytes.
@@ -571,10 +572,10 @@ pub unsafe fn call_simple_func(
     funcname: *const c_char,
     len: size_t,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `rettv` is the return value.
     let mut rv = unsafe { Tv::new(rettv) };
-    let mut ret = FAIL;
+    let mut ret = Err(Failed);
     rv.v_type = VAR_NUMBER; // the default is number zero
     rv.vval.v_number = 0;
 
@@ -599,7 +600,7 @@ pub unsafe fn call_simple_func(
 
     let fp = unsafe { find_func(rfname) };
     if fp.is_null() {
-        ret = NOTDONE;
+        ret = Ok(Parsed::NotThis);
     } else if unsafe { (*fp).uf_flags } & FC_DELETED != 0 {
         error = FCERR_DELETED;
     } else {
@@ -610,7 +611,7 @@ pub unsafe fn call_simple_func(
         let (args, exe) = (argvars.as_mut_ptr(), &raw mut funcexe);
         error = unsafe { call_user_func_check(fp, 0, args, rettv, exe, ptr::null_mut()) };
         if error == FCERR_NONE {
-            ret = OK;
+            ret = Ok(Parsed::Done);
         }
     }
 

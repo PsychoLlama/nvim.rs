@@ -12,7 +12,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{CONV_NONE, FAIL, Failed, NUL, Refcount};
+use crate::types::{CONV_NONE, Failed, NUL, Refcount};
 
 /// The dictionary already has an entry under that key — or, in a scope
 /// dictionary, the key would shadow a builtin function — so nothing was
@@ -645,7 +645,7 @@ pub unsafe fn tv_dict_copy(
         if deep {
             let from = di_tv(di);
             let to = di_tv(new_di);
-            if unsafe { var_item_copy(conv, from, to, deep, copyID) } == FAIL {
+            if unsafe { var_item_copy(conv, from, to, deep, copyID) }.is_err() {
                 unsafe { xfree(new_di.cast()) };
                 break;
             }

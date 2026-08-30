@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::guard::Depth;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::{null, null_mut};
@@ -69,12 +70,12 @@ use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, DictWatcher, FAIL, NUL, OK,
-    OptInt, QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, dict_T,
-    dictitem_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T,
-    listitem_T, partial_T, pos_T, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T,
-    vimconv_T, win_T, xfmark_T, yankreg_T,
+    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, DictWatcher, Failed, NUL, OptInt,
+    QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, dict_T, dictitem_T, fmark_T,
+    fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T,
+    pos_T, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T,
+    xfmark_T, yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -664,20 +665,21 @@ pub unsafe fn var_item_copy(
     to: *mut typval_T,
     deep: bool,
     copy_id: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
 
     if RECURSE.get() >= DICT_MAXNEST {
         emsg_static(e_variable_nested_too_deep_for_making_copy);
-        return FAIL;
+        return Err(Failed);
     }
-    RECURSE.set(RECURSE.get() + 1);
+    // The un-bump is the guard's, so that an early exit cannot skip it.
+    let _depth = Depth::of(&RECURSE);
 
     // SAFETY: the caller's promise -- both typvals outlive the call. Every
     // union member read below is the one `src.v_type` names, and the
     // matching member of `dst` is written before it is read.
     let (src, mut dst) = unsafe { (Tv::new(from), Tv::new(to)) };
-    let mut ret = OK;
+    let mut ret = Ok(());
     match src.v_type {
         VAR_STRING => {
             // SAFETY: as above; a null `conv` is not read.
@@ -721,7 +723,7 @@ pub unsafe fn var_item_copy(
             }
             // SAFETY: `v_list` is the member just written.
             if unsafe { dst.vval.v_list }.is_null() && !l.is_null() {
-                ret = FAIL;
+                ret = Err(Failed);
             }
         }
         VAR_DICT => {
@@ -744,7 +746,7 @@ pub unsafe fn var_item_copy(
             }
             // SAFETY: `v_dict` is the member just written.
             if unsafe { dst.vval.v_dict }.is_null() && !d.is_null() {
-                ret = FAIL;
+                ret = Err(Failed);
             }
         }
         VAR_BLOB => {
@@ -755,7 +757,7 @@ pub unsafe fn var_item_copy(
         VAR_UNKNOWN => {
             // SAFETY: the text is a NUL-terminated literal.
             unsafe { internal_error(c"var_item_copy(UNKNOWN)".as_ptr()) };
-            ret = FAIL;
+            ret = Err(Failed);
         }
         // Number, Float, Funcref, partial, Boolean and Special copy by
         // value or by reference count.
@@ -766,7 +768,6 @@ pub unsafe fn var_item_copy(
         _ => {}
     }
 
-    RECURSE.set(RECURSE.get() - 1);
     ret
 }
 

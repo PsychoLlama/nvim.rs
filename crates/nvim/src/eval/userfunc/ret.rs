@@ -18,7 +18,7 @@ use core::ptr;
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{FAIL, IOSIZE, NUL, OK};
+use crate::types::{Failed, IOSIZE, NUL};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 #[derive(Copy, Clone)]
@@ -61,7 +61,7 @@ pub unsafe fn ex_return(eap: *mut exarg_T) {
     if unsafe { *arg } != NUL as c_char
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
-        && unsafe { eval0(arg, &raw mut rettv, eap, &raw mut evalarg) } != FAIL
+        && unsafe { eval0(arg, &raw mut rettv, eap, &raw mut evalarg) }.is_ok()
     {
         if ea.skip == 0 {
             returning = unsafe { do_return(eap, false, true, (&raw mut rettv) as *mut c_void) };
@@ -129,14 +129,14 @@ unsafe fn ex_call_inner(
         let mut funcexe = unsafe { *funcexe_init };
         funcexe.fe_doesrange = &raw mut doesrange;
         let mut rettv = TV_INITIAL_VALUE;
-        if unsafe { get_func_tv(name, -1, &raw mut rettv, arg, evalarg, &raw mut funcexe) } == FAIL
+        if unsafe { get_func_tv(name, -1, &raw mut rettv, arg, evalarg, &raw mut funcexe) }.is_err()
         {
             failed = true;
             break;
         }
         // Handle a trailing subscript, e.g. `:call f()[1]()`.
         let (ret, ev) = (&raw mut rettv, &raw mut subscript_evalarg);
-        if unsafe { handle_subscript(arg as *mut *const c_char, ret, ev, true) } == FAIL {
+        if unsafe { handle_subscript(arg as *mut *const c_char, ret, ev, true) }.is_err() {
             failed = true;
             break;
         }
@@ -158,7 +158,7 @@ unsafe fn ex_defer_inner(
     arg: *mut *mut c_char,
     partial: *const partial_T,
     evalarg: *mut evalarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut argvars = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
     let mut partial_argc = 0;
     let mut argcount = 0;
@@ -166,14 +166,14 @@ unsafe fn ex_defer_inner(
     if current_funccal.get().is_null() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
-        return FAIL;
+        return Err(Failed);
     }
 
     if !partial.is_null() {
         if !unsafe { (*partial).pt_dict }.is_null() {
             let fmt = E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER.as_ptr();
             unsafe { emsg(gettext_ptr(fmt)) };
-            return FAIL;
+            return Err(Failed);
         }
         if unsafe { (*partial).pt_argc } > 0 {
             partial_argc = unsafe { (*partial).pt_argc };
@@ -196,14 +196,14 @@ unsafe fn ex_defer_inner(
     let mut r = unsafe { get_func_arguments(arg, evalarg, 0, free_slot, countp) };
     argcount += partial_argc;
 
-    if r == OK {
+    if r.is_ok() {
         if unsafe { builtin_function(name, -1) } {
             let fdef = unsafe { find_internal_func(name) };
             if fdef.is_null() {
                 unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
-                r = FAIL;
+                r = Err(Failed);
             } else if unsafe { check_internal_func(fdef, argcount) } == -1 {
-                r = FAIL;
+                r = Err(Failed);
             }
         } else {
             let ufunc = unsafe { find_func(name) };
@@ -211,21 +211,21 @@ unsafe fn ex_defer_inner(
                 let error = unsafe { check_user_func_argcount(ufunc, argcount) };
                 if error != FCERR_UNKNOWN {
                     unsafe { user_func_error(error, name, false) };
-                    r = FAIL;
+                    r = Err(Failed);
                 }
             }
         }
     }
 
-    if r == FAIL {
+    if r.is_err() {
         while argcount > 0 {
             argcount -= 1;
             unsafe { tv_clear(argvars.as_mut_ptr().offset(argcount as isize)) };
         }
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { add_defer(name, argcount, argvars.as_mut_ptr()) };
-    OK
+    Ok(())
 }
 
 /// Whether a `:defer` can be recorded here, i.e. whether a function is
@@ -293,7 +293,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut funccall_T) {
             // argument array holds `dr_argcount` values.
             let (argc, args) = unsafe { ((*dr).dr_argcount, &raw mut (*dr).dr_argvars) };
             let (ret, exe) = (&raw mut rettv, &raw mut funcexe);
-            unsafe { call_func(name, -1, ret, argc, args as *mut typval_T, exe) };
+            let _ = unsafe { call_func(name, -1, ret, argc, args as *mut typval_T, exe) };
 
             unsafe { exception_state_restore(&raw mut estate) };
             unsafe { tv_clear(&raw mut rettv) };
@@ -347,7 +347,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
         // are reported -- but nothing is called.
         let mut rettv = TV_INITIAL_VALUE;
         let skipping = Suppress::emsg_skip();
-        if unsafe { eval0(ea.arg, &raw mut rettv, eap, &raw mut evalarg) } != FAIL {
+        if unsafe { eval0(ea.arg, &raw mut rettv, eap, &raw mut evalarg) }.is_ok() {
             unsafe { tv_clear(&raw mut rettv) };
         }
         drop(skipping);
@@ -399,7 +399,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
     } else {
         let failed = if ea.cmdidx == CMD_defer {
             arg = startarg;
-            unsafe { ex_defer_inner(name, &raw mut arg, partial, &raw mut evalarg) == FAIL }
+            unsafe { ex_defer_inner(name, &raw mut arg, partial, &raw mut evalarg).is_err() }
         } else {
             let mut funcexe = FUNCEXE_INIT;
             funcexe.fe_partial = partial;

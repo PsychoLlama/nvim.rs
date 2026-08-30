@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 
 /// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a
 /// `base->Method()` base is put in front of them.
@@ -33,7 +33,7 @@ pub unsafe fn get_func_tv(
     arg: *mut *mut c_char,
     evalarg: *mut evalarg_T,
     funcexe: *mut funcexe_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut argvars = ARGV_INIT;
     let mut argcount = 0;
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
@@ -51,9 +51,9 @@ pub unsafe fn get_func_tv(
     };
     let (argpp, args, countp) = (&raw mut argp, argvars.as_mut_ptr(), &raw mut argcount);
     let mut ret = unsafe { get_func_arguments(argpp, evalarg, bound, args, countp) };
-    debug_assert!(ret == OK || ret == FAIL);
+    debug_assert!(ret.is_ok() || ret.is_err());
 
-    if ret == OK {
+    if ret.is_ok() {
         // Prepare for calling `test_garbagecollect_now()`, which needs to
         // know which variables are used on the call stack.
         let pushed = if unsafe { get_vim_var_nr(Vv::Testing) } != 0 {
@@ -97,10 +97,10 @@ pub unsafe fn func_call(
     partial: *mut partial_T,
     selfdict: *mut dict_T,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut argv = ARGV_INIT;
     let mut argc = 0;
-    let mut r = 0;
+    let mut r = Ok(());
 
     'skip_call: {
         let bound = if partial.is_null() {
@@ -171,8 +171,8 @@ pub unsafe fn call_func(
     argcount_in: c_int,
     argvars_in: *mut typval_T,
     funcexe: *mut funcexe_T,
-) -> c_int {
-    let mut ret = FAIL;
+) -> Result<(), Failed> {
+    let mut ret = Err(Failed);
     let mut error = FCERR_NONE;
     let mut fp: *mut ufunc_T = ptr::null_mut();
     let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
@@ -336,7 +336,7 @@ pub unsafe fn call_func(
             update_force_abort();
         }
         if error == FCERR_NONE {
-            ret = OK;
+            ret = Ok(());
         }
     }
 

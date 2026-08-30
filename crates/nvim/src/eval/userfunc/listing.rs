@@ -15,7 +15,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{ExpandContext, FAIL, IOSIZE, NUL, OK};
+use crate::types::{ExpandContext, IOSIZE, NUL};
 
 /// Print the head of every function, or of the ones `regmatch` matches.
 ///
@@ -44,7 +44,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
                     && unsafe { vim_regexec(regmatch, uf_name_ptr(fp), 0) }
             };
             if show {
-                if unsafe { list_func_head(fp, false, false) } == FAIL {
+                if unsafe { list_func_head(fp, false, false) }.is_err() {
                     return;
                 }
                 if unsafe { function_list_modified(prev_ht_changed) } != 0 {
@@ -121,7 +121,7 @@ pub(crate) unsafe fn list_one_function(
     // therefore that `fp` is still the function this started on.
     let prev_ht_changed = func_table().changed();
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    if unsafe { list_func_head(fp, ea.forceit == 0, ea.forceit != 0) } != OK {
+    if unsafe { list_func_head(fp, ea.forceit == 0, ea.forceit != 0) }.is_err() {
         return fp;
     }
     // SAFETY: `fp` is the live function just listed.

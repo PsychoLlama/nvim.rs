@@ -15,7 +15,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{FAIL, IOSIZE, NUL};
+use crate::types::{IOSIZE, NUL};
 
 /// Every variable of `ht`, one per line, each name prefixed with `prefix`.
 ///
@@ -172,14 +172,14 @@ pub(crate) unsafe fn list_arg_vars(
 
             let mut tv = TV_INITIAL_VALUE;
             if unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), true, false) }
-                == FAIL
+                .is_err()
             {
                 error = true;
                 break 'done;
             }
             let arg_subsc = arg;
             if unsafe { handle_subscript(&raw mut arg, &raw mut tv, &raw mut evalarg, true) }
-                == FAIL
+                .is_err()
             {
                 error = true;
                 break 'done;

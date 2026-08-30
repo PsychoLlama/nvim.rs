@@ -35,7 +35,7 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, FAIL, NUL, OK, VAR_FLAVOUR_DEFAULT,
+    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, NUL, VAR_FLAVOUR_DEFAULT,
     VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
     funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T, typval_vval_union,
     var_flavour_T,
@@ -101,7 +101,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
         need_clr_eos.set(true);
         let start = arg;
         // SAFETY: `arg`, `rettv` and `evalarg` are all this frame's.
-        if unsafe { eval1(&raw mut arg, &raw mut rettv, &raw mut evalarg) } == FAIL {
+        if unsafe { eval1(&raw mut arg, &raw mut rettv, &raw mut evalarg) }.is_err() {
             if !aborting()
                 && did_emsg.get() == did_emsg_before
                 && called_emsg.get() == called_emsg_before
@@ -195,7 +195,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let mut arg: *mut c_char = eap.arg;
     let mut rettv = UNSET_TV;
-    let mut ret = OK;
+    let mut ret = Ok(());
     let mut ga = UNSET_GA;
     // SAFETY: `ga` is this frame's.
     unsafe { ga_init(&raw mut ga, 1, 80) };
@@ -205,7 +205,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
     while !ends_args(unsafe { *arg }) {
         // SAFETY: `arg` and `rettv` are this frame's, `eap` the caller's.
         ret = unsafe { eval1_emsg(&raw mut arg, &raw mut rettv, eap.raw()) };
-        if ret == FAIL {
+        if ret.is_err() {
             break;
         }
         if eap.skip == 0 {
@@ -248,7 +248,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
         arg = unsafe { skipwhite(arg) };
     }
 
-    if ret != FAIL && !ga.ga_data.is_null() {
+    if ret.is_ok() && !ga.ga_data.is_null() {
         if eap.cmdidx == CMD_echomsg {
             // SAFETY: the kind is a NUL-terminated literal.
             unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };

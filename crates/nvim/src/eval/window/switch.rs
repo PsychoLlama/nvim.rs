@@ -13,6 +13,7 @@
 use super::*;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
+use crate::types::Failed;
 use crate::types::VAR_STRING;
 
 /// Switch to a window for executing user code.
@@ -66,7 +67,7 @@ pub unsafe fn win_execute_before(
             args.apply_acd = unsafe { strcmp(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) } == 0;
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tp, true) } == OK {
+    if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tp, true) }.is_ok() {
         check_cursor(cur_win());
         return true;
     }
@@ -141,7 +142,7 @@ pub unsafe fn switch_win(
     win: *mut win_T,
     tp: *mut tabpage_T,
     no_display: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation.
     unsafe { block_autocmds() };
     unsafe { switch_win_noblock(switchwin, win, tp, no_display) }
@@ -156,7 +157,7 @@ pub unsafe fn switch_win_noblock(
     win: *mut win_T,
     tp: *mut tabpage_T,
     no_display: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
     // storage and nothing below can reach it, so the exclusive borrow is
     // sound; all-zero is a valid `switchwin_T`.
@@ -182,11 +183,11 @@ pub unsafe fn switch_win_noblock(
         }
     }
     if !win_valid(win) {
-        return FAIL;
+        return Err(Failed);
     }
     curwin.set(win);
     curbuf.set(unsafe { Win::new(win) }.w_buffer);
-    OK
+    Ok(())
 }
 
 /// Restore the tab page and window [`switch_win`] saved, if they are still

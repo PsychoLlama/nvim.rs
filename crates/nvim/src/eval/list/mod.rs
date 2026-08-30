@@ -868,7 +868,7 @@ pub(crate) fn eval_expr(
     newtv: &mut typval_T,
 ) -> bool {
     // SAFETY: three live typvals, and `argv` holds the two the count names.
-    unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, newtv) != 0 }
+    unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, newtv) }.is_ok()
 }
 
 /// Run `cmd` as an Ex command line -- `foreach()`'s String arm, which is not

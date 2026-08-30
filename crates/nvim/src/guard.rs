@@ -211,6 +211,24 @@ impl Suppress {
     }
 }
 
+/// A function's own recursion counter, held one higher for a scope.
+///
+/// The odd guard out in two ways: the cell is the *caller's* rather than one
+/// of the editor's globals, and what it protects is not a suppression but a
+/// depth limit — the `static RECURSE: GlobalCell<c_int>` a recursive parser
+/// keeps inside itself so that a self-referential expression cannot exhaust
+/// the C stack. The shape is [`Bump`]'s; what it buys is that the un-bump
+/// can no longer be skipped by a `?` on the way out, which is exactly what
+/// happens the moment such a body starts answering `Result`.
+pub struct Depth;
+
+impl Depth {
+    /// Hold `cell` one higher until the guard is dropped.
+    pub fn of(cell: &'static GlobalCell<c_int>) -> Bump {
+        Bump::new(cell)
+    }
+}
+
 /// Guards that lift a suppression for a scope and put it back afterwards.
 ///
 /// The mirror of [`Suppress`]: these are the sites where the editor has to

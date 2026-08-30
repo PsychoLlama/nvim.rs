@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -34,7 +35,7 @@ use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
 use crate::eval::window::cur_win;
 use crate::eval::{
-    EVAL_EVALUATE, FUNCEXE_INIT, NL, NOTDONE, Tv, check_luafunc_name, clear_evalarg, eval0,
+    EVAL_EVALUATE, FUNCEXE_INIT, NL, Tv, check_luafunc_name, clear_evalarg, eval0,
     eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
 };
 use crate::ex_eval::aborting;
@@ -46,11 +47,11 @@ use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, FAIL, NUL, OK, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, exarg_T,
-    funccal_entry_T, funcexe_T, garray_T, hashtab_T, kObjectTypeString, list_T, object_data,
-    partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uint8_t, varnumber_T, win_T,
+    Arena, Failed, NUL, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, exarg_T, funccal_entry_T,
+    funcexe_T, garray_T, hashtab_T, kObjectTypeString, list_T, object_data, partial_T, ptrdiff_t,
+    save_v_event_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    win_T,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::{atol, memcmp, memset, strlen};
@@ -200,7 +201,7 @@ pub unsafe fn eval_to_bool(
     } else {
         unsafe { eval0(arg, &raw mut tv, eap, &raw mut evalarg) }
     };
-    if r == FAIL {
+    if r.is_err() {
         unsafe { *error = true };
     } else {
         unsafe { *error = false };
@@ -224,7 +225,7 @@ pub(crate) unsafe fn eval1_emsg(
     arg: *mut *mut c_char,
     rettv: *mut typval_T,
     eap: *mut exarg_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let start: *const c_char = unsafe { *arg };
     let did_emsg_before = did_emsg.get();
     let called_emsg_before = called_emsg.get();
@@ -232,7 +233,7 @@ pub(crate) unsafe fn eval1_emsg(
     let mut evalarg = UNSET_EVALARG;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, !eap.is_null() && (*eap).skip != 0) };
     let ret = unsafe { eval1(arg, rettv, &raw mut evalarg) };
-    if ret == FAIL
+    if ret.is_err()
         && !aborting()
         && did_emsg.get() == did_emsg_before
         && called_emsg.get() == called_emsg_before
@@ -275,24 +276,24 @@ pub(crate) unsafe fn eval_expr_partial(
     argv: *mut typval_T,
     argc: c_int,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so `v_partial` is
     // the union's live member.
     let partial = unsafe { (*expr).vval.v_partial };
     if partial.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     let s: *const c_char = unsafe { partial_name(partial) };
     if s.is_null() || unsafe { *s } as c_int == NUL {
-        return FAIL;
+        return Err(Failed);
     }
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
-    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) } == FAIL {
-        return FAIL;
+    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }.is_err() {
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Call the function `expr` names.
@@ -304,7 +305,7 @@ pub(crate) unsafe fn eval_expr_func(
     argv: *mut typval_T,
     argc: c_int,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     // SAFETY: the caller's promise -- `expr` outlives the call, and it is
     // only read through here; `VAR_FUNC` says `v_string` is its live
@@ -316,38 +317,41 @@ pub(crate) unsafe fn eval_expr_func(
         unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) }
     };
     if s.is_null() || unsafe { *s } as c_int == NUL {
-        return FAIL;
+        return Err(Failed);
     }
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
-    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) } == FAIL {
-        return FAIL;
+    if unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }.is_err() {
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
 ///
 /// # Safety
 /// `expr` and `rettv` must be valid.
-pub(crate) unsafe fn eval_expr_string(expr: *const typval_T, rettv: *mut typval_T) -> c_int {
+pub(crate) unsafe fn eval_expr_string(
+    expr: *const typval_T,
+    rettv: *mut typval_T,
+) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut s = unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) } as *mut c_char;
     if s.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     s = unsafe { skipwhite(s) };
-    if unsafe { eval1_emsg(&raw mut s, rettv, null_mut()) } == FAIL {
-        return FAIL;
+    if unsafe { eval1_emsg(&raw mut s, rettv, null_mut()) }.is_err() {
+        return Err(Failed);
     }
     if unsafe { *skipwhite(s) } as c_int != NUL {
         unsafe { tv_clear(rettv) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let s = unsafe { c_str(s) };
         semsg!("E15: Invalid expression: \"{s}\"");
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Evaluate whatever `expr` holds — a partial, a Funcref, a function name
@@ -361,7 +365,7 @@ pub unsafe fn eval_expr_typval(
     argv: *mut typval_T,
     argc: c_int,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `expr` outlives the call and is only
     // read through here; each arm restates the same promise.
     let ty = unsafe { Tv::new(expr.cast_mut()) };
@@ -381,7 +385,7 @@ pub unsafe fn eval_expr_typval(
 pub unsafe fn eval_expr_to_bool(expr: *const typval_T, error: *mut bool) -> bool {
     let mut argv = UNSET_TV;
     let mut rettv = UNSET_TV;
-    if unsafe { eval_expr_typval(expr, false, &raw mut argv, 0, &raw mut rettv) } == FAIL {
+    if unsafe { eval_expr_typval(expr, false, &raw mut argv, 0, &raw mut rettv) }.is_err() {
         unsafe { *error = true };
         return false;
     }
@@ -400,7 +404,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
     let mut evalarg = UNSET_EVALARG;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, skip) };
     let skipping = skip.then(Suppress::emsg_skip);
-    let retval = if unsafe { eval0(arg, &raw mut tv, eap, &raw mut evalarg) } == FAIL || skip {
+    let retval = if unsafe { eval0(arg, &raw mut tv, eap, &raw mut evalarg) }.is_err() || skip {
         null_mut()
     } else {
         let s = unsafe { xstrdup(numbuf.string(&raw mut tv)) };
@@ -417,7 +421,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
 /// # Safety
 /// `pp` must point at the cursor into a NUL-terminated expression;
 /// `evalarg` null or valid.
-pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut evalarg_T) -> c_int {
+pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut evalarg_T) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a non-null `evalarg` outlives the
     // call.
     let ev = (!evalarg.is_null()).then(|| unsafe { Ev::new(evalarg) });
@@ -498,7 +502,7 @@ pub unsafe fn eval_to_string_eap(
     } else {
         unsafe { eval0(arg, &raw mut tv, null_mut(), &raw mut evalarg) }
     };
-    let retval = if r == FAIL {
+    let retval = if r.is_err() {
         null_mut()
     } else {
         let s = unsafe { typval2string(&raw mut tv, join_list) };
@@ -553,16 +557,18 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> va
     let mut rettv = UNSET_TV;
     let mut p = unsafe { skipwhite(expr) };
     let _no_emsg = Suppress::emsg();
-    let mut r = NOTDONE;
-    if use_simple_function {
-        // Note it is handed the *unskipped* expression, unlike `eval1`.
-        r = unsafe { may_call_simple_func(expr, &raw mut rettv) };
-    }
-    if r == NOTDONE {
-        r = unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) };
-    }
+    // Note the shortcut is handed the *unskipped* expression, unlike `eval1`.
+    let simple = if use_simple_function {
+        unsafe { may_call_simple_func(expr, &raw mut rettv) }
+    } else {
+        Ok(Parsed::NotThis)
+    };
+    let r = match simple {
+        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) },
+        other => other.map(|_| ()),
+    };
 
-    if r == FAIL {
+    if r.is_err() {
         -1
     } else {
         let n = unsafe { tv_get_number_chk(&raw mut rettv, null_mut()) };
@@ -592,14 +598,14 @@ pub unsafe fn eval_expr_ext(
     let mut tv = unsafe { xmalloc(size_of::<typval_T>()) } as *mut typval_T;
     let mut evalarg = UNSET_EVALARG;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, !eap.is_null() && (*eap).skip != 0) };
-    let mut r = NOTDONE;
-    if use_simple_function {
-        r = unsafe { eval0_simple_funccal(arg, tv, eap, &raw mut evalarg) };
-    }
-    if r == NOTDONE {
-        r = unsafe { eval0(arg, tv, eap, &raw mut evalarg) };
-    }
-    if r == FAIL {
+    // `eval0_simple_funccal` falls through to `eval0` itself, so the two
+    // arms are the whole of the choice: nothing here can be left undone.
+    let r = if use_simple_function {
+        unsafe { eval0_simple_funccal(arg, tv, eap, &raw mut evalarg) }
+    } else {
+        unsafe { eval0(arg, tv, eap, &raw mut evalarg) }
+    };
+    if r.is_err() {
         unsafe { xfree(tv as *mut c_void) };
         tv = null_mut();
     }
@@ -617,11 +623,11 @@ pub unsafe fn call_vim_function(
     argc: c_int,
     argv: *mut typval_T,
     rettv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut func = func;
     let mut len = unsafe { strlen(func) } as c_int;
     let mut pt: *mut partial_T = null_mut();
-    let mut ret = FAIL;
+    let mut ret = Err(Failed);
 
     'fail: {
         let vlua = c"v:lua.".as_ptr().cast();
@@ -648,7 +654,7 @@ pub unsafe fn call_vim_function(
         ret = unsafe { call_func(func, len, rettv, argc, argv, &raw mut funcexe) };
     }
 
-    if ret == FAIL {
+    if ret.is_err() {
         unsafe { tv_clear(rettv) };
     }
     ret
@@ -665,7 +671,7 @@ pub unsafe fn call_func_retstr(
 ) -> *mut c_void {
     let mut numbuf = NumBuf::new();
     let mut rettv = UNSET_TV;
-    if unsafe { call_vim_function(func, argc, argv, &raw mut rettv) } == FAIL {
+    if unsafe { call_vim_function(func, argc, argv, &raw mut rettv) }.is_err() {
         return null_mut();
     }
     let retval = unsafe { xstrdup(numbuf.string(&raw mut rettv)) };
@@ -684,7 +690,7 @@ pub unsafe fn call_func_retlist(
     argv: *mut typval_T,
 ) -> *mut c_void {
     let mut rettv = UNSET_TV;
-    if unsafe { call_vim_function(func, argc, argv, &raw mut rettv) } == FAIL {
+    if unsafe { call_vim_function(func, argc, argv, &raw mut rettv) }.is_err() {
         return null_mut();
     }
     if rettv.v_type != VAR_LIST {
@@ -719,7 +725,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
 
         let mut tv = UNSET_TV;
         let mut retval: varnumber_T = 0;
-        if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) } != FAIL {
+        if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) }.is_ok() {
             if tv.v_type == VAR_NUMBER {
                 retval = unsafe { tv.vval.v_number };
             } else if tv.v_type != VAR_STRING || unsafe { tv.vval.v_string }.is_null() {
@@ -785,7 +791,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
 
     let mut tv = UNSET_TV;
     let retval = if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) }
-        == FAIL
+        .is_err()
     {
         empty_string()
     } else {

@@ -734,12 +734,12 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
         };
     }
     let (name, len) = (CURRENT_COMPILER.as_ptr(), CURRENT_COMPILER.count_bytes());
-    unsafe { do_unlet(name, len, true) };
+    let _ = unsafe { do_unlet(name, len, true) };
     let (name, len) = (
         B_CURRENT_COMPILER.as_ptr(),
         B_CURRENT_COMPILER.count_bytes(),
     );
-    unsafe { do_unlet(name, len, true) };
+    let _ = unsafe { do_unlet(name, len, true) };
 
     let mut pattern = Vec::with_capacity(unsafe { strlen((*eap).arg) } + 12);
     pattern.extend_from_slice(b"compiler/");
@@ -762,7 +762,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     // Restore "current_compiler" for ":compiler {name}".
     if unsafe { (*eap).forceit } == 0 {
         if old_cur_comp.is_null() {
-            unsafe {
+            let _ = unsafe {
                 do_unlet(
                     CURRENT_COMPILER.as_ptr(),
                     CURRENT_COMPILER.count_bytes(),

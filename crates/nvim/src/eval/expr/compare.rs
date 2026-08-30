@@ -22,7 +22,7 @@ use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::types::{
-    FAIL, NUL, OK, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    Failed, NUL, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     dict_T, exprtype_T, float_T, typval_T, varnumber_T,
 };
 use ::libc::strcmp;
@@ -221,7 +221,7 @@ pub(crate) unsafe fn typval_compare(
     typ2: *mut typval_T,
     op: exprtype_T,
     ic: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let type_is = op == EXPR_IS || op == EXPR_ISNOT;
     let (t1, t2) = (unsafe { (*typ1).v_type }, unsafe { (*typ2).v_type });
     let same_type = t1 == t2;
@@ -240,7 +240,7 @@ pub(crate) unsafe fn typval_compare(
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
         match cmp {
             Some(n) => n,
-            None => return FAIL,
+            None => return Err(Failed),
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
         // SAFETY: as the Blob arm.
@@ -251,7 +251,7 @@ pub(crate) unsafe fn typval_compare(
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
         match cmp {
             Some(n) => n,
-            None => return FAIL,
+            None => return Err(Failed),
         }
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
         // SAFETY: as the Blob arm.
@@ -262,13 +262,13 @@ pub(crate) unsafe fn typval_compare(
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
         match cmp {
             Some(n) => n,
-            None => return FAIL,
+            None => return Err(Failed),
         }
     } else if tv_is_func(unsafe { *typ1 }) || tv_is_func(unsafe { *typ2 }) {
         if op != EXPR_EQUAL && op != EXPR_NEQUAL && !type_is {
             emsg(gettext(c"E694: Invalid operation for Funcrefs"));
             unsafe { tv_clear(typ1) };
-            return FAIL;
+            return Err(Failed);
         }
         let equal = if t1 == VAR_PARTIAL && unsafe { (*typ1).vval.v_partial }.is_null()
             || t2 == VAR_PARTIAL && unsafe { (*typ2).vval.v_partial }.is_null()
@@ -324,5 +324,5 @@ pub(crate) unsafe fn typval_compare(
     unsafe { tv_clear(typ1) };
     one.v_type = VAR_NUMBER;
     one.vval.v_number = answer;
-    OK
+    Ok(())
 }

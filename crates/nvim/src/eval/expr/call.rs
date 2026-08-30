@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::eval::Parsed;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -32,7 +33,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, NUL, OK, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, funcexe_T,
+    Failed, NUL, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, funcexe_T,
     partial_T, size_t, typval_T, typval_vval_union,
 };
 use ::libc::strlen;
@@ -64,7 +65,7 @@ pub(crate) unsafe fn eval_func(
     rettv: *mut typval_T,
     flags: c_int,
     basetv: *mut typval_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` is the result being built.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
@@ -107,11 +108,11 @@ pub(crate) unsafe fn eval_func(
         rv.v_type = VAR_FUNC;
     }
     if evaluate && aborting() {
-        if ret == OK {
+        if ret.is_ok() {
             // SAFETY: the caller's promise -- `rettv` is valid.
             unsafe { tv_clear(rettv) };
         }
-        ret = FAIL;
+        ret = Err(Failed);
     }
     ret
 }
@@ -134,7 +135,7 @@ pub(crate) unsafe fn call_func_rettv(
     selfdict: *mut dict_T,
     basetv: *mut typval_T,
     lua_funcname: *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` holds the callee.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
@@ -166,7 +167,7 @@ pub(crate) unsafe fn call_func_rettv(
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
                 emsg(gettext(e_empty_function_name));
                 unsafe { tv_clear(&raw mut functv) };
-                return FAIL;
+                return Err(Failed);
             }
         }
     } else {
@@ -209,7 +210,7 @@ pub(crate) unsafe fn eval_lambda(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     verbose: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` holds the base and `evalarg` is null or valid.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
@@ -218,10 +219,10 @@ pub(crate) unsafe fn eval_lambda(
     let mut base = *rv;
     rv.v_type = VAR_UNKNOWN;
 
-    if unsafe { get_lambda_tv(arg, rettv, evalarg) } != OK {
+    if unsafe { get_lambda_tv(arg, rettv, evalarg) } != Ok(Parsed::Done) {
         // `base` is not cleared: `get_lambda_tv` failing means the
         // caller still owns it. Upstream's.
-        return FAIL;
+        return Err(Failed);
     }
     let ret = if cur.byte() != b'(' {
         if verbose {
@@ -237,7 +238,7 @@ pub(crate) unsafe fn eval_lambda(
             }
         }
         unsafe { tv_clear(rettv) };
-        FAIL
+        Err(Failed)
     } else {
         let basep = &raw mut base;
         // SAFETY: as above, with `base` this frame's own.
@@ -259,7 +260,7 @@ pub(crate) unsafe fn eval_method(
     rettv: *mut typval_T,
     evalarg: *mut evalarg_T,
     verbose: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` holds the base and `evalarg` is null or valid.
     // All three hold for every call below.
@@ -288,7 +289,7 @@ pub(crate) unsafe fn eval_method(
     }
 
     let mut tofree: *mut c_char = null_mut();
-    let mut ret = OK;
+    let mut ret = Ok(());
     if len <= 0 {
         if verbose {
             if lua_funcname.is_null() {
@@ -299,7 +300,7 @@ pub(crate) unsafe fn eval_method(
                 semsg!("E15: Invalid expression: \"{name}\"");
             }
         }
-        ret = FAIL;
+        ret = Err(Failed);
     } else {
         cur.skip(0);
 
@@ -317,9 +318,9 @@ pub(crate) unsafe fn eval_method(
             // back at the end of the branch.
             unsafe { *paren = NUL as c_char };
             let mut callee = UNSET_TV;
-            if unsafe { eval7(arg, &raw mut callee, evalarg, false) } == FAIL {
+            if unsafe { eval7(arg, &raw mut callee, evalarg, false) }.is_err() {
                 cur.set(name.wrapping_offset(len as isize));
-                ret = FAIL;
+                ret = Err(Failed);
             } else if unsafe { *skipwhite(cur.get()) } as c_int != NUL {
                 if verbose {
                     let at = cur.get();
@@ -327,7 +328,7 @@ pub(crate) unsafe fn eval_method(
                     let at = unsafe { c_str(at) };
                     semsg!("E488: Trailing characters: {at}");
                 }
-                ret = FAIL;
+                ret = Err(Failed);
             } else if callee.v_type == VAR_FUNC && !unsafe { callee.vval.v_string }.is_null() {
                 // Take the name over from the typval so `tv_clear`
                 // below does not free what is about to be called.
@@ -342,14 +343,14 @@ pub(crate) unsafe fn eval_method(
                     if verbose {
                         emsg(gettext(e_cannot_use_partial_here));
                     }
-                    ret = FAIL;
+                    ret = Err(Failed);
                 } else {
                     name = unsafe { xstrdup(partial_name(pt.raw())) };
                     tofree = name;
                     // `xstrdup` aborts rather than answering null; the
                     // arm is upstream's and is kept.
                     if name.is_null() {
-                        ret = FAIL;
+                        ret = Err(Failed);
                         name = cur.get();
                     } else {
                         len = unsafe { strlen(name) } as c_int;
@@ -361,13 +362,13 @@ pub(crate) unsafe fn eval_method(
                     let name = unsafe { c_str(name) };
                     semsg!("E1085: Not a callable type: {name}");
                 }
-                ret = FAIL;
+                ret = Err(Failed);
             }
             unsafe { tv_clear(&raw mut callee) };
             unsafe { *paren = b'(' as c_char };
         }
 
-        if ret == OK {
+        if ret.is_ok() {
             let basep = &raw mut base;
             if cur.byte() != b'(' {
                 if verbose {
@@ -375,12 +376,12 @@ pub(crate) unsafe fn eval_method(
                     let name = unsafe { c_str(name) };
                     semsg!("E107: Missing parentheses: {name}");
                 }
-                ret = FAIL;
+                ret = Err(Failed);
             } else if ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int) {
                 if verbose {
                     emsg(gettext(e_nowhitespace));
                 }
-                ret = FAIL;
+                ret = Err(Failed);
             } else if !lua_funcname.is_null() {
                 if evaluate {
                     rv.v_type = VAR_PARTIAL;

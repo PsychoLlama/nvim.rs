@@ -27,8 +27,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    Args, FAIL, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet,
-    nr_arg, ret_string, str_arg, str_arg_chk,
+    Args, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg,
+    ret_string, str_arg, str_arg_chk,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
@@ -456,7 +456,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnum
     // SAFETY: three live typvals, and `argv` holds the one argument the count
     // names.
     let ran = unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 1, &raw mut rettv) };
-    if ran != FAIL {
+    if ran.is_ok() {
         let mut error = false;
         // SAFETY: a live typval; the callee reports through `error`.
         retval = unsafe { tv_get_number_chk(&raw mut rettv, &raw mut error) };

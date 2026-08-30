@@ -36,7 +36,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{FAIL, FILE, NUL, OK, Vv, exarg_T, ssize_t, varnumber_T};
+use crate::types::{FAIL, FILE, NUL, Vv, exarg_T, ssize_t, varnumber_T};
 
 use crate::winlayer::{Ea, Win};
 use ::libc::{fclose, strcasecmp};
@@ -138,7 +138,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
         if append {
             arg = unsafe { arg.add(1) };
         }
-        if unsafe { var_redir_start(skipwhite(arg), append) } == OK {
+        if unsafe { var_redir_start(skipwhite(arg), append) }.is_ok() {
             redir_vname.set(true);
         }
     } else {

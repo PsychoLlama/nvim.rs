@@ -27,11 +27,11 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, NUL, Refcount, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
-    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
-    VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, Vv, blob_T, kBoolVarTrue,
-    kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
+    BoolVarValue, EvalFuncData, NUL, Refcount, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
+    VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
+    VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, Vv, blob_T, kBoolVarTrue, kSpecialVarNull, list_T,
+    listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int};
@@ -48,7 +48,7 @@ const NIL: typval_T = typval_T {
 pub unsafe fn f_copy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `args.ptr(0)` and `rettv` are live typvals.
-    unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, false, 0) };
+    let _ = unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, false, 0) };
 }
 
 /// `deepcopy({expr} [, {noref}])`.
@@ -63,7 +63,7 @@ pub unsafe fn f_deepcopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
     let noref = args.has(1) && unsafe { tv_get_bool_chk(args.ptr(1), ptr::null_mut()) } != 0;
     let copy_id = if noref { 0 } else { unsafe { get_copy_id() } };
-    unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, true, copy_id) };
+    let _ = unsafe { var_item_copy(ptr::null(), args.ptr(0), rettv, true, copy_id) };
 }
 
 /// `empty({expr})` — what "empty" means for each type.
@@ -337,7 +337,7 @@ unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     let (mut required, mut optional, mut varargs) = (0, 0, false);
     let name = unsafe { partial_name(pt) };
     let (req, opt, var) = (&raw mut required, &raw mut optional, &raw mut varargs);
-    unsafe { get_func_arity(name, req, opt, var) };
+    let _ = unsafe { get_func_arity(name, req, opt, var) };
     rettv.v_type = VAR_DICT;
     dict_alloc_ret(rettv);
     let dict = unsafe { rettv.vval.v_dict };
@@ -503,7 +503,7 @@ unsafe fn indexof_matches(expr: *mut typval_T) -> bool {
         NIL,
     ];
     let mut newtv = NIL;
-    if unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) } == FAIL {
+    if unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) }.is_err() {
         return false;
     }
     let mut error = false;

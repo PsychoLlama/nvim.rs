@@ -172,7 +172,7 @@ pub unsafe fn parse_cmdline(
             while byte(arg) != NUL && byte(arg) != '|' as c_int && byte(arg) != '\n' as c_int {
                 let start = arg;
                 let skipping = Suppress::emsg_skip();
-                unsafe { skip_expr(&raw mut arg, ptr::null_mut()) };
+                let _ = unsafe { skip_expr(&raw mut arg, ptr::null_mut()) };
                 drop(skipping);
                 // Nothing an expression parser recognises: step over one
                 // byte, or this loop never ends.

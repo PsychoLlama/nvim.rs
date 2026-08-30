@@ -112,7 +112,7 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
         let name = c"g:colors_name";
         // SAFETY: the name is a C string of the length given, and `p_bg` is
         // this process's own option variable.
-        unsafe { do_unlet(name.as_ptr(), name.to_bytes().len(), true) };
+        let _ = unsafe { do_unlet(name.as_ptr(), name.to_bytes().len(), true) };
         unsafe { free_string_option(p_bg.get()) };
         p_bg.set(unsafe {
             xstrdup(if dark {

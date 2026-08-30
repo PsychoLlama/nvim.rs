@@ -24,7 +24,7 @@ use crate::register::{
 use crate::semsg;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, MotionType, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
+    BoolVarValue, EvalFuncData, Failed, MotionType, NUL, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
     colnr_T, dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
 use ::libc::strlen;
@@ -205,7 +205,7 @@ unsafe fn get_yank_type(
     pp: &mut *const c_char,
     yank_type: &mut MotionType,
     block_len: &mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY throughout: the caller's obligation; `getdigits_int` only walks forward
     // and stops at the first non-digit.
     let mut p = *pp;
@@ -214,7 +214,7 @@ unsafe fn get_yank_type(
         b'V' | b'l' => *yank_type = kMTLineWise,
         b'b' => *yank_type = kMTBlockWise,
         c if c as c_int == Ctrl_V => *yank_type = kMTBlockWise,
-        _ => return FAIL,
+        _ => return Err(Failed),
     }
     if *yank_type == kMTBlockWise && ascii_isdigit(unsafe { *p.add(1) } as c_int) {
         let mut q = unsafe { p.add(1) } as *mut c_char;
@@ -222,7 +222,7 @@ unsafe fn get_yank_type(
         p = unsafe { q.sub(1) };
     }
     *pp = p;
-    OK
+    Ok(())
 }
 
 /// `setreg({regname}, {value} [, {options}])`.
@@ -272,7 +272,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             // The type must be exactly one letter (plus a width), so
             // the byte after what was consumed has to be the
             // terminator.
-            if unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) } == FAIL
+            if unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) }.is_err()
                 || unsafe { *p.add(1) } != NUL as c_char
             {
                 let arg0 = "value";
@@ -315,7 +315,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
                 // Anything else is a register type, and an
                 // unrecognised one is silently ignored.
                 _ => {
-                    unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) };
+                    let _ = unsafe { get_yank_type(&mut p, &mut yank_type, &mut block_len) };
                 }
             }
             p = unsafe { p.add(1) };

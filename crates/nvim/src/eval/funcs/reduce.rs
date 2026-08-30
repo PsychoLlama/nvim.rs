@@ -21,8 +21,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
+    EvalFuncData, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 
@@ -207,7 +207,7 @@ unsafe fn fold_step(
     if cleanup.clear_item {
         unsafe { tv_clear(&raw mut argv[1]) };
     }
-    r != FAIL && called_emsg.get() == called_emsg_start
+    r.is_ok() && called_emsg.get() == called_emsg_start
 }
 
 /// `reduce()` over a List.
