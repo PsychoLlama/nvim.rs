@@ -87,9 +87,7 @@ pub unsafe fn handle_nvim_ui_detach(
         wrong_arity(error, 0, args.len());
         return NIL;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_ui_detach(channel_id) } {
+    if let Err(e) = nvim_ui_detach(channel_id) {
         return failure(error, e);
     }
     NIL
@@ -225,9 +223,7 @@ pub unsafe fn handle_nvim_ui_send(
         wrong_type(error, 1, c"nvim_ui_send", c"String");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_send(channel_id, arg_1) };
+    nvim_ui_send(channel_id, arg_1);
     NIL
 }
 
@@ -265,9 +261,7 @@ pub unsafe fn handle_nvim_ui_set_focus(
         wrong_type(error, 1, c"nvim_ui_set_focus", c"Boolean");
         return NIL;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_ui_set_focus(channel_id, arg_1) } {
+    if let Err(e) = nvim_ui_set_focus(channel_id, arg_1) {
         return failure(error, e);
     }
     NIL

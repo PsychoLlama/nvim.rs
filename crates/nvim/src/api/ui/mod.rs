@@ -317,11 +317,7 @@ pub unsafe fn ui_attach(
 }
 
 /// Tells the editor that this UI gained or lost the user's attention.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> {
+pub fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> {
     let mut error = Error::none();
     if get_ui_or_err(channel_id, &mut error).is_null() {
         return Err(error);
@@ -337,11 +333,7 @@ pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), 
 }
 
 /// Detaches the UI on `channel_id`.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
+pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
     let mut error = Error::none();
     remote_ui_disconnect(channel_id, &mut error, false);
     ().reported(error)
@@ -715,10 +707,6 @@ pub unsafe fn nvim_ui_pum_set_bounds(
 }
 
 /// Forwards `content` to every UI that owns a terminal, as `ui_send`.
-///
-/// # Safety
-///
-/// `content` must be valid for the duration of the call.
-pub unsafe fn nvim_ui_send(_channel_id: u64, content: String_0) {
+pub fn nvim_ui_send(_channel_id: u64, content: String_0) {
     ui_call_ui_send(content);
 }
