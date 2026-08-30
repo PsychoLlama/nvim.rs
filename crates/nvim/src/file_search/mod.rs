@@ -43,7 +43,7 @@ use crate::path::{
 };
 use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, OK, cmdarg_T, event_T, linenr_T, ptrdiff_t,
+    BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, cmdarg_T, event_T, linenr_T, ptrdiff_t,
     save_v_event_T, size_t,
 };
 use ::libc::{abort, strcpy, strlen};
@@ -554,7 +554,7 @@ impl FindContext {
     /// `file_path` must hold a NUL-terminated name.
     unsafe fn shorten(&self, file_path: &mut Candidate) {
         let mut curdir = [0 as c_char; MAXPATHL as usize];
-        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) } != OK {
+        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) }.is_err() {
             return;
         }
         let base = file_path.as_mut_ptr();

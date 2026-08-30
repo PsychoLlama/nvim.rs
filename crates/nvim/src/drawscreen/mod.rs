@@ -89,7 +89,7 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    DecorPriority, DecorVirtText, DecorVirtText_data, FAIL, Integer, OK, OptInt, VirtText,
+    DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Integer, OptInt, VirtText,
     VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T,
     match_T, pos_T, proftime_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
     varnumber_T, win_T,
@@ -324,7 +324,7 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
 ///
 /// Answers `FAIL` when nothing was drawn -- the screen is not ready, redrawing
 /// is disabled, or this is a recursive call.
-pub unsafe fn update_screen() -> c_int {
+pub unsafe fn update_screen() -> Result<(), Failed> {
     // The intro message is shown until something else claims the screen.
     static STILL_MAY_INTRO: GlobalCell<bool> = GlobalCell::new(true);
 
@@ -339,7 +339,7 @@ pub unsafe fn update_screen() -> c_int {
     // A VimResized autocommand can redraw in the middle of a resize, which
     // would bypass the checks in `screen_resize`.
     if resizing_autocmd.get() || !default_grid_ref().is_allocated() {
-        return FAIL;
+        return Err(Failed);
     }
 
     // May have postponed updating diffs.
@@ -348,7 +348,7 @@ pub unsafe fn update_screen() -> c_int {
     }
 
     if !unsafe { redrawing() } || updating_screen.get() || cmdline_number_prompt() {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut redr_type = must_redraw.get();
@@ -563,7 +563,7 @@ pub unsafe fn update_screen() -> c_int {
     if !ui_has(kUICmdline) {
         cmdline_was_last_drawn.set(false);
     }
-    OK
+    Ok(())
 }
 
 /// The search-highlight matcher the whole redraw shares.

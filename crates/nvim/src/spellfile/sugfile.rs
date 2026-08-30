@@ -48,8 +48,8 @@ use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
-    FILE, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint8_t,
-    uint16_t, uintmax_t,
+    FILE, Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T,
+    uint8_t, uint16_t, uintmax_t,
 };
 use ::libc::{fclose, fwrite, strlen};
 
@@ -102,7 +102,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
 
     spell_message(spin, c"Performing soundfolding...");
     let mut fname: *mut c_char = core::ptr::null_mut();
-    if unsafe { sug_filltree(spin, slang) } != FAIL && unsafe { sug_maketable(spin) } != FAIL {
+    if unsafe { sug_filltree(spin, slang) }.is_ok() && unsafe { sug_maketable(spin) } != FAIL {
         let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
@@ -138,7 +138,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut spellinfo_T, wfname: *mut c_c
 /// # Safety
 ///
 /// `slang` must be a fully loaded language.
-unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
+unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<(), Failed> {
     // SAFETY: the caller promises a loaded language; the walk is bounded by
     // the byte counts the tree itself carries, and depth by MAXWLEN, which
     // is the longest word the tree can hold.
@@ -155,7 +155,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
     let byts = unsafe { (*slang).sl_fbyts };
     let idxs = unsafe { (*slang).sl_fidxs };
     if byts.is_null() || idxs.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     arridx[0] = 0;
@@ -202,8 +202,8 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
         let foldroot = spin.si_foldroot;
         let word = tsalword.as_ptr();
         let (hi, lo) = ((words_done >> 16) as c_int, (words_done & 0xffff) as c_int);
-        if unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) } == FAIL {
-            return FAIL;
+        if unsafe { tree_add_word(spin, word, foldroot, hi, lo, 0) }.is_err() {
+            return Err(Failed);
         }
         words_done = words_done.wrapping_add(1);
         wordcount[depth] += 1;
@@ -223,7 +223,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> c_int {
     }
 
     smsg!(0, "Total number of words: {}", words_done);
-    OK
+    Ok(())
 }
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
@@ -302,7 +302,7 @@ unsafe fn sug_filltable(
 
         let at = wordnr as linenr_T;
         let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as colnr_T) };
-        if unsafe { ml_append_buf(spin.si_spellbuf, at, text, len, true) } == FAIL {
+        if unsafe { ml_append_buf(spin.si_spellbuf, at, text, len, true) }.is_err() {
             return -1;
         }
         wordnr += 1;

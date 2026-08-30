@@ -19,7 +19,7 @@ use crate::buffer::BufRef;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
+use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -67,7 +67,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
     // SAFETY: the editor exists, for both names.
     let (tmp_orig, tmp_new) = unsafe { (vim_tempname(), vim_tempname()) };
 
-    if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig) != FAIL {
+    if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // SAFETY: `eap.arg` is the command's own argument string.
         fullname = unsafe { full_name_save(eap.arg, false) };
         let name = if fullname.is_null() {
@@ -143,7 +143,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
             cmdmod_set_tab(0);
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
             let flags = if vertical { WSP_VERT as c_int } else { 0 };
-            if win_split(0, flags) != FAIL {
+            if win_split(0, flags).is_ok() {
                 eap.cmdidx = CMD_split;
                 eap.arg = tmp_new;
                 // SAFETY: the caller's command, and a window that was live
@@ -161,7 +161,8 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
                         // the command line are static strings.
                         unsafe { ex_file(eap.raw()) };
                         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
-                            unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
+                            let _ =
+                                unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
                         }
                     }
                 }
@@ -177,7 +178,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
 }
 
 /// Write the current buffer out to `tmp_orig`, the patch's input.
-fn write_orig(tmp_orig: *mut c_char) -> c_int {
+fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
     let cb = curbuf.get();
     let end = cur_buf().b_ml.ml_line_count;
     let req = WriteRequest::filter();
@@ -195,7 +196,7 @@ fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
     let at = dirbuf.as_mut_ptr();
     // SAFETY: `dirbuf` holds `MAXPATHL` bytes, which is what `os_dirname` is
     // told, and `os_chdir` gets the NUL-terminated name it wrote there.
-    let ok = unsafe { os_dirname(at, MAXPATHL as size_t) == OK && os_chdir(at) == 0 };
+    let ok = unsafe { os_dirname(at, MAXPATHL as size_t).is_ok() && os_chdir(at) == 0 };
     if !ok {
         dirbuf[0] = NUL as c_char;
     }
@@ -228,7 +229,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT as c_int } else { 0 };
-    if win_split(0, flags) == FAIL {
+    if win_split(0, flags).is_err() {
         return;
     }
     eap.cmdidx = CMD_split;
@@ -365,7 +366,7 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
     fold_update_all(wp);
     changed_window_setting(wp);
     if unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
-        unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
     }
     wp.w_onebuf_opt.wo_diff_saved = 1;
     set_diff_option(wp, true);
@@ -465,7 +466,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
     // SAFETY: `p_sbo` is the `'scrollopt'` option string.
     if !diffwin && !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
         // SAFETY: a static command line.
-        unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
     }
 }
 

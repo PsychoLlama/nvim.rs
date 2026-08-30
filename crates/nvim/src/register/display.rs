@@ -15,7 +15,7 @@ use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// Print `p` as one line of `:registers`, stopping at the window width.
 ///
@@ -252,7 +252,7 @@ pub unsafe fn ex_display(eap: *mut exarg_T) {
         let mut fname: *mut c_char = ::core::ptr::null_mut();
         let mut dummy: linenr_T = 0;
         // SAFETY: both out-parameters are writable locals.
-        let named = unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) } != FAIL;
+        let named = unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_ok();
         // SAFETY: on success `fname` is the alternate file's name, which is
         // NUL-terminated.
         if named && !unsafe { message_filtered(fname) } {

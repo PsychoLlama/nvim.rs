@@ -12,7 +12,7 @@ use super::*;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
-use crate::types::{ExpandContext, FAIL, NUL, OK};
+use crate::types::{ExpandContext, Failed, NUL};
 use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
@@ -132,7 +132,7 @@ pub unsafe fn parse_pattern_and_range(
 
     // Uninitialised in the C; `parse_command_modifiers` only writes it.
     let mut dummy_cmdmod = cmdmod_T::default();
-    unsafe { parse_command_modifiers(&raw mut ea, &mut dummy, &mut dummy_cmdmod, true) };
+    let _ = unsafe { parse_command_modifiers(&raw mut ea, &mut dummy, &mut dummy_cmdmod, true) };
 
     // Skip over the range to find the command.
     let cmd = unsafe { skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>()) };
@@ -461,7 +461,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     }
 
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     highlight_match.set(false);
     restore_last_search_pattern();
 
@@ -488,7 +488,7 @@ pub(crate) unsafe fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
     mut s: Is,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut skiplen = 0;
     let mut patlen = 0;
     let mut search_delim = 0;
@@ -499,7 +499,7 @@ pub(crate) unsafe fn may_add_char_to_search(
 
     if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
         restore_last_search_pattern();
-        return FAIL;
+        return Err(Failed);
     }
     restore_last_search_pattern();
 
@@ -543,10 +543,10 @@ pub(crate) unsafe fn may_add_char_to_search(
                 }
                 *c = save_c;
             }
-            return FAIL;
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Undo the preview: put the cursor and the view back where the command line
@@ -585,7 +585,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
     unsafe { status_redraw_all() };
     unsafe { redraw_all_later(UPD_SOME_VALID) };
     if call_update_screen {
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     }
 }
 
@@ -599,7 +599,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     count: ::core::ffi::c_int,
     mut s: Is,
     next_match: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut cc = Cc::current();
     let mut skiplen = 0;
     let mut patlen = 0;
@@ -611,11 +611,11 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
 
     if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
         restore_last_search_pattern();
-        return OK;
+        return Ok(());
     }
     if patlen == 0 && cmd_byte(cc, skiplen) as ::core::ffi::c_int == NUL {
         restore_last_search_pattern();
-        return FAIL;
+        return Err(Failed);
     }
 
     ui_busy_start();
@@ -628,7 +628,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         pat = last_search_pattern();
         if pat.is_null() {
             restore_last_search_pattern();
-            return FAIL;
+            return Err(Failed);
         }
         skiplen = 0;
         patlen = last_search_pattern_len() as ::core::ffi::c_int;
@@ -718,7 +718,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         highlight_match.set(true);
         s.old_viewstate = save_viewstate(cur_win());
         unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
         highlight_match.set(false);
         unsafe { redrawcmdline() };
         cur_win().w_cursor = s.match_end;
@@ -727,7 +727,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     }
 
     restore_last_search_pattern();
-    FAIL
+    Err(Failed)
 }
 
 /// Guess whether the pattern matches everything.

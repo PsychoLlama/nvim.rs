@@ -234,7 +234,7 @@ unsafe fn assert_beeps(argvars: *mut typval_T, no_beep: bool) -> c_int {
     called_vim_beep.set(false);
     suppress_errthrow.set(true);
     emsg_silent.set(0);
-    unsafe { do_cmdline_cmd(cmd) };
+    let _ = unsafe { do_cmdline_cmd(cmd) };
 
     let mut ret = 0;
     if called_vim_beep.get() == no_beep {

@@ -44,8 +44,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, FAIL, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T,
-    colnr_T, fmark_T, fmarkv_T, linenr_T, optset_T, pos_T,
+    AdditionalData, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T, colnr_T,
+    fmark_T, fmarkv_T, linenr_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
 use ::libc::strcmp;
@@ -302,7 +302,7 @@ pub unsafe fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's frame.
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     // SAFETY: re-reads the option's own value.
-    if unsafe { diffanchors_changed(local) } == FAIL {
+    if unsafe { diffanchors_changed(local) }.is_err() {
         return invalid();
     }
     ptr::null()
@@ -312,7 +312,7 @@ pub unsafe fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_diffopt(_args: *mut optset_T) -> *const c_char {
     // SAFETY: re-reads the option's own value.
-    if unsafe { diffopt_changed() } == FAIL {
+    if unsafe { diffopt_changed() }.is_err() {
         return invalid();
     }
     ptr::null()
@@ -367,7 +367,7 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_eventignore(args: *mut optset_T) -> *const c_char {
     // SAFETY: the frame's C string value.
-    if unsafe { check_ei(*varp(args)) } == FAIL {
+    if unsafe { check_ei(*varp(args)) }.is_err() {
         return invalid();
     }
     ptr::null()
@@ -496,7 +496,7 @@ pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
         return unsafe { did_set_isopt(args) };
     }
     // SAFETY: the frame's C string value.
-    if unsafe { check_isopt(*varp) } == FAIL {
+    if unsafe { check_isopt(*varp) }.is_err() {
         return invalid();
     }
     ptr::null()

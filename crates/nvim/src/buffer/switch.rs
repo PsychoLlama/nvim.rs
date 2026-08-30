@@ -47,7 +47,7 @@ use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
     CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CmdModFlags, FAIL,
-    NUL, OK, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
+    Failed, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -101,7 +101,7 @@ fn is_autocmd_window(win: *mut win_T) -> bool {
     // SAFETY: the pointer is only compared against the autocommand windows.
     is_aucmd_win(win)
 }
-fn split_window() -> c_int {
+fn split_window() -> Result<(), Failed> {
     win_split(0, 0)
 }
 
@@ -327,7 +327,7 @@ pub unsafe fn do_bufdel(
     let mut deleted = 0; // number of buffers deleted
 
     if addr_count == 0 {
-        do_buffer_ext(
+        let _ = do_buffer_ext(
             command,
             DOBUF_CURRENT as c_int,
             FORWARD as c_int,
@@ -418,17 +418,17 @@ fn forceit_flag(forceit: c_int) -> c_int {
 /// One step of [`do_bufdel`]: delete buffer number `bnr`.
 fn delete_one(command: c_int, bnr: c_int, forceit: c_int) -> bool {
     let start = DOBUF_FIRST as c_int;
-    do_buffer_ext(command, start, FORWARD as c_int, bnr, forceit_flag(forceit)) == OK
+    do_buffer_ext(command, start, FORWARD as c_int, bnr, forceit_flag(forceit)).is_ok()
 }
 
 /// Make the current buffer empty, for when it is wiped out and it is the last
 /// one.
-fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> c_int {
+fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(), Failed> {
     let buf = cur_buf();
 
     if action == DOBUF_UNLOAD as c_int {
         err(c"E90: Cannot unload last buffer");
-        return FAIL;
+        return Err(Failed);
     }
 
     let bufref = BufRef::of(buf);
@@ -480,7 +480,13 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> c_int {
 /// or one of `DOBUF_UNLOAD`/`DEL`/`WIPE`; `start` says where counting begins
 /// (`DOBUF_CURRENT`/`FIRST`/`LAST`/`MOD`); `dir` is `FORWARD` or `BACKWARD`;
 /// `count` is a buffer number or a number of buffers.
-fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int) -> c_int {
+fn do_buffer_ext(
+    action: c_int,
+    start: c_int,
+    dir: c_int,
+    count: c_int,
+    flags: c_int,
+) -> Result<(), Failed> {
     let mut update_jumplist = true;
     let unload = action == DOBUF_UNLOAD as c_int
         || action == DOBUF_DEL as c_int
@@ -488,12 +494,12 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     let forceit = flags & DOBUF_FORCEIT as c_int != 0;
 
     let Some(buf) = locate(start, dir, count, flags, unload) else {
-        return FAIL;
+        return Err(Failed);
     };
 
     if action == DOBUF_GOTO as c_int && buf.raw() != curbuf.get() && !may_change_buffer(forceit) {
         // disallow navigating to another buffer when 'winfixbuf' is applied
-        return FAIL;
+        return Err(Failed);
     }
 
     if (action == DOBUF_GOTO as c_int || action == DOBUF_SPLIT as c_int)
@@ -501,7 +507,7 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     {
         // disallow navigating to the dummy buffer
         err_nobufnr(count.into());
-        return FAIL;
+        return Err(Failed);
     }
 
     // delete buffer "buf" from memory and/or the list
@@ -522,20 +528,20 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     // make "buf" the current buffer
     // If 'switchbuf' is set jump to the window containing "buf".
     if action == DOBUF_SPLIT as c_int && window_showing(buf) {
-        return OK;
+        return Ok(());
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
     if buf.raw() != curbuf.get() && buf.b_locked_split != 0 {
         err_raw(tr_raw(e_cannot_switch_to_a_closing_buffer.as_ptr()));
-        return FAIL;
+        return Err(Failed);
     }
-    if action == DOBUF_SPLIT as c_int && split_window() == FAIL {
-        return FAIL; // split window first
+    if action == DOBUF_SPLIT as c_int && split_window().is_err() {
+        return Err(Failed); // split window first
     }
 
     // go to current buffer - nothing to do
     if buf.raw() == curbuf.get() {
-        return OK;
+        return Ok(());
     }
 
     // Check if the current buffer may be abandoned.
@@ -545,12 +551,12 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
             ask_about_changes(cur_buf());
             if !bufref.valid() {
                 // Autocommand deleted buffer, oops!
-                return FAIL;
+                return Err(Failed);
             }
         }
         if is_changed(cur_buf()) {
             no_write_message();
-            return FAIL;
+            return Err(Failed);
         }
     }
 
@@ -567,10 +573,10 @@ fn do_buffer_ext(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c
     }
 
     if aborting_now() {
-        return FAIL; // autocmds may abort script processing
+        return Err(Failed); // autocmds may abort script processing
     }
 
-    OK
+    Ok(())
 }
 
 /// Which buffer `start`/`dir`/`count` name, with the error already reported
@@ -707,7 +713,7 @@ fn step_to_listed(buf: Buf, dir: c_int, count: c_int, flags: c_int, unload: bool
 /// What the unload half of [`do_buffer_ext`] decided.
 enum Unloaded {
     /// The command is finished; this is its result.
-    Done(c_int),
+    Done(Result<(), Failed>),
     /// The buffer was unloaded; this is the one to go to instead, if any.
     Replace(Option<Buf>),
 }
@@ -715,14 +721,14 @@ enum Unloaded {
 /// Unload, delete or wipe `buf`, and pick the buffer to show in its place.
 fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bool) -> Unloaded {
     if !can_unload_buffer(buf) {
-        return Unloaded::Done(FAIL);
+        return Unloaded::Done(Err(Failed));
     }
     let bufref = BufRef::of(buf);
 
     // When unloading or deleting a buffer that's already unloaded and
     // unlisted: fail silently.
     if action != DOBUF_WIPE as c_int && buf.b_ml.ml_mfp.is_null() && buf.b_p_bl == 0 {
-        return Unloaded::Done(FAIL);
+        return Unloaded::Done(Err(Failed));
     }
 
     if let Some(rc) = refuse_unload(buf, bufref, flags) {
@@ -771,7 +777,7 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
         {
             close_buffer(None, gone, action, false, false);
         }
-        return Unloaded::Done(OK);
+        return Unloaded::Done(Ok(()));
     }
 
     Unloaded::Replace(pick_replacement(buf_fnum, update_jumplist))
@@ -781,7 +787,7 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
 ///
 /// `Some(FAIL)` means the caller must stop; the dialogs re-enter, so `bufref`
 /// re-validates `buf` after each.
-fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<c_int> {
+fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(), Failed>> {
     if flags & DOBUF_FORCEIT as c_int == 0 && is_changed(buf) {
         if confirming() && p_write.get() != 0 {
             ask_about_changes(buf);
@@ -789,26 +795,26 @@ fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<c_int> {
             // still changed fail silently, the dialog already mentioned why it
             // fails.
             let Some(buf) = bufref.get() else {
-                return Some(FAIL);
+                return Some(Err(Failed));
             };
             if is_changed(buf) {
-                return Some(FAIL);
+                return Some(Err(Failed));
             }
         } else {
             let nr = buf.handle as c_int;
             semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
-            return Some(FAIL);
+            return Some(Err(Failed));
         }
     }
 
     if flags & DOBUF_FORCEIT as c_int == 0 && !buf.terminal.is_null() && terminal_alive(buf) {
         if confirming() {
             if !ask_about_terminal(buf) {
-                return Some(FAIL);
+                return Some(Err(Failed));
             }
         } else {
             err_fname(buf);
-            return Some(FAIL);
+            return Some(Err(Failed));
         }
     }
     None
@@ -958,6 +964,12 @@ fn err_fname(mut buf: Buf) {
 }
 
 /// [`do_buffer_ext`] with just the `forceit` flag.
-pub fn do_buffer(action: c_int, start: c_int, dir: c_int, count: c_int, forceit: c_int) -> c_int {
+pub fn do_buffer(
+    action: c_int,
+    start: c_int,
+    dir: c_int,
+    count: c_int,
+    forceit: c_int,
+) -> Result<(), Failed> {
     do_buffer_ext(action, start, dir, count, forceit_flag(forceit))
 }

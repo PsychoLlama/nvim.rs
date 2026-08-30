@@ -89,7 +89,7 @@ pub(crate) unsafe fn set_buffer_lines(
             }
             if !append && lnum <= cur_buf().line_count() {
                 let old_len = len_as_int(unsafe { strlen(ml_get(lnum)) });
-                if u_savesub(lnum) == OK && unsafe { ml_replace(lnum, line, true) } == OK {
+                if u_savesub(lnum).is_ok() && unsafe { ml_replace(lnum, line, true) }.is_ok() {
                     let new_len = len_as_int(unsafe { strlen(line) });
                     unsafe { inserted_bytes(lnum, 0, old_len, new_len) };
                     if is_curbuf && lnum == cur_win().w_cursor.lnum {
@@ -97,9 +97,9 @@ pub(crate) unsafe fn set_buffer_lines(
                     }
                     ret.vval.v_number = 0;
                 }
-            } else if added > 0 || u_save(lnum - 1, lnum) == OK {
+            } else if added > 0 || u_save(lnum - 1, lnum).is_ok() {
                 added += 1;
-                if unsafe { ml_append(lnum - 1, line, 0, false) } == OK {
+                if unsafe { ml_append(lnum - 1, line, 0, false) }.is_ok() {
                     ret.vval.v_number = 0;
                 }
             }
@@ -310,11 +310,11 @@ pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         u_sync_once.set(1);
         u_sync(true);
     }
-    if u_save(first - 1, last + 1) != FAIL {
+    if u_save(first - 1, last + 1).is_ok() {
         // Every delete takes the same line number: the lines below move
         // up.
         for _ in first..=last {
-            unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
+            let _ = unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
         }
         // Pull every cursor that was inside or after the deleted range
         // back onto a line that still exists.

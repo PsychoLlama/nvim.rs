@@ -230,9 +230,9 @@ impl PreviewBuf {
             )
         };
         if self.linenr_preview == 0 as linenr_T {
-            unsafe { ml_replace_buf(self.buf.raw(), 1 as linenr_T, self.str, true, false) };
+            let _ = unsafe { ml_replace_buf(self.buf.raw(), 1 as linenr_T, self.str, true, false) };
         } else {
-            unsafe {
+            let _ = unsafe {
                 ml_append_buf(
                     self.buf.raw(),
                     self.linenr_preview,

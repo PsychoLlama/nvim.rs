@@ -36,7 +36,7 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{FAIL, FILE, NUL, Vv, exarg_T, ssize_t, varnumber_T};
+use crate::types::{FILE, Failed, NUL, Vv, exarg_T, ssize_t, varnumber_T};
 
 use crate::winlayer::{Ea, Win};
 use ::libc::{fclose, strcasecmp};
@@ -45,7 +45,7 @@ use ::libc::{fclose, strcasecmp};
 pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
-        if unsafe { load_colors(eap.arg) } == FAIL {
+        if unsafe { load_colors(eap.arg) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(eap.arg) };
             semsg!("E185: Cannot find color scheme '{arg}'");
@@ -168,7 +168,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
     } else if visual_active() {
         redraw_curbuf_later(UPD_INVERTED);
     }
-    update_screen();
+    let _ = update_screen();
     if need_maketitle.get() {
         unsafe { maketitle() };
     }
@@ -199,7 +199,7 @@ pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
         if visual_active() {
             redraw_curbuf_later(UPD_INVERTED);
         }
-        update_screen();
+        let _ = update_screen();
     }
     drop(lazyredraw_off);
     ui_flush();
@@ -317,7 +317,7 @@ fn ui_flush() {
 }
 
 /// `update_screen()` as checked code.
-fn update_screen() -> c_int {
+fn update_screen() -> Result<(), Failed> {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::drawscreen::update_screen() }
 }

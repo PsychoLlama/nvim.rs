@@ -45,8 +45,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, memmove, snprintf, strncmp};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    FAIL, colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T,
-    size_t, slang_T, smt_T, spelltab_T, uint8_t, win_T,
+    colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
+    slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy, strlen};
@@ -304,7 +304,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
                 no_arg,
             )
         };
-        if found == 0 || u_save_cursor() == FAIL {
+        if found == 0 || u_save_cursor().is_err() {
             break;
         }
 
@@ -320,7 +320,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
             unsafe { memmove(p as *mut c_void, line as *const c_void, col as size_t) };
             unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
             unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
-            unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };
+            let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };
             let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
             unsafe { inserted_bytes(lnum, col, was, now) };

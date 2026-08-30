@@ -271,7 +271,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
         p_ls.set(save_p_ls.get() as OptInt);
         p_wmh.set(save_p_wmh.get() as OptInt);
         last_status(false);
-        unsafe { update_screen() }; // redraw the screen NOW
+        let _ = unsafe { update_screen() }; // redraw the screen NOW
         unsafe { redrawcmd() };
         save_p_ls.set(-1);
     } else {

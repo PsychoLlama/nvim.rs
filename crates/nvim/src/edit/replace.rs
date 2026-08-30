@@ -110,9 +110,9 @@ fn del_char_after_col(limit_col: c_int) -> bool {
         if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || cur_win().w_cursor.col == ecol {
             return false;
         }
-        unsafe { del_bytes(ecol - cur_win().w_cursor.col, false, true) };
+        let _ = unsafe { del_bytes(ecol - cur_win().w_cursor.col, false, true) };
     } else {
-        unsafe { del_char(false) };
+        let _ = unsafe { del_char(false) };
     }
     true
 }
@@ -321,7 +321,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // spaces it padded with have to come off again.
             cur_win().w_cursor.col += ins_len;
             while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
-                unsafe { del_char(false) };
+                let _ = unsafe { del_char(false) };
                 orig_vcols += 1;
             }
             cur_win().w_cursor.col -= ins_len;

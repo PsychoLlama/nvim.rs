@@ -104,7 +104,7 @@ impl Statusline {
         };
         // SAFETY: `curbuf` is the editor's own buffer under the editor
         // lock, and `name` outlives the call, which copies what it keeps.
-        unsafe { setfname(Buf::current(), ptr, ptr::null_mut(), true) };
+        let _ = unsafe { setfname(Buf::current(), ptr, ptr::null_mut(), true) };
     }
 
     /// Render one row and check both halves of the answer: the bytes

@@ -90,7 +90,7 @@ pub(crate) fn ins_left() {
     hide_dollar();
 
     let mut tpos = cur_win().w_cursor;
-    if unsafe { oneleft() } == OK {
+    if unsafe { oneleft() }.is_ok() {
         start_arrow_changing(&mut tpos, end_change);
         if !end_change {
             append_to_redobuff_char(K_LEFT);
@@ -157,7 +157,7 @@ pub(crate) fn ins_s_left() {
         if !end_change {
             append_to_redobuff_char(K_S_LEFT);
         }
-        unsafe { bck_word(1, false, false) };
+        let _ = unsafe { bck_word(1, false, false) };
         cur_win().w_set_curswant = true;
     } else {
         beep_cursor();
@@ -178,7 +178,7 @@ pub(crate) fn ins_right() {
         }
         cur_win().w_set_curswant = true;
         if virtual_active(cur_win()) {
-            unsafe { oneright() };
+            let _ = unsafe { oneright() };
         } else {
             // SAFETY: the cursor is on a character of its line, so the
             // character there has a length.
@@ -218,7 +218,7 @@ pub(crate) fn ins_s_right() {
         if !end_change {
             append_to_redobuff_char(K_S_RIGHT);
         }
-        unsafe { fwd_word(1, false, false) };
+        let _ = unsafe { fwd_word(1, false, false) };
         cur_win().w_set_curswant = true;
     } else {
         beep_cursor();
@@ -244,7 +244,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
     } else {
         unsafe { cursor_down(1, true) }
     };
-    if moved == OK {
+    if moved.is_ok() {
         if startcol {
             // `getvcol_nolist` only reads: a copy keeps the global out
             // of the call's reach.

@@ -18,7 +18,7 @@ use super::*;
 use crate::types::{
     CMD_caddbuffer, CMD_caddexpr, CMD_caddfile, CMD_cbuffer, CMD_cexpr, CMD_cfile, CMD_cgetbuffer,
     CMD_cgetexpr, CMD_cgetfile, CMD_laddbuffer, CMD_laddexpr, CMD_laddfile, CMD_lbuffer, CMD_lexpr,
-    CMD_lfile, CMD_lgetbuffer, CMD_lgetexpr, CMD_lgetfile, FAIL, IOSIZE, NUL, OK, OptionSetFlags,
+    CMD_lfile, CMD_lgetbuffer, CMD_lgetexpr, CMD_lgetfile, Failed, IOSIZE, NUL, OptionSetFlags,
     VAR_LIST, VAR_STRING,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -297,7 +297,7 @@ unsafe fn trigger_cexpr_autocmd(cmdidx: cmdidx_T) -> bool {
 /// # Safety
 ///
 /// `eap` must be a live command and `tv` a live value.
-unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
+unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap.cast_mut()) };
     // SAFETY: forwarded from the caller.
@@ -310,7 +310,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
         || unsafe { (*tv).v_type } == VAR_LIST;
     if !usable {
         qf_emsg(c"E777: String or List expected".as_ptr());
-        return FAIL;
+        return Err(Failed);
     }
 
     let au_name = cexpr_get_auname(eap.cmdidx);
@@ -343,7 +343,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
 
     if qf_is_empty(qi) {
         qf_busy_end();
-        return FAIL;
+        return Err(Failed);
     }
     if res >= 0 {
         qfl_changed(qf_current_list(qi));
@@ -358,7 +358,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> c_int {
         unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
     }
     qf_busy_end();
-    OK
+    Ok(())
 }
 
 /// `:cexpr`, `:cgetexpr`, `:caddexpr` and their `:l…` twins.
@@ -379,6 +379,6 @@ pub unsafe fn ex_cexpr(eap: *mut exarg_T) {
     if tv.is_null() {
         return;
     }
-    unsafe { cexpr_core(eap.raw().cast_const(), tv) };
+    let _ = unsafe { cexpr_core(eap.raw().cast_const(), tv) };
     unsafe { tv_free(tv) };
 }

@@ -33,7 +33,7 @@ use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
 use crate::normal::{visual_active, visual_mode};
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and
 /// `0xab` to `0xac`.
@@ -108,7 +108,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
 
     if !visual_active() {
         let mut pos = cur_win().w_cursor;
-        if u_save_cursor() == FAIL {
+        if u_save_cursor().is_err() {
             disable_fold_update.set(disable_fold_update.get() - 1);
             return;
         }
@@ -121,7 +121,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     }
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if u_save(above, below) == FAIL {
+    if u_save(above, below).is_err() {
         disable_fold_update.set(disable_fold_update.get() - 1);
         return;
     }
@@ -472,7 +472,7 @@ unsafe fn bump_alpha_char(
     cur_win().w_cursor.col = col;
     let startpos = cur_win().w_cursor;
     // SAFETY: the caller's promise -- the cursor is on the line holding `col`.
-    unsafe { del_char(false) };
+    let _ = unsafe { del_char(false) };
     unsafe { ins_char(firstdigit) };
     let endpos = cur_win().w_cursor;
     cur_win().w_cursor.col = col;
@@ -606,7 +606,7 @@ unsafe fn replace_number(
         if class & _ISalpha as ::core::ffi::c_ushort as c_int != 0 {
             HEX_UPPER.set(class & _ISupper as ::core::ffi::c_ushort as c_int != 0);
         }
-        unsafe { del_char(false) };
+        let _ = unsafe { del_char(false) };
         c = gchar_cursor();
     }
 

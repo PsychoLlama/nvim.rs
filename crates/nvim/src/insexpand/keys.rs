@@ -11,7 +11,7 @@ use super::*;
 use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
-use crate::types::{BsFlag, FAIL, NUL, ShmFlag};
+use crate::types::{BsFlag, NUL, ShmFlag};
 use crate::winlayer::Win;
 
 /// Delete one character before the cursor and show the subset of the matches
@@ -90,7 +90,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
     if p_acl.get() > 0 {
         unsafe { pum_undisplay(true) };
         unsafe { redraw_later(curwin.get(), UPD_VALID) };
-        unsafe { update_screen() }; // Show char (deletion) immediately
+        let _ = unsafe { update_screen() }; // Show char (deletion) immediately
         unsafe { ui_flush() };
     }
 
@@ -112,7 +112,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         } else {
             compl_autocomplete.set(false);
         }
-        if unsafe { ins_complete(Ctrl_N, true) } == FAIL {
+        if unsafe { ins_complete(Ctrl_N, true) }.is_err() {
             compl_cont_status.set(0);
         }
         compl_restarting.set(false);
@@ -147,7 +147,7 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
         unsafe { ins_compl_delete(false) };
     }
 
-    if unsafe { stop_arrow() } == FAIL {
+    if unsafe { stop_arrow() }.is_err() {
         return;
     }
     let cc = utf_char2len(c);
@@ -180,7 +180,7 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
 pub(crate) unsafe fn ins_compl_restart() {
     // Update the screen before restarting, so that if completion is
     // blocked we stay at the last popup menu and reduce flicker.
-    unsafe { update_screen() }; // TODO(bfredl): no.
+    let _ = unsafe { update_screen() }; // TODO(bfredl): no.
     unsafe { ins_compl_free() };
     compl_started.set(false);
     compl_matches.set(0);
@@ -385,7 +385,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
     if c == Ctrl_C && cmdwin_type.get() != 0 {
         // Avoid the popup menu remaining displayed when leaving the
         // command line window.
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.

@@ -108,7 +108,8 @@ pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
         start_lnum + line_count,
         start_lnum + line_count,
         false,
-    ) == OK
+    )
+    .is_ok()
     {
         i = (line_count - 1) as c_int;
         while i >= 0 && !got_int.get() {
@@ -461,7 +462,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: colnr_T) {
     let new_line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) };
     let new_col = unsafe { (*win).w_cursor.col };
     unsafe { *new_line.offset(new_col as isize) = 0 };
-    unsafe { ml_replace((*win).w_cursor.lnum, orig_line, false) };
+    let _ = unsafe { ml_replace((*win).w_cursor.lnum, orig_line, false) };
     unsafe { (*win).w_cursor.col = orig_col };
     curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
     unsafe { backspace_until_column(0) };
@@ -639,7 +640,7 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
             line_len as size_t,
         )
     };
-    unsafe { ml_replace((*curwin.get()).w_cursor.lnum, line, false) };
+    let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, line, false) };
     unsafe { (*curwin.get()).w_cursor.col = ind_len as colnr_T };
     true
 }
@@ -780,7 +781,7 @@ impl Retab {
         }
         if !scan.did_undo {
             scan.did_undo = true;
-            if u_save(scan.lnum - 1, scan.lnum + 1) == FAIL {
+            if u_save(scan.lnum - 1, scan.lnum + 1).is_err() {
                 return Retabulated::OutOfMemory;
             }
         }
@@ -807,7 +808,7 @@ impl Retab {
             unsafe { *run.offset(i as isize) = if i < num_tabs { b'\t' } else { b' ' } as c_char };
         }
         let mut line = new_line;
-        if unsafe { ml_replace(scan.lnum, new_line, false) } == OK {
+        if unsafe { ml_replace(scan.lnum, new_line, false) }.is_ok() {
             // `new_line` may have been copied.
             line = unsafe { (*buf).b_ml.cached_text() };
             let lnum = scan.lnum as c_int - 1;

@@ -176,7 +176,7 @@ pub(crate) unsafe fn command_line_execute(
         if s.c == K_EVENT {
             unsafe { state_handle_k_event() };
         } else if s.c == K_COMMAND {
-            unsafe {
+            let _ = unsafe {
                 do_cmdline(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     Some(getcmdkeycmd),
@@ -515,7 +515,7 @@ pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
         if prev_cmdpreview {
             // TODO(bfredl): add an immediate redraw flag for cmdline mode
             // which will trigger at the next wait-for-input.
-            unsafe { update_screen() }; // clear the 'inccommand' preview
+            let _ = unsafe { update_screen() }; // clear the 'inccommand' preview
         }
         if s.xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };

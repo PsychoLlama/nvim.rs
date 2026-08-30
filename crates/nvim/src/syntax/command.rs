@@ -245,7 +245,7 @@ unsafe fn syn_cmd_onoff(eap: *mut exarg_T, name: &CStr) {
     let (at, room) = (unsafe { buf.as_mut_ptr().add(3) }, buf.len() - 3);
     // SAFETY: `at` is three bytes into a buffer with `room` left.
     unsafe { vim_snprintf(at, room, SYNTAX_FNAME.as_ptr(), name.as_ptr()) };
-    unsafe { do_cmdline_cmd(buf.as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(buf.as_ptr()) };
 }
 
 /// Turn syntax highlighting on unless `:syntax` has already been used one way

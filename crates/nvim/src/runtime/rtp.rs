@@ -18,7 +18,7 @@
 
 use super::*;
 
-use crate::types::{MAXPATHL, OK};
+use crate::types::MAXPATHL;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
@@ -191,7 +191,8 @@ pub unsafe fn get_lib_dir() -> *mut c_char {
             c"lib/nvim".as_ptr(),
             MAXPATHL as size_t,
         )
-    } == OK
+    }
+    .is_ok()
     {
         return unsafe { xstrdup(exe_name.as_ptr()) };
     }

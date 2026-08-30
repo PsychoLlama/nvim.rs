@@ -33,8 +33,8 @@ use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BreakAt, Error, FAIL, FloatAnchor, NUL, OK, OptInt, OptionSetFlags, VirtText, WinConfig,
-    colnr_T, kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
+    BreakAt, Error, FAIL, FloatAnchor, NUL, OptInt, OptionSetFlags, VirtText, WinConfig, colnr_T,
+    kFloatRelativeEditor, linenr_T, lpos_T, optset_T,
 };
 use crate::window::check_colorcolumn;
 use ::libc::strcmp;
@@ -72,7 +72,7 @@ pub unsafe fn did_set_ambiwidth(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_emoji(_args: *mut optset_T) -> *const c_char {
-    if unsafe { check_str_opt(kOptAmbiwidth, ptr::null_mut()) } != OK {
+    if unsafe { check_str_opt(kOptAmbiwidth, ptr::null_mut()) }.is_err() {
         return invalid();
     }
     unsafe { check_chars_options() }
@@ -204,7 +204,7 @@ pub unsafe fn did_set_cursorlineopt(args: *mut optset_T) -> *const c_char {
     // `optset_T` names for exactly this call.
     let win = unsafe { Win::new(wp) };
     if unsafe { c_int::from(**varp) } == NUL
-        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), win) } != OK
+        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), win) }.is_err()
     {
         return invalid();
     }
@@ -284,7 +284,7 @@ pub unsafe fn did_set_keymodel(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_messagesopt(_args: *mut optset_T) -> *const c_char {
     // SAFETY: reads the option's own value.
-    if unsafe { messagesopt_changed() } == FAIL {
+    if unsafe { messagesopt_changed() }.is_err() {
         return invalid();
     }
     ptr::null()
@@ -399,7 +399,7 @@ pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
     let (wp, varp) = unsafe { (win(args), varp(args)) };
     // SAFETY: the frame's window and value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_scl };
-    if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) } != OK {
+    if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) }.is_err() {
         return invalid();
     }
     // "number" shares the sign column with the number column, so
@@ -473,7 +473,7 @@ pub unsafe fn did_set_whichwrap(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_wildmode(_args: *mut optset_T) -> *const c_char {
     // SAFETY: reads the option's own value.
-    if unsafe { check_opt_wim() } == FAIL {
+    if unsafe { check_opt_wim() }.is_err() {
         return invalid();
     }
     ptr::null()

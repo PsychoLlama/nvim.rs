@@ -15,12 +15,12 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, CString, c_char, c_int};
+use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
 use neovim::garray::ga_clear_strings;
 use neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
-use neovim::types::{FAIL, OK, garray_T};
+use neovim::types::{Failed, garray_T};
 
 use crate::support::{cstr, editor_lock, take_bytes};
 
@@ -35,7 +35,7 @@ impl Names {
         Names(unsafe { std::mem::zeroed() })
     }
 
-    fn fill(&mut self) -> c_int {
+    fn fill(&mut self) -> Result<(), Failed> {
         // SAFETY: the array is this frame's and writable.
         unsafe { os_get_usernames(&raw mut self.0) }
     }
@@ -70,7 +70,9 @@ fn current_username() -> String {
 
 /// Write into a 100-byte buffer and read back what landed, the way the spec's
 /// `ffi.new('char[100]')` cases did.
-fn into_buffer(write: impl FnOnce(*mut c_char, usize) -> c_int) -> (c_int, String) {
+fn into_buffer(
+    write: impl FnOnce(*mut c_char, usize) -> Result<(), Failed>,
+) -> (Result<(), Failed>, String) {
     let mut buffer = [0_u8; 100];
     let result = write(buffer.as_mut_ptr().cast::<c_char>(), buffer.len());
     let end = buffer.iter().position(|&b| b == 0).expect("terminated");
@@ -84,14 +86,14 @@ fn into_buffer(write: impl FnOnce(*mut c_char, usize) -> c_int) -> (c_int, Strin
 fn asking_for_every_username_without_somewhere_to_put_them_fails() {
     let _editor = editor_lock();
     // SAFETY: NULL is the case under test.
-    assert_eq!(unsafe { os_get_usernames(ptr::null_mut()) }, FAIL);
+    assert_eq!(unsafe { os_get_usernames(ptr::null_mut()) }, Err(Failed));
 }
 
 #[test]
 fn every_username_includes_the_one_running_the_tests() {
     let _editor = editor_lock();
     let mut names = Names::new();
-    assert_eq!(names.fill(), OK);
+    assert_eq!(names.fill(), Ok(()));
 
     let names = names.to_strings();
     assert!(!names.is_empty(), "the password database is not empty");
@@ -107,7 +109,7 @@ fn the_process_owner_is_named_by_its_own_uid() {
     let _editor = editor_lock();
     // SAFETY: the buffer is `into_buffer`'s, and `len` is its true length.
     let (result, name) = into_buffer(|s, len| unsafe { os_get_username(s, len) });
-    assert_eq!(result, OK);
+    assert_eq!(result, Ok(()));
     assert_eq!(name, current_username());
 
     // The same answer by hand, which is what `os_get_username` is: `getuid`
@@ -115,7 +117,7 @@ fn the_process_owner_is_named_by_its_own_uid() {
     // SAFETY: `getuid` cannot fail; the buffer is `into_buffer`'s.
     let uid = unsafe { libc::getuid() };
     let (result, by_uid) = into_buffer(|s, len| unsafe { os_get_uname(uid, s, len) });
-    assert_eq!(result, OK);
+    assert_eq!(result, Ok(()));
     assert_eq!(by_uid, name);
 }
 
@@ -129,7 +131,7 @@ fn an_unknown_uid_fails_and_leaves_its_number_behind() {
     const NOBODY: u32 = 2342;
     // SAFETY: the buffer is `into_buffer`'s.
     let (result, name) = into_buffer(|s, len| unsafe { os_get_uname(NOBODY, s, len) });
-    assert_eq!(result, FAIL);
+    assert_eq!(result, Err(Failed));
     assert_eq!(name, NOBODY.to_string());
 }
 

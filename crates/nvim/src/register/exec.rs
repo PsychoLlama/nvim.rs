@@ -20,7 +20,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::normal::visual_active;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// Put the allocated string `p` in register `regname` as a single charwise
 /// line, appending for an uppercase name.
@@ -29,17 +29,17 @@ use crate::types::{FAIL, NUL, OK};
 ///
 /// # Safety
 /// `p` must be an allocated, NUL-terminated string.
-unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
+unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `valid_yank_reg` only looks the name up.
     if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
         // SAFETY: `p` is the allocated string this function took over.
         unsafe { xfree(p as *mut c_void) };
-        return FAIL;
+        return Err(Failed);
     }
     if regname == '_' as c_int {
         // SAFETY: as above -- the black hole just drops it.
         unsafe { xfree(p as *mut c_void) };
-        return OK;
+        return Ok(());
     }
 
     // SAFETY: `p` is NUL-terminated, and a valid register name answers a
@@ -73,7 +73,7 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
     }
     // SAFETY: `reg` is a live register.
     unsafe { (*reg).timestamp = os_time() };
-    OK
+    Ok(())
 }
 
 /// Build the `v:event` dictionary RecordingLeave sees, and fire the event.
@@ -138,7 +138,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
 ///
 /// # Safety
 /// Runs arbitrary autocommands (RecordingEnter/RecordingLeave).
-pub unsafe fn do_record(c: c_int) -> c_int {
+pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
     /// Which register the recording in progress goes into; kept across
     /// the two calls because `reg_recording` is cleared before the store.
     static regname: GlobalCell<c_int> = GlobalCell::new(0);
@@ -150,7 +150,7 @@ pub unsafe fn do_record(c: c_int) -> c_int {
             || (b'a' as c_int..=b'z' as c_int).contains(&c)
             || ascii_isdigit(c);
         if c < 0 || (!alnum && c != '"' as c_int) {
-            return FAIL;
+            return Err(Failed);
         }
         reg_recording.set(c);
         // SAFETY: main thread, with the message area set up.
@@ -168,7 +168,7 @@ pub unsafe fn do_record(c: c_int) -> c_int {
                 curbuf.get(),
             )
         };
-        return OK;
+        return Ok(());
     }
 
     // Stop recording.
@@ -192,7 +192,7 @@ pub unsafe fn do_record(c: c_int) -> c_int {
         msg(c"", 0);
     }
     if p.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // Recording into a register must not move `""`.
     let old_y_previous = y_previous.get();
@@ -210,8 +210,13 @@ pub unsafe fn do_record(c: c_int) -> c_int {
 ///
 /// # Safety
 /// `s` must be NUL-terminated.
-unsafe fn put_in_typebuf(s: *mut c_char, esc: bool, colon: bool, silent: c_int) -> c_int {
-    let mut retval = OK;
+unsafe fn put_in_typebuf(
+    s: *mut c_char,
+    esc: bool,
+    colon: bool,
+    silent: c_int,
+) -> Result<(), Failed> {
+    let mut retval = Ok(());
     // SAFETY: main thread, writing the typeahead buffer.
     unsafe { put_reedit_in_typebuf(silent) };
 
@@ -221,7 +226,7 @@ unsafe fn put_in_typebuf(s: *mut c_char, esc: bool, colon: bool, silent: c_int) 
         // SAFETY: a NUL-terminated literal, copied into the typeahead.
         retval = unsafe { ins_typebuf(nl, REMAP_NONE, 0, true, silent != 0) };
     }
-    if retval == OK {
+    if retval.is_ok() {
         // SAFETY: `s` is NUL-terminated, so the escaped copy is too.
         let p = if esc {
             unsafe { vim_strsave_escape_ks(s) }
@@ -229,7 +234,7 @@ unsafe fn put_in_typebuf(s: *mut c_char, esc: bool, colon: bool, silent: c_int) 
             s
         };
         if p.is_null() {
-            retval = FAIL;
+            retval = Err(Failed);
         } else {
             let remap = if esc { REMAP_NONE } else { REMAP_YES };
             // SAFETY: `p` is NUL-terminated either way, and is copied.
@@ -240,7 +245,7 @@ unsafe fn put_in_typebuf(s: *mut c_char, esc: bool, colon: bool, silent: c_int) 
             unsafe { xfree(p as *mut c_void) };
         }
     }
-    if colon && retval == OK {
+    if colon && retval.is_ok() {
         let colon_key = c":".as_ptr().cast_mut();
         // SAFETY: a NUL-terminated literal, copied into the typeahead.
         retval = unsafe { ins_typebuf(colon_key, REMAP_NONE, 0, true, silent != 0) };
@@ -279,7 +284,7 @@ unsafe fn put_reedit_in_typebuf(silent: c_int) {
     // SAFETY: `buf` is a local the branches above left NUL-terminated, and
     // `ins_typebuf` copies it into the typeahead buffer.
     let queued = unsafe { ins_typebuf(keys, REMAP_NONE, 0, true, silent != 0) };
-    if queued == OK {
+    if queued.is_ok() {
         restart_edit.set(NUL);
     }
 }
@@ -376,13 +381,18 @@ unsafe fn is_continuation_comment(p: *const c_char) -> bool {
 ///
 /// # Safety
 /// May run arbitrary Vimscript through the `"=` register.
-pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int {
+pub unsafe fn do_execreg(
+    regname: c_int,
+    colon: c_int,
+    addcr: c_int,
+    silent: c_int,
+) -> Result<(), Failed> {
     let mut regname = regname;
     if regname == '@' as c_int {
         // `@@` repeats the last `@`.
         if execreg_lastc.get() == NUL {
             emsg(gettext(c"E748: No previously used register"));
-            return FAIL;
+            return Err(Failed);
         }
         regname = execreg_lastc.get();
     }
@@ -393,12 +403,12 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
     {
         // SAFETY: reports the name; nothing of the caller's is dereferenced.
         unsafe { emsg_invreg(regname) };
-        return FAIL;
+        return Err(Failed);
     }
     execreg_lastc.set(regname);
 
     if regname == '_' as c_int {
-        return OK; // black hole: nothing to do
+        return Ok(()); // black hole: nothing to do
     }
 
     if regname == ':' as c_int {
@@ -406,7 +416,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // escaped with CTRL-V or the typeahead buffer would act on them.
         if last_cmdline.get().is_null() {
             emsg(gettext(e_nolastcmd));
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `new_last_cmdline` owns whatever it holds, and is cleared
         // on the next line so the freed pointer is never read back.
@@ -444,7 +454,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // allocated NUL-terminated string.
         let p = unsafe { get_expr_line() };
         if p.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `p` is that non-null NUL-terminated string, and is ours to
         // free once it has been copied into the typeahead.
@@ -459,7 +469,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         let p = unsafe { get_last_insert_save() };
         if p.is_null() {
             emsg(gettext(e_noinstext));
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: as above -- `p` is NUL-terminated and ours to free.
         let retval = unsafe { put_in_typebuf(p, false, colon != 0, silent) };
@@ -471,7 +481,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
     let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
     // SAFETY: `reg` is that live register, so its `y_array` is there to test.
     if unsafe { (*reg).y_array.is_null() } {
-        return FAIL;
+        return Err(Failed);
     }
     let remap = if colon != 0 { REMAP_NONE } else { REMAP_YES };
     // SAFETY: main thread, writing the typeahead buffer.
@@ -479,7 +489,7 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
 
     // The typeahead buffer is a stack, so the register goes in last line
     // first.
-    let mut retval = OK;
+    let mut retval = Ok(());
     // SAFETY: `reg` is live, so `y_size` is its line count.
     let mut i = unsafe { (*reg).y_size };
     while i > 0 {
@@ -491,10 +501,10 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // whole. The key is a NUL-terminated literal, which is copied.
         let nl_failed = unsafe {
             ((*reg).y_type == kMTLineWise || i < (*reg).y_size.wrapping_sub(1) || addcr != 0)
-                && ins_typebuf(c"\n".as_ptr().cast_mut(), remap, 0, true, silent != 0) == FAIL
+                && ins_typebuf(c"\n".as_ptr().cast_mut(), remap, 0, true, silent != 0).is_err()
         };
         if nl_failed {
-            return FAIL;
+            return Err(Failed);
         }
 
         // SAFETY: a non-null `y_array` holds `y_size` lines and `i` is below
@@ -524,14 +534,15 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
         // `ins_typebuf` copies again, leaving it ours to free.
         retval = unsafe { ins_typebuf(escaped, remap, 0, true, silent != 0) };
         unsafe { xfree(escaped as *mut c_void) };
-        if retval == FAIL {
-            return FAIL;
+        if retval.is_err() {
+            return Err(Failed);
         }
         // SAFETY: a NUL-terminated literal, copied into the typeahead.
         if colon != 0
-            && unsafe { ins_typebuf(c":".as_ptr().cast_mut(), remap, 0, true, silent != 0) } == FAIL
+            && unsafe { ins_typebuf(c":".as_ptr().cast_mut(), remap, 0, true, silent != 0) }
+                .is_err()
         {
-            return FAIL;
+            return Err(Failed);
         }
     }
     reg_executing.set(if regname == 0 { '"' as c_int } else { regname });
@@ -547,17 +558,21 @@ pub unsafe fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_i
 ///
 /// # Safety
 /// `reg` must be null or a live register. May run arbitrary Vimscript.
-pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: bool) -> c_int {
+pub unsafe fn insert_reg(
+    regname: c_int,
+    reg: *mut yankreg_T,
+    literally_arg: bool,
+) -> Result<(), Failed> {
     let literally = literally_arg || is_literal_register(regname);
 
     // A register may be a long list of lines; let CTRL-C out.
     os_breakcheck();
     if got_int.get() {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `valid_yank_reg` only looks the name up.
     if regname != NUL && !unsafe { valid_yank_reg(regname, false) } {
-        return FAIL;
+        return Err(Failed);
     }
 
     if regname == '.' as c_int {
@@ -575,7 +590,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
     // allows.
     if unsafe { get_spec_reg(regname, &raw mut arg, &raw mut allocated, true) } {
         if arg.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: `arg` is non-null and NUL-terminated, and is copied into
         // the read buffer; it is ours to free only when it was allocated.
@@ -583,7 +598,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
         if allocated {
             unsafe { xfree(arg as *mut c_void) };
         }
-        return OK;
+        return Ok(());
     }
 
     let reg = if reg.is_null() {
@@ -595,7 +610,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
     };
     // SAFETY: `reg` is live -- the caller's, or the one just fetched.
     if unsafe { (*reg).y_array.is_null() } {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `reg` is live, so `y_size` is its line count. The original
     // read it once here too, to bound the loop.
@@ -609,15 +624,15 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
             if State.get() & REPLACE_FLAG != 0 {
                 // SAFETY: main thread with a current buffer; saves the
                 // cursor line for undo.
-                if u_save_cursor() == FAIL {
-                    return FAIL;
+                if u_save_cursor().is_err() {
+                    return Err(Failed);
                 }
                 // SAFETY: a non-null `y_array` starts with a NUL-terminated
                 // line, whose character count is what is deleted.
-                unsafe { del_chars(mb_charlen((*(*reg).y_array).data()), 1) };
+                let _ = unsafe { del_chars(mb_charlen((*(*reg).y_array).data()), 1) };
                 let curpos = cur_win().w_cursor;
                 // SAFETY: main thread with a current window and buffer.
-                if unsafe { oneright() } == FAIL {
+                if unsafe { oneright() }.is_err() {
                     dir = FORWARD;
                 }
                 cur_win().w_cursor = curpos;
@@ -646,7 +661,7 @@ pub unsafe fn insert_reg(regname: c_int, reg: *mut yankreg_T, literally_arg: boo
             }
         }
     }
-    OK
+    Ok(())
 }
 
 /// CTRL-R on the command line: insert register `regname` there.
@@ -659,7 +674,7 @@ pub unsafe fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool
     let reg = unsafe { get_yank_register(regname, YREG_PASTE) };
     // SAFETY: `reg` is that live register, so its `y_array` is there to test.
     if unsafe { (*reg).y_array.is_null() } {
-        return FAIL != 0;
+        return false;
     }
     // SAFETY: `reg` is live, so `y_size` is its line count. The original
     // read it once here too, to bound the loop.
@@ -675,10 +690,10 @@ pub unsafe fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool
         }
         os_breakcheck();
         if got_int.get() {
-            return FAIL != 0;
+            return false;
         }
     }
-    OK != 0
+    true
 }
 
 /// The window the editor is working in.

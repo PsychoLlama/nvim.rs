@@ -22,7 +22,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use ::libc::{EILSEQ, EINVAL};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -215,7 +215,7 @@ pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     };
 
     let mut vimconv = CONV_NONE_INIT;
-    unsafe { convert_setup(&raw mut vimconv, from, to) };
+    let _ = unsafe { convert_setup(&raw mut vimconv, from, to) };
     unsafe {
         (*rettv).vval.v_string = if vimconv.vc_type == CONV_NONE {
             // Same encoding both ways: hand back a copy unchanged.
@@ -226,7 +226,7 @@ pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     };
 
     // Closes the descriptor.
-    unsafe {
+    let _ = unsafe {
         convert_setup(
             &raw mut vimconv,
             core::ptr::null_mut(),
@@ -243,7 +243,11 @@ pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 ///
 /// `vcp` must be writable and hold either a valid plan or zeroed memory;
 /// `from` and `to` must be null or NUL-terminated.
-pub unsafe fn convert_setup(vcp: *mut vimconv_T, from: *mut c_char, to: *mut c_char) -> c_int {
+pub unsafe fn convert_setup(
+    vcp: *mut vimconv_T,
+    from: *mut c_char,
+    to: *mut c_char,
+) -> Result<(), Failed> {
     unsafe { convert_setup_ext(vcp, from, true, to, true) }
 }
 
@@ -264,7 +268,7 @@ pub unsafe fn convert_setup_ext(
     from_unicode_is_utf8: bool,
     to: *mut c_char,
     to_unicode_is_utf8: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     if unsafe { (*vcp).vc_type } == CONV_ICONV && unsafe { (*vcp).vc_fd } != iconv_failed() {
         unsafe { iconv_close((*vcp).vc_fd) };
     }
@@ -277,7 +281,7 @@ pub unsafe fn convert_setup_ext(
         || unsafe { *to } == 0
         || unsafe { strcmp(from, to) } == 0
     {
-        return OK;
+        return Ok(());
     }
 
     let from_prop = unsafe { enc_canon_props(from) };
@@ -322,9 +326,9 @@ pub unsafe fn convert_setup_ext(
         }
     }
     if unsafe { (*vcp).vc_type } == CONV_NONE {
-        FAIL
+        Err(Failed)
     } else {
-        OK
+        Ok(())
     }
 }
 

@@ -123,7 +123,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
             )
         };
     }
-    unsafe { do_cmdline_cmd(&raw mut ex_cmd as *mut c_char) };
+    let _ = unsafe { do_cmdline_cmd(&raw mut ex_cmd as *mut c_char) };
 }
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.

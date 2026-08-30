@@ -13,7 +13,7 @@ use crate::optionstr::{empty_option, is_empty_option};
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg;
-use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OK, OptionSetFlags};
+use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -131,7 +131,8 @@ unsafe fn hgr_search_files_in_dir(
             &raw mut fnames,
             ExpandFlags::FILE | ExpandFlags::SILENT,
         )
-    } != OK
+    }
+    .is_err()
         || fcount <= 0
     {
         return;

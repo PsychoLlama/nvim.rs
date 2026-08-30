@@ -37,7 +37,7 @@ use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
-    FAIL, NUL, OK, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
+    Failed, NUL, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
     varnumber_T,
 };
 use ::libc::{__errno_location, abort, strlen};
@@ -281,7 +281,7 @@ pub unsafe fn buf_init_chartab(buf: *mut buf_T, global: bool) -> bool {
     for &option in &options[if global { 0 } else { 3 }..] {
         // SAFETY: an option value is a NUL-terminated string, and `buf` is
         // valid.
-        if unsafe { parse_isopt(option, buf, false) } == FAIL {
+        if unsafe { parse_isopt(option, buf, false) }.is_err() {
             return false;
         }
     }
@@ -293,7 +293,7 @@ pub unsafe fn buf_init_chartab(buf: *mut buf_T, global: bool) -> bool {
 ///
 /// # Safety
 /// `var` must be a NUL-terminated string.
-pub unsafe fn check_isopt(var: *mut c_char) -> c_int {
+pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
     // SAFETY: forwarded; a check pass never touches the (null) buffer.
     unsafe { parse_isopt(var, ptr::null_mut(), true) }
 }
@@ -439,7 +439,7 @@ unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buf: *mut buf
 /// # Safety
 /// `var` must be a NUL-terminated string, and `buf` a valid buffer unless
 /// `only_check`.
-unsafe fn parse_isopt(var: *const c_char, buf: *mut buf_T, only_check: bool) -> c_int {
+unsafe fn parse_isopt(var: *const c_char, buf: *mut buf_T, only_check: bool) -> Result<(), Failed> {
     let table = if var == p_isi.get().cast_const() {
         IsoptTable::Ident
     } else if var == p_isp.get().cast_const() {
@@ -454,14 +454,14 @@ unsafe fn parse_isopt(var: *const c_char, buf: *mut buf_T, only_check: bool) -> 
     while cursor.byte() != 0 {
         // SAFETY: the cursor is still inside `var`.
         let Some(entry) = (unsafe { next_isopt_entry(&mut cursor) }) else {
-            return FAIL;
+            return Err(Failed);
         };
         if !only_check {
             // SAFETY: `buf` is valid whenever an entry is applied.
             unsafe { apply_isopt_entry(table, &entry, buf) };
         }
     }
-    OK
+    Ok(())
 }
 
 /// Whether `c` may appear in an identifier ('isident').

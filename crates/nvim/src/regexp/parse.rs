@@ -29,7 +29,7 @@ use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::os::cshim::memmove;
 use crate::strings::xstrnsave;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use ::libc::strlen;
 
 /// Whether `c` is a repeat operator, and whether it can match more than one
@@ -526,7 +526,7 @@ fn take_digits(default: c_int) -> c_int {
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving
 /// the cursor past the closing brace. Returns `FAIL` after reporting a
 /// syntax error.
-pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
+pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> Result<(), Failed> {
     // `{-n,m}` asks for the shortest match, which the caller reads back
     // out of the min/max order rather than from a flag.
     let mut reverse = false;
@@ -560,11 +560,11 @@ pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
         };
         semsg!("E554: Syntax error in {prefix}{{...}}");
         rc_did_emsg.set(true);
-        return FAIL;
+        return Err(Failed);
     }
     if (!reverse && *minval > *maxval) || (reverse && *minval < *maxval) {
         core::mem::swap(minval, maxval);
     }
     skipchr();
-    OK
+    Ok(())
 }

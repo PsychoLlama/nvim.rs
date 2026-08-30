@@ -41,7 +41,7 @@ use crate::os::env::expand_env;
 use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdCause, CdScope, CpoFlag,
-    FAIL, MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    Failed, MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
     VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
@@ -112,17 +112,17 @@ pub unsafe fn expand_findfunc(
     pat: *mut c_char,
     files: *mut *mut *mut c_char,
     num_matches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { *num_matches = 0 };
     unsafe { *files = ptr::null_mut() };
     let l = call_findfunc(pat, kBoolVarTrue);
     if l.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     let len = tv_list_len(l);
     if len == 0 {
         tv_list_free(l);
-        return FAIL;
+        return Err(Failed);
     }
     // Sized by the list length, filled only with the entries that are
     // strings — so the count answered may be smaller.
@@ -138,7 +138,7 @@ pub unsafe fn expand_findfunc(
     }
     unsafe { *num_matches = idx };
     tv_list_free(l);
-    OK
+    Ok(())
 }
 
 /// Resolve the `count`'th name 'findfunc' answers for `findarg`.
@@ -193,7 +193,7 @@ pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
         }
         r
     };
-    if retval == FAIL {
+    if retval.is_err() {
         return e_invarg.as_ptr();
     }
     let varp = unsafe { (*args).os_varp }.string_var();
@@ -242,7 +242,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
     }
 
     let mut cwd: [c_char; 4096] = [0; 4096];
-    if os_dirname(&raw mut cwd as *mut c_char, MAXPATHL as size_t) != OK {
+    if os_dirname(&raw mut cwd as *mut c_char, MAXPATHL as size_t).is_err() {
         return;
     }
     match scope as c_int {
@@ -290,7 +290,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
         new_dir = pdir;
     }
 
-    let pdir = if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) == OK {
+    let pdir = if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_ok() {
         xstrdup(dir.as_mut_ptr())
     } else {
         ptr::null_mut()
@@ -359,7 +359,7 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
 pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
-    if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t) != OK {
+    if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
         emsg(gettext(c"E187: Unknown".as_ptr()));
         return;
     }
@@ -412,13 +412,13 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 }
 
 /// `option_set_callback_func()` as checked code.
-fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
+fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::option::option_set_callback_func(optval, optcb) }
 }
 
 /// `os_dirname()` as checked code.
-fn os_dirname(buf: *mut c_char, len: size_t) -> c_int {
+fn os_dirname(buf: *mut c_char, len: size_t) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::os::fs::os_dirname(buf, len) }
 }

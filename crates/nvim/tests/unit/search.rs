@@ -22,7 +22,7 @@ use std::ptr;
 use neovim::main::{cmdmod, curwin};
 use neovim::regexp::vim_regfree;
 use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
-use neovim::types::{CmdModFlags, OK, regmmatch_T};
+use neovim::types::{CmdModFlags, regmmatch_T};
 
 use crate::support::{Sandbox, cstr};
 
@@ -153,7 +153,7 @@ fn a_right_to_left_pattern_is_reversed_bytewise() {
             &raw mut regmatch,
         )
     };
-    assert_eq!(rc, OK, "the reversed pattern still compiles");
+    assert_eq!(rc, Ok(()), "the reversed pattern still compiles");
 
     // SAFETY: `get_search_pat` answers the buffer `search_regcomp` just
     // filled; it belongs to the search module, so it is only read here.
@@ -186,7 +186,7 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
             &raw mut regmatch,
         )
     };
-    assert_eq!(rc, OK);
+    assert_eq!(rc, Ok(()));
 
     // SAFETY: as in the case above.
     let compiled = unsafe { CStr::from_ptr(get_search_pat()) };

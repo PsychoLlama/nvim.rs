@@ -27,7 +27,7 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::keycodes::{K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE};
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// `<Space>`, which is only a command when CTRL is held (`i_CTRL-@`'s
 /// spelling on some terminals).
@@ -227,7 +227,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         }
         // `<Cmd>command<CR>`.
         K_COMMAND => {
-            unsafe {
+            let _ = unsafe {
                 do_cmdline(
                     ::core::ptr::null_mut(),
                     Some(
@@ -424,7 +424,7 @@ fn key_stuff_last_insert(s: &mut InsertState) -> Next {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // CTRL-A keeps Insert mode, so it asks for no trailing <Esc>.
-    if unsafe { stuff_inserted(NUL, 1, (s.c == Ctrl_A) as c_int) } == FAIL && s.c != Ctrl_A {
+    if unsafe { stuff_inserted(NUL, 1, (s.c == Ctrl_A) as c_int) }.is_err() && s.c != Ctrl_A {
         return Next::Leave;
     }
     s.inserted_space = 0;
@@ -472,9 +472,9 @@ fn key_eol(s: &mut InsertState) -> Next {
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == CAR {
         if cur_win().w_llist_ref.is_null() {
-            unsafe { do_cmdline_cmd(c".cc".as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(c".cc".as_ptr()) };
         } else {
-            unsafe { do_cmdline_cmd(c".ll".as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(c".ll".as_ptr()) };
         }
         return Next::Continue;
     }
@@ -595,7 +595,7 @@ fn insert_normal_char(s: &mut InsertState) {
     if p_paste.get() == 0 {
         let str = do_insert_char_pre(s.c);
         if !str.is_null() {
-            if unsafe { *str } as c_int != NUL && unsafe { stop_arrow() } != FAIL {
+            if unsafe { *str } as c_int != NUL && unsafe { stop_arrow() }.is_ok() {
                 // Insert the new value of v:char literally.
                 let mut p = str;
                 while unsafe { *p } as c_int != NUL {
@@ -659,7 +659,7 @@ fn insert_normal_char(s: &mut InsertState) {
 fn start_autocomplete(s: &mut InsertState) {
     // SAFETY: `curwin` is live, which is all a redraw asks for.
     unsafe { redraw_later(curwin.get(), UPD_VALID) };
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     unsafe { ui_flush() };
     ins_compl_enable_autocomplete();
     insert_do_complete(s);

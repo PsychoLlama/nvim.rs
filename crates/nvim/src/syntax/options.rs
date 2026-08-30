@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 use crate::winlayer::Win;
 
 /// Split off a `:syntax` command's group-name argument.
@@ -180,17 +180,17 @@ pub(crate) unsafe fn get_syn_options(
                     emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE));
                     return ::core::ptr::null_mut();
                 }
-                if unsafe { get_id_list(&mut arg, 8, &mut opt.cont_list, skip != 0) } == FAIL {
+                if unsafe { get_id_list(&mut arg, 8, &mut opt.cont_list, skip != 0) }.is_err() {
                     return ::core::ptr::null_mut();
                 }
             }
             OptArg::ContainedIn => {
-                if unsafe { get_id_list(&mut arg, 11, &mut opt.cont_in_list, skip != 0) } == FAIL {
+                if unsafe { get_id_list(&mut arg, 11, &mut opt.cont_in_list, skip != 0) }.is_err() {
                     return ::core::ptr::null_mut();
                 }
             }
             OptArg::NextGroup => {
-                if unsafe { get_id_list(&mut arg, 9, &mut opt.next_list, skip != 0) } == FAIL {
+                if unsafe { get_id_list(&mut arg, 9, &mut opt.next_list, skip != 0) }.is_err() {
                     return ::core::ptr::null_mut();
                 }
             }
@@ -292,7 +292,7 @@ pub(crate) unsafe fn get_id_list(
     keylen: c_int,
     list: &mut *mut int16_t,
     skip: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // The list is parsed more than once. A name that is a regexp matches
     // the group table as it stands, and a *later* name in the same list
     // can create a group that the regexp would also have matched
@@ -313,14 +313,14 @@ pub(crate) unsafe fn get_id_list(
 
     *arg = pass.end;
     if pass.failed {
-        return FAIL;
+        return Err(Failed);
     }
     // An already-parsed list is kept; upstream allocates the second one
     // and frees it again.
     if list.is_null() {
         *list = unsafe { alloc_ids(&pass.ids) };
     }
-    OK
+    Ok(())
 }
 
 /// Copy `ids` into the `xmalloc`ed, NUL-terminated array the item structs hold.

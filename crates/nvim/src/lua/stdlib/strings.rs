@@ -229,11 +229,11 @@ pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_i
             vc_fd: ptr::null_mut(),
             vc_fail: false,
         };
-        convert_setup_ext(&raw mut vimconv, from, false, to, false);
+        let _ = convert_setup_ext(&raw mut vimconv, from, false, to, false);
 
         let ret = string_convert(&raw mut vimconv, str.cast_mut(), &raw mut str_len);
 
-        convert_setup(&raw mut vimconv, ptr::null_mut(), ptr::null_mut());
+        let _ = convert_setup(&raw mut vimconv, ptr::null_mut(), ptr::null_mut());
 
         xfree(from.cast::<c_void>());
         xfree(to.cast::<c_void>());

@@ -15,7 +15,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::regexp::{RE_MAGIC, RE_STRING};
-use crate::types::{MAXPATHL, OK, PATHSEPSTR};
+use crate::types::{MAXPATHL, PATHSEPSTR};
 
 /// Shorten the directory part of `str` in place, keeping `trim_len`
 /// characters of each component: `"~/foo/../.bar/fname"` with a `trim_len`
@@ -201,7 +201,7 @@ pub(crate) unsafe fn uniquefy_paths(
     }
 
     let mut curdir = vec![0 as c_char; MAXPATHL as usize];
-    unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
     let mut path_ga = garray_T::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     unsafe { expand_path_option(curdir.as_mut_ptr(), path_option, &raw mut path_ga) };
@@ -369,7 +369,7 @@ pub unsafe fn gettail_dir(fname: *const c_char) -> *const c_char {
 /// `full_path` must be a NUL-terminated string.
 pub unsafe fn path_try_shorten_fname(full_path: *mut c_char) -> *mut c_char {
     let mut dirname = vec![0 as c_char; MAXPATHL as usize];
-    if unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) } != OK {
+    if unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) }.is_err() {
         return full_path;
     }
     let p = unsafe { path_shorten_fname(full_path, dirname.as_mut_ptr()) };

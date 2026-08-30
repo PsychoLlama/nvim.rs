@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::types::Failed;
 
 #[derive(Copy, Clone)]
 pub struct switchwin_T {
@@ -23,7 +24,7 @@ pub struct win_execute_T {
     pub wp: *mut win_T,
     pub curpos: pos_T,
     pub cwd: [::core::ffi::c_char; 4096],
-    pub cwd_status: ::core::ffi::c_int,
+    pub cwd_status: Result<(), Failed>,
     pub apply_acd: bool,
     pub save_sfname: *mut ::core::ffi::c_char,
     pub switchwin: switchwin_T,
@@ -55,7 +56,7 @@ impl Default for win_execute_T {
                 coladd: 0,
             },
             cwd: [0; 4096],
-            cwd_status: 0,
+            cwd_status: Err(Failed),
             apply_acd: false,
             save_sfname: ::core::ptr::null_mut(),
             switchwin: switchwin_T::default(),

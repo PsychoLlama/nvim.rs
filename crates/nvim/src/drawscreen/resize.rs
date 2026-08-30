@@ -231,7 +231,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
         if deferred {
             if State.get() & MODE_CMDLINE != 0 {
-                unsafe { update_screen() };
+                let _ = unsafe { update_screen() };
             }
             if msg_grid_ref().is_allocated() {
                 unsafe { msg_grid_validate() };
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 // new position; keep `update_screen` from drawing it at the
                 // old one.
                 redraw_popupmenu.set(false);
-                unsafe { update_screen() };
+                let _ = unsafe { update_screen() };
                 unsafe { redrawcmdline() };
                 if pum_drawn() {
                     unsafe { cmdline_pum_display(false) };
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                     redraw_popupmenu.set(false);
                     unsafe { ins_compl_show_pum() };
                 }
-                unsafe { update_screen() };
+                let _ = unsafe { update_screen() };
                 if unsafe { redrawing() } {
                     unsafe { setcursor() };
                 }

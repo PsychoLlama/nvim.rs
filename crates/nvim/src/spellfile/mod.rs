@@ -19,9 +19,10 @@ use crate::semsg;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, MAXPATHL, NUL, OK, OptInt,
-    OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T, file_comparison,
-    fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t, vimconv_T,
+    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK,
+    OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
+    file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
+    time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use ::libc::{strcmp, strlen};
@@ -397,10 +398,10 @@ impl spellinfo_T {
 /// next one, and how many words may be added in between. The first two are
 /// given in megabytes and scaled to arena blocks here; the third is in
 /// thousands of words.
-pub fn spell_check_msm() -> ::core::ffi::c_int {
+pub fn spell_check_msm() -> Result<(), Failed> {
     // SAFETY: `p_msm` holds the option's value, a NUL-terminated string.
     let Some((start, incr, added)) = (unsafe { parse_mkspellmem(p_msm.get()) }) else {
-        return FAIL;
+        return Err(Failed);
     };
 
     let block = wordtree::block_size();
@@ -408,10 +409,10 @@ pub fn spell_check_msm() -> ::core::ffi::c_int {
     let incr = incr * 102 / (block / 10);
     let added = added * 1024;
     if start == 0 || incr == 0 || added == 0 || incr > start {
-        return FAIL;
+        return Err(Failed);
     }
     set_compression_limits(start, incr, added);
-    OK
+    Ok(())
 }
 
 /// The three unscaled numbers of a `'mkspellmem'` value, or `None` when the
@@ -475,7 +476,7 @@ pub unsafe fn ex_mkspell(eap: *mut exarg_T) {
 
     let mut fcount = 0;
     let mut fnames = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
-    if unsafe { get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) } != OK {
+    if unsafe { get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) }.is_err() {
         return;
     }
     unsafe { mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false) };
@@ -566,7 +567,7 @@ unsafe fn mkspell(
         if !error && !got_int.get() {
             let name = unsafe { CStr::from_ptr(wfname) }.to_string_lossy();
             spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
-            error = unsafe { write_vim_spell(&mut spin, wfname) } == FAIL;
+            error = unsafe { write_vim_spell(&mut spin, wfname) }.is_err();
             spell_message(&spin, c"Done!");
             let used = spin.si_memtot;
             spell_message_fmt(
@@ -755,13 +756,13 @@ unsafe fn read_inputs(
             *aff = unsafe { spell_read_aff(spin, fname) };
             aff.is_null() || {
                 unsafe { vim_snprintf(fname, MAXPATHL as size_t, c"%s.dic".as_ptr(), stem) };
-                unsafe { spell_read_dic(spin, fname, *aff) == FAIL }
+                unsafe { spell_read_dic(spin, fname, *aff).is_err() }
             }
         } else {
-            unsafe { spell_read_wordfile(spin, stem) == FAIL }
+            unsafe { spell_read_wordfile(spin, stem).is_err() }
         };
         let none = ::core::ptr::null_mut();
-        unsafe { convert_setup(&raw mut spin.si_conv, none, none) };
+        let _ = unsafe { convert_setup(&raw mut spin.si_conv, none, none) };
         if failed {
             return true;
         }
@@ -835,11 +836,11 @@ pub unsafe fn ex_spell(eap: *mut exarg_T) {
 ///
 /// The table is global, so two spell files that disagree about which bytes
 /// are word characters cannot be loaded together.
-fn set_spell_finish(new_st: &spelltab_T) -> ::core::ffi::c_int {
+fn set_spell_finish(new_st: &spelltab_T) -> Result<(), Failed> {
     if !did_set_spelltab.get() {
         spelltab.set(*new_st);
         did_set_spelltab.set(true);
-        return OK;
+        return Ok(());
     }
     let agrees = spelltab.with(|st| {
         (0..256).all(|i| {
@@ -851,9 +852,9 @@ fn set_spell_finish(new_st: &spelltab_T) -> ::core::ffi::c_int {
     });
     if !agrees {
         emsg(gettext(c"E763: Word characters differ between spell files"));
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 #[cfg(test)]

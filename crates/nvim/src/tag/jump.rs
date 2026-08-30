@@ -8,12 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::Jumped;
 use super::*;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
-use crate::types::{CpoFlag, FAIL, OK};
+use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
 use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -313,11 +314,15 @@ pub(crate) unsafe fn find_extra(start: *mut c_char) -> Option<*mut c_char> {
 ///
 /// # Safety
 /// `lbuf_arg` must point at a stored match.
-pub(crate) unsafe fn jumpto_tag(lbuf_arg: *const c_char, forceit: c_int, keep_help: bool) -> c_int {
+pub(crate) unsafe fn jumpto_tag(
+    lbuf_arg: *const c_char,
+    forceit: c_int,
+    keep_help: bool,
+) -> Result<Jumped, Failed> {
     // SAFETY: the caller's promise. `lbuf` is our own copy of the match and
     // outlives every pointer `parse_match` takes into it.
     if postponed_split.get() == 0 && !check_can_set_curbuf_forceit(forceit) {
-        return FAIL;
+        return Err(Failed);
     }
 
     // Our own copy: the jump writes terminators into it, and opening
@@ -342,7 +347,7 @@ pub(crate) unsafe fn jumpto_tag(lbuf_arg: *const c_char, forceit: c_int, keep_he
         }
         .run(&tagp, forceit, keep_help)
     } else {
-        FAIL
+        Err(Failed)
     };
 
     // For next time.
@@ -395,7 +400,7 @@ impl Jump {
     }
 
     /// Open the file and run the tag's command in it.
-    fn run(&mut self, tagp: &TagParts, forceit: c_int, keep_help: bool) -> c_int {
+    fn run(&mut self, tagp: &TagParts, forceit: c_int, keep_help: bool) -> Result<Jumped, Failed> {
         // SAFETY: the caller's promise; the globals are live, and the file
         // name is NUL-terminated.
         // Check the file exists before abandoning the current one. A
@@ -406,14 +411,14 @@ impl Jump {
         {
             unsafe { xfree(nofile_fname.get().cast()) };
             nofile_fname.set(unsafe { xstrdup(self.fname()) });
-            return NOTAGFILE;
+            return Ok(Jumped::NoSuchFile);
         }
 
         let redraw_off = Suppress::redraw();
         self.open_preview();
         if !self.open_window() {
             drop(redraw_off);
-            return FAIL;
+            return Err(Failed);
         }
 
         if keep_help {
@@ -448,18 +453,22 @@ impl Jump {
                 unsafe { win_close(curwin.get(), false, false) };
                 postponed_split.set(0);
             }
-            return FAIL;
+            return Err(Failed);
         }
 
         cur_win().w_set_curswant = true;
         postponed_split.set(0);
-        let mut retval = self.run_command(tagp);
+        let mut retval = if self.run_command(tagp) == OK {
+            Ok(Jumped::Done)
+        } else {
+            Err(Failed)
+        };
         // Jumping to another file counts as success: at least the file
         // was found.
         if opened == GETFILE_OPEN_OTHER as c_int {
-            retval = OK;
+            retval = Ok(Jumped::Done);
         }
-        if retval == OK {
+        if retval.is_ok() {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
             if cur_buf().b_help {
@@ -535,7 +544,7 @@ impl Jump {
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
             cmdmod_set_tab(tabpage_index(curtab.get()) + 1);
         }
-        if win_split(postponed_split.get().max(0), postponed_split_flags.get()) == FAIL {
+        if win_split(postponed_split.get().max(0), postponed_split_flags.get()).is_err() {
             return false;
         }
         // A fresh window does not inherit the scroll and cursor binding.
@@ -787,7 +796,7 @@ impl Pattern {
             col: 0,
             coladd: 0,
         };
-        unsafe { do_cmdline_cmd(self.buf.as_mut_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(self.buf.as_mut_ptr()) };
 
         // When the command did something that is not allowed, make
         // sure the error message can be seen.

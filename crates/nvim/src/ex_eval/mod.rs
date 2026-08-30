@@ -65,8 +65,8 @@ use crate::memory::xfree;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
-    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, VAR_UNKNOWN, VarLock, cstack_T, eslist_T,
-    evalarg_T, exarg_T, typval_T, typval_vval_union,
+    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, Failed, OK, VAR_UNKNOWN, VarLock,
+    cstack_T, eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -218,6 +218,11 @@ pub(crate) fn update_force_abort() {
 /// the abort.
 pub(crate) fn should_abort(retcode: c_int) -> bool {
     (retcode == FAIL && trylevel.get() != 0 && emsg_silent.get() == 0) || aborting()
+}
+
+/// [`should_abort`] over an answer that has already become a `Result`.
+pub(crate) fn should_abort_err<T>(answer: Result<T, Failed>) -> bool {
+    should_abort(if answer.is_ok() { OK } else { FAIL })
 }
 
 /// Whether a function with the "abort" flag should not count as ended on an

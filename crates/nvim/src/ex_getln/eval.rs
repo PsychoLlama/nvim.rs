@@ -283,7 +283,7 @@ pub unsafe fn f_wildtrigger(_argvars: *mut typval_T, _rettv: *mut typval_T, _fpt
             KE_WILD as uint8_t,
             NUL as uint8_t,
         ];
-        unsafe {
+        let _ = unsafe {
             ins_typebuf(
                 key_string.as_mut_ptr() as *mut ::core::ffi::c_char,
                 REMAP_NONE,

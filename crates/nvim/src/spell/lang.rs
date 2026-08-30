@@ -50,7 +50,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    MAXPATHL, NUL, SPL_FNAME_TMPL, garray_T, langp_T, regprog_T, size_t, slang_T, synblock_T, win_T,
+    Failed, MAXPATHL, NUL, SPL_FNAME_TMPL, garray_T, langp_T, regprog_T, size_t, slang_T,
+    synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
 use ::libc::{strcasecmp, strcmp, strcpy, strlen};
@@ -111,7 +112,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
     // Autocommands could otherwise delete the buffer and free "lang".
     unsafe { (*curbuf.get()).b_locked += 1 };
 
-    let mut r = 0;
+    let mut r = Err(Failed);
     for round in 1..=2 {
         let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
         let fmt = c"spell/%s.%s.spl".as_ptr();
@@ -119,7 +120,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         unsafe { vim_snprintf(buf, room, fmt, lang, enc) };
         r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
 
-        if r == FAIL_I && sl.sl_lang[0] != 0 {
+        if r.is_err() && sl.sl_lang[0] != 0 {
             // Fall back on the ASCII version.
             let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
             let fmt = c"spell/%s.ascii.spl".as_ptr();
@@ -128,7 +129,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                 do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl)
             };
 
-            if r == FAIL_I && sl.sl_lang[0] != 0 && round == 1 && {
+            if r.is_err() && sl.sl_lang[0] != 0 && round == 1 && {
                 let buf = curbuf.get();
                 let fname = unsafe { (*buf).b_fname };
                 let event = EVENT_SPELLFILEMISSING;
@@ -140,7 +141,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         break;
     }
 
-    if r == FAIL_I {
+    if r.is_err() {
         if starting.get() != 0 {
             // Plugins are not loaded yet, so nvim/spellfile.lua cannot
             // offer the download itself. #3027
@@ -149,7 +150,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             let fmt = c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
                 .as_ptr();
             unsafe { snprintf(buf, room, fmt, lang) };
-            unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
         } else {
             // SAFETY: the language name and the encoding are NUL-terminated.
             let (lang, enc) = unsafe { (c_str(lang), c_str(spell_enc())) };
@@ -162,20 +163,19 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         // At least one file loaded; now take all the additions.
         let at = unsafe { fname_enc.as_mut_ptr().add(strlen(fname_enc.as_ptr()) - 3) };
         unsafe { strcpy(at, c"add.spl".as_ptr()) };
-        unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
+        let _ =
+            unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
     }
 
     unsafe { (*curbuf.get()).b_locked -= 1 };
 }
-
-const FAIL_I: c_int = 0;
 
 /// `do_in_runtimepath` with [`spell_load_cb`] as the callback.
 unsafe fn do_in_runtimepath_cb(
     name: *mut c_char,
     flags: RuntimeOpts,
     sl: *mut spelload_T,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe {
         crate::runtime::do_in_runtimepath(name, flags, Some(spell_load_cb), sl as *mut c_void)
     }

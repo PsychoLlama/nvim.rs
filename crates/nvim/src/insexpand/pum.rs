@@ -550,7 +550,7 @@ pub unsafe fn ins_compl_show_pum() {
 
     // Update the screen before drawing the popup menu over it.
     // SAFETY: the editor exists and this runs on its own thread.
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
 
     let mut cur = -1;
     let mut array_changed = false;

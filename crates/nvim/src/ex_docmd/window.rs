@@ -50,7 +50,7 @@ use crate::strings::vim_snprintf;
 use crate::types::{
     CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
     CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CmdModFlags,
-    FAIL, IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
+    IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -251,7 +251,7 @@ fn splitview(mut ea: Ex) {
 
     if use_tab {
         open_tabpage(ea, old_curwin);
-    } else if split(ea.count(0), vertical_flag(ea.cmd)) != FAIL {
+    } else if split(ea.count(0), vertical_flag(ea.cmd)).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
         if byte(ea.arg) != NUL {

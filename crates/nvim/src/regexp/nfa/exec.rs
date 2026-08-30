@@ -30,8 +30,8 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    FAIL, NUL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T,
-    regmmatch_T, regprog_T, uint8_t, win_T,
+    NUL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, uint8_t, win_T,
 };
 
 /// Try to match at column `col` of the current line.
@@ -279,7 +279,7 @@ fn try_match(
     if unsafe { (*prog).regstart } != NUL {
         // The first character is known: there is no point trying any
         // column before the next one that holds it.
-        if skip_to_start(rex, unsafe { (*prog).regstart }, col) == FAIL {
+        if skip_to_start(rex, unsafe { (*prog).regstart }, col).is_err() {
             return Attempt::Done(0);
         }
         // And when the whole pattern is that literal run, the machine

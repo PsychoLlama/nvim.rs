@@ -30,7 +30,7 @@ use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{NUL, OK, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::types::{NUL, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
@@ -102,7 +102,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     }
     coladvance(win, i);
     if to_first_non_blank {
-        while ascii_iswhite(gchar_cursor()) && unsafe { oneright() } == OK {}
+        while ascii_iswhite(gchar_cursor()) && unsafe { oneright() }.is_ok() {}
         win.w_valid.clear(WinValid::WCOL);
     }
     win.w_set_curswant = true;
@@ -125,7 +125,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     win.w_curswant = MAXCOL as colnr_T;
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) } == 0 {
+    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) }.is_err() {
         clear_op_beep(ca.op());
         return;
     }
@@ -177,7 +177,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
     } else {
         // Without 'wrap' the screen line is what 'sidescroll' left showing.
         if ca.count1 > 1 {
-            unsafe { cursor_down(ca.count1 - 1, false) };
+            let _ = unsafe { cursor_down(ca.count1 - 1, false) };
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
         coladvance(win, i);
@@ -190,7 +190,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
         unsafe { update_curswant_force() };
     }
     if to_last_non_blank {
-        while ascii_iswhite_or_nul(gchar_cursor()) && unsafe { oneleft() } == OK {}
+        while ascii_iswhite_or_nul(gchar_cursor()) && unsafe { oneleft() }.is_ok() {}
         win.w_valid.clear(WinValid::WCOL);
     }
 }
@@ -237,9 +237,9 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
         op.motion_type = kMTLineWise;
         let stop_at_end = op.op_type == OP_NOP;
         if dir == FORWARD as c_int {
-            unsafe { cursor_down(ca.count1, stop_at_end) != 0 }
+            unsafe { cursor_down(ca.count1, stop_at_end).is_ok() }
         } else {
-            unsafe { cursor_up(ca.count1 as linenr_T, stop_at_end) != 0 }
+            unsafe { cursor_up(ca.count1 as linenr_T, stop_at_end).is_ok() }
         }
     } else {
         unsafe { nv_screengo(op.raw(), dir, ca.count1, false) }
@@ -314,7 +314,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
         // `g&`: repeat the last `:substitute` over the whole file, keeping
         // the flags.
         Ok(b'&') => {
-            unsafe { do_cmdline_cmd(c"%s//~/&".as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(c"%s//~/&".as_ptr()) };
         }
         // `gv`: reselect the previous selection.
         Ok(b'v') => unsafe { nv_gv_cmd(cap) },
@@ -323,7 +323,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
         Ok(b'h' | b'H' | CTRL_H) => unsafe { nv_g_select(cap) },
         // `gn`/`gN`: select the next/previous match of the last search.
         Ok(b'N' | b'n') => {
-            if unsafe { current_search(ca.count1, nchar == 'n' as c_int) } == 0 {
+            if unsafe { current_search(ca.count1, nchar == 'n' as c_int) }.is_err() {
                 clear_op_beep(op);
             }
         }
@@ -355,7 +355,7 @@ pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
             op.motion_type = kMTCharWise;
             cur_win().w_set_curswant = true;
             op.inclusive = true;
-            if unsafe { bckend_word(ca.count1, nchar == 'E' as c_int, false) } == 0 {
+            if unsafe { bckend_word(ca.count1, nchar == 'E' as c_int, false) }.is_err() {
                 clear_op_beep(op);
             }
         }

@@ -24,7 +24,7 @@ use crate::main::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, OK, OptIndex, optset_T, size_t};
+use crate::types::{FAIL, Failed, OK, OptIndex, optset_T, size_t};
 
 use super::illegal_char;
 
@@ -133,7 +133,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
     let (idx, varp) = unsafe { ((*args).os_idx, (*args).os_varp.string_var()) };
-    if unsafe { check_str_opt(idx, varp) } != OK {
+    if unsafe { check_str_opt(idx, varp) }.is_err() {
         e_invarg.as_ptr()
     } else {
         ptr::null()
@@ -171,7 +171,7 @@ pub(crate) unsafe fn did_set_option_listflag(
 ///
 /// # Safety
 /// `varp` is null or points at the option's `char *` variable.
-pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_int {
+pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> Result<(), Failed> {
     let opt = get_option(idx);
     let varp = if varp.is_null() {
         option_var(idx).string_var()
@@ -181,13 +181,13 @@ pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> c_i
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
     // SAFETY: the option's variable holds a C string.
     let Some(mask) = (unsafe { opt_strings_mask(*varp, opt_values(idx), list) }) else {
-        return FAIL;
+        return Err(Failed);
     };
     // The table names the mask cell itself; an option with no mask has none.
     if let Some(cell) = opt.flags_var {
         cell.set(mask);
     }
-    OK
+    Ok(())
 }
 
 /// Is `p` one of "unix", "dos" or "mac"? `OK` or `FAIL`.

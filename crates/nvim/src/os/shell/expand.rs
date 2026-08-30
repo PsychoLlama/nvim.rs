@@ -21,7 +21,7 @@ use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
 use crate::semsg;
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, OK, READBIN};
+use crate::types::{Failed, READBIN};
 use core::ops::Range;
 
 /// The `vimglob()` shell function, for a POSIX shell.
@@ -349,7 +349,7 @@ pub unsafe fn os_expand_wildcards(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     flags: ExpandFlags,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract, for the whole body. Every pattern is
     // read as a `CStr`, and every pointer written out is freshly allocated.
     unsafe {
@@ -361,17 +361,17 @@ pub unsafe fn os_expand_wildcards(
         // shell — that saves a great deal of time.
         if !have_wildcard(num_pat, pat) {
             save_patterns(num_pat, pat, num_file, file);
-            return OK;
+            return Ok(());
         }
 
         // No shell command inside the sandbox, and no backticks in `secure`.
         if sandbox.get() != 0 && check_secure() {
-            return FAIL;
+            return Err(Failed);
         }
         if secure.get() != 0 {
             for i in 0..num_pat as isize {
                 if !vim_strchr(*pat.offset(i), '`' as c_int).is_null() && check_secure() {
-                    return FAIL;
+                    return Err(Failed);
                 }
             }
         }
@@ -379,7 +379,7 @@ pub unsafe fn os_expand_wildcards(
         let tempname = vim_tempname();
         if tempname.is_null() {
             emsg(gettext(e_notmp));
-            return FAIL;
+            return Err(Failed);
         }
         let style = pick_shell_style(num_pat, pat);
         let (command, ampersand) = build_command(
@@ -425,7 +425,7 @@ pub unsafe fn os_expand_wildcards(
             // A failed `cmd` expansion must not list `cmd` as a match, even
             // under NOTFOUND.
             if style == ShellStyle::Backtick {
-                return FAIL;
+                return Err(Failed);
             }
             return not_found(num_pat, pat, num_file, file, flags);
         }
@@ -433,7 +433,7 @@ pub unsafe fn os_expand_wildcards(
         let mut buffer = match read_temp_file(tempname, flags) {
             Read::Content(buffer) => buffer,
             Read::NotFound => return not_found(num_pat, pat, num_file, file, flags),
-            Read::Failed => return FAIL,
+            Read::Failed => return Err(Failed),
         };
         xfree(tempname.cast());
 
@@ -516,7 +516,7 @@ pub unsafe fn os_expand_wildcards(
         }
         *num_file = kept as c_int;
         *file = out;
-        OK
+        Ok(())
     }
 }
 
@@ -587,11 +587,11 @@ unsafe fn not_found(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     flags: ExpandFlags,
-) -> c_int {
+) -> Result<(), Failed> {
     if !flags.has(ExpandFlags::NOTFOUND) {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the caller's contract.
     unsafe { save_patterns(num_pat, pat, num_file, file) };
-    OK
+    Ok(())
 }

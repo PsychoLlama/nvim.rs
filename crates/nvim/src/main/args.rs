@@ -53,7 +53,7 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    FAIL, IOSIZE, MAXPATHL, NUL, OK, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
+    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
     aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
 };
 use crate::winlayer::Live;
@@ -780,23 +780,23 @@ fn env_script() -> SavedSctx {
 ///
 /// Answers `OK` when the variable existed -- which is what makes it count as
 /// a config source, whether or not the commands in it worked.
-pub(crate) unsafe fn execute_env(env: *mut c_char) -> c_int {
+pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `env` names an environment variable; `os_getenv` hands over an
     // owned copy of its value.
     let initstr = unsafe { os_getenv(env) };
     if initstr.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     estack_push(ETYPE_ENV, env, 0 as linenr_T);
     let sctx = env_script();
 
-    unsafe { do_cmdline_cmd(initstr) };
+    let _ = unsafe { do_cmdline_cmd(initstr) };
 
     estack_pop();
     drop(sctx);
     unsafe { xfree(initstr as *mut c_void) };
-    OK
+    Ok(())
 }
 
 /// The buffer the editor is working in.

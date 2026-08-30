@@ -308,7 +308,8 @@ unsafe fn expand_rtp_entry(
             &raw mut files,
             ExpandFlags::DIR | ExpandFlags::NOBREAK,
         )
-    } != OK
+    }
+    .is_err()
     {
         return;
     }

@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::winlayer::{Buf, TabPage, Win, tabs, windows};
 use core::ffi::c_int;
 use std::ffi::CStr;
@@ -413,7 +413,7 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut diff_T) {
     let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tp.tp_diffbuf[i].is_null()) else {
         return;
     };
-    if unsafe { diff_check_sanity(tp, dp) } == FAIL {
+    if unsafe { diff_check_sanity(tp, dp) }.is_err() {
         return;
     }
     for dir in [FORWARD as c_int, BACKWARD as c_int] {
@@ -474,17 +474,17 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut diff_T) {
 ///
 /// An edit can leave a block naming lines that no longer exist, and every
 /// reader of a block has to check first.
-pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut diff_T) -> c_int {
+pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut diff_T) -> Result<(), Failed> {
     for i in 0..DB_COUNT as usize {
         let buf = tp.tp_diffbuf[i];
         if !buf.is_null()
             && unsafe { (*dp).df_lnum[i] } + unsafe { (*dp).df_count[i] } - 1
                 > unsafe { (*buf).b_ml.ml_line_count }
         {
-            return FAIL;
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Give buffer `idx_new` the same range as `idx_orig`, corrected for the

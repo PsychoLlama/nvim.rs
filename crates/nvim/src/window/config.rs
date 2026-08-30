@@ -97,7 +97,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
         }
         let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
         let nr = buf.handle();
-        do_buffer(goto, first, fwd, nr, 0);
+        let _ = do_buffer(goto, first, fwd, nr, 0);
         if !switchwin.sw_same_win {
             p_acd.set(save_acd);
         }

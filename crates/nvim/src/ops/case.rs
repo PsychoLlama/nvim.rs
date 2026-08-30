@@ -22,7 +22,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::types::FAIL;
 
 /// `g~`, `gu`, `gU`, `g?` over the operator's region.
 ///
@@ -37,7 +36,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
     let mut did_change = false;
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if u_save(above, below) == FAIL {
+    if u_save(above, below).is_err() {
         return;
     }
 
@@ -179,7 +178,7 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
         // characters with it.
         let saved: pos_T = cur_win().w_cursor;
         cur_win().w_cursor = unsafe { *pos };
-        unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
+        let _ = unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
         unsafe { ins_char(nc) };
         cur_win().w_cursor = saved;
     } else {

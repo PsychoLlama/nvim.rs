@@ -523,7 +523,7 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
 
     if regname == '.' as c_int {
         // SAFETY: inserts the register's text at the cursor.
-        unsafe { insert_reg(regname, ptr::null_mut(), true) };
+        let _ = unsafe { insert_reg(regname, ptr::null_mut(), true) };
         return Some(false);
     }
     if regname == 0 && has_clipboard_provider() {
@@ -539,7 +539,7 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
         State.get() & REPLACE_FLAG != 0 && !unsafe { yank_register_mline(regname, &raw mut reg) };
     if replacing {
         // SAFETY: `reg` is a register the editor owns.
-        unsafe { insert_reg(regname, reg, true) };
+        let _ = unsafe { insert_reg(regname, reg, true) };
         return Some(false);
     }
 
@@ -772,7 +772,7 @@ fn dispatch_action(a: Action, win: Win) {
             c".ll"
         };
         // SAFETY: a NUL-terminated literal.
-        unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
         got_click.set(false); // ignore drag&release now
         return;
     }

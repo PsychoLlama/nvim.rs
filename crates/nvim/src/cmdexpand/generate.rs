@@ -15,7 +15,7 @@ use crate::syntax::EXPAND_BUF_LEN;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, FAIL, OK, static_cstring};
+use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, Failed, static_cstring};
 
 /// Expand a file or directory pattern.
 ///
@@ -34,7 +34,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     numMatches: *mut c_int,
     flags: ExpandFlags,
     options: WildOpts,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -333,7 +333,7 @@ pub(crate) unsafe fn expand_other(
     rmp: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -343,11 +343,11 @@ pub(crate) unsafe fn expand_other(
         .iter()
         .find(|&&(context, ..)| context == xp.xp_context)
     else {
-        return FAIL;
+        return Err(Failed);
     };
     if ic {
         unsafe { (*rmp).rm_ic = true };
     }
     unsafe { expand_generic(pat, xp.raw(), rmp, matches, numMatches, Some(func), escaped) };
-    OK
+    Ok(())
 }

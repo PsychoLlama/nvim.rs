@@ -78,7 +78,7 @@ use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::{
-    CMD_first, CMD_sfirst, CmdModFlags, FAIL, MAXPATHL, NUL, OK, Vv, aentry_T, buf_T, exarg_T,
+    CMD_first, CMD_sfirst, CmdModFlags, Failed, MAXPATHL, NUL, Vv, aentry_T, buf_T, exarg_T,
     linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
@@ -228,7 +228,7 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
         return;
     }
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    unsafe { vim_full_name((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
+    let _ = unsafe { vim_full_name((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
 
     let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
     unsafe { tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t) };
@@ -275,7 +275,7 @@ unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
+pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> Result<(), Failed> {
     // SAFETY: module contract.
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
@@ -284,7 +284,7 @@ pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
         || (!forceit && unsafe { (*buf) .b_p_ro } != 0)
         || unsafe { (*buf) .b_ffname }.is_null()
     {
-        return FAIL;
+        return Err(Failed);
     }
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
     let r = unsafe { buf_write_all(buf, forceit) };
@@ -292,7 +292,7 @@ pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> c_int {
     // The write can succeed and still leave the buffer changed, e.g. on
     // a conversion error. That is a failure.
     if bufref.valid() && buf_is_changed(unsafe { Buf::new(buf) }) {
-        return FAIL;
+        return Err(Failed);
     }
     r
 }
@@ -312,7 +312,7 @@ pub(crate) unsafe fn autowrite_all() {
     while let Some(b) = cur {
         if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
             let bufref = BufRef::of(b);
-            unsafe { buf_write_all(b.raw(), false) };
+            let _ = unsafe { buf_write_all(b.raw(), false) };
             if !bufref.valid() {
                 cur = first_buffer();
             }
@@ -335,7 +335,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
         !forceit
             && buf_is_changed(Buf::new(buf))
             && (flags & CCGD_MULTWIN != 0 || (*buf).b_nwindows <= 1)
-            && (flags & CCGD_AW == 0 || autowrite(buf, forceit) == FAIL)
+            && (flags & CCGD_AW == 0 || autowrite(buf, forceit).is_err())
     };
     if !blocked {
         return false;
@@ -404,9 +404,9 @@ pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
             unsafe { buf_set_name((*buf).handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
         let target = unsafe { Buf::new(buf) };
-        if unsafe { check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) } == OK
+        if unsafe { check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) }.is_ok()
             // didn't hit Cancel
-            && unsafe { buf_write_all(buf, false) } == OK
+            && unsafe { buf_write_all(buf, false) }.is_ok()
         {
             return;
         }
@@ -445,10 +445,11 @@ unsafe fn write_all_writable() {
             if !target.b_fname.is_null()
                 && unsafe {
                     check_overwrite(&raw mut ea, target, target.b_fname, target.b_ffname, false)
-                } == OK
+                }
+                .is_ok()
             {
                 // didn't hit Cancel
-                unsafe { buf_write_all(target.raw(), false) };
+                let _ = unsafe { buf_write_all(target.raw(), false) };
             }
             if !bufref.valid() {
                 cur = first_buffer();
@@ -494,7 +495,7 @@ pub(crate) unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
     hidden
         || !buf_is_changed(unsafe { Buf::new(buf) })
         || unsafe { (*buf).b_nwindows } > 1
-        || unsafe { autowrite(buf, forceit) } == OK
+        || unsafe { autowrite(buf, forceit) }.is_ok()
         || forceit
 }
 
@@ -650,20 +651,20 @@ unsafe fn report_unwritten(buf: *mut buf_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn check_fname() -> c_int {
+pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
     // SAFETY: module contract.
     if unsafe { (*curbuf.get()).b_ffname }.is_null() {
         emsg(gettext(c"E32: No file name"));
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Write out the whole of `buf`.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> c_int {
+pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = curbuf.get();
     // SAFETY: module contract.
     let retval = unsafe {
@@ -711,8 +712,8 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     // SAFETY: module contract; `eap->arg` is NUL-terminated.
     if unsafe { *(*eap).arg } == NUL as c_char {
         // List all compiler scripts.
-        unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
-        unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };
         return;
     }
 
@@ -723,15 +724,15 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     let mut old_cur_comp = ptr::null_mut();
     if unsafe { (*eap).forceit } != 0 {
         // ":compiler! {name}" sets global options.
-        unsafe { do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr()) };
+        let cmd = c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr();
+        let _ = unsafe { do_cmdline_cmd(cmd) };
     } else {
         old_cur_comp = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };
         if !old_cur_comp.is_null() {
             old_cur_comp = unsafe { xstrdup(old_cur_comp) };
         }
-        unsafe {
-            do_cmdline_cmd(c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr())
-        };
+        let cmd = c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr();
+        let _ = unsafe { do_cmdline_cmd(cmd) };
     }
     let (name, len) = (CURRENT_COMPILER.as_ptr(), CURRENT_COMPILER.count_bytes());
     let _ = unsafe { do_unlet(name, len, true) };
@@ -745,13 +746,13 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
     pattern.extend_from_slice(b"compiler/");
     pattern.extend_from_slice(unsafe { CStr::from_ptr((*eap).arg) }.to_bytes());
     pattern.extend_from_slice(b".*\0");
-    if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) } == FAIL {
+    if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = unsafe { c_str((*eap).arg) };
         semsg!("E666: Compiler not supported: {arg}");
     }
 
-    unsafe { do_cmdline_cmd(c":delcommand CompilerSet".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c":delcommand CompilerSet".as_ptr()) };
 
     // Set "b:current_compiler" from "current_compiler".
     let p = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };
@@ -853,7 +854,7 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
         if !unsafe { (*eap).do_ecmd_cmd }.is_null() {
             let did_set_swapcommand = unsafe { set_swapcommand((*eap).do_ecmd_cmd, 0 as linenr_T) };
             let verbose = DoCmdOpts::VERBOSE;
-            unsafe { do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose) };
+            let _ = unsafe { do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose) };
             if did_set_swapcommand {
                 unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1 as ptrdiff_t) };
             }

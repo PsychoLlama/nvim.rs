@@ -48,7 +48,7 @@ use crate::search::find_pattern_in_path;
 use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, NUL, OK, WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
+use crate::types::{Failed, NUL, WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 
@@ -343,7 +343,7 @@ fn split_or_new(nchar: c_int, prenum: c_int, flags: c_int) {
     if buf_is_quickfix(Some(cur_buf())) {
         new_window(nchar, prenum);
     } else {
-        split(prenum, flags);
+        let _ = split(prenum, flags);
     }
 }
 
@@ -363,7 +363,7 @@ fn split_alternate(prenum: c_int) {
         }
         return;
     }
-    if !buffer_locked() && split(0, 0) == OK {
+    if !buffer_locked() && split(0, 0).is_ok() {
         open_buffer_here(fnum);
     }
 }
@@ -502,7 +502,7 @@ fn move_to_edge(nchar: c_int, prenum: c_int) {
         } else {
             WSP_BOT as c_int
         };
-    splitmove(cur_win(), prenum, dir);
+    let _ = splitmove(cur_win(), prenum, dir);
 }
 
 /// The height `'previewheight'` gives the preview window, or the count.
@@ -549,11 +549,11 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     if swb_flags.get() & jump != 0 && cmdmod.with(|m| m.cmod_tab) == 0 {
         wp = find_buffer_by_name(ptr).and_then(swbuf_goto_win);
     }
-    if wp.is_none() && split(0, 0) == OK {
+    if wp.is_none() && split(0, 0).is_ok() {
         let mut cur = cur_win();
         cur.w_onebuf_opt.wo_scb = 0;
         cur.w_onebuf_opt.wo_crb = 0;
-        if edit_file(ptr) == FAIL {
+        if edit_file(ptr).is_err() {
             // Failed to open the file: close the window opened for it.
             close(cur_win(), false, false);
             // SAFETY: upstream assumes both survive the failed edit, which only
@@ -706,7 +706,7 @@ fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
     // SAFETY: a buffer number the list was just searched for.
-    unsafe { buflist_getfile(fnum, 0 as linenr_T, GETF_ALT as c_int, 0) };
+    let _ = unsafe { buflist_getfile(fnum, 0 as linenr_T, GETF_ALT as c_int, 0) };
 }
 
 /// Whether the current buffer may not be changed right now.
@@ -729,7 +729,7 @@ fn grab_filename(prenum1: c_int, lnum: &mut linenr_T) -> *mut c_char {
 }
 
 /// `do_ecmd()`: edit file `ptr` in the current window, keeping the alternate.
-fn edit_file(ptr: *mut c_char) -> c_int {
+fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
     let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<exarg_T>(), ptr::null_mut());
     let lnum = ECMD_LASTL as linenr_T;
     // SAFETY: a NUL-terminated file name; every other argument is optional.

@@ -575,7 +575,7 @@ unsafe fn compound_part_allowed(
             if ptr == unsafe { (*mip).mi_word } {
                 let win = unsafe { (*mip).mi_win };
                 let out = fword.as_mut_ptr();
-                unsafe { spell_casefold(win, ptr, wlen, out, MAXWLEN as c_int) };
+                let _ = unsafe { spell_casefold(win, ptr, wlen, out, MAXWLEN as c_int) };
             } else {
                 let to = fword.as_mut_ptr() as *mut ::core::ffi::c_void;
                 let from = ptr as *const ::core::ffi::c_void;
@@ -874,7 +874,7 @@ unsafe fn fold_more(mip: *mut matchinf_T) -> c_int {
     let win = unsafe { (*mip).mi_win };
     let taken = unsafe { (*mip).mi_fend.offset_from(p) } as c_int;
     let room = MAXWLEN as c_int - fwordlen;
-    unsafe { spell_casefold(win, p, taken, tail, room) };
+    let _ = unsafe { spell_casefold(win, p, taken, tail, room) };
     let flen = unsafe { strlen(tail) } as c_int;
     unsafe { (*mip).mi_fwordlen += flen };
     flen

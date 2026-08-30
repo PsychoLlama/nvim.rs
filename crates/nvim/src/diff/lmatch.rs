@@ -90,7 +90,7 @@ pub(crate) unsafe fn run_linematch_algorithm(dp: *mut diff_T) {
             continue;
         }
         if unsafe { (*dp).df_count[i] } > 0 {
-            unsafe {
+            let _ = unsafe {
                 diff_write_buffer(
                     Buf::new(tp.tp_diffbuf[i]),
                     &raw mut images[ndiffs],

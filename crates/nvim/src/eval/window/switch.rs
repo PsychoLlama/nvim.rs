@@ -35,7 +35,7 @@ pub unsafe fn win_execute_before(
     let (args, win, tab) = unsafe { (&mut *args, Win::new(wp), TabPage::new(tp)) };
     args.wp = wp;
     args.curpos = win.w_cursor;
-    args.cwd_status = FAIL;
+    args.cwd_status = Err(Failed);
     args.apply_acd = false;
     args.save_sfname = ptr::null_mut();
     // SAFETY: live window and tab page handles, and the globals they are
@@ -53,7 +53,7 @@ pub unsafe fn win_execute_before(
     {
         args.cwd_status = unsafe { os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd)) };
     }
-    if args.cwd_status == OK && p_acd.get() != 0 {
+    if args.cwd_status.is_ok() && p_acd.get() != 0 {
         // 'autochdir' will move the working directory itself when the
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.
@@ -63,7 +63,7 @@ pub unsafe fn win_execute_before(
         }
         do_autochdir();
         let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-        if unsafe { os_dirname(autocwd.as_mut_ptr(), size_of_val(&autocwd)) } == OK {
+        if unsafe { os_dirname(autocwd.as_mut_ptr(), size_of_val(&autocwd)) }.is_ok() {
             args.apply_acd = unsafe { strcmp(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) } == 0;
         }
     }
@@ -87,7 +87,7 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
     if args.apply_acd {
         unsafe { xfree(args.save_sfname.cast()) };
         do_autochdir();
-    } else if args.cwd_status == OK {
+    } else if args.cwd_status.is_ok() {
         unsafe { os_chdir(args.cwd.as_mut_ptr()) };
         if !args.save_sfname.is_null() {
             let mut buf = cur_buf();

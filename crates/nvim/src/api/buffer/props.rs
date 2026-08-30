@@ -10,7 +10,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::guard::Suppress;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 
 use crate::winlayer::Buf;
 
@@ -128,7 +128,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     if b.is_null() {
         return ().reported(error);
     }
-    let mut ren_ret: ::core::ffi::c_int = OK;
+    let mut ren_ret = Ok(());
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -157,7 +157,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
-    if ren_ret == FAIL {
+    if ren_ret.is_err() {
         let why = c"Failed to rename buffer";
         error = Error::exception(why);
     }
@@ -179,7 +179,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
     }
     let mut force: bool = unsafe { (*opts).force };
     let mut unload: bool = unsafe { (*opts).unload };
-    let mut result: ::core::ffi::c_int = do_buffer(
+    let result: Result<(), Failed> = do_buffer(
         if unload as ::core::ffi::c_int != 0 {
             DOBUF_UNLOAD as ::core::ffi::c_int
         } else {
@@ -190,7 +190,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
         unsafe { (*b).handle } as ::core::ffi::c_int,
         force as ::core::ffi::c_int,
     );
-    if result == FAIL {
+    if result.is_err() {
         let why = c"Failed to unload buffer.";
         error = Error::exception(why);
         return ().reported(error);

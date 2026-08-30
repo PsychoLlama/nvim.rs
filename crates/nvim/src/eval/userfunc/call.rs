@@ -351,7 +351,7 @@ pub unsafe fn call_user_func(
         type Getline = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
         let getline = Some(get_func_line as Getline);
         let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT;
-        unsafe { do_cmdline(ptr::null_mut(), getline, fc as *mut c_void, opts) };
+        let _ = unsafe { do_cmdline(ptr::null_mut(), getline, fc as *mut c_void, opts) };
     }
 
     // Invoke functions added with `:defer`.

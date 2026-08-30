@@ -22,7 +22,7 @@ use std::ffi::CString;
 
 use super::*;
 use crate::os::cshim::gettext;
-use crate::types::{FAIL, MAXPATHL, NUL, OK};
+use crate::types::{FAIL, Failed, MAXPATHL, NUL, OK};
 
 /// Report `E136`/`E137`/`E138`/`E886` about the ShaDa file itself, naming
 /// the file it is about.
@@ -125,9 +125,9 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
 /// Read a ShaDa file into the running editor.
 ///
 /// `flags` says which parts of it are wanted; see the `kShaDa*` values.
-unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
+unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Failed> {
     let Some(fname) = (unsafe { shada_filename(file) }) else {
-        return FAIL;
+        return Err(Failed);
     };
     let mut sd_reader: FileDescriptor = unsafe { core::mem::zeroed() };
     let of_ret = unsafe {
@@ -174,16 +174,16 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> c_int {
                 unsafe { uv_strerror(of_ret) },
             );
         }
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { shada_read(&raw mut sd_reader, flags) };
     unsafe { close_file(&raw mut sd_reader) };
-    OK
+    Ok(())
 }
 
 /// Read the marks out of the default ShaDa file.
-pub unsafe fn shada_read_marks() -> c_int {
+pub unsafe fn shada_read_marks() -> Result<(), Failed> {
     unsafe { shada_read_file(core::ptr::null(), kShaDaWantMarks as c_int) }
 }
 
@@ -195,7 +195,7 @@ pub unsafe fn shada_read_everything(
     fname: *const c_char,
     forceit: bool,
     missing_ok: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut flags = kShaDaWantInfo as c_int
         | kShaDaWantMarks as c_int
         | kShaDaGetOldfiles as c_int
@@ -543,7 +543,7 @@ pub unsafe fn check_marks_read() {
         && unsafe { get_shada_parameter('\'' as c_int) } > 0
         && !unsafe { (*buf).b_ffname.is_null() }
     {
-        unsafe { shada_read_marks() };
+        let _ = unsafe { shada_read_marks() };
     }
     // Set unconditionally: it is what stops this running again after
     // `'shada'` gains its `'` parameter with the buffer already open.

@@ -328,7 +328,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
             // Not a debug command, so run it -- but do not debug it.
             let outer_level = debug_break_level.replace(-1);
             // SAFETY: `cmdline` is a NUL-terminated Ex command line.
-            unsafe {
+            let _ = unsafe {
                 do_cmdline(
                     cmdline,
                     Some(getexline as _),
@@ -506,7 +506,7 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 pub unsafe fn ex_debug(eap: *mut exarg_T) {
     let outer_level = debug_break_level.replace(9999);
     // SAFETY: caller contract; `eap.arg` is the NUL-terminated argument.
-    unsafe { do_cmdline_cmd((*eap).arg) };
+    let _ = unsafe { do_cmdline_cmd((*eap).arg) };
     debug_break_level.set(outer_level);
 }
 

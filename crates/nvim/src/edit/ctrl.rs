@@ -29,7 +29,7 @@ use crate::guard::Keys;
 use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, NUL};
+use crate::types::{CpoFlag, NUL};
 
 /// The three CTRL-G commands that are spelled with a letter.
 const CTRL_G_UP: c_int = b'k' as c_int;
@@ -134,7 +134,7 @@ pub(crate) fn ins_reg() {
             append_to_redobuff_char(regname);
             let flags = PUT_CURSEND as c_int;
             unsafe { do_put(regname, ::core::ptr::null_mut(), BACKWARD, 1, flags) };
-        } else if unsafe { insert_reg(regname, ::core::ptr::null_mut(), literally != 0) } == FAIL {
+        } else if unsafe { insert_reg(regname, ::core::ptr::null_mut(), literally != 0) }.is_err() {
             beep(kOptBoFlagRegister as ::core::ffi::c_uint);
             need_redraw = true; // remove the `"`
         } else if stop_insert_mode.get() {
@@ -266,7 +266,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             if cpo_has(CpoFlag::REPLCNT) {
                 State.set(State.get() & !REPLACE_FLAG);
             }
-            unsafe { start_redo_ins() };
+            let _ = unsafe { start_redo_ins() };
             if single_char_insert {
                 unsafe { stuff_redo_readbuf(ESC_STR.as_ptr()) }; // no ESC in the redo buffer
             }
@@ -310,7 +310,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         if cur_win().w_cursor.coladd > 0
             || get_ve_flags(cur_win()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
-            unsafe { oneleft() };
+            let _ = unsafe { oneleft() };
             if restart_edit.get() != NUL {
                 cur_win().w_cursor.coladd += 1;
             }

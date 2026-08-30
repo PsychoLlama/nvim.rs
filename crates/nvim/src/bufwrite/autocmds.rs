@@ -16,9 +16,9 @@ use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_char;
 
-use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, event_T};
+use crate::types::{CmdModFlags, CpoFlag, Failed, event_T};
 
 use super::*;
 use crate::buffer::BufRef;
@@ -64,7 +64,7 @@ pub(crate) enum PreWrite {
     /// The write is over before it began — either a `*WriteCmd` autocommand
     /// did it, or something went wrong. This is `buf_write`'s return value,
     /// and `no_wait_return` has already been decremented.
-    Finished(c_int),
+    Finished(Result<(), Failed>),
 }
 
 /// Fire one `*WritePre` event.
@@ -189,13 +189,13 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         if nofile_err || aborting() {
             // An aborting error, interrupt or exception in the
             // autocommands.
-            return PreWrite::Finished(FAIL);
+            return PreWrite::Finished(Err(Failed));
         }
         if did_cmd {
             if buf.is_null() {
                 // The buffer was deleted. Assume it was written; there is
                 // no retrying anyway.
-                return PreWrite::Finished(OK);
+                return PreWrite::Finished(Ok(()));
             }
             if mode.overwriting {
                 // Assume the buffer was written; update the timestamp.
@@ -213,15 +213,15 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             {
                 // Buffer still changed: the autocommands didn't work
                 // properly.
-                return PreWrite::Finished(FAIL);
+                return PreWrite::Finished(Err(Failed));
             }
-            return PreWrite::Finished(OK);
+            return PreWrite::Finished(Ok(()));
         }
         if !aborting() {
             let why = gettext(c"E203: Autocommands deleted or unloaded buffer to be written");
             emsg(why);
         }
-        return PreWrite::Finished(FAIL);
+        return PreWrite::Finished(Err(Failed));
     }
 
     // The autocommands may have changed the number of lines in the file.
@@ -240,7 +240,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 msg_scroll.set(msg_save);
                 let why = gettext(c"E204: Autocommand changed number of lines in unexpected way");
                 emsg(why);
-                return PreWrite::Finished(FAIL);
+                return PreWrite::Finished(Err(Failed));
             }
         }
     }

@@ -80,7 +80,7 @@ pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
     };
     let handle = b.handle;
     api_try(&mut err, |_| {
-        do_buffer(
+        let _ = do_buffer(
             DOBUF_GOTO as ::core::ffi::c_int,
             DOBUF_FIRST as ::core::ffi::c_int,
             FORWARD as ::core::ffi::c_int,
@@ -162,7 +162,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
     // SAFETY: a new buffer with neither a file name nor a short name.
     let buf = unsafe { buflist_new(no_name, no_name, 0 as linenr_T, flags) };
     // SAFETY: `buf` is the buffer just made, or null.
-    let opened = !buf.is_null() && unsafe { ml_open(buf) } != 0 as ::core::ffi::c_int;
+    let opened = !buf.is_null() && unsafe { ml_open(buf) }.is_ok();
     if !opened {
         // SAFETY: paired with the `block_autocmds` above.
         unsafe { unblock_autocmds() };

@@ -17,6 +17,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::Failed;
 
 /// Room for [`describe_sign_text`]'s answer: SIGN_WIDTH cells of up to
 /// `MAX_SCHAR_SIZE` bytes each, the last of which carries the NUL
@@ -89,7 +90,7 @@ pub(crate) unsafe fn init_sign_text(
     text: *mut c_char,
     sign_text: *mut schar_T,
     from_define: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's text, NUL-terminated and writable.
     let len = unsafe { strlen(text) };
     let len = if from_define {
@@ -149,7 +150,7 @@ pub(crate) unsafe fn init_sign_text(
             let text = unsafe { c_str(text) };
             semsg!("E239: Invalid sign text: {text}");
         }
-        return FAIL;
+        return Err(Failed);
     }
 
     if cells < 1 {
@@ -157,7 +158,7 @@ pub(crate) unsafe fn init_sign_text(
     } else if cells == 1 {
         out[1] = schar_T::from(b' ');
     }
-    OK
+    Ok(())
 }
 
 #[cfg(test)]

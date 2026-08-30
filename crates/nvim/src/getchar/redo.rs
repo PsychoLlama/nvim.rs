@@ -11,7 +11,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
-use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
+use crate::types::{FAIL, Failed, MB_MAXBYTES, NUL, OK};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -328,12 +328,12 @@ unsafe fn copy_redo(old_redo: bool) {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
+pub unsafe fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
     // Position the cursor; give up if there is nothing to redo.
     // SAFETY (this body): the redo buffer's chain is live for the whole of
     // this body, and `buf` is this frame's own array.
     if unsafe { read_redo(true, old_redo) } == FAIL {
-        return FAIL;
+        return Err(Failed);
     }
     let mut c = unsafe { read_redo(false, old_redo) };
 
@@ -380,7 +380,7 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
     // scan stopped on.
     readbuf2().add_char(c);
     unsafe { copy_redo(old_redo) };
-    OK
+    Ok(())
 }
 
 /// Repeat the last insert (`R`, `o`, `O`, `a`, `A`, `i` or `I`) by stuffing
@@ -389,10 +389,10 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> c_int {
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn start_redo_ins() -> c_int {
+pub unsafe fn start_redo_ins() -> Result<(), Failed> {
     // SAFETY (this body): as [`start_redo`].
     if unsafe { read_redo(true, false) } == FAIL {
-        return FAIL;
+        return Err(Failed);
     }
     start_stuff();
 
@@ -415,7 +415,7 @@ pub unsafe fn start_redo_ins() -> c_int {
     // Then the text that was typed.
     unsafe { copy_redo(false) };
     block_redo.set(true);
-    OK
+    Ok(())
 }
 
 /// Stop blocking changes to the redo buffer; the pair of [`start_redo_ins`].

@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::Jumped;
 use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
@@ -18,7 +19,7 @@ use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
-use crate::types::{FAIL, IOSIZE, OK, Vv};
+use crate::types::{IOSIZE, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -414,7 +415,8 @@ impl DoTag {
                     GETF_SETMARK as c_int,
                     self.forceit,
                 )
-            } == FAIL
+            }
+            .is_err()
             {
                 self.idx = self.old_idx;
                 return false;
@@ -643,7 +645,8 @@ impl DoTag {
                 max_num_matches.get(),
                 self.buf_ffname,
             )
-        } == OK
+        }
+        .is_ok()
             && new_num_matches < max_num_matches.get()
         {
             // Fewer than the limit: that is all of them.
@@ -690,7 +693,7 @@ impl DoTag {
             unsafe { print_tag_list(self.new_tag, self.use_tagstack, found, matches.get()) };
             ask = true;
         } else if self.kind == DT_LTAG as c_int {
-            if unsafe { add_llist_tags(self.tag, found, matches.get()) } == FAIL {
+            if unsafe { add_llist_tags(self.tag, found, matches.get()) }.is_err() {
                 return false;
             }
             // Jump to the first tag.
@@ -789,7 +792,7 @@ impl DoTag {
         let result = unsafe { jumpto_tag(entry, self.forceit, true) };
         unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
 
-        if result != NOTAGFILE {
+        if result != Ok(Jumped::NoSuchFile) {
             // We may have jumped to another window; check the index is
             // still one this window has.
             if self.use_tagstack && self.idx > cur_win().w_tagstacklen {

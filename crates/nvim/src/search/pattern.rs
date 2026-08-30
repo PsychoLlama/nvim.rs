@@ -17,7 +17,7 @@ use crate::guard::Suppress;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
-use crate::types::{CmdModFlags, FAIL, NUL, OK, Vv};
+use crate::types::{CmdModFlags, FAIL, Failed, NUL, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -150,7 +150,7 @@ pub unsafe fn search_regcomp(
     pat_use: c_int,
     options: c_int,
     regmatch: *mut regmmatch_T,
-) -> c_int {
+) -> Result<(), Failed> {
     rc_did_emsg.set(false);
     let mut magic = magic_isset();
 
@@ -171,7 +171,7 @@ pub unsafe fn search_regcomp(
             };
             unsafe { emsg(gettext_ptr(msg)) };
             rc_did_emsg.set(true);
-            return FAIL;
+            return Err(Failed);
         }
         pat = remembered.pat;
         patlen = remembered.patlen;
@@ -215,9 +215,9 @@ pub unsafe fn search_regcomp(
     unsafe { (*regmatch).rmm_maxcol = 0 };
     unsafe { (*regmatch).regprog = vim_regcomp(pat, if magic { RE_MAGIC } else { 0 }) };
     if unsafe { (*regmatch).regprog.is_null() } {
-        FAIL
+        Err(Failed)
     } else {
-        OK
+        Ok(())
     }
 }
 
@@ -564,7 +564,7 @@ pub unsafe fn last_pat_prog(regmatch: *mut regmmatch_T) {
     let empty = c"".as_ptr() as *mut c_char;
     let (used, keep) = (last_idx.get(), SEARCH_KEEP as c_int);
     // SAFETY: an empty pattern re-compiled into the caller's `regmatch`.
-    unsafe { search_regcomp(empty, 0, ptr::null_mut(), 0, used, keep, regmatch) };
+    let _ = unsafe { search_regcomp(empty, 0, ptr::null_mut(), 0, used, keep, regmatch) };
 }
 
 /// Set the direction `n` repeats in, for `:let v:searchforward =`.
@@ -618,7 +618,7 @@ pub(crate) unsafe fn is_zero_width(
             rm,
         )
     };
-    if compiled == FAIL {
+    if compiled.is_err() {
         return -1;
     }
 

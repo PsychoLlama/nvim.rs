@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
 ///
@@ -110,7 +110,7 @@ fn global_opfunc() -> *mut Callback {
 /// The option's current value must be a valid C string.
 pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
-    if unsafe { option_set_callback_func(p_opfunc.get(), global_opfunc()) } == FAIL {
+    if unsafe { option_set_callback_func(p_opfunc.get(), global_opfunc()) }.is_err() {
         return e_invarg.as_ptr();
     }
     ::core::ptr::null()

@@ -371,7 +371,7 @@ pub(crate) fn normal_redraw_mode_message() {
         let kmsg = keep_msg.get();
         keep_msg.set(ptr::null_mut());
         unsafe { setcursor() };
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
         keep_msg.set(kmsg);
         let copy = unsafe { xstrdup(keep_msg.get()) };
         unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
@@ -494,7 +494,7 @@ fn normal_redraw() {
     validate_cursor(unsafe { Win::current() });
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     } else {
         unsafe { redraw_statuslines() };
         if redraw_cmdline.get() || clear_cmdline.get() || redraw_mode.get() {

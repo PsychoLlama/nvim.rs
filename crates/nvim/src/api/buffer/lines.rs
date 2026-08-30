@@ -142,9 +142,7 @@ pub unsafe fn nvim_buf_set_lines(
         if buf.b_p_ma == 0 {
             let why = c"Buffer is not 'modifiable'";
             error = Error::exception(why);
-        } else if u_save_buf(buf, (start - 1 as Integer) as linenr_T, end as linenr_T)
-            == 0 as ::core::ffi::c_int
-        {
+        } else if u_save_buf(buf, (start - 1 as Integer) as linenr_T, end as linenr_T).is_err() {
             let why = c"Failed to save undo information";
             error = Error::exception(why);
         } else {
@@ -162,8 +160,7 @@ pub unsafe fn nvim_buf_set_lines(
             };
             let mut i_0: size_t = 0 as size_t;
             while i_0 < to_delete {
-                if unsafe { ml_delete_buf(b, start as linenr_T, false) } == 0 as ::core::ffi::c_int
-                {
+                if unsafe { ml_delete_buf(b, start as linenr_T, false) }.is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_382;
@@ -188,7 +185,8 @@ pub unsafe fn nvim_buf_set_lines(
                     let line = unsafe { *lines.add(i_1) };
                     // SAFETY: `b` is the live buffer, `lnum` one of its lines.
                     unsafe { ml_replace_buf(b, lnum as linenr_T, line, false, true) }
-                } == 0 as ::core::ffi::c_int
+                }
+                .is_err()
                 {
                     let why = c"Failed to replace line";
                     error = Error::exception(why);
@@ -212,7 +210,8 @@ pub unsafe fn nvim_buf_set_lines(
                     let at = lnum_0 as linenr_T;
                     // SAFETY: `b` is the live buffer.
                     unsafe { ml_append_buf(b, at, line, 0 as colnr_T, false) }
-                } == 0 as ::core::ffi::c_int
+                }
+                .is_err()
                 {
                     let why = c"Failed to insert line";
                     error = Error::exception(why);

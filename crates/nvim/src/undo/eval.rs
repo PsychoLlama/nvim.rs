@@ -202,7 +202,7 @@ pub unsafe fn u_force_get_undo_header(buf: *mut buf_T) -> *mut u_header_T {
         return uh.raw();
     }
     // Nothing to hang it on: force an undo header, even for an empty change.
-    u_savecommon(b, 0, 1, 1, true);
+    let _ = u_savecommon(b, 0, 1, 1, true);
     // SAFETY: `u_savecommon` may have reloaded the buffer under us.
     b = unsafe { Buf::new(buf) };
     match b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {

@@ -28,7 +28,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CMD_equal, FAIL, FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
+    CMD_equal, FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
     typval_T,
 };
 use crate::undo::u_save;
@@ -104,7 +104,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
     // `IObuff` for it, which the loop body may overwrite.
     let mut chunk = [0 as c_char; IOSIZE as usize];
     unsafe {
-        if u_save((*eap).line1 - 1, (*eap).line2 + 1) == FAIL {
+        if u_save((*eap).line1 - 1, (*eap).line2 + 1).is_err() {
             emsg(gettext(c"cannot save undo information"));
             return;
         }
@@ -171,7 +171,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
                         *new_line_transformed.add(i) = b'\n' as c_char;
                     }
                 }
-                ml_replace(l, new_line_transformed, false);
+                let _ = ml_replace(l, new_line_transformed, false);
                 inserted_bytes(l, 0 as colnr_T, old_line_len, new_line_len as c_int);
             }
             lua_pop(lstate, 1);

@@ -39,7 +39,8 @@ impl FileList {
         // Upstream ignores the answer: on failure the two out-parameters are
         // left as they are, which is the empty list.
         // SAFETY: the caller's promise.
-        unsafe { expand_wildcards(num_pat, pat, &raw mut list.len, &raw mut list.names, flags) };
+        let (lenp, namesp) = (&raw mut list.len, &raw mut list.names);
+        let _ = unsafe { expand_wildcards(num_pat, pat, lenp, namesp, flags) };
         list
     }
 

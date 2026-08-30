@@ -24,7 +24,7 @@ use crate::lua::ffi::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::os::cshim::gettext;
-use crate::types::{Arena, FAIL, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t};
+use crate::types::{Arena, FAIL, Failed, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_get_matches`] to take ownership of them. Each entry is an
@@ -117,7 +117,7 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
 pub unsafe fn nlua_expand_get_matches(
     num_results: *mut c_int,
     results: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     let matches = EXPAND_RESULTS.take();
     let count = matches.len();
     // The caller frees the array with `free_wild`, so it has to be one
@@ -135,5 +135,5 @@ pub unsafe fn nlua_expand_get_matches(
         };
         *num_results = count as c_int;
     }
-    (count > 0) as c_int
+    if count > 0 { Ok(()) } else { Err(Failed) }
 }

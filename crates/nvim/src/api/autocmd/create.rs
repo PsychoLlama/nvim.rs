@@ -13,7 +13,7 @@ use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::api::private::validate::{
     err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected, err_required_ptr,
 };
-use crate::types::{FAIL, kObjectTypeLuaRef, kObjectTypeString};
+use crate::types::{Failed, kObjectTypeLuaRef, kObjectTypeString};
 use crate::winlayer::Live;
 
 pub unsafe fn nvim_create_autocmd(
@@ -176,7 +176,7 @@ pub unsafe fn nvim_create_autocmd(
                                         error = unsafe { err_bad_value_ptr(c"event", bad) };
                                         break '_cleanup;
                                     } else {
-                                        let mut retval: ::core::ffi::c_int = 0;
+                                        let mut retval: Result<(), Failed> = Err(Failed);
                                         let mut pat_index: size_t = 0 as size_t;
                                         while pat_index < patterns.size {
                                             let mut pat: Object =
@@ -197,7 +197,7 @@ pub unsafe fn nvim_create_autocmd(
                                                 )
                                             };
                                             drop(sctx);
-                                            if retval == 0 as ::core::ffi::c_int {
+                                            if retval.is_err() {
                                                 let why = c"Failed to set autocmd";
                                                 error = Error::exception(why);
                                                 break '_cleanup;
@@ -350,7 +350,7 @@ unsafe fn clear_autocmd(
     mut au_group: ::core::ffi::c_int,
     err: &mut Error,
 ) -> bool {
-    if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) } == FAIL {
+    if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) }.is_err() {
         let why = c"Failed to clear autocmd";
         *err = Error::exception(why);
         return false;

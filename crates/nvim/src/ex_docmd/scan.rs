@@ -33,7 +33,7 @@ use crate::types::pos::linenr_T;
 use crate::types::{
     CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
     CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, CmdAddr,
-    CpoFlag, ExArgt, FAIL, NUL, OK, size_t,
+    CpoFlag, ExArgt, Failed, NUL, size_t,
 };
 use crate::winlayer::{Buf, Ea};
 use ::libc::strlen;
@@ -123,17 +123,17 @@ pub(crate) unsafe fn parse_count(
     eap: *mut exarg_T,
     errormsg: &mut Option<CString>,
     validate: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
     if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(ea.arg)) {
-        return OK;
+        return Ok(());
     }
     // A command that also takes a buffer name (`:buffer 2x`) only reads
     // the digits as a count when they are the whole word.
     if ea.argt.has(ExArgt::BUFNAME) {
         let p = unsafe { skipdigits(ea.arg.add(1)) };
         if byte(p) != NUL && !ascii_iswhite(byte(p)) {
-            return OK;
+            return Ok(());
         }
     }
 
@@ -154,10 +154,10 @@ pub(crate) unsafe fn parse_count(
     }
     if n <= 0 && !ea.argt.has(ExArgt::ZEROR) {
         *errormsg = Some(unsafe { ex_msg(e_zerocount.as_ptr()) });
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { set_cmd_count(eap, n, validate) };
-    OK
+    Ok(())
 }
 
 /// Take the `!` a command may carry. `:substitute` and its two magic

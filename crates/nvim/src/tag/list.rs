@@ -11,7 +11,7 @@ use super::*;
 use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
-use crate::types::{IOSIZE, MAXPATHL, OK};
+use crate::types::{Failed, IOSIZE, MAXPATHL};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -355,7 +355,7 @@ pub(crate) unsafe fn add_llist_tags(
     tag: *mut c_char,
     num_matches: c_int,
     matches: *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // The list's title outlives `set_errorlist`, so it is this frame's.
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller's promise; each match outlives the `TagParts`
@@ -428,7 +428,7 @@ pub(crate) unsafe fn add_llist_tags(
         )
     };
     unsafe { tv_list_free(list) };
-    OK
+    Ok(())
 }
 
 /// The location-list pattern that finds one tag: its search command, made

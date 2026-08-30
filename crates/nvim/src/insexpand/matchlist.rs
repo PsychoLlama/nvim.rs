@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, OK, VarLock};
+use crate::types::{FAIL, Failed, NUL, OK, VarLock};
 use crate::winlayer::{Live, Win};
 
 /// One node of the match list, whose caller has promised it outlives the
@@ -327,12 +327,12 @@ pub(crate) unsafe fn ins_compl_add(
 ///
 /// # Safety
 /// `compl_orig_text` holds the text being completed.
-pub(crate) unsafe fn ins_compl_add_orig_text(flags: c_int) -> c_int {
+pub(crate) unsafe fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
     let text = compl_orig_text().data();
     let len = compl_orig_text().len() as c_int;
     // SAFETY: the caller's promise; the nulls say there is no file name, no
     // `cptext`, no user data and no highlight pair.
-    unsafe {
+    let added = unsafe {
         ins_compl_add(
             text,
             len,
@@ -346,7 +346,10 @@ pub(crate) unsafe fn ins_compl_add_orig_text(flags: c_int) -> c_int {
             ptr::null(),
             FUZZY_SCORE_NONE,
         )
-    }
+    };
+    // `ins_compl_add` also answers `NOTDONE` for a text already in the list,
+    // which upstream's callers here read as "not added".
+    if added == OK { Ok(()) } else { Err(Failed) }
 }
 
 /// Does `str[..len]` match `match_0`'s text, honouring its `CP_ICASE` /

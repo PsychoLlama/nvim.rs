@@ -35,7 +35,7 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ExpandContext, FAIL, MAXPATHL, NUL, OK, OptIndex, OptionSetFlags, colnr_T,
+    BackslashEscape, ExpandContext, Failed, MAXPATHL, NUL, OptIndex, OptionSetFlags, colnr_T,
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
 use crate::winlayer::Live;
@@ -485,7 +485,7 @@ pub(crate) unsafe fn expand_settings(
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
     can_fuzzy: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut num_normal = 0;
     let mut count = 0;
     let mut fuzmatch: *mut fuzmatch_str_T = ptr::null_mut();
@@ -551,7 +551,7 @@ pub(crate) unsafe fn expand_settings(
 
         if counting {
             if num_normal == 0 {
-                return OK;
+                return Ok(());
             }
             unsafe { *numMatches = num_normal };
             if fuzzy {
@@ -568,7 +568,7 @@ pub(crate) unsafe fn expand_settings(
     if fuzzy {
         unsafe { fuzzymatches_to_strmatches(fuzmatch, matches, count, false) };
     }
-    OK
+    Ok(())
 }
 
 /// A value escaped the way the command line needs it back.
@@ -589,7 +589,7 @@ pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char 
 pub(crate) unsafe fn expand_old_setting(
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's out-parameters, and the option table.
     unsafe { *numMatches = 0 };
     unsafe { *matches = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>() };
@@ -608,7 +608,7 @@ pub(crate) unsafe fn expand_old_setting(
     };
     unsafe { *(*matches) = escape_option_str_cmdline(var) };
     unsafe { *numMatches = 1 };
-    OK
+    Ok(())
 }
 
 /// Complete a value through the option's own `opt_expand_cb`.
@@ -621,15 +621,15 @@ pub(crate) unsafe fn expand_string_setting(
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's expansion state and out-parameters, and the
     // option table.
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid {
-        return FAIL;
+        return Err(Failed);
     }
     let Some(expand_cb) = get_option(opt_idx).opt_expand_cb else {
-        return FAIL;
+        return Err(Failed);
     };
 
     let mut rendered = [0 as c_char; MAXPATHL as usize];
@@ -664,7 +664,7 @@ pub(crate) unsafe fn expand_setting_subtract(
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's expansion state and out-parameters, and the
     // option table.
     let opt_idx = IDX.get();
@@ -678,7 +678,7 @@ pub(crate) unsafe fn expand_setting_subtract(
 
     if flags & kOptFlagComma as uint32_t != 0 {
         if unsafe { *value } == NUL as c_char {
-            return FAIL;
+            return Err(Failed);
         }
         // The split is destructive, so it runs on a copy.
         let copy = unsafe { xstrdup(value) };
@@ -723,7 +723,7 @@ pub(crate) unsafe fn expand_setting_subtract(
         unsafe { xfree(copy.cast::<c_void>()) };
         unsafe { *matches = ga.ga_data.cast::<*mut c_char>() };
         unsafe { *numMatches = ga.ga_len };
-        return OK;
+        return Ok(());
     }
 
     if flags & kOptFlagFlagList as uint32_t != 0 {
@@ -731,11 +731,11 @@ pub(crate) unsafe fn expand_setting_subtract(
         // each letter. Nothing may have been typed, since a flag set
         // has no word boundary to complete from.
         if unsafe { *(*xp).xp_pattern } != NUL as c_char {
-            return FAIL;
+            return Err(Failed);
         }
         let num_flags = unsafe { strlen(value) };
         if num_flags == 0 {
-            return FAIL;
+            return Err(Failed);
         }
         let room = size_of::<*mut c_char>().wrapping_mul(num_flags.wrapping_add(1));
         let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();
@@ -753,7 +753,7 @@ pub(crate) unsafe fn expand_setting_subtract(
             }
         }
         unsafe { *numMatches = count };
-        return OK;
+        return Ok(());
     }
 
     unsafe { expand_old_setting(numMatches, matches) }

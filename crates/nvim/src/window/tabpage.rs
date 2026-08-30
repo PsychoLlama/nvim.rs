@@ -42,7 +42,7 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    CMD_tabnew, FAIL, OK, OptInt, OptVal, OptValData, OptionSetFlags, VAR_SCOPE, buf_T, handle_T,
+    CMD_tabnew, Failed, OptInt, OptVal, OptValData, OptionSetFlags, VAR_SCOPE, buf_T, handle_T,
     int64_t, switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
@@ -179,7 +179,7 @@ pub(crate) fn new_tabpage(
     // Remember the current windows in this tab page, avoiding the side effects
     // of `stash_tabpage` when not entering.
     if enter {
-        if leave_tab(Some(cur_buf()), true) == FAIL {
+        if leave_tab(Some(cur_buf()), true).is_err() {
             free(newtp.raw());
             return None;
         }
@@ -198,7 +198,7 @@ pub(crate) fn new_tabpage(
     // Create a new empty window.
     // SAFETY: the old tab page's current window, which is live.
     let result = unsafe { win_alloc_firstwin(old_curtab.tp_curwin) };
-    debug_assert!(result == OK, "result == OK");
+    debug_assert!(result.is_ok(), "result.is_ok()");
     let opened = cur_win();
 
     // Make the new tab page the new topframe.
@@ -296,22 +296,22 @@ fn clone_dir(dir: *mut c_char) -> *mut c_char {
 
 /// Open a new tab page if `:tab cmd` was used. It edits the same buffer, as
 /// with `:split`. `OK` when a tab page was created.
-pub(crate) fn may_open_tabpage() -> c_int {
+pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
     let n = match cmdmod.with(|m| m.cmod_tab) {
         0 => postponed_split_tab.get(),
         tab => tab,
     };
     if n == 0 {
-        return FAIL;
+        return Err(Failed);
     }
     cmdmod.with_mut(|m| m.cmod_tab = 0);
     postponed_split_tab.set(0);
     let status = if new_tabpage(n, ptr::null_mut(), true).is_some() {
-        OK
+        Ok(())
     } else {
-        FAIL
+        Err(Failed)
     };
-    if status == OK {
+    if status.is_ok() {
         fire(EVENT_TABNEWENTERED, cur_buf());
     }
     status
@@ -422,7 +422,7 @@ fn index_of_tab(ftp: *mut tabpage_T) -> c_int {
 ///
 /// `FAIL` when autocommands changed `curtab`, in which case the tab page is
 /// not left. Careful: after `OK` a new tab page must be entered very soon.
-fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> c_int {
+fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Failed> {
     let mut tp = cur_tab();
     leave_window(cur_win());
     reset_VIsual_and_resel(); // stop Visual mode
@@ -430,16 +430,16 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> c_int {
         if raw_buf(new_curbuf) != curbuf.get() {
             fire(EVENT_BUFLEAVE, cur_buf());
             if !tp.is_current() {
-                return FAIL;
+                return Err(Failed);
             }
         }
         fire(EVENT_WINLEAVE, cur_buf());
         if !tp.is_current() {
-            return FAIL;
+            return Err(Failed);
         }
         fire(EVENT_TABLEAVE, cur_buf());
         if !tp.is_current() {
-            return FAIL;
+            return Err(Failed);
         }
     }
     reset_dragwin();
@@ -453,7 +453,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> c_int {
     }
     firstwin.set(None);
     lastwin.set(None);
-    OK
+    Ok(())
 }
 
 /// Start using tab page `tp`. Only to be used after [`leave_tab`], or after
@@ -659,7 +659,7 @@ pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_
     skip_win_fix_scroll.set(true);
     // SAFETY: the tab page's own current window, which is live.
     let new_curbuf = unsafe { Win::new(tp.tp_curwin) }.buffer_or_none();
-    if !tp.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds) == OK {
+    if !tp.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
         let target = valid_tab(tp.raw()).unwrap_or_else(cur_tab);
         enter_tab(
             target,

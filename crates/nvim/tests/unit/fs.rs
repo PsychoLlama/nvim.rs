@@ -29,7 +29,7 @@ use neovim::os::fs::{
     os_remove, os_rename, os_rmdir, os_setperm, os_write,
 };
 use neovim::os::uv_error::{UV_EBADF, UV_EEXIST, UV_ENOENT};
-use neovim::types::{FAIL, FileID, FileInfo, OK, iovec};
+use neovim::types::{FAIL, Failed, FileID, FileInfo, OK, iovec};
 
 use crate::support::{Sandbox, internalize};
 
@@ -153,8 +153,12 @@ fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
         let text = String::from_utf8(buf[..end].iter().map(|&b| b as u8).collect()).expect("text");
         (result, text)
     };
-    assert_eq!(dirname(here.len() + 1), (OK, here.clone()));
-    assert_eq!(dirname(here.len()).0, FAIL, "the buffer must hold the NUL");
+    assert_eq!(dirname(here.len() + 1), (Ok(()), here.clone()));
+    assert_eq!(
+        dirname(here.len()).0,
+        Err(Failed),
+        "the buffer must hold the NUL"
+    );
 
     // `os_chdir` answers 0 for success, not OK. A literal `~` is not a
     // directory and is not expanded here, so both of these fail and neither
@@ -165,7 +169,7 @@ fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
         // SAFETY: `name` is this frame's and NUL-terminated.
         assert_ne!(unsafe { os_chdir(name.as_ptr()) }, 0, "chdir to a tilde");
     }
-    assert_eq!(dirname(here.len() + 1), (OK, here));
+    assert_eq!(dirname(here.len() + 1), (Ok(()), here));
 }
 
 #[test]

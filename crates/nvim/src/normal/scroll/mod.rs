@@ -215,7 +215,7 @@ pub(crate) unsafe fn nv_exit_command(cap: *mut cmdarg_T) {
             return;
         }
     };
-    unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
 }
 
 /// The buffer the editor is working in.

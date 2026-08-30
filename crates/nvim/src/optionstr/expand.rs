@@ -35,7 +35,7 @@ use crate::os::cshim::{snprintf, strncmp};
 use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
-    CompleteListItemGetter, FAIL, NUL, OK, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
+    CompleteListItemGetter, Failed, NUL, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
 };
 use ::libc::strcmp;
 
@@ -81,17 +81,17 @@ impl Matches {
     ///
     /// # Safety
     /// `matches` and `num` are the completer's out-parameters.
-    unsafe fn finish(self, matches: *mut *mut *mut c_char, num: *mut c_int) -> c_int {
+    unsafe fn finish(self, matches: *mut *mut *mut c_char, num: *mut c_int) -> Result<(), Failed> {
         if self.count == 0 {
             // SAFETY: the array this owns, and the caller's out-parameter.
             unsafe { xfree(self.into.cast::<c_void>()) };
             unsafe { *matches = ptr::null_mut() };
-            return FAIL;
+            return Err(Failed);
         }
         // SAFETY: the caller's out-parameters.
         unsafe { *matches = self.into };
         unsafe { *num = self.count };
-        OK
+        Ok(())
     }
 }
 
@@ -116,7 +116,7 @@ pub(crate) unsafe fn expand_set_opt_string(
     values: &[&CStr],
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
     let regmatch: *mut regmatch_T = unsafe { (*args).oe_regmatch };
     let original = unsafe { original_value(args) };
@@ -161,7 +161,7 @@ pub unsafe fn expand_set_str_generic(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
     let values = opt_values(unsafe { (*args).oe_idx });
     unsafe { expand_set_opt_string(args, values, num_matches, matches) }
@@ -205,7 +205,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
     func: CompleteListItemGetter,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
     ORIGINAL_VALUE.set(unsafe {
         if (*args).oe_include_orig_val {
@@ -233,7 +233,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
 
     ORIGINAL_VALUE.set(ptr::null_mut());
     ENUMERATOR.set(None);
-    OK
+    Ok(())
 }
 
 /// Complete an option that is a set of flag letters: one completion per
@@ -246,7 +246,7 @@ pub(crate) unsafe fn expand_set_opt_listflag(
     flags: *const c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's frame; `oe_opt_value` and `oe_set_arg` are C
     // strings.
     let (option_val, cmdline_val, append) =
@@ -299,7 +299,7 @@ pub unsafe fn expand_set_chars_option(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // 'listchars' and 'fillchars' share this callback; which one is being
     // completed is the row, at either scope.
     // SAFETY: the caller's frame.
@@ -317,7 +317,7 @@ pub unsafe fn expand_set_concealcursor(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, COCU_ALL.as_ptr(), num_matches, matches) }
 }
 
@@ -327,7 +327,7 @@ pub unsafe fn expand_set_cpoptions(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, CPO_VI.as_ptr(), num_matches, matches) }
 }
 
@@ -337,7 +337,7 @@ pub unsafe fn expand_set_formatoptions(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, FO_ALL.as_ptr(), num_matches, matches) }
 }
 
@@ -347,7 +347,7 @@ pub unsafe fn expand_set_mouse(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, MOUSE_ALL.as_ptr(), num_matches, matches) }
 }
 
@@ -357,7 +357,7 @@ pub unsafe fn expand_set_shortmess(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, SHM_ALL.as_ptr(), num_matches, matches) }
 }
 
@@ -367,7 +367,7 @@ pub unsafe fn expand_set_whichwrap(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_listflag(args, WW_ALL.as_ptr(), num_matches, matches) }
 }
 
@@ -395,7 +395,7 @@ pub unsafe fn expand_set_diffopt(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's frame; `xp_pattern` points into `oe_set_arg`.
     let (xp, start) = unsafe { ((*args).oe_xp, (*args).oe_set_arg) };
     let at = unsafe { (*xp).xp_pattern };
@@ -410,7 +410,7 @@ pub unsafe fn expand_set_diffopt(
     if unsafe { directly_after(at, start, c"inline:") } {
         return field(&opt_dip_inline_values);
     }
-    FAIL
+    Err(Failed)
 }
 
 /// # Safety
@@ -419,7 +419,7 @@ pub unsafe fn expand_set_encoding(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_generic(args, Some(get_encoding_name), num_matches, matches) }
 }
 
@@ -429,7 +429,7 @@ pub unsafe fn expand_set_winhighlight(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { expand_set_opt_generic(args, Some(get_highlight_name), num_matches, matches) }
 }
 
@@ -476,7 +476,7 @@ pub unsafe fn expand_set_eventignore(
     args: *mut optexpand_T,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // 'eventignore' and 'eventignorewin' share this callback, and only the
     // second one completes the window events.
     // SAFETY: the caller's frame.

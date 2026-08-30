@@ -19,7 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    FAIL, MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
+    MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
     e_noprevre, kExtmarkNOOP, kExtmarkUndo,
 };
 use crate::ascii::ascii_iswhite;
@@ -488,7 +488,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: the range is inside the current buffer.
-    if u_save(line1 - 1, line2 + 1) == FAIL {
+    if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
@@ -566,7 +566,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
                     // Copy the line into a buffer: it may become invalid in
                     // `ml_append`, and "unique" needs it next time round.
                     strcpy(SORTBUF1.get(), text);
-                    let failed = ml_append(lnum, SORTBUF1.get(), 0, false) == FAIL;
+                    let failed = ml_append(lnum, SORTBUF1.get(), 0, false).is_err();
                     lnum += 1;
                     if !failed {
                         new_count += bytelen;
@@ -589,7 +589,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
         if placed == count {
             for _ in 0..count {
                 // SAFETY: the range is still there, below the new lines.
-                unsafe { ml_delete(line1) };
+                let _ = unsafe { ml_delete(line1) };
             }
         } else {
             count = 0;
@@ -801,7 +801,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: the range is inside the current buffer.
-    if u_save(line1 - 1, line2 + 1) == FAIL {
+    if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
@@ -874,7 +874,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
 
             if delete_lnum > 0 {
                 // SAFETY: it is a line of the range.
-                unsafe { ml_delete(delete_lnum) };
+                let _ = unsafe { ml_delete(delete_lnum) };
                 i -= get_lnum - delete_lnum + 1;
                 count -= 1;
                 deleted += 1;

@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CmdModFlags, FAIL, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
+use super::{CmdModFlags, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
@@ -26,7 +26,7 @@ use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
 use crate::strings::xstrnsave;
 use crate::tr_plural;
-use crate::types::{OK, OptInt, bcount_t, int64_t, linenr_T, size_t};
+use crate::types::{Failed, OptInt, bcount_t, int64_t, linenr_T, size_t};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
@@ -40,10 +40,10 @@ use core::ptr;
 /// # Safety
 /// The range and the destination must be lines of the current buffer, or one
 /// short of its first line.
-pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int {
+pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Result<(), Failed> {
     if dest >= line1 && dest < line2 {
         emsg(gettext(c"E134: Cannot move a range of lines into itself"));
-        return FAIL;
+        return Err(Failed);
     }
 
     // Do nothing if we are not actually moving any lines.  This will prevent
@@ -52,7 +52,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     if dest == line1 - 1 || dest == line2 {
         // SAFETY: `curwin` is the live current window.
         cur_win().w_cursor.lnum = last_moved_line(line1, line2, dest);
-        return OK;
+        return Ok(());
     }
 
     // SAFETY: `curbuf` is live and the three line numbers are inside it.  A
@@ -70,8 +70,8 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     // First we copy the old text to its new location -- webb
     // Also copy the flag that ":global" command uses.
     // SAFETY: `dest` is a line of the current buffer, or zero.
-    if u_save(dest, dest + 1) == FAIL {
-        return FAIL;
+    if u_save(dest, dest + 1).is_err() {
+        return Err(Failed);
     }
 
     // How many lines the copies added before `line1`.
@@ -80,7 +80,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
         // SAFETY: `l + extra` tracks the source line as the copies push it
         // down, and `ml_append` takes ownership of nothing.
         let text = unsafe { xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t) };
-        unsafe { ml_append(dest + l - line1, text, 0, false) };
+        let _ = unsafe { ml_append(dest + l - line1, text, 0, false) };
         unsafe { xfree(text.cast()) };
         if dest < line1 {
             extra += 1;
@@ -166,12 +166,12 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
-    if u_save(line1 + extra - 1, line2 + extra + 1) == FAIL {
-        return FAIL;
+    if u_save(line1 + extra - 1, line2 + extra + 1).is_err() {
+        return Err(Failed);
     }
     for _ in line1..=line2 {
         // SAFETY: as above; each delete pulls the next line into place.
-        unsafe { ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int) };
+        let _ = unsafe { ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int) };
     }
 
     if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
@@ -212,7 +212,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> c_int
     // Send nvim_buf_lines_event regarding lines that were deleted.
     unsafe { buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t) };
 
-    OK
+    Ok(())
 }
 
 /// Where `:move` leaves the cursor: on the last line it moved.
@@ -288,7 +288,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     // line1 = start of source (while copying)
     // line2 = end of source (while copying)
     // SAFETY: `n` is a line of the current buffer, or zero.
-    if u_save(n, n + 1) == FAIL {
+    if u_save(n, n + 1).is_err() {
         return;
     }
 
@@ -300,7 +300,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
         // SAFETY: `line1` is a line of the current buffer throughout.
         let cursor = unsafe {
             let text = xstrnsave(ml_get(line1), ml_get_len(line1) as size_t);
-            ml_append(cur_win().w_cursor.lnum, text, 0, false);
+            let _ = ml_append(cur_win().w_cursor.lnum, text, 0, false);
             xfree(text.cast());
             &mut (*curwin.get()).w_cursor
         };

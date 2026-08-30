@@ -11,7 +11,7 @@
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 
 /// How a data block split came out, in the terms the pointer block above it
 /// has to be told: two blocks side by side, each with a block number, a line
@@ -74,12 +74,12 @@ pub(crate) unsafe fn ml_append_int(
     line: *mut c_char,
     len_arg: colnr_T,
     flags: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
     if lnum > b.b_ml.ml_line_count || b.b_ml.ml_mfp.is_null() {
-        return FAIL; // lnum out of range
+        return Err(Failed); // lnum out of range
     }
 
     if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
@@ -101,7 +101,7 @@ pub(crate) unsafe fn ml_append_int(
     // that was locked.
     let mut hp = unsafe { ml_find_line(buf, if lnum == 0 { 1 } else { lnum }, ML_INSERT) };
     if hp.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     b.b_ml.ml_flags.clear(MlFlags::EMPTY);
 
@@ -129,7 +129,7 @@ pub(crate) unsafe fn ml_append_int(
         b.b_ml.shift_locked(-1);
         hp = unsafe { ml_find_line(buf, lnum + 1, ML_INSERT) };
         if hp.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         db_idx = -1;
         line_count = b.b_ml.locked_high() - b.b_ml.locked_low();
@@ -152,13 +152,13 @@ pub(crate) unsafe fn ml_append_int(
     } else {
         let mut split = unsafe { ml_split_data_block(buf, hp, &at, lnum, &new, space_needed) };
         if !unsafe { ml_insert_pointer(buf, mfp, &mut split) } {
-            return FAIL;
+            return Err(Failed);
         }
     }
 
     // The line was inserted below `lnum`.
     unsafe { ml_updatechunk(buf, lnum + 1, len, ML_CHNK_ADDLINE) };
-    OK
+    Ok(())
 }
 
 /// Put the new line into a data block that has room for it, shifting the
@@ -666,7 +666,11 @@ unsafe fn ml_split_pointer_block(
 ///
 /// # Safety
 /// `buf` must point at a buffer holding line `lnum`.
-pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int) -> c_int {
+pub(crate) unsafe fn ml_delete_int(
+    buf: *mut buf_T,
+    lnum: linenr_T,
+    flags: c_int,
+) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -688,11 +692,11 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
     // with the blocks from the root down, and releases any locked block.
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     let hp = unsafe { ml_find_line(buf, lnum, ML_DELETE) };
     if hp.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut dp = unsafe { Db::new((*hp).bh_data.cast()) };
@@ -730,7 +734,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
         // entry pointing at it — and if that empties its pointer block,
         // that one too, up to the root if need be.
         if !unsafe { ml_free_data_block(buf, mfp, hp) } {
-            return FAIL;
+            return Err(Failed);
         }
     } else {
         // Move the text of the following lines forward over the deleted
@@ -763,7 +767,7 @@ pub(crate) unsafe fn ml_delete_int(buf: *mut buf_T, lnum: linenr_T, flags: c_int
     }
 
     unsafe { ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE) };
-    OK
+    Ok(())
 }
 
 /// The data block `hp` has emptied: free it and unhook it from the pointer

@@ -214,11 +214,11 @@ pub(super) unsafe fn add_fromto(
 
     let (win, out) = (curwin.get(), word.as_mut_ptr());
     let len = unsafe { strlen(from) } as c_int;
-    unsafe { spell_casefold(win, from, len, out, MAXWLEN as c_int) };
+    let _ = unsafe { spell_casefold(win, from, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_from = (*spin).si_arena.save_str(word.as_mut_ptr()) };
     let (win, out) = (curwin.get(), word.as_mut_ptr());
     let len = unsafe { strlen(to) } as c_int;
-    unsafe { spell_casefold(win, to, len, out, MAXWLEN as c_int) };
+    let _ = unsafe { spell_casefold(win, to, len, out, MAXWLEN as c_int) };
     unsafe { (*ftp).ft_to = (*spin).si_arena.save_str(word.as_mut_ptr()) };
 }
 

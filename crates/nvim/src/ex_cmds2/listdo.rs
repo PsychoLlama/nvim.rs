@@ -159,7 +159,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     }
     if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
-        win_split(0, 0);
+        let _ = win_split(0, 0);
         if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
             // Autocommands set 'winfixbuf', or sent us to another window
             // that has it set, or the split failed. Give up.
@@ -310,7 +310,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
 
         i += 1;
         if execute {
-            unsafe {
+            let _ = unsafe {
                 do_cmdline(
                     (*eap).arg,
                     (*eap).ea_getline,

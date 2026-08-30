@@ -27,15 +27,15 @@ use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
     BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, ECMD_ADDBUF, ECMD_ALTBUF,
     ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP,
-    FAIL, KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
+    KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
-use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER, apply_autocmds_retval};
-use crate::buffer::current_buf;
+use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER};
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
 };
+use crate::buffer::{current_buf, fire_retval};
 use crate::charset::skipwhite;
 use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum, get_cursor_line_ptr};
 use crate::diff::{diff_buf_add, diff_invalidate};
@@ -45,7 +45,7 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::ex_eval::{aborting, should_abort};
+use crate::ex_eval::{aborting, should_abort_err};
 use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
@@ -66,8 +66,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    NUL, OK, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, linenr_T, ptrdiff_t, time_t,
-    win_T,
+    Failed, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, linenr_T, ptrdiff_t,
+    time_t, win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -203,12 +203,12 @@ pub unsafe fn do_ecmd(
     newlnum: linenr_T,
     flags: c_int,
     oldwin: *mut win_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut ffname = ffname;
     let mut sfname = sfname;
     let mut oldwin = oldwin;
     let mut free_fname = ptr::null_mut::<c_char>();
-    let mut retval = FAIL;
+    let mut retval = Err(Failed);
     // Held from "the buffer is settled" to "the cursor is in the right
     // line", which is past the block below on one path and inside it on the
     // other.
@@ -241,7 +241,7 @@ pub unsafe fn do_ecmd(
         let other_file =
             match unsafe { resolve_target(fnum, &mut ffname, &mut sfname, flags, &mut free_fname) }
             {
-                Target::AlreadyHere => return OK,
+                Target::AlreadyHere => return Ok(()),
                 Target::Nothing => break 'theend,
                 Target::Editing(other) => other,
             };
@@ -261,7 +261,7 @@ pub unsafe fn do_ecmd(
             // arg index, e.g. "(2 of 5)".
             check_arg_idx(cur_win());
             unsafe { maketitle() };
-            retval = OK;
+            retval = Ok(());
             break 'theend;
         }
 
@@ -337,7 +337,7 @@ pub unsafe fn do_ecmd(
             cur_win().w_pcmark.col = 0;
         } else if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0
             // SAFETY: main thread, message state.
-            || unsafe { check_fname() } == FAIL
+            || unsafe { check_fname() }.is_err()
         {
             break 'theend;
         } else {
@@ -383,7 +383,7 @@ pub unsafe fn do_ecmd(
         }
 
         // If we get here we are sure to start editing.  Assume success now.
-        retval = OK;
+        retval = Ok(());
 
         // If the file name was changed, reset the not-edit flag so that
         // ":write" works.
@@ -436,7 +436,7 @@ pub unsafe fn do_ecmd(
         // SAFETY: `curbuf` is live and `command` the caller's.
         cur_buf().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
         if !command.is_null() {
-            unsafe { do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE) };
+            let _ = unsafe { do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE) };
         }
         if cur_buf().b_kmap_state as c_int & KEYMAP_INIT != 0 {
             keymap_init();
@@ -558,7 +558,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
-        if u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true) == FAIL {
+        if u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true).is_err() {
             unsafe { xfree(new_name.cast()) };
             return false;
         }
@@ -603,7 +603,7 @@ unsafe fn enter_new_buffer(
     args: &EcmdArgs,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
-    retval: &mut c_int,
+    retval: &mut Result<(), Failed>,
 ) {
     let (eap, flags) = (args.eap, args.flags);
     // Set cursor and init window before reading the file and executing
@@ -637,11 +637,12 @@ unsafe fn enter_new_buffer(
         if flags & ECMD_NOWINENTER as c_int != 0 {
             state.readfile_flags |= READ_NOWINENTER as c_int;
         }
-        if should_abort(unsafe { open_buffer(false, eap, state.readfile_flags) }) {
-            *retval = FAIL;
+        let opened = unsafe { open_buffer(false, eap, state.readfile_flags) };
+        if should_abort_err(opened) {
+            *retval = Err(Failed);
         }
         if swap_exists_action.get() == SEA_QUIT {
-            *retval = FAIL;
+            *retval = Err(Failed);
         }
         handle_swap_exists(Some(*old_curbuf));
     } else {
@@ -650,27 +651,9 @@ unsafe fn enter_new_buffer(
         // by the user.
         // SAFETY: `curbuf` is live.
         do_modelines(OptionSetFlags::WINONLY);
-        unsafe {
-            apply_autocmds_retval(
-                EVENT_BUFENTER,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                false,
-                curbuf.get(),
-                retval,
-            )
-        };
+        fire_retval(EVENT_BUFENTER, cur_buf(), retval);
         if flags & ECMD_NOWINENTER as c_int == 0 {
-            unsafe {
-                apply_autocmds_retval(
-                    EVENT_BUFWINENTER,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    false,
-                    curbuf.get(),
-                    retval,
-                )
-            };
+            fire_retval(EVENT_BUFWINENTER, cur_buf(), retval);
         }
     }
     // SAFETY: `curwin` is live.

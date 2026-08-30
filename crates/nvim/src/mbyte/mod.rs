@@ -182,7 +182,7 @@ pub unsafe fn utf_find_illegal() {
     if unsafe { enc_canon_props((*curbuf.get()).b_p_fenc) } & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
-        unsafe { convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc) };
+        let _ = unsafe { convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc) };
     }
 
     unsafe { (*curwin.get()).w_cursor.coladd = 0 };
@@ -238,7 +238,7 @@ pub unsafe fn utf_find_illegal() {
         beep_flush();
     }
     unsafe { xfree(tofree as *mut c_void) };
-    unsafe {
+    let _ = unsafe {
         convert_setup(
             &raw mut vimconv,
             core::ptr::null_mut(),

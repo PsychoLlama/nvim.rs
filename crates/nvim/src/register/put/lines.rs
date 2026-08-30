@@ -21,7 +21,7 @@ use super::Put;
 use crate::edit::BeginlineOpts;
 use crate::normal::visual_active;
 use crate::register::*;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 impl Put {
     /// Splice `count` copies of the register's single line into the buffer at
@@ -117,7 +117,7 @@ impl Put {
                 };
                 // SAFETY: `newp` is a NUL-terminated line the buffer takes
                 // ownership of.
-                unsafe { ml_replace(lnum, newp, false) };
+                let _ = unsafe { ml_replace(lnum, newp, false) };
 
                 // Where the last character of the put text starts.
                 //
@@ -192,7 +192,7 @@ impl Put {
             let newp = xmalloc(ptrlen.wrapping_add(last.len()).wrapping_add(1)) as *mut c_char;
             strcpy(newp, last.data());
             strcpy(newp.add(last.len()), ptr);
-            ml_append(lnum, newp, 0, false);
+            let _ = ml_append(lnum, newp, 0, false);
             xfree(newp as *mut c_void);
         }
 
@@ -211,7 +211,7 @@ impl Put {
             let put = (*self.y_array).data() as *const c_void;
             let at = newp.offset(col as isize) as *mut c_void;
             memmove(at, put, (yanklen + 1) as size_t);
-            ml_replace(lnum, newp, false);
+            let _ = ml_replace(lnum, newp, false);
         }
     }
 
@@ -381,7 +381,7 @@ impl Put {
                         // string is there and NUL-terminated; `lnum` is a
                         // line of the buffer, and `ml_append` copies the text.
                         let text = unsafe { (*self.y_array.add(i)).data() };
-                        if unsafe { ml_append(lnum, text, 0, false) } == FAIL {
+                        if unsafe { ml_append(lnum, text, 0, false) }.is_err() {
                             break 'error;
                         }
                         new_lnum += 1;

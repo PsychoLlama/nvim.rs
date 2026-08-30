@@ -221,7 +221,7 @@ pub(crate) fn fix_cursor(normal: bool) {
         if normal {
             // Save the position for the `''` mark.
             // SAFETY: sets a mark at the cursor of the current window.
-            unsafe { setmark('\'' as c_int) };
+            let _ = unsafe { setmark('\'' as c_int) };
             wp.w_cursor.lnum = nlnum;
         } else {
             wp.w_fraction = if nlnum == bot { FRACTION_MULT } else { 0 };

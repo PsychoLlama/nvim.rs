@@ -23,7 +23,7 @@ use crate::getchar::beep_flush;
 use crate::main::{curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_VIsual_and_resel, visual_active};
-use crate::types::{FAIL, OK, OptInt, frame_T, win_T};
+use crate::types::{FAIL, Failed, OptInt, frame_T, win_T};
 use crate::winlayer::{Frame, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
@@ -67,7 +67,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
                 WSP_ABOVE as c_int,
             )
         };
-        if win_split(size, flags) == FAIL {
+        if win_split(size, flags).is_err() {
             break;
         }
         todo -= 1;
@@ -237,21 +237,21 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> c_int {
+pub unsafe fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window.
     splitmove(unsafe { Win::new(wp) }, size, flags)
 }
 
 /// Take `wp` out of the layout and put it back in as a split given by `flags`,
 /// from `win_splitmove()`. Restores the old layout on failure.
-pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
+pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
     let height = wp.w_height;
     if is_only_window(wp, None) {
-        return OK;
+        return Ok(());
     }
     // SAFETY: a live window.
     if is_autocmd_window(Some(wp)) || unsafe { check_split_disallowed(wp.raw()) } == FAIL {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut dir = 0;
@@ -279,7 +279,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
             unsafe { winframe_restore(wp.raw(), dir, unflat_altfr) };
         }
         append(wp.prev(), wp, None);
-        return FAIL;
+        return Err(Failed);
     }
 
     // Keep the window's height when it was moved horizontally.
@@ -291,7 +291,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> c_int {
             equal(Some(cur), cur == wp, 'v' as c_int);
         }
     }
-    OK
+    Ok(())
 }
 
 pub unsafe fn win_move_after(win1: *mut win_T, win2: *mut win_T) {

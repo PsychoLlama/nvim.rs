@@ -40,7 +40,7 @@ use crate::normal::{
     visual_active, visual_anchor, visual_mode, visual_select,
 };
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FoFlag, NUL, OK};
+use crate::types::{CpoFlag, FoFlag, NUL};
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///
@@ -662,7 +662,7 @@ fn run_operator(
                 beep_flush();
             } else {
                 let count = oap.line_count as size_t;
-                unsafe { do_join(count, oap.op_type == OP_JOIN, true, true, true) };
+                let _ = unsafe { do_join(count, oap.op_type == OP_JOIN, true, true, true) };
                 unsafe { auto_format(false, true) };
             }
         }
@@ -679,7 +679,7 @@ fn run_operator(
                 // Save the cursor line for undo if that has not happened.
                 if oap.motion_type == kMTLineWise
                     && has_format_option(FoFlag::AUTO)
-                    && u_save_cursor() == OK
+                    && u_save_cursor().is_ok()
                 {
                     unsafe { auto_format(false, true) };
                 }
@@ -769,7 +769,7 @@ fn run_operator(
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                unsafe { op_replace(oap.raw(), cap.nchar) };
+                let _ = unsafe { op_replace(oap.raw(), cap.nchar) };
             }
         }
 

@@ -235,7 +235,7 @@ pub unsafe fn create_user_command(
             // SAFETY: `addr` is the caller's string, NUL-terminated with
             // `vallen` readable bytes, and `slot` is this frame's.
             let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
-            if parsed != 1 {
+            if parsed.is_err() {
                 // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"addr".as_ptr(), value, 0, true) };
                 break '_err;
@@ -282,7 +282,7 @@ pub unsafe fn create_user_command(
             // frame's.
             let parsed =
                 unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
-            if parsed != 1 {
+            if parsed.is_err() {
                 // SAFETY: the names and values are NUL-terminated strings.
                 unsafe { *err = err_invalid_ptr(c"complete".as_ptr(), value, 0, true) };
                 break '_err;
@@ -347,7 +347,7 @@ pub unsafe fn create_user_command(
                 force,
             )
         };
-        if added != 1 {
+        if added.is_err() {
             *err = Error::exception(c"Failed to create user command");
         }
         // `uc_add_command` owns what it was handed, so nothing below runs.

@@ -66,7 +66,7 @@ pub(super) unsafe fn fold_add_marker(
     let p = unsafe { strstr(cms, c"%s".as_ptr()) };
     let line = unsafe { ml_get_buf(buf, lnum) };
     let line_len = unsafe { ml_get_buf_len(buf, lnum) } as size_t;
-    if u_save(lnum - 1, lnum + 1) != OK {
+    if u_save(lnum - 1, lnum + 1).is_err() {
         return;
     }
     let mut line_is_comment = false;
@@ -113,7 +113,7 @@ pub(super) unsafe fn fold_add_marker(
             .wrapping_add(unsafe { strlen(cms) })
             .wrapping_sub(2)
     };
-    unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
+    let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
     if added != 0 {
         unsafe {
             extmark_splice_cols(
@@ -212,7 +212,7 @@ pub(super) unsafe fn fold_del_marker(
                 len = len.wrapping_add(unsafe { strlen(cms) }.wrapping_sub(2));
             }
         }
-        if u_save(lnum - 1, lnum + 1) == OK {
+        if u_save(lnum - 1, lnum + 1).is_ok() {
             let newline = unsafe {
                 xmalloc(
                     (ml_get_buf_len(buf, lnum) as size_t)
@@ -229,7 +229,7 @@ pub(super) unsafe fn fold_del_marker(
                 )
             };
             unsafe { strcpy(newline.offset(p.offset_from(line)), p.add(len)) };
-            unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
+            let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
             unsafe {
                 extmark_splice_cols(
                     buf,

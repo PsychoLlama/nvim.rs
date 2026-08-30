@@ -13,6 +13,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::memory::xstrdup;
 use crate::types::CMD_drop;
+use crate::types::Failed;
 use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
 use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, windows};
 
@@ -202,7 +203,7 @@ unsafe fn close_unused_window(
         // re-check afterwards is for.
         let bufref = BufRef::of(buf);
         // SAFETY: as above; this may fire autocommands.
-        unsafe { autowrite(buf.raw(), false) };
+        let _ = unsafe { autowrite(buf.raw(), false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
         let survived = win_valid(wp) && bufref.valid();
         if !survived {
@@ -353,7 +354,7 @@ unsafe fn open_window_for_arg(
     i: c_int,
     count: c_int,
     tab_drop_empty_window: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // Trigger the events for a tab drop.
     let tab_drop_last = tab_drop_empty_window && i == count - 1;
     if tab_drop_last {
@@ -368,8 +369,8 @@ unsafe fn open_window_for_arg(
         p_ea.set(c_int::from(true));
         let split_ret = win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int);
         p_ea.set(c_int::from(p_ea_save));
-        if split_ret == FAIL {
-            return FAIL;
+        if split_ret.is_err() {
+            return Err(Failed);
         }
     }
     // SAFETY: curwin is the window just split (or the first one), and the
@@ -389,7 +390,7 @@ unsafe fn open_window_for_arg(
     let sfname = ptr::null_mut();
     let eap2 = ptr::null_mut();
     let newlnum = ECMD_ONE as linenr_T;
-    unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
+    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
     if tab_drop_last {
         autocmd_no_enter.set(autocmd_no_enter.get() + 1);
     }
@@ -397,7 +398,7 @@ unsafe fn open_window_for_arg(
         autocmd_no_leave.set(autocmd_no_leave.get() + 1);
     }
     aall.use_firstwin = false;
-    OK
+    Ok(())
 }
 
 /// Open up to `count` windows for the files in `aall.alist`.
@@ -419,7 +420,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     if tab_drop_empty_window {
         aall.use_firstwin = true;
     }
-    let mut split_ret = OK;
+    let mut split_ret = Ok(());
     let mut i = 0;
     while i < count && !got_int.get() {
         // SAFETY: caller contract; `i` is below `count`, which is at most
@@ -437,10 +438,10 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
                 i = count;
             }
             false
-        } else if split_ret == OK {
+        } else if split_ret.is_ok() {
             // SAFETY: caller contract.
             split_ret = unsafe { open_window_for_arg(aall, i, count, tab_drop_empty_window) };
-            split_ret == FAIL
+            split_ret.is_err()
         } else {
             false
         };

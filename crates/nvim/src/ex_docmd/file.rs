@@ -2,6 +2,7 @@
 //! recovering, and the buffer list.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
 use crate::semsg;
@@ -50,7 +51,7 @@ use crate::types::ui::kUICmdline;
 use crate::types::{
     CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
     CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CmdModFlags,
-    CpoFlag, FAIL, NUL, OK, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t, uint8_t, win_T,
+    CpoFlag, Failed, NUL, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t, uint8_t, win_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -112,7 +113,7 @@ pub(crate) fn do_exbuffer(mut eap: Ea) {
 /// Run the `+cmd` argument, once the buffer it applies to is current.
 fn run_ecmd_cmd(eap: Ea) {
     if !eap.do_ecmd_cmd.is_null() {
-        unsafe { do_cmdline_cmd(eap.do_ecmd_cmd) };
+        let _ = unsafe { do_cmdline_cmd(eap.do_ecmd_cmd) };
     }
 }
 
@@ -193,7 +194,7 @@ pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
     };
     if !unsaved
         && (byte(eap.arg) == NUL
-            || unsafe { setfname(Buf::current(), eap.arg, ptr::null_mut(), true) } == OK)
+            || unsafe { setfname(Buf::current(), eap.arg, ptr::null_mut(), true) }.is_ok())
     {
         unsafe { ml_recover(true) };
     }
@@ -342,7 +343,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
     {
         // A new, empty buffer.
         setpcmark();
-        do_ecmd(
+        let _ = do_ecmd(
             0,
             ptr::null_mut(),
             ptr::null_mut(),
@@ -412,7 +413,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             },
         );
 
-        if opened == FAIL {
+        if opened.is_err() {
             // The split has already happened; close it again. The
             // cleanup pair keeps an exception from the failed edit from
             // being lost while the window is closed.
@@ -471,12 +472,12 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         do_bang(1, eap.raw(), false, false, true);
         return;
     }
-    if u_save(eap.line2, eap.line2 + 1) == FAIL {
+    if u_save(eap.line2, eap.line2 + 1).is_err() {
         return;
     }
 
     let read = if byte(eap.arg) == NUL {
-        if unsafe { check_fname() } == FAIL {
+        if unsafe { check_fname() }.is_err() {
             return;
         }
         readfile(
@@ -506,7 +507,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         )
     };
 
-    if read != OK {
+    if read.is_err() {
         if !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(eap.arg) };
@@ -522,8 +523,8 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
         } else {
             1
         };
-        if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1) == OK {
-            unsafe { ml_delete(lnum) };
+        if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1).is_ok() {
+            let _ = unsafe { ml_delete(lnum) };
             if cur_win().w_cursor.lnum > 1 && cur_win().w_cursor.lnum >= lnum {
                 cur_win().w_cursor.lnum -= 1;
             }
@@ -598,7 +599,7 @@ pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
         p_shada.set(c"'100".as_ptr() as *mut c_char);
     }
     if eap.cmdidx as c_int == CMD_rviminfo as c_int || eap.cmdidx as c_int == CMD_rshada as c_int {
-        unsafe { shada_read_everything(eap.arg, eap.forceit != 0, false) };
+        let _ = unsafe { shada_read_everything(eap.arg, eap.forceit != 0, false) };
     } else {
         unsafe { shada_write_file(eap.arg, eap.forceit != 0) };
     }
@@ -645,7 +646,7 @@ fn do_ecmd(
     newlnum: linenr_T,
     flags: c_int,
     oldwin: *mut win_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, oldwin) }
 }
@@ -710,7 +711,7 @@ fn readfile(
     eap: *mut exarg_T,
     flags: c_int,
     silent: bool,
-) -> c_int {
+) -> Result<Loaded, Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe {
         crate::fileio::readfile(

@@ -53,8 +53,8 @@ use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
     CMD_SIZE, CMD_bang, CMD_bdelete, CMD_bunload, CMD_bwipeout, CMD_checktime, CMD_edit, CMD_file,
-    CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, NUL, OK, cstack_T,
-    exarg_T, linenr_T, pos_T,
+    CMD_iput, CMD_put, CMD_read, CMD_try, CmdAddr, CmdParseInfo, ExArgt, FAIL, Failed, NUL,
+    cstack_T, exarg_T, linenr_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
@@ -95,7 +95,7 @@ pub unsafe fn parse_cmdline(
         let result =
             unsafe { parse_command_modifiers(eap, errormsg, &mut (*cmdinfo).cmdmod, false) };
         let after_modifier = ea.cmd;
-        if result == FAIL && after_modifier == orig_cmd {
+        if result.is_err() && after_modifier == orig_cmd {
             break 'end;
         }
 
@@ -199,7 +199,7 @@ pub unsafe fn parse_cmdline(
         }
 
         unsafe { parse_register(eap) };
-        if unsafe { parse_count(eap, errormsg, false) } == FAIL {
+        if unsafe { parse_count(eap, errormsg, false) }.is_err() {
             break 'end;
         }
 
@@ -236,11 +236,11 @@ pub(crate) unsafe fn execute_cmd0(
     eap: *mut exarg_T,
     errormsg: &mut Option<CString>,
     preview: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
-    if ea.argt.has(ExArgt::XFILE) && unsafe { expand_filename(eap, ea.cmdlinep, errormsg) } == FAIL
+    if ea.argt.has(ExArgt::XFILE) && unsafe { expand_filename(eap, ea.cmdlinep, errormsg) }.is_err()
     {
-        return FAIL;
+        return Err(Failed);
     }
 
     // A buffer name may stand in for a buffer number, but not alongside
@@ -287,7 +287,7 @@ pub(crate) unsafe fn execute_cmd0(
             shift_cmd_args(ea);
         }
         if ea.line2 < 0 {
-            return FAIL;
+            return Err(Failed);
         }
     }
 
@@ -325,7 +325,7 @@ pub(crate) unsafe fn execute_cmd0(
         }
     }
 
-    OK
+    Ok(())
 }
 
 /// Run an `exarg_T` the API built, without re-parsing anything.
@@ -338,7 +338,7 @@ pub(crate) unsafe fn execute_cmd0(
 pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
     let mut ea = unsafe { Ea::new(eap) };
     let mut retv: c_int = 0;
-    if do_cmdline_start() == FAIL {
+    if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive).as_ptr());
         return retv;
     }
@@ -400,7 +400,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
             has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
         }
 
-        if unsafe { parse_count(eap, &mut errormsg, true) } == FAIL {
+        if unsafe { parse_count(eap, &mut errormsg, true) }.is_err() {
             break 'end;
         }
 
@@ -410,7 +410,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
         cstack.cs_idx = -1;
         ea.cstack = &raw mut cstack;
 
-        unsafe { execute_cmd0(&raw mut retv, eap, &mut errormsg, preview) };
+        let _ = unsafe { execute_cmd0(&raw mut retv, eap, &mut errormsg, preview) };
     }
 
     if let Some(msg) = &errormsg

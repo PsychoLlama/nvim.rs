@@ -366,7 +366,7 @@ unsafe fn expand_one_start(
     let numfiles = xp.field_ptr(core::mem::offset_of!(expand_T, xp_numfiles));
     // SAFETY: `xp` is live and both out-parameters are its own fields.
     let expanded = unsafe { expand_from_context(xp.raw(), str, files, numfiles, options) };
-    if expanded == FAIL {
+    if expanded.is_err() {
         // Upstream reports "No match" here under FNAME_ILLEGAL, which is
         // not defined on any platform this port builds for.
         return ptr::null_mut();

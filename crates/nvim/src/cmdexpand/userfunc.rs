@@ -11,7 +11,7 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
 use crate::types::{
-    ExpandContext, FAIL, MAXPATHL, NUL, OK, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
     VAR_UNKNOWN, VarLock,
 };
 use core::ffi::{c_char, c_int, c_void};
@@ -43,7 +43,8 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
     gap: *mut garray_T,
 ) {
     let mut pathed_pattern = pathed_pattern;
-    if unsafe { expand_wildcards(1, &raw mut pathed_pattern, numMatches, matches, flags) } != OK {
+    if unsafe { expand_wildcards(1, &raw mut pathed_pattern, numMatches, matches, flags) }.is_err()
+    {
         return;
     }
 
@@ -308,7 +309,7 @@ pub(crate) unsafe fn expand_user_defined(
     regmatch: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -318,7 +319,7 @@ pub(crate) unsafe fn expand_user_defined(
 
     let retstr = unsafe { call_user_expand_func(call_func_retstr, xp.raw()) } as *mut c_char;
     if retstr.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut ga = garray_T {
@@ -389,7 +390,7 @@ pub(crate) unsafe fn expand_user_defined(
     unsafe { xfree(retstr as *mut c_void) };
 
     if ga.ga_len == 0 {
-        return OK;
+        return Ok(());
     }
 
     if fuzzy {
@@ -400,7 +401,7 @@ pub(crate) unsafe fn expand_user_defined(
         unsafe { *matches = ga.ga_data as *mut *mut c_char };
     }
     unsafe { *numMatches = ga.ga_len };
-    OK
+    Ok(())
 }
 
 /// Copy the strings of a `customlist,` answer into a fresh match array.
@@ -449,7 +450,7 @@ pub(crate) unsafe fn expand_user_list(
     xp: *mut expand_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -457,11 +458,11 @@ pub(crate) unsafe fn expand_user_list(
     unsafe { *numMatches = 0 };
     let retlist = unsafe { call_user_expand_func(call_func_retlist, xp.raw()) } as *mut list_T;
     if retlist.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { process_user_list(retlist, matches, numMatches) };
-    OK
+    Ok(())
 }
 
 /// Expand names with a Lua completion function.
@@ -469,7 +470,7 @@ pub(crate) unsafe fn expand_user_lua(
     xp: *mut expand_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -481,11 +482,11 @@ pub(crate) unsafe fn expand_user_lua(
     unsafe { nlua_call_user_expand_func(xp.raw(), &raw mut rettv) };
     if rettv.v_type != VAR_LIST {
         unsafe { tv_clear(&raw mut rettv) };
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { process_user_list(rettv.vval.v_list, matches, numMatches) };
-    OK
+    Ok(())
 }
 
 /// Expand `file` for all comma-separated directories in `path`, adding the
@@ -555,7 +556,7 @@ pub unsafe fn globpath(
 
             let mut p: *mut *mut c_char = ptr::null_mut();
             let mut num_p = 0;
-            unsafe {
+            let _ = unsafe {
                 expand_from_context(
                     &raw mut xpc,
                     buf,

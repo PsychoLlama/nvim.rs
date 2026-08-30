@@ -47,7 +47,7 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ChangedtickDictItem, CmdModFlags, NUL, OK, OptInt, ShmFlag, Terminal, VAR_NUMBER, VarLock,
+    ChangedtickDictItem, CmdModFlags, Failed, NUL, OptInt, ShmFlag, Terminal, VAR_NUMBER, VarLock,
     colnr_T, dictitem_T, linenr_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;
@@ -113,7 +113,7 @@ fn diff_add(mut buf: Buf) {
 /// Load the buffer that has just been made current.
 fn load_current_buffer() {
     // SAFETY: `curbuf` and `curwin` are set; a null `eap` is the no-command form.
-    unsafe { open_buffer(false, ptr::null_mut(), 0) };
+    let _ = unsafe { open_buffer(false, ptr::null_mut(), 0) };
 }
 
 /// Warn if the file changed on disk since the buffer was read.
@@ -183,7 +183,7 @@ fn job_running(mut buf: Buf) -> bool {
 }
 
 /// Change to the directory of `fname`.
-fn chdir_to_file(fname: *mut c_char) -> c_int {
+fn chdir_to_file(fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: a NUL-terminated file name.
     unsafe { vim_chdirfile(fname, kCdCauseAuto) }
 }
@@ -455,7 +455,7 @@ fn do_autochdir_now() {
         return;
     }
     let fname = cur_buf().b_ffname;
-    if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname) == OK {
+    if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname).is_ok() {
         last_chdir_reason.set(c"autochdir".as_ptr().cast_mut());
         reshorten_fnames();
     }

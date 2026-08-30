@@ -421,7 +421,7 @@ unsafe fn pad_line(
             newline.offset((idx + spaces) as isize),
             tail as usize,
         );
-        ml_replace(lnum, newline, false);
+        let _ = ml_replace(lnum, newline, false);
         inserted_bytes(lnum, idx, skipped, spaces);
     }
 }

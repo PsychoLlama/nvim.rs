@@ -23,7 +23,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, MB_MAXBYTES, OK};
+use crate::types::{Failed, MB_MAXBYTES};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -540,7 +540,7 @@ pub unsafe fn ins_typebuf(
     offset: c_int,
     nottyped: bool,
     silent: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     init_typebuf();
     typeahead().note_change();
     // SAFETY (this body): the caller's promise -- `str` is NUL-terminated and
@@ -555,9 +555,9 @@ pub unsafe fn ins_typebuf(
         // reaches the typeahead itself.
         emsg(gettext(e_toocompl));
         unsafe { setcursor() };
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Put character `c` back into the typeahead buffer, restoring the flags that
@@ -577,7 +577,7 @@ pub unsafe fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) 
     let len = unsafe { special_to_buf(c, modifiers, true, buf.as_mut_ptr()) } as usize;
     debug_assert!(len < buf.len());
     buf[len] = 0;
-    unsafe {
+    let _ = unsafe {
         ins_typebuf(
             buf.as_mut_ptr(),
             KeyNoremap.get(),

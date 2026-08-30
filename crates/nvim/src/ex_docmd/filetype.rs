@@ -29,8 +29,8 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
 use crate::types::{
-    Array, CMD_autocmd, Error, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0, exarg_T,
-    kObjectTypeString, size_t,
+    Array, CMD_autocmd, Error, Failed, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0,
+    exarg_T, kObjectTypeString, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -59,7 +59,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
     let mut arg = eap.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
-    do_doautocmd(arg, false, &raw mut did_aucmd);
+    let _ = do_doautocmd(arg, false, &raw mut did_aucmd);
     if call_do_modelines && did_aucmd {
         do_modelines(OptionSetFlags::NONE);
     }
@@ -92,21 +92,21 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
         if byte(arg) == 'o' as c_int || filetype_detect.get() != Some(true) {
-            source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+            let _ = source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
             filetype_detect.set(Some(true));
             if plugin {
-                source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(true));
             }
             if indent {
-                source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_indent.set(Some(true));
             }
         }
         if byte(arg) == 'd' as c_int {
             // `detect` also applies the result to the buffers already
             // open.
-            do_doautocmd(
+            let _ = do_doautocmd(
                 c"filetypedetect BufRead".as_ptr() as *mut c_char,
                 true,
                 ptr::null_mut(),
@@ -117,15 +117,15 @@ pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
-                source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(false));
             }
             if indent {
-                source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
                 filetype_indent.set(Some(false));
             }
         } else {
-            source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+            let _ = source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
             filetype_detect.set(Some(false));
         }
     } else {
@@ -169,11 +169,11 @@ unsafe fn report_filetype_state() {
 /// explicitly turned off.
 pub unsafe fn filetype_plugin_enable() {
     if filetype_plugin.get().is_none() {
-        source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_plugin.set(Some(true));
     }
     if filetype_indent.get().is_none() {
-        source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_indent.set(Some(true));
     }
 }
@@ -181,7 +181,7 @@ pub unsafe fn filetype_plugin_enable() {
 /// The same for detection.
 pub unsafe fn filetype_maybe_enable() {
     if filetype_detect.get().is_none() {
-        source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_detect.set(Some(true));
     }
 }
@@ -312,7 +312,7 @@ fn do_doautocmd(
     arg_start: *mut ::core::ffi::c_char,
     do_msg: bool,
     did_something: *mut bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::autocmd::do_doautocmd(arg_start, do_msg, did_something) }
 }
@@ -336,7 +336,7 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 }
 
 /// `source_runtime()` as checked code.
-fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> c_int {
+fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::runtime::source_runtime(name, flags) }
 }

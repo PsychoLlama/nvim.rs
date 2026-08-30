@@ -19,8 +19,8 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    EvalFuncData, NUL, OK, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
-    typval_T, varnumber_T,
+    EvalFuncData, NUL, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T, typval_T,
+    varnumber_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -191,7 +191,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             }
         }
     }
-    if unsafe { set_tagstack(wp, d, action as c_int) } == OK {
+    if unsafe { set_tagstack(wp, d, action as c_int) }.is_ok() {
         rettv.vval.v_number = 0;
     }
 }
@@ -227,5 +227,5 @@ pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     };
     let list = list_alloc_ret(rettv, kListLenUnknown as isize);
     let (pat, file) = (pattern as *mut c_char, fname as *mut c_char);
-    unsafe { get_tags(list, pat, file) };
+    let _ = unsafe { get_tags(list, pat, file) };
 }

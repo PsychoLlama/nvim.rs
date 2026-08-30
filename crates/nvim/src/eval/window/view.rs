@@ -169,7 +169,7 @@ pub unsafe fn f_win_splitmove(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         unsafe { win_goto(targetwin.raw()) };
     }
     if targetwin.is_current() && win_valid(wp.raw()) {
-        if unsafe { win_splitmove(wp.raw(), size, flags) } == OK {
+        if unsafe { win_splitmove(wp.raw(), size, flags) }.is_ok() {
             rettv.vval.v_number = 0;
         }
     } else {

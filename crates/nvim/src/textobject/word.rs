@@ -25,7 +25,7 @@ use crate::normal::{
 };
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{FAIL, NUL, OK, oparg_T, pos_T};
+use crate::types::{Failed, NUL, oparg_T, pos_T};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///
@@ -98,7 +98,7 @@ unsafe fn back_in_line() {
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
     cur_win().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -122,10 +122,10 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // step leaves it on one.
         let mut i = inc_cursor();
         if i == -1 || (i >= 1 && last_line) {
-            return FAIL; // started on the last character of the file
+            return Err(Failed); // started on the last character of the file
         }
         if i >= 1 && eol && count == 0 {
-            return OK; // started on the last character of the line
+            return Ok(()); // started on the last character of the line
         }
 
         // One character past the end of the current word, if any.
@@ -133,7 +133,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
             while cls() == sclass {
                 i = inc_cursor();
                 if i == -1 || (i >= 1 && eol && count == 0) {
-                    return OK;
+                    return Ok(());
                 }
             }
         }
@@ -147,11 +147,11 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
             }
             i = inc_cursor();
             if i == -1 || (i >= 1 && eol && count == 0) {
-                return OK;
+                return Ok(());
             }
         }
     }
-    OK
+    Ok(())
 }
 
 /// `b` / `B`: move back `count` words. Answers FAIL when the top of the file
@@ -162,7 +162,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
+pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), Failed> {
     cur_win().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -180,7 +180,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
         // with its cursor on a line of the current buffer, and each step
         // leaves it on one.
         if dec_cursor() == -1 {
-            return FAIL; // started at the start of the file
+            return Err(Failed); // started at the start of the file
         }
         'finished: {
             if !stop || sclass == cls() || sclass == 0 {
@@ -195,12 +195,12 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
                         break 'finished;
                     }
                     if dec_cursor() == -1 {
-                        return OK; // hit the start of the file
+                        return Ok(()); // hit the start of the file
                     }
                 }
                 // Back to the start of this word.
                 if unsafe { skip_chars(cls(), BACKWARD as c_int) } {
-                    return OK;
+                    return Ok(());
                 }
             }
             inc_cursor(); // overshot: forward one
@@ -209,7 +209,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
     }
     // SAFETY: on the main thread with a current window.
     unsafe { adjust_skipcol() };
-    OK
+    Ok(())
 }
 
 /// `e` / `E`: move to the end of the `count`th word. Answers FAIL when the
@@ -224,7 +224,12 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> c_int
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: bool) -> c_int {
+pub unsafe fn end_word(
+    mut count: c_int,
+    bigword: bool,
+    mut stop: bool,
+    empty: bool,
+) -> Result<(), Failed> {
     cur_win().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
 
@@ -255,13 +260,13 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
         // with its cursor on a line of the current buffer, and each step
         // leaves it on one.
         if inc_cursor() == -1 {
-            return FAIL;
+            return Err(Failed);
         }
         'finished: {
             if cls() == sclass && sclass != 0 {
                 // In the middle of a word: just go to its end.
                 if unsafe { skip_chars(sclass, FORWARD as c_int) } {
-                    return FAIL;
+                    return Err(Failed);
                 }
             } else if !stop || sclass == 0 {
                 // At the end of a word: go to the end of the next one,
@@ -276,18 +281,18 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
                         break 'finished;
                     }
                     if inc_cursor() == -1 {
-                        return FAIL; // hit the end of the file
+                        return Err(Failed); // hit the end of the file
                     }
                 }
                 if unsafe { skip_chars(cls(), FORWARD as c_int) } {
-                    return FAIL;
+                    return Err(Failed);
                 }
             }
             dec_cursor(); // overshot: back one
         }
         stop = false; // only the first word moves one less
     }
-    OK
+    Ok(())
 }
 
 /// `ge` / `gE`: move back to the end of the `count`th previous word. Answers
@@ -297,7 +302,7 @@ pub unsafe fn end_word(mut count: c_int, bigword: bool, mut stop: bool, empty: b
 ///
 /// # Safety
 /// There must be a current line and the cursor must be on it.
-pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
     cur_win().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -311,17 +316,17 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
         // leaves it on one.
         let mut i = dec_cursor();
         if i == -1 {
-            return FAIL;
+            return Err(Failed);
         }
         if eol && i == 1 {
-            return OK;
+            return Ok(());
         }
         // Back to before the start of this word.
         if sclass != 0 {
             while cls() == sclass {
                 i = dec_cursor();
                 if i == -1 || (eol && i == 1) {
-                    return OK;
+                    return Ok(());
                 }
             }
         }
@@ -336,13 +341,13 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> c_int {
             }
             i = dec_cursor();
             if i == -1 || (eol && i == 1) {
-                return OK;
+                return Ok(());
             }
         }
     }
     // SAFETY: on the main thread with a current window.
     unsafe { adjust_skipcol() };
-    OK
+    Ok(())
 }
 
 /// `iw` / `aw` (and the `W` forms): the word under the cursor, cursor left at
@@ -359,7 +364,7 @@ pub unsafe fn current_word(
     mut count: c_int,
     include: bool,
     bigword: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut start_pos = pos_T {
         lnum: 0,
         col: 0,
@@ -393,8 +398,8 @@ pub unsafe fn current_word(
         // Starting on white space that is to be included (" word"), or
         // off white space that is not ("word"): find the end of the word.
         if (cls() == 0) == include {
-            if unsafe { end_word(1, bigword, true, true) } == FAIL {
-                return FAIL;
+            if unsafe { end_word(1, bigword, true, true) }.is_err() {
+                return Err(Failed);
             }
         } else {
             // Starting off white space that is to be included
@@ -402,11 +407,11 @@ pub unsafe fn current_word(
             // the start of the next word. Landing in the first column of
             // the next line (a single-character word) means backing up to
             // the end of this one.
-            unsafe { fwd_word(1, bigword, true) };
+            let _ = unsafe { fwd_word(1, bigword, true) };
             if cur_win().w_cursor.col == 0 {
                 unsafe { decl(&mut cur_win().cursor()) };
             } else {
-                unsafe { oneleft() };
+                let _ = unsafe { oneleft() };
             }
             if include {
                 include_white = true;
@@ -433,35 +438,35 @@ pub unsafe fn current_word(
         if visual_active() && lt(cur_win().w_cursor, visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
             if unsafe { decl(&mut cur_win().cursor()) } == -1 {
-                return FAIL;
+                return Err(Failed);
             }
             if include != (cls() != 0) {
-                if unsafe { bck_word(1, bigword, true) } == FAIL {
-                    return FAIL;
+                if unsafe { bck_word(1, bigword, true) }.is_err() {
+                    return Err(Failed);
                 }
             } else {
-                if unsafe { bckend_word(1, bigword, true) } == FAIL {
-                    return FAIL;
+                if unsafe { bckend_word(1, bigword, true) }.is_err() {
+                    return Err(Failed);
                 }
                 unsafe { incl(&mut cur_win().cursor()) };
             }
         } else {
             // Move the cursor forward one word and/or run of white space.
             if unsafe { incl(&mut cur_win().cursor()) } == -1 {
-                return FAIL;
+                return Err(Failed);
             }
             if include != (cls() == 0) {
-                if unsafe { fwd_word(1, bigword, true) } == FAIL && count > 1 {
-                    return FAIL;
+                if unsafe { fwd_word(1, bigword, true) }.is_err() && count > 1 {
+                    return Err(Failed);
                 }
                 // An end just past a newline must not include the first
                 // character of that line: put the cursor on the last
                 // character of the white space instead.
-                if unsafe { oneleft() } == FAIL {
+                if unsafe { oneleft() }.is_err() {
                     inclusive = false;
                 }
-            } else if unsafe { end_word(1, bigword, true, true) } == FAIL {
-                return FAIL;
+            } else if unsafe { end_word(1, bigword, true, true) }.is_err() {
+                return Err(Failed);
             }
         }
         count -= 1;
@@ -476,7 +481,7 @@ pub unsafe fn current_word(
         // white space at the start of a line: that is indent.
         let pos = cur_win().w_cursor;
         cur_win().w_cursor = start_pos;
-        if unsafe { oneleft() } == OK {
+        if unsafe { oneleft() }.is_ok() {
             unsafe { back_in_line() };
             if cls() == 0 && cur_win().w_cursor.col > 0 {
                 if visual_active() {
@@ -507,7 +512,7 @@ pub unsafe fn current_word(
         // SAFETY: the caller guarantees `oap` is a live operator argument.
         unsafe { (*oap).inclusive = inclusive };
     }
-    OK
+    Ok(())
 }
 
 /// The buffer the editor is working in.

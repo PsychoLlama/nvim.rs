@@ -22,7 +22,7 @@ use std::ffi::CStr;
 use super::*;
 use crate::buffer::BufRef;
 use crate::highlight_group::{HLF_E, HLF_W};
-use crate::types::{FAIL, OK, ShmFlag, Vv};
+use crate::types::{FAIL, Failed, OK, ShmFlag, Vv};
 
 /// Has a warning already been shown this sweep? Only one is worth reading.
 static ALREADY_WARNED: GlobalCell<bool> = GlobalCell::new(false);
@@ -199,7 +199,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
         .cast::<c_char>();
         let appended = unsafe { ml_append(lnum - 1, p, 0, false) };
         unsafe { xfree(p.cast()) };
-        if appended == FAIL {
+        if appended.is_err() {
             retval = FAIL;
             break;
         }
@@ -211,7 +211,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
         curbuf.set(frombuf.raw());
         let mut lnum = cur_buf().b_ml.ml_line_count;
         while lnum > 0 {
-            if unsafe { ml_delete(lnum) } == FAIL {
+            if unsafe { ml_delete(lnum) }.is_err() {
                 // Oops! We could try putting back the saved lines, but
                 // that might fail again...
                 retval = FAIL;
@@ -525,7 +525,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
 /// them, as upstream's own comment at the end of this function warns.
 pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     let old_ro = buf.b_p_ro;
-    let mut saved = OK;
+    let mut saved = Ok(());
     let mut flags = READ_NEW as c_int;
 
     // Set curwin/curbuf for "buf" and save some things.
@@ -559,7 +559,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     // move the buffer contents to a hidden buffer.
     let mut savebuf = ptr::null_mut::<buf_T>();
     let mut bufref = BufRef::NONE;
-    if !(unsafe { buf_is_empty(curbuf.get()) } || saved == FAIL) {
+    if !(unsafe { buf_is_empty(curbuf.get()) } || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
         // SAFETY: `buflist_new` answers a live buffer or null.
@@ -573,7 +573,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
             cur_win().w_buffer = buf.raw();
         }
         if savebuf.is_null()
-            || saved == FAIL
+            || saved.is_err()
             || buf.raw() != curbuf.get()
             // SAFETY: the null check above guards this one.
             || move_lines(buf, unsafe { Buf::new(savebuf) }) == FAIL
@@ -582,11 +582,11 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
             // SAFETY: a static format string with one `%s`, and the buffer's // own file name.
             let fname = unsafe { c_str(fname) };
             semsg!("E462: Could not prepare for reloading \"{fname}\"");
-            saved = FAIL;
+            saved = Err(Failed);
         }
     }
 
-    if saved == OK {
+    if saved.is_ok() {
         cur_buf().b_flags |= BufFlags::CHECK_RO; // check for RO again
         cur_buf().b_keep_filetype = true; // don't detect 'filetype'
         let (ffname, fname) = (buf.b_ffname, buf.b_fname);
@@ -594,7 +594,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
         let quiet = shortmess(ShmFlag::FILEINFO);
         let at = &raw mut ea;
         // SAFETY: a live buffer's own names, and `ea` is a local.
-        if unsafe { readfile(ffname, fname, 0, 0, last, at, flags, quiet) } != OK {
+        if unsafe { readfile(ffname, fname, 0, 0, last, at, flags, quiet) }.is_err() {
             if !aborting() {
                 let fname = buf.b_fname;
                 // SAFETY: a static format string with one `%s`, and the // buffer's own file name.
@@ -605,7 +605,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
                 while !unsafe { buf_is_empty(curbuf.get()) } {
-                    if unsafe { ml_delete(buf.b_ml.ml_line_count) } == FAIL {
+                    if unsafe { ml_delete(buf.b_ml.ml_line_count) }.is_err() {
                         break;
                     }
                 }

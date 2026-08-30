@@ -17,7 +17,7 @@ use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
 use crate::option::boolean_optval;
-use crate::types::{FAIL, OptionSetFlags};
+use crate::types::{Failed, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
@@ -91,7 +91,7 @@ fn buf_is_valid(buf: *mut buf_T) -> bool {
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
 /// when it is zero, without entering the window.
-fn load_buffer(fnum: c_int, flags: c_int, oldwin: Option<Win>) -> c_int {
+fn load_buffer(fnum: c_int, flags: c_int, oldwin: Option<Win>) -> Result<(), Failed> {
     let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
     let one = ECMD_ONE as linenr_T;
     let oldwin = oldwin.map_or(ptr::null_mut(), Win::raw);
@@ -236,7 +236,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     // The current window becomes the previous window afterwards.
     let win = curwin.get();
 
-    if split(height, split_flags(qi)) == FAIL {
+    if split(height, split_flags(qi)).is_err() {
         return false; // not enough room for the window
     }
     // RESET_BINDING.
@@ -257,13 +257,13 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         // Use the existing quickfix buffer.
         Some(buf) => {
             let flags = hide + ECMD_OLDBUF as c_int;
-            if load_buffer(buf.handle, flags, oldwin) == FAIL {
+            if load_buffer(buf.handle, flags, oldwin).is_err() {
                 return false;
             }
         }
         // Create a new quickfix buffer and remember its number.
         None => {
-            if load_buffer(0, hide, oldwin) == FAIL {
+            if load_buffer(0, hide, oldwin).is_err() {
                 return false;
             }
             qi.qf_bufnr = cur_buf().handle;
@@ -494,7 +494,7 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
 pub unsafe fn did_set_quickfixtextfunc(_args: *mut optset_T) -> *const c_char {
     let (value, cb) = (p_qftf.get(), global_qftf());
     // SAFETY: the option's own value and its callback slot.
-    if unsafe { option_set_callback_func(value, cb) } == FAIL {
+    if unsafe { option_set_callback_func(value, cb) }.is_err() {
         return e_invarg.as_ptr();
     }
     ptr::null()

@@ -44,7 +44,7 @@ use crate::semsg;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, FAIL, IOSIZE,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, IOSIZE,
     Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, Vv,
     buf_T, dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
     typval_vval_union, uint16_t, uint64_t, varnumber_T,
@@ -611,7 +611,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     let pid = unsafe { (*channel_proc(chan)).pid };
     let buf = curbuf.get();
     unsafe { (*buf).b_p_swf = 0 };
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null() && unsafe { ml_open(buf) } == FAIL {
+    if unsafe { (*buf).b_ml.ml_mfp }.is_null() && unsafe { ml_open(buf) }.is_err() {
         unsafe { proc_stop(channel_proc(chan)) };
         unsafe { channel_decref(chan) };
         return;
@@ -625,7 +625,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     // which is what each of these three re-tests is for.
     if unsafe { terminal_live(chan) } {
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
-        unsafe { vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false) };
+        let _ = unsafe { vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false) };
         let (src, dst) = (name.as_mut_ptr(), shortened.as_mut_ptr());
         let len = unsafe { home_replace(ptr::null(), src, dst, IOSIZE as usize, true) };
         // Drop a trailing separator, but keep `/` itself meaningful by
@@ -641,7 +641,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let fmt = c"term://%s//%d:%s".as_ptr();
         let dir = shortened.as_ptr();
         unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
-        unsafe { setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true) };
+        let _ = unsafe { setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true) };
         unsafe { apply_autocmds(EVENT_BUFFILEPOST, noname, noname, false, buf) };
 
         if unsafe { terminal_live(chan) } {

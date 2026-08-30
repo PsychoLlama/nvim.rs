@@ -18,6 +18,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::Failed;
 
 /// The `"*"` group's first byte: the "all groups" filter.
 const STAR: c_char = b'*'.cast_signed();
@@ -339,11 +340,11 @@ pub(crate) unsafe fn sign_place(
     buf: *mut buf_T,
     lnum: linenr_T,
     prio: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // `*` is the "all groups" filter, not a group one can place into.
     // SAFETY: the caller's group name, null or NUL-terminated.
     if !group.is_null() && unsafe { *group == STAR || *group == 0 } {
-        return FAIL;
+        return Err(Failed);
     }
 
     // SAFETY: the caller's name.
@@ -351,7 +352,7 @@ pub(crate) unsafe fn sign_place(
         // SAFETY: as above, and a format the message takes.
         let name = unsafe { c_str(name) };
         semsg!("E155: Unknown sign: {name}");
-        return FAIL;
+        return Err(Failed);
     };
     let prio = match (prio, def.sn_priority) {
         (-1, -1) => SIGN_DEF_PRIO,
@@ -372,9 +373,9 @@ pub(crate) unsafe fn sign_place(
         // SAFETY: the caller's name.
         let name = unsafe { c_str(name) };
         semsg!("E885: Not possible to change sign {name}");
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// [`sign_unplace`] for one buffer.
@@ -477,7 +478,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T)
                 int64_t::from(lnum),
                 buf.b_fname,
             );
-            do_cmdline_cmd(cmd.as_mut_ptr());
+            let _ = do_cmdline_cmd(cmd.as_mut_ptr());
         };
     }
 

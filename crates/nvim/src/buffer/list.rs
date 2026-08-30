@@ -49,7 +49,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    AdditionalData, Callback, FAIL, FileID, OK, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
+    AdditionalData, Callback, Failed, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
     event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T,
     size_t, uint64_t,
 };
@@ -603,24 +603,24 @@ pub unsafe fn buflist_getfile(
     mut lnum: linenr_T,
     options: c_int,
     forceit: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     let Some(mut buf) = find_buf(n) else {
         if options & GETF_ALT as c_int != 0 && n == 0 {
             err(tr_raw(e_noalt.as_ptr()));
         } else {
             semsg!("E92: Buffer {n} not found");
         }
-        return FAIL;
+        return Err(Failed);
     };
 
     // There is nothing to do when it is the current buffer.
     if buf.raw() == curbuf.get() {
-        return OK;
+        return Ok(());
     }
 
     // SAFETY: reads the command-line and textlock state.
     if unsafe { text_or_buf_locked() } {
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut col: colnr_T = 0;
@@ -636,7 +636,7 @@ pub unsafe fn buflist_getfile(
     }
 
     if options & GETF_SWITCH as c_int != 0 && !goto_existing_window(buf) {
-        return FAIL;
+        return Err(Failed);
     }
 
     let redraw_off = Suppress::redraw();
@@ -649,7 +649,7 @@ pub unsafe fn buflist_getfile(
     let failed = unsafe { getfile(handle, no_name, no_name, setmark, lnum, forceit != 0) } > 0;
     drop(redraw_off);
     if failed {
-        return FAIL;
+        return Err(Failed);
     }
 
     if p_sol.get() == 0 && col != 0 {
@@ -663,7 +663,7 @@ pub unsafe fn buflist_getfile(
         // SAFETY: the mark read above, which is still live.
         unsafe { mark_view_restore(fm) };
     }
-    OK
+    Ok(())
 }
 
 /// The `'switchbuf'` half of [`buflist_getfile`]: go to a window already
@@ -683,7 +683,7 @@ fn goto_existing_window(mut buf: Buf) -> bool {
     } else {
         let vertical = swb_flags.get() & kOptSwbFlagVsplit as c_int as u32 != 0;
         let flags = if vertical { WSP_VERT as c_int } else { 0 };
-        if win_split(0, flags) == FAIL {
+        if win_split(0, flags).is_err() {
             return false;
         }
     }

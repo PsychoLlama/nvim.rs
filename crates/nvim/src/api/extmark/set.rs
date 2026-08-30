@@ -420,7 +420,8 @@ pub unsafe fn nvim_buf_set_extmark(
                             &raw mut sign.text as *mut schar_T,
                             false,
                         )
-                    } == 0
+                    }
+                    .is_err()
                     {
                         // SAFETY: the value the keyset carried, live for this call.
                         error = unsafe { err_bad_value_ptr(c"sign_text", c"".as_ptr()) };

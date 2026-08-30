@@ -41,8 +41,8 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    BackslashEscape, EvalFuncData, ExpandContext, OK, VAR_LIST, VAR_STRING, VAR_UNKNOWN, Vv,
-    expand_T, garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
+    BackslashEscape, EvalFuncData, ExpandContext, VAR_LIST, VAR_STRING, VAR_UNKNOWN, Vv, expand_T,
+    garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -490,7 +490,7 @@ pub unsafe fn f_readdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // SAFETY: `path` is NUL-terminated, `expr` is the argument slot the
     // filter reads back through, and the array is a fresh one to fill.
     let ret = unsafe { readdir_core(found.raw(), path, expr.cast(), Some(readdir_checkitem)) };
-    if ret == OK {
+    if ret.is_ok() {
         for &name in found.names() {
             list.push(name);
         }

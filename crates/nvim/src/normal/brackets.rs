@@ -348,7 +348,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
             clear_op_beep(ca.op());
         }
     } else if nchar == 'c' as c_int {
-        if unsafe { diff_move_to(direction(cap), ca.count1) } == 0 {
+        if unsafe { diff_move_to(direction(cap), ca.count1) }.is_err() {
             clear_op_beep(ca.op());
         }
     } else if nchar == 'r' as c_int || nchar == 's' as c_int || nchar == 'S' as c_int {

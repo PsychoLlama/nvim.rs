@@ -75,7 +75,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
         // they go after whatever is already queued.
         let offset = if insert { 0 } else { typeahead().len() };
         // SAFETY: `keys_esc` is the escaped copy, or the caller's own string.
-        unsafe { ins_typebuf(keys_esc, remap_flag, offset, !typed, false) };
+        let _ = unsafe { ins_typebuf(keys_esc, remap_flag, offset, !typed, false) };
         if vgetc_busy.get() != 0 {
             typebuf_was_filled.set(true);
         }

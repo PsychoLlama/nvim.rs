@@ -741,7 +741,7 @@ unsafe fn goto_match(
             unsafe { prepare_tagpreview(true) };
         }
         if action == ACTION_SPLIT {
-            if win_split(0, 0) == FAIL {
+            if win_split(0, 0).is_err() {
                 return After::Stop;
             }
             // RESET_BINDING: a new window does not inherit

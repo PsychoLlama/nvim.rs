@@ -720,7 +720,8 @@ pub(super) unsafe fn stp_sal_score(
         // `MAXWLEN` bytes, which is the bound handed over.
         let win = curwin.get();
         let len = MAXWLEN as c_int;
-        unsafe { spell_casefold(win, su.su_badptr, stp.st_orglen, fword.as_mut_ptr(), len) };
+        let _ =
+            unsafe { spell_casefold(win, su.su_badptr, stp.st_orglen, fword.as_mut_ptr(), len) };
 
         // Joining two words changes the sound a lot -- "t he" sounds
         // like "t h" where "the" sounds like "@" -- so drop the space,

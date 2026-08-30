@@ -24,7 +24,7 @@ use neovim::path::{
     path_guess_exepath, path_is_absolute, path_next_component, path_shorten_fname, path_tail,
     path_tail_with_sep, path_try_shorten_fname, path_with_extension, path_with_url, vim_full_name,
 };
-use neovim::types::{FAIL, OK};
+use neovim::types::Failed;
 
 use crate::support::Sandbox;
 
@@ -87,7 +87,7 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
     };
 
     // The empty name is the working directory.
-    assert_eq!(resolve(""), (OK, sandbox.as_str().to_string()));
+    assert_eq!(resolve(""), (Ok(()), sandbox.as_str().to_string()));
 
     let parent = sandbox
         .root()
@@ -96,7 +96,7 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
         .to_str()
         .expect("text")
         .to_string();
-    assert_eq!(resolve(".."), (OK, parent));
+    assert_eq!(resolve(".."), (Ok(()), parent));
 
     // A link is resolved, absolutely or relatively; a name that does not
     // exist is still made absolute.
@@ -107,15 +107,15 @@ fn a_directory_name_is_resolved_against_the_working_directory() {
         real.to_str().expect("text"),
         sandbox.path("unit-test-symlink").to_str().expect("text"),
     ] {
-        assert_eq!(resolve(name), (OK, expected.clone()), "{name}");
+        assert_eq!(resolve(name), (Ok(()), expected.clone()), "{name}");
     }
     assert_eq!(
         resolve("does-not-exist"),
-        (OK, format!("{}/does-not-exist", sandbox.as_str()))
+        (Ok(()), format!("{}/does-not-exist", sandbox.as_str()))
     );
 
     // ...but an absolute name that does not exist cannot be resolved at all.
-    assert_eq!(resolve("/does_not_exist").0, FAIL);
+    assert_eq!(resolve("/does_not_exist").0, Err(Failed));
 }
 
 /// `#28786`: an absolute directory still resolves when the process is
@@ -138,7 +138,7 @@ fn an_absolute_directory_resolves_from_a_working_directory_that_is_gone() {
         let mut buf = Buffer::new(sandbox.as_str().len() + 64);
         // SAFETY: both buffers are this frame's.
         let result = unsafe { path_full_dir_name(name.as_mut_ptr(), buf.as_mut_ptr(), buf.len()) };
-        assert_eq!((result, buf.text()), (OK, expected.clone()));
+        assert_eq!((result, buf.text()), (Ok(()), expected.clone()));
     }
 }
 
@@ -376,22 +376,28 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
     let room = |a: &str, b: &str| a.len().max(b.len()) + 1;
     let here = sandbox.as_str().to_string();
 
-    assert_eq!(full(None, 10, true).0, FAIL, "no name, no path");
+    assert_eq!(full(None, 10, true).0, Err(Failed), "no name, no path");
 
     // `#5737`: a buffer too short gets a truncated, terminated copy.
     let long = "foo/bar/bazzzzzzz/buz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a";
-    assert_eq!(full(Some(long), 8, true), (FAIL, long[..7].to_string()));
+    assert_eq!(
+        full(Some(long), 8, true),
+        (Err(Failed), long[..7].to_string())
+    );
 
     // A URL is not a file name and is used as it stands.
     let url = "http://www.neovim.org";
-    assert_eq!(full(Some(url), url.len() + 1, true), (OK, url.to_string()));
+    assert_eq!(
+        full(Some(url), url.len() + 1, true),
+        (Ok(()), url.to_string())
+    );
 
     // A name under a directory that does not exist fails, at every length.
     for rep in 1..=10 {
         let name = format!("{}dir/test.file", "non_existing_".repeat(rep));
         assert_eq!(
             full(Some(&name), name.len() + 1, true),
-            (FAIL, name.clone())
+            (Err(Failed), name.clone())
         );
     }
 
@@ -428,7 +434,7 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
     for (name, expected) in cases {
         assert_eq!(
             full(Some(name), room(&expected, name), true),
-            (OK, expected.clone()),
+            (Ok(()), expected.clone()),
             "{name}"
         );
     }
@@ -438,14 +444,14 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
     let tilde = "~/home.file";
     assert_eq!(
         full(Some(tilde), tilde.len() + 1, true),
-        (FAIL, tilde.to_string())
+        (Err(Failed), tilde.to_string())
     );
 
     // Without `force` an absolute name is copied rather than resolved.
     let absolute = "/absolute/path";
     assert_eq!(
         full(Some(absolute), absolute.len() + 1, false),
-        (OK, absolute.to_string())
+        (Ok(()), absolute.to_string())
     );
 
     // And the name itself is never written through.
@@ -454,7 +460,7 @@ fn a_file_name_is_made_absolute_or_handed_back_with_a_failure() {
     let mut buf = Buffer::new(expected.len() + 1);
     // SAFETY: `name` is this frame's, and `buf` holds `expected.len() + 1`.
     let result = unsafe { vim_full_name(name.as_ptr(), buf.as_mut_ptr(), buf.len(), true) };
-    assert_eq!((result, buf.text()), (OK, expected));
+    assert_eq!((result, buf.text()), (Ok(()), expected));
     // SAFETY: `name` is still alive and NUL-terminated.
     assert_eq!(
         unsafe { borrowed(name.as_ptr()) },
@@ -496,16 +502,27 @@ fn appending_to_a_path_adds_a_separator_only_where_one_is_missing() {
         (result, unsafe { borrowed(path.as_ptr()) })
     };
 
-    assert_eq!(join("path1", "path2", 100), (OK, "path1/path2".to_string()));
+    assert_eq!(
+        join("path1", "path2", 100),
+        (Ok(()), "path1/path2".to_string())
+    );
     assert_eq!(
         join("path1/", "path2", 100),
-        (OK, "path1/path2".to_string())
+        (Ok(()), "path1/path2".to_string())
     );
-    assert_eq!(join("", "/path2", 7), (OK, "/path2".to_string()));
-    assert_eq!(join("path1", "", 6), (OK, "path1".to_string()), "no tail");
-    assert_eq!(join("path1", ".", 6), (OK, "path1".to_string()), "no dot");
+    assert_eq!(join("", "/path2", 7), (Ok(()), "/path2".to_string()));
+    assert_eq!(
+        join("path1", "", 6),
+        (Ok(()), "path1".to_string()),
+        "no tail"
+    );
+    assert_eq!(
+        join("path1", ".", 6),
+        (Ok(()), "path1".to_string()),
+        "no dot"
+    );
     // Eleven bytes is one short of "path1/path2" plus its terminator.
-    assert_eq!(join("path1/", "path2", 11).0, FAIL);
+    assert_eq!(join("path1/", "path2", 11).0, Err(Failed));
 }
 
 #[test]

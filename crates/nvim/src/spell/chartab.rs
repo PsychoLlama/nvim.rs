@@ -30,10 +30,10 @@ use crate::mbyte::{
 };
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
-use crate::types::{MB_MAXBYTES, NUL, OK, spelltab_T, uint8_t, win_T};
+use crate::types::{Failed, MB_MAXBYTES, NUL, spelltab_T, uint8_t, win_T};
 use ::libc::strcpy;
 
-use super::{FAIL, MAXWLEN, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
+use super::{MAXWLEN, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
 
 /// A table holding the ASCII answers: digits and letters are word
 /// characters, `A`-`Z` are upper case, and everything else maps to itself.
@@ -210,10 +210,10 @@ pub unsafe fn spell_casefold(
     len: c_int,
     buf: *mut c_char,
     buflen: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     if len >= buflen {
         unsafe { *buf = NUL as c_char };
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut outi = 0;
@@ -222,7 +222,7 @@ pub unsafe fn spell_casefold(
     while p < end {
         if outi + MB_MAXBYTES as c_int > buflen {
             unsafe { *buf.offset(outi as isize) = NUL as c_char };
-            return FAIL;
+            return Err(Failed);
         }
         let mut c = unsafe { mb_cptr2char_adv(&raw mut p) };
         if c == 0x3a3 || c == 0x3c2 {
@@ -241,7 +241,7 @@ pub unsafe fn spell_casefold(
         outi += unsafe { utf_char2bytes(c, buf.offset(outi as isize)) };
     }
     unsafe { *buf.offset(outi as isize) = NUL as c_char };
-    OK
+    Ok(())
 }
 
 /// Classify the capitalisation of `word` (up to `end`, or its NUL when

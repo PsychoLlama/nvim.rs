@@ -198,7 +198,8 @@ pub unsafe fn nvim_buf_set_text(
             unsafe { Buf::new(b) },
             start_row as linenr_T - 1 as linenr_T,
             end_row as linenr_T + 1 as linenr_T,
-        ) == 0 as ::core::ffi::c_int
+        )
+        .is_err()
         {
             let why = c"Failed to save undo information";
             error = Error::exception(why);
@@ -212,9 +213,7 @@ pub unsafe fn nvim_buf_set_text(
             };
             let mut i_1: size_t = 0 as size_t;
             while i_1 < to_delete {
-                if unsafe { ml_delete_buf(b, start_row as linenr_T, false) }
-                    == 0 as ::core::ffi::c_int
-                {
+                if unsafe { ml_delete_buf(b, start_row as linenr_T, false) }.is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_652;
@@ -235,7 +234,8 @@ pub unsafe fn nvim_buf_set_text(
                     break 's_652;
                 } else if unsafe {
                     ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
-                } == 0 as ::core::ffi::c_int
+                }
+                .is_err()
                 {
                     let why = c"Failed to replace line";
                     error = Error::exception(why);
@@ -253,7 +253,8 @@ pub unsafe fn nvim_buf_set_text(
                     break 's_652;
                 } else if unsafe {
                     ml_append_buf(b, lnum_1 as linenr_T, *lines.add(i_3), 0 as colnr_T, false)
-                } == 0 as ::core::ffi::c_int
+                }
+                .is_err()
                 {
                     let why = c"Failed to insert line";
                     error = Error::exception(why);

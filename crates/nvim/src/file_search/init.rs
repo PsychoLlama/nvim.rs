@@ -13,7 +13,7 @@
 use super::*;
 use crate::option::cpo_has;
 use crate::semsg;
-use crate::types::{CpoFlag, FAIL, MAXPATHL};
+use crate::types::{CpoFlag, MAXPATHL};
 use ::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -90,7 +90,7 @@ unsafe fn starting_dir(
 
     if unsafe { *path } == 0 || !unsafe { vim_is_abs_name(path) } {
         let mut curdir = [0 as c_char; MAXPATHL as usize];
-        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) } == FAIL {
+        if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) }.is_err() {
             return Err(());
         }
         ctx.start_dir = Some(unsafe { Name::from_ptr(curdir.as_ptr()) });

@@ -158,6 +158,20 @@ pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NOTAGFILE: ::core::ffi::c_int = 99 as ::core::ffi::c_int;
+
+/// What [`jumpto_tag`](crate::tag::jumpto_tag) did.
+///
+/// `NOTAGFILE` as a value rather than a status: the file the match names
+/// does not exist, which is not a failure -- the caller goes on to the next
+/// match, and the error message is only shown once every match has been
+/// tried.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Jumped {
+    /// The editor is at the tag.
+    Done,
+    /// The file the match names does not exist. The C's `NOTAGFILE`.
+    NoSuchFile,
+}
 static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static tagmatchname: GlobalCell<*mut ::core::ffi::c_char> =

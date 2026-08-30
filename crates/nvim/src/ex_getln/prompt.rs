@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::types::{ExArgt, ExpandContext, FAIL, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
+use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -220,7 +220,7 @@ pub unsafe fn get_user_input(
         let xp_namelen = unsafe { strlen(xp_name) } as ::core::ffi::c_int;
         let mut argt = ExArgt::NONE;
         if unsafe { parse_compl_arg(xp_name, xp_namelen, &mut xp_type, &mut argt, &mut xp_arg) }
-            == FAIL
+            .is_err()
         {
             return;
         }

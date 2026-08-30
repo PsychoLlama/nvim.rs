@@ -37,7 +37,7 @@ use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
-    ExpandContext, FAIL, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
+    ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
 };
 use ::libc::{fclose, fprintf, fputs, memcpy, strcasecmp, strcmp, strlen};
 use core::ffi::{c_char, c_int, c_void};
@@ -236,7 +236,7 @@ unsafe fn expand_help_files(pattern: *mut c_char) -> Option<Wildcards> {
     let (out_count, out_names) = (&raw mut count, &raw mut names);
     // SAFETY: caller contract; the out-parameters are ours.
     let res = unsafe { gen_expand_wildcards(1, list.as_mut_ptr(), out_count, out_names, flags) };
-    if res == FAIL {
+    if res.is_err() {
         return None;
     }
     let found = Wildcards { count, names };

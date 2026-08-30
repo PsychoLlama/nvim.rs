@@ -40,7 +40,7 @@ use crate::types::{
 };
 use ::libc::{memcpy, strlen};
 
-use super::{FAIL, MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
+use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
 
 /// Free the contents of `gap`, which holds `T` items each needing `drop`,
 /// then the array itself.
@@ -309,7 +309,7 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
 
     unsafe { (*buf).b_spell = true };
     unsafe { (*buf).b_p_swf = 1 };
-    if unsafe { ml_open(buf) } == FAIL {
+    if unsafe { ml_open(buf) }.is_err() {
         let (site, at) = (c"open_spellbuf".as_ptr(), line!() as c_int);
         let text = c"Error opening a new memline".as_ptr();
         let none = core::ptr::null();

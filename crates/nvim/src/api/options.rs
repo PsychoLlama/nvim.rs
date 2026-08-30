@@ -38,9 +38,9 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, FAIL, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData,
-    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation,
-    linenr_T, uint64_t,
+    Arena, Dict, Error, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
+    OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, linenr_T,
+    uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -223,7 +223,7 @@ unsafe fn do_ft_buf(
         return ptr::null_mut::<buf_T>();
     }
     // SAFETY: `ftbuf` is the buffer just created.
-    if unsafe { ml_open(ftbuf) } == FAIL {
+    if unsafe { ml_open(ftbuf) }.is_err() {
         *err = Error::exception(c"Could not load internal buffer");
         return ftbuf;
     }

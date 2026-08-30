@@ -61,8 +61,7 @@ use crate::runtime::{
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    FAIL, LineGetter, OK, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T,
-    size_t,
+    Failed, LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
 };
 use crate::ui::ui_has;
 use ::libc::{memset, strlen};
@@ -102,7 +101,7 @@ unsafe fn clear_loop_lines(gap: *mut garray_T) {
 }
 
 /// Run one Ex command line, as if the user had typed it.
-pub unsafe fn do_cmdline_cmd(cmd: *const c_char) -> c_int {
+pub unsafe fn do_cmdline_cmd(cmd: *const c_char) -> Result<(), Failed> {
     unsafe {
         do_cmdline(
             cmd as *mut c_char,
@@ -141,7 +140,7 @@ pub unsafe fn do_cmdline(
     fgetline: LineGetter,
     cookie: *mut c_void,
     flags: DoCmdOpts,
-) -> c_int {
+) -> Result<(), Failed> {
     // How deep this call is inside other `do_cmdline` calls. Used to
     // decide whether this is the outermost one, which is the one that
     // owns the "wait for return" bookkeeping.
@@ -157,7 +156,7 @@ pub unsafe fn do_cmdline(
     // which is past the loop the C bumps them in.
     let mut quiet_output: Option<(Bump, Bump)> = None;
     let mut did_block = false;
-    let mut retval = OK;
+    let mut retval = Ok(());
     let mut cstack = empty_cstack();
     let mut lines_ga: garray_T = unsafe { core::mem::zeroed() };
     let mut current_line: c_int = 0;
@@ -176,12 +175,12 @@ pub unsafe fn do_cmdline(
     let saved_msg_list = msg_list.get();
     msg_list.set(&raw mut private_msg_list);
 
-    if do_cmdline_start() == FAIL {
+    if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive.as_ptr()));
         // No command name: this is not an error of any one command.
         do_errthrow(ptr::null_mut(), ptr::null_mut());
         msg_list.set(saved_msg_list);
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { ga_init(&raw mut lines_ga, size_of::<wcmd_T>() as c_int, 10) };
@@ -264,7 +263,7 @@ pub unsafe fn do_cmdline(
                     unsafe { func_line_end(real_cookie) };
                 }
                 if func_has_ended(real_cookie) != 0 {
-                    retval = FAIL;
+                    retval = Err(Failed);
                     break;
                 }
             } else if do_profiling.get() == PROF_YES
@@ -275,7 +274,7 @@ pub unsafe fn do_cmdline(
 
             // Has the sourced file hit a `:finish`?
             if source_finished(fgetline, cookie) {
-                retval = FAIL;
+                retval = Err(Failed);
                 break;
             }
 
@@ -351,7 +350,7 @@ pub unsafe fn do_cmdline(
                 if KeyTyped.get() && !flags.has(DoCmdOpts::REPEAT) {
                     need_wait_return.set(false);
                 }
-                retval = FAIL;
+                retval = Err(Failed);
                 break;
             }
             used_getline = true;
@@ -743,7 +742,7 @@ pub unsafe fn do_cmdline(
     if quiet_output.take().is_some() {
         msg_scroll.set(0);
 
-        if retval == FAIL || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {
+        if retval.is_err() || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {
             // A typed `:if`/`:else` that has just finished, or an error.
             need_wait_return.set(false);
             msg_didany.set(false);

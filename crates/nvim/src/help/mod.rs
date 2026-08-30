@@ -53,7 +53,7 @@ use crate::smsg;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CmdModFlags, Error, FAIL, IOSIZE, LuaRetMode, NUL, OK, Object, OptInt, OptVal,
+    Array, ArrayBuf, CmdModFlags, Error, Failed, IOSIZE, LuaRetMode, NUL, Object, OptInt, OptVal,
     OptValData, OptionSetFlags, exarg_T, file_comparison, kObjectTypeString, linenr_T, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
@@ -176,7 +176,7 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
 
     // The first match in the requested language is the best match.
     let mut i: c_int = 0;
-    if n != FAIL && !lang.is_null() {
+    if n.is_ok() && !lang.is_null() {
         while i < num_matches {
             // SAFETY: `matches` holds `num_matches` NUL-terminated strings.
             let m = unsafe { *matches.offset(i as isize) };
@@ -190,7 +190,7 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
             i += 1;
         }
     }
-    if i >= num_matches || n == FAIL {
+    if i >= num_matches || n.is_err() {
         // SAFETY: `lang` and `arg` are NUL-terminated; both carry bytes, so
         // they go through vim's own printf rather than `format_args!`.
         if lang.is_null() {
@@ -202,7 +202,7 @@ pub(crate) unsafe fn ex_help(eap: *mut exarg_T) {
             let (lang, arg) = unsafe { (c_str(lang), c_str(arg)) };
             semsg!("E661: No '{lang}' help for {arg}");
         }
-        if n != FAIL {
+        if n.is_ok() {
             unsafe { free_wild(num_matches, matches) };
         }
         unsafe { xfree(allocated_arg.cast::<c_void>()) };
@@ -377,7 +377,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
             WSP_TOP as c_int
         };
     }
-    if win_split(0, split) == FAIL {
+    if win_split(0, split).is_err() {
         return None;
     }
     if (unsafe { (*curwin.get()).w_height } as OptInt) < p_hh.get() {
@@ -391,7 +391,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     let (eap_0, win) = (ptr::null_mut(), ptr::null_mut());
     let (lnum, flags) = (ECMD_LASTL as linenr_T, (ECMD_HIDE + ECMD_SET_HELP) as c_int);
     // SAFETY: the editor's own current window and buffer.
-    unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
+    let _ = unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
     if keepalt_is_off() {
         unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
     }
@@ -417,7 +417,7 @@ pub(crate) unsafe fn ex_helpclose(eap: *mut exarg_T) {
 /// `eap` is unused, but the signature is the Ex-command one.
 pub(crate) unsafe fn ex_exusage(_eap: *mut exarg_T) {
     // SAFETY: a static command line.
-    unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
 }
 
 /// `:viusage`.
@@ -426,7 +426,7 @@ pub(crate) unsafe fn ex_exusage(_eap: *mut exarg_T) {
 /// As [`ex_exusage`].
 pub(crate) unsafe fn ex_viusage(_eap: *mut exarg_T) {
     // SAFETY: a static command line.
-    unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }
 
 // -- Finding a subject -----------------------------------------------------
@@ -520,7 +520,7 @@ pub(crate) unsafe fn find_help_tags(
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
     keep_lang: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut err = NO_ERROR;
     // The search pattern lives here between the two calls below. Upstream
     // uses the shared `IObuff`, and `find_tags` runs a tag function.
@@ -541,7 +541,7 @@ pub(crate) unsafe fn find_help_tags(
         let why = err.message_or_empty().as_ptr();
         unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
         err.clear();
-        return FAIL;
+        return Err(Failed);
     }
     err.clear();
     debug_assert!(
@@ -561,7 +561,7 @@ pub(crate) unsafe fn find_help_tags(
     unsafe { *num_matches = 0 };
     let (mincount, buf) = (MAXCOL as c_int, ptr::null_mut());
     let found = unsafe { find_tags(iobuff, num_matches, matches, flags, mincount, buf) };
-    if found == OK && unsafe { *num_matches } > 0 {
+    if found.is_ok() && unsafe { *num_matches } > 0 {
         // Sort on the heuristic number `find_tags` put after the tag.
         let base = unsafe { (*matches).cast::<c_void>() };
         let (count, width) = (unsafe { *num_matches } as size_t, size_of::<*mut c_char>());
@@ -572,7 +572,7 @@ pub(crate) unsafe fn find_help_tags(
             unsafe { xfree((*(*matches).offset(*num_matches as isize)).cast::<c_void>()) };
         }
     }
-    OK
+    Ok(())
 }
 
 /// Tidy the match list for display: strip `@ab` where `ab` is the head of

@@ -14,7 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::winlayer::{Buf, TabPage, Win};
 use core::ffi::c_int;
 
@@ -188,19 +188,19 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 
 /// `]c` / `[c`: move the cursor to the start of the `count`th next or
 /// previous change.
-pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
+pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = cur_tab();
     let mut lnum = cur_win().w_cursor.lnum;
     let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT || tp.tp_first_diff.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };
     }
     let Some(first) = Df::first(tp) else {
-        return FAIL;
+        return Err(Failed);
     };
     let idx = idx as usize;
 
@@ -225,13 +225,13 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> c_int {
 
     lnum = lnum.min(cur_buf().b_ml.ml_line_count);
     if lnum == cur_win().w_cursor.lnum {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the editor exists.
     setpcmark();
     cur_win().w_cursor.lnum = lnum;
     cur_win().w_cursor.col = 0;
-    OK
+    Ok(())
 }
 
 /// The line of the current buffer matching `lnum1` of `buf1`.

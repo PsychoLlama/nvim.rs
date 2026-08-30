@@ -30,7 +30,7 @@ use crate::option::cpo_has;
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{CpoFlag, FAIL, NUL, OK, colnr_T, oparg_T, pos_T, size_t};
+use crate::types::{CpoFlag, FAIL, Failed, NUL, OK, colnr_T, oparg_T, pos_T, size_t};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -61,7 +61,7 @@ pub unsafe fn current_block(
     include: bool,
     what: c_int,
     other: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut pos: Option<pos_T>;
     let mut start_pos = pos_T {
         lnum: 0,
@@ -144,12 +144,12 @@ pub unsafe fn current_block(
     // Then the matching closing bracket.
     if pos.is_none() {
         cur_win().w_cursor = old_pos;
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the cursor sits on the opening bracket the search above found.
     let Some(mut end_pos) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
         cur_win().w_cursor = old_pos;
-        return FAIL;
+        return Err(Failed);
     };
     cur_win().w_cursor = end_pos;
 
@@ -178,7 +178,7 @@ pub unsafe fn current_block(
             // In Visual mode, an empty result means there is no inner block.
             if equalpos(start_pos, end_pos) && visual_active() {
                 cur_win().w_cursor = old_pos;
-                return FAIL;
+                return Err(Failed);
             }
             // In Visual mode, a result no bigger than what we started with
             // extends to the next block out and excludes again. An empty area
@@ -197,13 +197,13 @@ pub unsafe fn current_block(
             pos = unsafe { findmatch(ptr::null_mut(), what) };
             let Some(found) = pos else {
                 cur_win().w_cursor = old_pos;
-                return FAIL;
+                return Err(Failed);
             };
             start_pos = found;
             cur_win().w_cursor = found;
             let Some(found_end) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
                 cur_win().w_cursor = old_pos;
-                return FAIL;
+                return Err(Failed);
             };
             end_pos = found_end;
             cur_win().w_cursor = end_pos;
@@ -246,7 +246,7 @@ pub unsafe fn current_block(
             cur_win().w_cursor = start_pos;
         }
     }
-    OK
+    Ok(())
 }
 
 /// Whether the cursor is inside a `<aaa>` tag, or with `end_tag` a `</aaa>`

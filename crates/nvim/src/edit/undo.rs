@@ -27,7 +27,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::normal::visual_active;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, FoFlag, NUL, OK};
+use crate::types::{CpoFlag, Failed, FoFlag, NUL};
 
 /// Called when an arrow key is used in Insert mode: for undo and redo it
 /// resembles hitting `<Esc>`.
@@ -92,7 +92,7 @@ pub(crate) fn check_spell_redraw() {
 ///
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn stop_arrow() -> c_int {
+pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     if arrow_used.get() {
@@ -104,7 +104,7 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
         }
         Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as colnr_T);
 
-        if save_cursor_line() == OK {
+        if save_cursor_line().is_ok() {
             arrow_used.set(false);
             ins_need_undo.set(false);
         }
@@ -116,7 +116,7 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
         unsafe { reset_redobuff() };
         unsafe { append_to_redobuff(c"1i".as_ptr()) }; // pretend we start an insertion
         new_insert_skip.set(2);
-    } else if ins_need_undo.get() && save_cursor_line() == OK {
+    } else if ins_need_undo.get() && save_cursor_line().is_ok() {
         ins_need_undo.set(false);
     }
 
@@ -124,9 +124,9 @@ pub(crate) unsafe fn stop_arrow() -> c_int {
     unsafe { fold_open_cursor() };
 
     if arrow_used.get() || ins_need_undo.get() {
-        FAIL
+        Err(Failed)
     } else {
-        OK
+        Ok(())
     }
 }
 
@@ -225,7 +225,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
                     cur_win().w_cursor.col -= 1;
                 }
                 cc = char_at_cursor();
-                if !ascii_iswhite(cc) || unsafe { del_char(true) } == FAIL {
+                if !ascii_iswhite(cc) || unsafe { del_char(true) }.is_err() {
                     break;
                 }
             }
@@ -279,7 +279,7 @@ pub(crate) unsafe fn ins_apply_autocmds(event: event_T) -> c_int {
 
     if event != EVENT_INSERTLEAVE && tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
     {
-        u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
+        let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
     }
     r
 }
@@ -293,7 +293,7 @@ fn char_at_cursor() -> c_int {
 
 /// Save the cursor's line for undo, answering `OK` when it was saved.
 #[inline(always)]
-fn save_cursor_line() -> c_int {
+fn save_cursor_line() -> Result<(), Failed> {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
     u_save_cursor()
 }

@@ -24,7 +24,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::{
     CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
-    CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, FAIL, MAXPATHL, NUL, OK, OptionSetFlags,
+    CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, MAXPATHL, NUL, OptionSetFlags,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -66,8 +66,8 @@ impl Files {
             count: 0,
         };
         // SAFETY: the caller's string, and two writable out-parameters.
-        let ok =
-            unsafe { get_arglist_exp(arg, &raw mut files.count, &raw mut files.names, true) } == OK;
+        let ok = unsafe { get_arglist_exp(arg, &raw mut files.count, &raw mut files.names, true) }
+            .is_ok();
         if !ok || files.count == 0 {
             qf_emsg(e_nomatch.as_ptr());
             return None;
@@ -248,7 +248,7 @@ unsafe fn list_still_usable(
         unsafe { qf_new_list(qi, title) };
         return true;
     }
-    unsafe { qf_restore_list(qi, qfid) != FAIL }
+    unsafe { qf_restore_list(qi, qfid).is_ok() }
 }
 
 /// Search one buffer's lines and add an entry for every match. Answers
@@ -440,7 +440,7 @@ unsafe fn process_files(
     let mut save_qfid = qf_current_list(qi).qf_id;
     let mut dirname_start = vec![0 as c_char; MAXPATHL as usize];
     let mut dirname_now = vec![0 as c_char; MAXPATHL as usize];
-    unsafe { os_dirname(dirname_start.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(dirname_start.as_mut_ptr(), MAXPATHL as size_t) };
     let start = dirname_start.as_ptr();
 
     // Upstream never resets this in the "buffer already loaded" arm, so
@@ -673,7 +673,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
         fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
     }
     if !qf_list_still_valid(wp, save_qfid)
-        || unsafe { qf_restore_list(qi.raw(), save_qfid) } == FAIL
+        || unsafe { qf_restore_list(qi.raw(), save_qfid) }.is_err()
     {
         qf_busy_end();
         return;

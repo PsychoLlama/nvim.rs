@@ -20,7 +20,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, NUL, OK};
+use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::{Buf, Win};
 
 /// `memmove` between two places inside this module's own line buffers.
@@ -196,7 +196,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe { ml_replace(lnum, newp, false) };
+    let _ = unsafe { ml_replace(lnum, newp, false) };
     unsafe { inserted_bytes(lnum, col as colnr_T, oldlen as c_int, newlen as c_int) };
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
@@ -248,7 +248,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
     move_bytes(at.wrapping_add(slen), tail, bytes as size_t);
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe { ml_replace(lnum, newp, false) };
+    let _ = unsafe { ml_replace(lnum, newp, false) };
     unsafe { inserted_bytes(lnum, col, 0, slen as c_int) };
     cur_win().w_cursor.col += slen as colnr_T;
 }
@@ -259,11 +259,11 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
 ///
 /// # Safety
 /// The caller must have prepared for undo.
-pub unsafe fn del_char(fixpos: bool) -> c_int {
+pub unsafe fn del_char(fixpos: bool) -> Result<(), Failed> {
     // Make sure the cursor is at the start of a character.
     unsafe { mb_adjust_cursor() };
     if c_int::from(unsafe { *get_cursor_pos_ptr() }) == NUL {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { del_chars(1, fixpos as c_int) }
 }
@@ -272,7 +272,7 @@ pub unsafe fn del_char(fixpos: bool) -> c_int {
 ///
 /// # Safety
 /// The caller must have prepared for undo.
-pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> c_int {
+pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
     let mut bytes = 0;
     let mut p = get_cursor_pos_ptr();
     let mut i = 0;
@@ -296,7 +296,11 @@ pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> c_int {
 ///
 /// # Safety
 /// The caller must have prepared for undo.
-pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bool) -> c_int {
+pub unsafe fn del_bytes(
+    mut count: colnr_T,
+    fixpos_arg: bool,
+    use_delcombine: bool,
+) -> Result<(), Failed> {
     let lnum = cur_win().w_cursor.lnum;
     let mut col = cur_win().w_cursor.col;
     let mut fixpos = fixpos_arg;
@@ -304,17 +308,17 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
 
     // Nothing to do on the NUL after the line.
     if col >= oldlen {
-        return FAIL;
+        return Err(Failed);
     }
     if count == 0 {
-        return OK;
+        return Ok(());
     }
     if count < 1 {
         siemsg!(
             "E292: Invalid count for del_bytes(): {}",
             int64_t::from(count)
         );
-        return FAIL;
+        return Err(Failed);
     }
 
     // With 'delcombine', deleting (less than) one character takes only the
@@ -386,13 +390,13 @@ pub unsafe fn del_bytes(mut count: colnr_T, fixpos_arg: bool, use_delcombine: bo
         .wrapping_offset(count as isize);
     move_bytes(newp.wrapping_offset(col as isize), from, movelen as size_t);
     if alloc_newp {
-        unsafe { ml_replace(lnum, newp, false) };
+        let _ = unsafe { ml_replace(lnum, newp, false) };
     } else {
         cur_buf().b_ml.set_cached_len(newlen + 1);
     }
 
     unsafe { inserted_bytes(lnum, col, count, 0) };
-    OK
+    Ok(())
 }
 
 /// Delete everything on the cursor line from the cursor onwards.
@@ -415,7 +419,7 @@ pub unsafe fn truncate_line(fixpos: c_int) {
 
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
-    unsafe { ml_replace(lnum, newp, false) };
+    let _ = unsafe { ml_replace(lnum, newp, false) };
     unsafe { inserted_bytes(lnum, col, deleted, 0) };
 
     // Don't leave the cursor past the end of the line.
@@ -437,7 +441,7 @@ pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
     if nlines <= 0 {
         return;
     }
-    if undo && u_savedel(first, nlines) == FAIL {
+    if undo && u_savedel(first, nlines).is_err() {
         return;
     }
 
@@ -446,7 +450,7 @@ pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
         if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
             break; // nothing to delete
         }
-        unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
+        let _ = unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
         n += 1;
         // Delete the *same* line over and over, until the buffer runs out.
         if first > cur_buf().b_ml.ml_line_count {

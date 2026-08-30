@@ -31,7 +31,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
 
 /// The first line, measured just before Insert mode runs.
 ///
@@ -64,7 +64,7 @@ pub(crate) unsafe fn op_insert(oap: *mut oparg_T, count1: c_int) {
     cur_win().w_cursor.lnum = oap.start.lnum;
     // SAFETY: both only touch the current buffer's windows.
     redraw_curbuf_later(UPD_INVERTED);
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
 
     let mut pre = BlockInsertPre {
         ind_pre_col: 0,
@@ -119,7 +119,7 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
     // the cursor is on it.
     if cur_win().w_cursor.coladd > 0 {
         let old_ve_flags: c_uint = cur_win().w_onebuf_opt.wo_ve_flags;
-        if u_save_cursor() == FAIL {
+        if u_save_cursor().is_err() {
             return None;
         }
         cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
@@ -163,7 +163,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
         }
         if bd.is_short != 0 && bd.is_MAX == 0 {
             // The first line was too short: pad it out and say so in `bd`.
-            if u_save_cursor() == FAIL {
+            if u_save_cursor().is_err() {
                 return false;
             }
             for _ in 0..bd.endspaces {
@@ -293,7 +293,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         let n = ins_len as size_t;
         let ins_text = unsafe { xmemdupz(firstline as *const c_void, n) } as *mut c_char;
         let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
-        if u_save(first, last) == OK {
+        if u_save(first, last).is_ok() {
             let insert = oap.op_type == OP_INSERT;
             unsafe { block_insert(oap.raw(), ins_text, n, insert, &raw mut *bd) };
         }
@@ -324,7 +324,7 @@ pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
     // Delete the region first. In an empty buffer there is nothing to
     // delete, only undo to prepare.
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if u_save_cursor() == FAIL {
+        if u_save_cursor().is_err() {
             return 0;
         }
     } else if unsafe { op_delete(oap.raw()) }.is_err() {
@@ -444,7 +444,7 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
                     oldp.offset(bd.textcol as isize),
                 )
             };
-            unsafe { ml_replace(linenr, newp, false) };
+            let _ = unsafe { ml_replace(linenr, newp, false) };
             let splice = vpos.coladd + ins_len;
             let row = linenr as c_int - 1;
             unsafe { extmark_splice_cols(curbuf.get(), row, bd.textcol, 0, splice, kExtmarkUndo) };

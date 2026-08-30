@@ -11,7 +11,7 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::Ctrl_Z;
 use crate::options::OptWimFlags;
-use crate::types::{ExpandContext, FAIL, NUL, OK};
+use crate::types::{ExpandContext, Failed, NUL, OK};
 
 /// Whether stage `idx` of `'wildmode'` carries `flag` (a `kOptWimFlag*`).
 ///
@@ -183,7 +183,7 @@ const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
 
 /// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `FAIL` on a
 /// malformed value, leaving `wim_flags` alone.
-pub unsafe fn check_opt_wim() -> ::core::ffi::c_int {
+pub unsafe fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
 
@@ -198,12 +198,12 @@ pub unsafe fn check_opt_wim() -> ::core::ffi::c_int {
         let after = unsafe { *p.offset(len) } as ::core::ffi::c_int;
         if after != NUL && after != ',' as ::core::ffi::c_int && after != ':' as ::core::ffi::c_int
         {
-            return FAIL;
+            return Err(Failed);
         }
 
         let word = unsafe { ::core::slice::from_raw_parts(p as *const u8, len as usize) };
         let Some(&(_, flag)) = WIM_WORDS.iter().find(|(name, _)| *name == word) else {
-            return FAIL;
+            return Err(Failed);
         };
         new_wim_flags[idx] |= flag as uint8_t;
 
@@ -213,7 +213,7 @@ pub unsafe fn check_opt_wim() -> ::core::ffi::c_int {
         }
         if unsafe { *p } as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
             if idx == 3 {
-                return FAIL;
+                return Err(Failed);
             }
             idx += 1;
         }
@@ -228,5 +228,5 @@ pub unsafe fn check_opt_wim() -> ::core::ffi::c_int {
 
     // Only when there are no errors is wim_flags[] changed.
     wim_flags.set(new_wim_flags);
-    OK
+    Ok(())
 }

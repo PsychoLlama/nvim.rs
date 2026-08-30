@@ -85,7 +85,7 @@ pub(crate) unsafe fn set_argf_var() {
         let fname =
             unsafe { alist_name(((*alist).al_ga.ga_data as *mut aentry_T).offset(i as isize)) };
         if !fname.is_null() {
-            unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
+            let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
             unsafe { tv_list_append_string(list, full.as_mut_ptr(), -1 as ssize_t) };
         }
     }
@@ -146,7 +146,7 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     swap_exists_did_quit.set(false);
     let into = cmd.as_mut_ptr();
     unsafe { vim_snprintf(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
-    unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
     time_msg_at(c"jumping to tag");
     if swap_exists_did_quit.get() {
         quit_on_swap_exists(false);
@@ -179,7 +179,7 @@ pub(crate) unsafe fn read_stdin() {
         let null_ea = ptr::null_mut::<exarg_T>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
-        unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
+        let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
         let stdin_buf_handle: handle_T = unsafe { (*stdin_buf).handle };
         let stdin_buf_empty = unsafe { buf_is_empty(curbuf.get()) };
 
@@ -189,19 +189,19 @@ pub(crate) unsafe fn read_stdin() {
         let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
         let fmt = c"silent! buffer %d".as_ptr();
         unsafe { vim_snprintf(into, size, fmt, initial_buf_handle) };
-        unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         if stdin_buf_empty {
             let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
             let fmt = c"silent! bwipeout! %d".as_ptr();
             unsafe { vim_snprintf(into, size, fmt, stdin_buf_handle) };
-            unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         }
     } else {
         unsafe { set_buflisted(1) };
-        unsafe { open_buffer(true, ptr::null_mut::<exarg_T>(), 0) };
+        let _ = unsafe { open_buffer(true, ptr::null_mut::<exarg_T>(), 0) };
         if unsafe { buf_is_empty(curbuf.get()) } && unsafe { Buf::current() }.b_next.is_some() {
-            unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
-            unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
+            let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
         }
     }
 
@@ -301,7 +301,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
             unsafe { set_buflisted(1) };
-            unsafe { open_buffer(false, ptr::null_mut::<exarg_T>(), 0) };
+            let _ = unsafe { open_buffer(false, ptr::null_mut::<exarg_T>(), 0) };
 
             if swap_exists_action.get() == SEA_QUIT {
                 if got_int.get() || unsafe { only_one_window() } {
@@ -310,7 +310,8 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
                 // The window cannot be closed here without disturbing
                 // what comes next: clear the name and mark the argument
                 // index so it is deleted later.
-                unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
+                let _ =
+                    unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
                 cur_win().w_arg_idx = -1;
                 swap_exists_action.set(SEA_NONE);
             } else {
@@ -403,7 +404,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
             };
             let (last, hide) = (ECMD_LASTL as c_int as linenr_T, ECMD_HIDE as c_int);
             let null_ea = ptr::null_mut::<exarg_T>();
-            unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
+            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || unsafe { only_one_window() } {
                     quit_on_swap_exists(true);

@@ -16,8 +16,8 @@
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
 use crate::ex_cmds::{
-    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, FAIL, HIST_SEARCH, kSubHonorOptions,
-    kSubIgnoreCase, kSubMatchCase, subflags_T,
+    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, kSubHonorOptions, kSubIgnoreCase,
+    kSubMatchCase, subflags_T,
 };
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
@@ -30,7 +30,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
-use crate::types::{NUL, OK, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use crate::types::{Failed, NUL, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
 use crate::winlayer::{Buf, Win};
 use ::libc::{memset, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -149,7 +149,7 @@ pub(crate) unsafe fn sub_joining_lines(
     };
     if joined_lines_count > 1 as linenr_T {
         // SAFETY: the range is inside the buffer; message state is ready.
-        unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
+        let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
         sub_nsubs.set(joined_lines_count - 1 as linenr_T);
         sub_nlines.set(1 as linenr_T);
         unsafe { do_sub_msg(false) };
@@ -317,16 +317,16 @@ pub(crate) unsafe fn skip_substitute(start: *mut c_char, delimiter: c_int) -> *m
 /// # Safety
 /// Message state.  `c` must be a `char` value (`-128..=255`), which is what
 /// the ctype table is indexed by.
-pub(crate) unsafe fn check_regexp_delim(c: c_int) -> c_int {
+pub(crate) unsafe fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
     // SAFETY: caller's contract -- the ctype table covers `-128..=255`.
     let isalpha = unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_int & _ISalpha as c_int;
     if isalpha != 0 {
         emsg(gettext(
             c"E146: Regular expressions can't be delimited by letters",
         ));
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// The buffer the editor is working in.

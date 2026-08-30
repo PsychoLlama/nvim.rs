@@ -14,6 +14,7 @@
 
 use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
+use crate::fileio::Loaded;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -22,7 +23,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
 use crate::highlight_group::HLF_E;
-use crate::types::{FAIL, MAXPATHL, NUL, OK, OptionSetFlags};
+use crate::types::{FAIL, Failed, MAXPATHL, NUL, OK, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
 /// Try to recover `curbuf` from its swap file.
@@ -34,7 +35,12 @@ use crate::winlayer::{Buf, Win};
 /// Both callers name `curbuf`'s own full path and pass no `:read` command,
 /// which is the whole of `readfile`'s precondition; they differ only in the
 /// range and in whether the buffer is new.
-fn read_original(from: linenr_T, skip: linenr_T, lines: linenr_T, flags: c_int) -> c_int {
+fn read_original(
+    from: linenr_T,
+    skip: linenr_T,
+    lines: linenr_T,
+    flags: c_int,
+) -> Result<Loaded, Failed> {
     let (name, short) = (cur_buf().b_ffname, core::ptr::null_mut());
     let no_cmd = core::ptr::null_mut();
     // SAFETY: the name is the buffer's own, and a null `eap` is "no command".
@@ -82,7 +88,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         }
         // When called from main() the storage structure still needs
         // initialising.
-        if called_from_main && unsafe { ml_open(curbuf.get()) } == FAIL {
+        if called_from_main && unsafe { ml_open(curbuf.get()) }.is_err() {
             unsafe { getout(1) };
         }
 
@@ -197,7 +203,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         if directly {
             unsafe { expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL) };
             if unsafe { setfname(cur_buf(), path.as_mut_ptr(), core::ptr::null_mut(), true) }
-                == FAIL
+                .is_err()
             {
                 break 'theend;
             }
@@ -269,13 +275,13 @@ pub unsafe fn ml_recover(checkext: bool) {
 
         // Recovery is going ahead, so the buffer's current contents go.
         while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-            unsafe { ml_delete(1) };
+            let _ = unsafe { ml_delete(1) };
         }
 
         // Read the original file, to pick up 'fileformat', 'fileencoding'
         // and friends. Errors are ignored, and the text itself is not
         // used — except as the "unchanged?" comparison below.
-        let mut orig_file_status = NOTDONE;
+        let mut orig_file_status = Err(Failed);
         if !cur_buf().b_ffname.is_null() {
             orig_file_status = read_original(0, 0, MAXLNUM as linenr_T, READ_NEW as c_int);
         }
@@ -308,7 +314,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // Lines 1 to lnum are what was recovered, lines lnum + 1 to
         // ml_line_count are the file's, and line ml_line_count + 1 is the
         // empty buffer's dummy line.
-        if orig_file_status != OK || cur_buf().b_ml.ml_line_count != lnum * 2 + 1 {
+        if orig_file_status != Ok(Loaded::Read) || cur_buf().b_ml.ml_line_count != lnum * 2 + 1 {
             // Recovering an empty file gives two lines of which the first
             // is empty; that is not a modification.
             if !(cur_buf().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
@@ -333,7 +339,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // Drop the original file's lines and the empty buffer's dummy
         // line; they are now past the end of what was recovered.
         while cur_buf().b_ml.ml_line_count > lnum && !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-            unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
+            let _ = unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
         }
         cur_buf().b_flags |= BufFlags::RECOVERED;
         check_cursor(unsafe { Win::current() });
@@ -447,7 +453,7 @@ unsafe fn recover_lines(
     let mut cannot_open = cur_buf().b_ffname.is_null();
 
     let append = |lnum: &mut linenr_T, text: *const c_char| {
-        unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
+        let _ = unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
         *lnum += 1;
     };
 
@@ -516,7 +522,7 @@ unsafe fn recover_lines(
                             // of them unchecked.
                             if line_count <= 0
                                 || pe.pe_old_lnum < 1
-                                || read_original(lnum, pe.pe_old_lnum - 1, line_count, 0) != OK
+                                || read_original(lnum, pe.pe_old_lnum - 1, line_count, 0).is_err()
                             {
                                 cannot_open = true;
                             } else {

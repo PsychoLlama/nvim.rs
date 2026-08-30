@@ -23,7 +23,7 @@ use std::ffi::{CStr, CString};
 
 use super::*;
 use crate::os::fs::TEMP_FILE_PATH_MAXLEN;
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{Failed, MAXPATHL};
 use ::libc::{DIR, closedir, dirfd, opendir};
 
 /// Candidate homes for our private directory, tried in order.
@@ -114,7 +114,7 @@ impl Template {
 /// Only done once; the same directory is used for all temp files.
 unsafe fn vim_mktempdir() {
     let mut user = [0u8; 40];
-    unsafe { os_get_username(user.as_mut_ptr().cast(), user.len()) };
+    let _ = unsafe { os_get_username(user.as_mut_ptr().cast(), user.len()) };
     // Usernames may contain slashes! #19240
     let data = user.as_mut_ptr().cast::<c_void>();
     unsafe { memchrsub(data, b'/' as c_char, b'_' as c_char, user.len()) };
@@ -237,7 +237,7 @@ pub unsafe fn readdir_core(
     path: *const c_char,
     context: *mut c_void,
     checkitem: CheckItem,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
 
     let mut dir = Directory::default();
@@ -245,7 +245,7 @@ pub unsafe fn readdir_core(
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let path = unsafe { c_str(path) };
         smsg!(0, "E484: Can't open file {path}");
-        return FAIL;
+        return Err(Failed);
     }
 
     loop {
@@ -278,7 +278,7 @@ pub unsafe fn readdir_core(
         unsafe { sort_strings((*gap).ga_data as *mut *mut c_char, (*gap).ga_len) };
     }
 
-    OK
+    Ok(())
 }
 
 /// Delete `name` and everything in it, recursively.
@@ -306,7 +306,7 @@ unsafe fn delete_tree(name: &[u8]) -> c_int {
     }
 
     let mut ga = garray_T::default();
-    if unsafe { readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) } != OK {
+    if unsafe { readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) }.is_err() {
         return -1;
     }
 
@@ -414,7 +414,7 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
     if buf.is_null() {
         return false;
     }
-    unsafe { vim_full_name(tempdir, buf, MAXPATHL as size_t, false) };
+    let _ = unsafe { vim_full_name(tempdir, buf, MAXPATHL as size_t, false) };
     let mut full = unsafe { CStr::from_ptr(buf) }.to_bytes().to_vec();
     unsafe { xfree(buf.cast()) };
 

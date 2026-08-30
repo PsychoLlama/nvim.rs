@@ -51,8 +51,8 @@ use crate::strings::strrep;
 
 use crate::types::{
     CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
-    ExArgt, ExpandContext, FAIL, MAXPATHL, NUL, OK, Vv, exarg_T, expand_T, linenr_T, size_t,
-    ssize_t, uint8_t,
+    ExArgt, ExpandContext, Failed, MAXPATHL, NUL, Vv, exarg_T, expand_T, linenr_T, size_t, ssize_t,
+    uint8_t,
 };
 use crate::winlayer::{Buf, Ea};
 use ::libc::{strcat, strcpy, strpbrk, strrchr};
@@ -116,7 +116,7 @@ pub(crate) unsafe fn expand_filename(
     eap: *mut exarg_T,
     cmdlinep: *mut *mut c_char,
     errormsgp: &mut Option<CString>,
-) -> c_int {
+) -> Result<(), Failed> {
     // `eval_vars` answers a static message or the empty marker, never a
     // shared buffer, so the copy below is the whole of what owning it costs.
     let mut msg: *const c_char = ptr::null();
@@ -160,7 +160,7 @@ pub(crate) unsafe fn expand_filename(
         };
         if !msg.is_null() {
             *errormsgp = Some(unsafe { CStr::from_ptr(msg) }.to_owned());
-            return FAIL;
+            return Err(Failed);
         }
         if repl.is_null() {
             p = unsafe { p.add(srclen as usize) };
@@ -218,7 +218,7 @@ pub(crate) unsafe fn expand_filename(
     // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
     // it can be expanded to exactly one match.
     if !ea.argt.has(ExArgt::NOSPC) || ea.usefilter != 0 {
-        return OK;
+        return Ok(());
     }
 
     if has_wildcards {
@@ -235,7 +235,7 @@ pub(crate) unsafe fn expand_filename(
     }
     if !has_wildcards {
         unsafe { backslash_halve(ea.arg) };
-        return OK;
+        return Ok(());
     }
 
     let mut xpc: expand_T = unsafe { core::mem::zeroed() };
@@ -255,11 +255,11 @@ pub(crate) unsafe fn expand_filename(
         )
     };
     if expanded.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     repl_cmdline(eap, ea.arg, strlen(ea.arg), expanded, cmdlinep);
     xfree(expanded as *mut c_void);
-    OK
+    Ok(())
 }
 
 /// Replace `srclen` bytes at `src` with `repl`, in a freshly allocated copy

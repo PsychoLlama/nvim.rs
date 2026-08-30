@@ -22,7 +22,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::FAIL;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -469,7 +468,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
                 ptr: file2.as_mut_ptr().cast(),
                 size: file2.len() as c_int,
             };
-            if unsafe { diff_file_internal(&raw mut dio) } == FAIL {
+            if unsafe { diff_file_internal(&raw mut dio) }.is_err() {
                 break 'done;
             }
             unsafe { diff_read(0, i as c_int, &raw mut dio) };

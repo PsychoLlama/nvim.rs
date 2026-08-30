@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::lines::set_op_range;
-use super::{B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, FAIL, NL, print_line};
+use super::{B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
@@ -119,7 +119,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
         let ended = &text[typed..] == b".";
         // SAFETY: `lnum` is a line of the current buffer, or zero.
         let undo_failed =
-            !ended && !did_undo && u_save(lnum, lnum + 1 + linenr_T::from(empty)) == FAIL;
+            !ended && !did_undo && u_save(lnum, lnum + 1 + linenr_T::from(empty)).is_err();
         if ended || undo_failed {
             // SAFETY: the line is ours.
             unsafe { xfree(theline.cast()) };
@@ -134,7 +134,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
         did_undo = true;
         // SAFETY: `lnum` is a line of the current buffer, or zero.
-        unsafe { ml_append(lnum, theline, 0, false) };
+        let _ = unsafe { ml_append(lnum, theline, 0, false) };
         if empty {
             // There are no marks below the inserted lines.
             unsafe { appended_lines(lnum, 1) };
@@ -146,7 +146,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
         if empty {
             // SAFETY: the dummy line the buffer started with.
-            unsafe { ml_delete(2) };
+            let _ = unsafe { ml_delete(2) };
             empty = false;
         }
     }
@@ -260,7 +260,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
     let (forceit, line1, line2) = unsafe { ((*eap).forceit, (*eap).line1, (*eap).line2) };
     // SAFETY: the range is inside the current buffer.
-    if line2 >= line1 && u_save(line1 - 1, line2 + 1) == FAIL {
+    if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
@@ -283,7 +283,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
             // Nothing left to delete.
             break;
         }
-        unsafe { ml_delete(line1) };
+        let _ = unsafe { ml_delete(line1) };
         lnum -= 1;
     }
 

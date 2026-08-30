@@ -17,7 +17,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -227,14 +227,18 @@ fn new_string_garray() -> garray_T {
 ///
 /// # Safety
 /// Both out-parameters must be writable, and `ga` must own its strings.
-unsafe fn take_matches(ga: garray_T, num_file: *mut c_int, file: *mut *mut *mut c_char) -> c_int {
+unsafe fn take_matches(
+    ga: garray_T,
+    num_file: *mut c_int,
+    file: *mut *mut *mut c_char,
+) -> Result<(), Failed> {
     if ga.ga_len <= 0 {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the caller's out-parameters; the garray's buffer is handed over.
     unsafe { *file = ga.ga_data.cast() };
     unsafe { *num_file = ga.ga_len };
-    OK
+    Ok(())
 }
 
 /// Expand color scheme, compiler or filetype names.
@@ -251,7 +255,7 @@ pub unsafe fn expand_runtime_dir(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     dirnames: *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's out-parameters and strings.
     unsafe { *num_file = 0 };
     unsafe { *file = ptr::null_mut() };
@@ -275,7 +279,7 @@ pub unsafe fn expand_runtime_cmd(
     pat: *mut c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's out-parameters and pattern.
     unsafe { *num_matches = 0 };
     unsafe { *matches = ptr::null_mut() };
@@ -318,7 +322,7 @@ pub unsafe fn expand_packadd_dir(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's out-parameters and pattern; `s` is owned and freed
     // below.
     unsafe { *num_file = 0 };
@@ -340,7 +344,7 @@ pub unsafe fn expand_packadd_dir(
     }
 
     if ga.ga_len <= 0 {
-        return FAIL;
+        return Err(Failed);
     }
     // Sort and remove the duplicates the two patterns can produce.
     unsafe { ga_remove_duplicate_strings(&raw mut ga) };

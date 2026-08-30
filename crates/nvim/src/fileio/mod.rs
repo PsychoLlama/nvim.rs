@@ -80,10 +80,10 @@ use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FAIL, FILE, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData, OptValType,
-    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, event_T, exarg_T, garray_T,
-    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
-    ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    CheckItem, Directory, FAIL, FILE, Failed, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValData,
+    OptValType, OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, event_T, exarg_T,
+    garray_T, iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T,
+    size_t, ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -151,6 +151,23 @@ pub const BASENAMELEN: ::core::ffi::c_int = NAME_MAX - 5 as ::core::ffi::c_int;
 pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
+
+/// What a read of a file into a buffer came to.
+///
+/// `readfile`'s `NOTDONE` as a value rather than a status: the file was not
+/// read and that is *not* an error -- a `BufReadCmd` autocommand did the
+/// reading itself, or the name is a directory and the caller still wants
+/// `BufEnter` to fire. Callers that only ask "did it work" read the
+/// `Result`; the two that ask "were the lines actually read" match on this,
+/// which is the distinction `retval == OK` versus `retval != FAIL` carried
+/// in the C and which a bare `Result` would have quietly lost.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Loaded {
+    /// The file was read into the buffer.
+    Read,
+    /// Nothing was read, and nothing is wrong. The C's `NOTDONE`.
+    Skipped,
+}
 
 /// One of the buffer-lifecycle autocommands this file fires about the current
 /// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
@@ -236,7 +253,7 @@ pub(crate) unsafe fn readfile_linenr(
 }
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file
 /// name given for a buffer that has none.
-pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
+pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<(), Failed> {
     let buf = curbuf.get();
 
     // It's like the unnamed buffer is deleted...
@@ -246,15 +263,15 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
     autocmd_for_curbuf(EVENT_BUFWIPEOUT);
     if aborting() {
         // Autocommands may abort script processing.
-        return FAIL;
+        return Err(Failed);
     }
     if curbuf.get() != buf {
         // We are in another buffer now, don't do the renaming.
         unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
-        return FAIL;
+        return Err(Failed);
     }
 
-    if unsafe { setfname(cur_buf(), fname, sfname, false) } == OK {
+    if unsafe { setfname(cur_buf(), fname, sfname, false) }.is_ok() {
         cur_buf().b_flags |= BufFlags::NOTEDITED;
     }
 
@@ -264,7 +281,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
         autocmd_for_curbuf(EVENT_BUFADD);
     }
     if aborting() {
-        return FAIL;
+        return Err(Failed);
     }
 
     // Do filetype detection now if 'filetype' is empty.
@@ -272,11 +289,11 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             let cmd = c"filetypedetect BufRead".as_ptr().cast_mut();
             // SAFETY: a static command line.
-            unsafe { do_doautocmd(cmd, false, ptr::null_mut()) };
+            let _ = unsafe { do_doautocmd(cmd, false, ptr::null_mut()) };
         }
         do_modelines(OptionSetFlags::NONE);
     }
-    OK
+    Ok(())
 }
 
 /// Put a file name into `ret_buf`, in quotes, with the home directory at the

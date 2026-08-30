@@ -39,7 +39,7 @@ use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
-    CdScope, MAXPATHL, NUL, OK, OptInt, buf_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
+    CdScope, MAXPATHL, NUL, OptInt, buf_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
     tabpage_T,
 };
 use crate::undo::u_sync;
@@ -413,7 +413,7 @@ fn fix_current_dir() {
     };
     let mut cwd = [0 as c_char; MAXPATHL as usize];
     // SAFETY: a buffer of exactly `MAXPATHL` bytes to fill in.
-    if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) } != OK {
+    if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) }.is_err() {
         cwd[0] = NUL as c_char;
     }
 

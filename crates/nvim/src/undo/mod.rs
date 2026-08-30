@@ -63,6 +63,7 @@ use crate::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::spell::spell_check_window;
 use crate::state::virtual_active;
 use crate::strings::vim_snprintf;
+use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::Win;
 use ::libc::{
@@ -158,23 +159,16 @@ static lastmark: GlobalCell<c_int> = GlobalCell::new(0);
 /// Undo could not record the lines a change is about to touch, so the change
 /// must not be made.
 ///
-/// The `u_save*` family is `pub` with 64 call sites across the tree and still
-/// answers `OK`/`FAIL`; [`saved`] is the conversion a converted caller puts
-/// at the call, and the domain error of whatever is being edited absorbs this
-/// one with a `From` impl (see `ops::delete::NotDeleted`). Converting the
-/// family itself is a later job.
+/// The `u_save*` family answers the anonymous [`Failed`]; this is the name
+/// that failure has for a caller who was about to change the buffer, and the
+/// domain error of whatever is being edited absorbs it in turn with a `From`
+/// impl (see `ops::delete::NotDeleted`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct UndoFailed;
 
-/// One of the `u_save*` answers as a `Result`.
-///
-/// The conversion belongs at the call and nowhere else, exactly as
-/// `eval::typval::added` does for the `tv_dict_add_*` family.
-pub fn saved(status: c_int) -> Result<(), UndoFailed> {
-    if status == FAIL {
-        Err(UndoFailed)
-    } else {
-        Ok(())
+impl From<Failed> for UndoFailed {
+    fn from(_: Failed) -> Self {
+        UndoFailed
     }
 }
 
@@ -182,7 +176,7 @@ pub fn saved(status: c_int) -> Result<(), UndoFailed> {
 /// destroy.
 ///
 /// Safe: as [`u_save`], over the cursor's line.
-pub fn u_save_cursor() -> c_int {
+pub fn u_save_cursor() -> Result<(), Failed> {
     // SAFETY: a live current window, by the contract above.
     let cur: linenr_T = cur_win().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
@@ -193,7 +187,7 @@ pub fn u_save_cursor() -> c_int {
 ///
 /// Safe: the only promise is that the editor exists; `u_save_buf` validates
 /// the line range itself and answers `FAIL` when it is out of range.
-pub fn u_save(top: linenr_T, bot: linenr_T) -> c_int {
+pub fn u_save(top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
     u_save_buf(cur_buf(), top, bot)
 }
 
@@ -202,9 +196,9 @@ pub fn u_save(top: linenr_T, bot: linenr_T) -> c_int {
 ///
 /// Safe: the line range is validated here, and `FAIL` is the answer for one
 /// that is out of range.
-pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> c_int {
+pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
     if top >= bot || bot > buf.line_count() + 1 {
-        return FAIL;
+        return Err(Failed);
     }
     if top + 2 == bot {
         // A single line: `U` can put it back.
@@ -216,21 +210,21 @@ pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> c_int {
 /// Saves the line a `:substitute` is about to replace.
 ///
 /// Safe: as [`u_save`].
-pub fn u_savesub(lnum: linenr_T) -> c_int {
+pub fn u_savesub(lnum: linenr_T) -> Result<(), Failed> {
     u_savecommon(cur_buf(), lnum - 1, lnum + 1, lnum + 1, false)
 }
 
 /// Saves the position a `:substitute` is about to insert a line at.
 ///
 /// Safe: as [`u_savesub`].
-pub fn u_inssub(lnum: linenr_T) -> c_int {
+pub fn u_inssub(lnum: linenr_T) -> Result<(), Failed> {
     u_savecommon(cur_buf(), lnum - 1, lnum, lnum + 1, false)
 }
 
 /// Saves the `nlines` lines from `lnum` that are about to be deleted.
 ///
 /// Safe: as [`u_save`].
-pub fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> c_int {
+pub fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> Result<(), Failed> {
     let whole_buffer = nlines == cur_buf().b_ml.ml_line_count;
     u_savecommon(
         cur_buf(),
@@ -306,11 +300,11 @@ pub fn u_savecommon(
     bot: linenr_T,
     newbot: linenr_T,
     reload: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let b = buf;
     if !reload {
         if !undo_allowed(buf) {
-            return FAIL;
+            return Err(Failed);
         }
         if ptr::eq(buf.raw(), curbuf.get()) {
             // SAFETY: the current buffer, which is live and survives
@@ -319,7 +313,7 @@ pub fn u_savecommon(
         }
         if bot > b.line_count() + 1 {
             emsg(gettext(c"E881: Line count changed unexpectedly"));
-            return FAIL;
+            return Err(Failed);
         }
     }
     let size: linenr_T = bot - top - 1;
@@ -327,15 +321,15 @@ pub fn u_savecommon(
         // A boundary: this change starts an undo header of its own.
         // SAFETY: a live current window.
         if !unsafe { start_new_header(b) } {
-            return OK;
+            return Ok(());
         }
     } else {
         if get_undolevel(buf) < 0 {
-            return OK;
+            return Ok(());
         }
         // SAFETY: a live current window.
         if size == 1 && unsafe { extend_last_entry(b, top, bot, newbot) } {
-            return OK;
+            return Ok(());
         }
         u_getbot(buf);
     }
@@ -560,7 +554,7 @@ unsafe fn record_entry(
     bot: linenr_T,
     newbot: linenr_T,
     reload: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut newhead = b
         .header(b.b_u_newhead)
         .expect("the newest header is the one this change is recorded against");
@@ -585,7 +579,7 @@ unsafe fn record_entry(
             if got_int.get() {
                 // Only the lines already copied are there to free.
                 unsafe { u_freeentry(uep, i) };
-                return FAIL;
+                return Err(Failed);
             }
             unsafe { *array.add(i as size_t) = u_save_line_buf(b, top + 1 + i) };
         }
@@ -597,7 +591,7 @@ unsafe fn record_entry(
     }
     b.b_u_synced = false;
     undo_undoes.set(false);
-    OK
+    Ok(())
 }
 
 /// Writes when `tt` was into `buf`: a clock time for anything older than a

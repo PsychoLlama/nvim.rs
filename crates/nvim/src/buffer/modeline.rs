@@ -26,7 +26,7 @@ use crate::main::{current_sctx, p_mls, secure};
 use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{FAIL, OK, OptionSetFlags, intmax_t, linenr_T, scid_T};
+use crate::types::{Failed, OptionSetFlags, intmax_t, linenr_T, scid_T};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 
@@ -65,7 +65,7 @@ fn version_at(line: &[u8], off: usize) -> Option<(intmax_t, usize)> {
 }
 
 /// `do_set` over the option list at `text[off..]`, which it may write into.
-fn set_options(text: &mut [u8], off: usize, flags: OptionSetFlags) -> c_int {
+fn set_options(text: &mut [u8], off: usize, flags: OptionSetFlags) -> Result<(), Failed> {
     let arg = text[off..].as_mut_ptr().cast::<c_char>();
     // SAFETY: a NUL-terminated option list inside a buffer this function
     // owns, which is what `do_set` parses and truncates in place.
@@ -126,7 +126,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
         && lnum <= current_buf().b_ml.ml_line_count
         && lnum <= nmlines as linenr_T
     {
-        if chk_modeline(lnum, flags) == FAIL {
+        if chk_modeline(lnum, flags).is_err() {
             nmlines = 0;
         }
         lnum += 1;
@@ -138,7 +138,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
         && lnum > nmlines as linenr_T
         && lnum > current_buf().b_ml.ml_line_count - nmlines as linenr_T
     {
-        if chk_modeline(lnum, flags) == FAIL {
+        if chk_modeline(lnum, flags).is_err() {
             nmlines = 0;
         }
         lnum -= 1;
@@ -148,13 +148,13 @@ pub fn do_modelines(flags: OptionSetFlags) {
 
 /// Check one line for a mode string, and apply it. `FAIL` when an error was
 /// encountered, which stops the whole pass.
-fn chk_modeline(lnum: linenr_T, flags: OptionSetFlags) -> c_int {
+fn chk_modeline(lnum: linenr_T, flags: OptionSetFlags) -> Result<(), Failed> {
     let line = buffer_line(lnum);
     // The NUL the slice ends on is not part of the line: `line_end` is where
     // upstream's `ml_get_len` puts it.
     let line_end = line.len() - 1;
     let Some(marker) = find_marker(line) else {
-        return OK;
+        return Ok(());
     };
 
     // Skip over "ex:", "vi:" or "vim:".
@@ -237,8 +237,8 @@ fn version_guard_matches(line: &[u8], s: usize) -> Option<bool> {
 ///
 /// `text` is the caller's own NUL-terminated copy, which this writes into:
 /// `\:` collapses to `:`, and every separator becomes a NUL.
-fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: OptionSetFlags) -> c_int {
-    let mut retval = OK;
+fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: OptionSetFlags) -> Result<(), Failed> {
+    let mut retval = Ok(());
     let mut line_end = text.len() - 1;
 
     // Prepare for emsg().
@@ -284,7 +284,7 @@ fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: OptionSetFlags) -> c_i
         if at(text, s) != 0 {
             // Skip over an empty "::".
             retval = set_one(text, s, lnum, flags);
-            if retval == FAIL {
+            if retval.is_err() {
                 // Stop if an error was found.
                 break;
             }
@@ -299,7 +299,7 @@ fn apply_modeline(text: &mut [u8], lnum: linenr_T, flags: OptionSetFlags) -> c_i
 
 /// One `:`-separated part of a modeline, executed with `sandbox` on and the
 /// script context pointing at the modeline.
-fn set_one(text: &mut [u8], s: usize, lnum: linenr_T, flags: OptionSetFlags) -> c_int {
+fn set_one(text: &mut [u8], s: usize, lnum: linenr_T, flags: OptionSetFlags) -> Result<(), Failed> {
     let secure_save = secure.get();
     let save_current_sctx = current_sctx.get();
     current_sctx.with_mut(|sctx| {

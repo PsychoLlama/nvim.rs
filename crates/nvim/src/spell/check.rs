@@ -168,7 +168,7 @@ pub unsafe fn spell_check(
     let fword = &raw mut mi.mi_fword as *mut c_char;
     let taken = unsafe { mi.mi_fend.offset_from(ptr) } as c_int;
     let room = MAXWLEN as c_int + 1;
-    unsafe { super::chartab::spell_casefold(wp, ptr, taken, fword, room) };
+    let _ = unsafe { super::chartab::spell_casefold(wp, ptr, taken, fword, room) };
     mi.mi_fwordlen = unsafe { strlen(fword) } as c_int;
 
     if is_camel_case && mi.mi_fwordlen > 0 {

@@ -29,7 +29,7 @@ use neovim::garray::ga_clear;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    OK, Refcount, VAR_FLOAT, VAR_LIST, VarLock, list_T, listitem_T, listwatch_T, typval_T,
+    Refcount, VAR_FLOAT, VAR_LIST, VarLock, list_T, listitem_T, listwatch_T, typval_T,
     typval_vval_union, vimconv_T,
 };
 
@@ -947,7 +947,7 @@ fn a_converting_copy_rewrites_every_string() {
                 cstr("utf-8").as_ptr().cast_mut(),
                 cstr("latin1").as_ptr().cast_mut(),
             ),
-            OK
+            Ok(())
         );
 
         let mut l_tv = copy_corpus().build();
@@ -1003,7 +1003,7 @@ fn a_converting_copy_rewrites_every_string() {
 
         tv_list_free(deep);
         tv_clear(&raw mut l_tv);
-        convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
+        let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
     }
 }
 

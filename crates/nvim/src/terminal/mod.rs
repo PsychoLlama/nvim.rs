@@ -317,7 +317,7 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *
         while !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
             // SAFETY: a live buffer, deleting its own lines down to the one
             // empty line `MlFlags::EMPTY` stands for.
-            unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buf.raw(), 1 as linenr_T, line_count) };

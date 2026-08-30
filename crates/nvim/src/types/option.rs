@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
 use crate::option::{OptSlot, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
@@ -65,7 +66,7 @@ pub type opt_expand_cb_T = Option<
         *mut optexpand_T,
         *mut ::core::ffi::c_int,
         *mut *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int,
+    ) -> Result<(), Failed>,
 >;
 #[derive(Copy, Clone)]
 pub struct optexpand_T {

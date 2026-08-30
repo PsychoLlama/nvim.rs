@@ -47,7 +47,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    NUL, OK, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
+    NUL, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -643,7 +643,7 @@ unsafe fn build_keywordprg_cmd(
         out.push_num(c".,.+%ld", (count0 - 1) as int64_t);
     }
     // SAFETY: a NUL-terminated literal command.
-    unsafe { do_cmdline_cmd(c"tabnew".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c"tabnew".as_ptr()) };
     out.push(c"terminal ");
     if count0 == 0 && isman_s {
         // `man -s` with no section is just `man`.
@@ -909,7 +909,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.
         g_tag_at_cursor.set(true);
-        unsafe { do_cmdline_cmd(out.as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(out.as_ptr()) };
         g_tag_at_cursor.set(false);
         if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.
@@ -958,7 +958,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     let must_write =
         curbuf_is_changed() && cur_buf().b_nwindows <= 1 && !unsafe { buf_hide(curbuf.get()) };
     if must_write {
-        unsafe { autowrite(curbuf.get(), false) };
+        let _ = unsafe { autowrite(curbuf.get(), false) };
     }
     setpcmark();
     let hidden = unsafe { buf_hide(curbuf.get()) };
@@ -967,7 +967,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     let win = curwin.get();
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
-    if opened == OK && unsafe { (*cap).nchar } == 'F' as c_int && lnum >= 0 {
+    if opened.is_ok() && unsafe { (*cap).nchar } == 'F' as c_int && lnum >= 0 {
         cur_win().w_cursor.lnum = lnum;
         check_cursor_lnum(unsafe { Win::current() });
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

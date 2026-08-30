@@ -18,7 +18,7 @@ use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_tab;
 use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
-use crate::types::{FAIL, IOSIZE, OK, ShmFlag};
+use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
@@ -109,7 +109,8 @@ unsafe fn qf_jump_edit_buffer(
                 } else {
                     ptr::null_mut()
                 },
-            ) == OK
+            )
+            .is_ok()
         }
     } else {
         // Read before the window juggling below, which changes it.
@@ -123,7 +124,8 @@ unsafe fn qf_jump_edit_buffer(
                     1,
                     GETF_SETMARK as c_int | GETF_SWITCH as c_int,
                     forceit,
-                ) == OK
+                )
+                .is_ok()
             },
         }
     };
@@ -189,7 +191,7 @@ unsafe fn escape_winfixbuf(
         return Some(true);
     }
     // Split off a window, which is 'nowinfixbuf'.
-    if win_split(0, 0) == OK {
+    if win_split(0, 0).is_ok() {
         *opened_window = true;
     }
     if cur_win().w_onebuf_opt.wo_wfb == 0 {
@@ -285,7 +287,7 @@ unsafe fn qf_jump_print_msg(
     if msg_scrolled.get() == 0 {
         update_topline(unsafe { Win::current() });
         if must_redraw.get() != 0 {
-            unsafe { update_screen() };
+            let _ = unsafe { update_screen() };
         }
     }
     let dirc = IOSIZE as size_t;
@@ -356,7 +358,7 @@ unsafe fn qf_jump_open_window(
     // A `:helpgrep` entry wants a help window.
     if qf_ptr.qf_type == 1
         && (!buf_is_help(cur_win().buffer_or_none()) || cmdmod_tab() != 0)
-        && unsafe { jump_to_help_window(qi.raw(), newwin, opened_window) } == FAIL
+        && unsafe { jump_to_help_window(qi.raw(), newwin, opened_window) }.is_err()
     {
         return Jumped::Restore;
     }
@@ -368,7 +370,7 @@ unsafe fn qf_jump_open_window(
         if qf_ptr.qf_fnum == 0 {
             return Jumped::Nowhere;
         }
-        if unsafe { qf_jump_to_usable_window(qf_ptr.qf_fnum, newwin, opened_window) } == FAIL {
+        if unsafe { qf_jump_to_usable_window(qf_ptr.qf_fnum, newwin, opened_window) }.is_err() {
             return Jumped::Restore;
         }
     }
@@ -549,7 +551,7 @@ pub(crate) unsafe fn qf_jump_first(qi: *mut qf_info_T, save_qfid: c_uint, forcei
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: as above.
     let restored = unsafe { qf_restore_list(qi.raw(), save_qfid) };
-    if restored == FAIL || !check_can_set_curbuf_forceit(forceit) {
+    if restored.is_err() || !check_can_set_curbuf_forceit(forceit) {
         return;
     }
     // Autocommands may have cleared the list.

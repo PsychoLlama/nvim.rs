@@ -17,7 +17,7 @@ use crate::guard::{Allow, Suppress};
 use crate::message::emsg_ptr;
 use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
-use crate::types::{OK, OptionSetFlags};
+use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
 
 /// How tall a preview split starts out.
@@ -341,7 +341,7 @@ unsafe fn pum_show_info(
     if unsafe { (*curwin.get()).w_onebuf_opt.wo_pvw } != 0
         || unsafe { (*curwin.get()).w_float_is_info }
     {
-        let mut res = OK;
+        let mut res = Ok(());
         if !resized
             && unsafe { (*curbuf.get()).b_nwindows } == 1
             && unsafe { (*curbuf.get()).b_fname }.is_null()
@@ -365,7 +365,7 @@ unsafe fn pum_show_info(
             };
             no_u_sync.set(no_u_sync.get() - 1);
 
-            if res == OK {
+            if res.is_ok() {
                 // A new, empty, throwaway buffer.
                 for (option, value) in [
                     (kOptSwapfile, boolean_optval(Some(false))),
@@ -379,7 +379,7 @@ unsafe fn pum_show_info(
             }
         }
 
-        if res == OK {
+        if res.is_ok() {
             resized = unsafe {
                 pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save)
             };
@@ -482,7 +482,7 @@ unsafe fn pum_restore_window(
     // TODO(bfredl): can simplify, get rid of the flag munging? or at
     // least eliminate the extra redraw before win_enter()?
     pum_is_visible.set(false);
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     pum_is_visible.set(true);
 
     if !resized && win_valid(curwin_save) {
@@ -493,7 +493,7 @@ unsafe fn pum_restore_window(
 
     // Autocommands may have changed it again.
     pum_is_visible.set(false);
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     pum_is_visible.set(true);
     resized
 }

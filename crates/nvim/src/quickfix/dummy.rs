@@ -32,7 +32,7 @@ use core::ptr;
 pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     let mut dirname_now = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the caller's directory name, and one owned MAXPATHL buffer.
-    unsafe { os_dirname(dirname_now.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(dirname_now.as_mut_ptr(), MAXPATHL as size_t) };
     if unsafe { strcmp(dirname_start, dirname_now.as_ptr()) } == 0 {
         return;
     }
@@ -78,7 +78,7 @@ pub(crate) unsafe fn load_dummy_buffer(
     unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP) as c_int) };
 
     // Need to open the memfile before putting the buffer in a window.
-    if unsafe { ml_open(newbuf) } == OK {
+    if unsafe { ml_open(newbuf) }.is_ok() {
         // Make sure this buffer isn't wiped out by autocommands.
         unsafe { (*newbuf).b_locked += 1 };
         // Set curwin/curbuf to buf and save a few things.
@@ -86,7 +86,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.
-        unsafe { setfname(cur_buf(), fname, ptr::null_mut(), false) };
+        let _ = unsafe { setfname(cur_buf(), fname, ptr::null_mut(), false) };
 
         // Create swap file now to avoid the ATTENTION message.
         unsafe { check_need_swap(true) };
@@ -103,7 +103,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         let readfile_result =
             unsafe { readfile(fname, sfname, 0, 0, lines_to_read, eap, flags, false) };
         unsafe { (*newbuf).b_locked -= 1 };
-        if readfile_result == OK && !got_int.get() && !cur_buf().b_flags.has(BufFlags::NEW) {
+        if readfile_result.is_ok() && !got_int.get() && !cur_buf().b_flags.has(BufFlags::NEW) {
             failed = false;
             if !ptr::eq(curbuf.get(), newbuf) {
                 // Bloody autocommands changed the buffer! Restore
@@ -130,7 +130,7 @@ pub(crate) unsafe fn load_dummy_buffer(
 
     // When autocommands/'autochdir' option changed directory: go back.
     // Let the caller know where it went.
-    unsafe { os_dirname(resulting_dir, MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(resulting_dir, MAXPATHL as size_t) };
     unsafe { restore_start_dir(dirname_start) };
 
     if !newbufref.valid() {

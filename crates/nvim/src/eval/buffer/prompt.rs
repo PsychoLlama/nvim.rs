@@ -265,14 +265,14 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
     };
     if intact {
         let new_line = unsafe { concat_str(new_prompt, at(prompt_col)) };
-        if unsafe { ml_replace_buf(raw, prompt_lno, new_line, false, false) } != OK {
+        if unsafe { ml_replace_buf(raw, prompt_lno, new_line, false, false) }.is_err() {
             unsafe { xfree(new_line.cast()) };
         }
         splice(prompt_col);
         cursor_col += new_prompt_len - prompt_col;
     } else {
         let whole = new_prompt.cast_mut();
-        unsafe { ml_replace_buf(raw, prompt_lno, whole, true, false) };
+        let _ = unsafe { ml_replace_buf(raw, prompt_lno, whole, true, false) };
         splice(old_line_len);
         cursor_col = new_prompt_len;
     }

@@ -11,7 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{FAIL, check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
+use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -58,7 +58,7 @@ unsafe fn global_exe_one(cmd: *mut c_char, lnum: linenr_T) {
         cmd
     };
     // SAFETY: a live command string; re-enters the Ex layer.
-    unsafe { do_cmdline(cmd, None, ptr::null_mut(), DoCmdOpts::NOWAIT) };
+    let _ = unsafe { do_cmdline(cmd, None, ptr::null_mut(), DoCmdOpts::NOWAIT) };
 }
 
 /// Does the command letter `kind` select a line that (did not) match?
@@ -143,7 +143,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
     // The delimiter is handed on as a `char`, so a high byte arrives
     // sign-extended -- which is what indexes the ctype table upstream.
     // SAFETY: message state.
-    if unsafe { check_regexp_delim(delim as c_char as c_int) } == FAIL {
+    if unsafe { check_regexp_delim(delim as c_char as c_int) }.is_err() {
         return None;
     }
 
@@ -262,7 +262,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
             &raw mut regmatch,
         )
     };
-    if compiled == FAIL {
+    if compiled.is_err() {
         emsg(gettext(e_invcmd));
         return;
     }

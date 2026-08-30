@@ -11,7 +11,7 @@ use super::*;
 use crate::highlight_group::HLF_D;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, IOSIZE, OK, VAR_DICT, VAR_LIST};
+use crate::types::{Failed, IOSIZE, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Live, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -344,21 +344,21 @@ pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
 ///
 /// # Safety
 /// `d` must be a live dict.
-pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> c_int {
+pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> Result<(), Failed> {
     // SAFETY: the dict is live for the whole call, and nothing else holds
     // the window's tag stack.
     if tfu_in_use.get() {
         // 'tagfunc' is running: it is the tag stack's own contents
         // that are being computed.
         tag_emsg(c"E986: Cannot modify the tag stack within tagfunc");
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut items = ptr::null_mut::<list_T>();
     if let Some(di) = unsafe { find(d, c"items") } {
         if unsafe { (*di).di_tv.v_type } != VAR_LIST {
             emsg(gettext(e_listreq));
-            return FAIL;
+            return Err(Failed);
         }
         items = unsafe { (*di).di_tv.vval.v_list };
     }
@@ -384,7 +384,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> c_int {
         // Leave the index above the last entry, as a fresh jump would.
         stack.set_curidx(stack.len() as c_int);
     }
-    OK
+    Ok(())
 }
 
 /// [`tv_dict_find`] answering `None` rather than a NULL pointer.

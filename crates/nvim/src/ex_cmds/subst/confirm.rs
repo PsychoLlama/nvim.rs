@@ -196,7 +196,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         // before it.
         len_change = unsafe { strlen(new_line) } as c_int - unsafe { strlen(orig_line) } as c_int;
         cur_win().w_cursor.col += len_change;
-        unsafe { ml_replace(st.lnum, new_line, false) };
+        let _ = unsafe { ml_replace(st.lnum, new_line, false) };
     }
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
@@ -212,7 +212,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     validate_cursor(unsafe { Win::current() });
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     cur_win().w_onebuf_opt.wo_fen = save_p_fen;
 
@@ -245,7 +245,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     if !orig_line.is_null() {
         // SAFETY: `lnum` is a line of the buffer and `orig_line` its saved
         // text, which `ml_replace` takes ownership of.
-        unsafe { ml_replace(st.lnum, orig_line, false) };
+        let _ = unsafe { ml_replace(st.lnum, orig_line, false) };
     }
     typed
 }

@@ -55,8 +55,8 @@ use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
 use super::{
     _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, COMP_CHECKCASE, COMP_CHECKDUP,
-    COMP_CHECKREP, COMP_CHECKTRIPLE, FAIL, MAXLINELEN, TAB, afffile_T, affheader_T,
-    spell_message_fmt, spellinfo_T,
+    COMP_CHECKREP, COMP_CHECKTRIPLE, MAXLINELEN, TAB, afffile_T, affheader_T, spell_message_fmt,
+    spellinfo_T,
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.
@@ -434,7 +434,7 @@ unsafe fn handle_line(
         unsafe { (*aff).af_enc = enc_canonize(items[1]) };
         if unsafe { (*spin).si_ascii } == 0
             && unsafe { convert_setup(&raw mut (*spin).si_conv, (*aff).af_enc, p_enc.get()) }
-                == FAIL
+                .is_err()
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, af_enc, arg2) =

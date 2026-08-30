@@ -32,34 +32,34 @@ use crate::r#move::WinValid;
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Integer, OK, OptInt, frame_T, qf_info_T, win_T};
+use crate::types::{FAIL, Failed, Integer, OptInt, frame_T, qf_info_T, win_T};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
 use crate::winlayer::{Frame, Win, WinId, frames, tabs};
 use ::libc::memset;
 
-pub fn win_split(size: c_int, flags: c_int) -> c_int {
+pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
     split(size, flags)
 }
 
 /// Split the current window, `flags` being the `WSP_*` set: which half the new
 /// window takes, whether it is vertical, and whether it is entered.
-pub(crate) fn split(size: c_int, flags: c_int) -> c_int {
+pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     let cur = cur_win();
     // SAFETY: a live window.
     if unsafe { check_split_disallowed(cur.raw()) } == FAIL {
-        return FAIL;
+        return Err(Failed);
     }
     // When the ":tab" modifier was used, open a new tab page instead.
-    if may_open_tabpage() == OK {
-        return OK;
+    if may_open_tabpage().is_ok() {
+        return Ok(());
     }
     // Add flags from ":vertical", ":topleft" and ":botright".
     let flags = flags | cmdmod.with(|m| m.cmod_split);
     if flags & WSP_TOP as c_int != 0 && flags & WSP_BOT as c_int != 0 {
         err(c"E442: Can't split topleft and botright at the same time".as_ptr());
-        return FAIL;
+        return Err(Failed);
     }
     // When creating the help window make a snapshot of the window layout;
     // otherwise clear the snapshot, it is now invalid.
@@ -74,9 +74,9 @@ pub(crate) fn split(size: c_int, flags: c_int) -> c_int {
         }
     }
     if split_ins(size, flags, None, 0, None).is_some() {
-        OK
+        Ok(())
     } else {
-        FAIL
+        Err(Failed)
     }
 }
 

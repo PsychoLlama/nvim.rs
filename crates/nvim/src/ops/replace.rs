@@ -21,7 +21,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// Overwrite the single byte at `lp` with `c`.
 ///
@@ -74,11 +74,11 @@ unsafe fn replace_character(c: c_int) {
 /// # Safety
 /// `oap` must point to a live `oparg_T` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
+pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
     let mut oap = unsafe { Op::new(oap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || oap.empty {
-        return OK;
+        return Ok(());
     }
 
     // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
@@ -94,8 +94,8 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
     unsafe { mb_adjust_opend(oap.raw()) };
 
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if u_save(above, below) == FAIL {
-        return FAIL;
+    if u_save(above, below).is_err() {
+        return Err(Failed);
     }
 
     if oap.motion_type == kMTBlockWise {
@@ -113,7 +113,7 @@ pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> c_int {
         cur_buf().b_op_start = oap.start;
         cur_buf().b_op_end = oap.end;
     }
-    OK
+    Ok(())
 }
 
 /// The blockwise arm: one rebuilt line per line the block reaches.
@@ -237,11 +237,11 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     }
 
     let baselnum = cur_win().w_cursor.lnum;
-    unsafe { ml_replace(baselnum, newp, false) };
+    let _ = unsafe { ml_replace(baselnum, newp, false) };
     curbuf_splice_pending.set(curbuf_splice_pending.get() + 1);
     if !after_p.is_null() {
         let len = after_p_len as colnr_T;
-        unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
+        let _ = unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
         cur_win().w_cursor.lnum += 1;
         unsafe { appended_lines_mark(cur_win().w_cursor.lnum, 1) };
         oap.end.lnum += 1;

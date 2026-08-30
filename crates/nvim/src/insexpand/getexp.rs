@@ -10,7 +10,7 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
@@ -384,7 +384,7 @@ pub(crate) unsafe fn get_next_tag_completion() {
     // SAFETY: `pat` is the running completion's NUL-terminated pattern, and
     // the two out-parameters are this frame's own locals.
     let found = unsafe { find_tags(pat, count, out, flags, TAG_MANY, fname) };
-    if found == OK && num_matches > 0 {
+    if found.is_ok() && num_matches > 0 {
         unsafe { ins_compl_add_matches(num_matches, matches, p_ic.get()) };
     }
 
@@ -445,7 +445,8 @@ pub(crate) unsafe fn get_next_filename_completion() {
             &raw mut matches,
             ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT,
         )
-    } != OK
+    }
+    .is_err()
     {
         return;
     }
@@ -575,7 +576,7 @@ pub(crate) unsafe fn get_next_completion_match(
     st: *mut ins_compl_next_state_T,
     ini: *mut pos_T,
 ) -> bool {
-    let mut found_new_match = FAIL;
+    let mut found_new_match = Err(Failed);
     match type_0 {
         // No source: `process_next_cpt_value` rejected this entry.
         -1 => {}
@@ -606,15 +607,15 @@ pub(crate) unsafe fn get_next_completion_match(
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = unsafe { get_next_default_completion(st, ini) };
-            if found_new_match == FAIL && unsafe { (*st).ins_buf } == curbuf.get() {
+            if found_new_match.is_err() && unsafe { (*st).ins_buf } == curbuf.get() {
                 unsafe { (*st).found_all = true };
             }
         }
     }
     if type_0 != 0 && compl_curr_match.get() != compl_old_match.get() {
-        found_new_match = OK;
+        found_new_match = Ok(());
     }
-    found_new_match != 0
+    found_new_match.is_ok()
 }
 
 /// Start the per-source time slice, where a timeout is configured at all.
@@ -741,7 +742,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
             }
             if status == INS_COMPL_CPT_CONT {
                 if may_advance_cpt_idx {
-                    if unsafe { advance_cpt_sources_index_safe() } == 0 {
+                    if unsafe { advance_cpt_sources_index_safe() }.is_err() {
                         break;
                     }
                     compl_source_start_timer(cpt_sources().index());
@@ -778,7 +779,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
         }
 
         if may_advance_cpt_idx {
-            if unsafe { advance_cpt_sources_index_safe() } == 0 {
+            if unsafe { advance_cpt_sources_index_safe() }.is_err() {
                 break;
             }
             compl_source_start_timer(cpt_sources().index());

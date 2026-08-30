@@ -27,7 +27,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
 use crate::normal::{set_visual_active, visual_active, visual_mode};
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 mod block;
 mod lines;
@@ -95,7 +95,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
         unsafe {
             stuff_readbuf_char(command_start_char);
             while count > 0 {
-                stuff_inserted(NUL, 1, (count != 1) as c_int);
+                let _ = stuff_inserted(NUL, 1, (count != 1) as c_int);
                 if count != 1 {
                     // `<CR>` then CTRL-U, to take off the indent 'autoindent'
                     // would add. CTRL-U on its own would go back to the
@@ -109,7 +109,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
         }
     } else {
         // SAFETY: replays the last insert into the read buffer.
-        unsafe { stuff_inserted(command_start_char, count, false as c_int) };
+        let _ = unsafe { stuff_inserted(command_start_char, count, false as c_int) };
     }
 
     // The text goes in later, so the cursor cannot be moved past it here;
@@ -152,7 +152,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
     if command_start_char == 'a' as c_int {
         let lnum = cur_win().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
-        u_save(lnum, lnum + 1);
+        let _ = u_save(lnum, lnum + 1);
     }
 }
 
@@ -230,7 +230,7 @@ impl Put {
     /// The cursor must be on a valid line.
     unsafe fn split_current_line(&mut self) -> bool {
         // SAFETY: the cursor is on a valid line, which is what undo saves.
-        if u_save_cursor() == FAIL {
+        if u_save_cursor().is_err() {
             return false;
         }
         // SAFETY (these four): the cursor is on a valid line, so all three
@@ -258,7 +258,7 @@ impl Put {
         // SAFETY: `p` points at those `taillen` bytes.
         let tail = unsafe { xmemdupz(p as *const c_void, taillen) } as *mut c_char;
         // SAFETY: `tail` is NUL-terminated and `ml_append` copies it.
-        unsafe { ml_append(cur_win().w_cursor.lnum, tail, 0, false) };
+        let _ = unsafe { ml_append(cur_win().w_cursor.lnum, tail, 0, false) };
         // SAFETY: the copy is ours.
         unsafe { xfree(tail as *mut c_void) };
 
@@ -268,7 +268,7 @@ impl Put {
         // `split_pos` is a column of it, and `ml_replace` takes the copy over.
         let head = get_cursor_line_ptr() as *const c_void;
         let head = unsafe { xmemdupz(head, self.split_pos as size_t) } as *mut c_char;
-        unsafe { ml_replace(cur_win().w_cursor.lnum, head, false) };
+        let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, head, false) };
         self.nr_lines += 1;
         self.dir = FORWARD;
 
@@ -290,12 +290,12 @@ impl Put {
             lnum = lnum.min(cur_buf().b_ml.ml_line_count + 1);
             // SAFETY: the cursor is on a valid line and `lnum` is capped at
             // one past the last, so the range is the buffer's.
-            return u_save(cur_win().w_cursor.lnum - 1, lnum) != FAIL;
+            return u_save(cur_win().w_cursor.lnum - 1, lnum).is_ok();
         }
 
         if self.y_type != kMTLineWise {
             // SAFETY: the cursor is on a valid line.
-            return u_save_cursor() != FAIL;
+            return u_save_cursor().is_ok();
         }
 
         // Correct for a closed fold. The cursor must not move yet:
@@ -318,7 +318,7 @@ impl Put {
         } else {
             u_save(lnum - 1, lnum)
         };
-        if saved == FAIL {
+        if saved.is_err() {
             return false;
         }
         cur_win().w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
@@ -416,7 +416,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_i
         // `y_array`, so it happens before the register is read.
         let lnum = cur_win().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
-        if u_save(lnum, lnum + 1) == FAIL {
+        if u_save(lnum, lnum + 1).is_err() {
             return;
         }
     }

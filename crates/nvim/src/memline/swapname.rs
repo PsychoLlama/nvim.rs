@@ -22,7 +22,7 @@ use ::libc::{EINVAL, ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CmdModFlags, FAIL, MAXPATHL, NUL, OK, ShmFlag, Vv};
+use crate::types::{CmdModFlags, Failed, MAXPATHL, NUL, ShmFlag, Vv};
 
 /// Rename the swap file after the buffer's file name changed.
 ///
@@ -133,9 +133,9 @@ pub unsafe fn make_percent_swname(
 /// `resolve()` in Vimscript does this for every part of the path; this does
 /// not. Returns `OK` when `buf` holds a resolved name, `FAIL` when the caller
 /// should keep the name it already has.
-pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
+pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<(), Failed> {
     if fname.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     // The result so far lives in `tmp`, starting with the original name.
@@ -151,7 +151,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             semsg!("E773: Symlink loop for \"{fname}\"");
-            return FAIL;
+            return Err(Failed);
         }
 
         let ret = unsafe { readlink(tmp.as_mut_ptr(), buf, MAXPATHL as size_t - 1) } as c_int;
@@ -159,13 +159,13 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
             if unsafe { *__errno_location() } != EINVAL && unsafe { *__errno_location() } != ENOENT
             {
                 // Some other error reading the link: keep the original.
-                return FAIL;
+                return Err(Failed);
             }
             // Not a symlink, or it does not exist, so `tmp` is as
             // resolved as it gets. At the first level that means nothing
             // was resolved at all, and the caller keeps its own name.
             if depth == 1 {
-                return FAIL;
+                return Err(Failed);
             }
             break;
         }
@@ -178,7 +178,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> c_int {
         } else {
             let tail = unsafe { path_tail(tmp.as_ptr()) };
             if unsafe { strlen(tail) } + unsafe { strlen(buf) } >= MAXPATHL as size_t {
-                return FAIL;
+                return Err(Failed);
             }
             unsafe { strcpy(tail, buf) };
         }
@@ -200,7 +200,7 @@ pub unsafe fn makeswapname(
     // Expand a symlink, so that the swap file goes with the actual file
     // rather than with the link.
     let mut fname_buf: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) } == OK {
+    let fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) }.is_ok() {
         fname_buf.as_mut_ptr()
     } else {
         fname
@@ -596,7 +596,7 @@ fn expanded(
     pats: *mut *mut c_char,
     count: *mut c_int,
     files: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     let how = ExpandFlags::KEEPALL | ExpandFlags::FILE | ExpandFlags::SILENT;
     // SAFETY: the caller's array of `n` patterns and its two out-parameters.
     unsafe { expand_wildcards(n, pats, count, files, how) }
@@ -625,7 +625,7 @@ pub unsafe fn recover_names(
     let mut fname_buf: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let mut fname_res: *mut c_char = core::ptr::null_mut();
     if !fname.is_null() {
-        fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) } == OK {
+        fname_res = if unsafe { resolve_symlink(fname, fname_buf.as_mut_ptr()) }.is_ok() {
             fname_buf.as_mut_ptr()
         } else {
             fname
@@ -703,7 +703,8 @@ pub unsafe fn recover_names(
                 names.as_mut_ptr(),
                 &raw mut num_files,
                 &raw mut files,
-            ) == FAIL
+            )
+            .is_err()
         {
             num_files = 0;
         }

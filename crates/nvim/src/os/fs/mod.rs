@@ -42,8 +42,8 @@ use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    FAIL, FILE, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t, uv_file,
-    uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
+    FAIL, FILE, Failed, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t,
+    uv_file, uv_fs_t, uv_fs_type, uv_loop_s, uv_loop_t, uv_req_type, uv_stat_t, uv_timespec_t,
 };
 use crate::ui::ui_call_chdir;
 use ::libc::{__errno_location, abort, dup, fcntl, fdopen, read, readv, strerror, write};
@@ -263,16 +263,16 @@ pub unsafe fn os_chdir(path: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `buf` must address `len` writable bytes.
-pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> c_int {
+pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> Result<(), Failed> {
     // SAFETY: the caller's buffer. libuv reports the answer's length back
     // through `len`, which is what bounds the error message copy.
     unsafe {
         let error_number = uv_cwd(buf, &raw mut len);
         if error_number != LIBUV_SUCCESS {
             xstrlcpy(buf, uv_strerror(error_number), len);
-            return FAIL;
+            return Err(Failed);
         }
-        OK
+        Ok(())
     }
 }
 
@@ -402,7 +402,7 @@ unsafe fn is_executable_in_path(name: *const c_char, abspath: *mut *mut c_char) 
         buf[entry.len()] = 0;
         // SAFETY: `buf` is NUL-terminated at `entry.len()` and holds the
         // length passed, which is long enough for any entry plus `name`.
-        unsafe { append_path(buf.as_mut_ptr().cast(), name, buf.len()) };
+        let _ = unsafe { append_path(buf.as_mut_ptr().cast(), name, buf.len()) };
         // SAFETY: `buf` is NUL-terminated, and `abspath` is the caller's.
         if unsafe { is_executable(buf.as_ptr().cast(), abspath) } {
             rv = true;

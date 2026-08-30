@@ -39,7 +39,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{FAIL, NUL, OK, buf_T, size_t, uint32_t, win_T};
+use crate::types::{Failed, NUL, buf_T, size_t, uint32_t, win_T};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -71,7 +71,7 @@ pub unsafe fn didset_string_options() {
         kOptClipboard,
     ] {
         // SAFETY: a null `varp` asks for the option's own global variable.
-        unsafe { check_str_opt(idx, ptr::null_mut()) };
+        let _ = unsafe { check_str_opt(idx, ptr::null_mut()) };
     }
 }
 
@@ -274,7 +274,7 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 ///
 /// # Safety
 /// `scl` is null or a C string; `wp` is null or a live window.
-pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
+pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> Result<(), Failed> {
     let val = if !scl.is_null() {
         scl.cast_const()
     } else if !wp.is_null() {
@@ -286,7 +286,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     // SAFETY: an option value is a C string.
     let val = unsafe { CStr::from_ptr(val) }.to_bytes();
     if val.is_empty() {
-        return FAIL;
+        return Err(Failed);
     }
 
     // SAFETY: the table's own array, and no mask is wanted.
@@ -294,7 +294,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
 
     let (min, max) = if listed {
         if wp.is_null() {
-            return OK;
+            return Ok(());
         }
         // SAFETY: the caller's window; 'number' only wins when the window
         // is actually showing numbers.
@@ -310,17 +310,17 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
     } else {
         // "auto:<min>-<max>", the one spelling the table cannot list.
         let [b'a', b'u', b't', b'o', b':', min, b'-', max] = val else {
-            return FAIL;
+            return Err(Failed);
         };
         if !ascii_isdigit(c_int::from(*min)) || !ascii_isdigit(c_int::from(*max)) {
-            return FAIL;
+            return Err(Failed);
         }
         let (min, max) = (digit(*min), digit(*max));
         if min < 1 || max < 2 || min > 8 || min >= max {
-            return FAIL;
+            return Err(Failed);
         }
         if wp.is_null() {
-            return OK;
+            return Ok(());
         }
         (min, max)
     };
@@ -336,7 +336,7 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> c_int {
         max.min(unsafe { (*wp).w_scwidth })
     };
     unsafe { (*wp).w_scwidth = min.max(held) };
-    OK
+    Ok(())
 }
 
 /// One ASCII digit as its value. Every caller has already established that

@@ -23,7 +23,7 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{FAIL, NUL, OptionSetFlags, linenr_T, optset_T};
+use crate::types::{NUL, OptionSetFlags, linenr_T, optset_T};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
@@ -331,7 +331,7 @@ pub unsafe fn did_set_shortmess(args: *mut optset_T) -> *const c_char {
 pub unsafe fn did_set_verbosefile(_args: *mut optset_T) -> *const c_char {
     // SAFETY: closes and reopens this process's own log file.
     unsafe { verbose_stop() };
-    if c_int::from(unsafe { *p_vfile.get() }) != NUL && unsafe { verbose_open() } == FAIL {
+    if c_int::from(unsafe { *p_vfile.get() }) != NUL && unsafe { verbose_open() }.is_err() {
         return invalid();
     }
     ptr::null()

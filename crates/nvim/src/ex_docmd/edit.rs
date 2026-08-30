@@ -65,10 +65,10 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
     CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
-    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag, FAIL,
-    NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
-    exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t,
-    ssize_t,
+    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag,
+    Failed, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
+    colnr_T, exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
+    size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -152,7 +152,7 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != cur_win().w_cursor.lnum {
             let ctrl_o: [c_char; 2] = [Ctrl_O as c_char, 0];
-            ins_typebuf(
+            let _ = ins_typebuf(
                 ctrl_o.as_ptr() as *mut c_char,
                 REMAP_NONE as c_int,
                 0,
@@ -339,7 +339,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     }
 
     if eap.cmdidx as c_int == CMD_move as c_int {
-        if unsafe { do_move(eap.line1, eap.line2, n) } == FAIL {
+        if unsafe { do_move(eap.line1, eap.line2, n) }.is_err() {
             return;
         }
     } else {
@@ -411,7 +411,7 @@ pub(crate) unsafe fn ex_join(eap: *mut exarg_T) {
         }
         eap.line2 += 1;
     }
-    unsafe {
+    let _ = unsafe {
         do_join(
             (eap.line2 as ssize_t - eap.line1 as ssize_t + 1) as size_t,
             eap.forceit == 0,
@@ -441,14 +441,14 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
     }
     // 'cpoptions' `e` makes `:@` run the register's last line
     // immediately rather than leaving it on the command line.
-    if unsafe { do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1) } == FAIL {
+    if unsafe { do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1) }.is_err() {
         beep_flush();
         return;
     }
     let save_efr = exec_from_reg.get();
     exec_from_reg.set(true);
     while !stuff_empty() || typeahead().len() > prev_len {
-        unsafe {
+        let _ = unsafe {
             do_cmdline(
                 ptr::null_mut(),
                 Some(getexline),
@@ -594,7 +594,7 @@ pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
     let pos = cur_win().w_cursor;
     cur_win().w_cursor.lnum = eap.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    if unsafe { setmark(*eap.arg as c_int) } == FAIL {
+    if unsafe { setmark(*eap.arg as c_int) }.is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
         ));
@@ -804,7 +804,7 @@ pub(crate) unsafe fn ex_stopinsert(_eap: *mut exarg_T) {
 
 /// Put `cmd` into the typeahead and run it as normal-mode keys.
 pub unsafe fn exec_normal_cmd(cmd: *mut c_char, remap: c_int, silent: bool) {
-    ins_typebuf(cmd, remap, 0, true, silent);
+    let _ = ins_typebuf(cmd, remap, 0, true, silent);
     unsafe { exec_normal(false, false) };
 }
 
@@ -922,7 +922,7 @@ fn ins_typebuf(
     offset: c_int,
     nottyped: bool,
     silent: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::getchar::ins_typebuf(str, noremap, offset, nottyped, silent) }
 }

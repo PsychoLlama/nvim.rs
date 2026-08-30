@@ -9,7 +9,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -73,7 +73,7 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
     }
     // If 'verbosefile' is set prepare for writing in that file.
     if unsafe { verbosefile_set() } && verbose_fd.get().is_null() {
-        unsafe { verbose_open() };
+        let _ = unsafe { verbose_open() };
     }
     if !unsafe { redirecting() } {
         return;
@@ -241,7 +241,7 @@ pub unsafe fn verbose_stop() {
 ///
 /// # Safety
 /// Only that `p_vfile` holds a valid string.
-pub unsafe fn verbose_open() -> c_int {
+pub unsafe fn verbose_open() -> Result<(), Failed> {
     if verbose_fd.get().is_null() && !verbose_did_open.get() {
         // Only give the error message once.
         verbose_did_open.set(true);
@@ -250,8 +250,8 @@ pub unsafe fn verbose_open() -> c_int {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(p_vfile.get()) };
             semsg!("E484: Can't open file {arg0}");
-            return FAIL;
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }

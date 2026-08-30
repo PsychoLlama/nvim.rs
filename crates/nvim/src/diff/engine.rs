@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -19,7 +19,7 @@ use std::ffi::CStr;
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.
-pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
+pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> Result<(), Failed> {
     let orig = unsafe { (*diffio).dio_orig.din_fname };
     let new = unsafe { (*diffio).dio_new.din_fname };
     let out = unsafe { (*diffio).dio_diff.dout_fname };
@@ -43,7 +43,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
                     io_error = true;
                 }
                 unsafe { fclose(fd) };
-                fd = if unsafe { diff_file(diffio) } == OK {
+                fd = if unsafe { diff_file(diffio) }.is_ok() {
                     unsafe { os_fopen(out, c"r".as_ptr()) }
                 } else {
                     ::core::ptr::null_mut()
@@ -79,19 +79,19 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> c_int {
         }
     }
     if ok {
-        return OK;
+        return Ok(());
     }
     if io_error {
         emsg(gettext(c"E810: Cannot read or write temp files"));
     }
     emsg(gettext(c"E97: Cannot create diffs"));
     diff_a_works.set(None);
-    FAIL
+    Err(Failed)
 }
 
 /// Diff the two memory images with `xdl_diff`, collecting hunks into
 /// `dio_diff.dout_ga`.
-pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> c_int {
+pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> Result<(), Failed> {
     let flags = diff_flags.get();
     let mut param = xpparam_t {
         // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does
@@ -150,19 +150,19 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> c_int {
         } < 0
     {
         emsg(gettext(e_problem_creating_internal_diff));
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Diff whichever way `'diffopt'` and `'diffexpr'` say.
-pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> c_int {
+pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> Result<(), Failed> {
     let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
     let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
     if unsafe { *p_dex.get() } != 0 {
         unsafe { eval_diff(tmp_orig, tmp_new, tmp_diff) };
-        return OK;
+        return Ok(());
     }
     if unsafe { (*dio).dio_internal } != 0 {
         return unsafe { diff_file_internal(dio) };
@@ -210,7 +210,7 @@ pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> c_int {
     };
     unsafe { unblock_autocmds() };
     unsafe { xfree(cmd.cast()) };
-    OK
+    Ok(())
 }
 
 /// `xdl_diff`'s hunk callback: append one hunk to the `diffout_T` behind

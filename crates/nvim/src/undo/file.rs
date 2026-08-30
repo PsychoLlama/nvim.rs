@@ -58,7 +58,7 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
     let mut resolved: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     // SAFETY: a NUL-terminated path, by the contract above, and `MAXPATHL`
     // bytes for the name it resolves to.
-    let resolved_ok = unsafe { resolve_symlink(buf_ffname, resolved.as_mut_ptr()) } == OK;
+    let resolved_ok = unsafe { resolve_symlink(buf_ffname, resolved.as_mut_ptr()) }.is_ok();
     let ffname: *const c_char = if resolved_ok {
         resolved.as_ptr()
     } else {

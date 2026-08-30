@@ -726,7 +726,7 @@ unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
         }
         let orig_arg = ea.arg;
         // SAFETY: as above.
-        if unsafe { getargopt(ea) == 0 && !is_cmd_ni(ea.cmdidx) } {
+        if unsafe { getargopt(ea).is_err() && !is_cmd_ni(ea.cmdidx) } {
             err_invalid_ptr(err, c"argument ", orig_arg);
             return false;
         }

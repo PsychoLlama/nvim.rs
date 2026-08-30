@@ -448,7 +448,7 @@ pub unsafe fn apply_autocmds_group(
 
             // `getnextac` is what iterates: it is pulled once per
             // matching autocommand.
-            unsafe {
+            let _ = unsafe {
                 do_cmdline(
                     ::core::ptr::null_mut(),
                     Some(getnextac),

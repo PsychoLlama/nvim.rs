@@ -34,9 +34,9 @@ use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg;
 use crate::types::{
-    CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, FAIL, NUL, OK, OptInt, VAR_DICT,
-    VAR_LIST, VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse,
-    kListLenShouldKnow, kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
+    CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, NUL, OK, OptInt, VAR_DICT, VAR_LIST,
+    VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
+    kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
 };
 use ::libc::strlen;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -197,7 +197,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     eap.argt = ExArgt::NOSPC;
     let mut errormsg = None;
     let _no_emsg = quiet.then(Suppress::emsg);
-    if unsafe { expand_filename(&raw mut eap, &raw mut cmdstr, &mut errormsg) } == FAIL
+    if unsafe { expand_filename(&raw mut eap, &raw mut cmdstr, &mut errormsg) }.is_err()
         && !quiet
         && let Some(msg) = &errormsg
         && !msg.is_empty()

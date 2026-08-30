@@ -109,7 +109,7 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
     }
     let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
 
-    unsafe { do_cmdline_cmd(c"new".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c"new".as_ptr()) };
 
     // Spell checking has to be on in the new window for the dump to
     // mean anything.
@@ -138,7 +138,7 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
 
     // Drop the empty line the new buffer started with.
     if unsafe { (*curbuf.get()).b_ml.ml_line_count } > 1 {
-        unsafe { ml_delete((*curbuf.get()).b_ml.ml_line_count) };
+        let _ = unsafe { ml_delete((*curbuf.get()).b_ml.ml_line_count) };
     }
     unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
 }
@@ -201,7 +201,7 @@ pub unsafe fn spell_dump_compl(
         let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
         let fmt = c"/regions=%s".as_ptr();
         unsafe { vim_snprintf(buf, size, fmt, region_names) };
-        unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+        let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
         lnum += 1;
     } else {
         do_region = false;
@@ -219,7 +219,7 @@ pub unsafe fn spell_dump_compl(
             let fmt = c"# file: %s".as_ptr();
             let fname = unsafe { (*slang).sl_fname };
             unsafe { vim_snprintf(buf, size, fmt, fname) };
-            unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
+            let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
             lnum += 1;
         }
 
@@ -400,7 +400,7 @@ unsafe fn dump_word(
             }
         }
 
-        unsafe { ml_append(lnum, p, 0, false) };
+        let _ = unsafe { ml_append(lnum, p, 0, false) };
     } else {
         let matches = if dumpflags & DUMPFLAG_ICASE != 0 {
             unsafe { mb_strnicmp(p, pat, strlen(pat)) == 0 }

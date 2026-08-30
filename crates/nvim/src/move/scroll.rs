@@ -20,7 +20,7 @@ use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, colnr_T, int64_t, linenr_T};
+use crate::types::{colnr_T, int64_t, linenr_T};
 
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line
@@ -157,14 +157,14 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
         {
             if up {
                 // SAFETY: the caller's promise -- `win` is `curwin`.
-                if win.w_cursor.lnum > prev_lnum || unsafe { cursor_down(1, false) } == FAIL {
+                if win.w_cursor.lnum > prev_lnum || unsafe { cursor_down(1, false) }.is_err() {
                     break;
                 }
             } else if win.w_cursor.lnum < prev_lnum || prev_topline == 1 {
                 break;
             } else {
                 // SAFETY: the caller's promise -- `win` is `curwin`.
-                if unsafe { cursor_up(1, false) } == FAIL {
+                if unsafe { cursor_up(1, false) }.is_err() {
                     break;
                 }
             }

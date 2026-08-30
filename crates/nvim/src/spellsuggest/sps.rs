@@ -10,8 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    FAIL, MAXPATHL, MAXWLEN, NUL, OK, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags,
-    sps_limit,
+    MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,
 };
 use crate::charset::getdigits_int;
 use crate::eval::typval::{NumBuf, tv_list_unref};
@@ -26,6 +25,7 @@ use crate::semsg;
 use crate::spell::{captype, make_case_word};
 use crate::spellsuggest::collect::{add_suggestion, check_suggestions, cleanup_suggestions};
 use crate::strings::vim_strchr;
+use crate::types::Failed;
 use crate::types::VAR_LIST;
 use ::libc::{FILE, fclose, strcasecmp};
 use core::ffi::{CStr, c_char, c_int};
@@ -46,7 +46,7 @@ fn is_timeout_value(value: &[u8]) -> bool {
 /// # Safety
 ///
 /// `'spellsuggest'` must hold a NUL-terminated string.
-pub(crate) unsafe fn spell_check_sps() -> c_int {
+pub(crate) unsafe fn spell_check_sps() -> Result<(), Failed> {
     // SAFETY: the caller guarantees the option; `buf` is `MAXPATHL`, which
     // is what `copy_option_part` is told it may fill.
     let mut buf = [0 as c_char; MAXPATHL as usize];
@@ -92,7 +92,7 @@ pub(crate) unsafe fn spell_check_sps() -> c_int {
         if f == -1 || (sps_flags.get() != 0 && f != 0) {
             sps_flags.set(SPS_BEST);
             sps_limit.set(9999);
-            return FAIL;
+            return Err(Failed);
         }
         if f != 0 {
             sps_flags.set(f);
@@ -102,7 +102,7 @@ pub(crate) unsafe fn spell_check_sps() -> c_int {
     if sps_flags.get() == 0 {
         sps_flags.set(SPS_BEST);
     }
-    OK
+    Ok(())
 }
 
 /// Find suggestions by evaluating `expr`, the `expr:` item of

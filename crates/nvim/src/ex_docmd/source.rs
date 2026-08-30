@@ -46,7 +46,7 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
 use crate::types::{
-    FAIL, IOSIZE, LineGetter, OK, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
+    Failed, IOSIZE, LineGetter, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
     size_t,
 };
 
@@ -153,7 +153,7 @@ pub unsafe fn do_exmode() {
         cmdline_row.set(msg_row.get());
 
         let plain = DoCmdOpts::NONE;
-        unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
+        let _ = unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
         lines_left.set(Rows.get() - 1);
 
         let moved = prev_line != cur_win().w_cursor.lnum
@@ -188,7 +188,7 @@ pub unsafe fn do_exmode() {
     drop(redraw_off);
     drop(no_prompt);
     unsafe { redraw_all_later(UPD_NOT_VALID) };
-    unsafe { update_screen() };
+    let _ = unsafe { update_screen() };
     need_wait_return.set(false);
     msg_scroll.set(save_msg_scroll);
 }
@@ -217,16 +217,16 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
 ///
 /// The limit only bites above a floor of 200: a low 'maxfuncdepth' must
 /// still leave room for the editor's own nesting.
-pub(crate) fn do_cmdline_start() -> c_int {
+pub(crate) fn do_cmdline_start() -> Result<(), Failed> {
     debug_assert!(cmdline_call_depth.get() >= 0);
     if cmdline_call_depth.get() >= 200 && cmdline_call_depth.get() as OptInt >= p_mfd.get() {
-        return FAIL;
+        return Err(Failed);
     }
     cmdline_call_depth.set(cmdline_call_depth.get() + 1);
     // Clipboard writes are batched across the whole command line, so
     // that a `:while` that yanks repeatedly sets the selection once.
     start_batch_changes();
-    OK
+    Ok(())
 }
 
 /// Leave it.

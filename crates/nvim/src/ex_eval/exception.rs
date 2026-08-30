@@ -60,8 +60,8 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
 use crate::types::{
-    FAIL, IOSIZE, NUL, OK, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t,
-    list_T, msglist_T, ptrdiff_t,
+    Failed, IOSIZE, NUL, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t, list_T,
+    msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -244,7 +244,7 @@ pub(crate) unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
     if msg_list.get().is_null() || unsafe { *msg_list.get() }.is_null() {
         return;
     }
-    if unsafe { throw_exception((*msg_list.get()).cast(), ET_ERROR, cmdname) } == FAIL {
+    if unsafe { throw_exception((*msg_list.get()).cast(), ET_ERROR, cmdname) }.is_err() {
         unsafe { free_msglist(*msg_list.get()) };
     } else if !cstack.is_null() {
         unsafe { super::trycmd::do_throw(cstack) };
@@ -283,7 +283,8 @@ pub(crate) unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
             ET_INTERRUPT,
             ptr::null_mut(),
         )
-    } != FAIL
+    }
+    .is_ok()
     {
         unsafe { super::trycmd::do_throw(cstack) };
     }
@@ -396,7 +397,7 @@ pub(super) unsafe fn throw_exception(
     value: *mut c_void,
     type_0: except_type_T,
     cmdname: *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: caller contract.
     // Faking an interrupt or error exception as a user one is not
     // allowed: `do_cmdline` treats the two differently when no active
@@ -410,7 +411,7 @@ pub(super) unsafe fn throw_exception(
         {
             emsg(c"E608: Cannot :throw exceptions with 'Vim' prefix");
             current_exception.set(ptr::null_mut());
-            return FAIL;
+            return Err(Failed);
         }
     }
 
@@ -427,7 +428,7 @@ pub(super) unsafe fn throw_exception(
         suppress_errthrow.set(true);
         unsafe { emsg_ptr(message(e_outofmem)) };
         current_exception.set(ptr::null_mut());
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { (*excp).type_0 = type_0 };
@@ -452,7 +453,7 @@ pub(super) unsafe fn throw_exception(
     unsafe { verbose_exception(c"Exception thrown: %s", (*excp).value) };
 
     current_exception.set(excp);
-    OK
+    Ok(())
 }
 
 /// Report an exception's fate under 'verbose' >= 13 or while debugging.

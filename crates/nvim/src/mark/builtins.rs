@@ -29,6 +29,7 @@ use core::ptr;
 use super::store::{GlobalMarks, mark_name};
 use super::*;
 use crate::pos::MAXCOL;
+use crate::types::Failed;
 use crate::types::kListLenMayKnow;
 
 /// Add information about mark 'mname' to list 'l'
@@ -42,13 +43,13 @@ pub(super) unsafe fn add_mark(
     pos: *const pos_T,
     bufnr: c_int,
     fname: *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller promised a live position.
     let pos = unsafe { *pos };
     // An unset mark is omitted rather than reported at line 0: the list is
     // "the marks that exist", which is what makes it usable without a filter.
     if pos.lnum <= 0 {
-        return OK;
+        return Ok(());
     }
     // SAFETY: the caller promised a live list and NUL-terminated strings; the
     // dict and the position list are handed to `l`, which owns them from
@@ -78,9 +79,9 @@ pub(super) unsafe fn add_mark(
             && unsafe { tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) }
                 .is_err())
     {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Get information about marks local to a buffer.
@@ -101,7 +102,7 @@ pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
         mname[1] = mark_name('a' as c_int + i);
         // SAFETY: `mname` is NUL-terminated and lives for the call, and the
         // mark handle names a live position.
-        unsafe {
+        let _ = unsafe {
             add_mark(
                 l,
                 mname.as_ptr(),
@@ -114,7 +115,7 @@ pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
     // SAFETY: as above.
-    unsafe {
+    let _ = unsafe {
         add_mark(
             l,
             c"''".as_ptr(),
@@ -135,7 +136,7 @@ pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
     for (name, pos) in positions {
         // SAFETY: every position above is a field of the live buffer or of a
         // mark store inside it.
-        unsafe { add_mark(l, name.as_ptr(), pos, handle, ptr::null()) };
+        let _ = unsafe { add_mark(l, name.as_ptr(), pos, handle, ptr::null()) };
     }
 }
 
@@ -167,7 +168,7 @@ pub unsafe fn get_global_marks(l: *mut list_T) {
         });
         // SAFETY: `mname` and `name` are NUL-terminated and live for the
         // call, and the slot names a live position.
-        unsafe { add_mark(l, mname.as_ptr(), mark.fmark().pos_raw(), fnum, name) };
+        let _ = unsafe { add_mark(l, mname.as_ptr(), mark.fmark().pos_raw(), fnum, name) };
         if fnum != 0 {
             // SAFETY: `buflist_nr2name` answered an allocation nothing else
             // holds.

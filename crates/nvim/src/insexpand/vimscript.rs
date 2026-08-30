@@ -128,7 +128,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: b
     // frame's own locals, and there is no file name.
     let status =
         unsafe { ins_compl_add(text, -1, none, cpt, true, data, dir, flags, dup, hl, score) };
-    if status != OK {
+    if status == FAIL {
         unsafe { tv_clear(&raw mut user_data) };
     }
     status
@@ -276,7 +276,7 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
         flags |= CP_ICASE;
     }
     // SAFETY: `compl_orig_text` is the text being completed.
-    if unsafe { ins_compl_add_orig_text(flags | CP_FAST) } != OK {
+    if unsafe { ins_compl_add_orig_text(flags | CP_FAST) }.is_err() {
         return;
     }
 
@@ -293,12 +293,12 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
     compl_curr_match.set(compl_first_match.get());
     let no_select = compl_no_select || compl_longest;
     if compl_no_insert || no_select {
-        unsafe { ins_complete(K_DOWN, false) };
+        let _ = unsafe { ins_complete(K_DOWN, false) };
         if no_select {
-            unsafe { ins_complete(K_UP, false) };
+            let _ = unsafe { ins_complete(K_UP, false) };
         }
     } else {
-        unsafe { ins_complete(Ctrl_N, false) };
+        let _ = unsafe { ins_complete(Ctrl_N, false) };
     }
     compl_enter_selects.set(compl_no_insert);
 

@@ -512,7 +512,7 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
             *output.add(off) = 0;
             let lnum = (*curwin.get()).w_cursor.lnum;
             (*curwin.get()).w_cursor.lnum += 1;
-            ml_append(lnum, output, off as c_int + 1, false);
+            let _ = ml_append(lnum, output, off as c_int + 1, false);
             output = output.add(skip);
             remaining -= skip;
             off = 0;
@@ -524,7 +524,7 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
                 // missing.
                 let lnum = (*curwin.get()).w_cursor.lnum;
                 (*curwin.get()).w_cursor.lnum += 1;
-                ml_append(lnum, output, 0, false);
+                let _ = ml_append(lnum, output, 0, false);
                 (*curbuf.get()).b_no_eol_lnum = (*curwin.get()).w_cursor.lnum;
                 output = output.add(remaining);
             } else {

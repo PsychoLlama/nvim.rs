@@ -272,7 +272,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
         cmdline = unsafe { cmdline.add(1) };
     }
 
-    unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) };
+    let _ = unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) };
 }
 
 /// `:sign place`, which both places a sign and — with no id — lists them.
@@ -305,7 +305,7 @@ unsafe fn sign_place_cmd(
         return;
     }
     let mut uid = id.cast_unsigned();
-    unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) };
+    let _ = unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) };
 }
 
 /// `:sign unplace`.
@@ -571,7 +571,7 @@ pub(crate) unsafe fn ex_sign(eap: *mut exarg_T) {
         SIGNCMD_DEFINE => unsafe { sign_define_cmd(arg, p) },
         SIGNCMD_LIST => unsafe { sign_list_by_name(arg) },
         _ => {
-            unsafe { sign_undefine_by_name(arg) };
+            let _ = unsafe { sign_undefine_by_name(arg) };
         }
     }
 }

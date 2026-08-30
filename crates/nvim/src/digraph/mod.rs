@@ -37,8 +37,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, FAIL, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    buf_T, exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
+    BoolVarValue, EvalFuncData, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, buf_T,
+    exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -680,7 +680,7 @@ pub fn keymap_init() -> *const c_char {
         // Stop any active keymap and clear the b:keymap_name variable.
         keymap_unload();
         // SAFETY: a static command string, run like any other ex command.
-        unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
         return core::ptr::null();
     }
     // Source the keymap file, first for this encoding and then without it.
@@ -706,7 +706,7 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
     name.extend_from_slice(b".vim\0");
     // SAFETY: `name` is NUL-terminated and outlives the call, which only
     // reads it.
-    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, RuntimeOpts::NONE) != FAIL }
+    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, RuntimeOpts::NONE) }.is_ok()
 }
 
 /// `:loadkeymap` — read language mappings from the file being sourced.

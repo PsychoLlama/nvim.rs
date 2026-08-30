@@ -16,7 +16,7 @@ use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
 use crate::os::cshim::gettext;
-use crate::types::{FAIL, MAXPATHL, NUL, OK};
+use crate::types::{MAXPATHL, NUL};
 
 /// Why a swap file yielded no block zero.
 pub(crate) enum NoBlock {
@@ -165,7 +165,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
             // `flen` counts the bytes after the tilde *including* the
             // terminator, which is exactly what has to shift right.
             let flen = unsafe { strlen(name.as_ptr()) } as usize;
-            if named == FAIL || ulen + flen > B0_FNAME_SIZE_CRYPT as usize - 1 {
+            if named.is_err() || ulen + flen > B0_FNAME_SIZE_CRYPT as usize - 1 {
                 // No user name, or no room for one: keep the path as it
                 // was given.
                 unsafe {
@@ -321,7 +321,8 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
                 uname.as_mut_ptr(),
                 B0_UNAME_SIZE as size_t,
             )
-        } == OK
+        }
+        .is_ok()
         {
             unsafe {
                 kv_do_printf(
@@ -528,9 +529,9 @@ pub(crate) unsafe fn files_differ(
     let mut buf_c: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let mut buf_s: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let ok_c =
-        unsafe { vim_full_name(fname_c, buf_c.as_mut_ptr(), MAXPATHL as size_t, true) } == OK;
+        unsafe { vim_full_name(fname_c, buf_c.as_mut_ptr(), MAXPATHL as size_t, true) }.is_ok();
     let ok_s =
-        unsafe { vim_full_name(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) } == OK;
+        unsafe { vim_full_name(fname_s, buf_s.as_mut_ptr(), MAXPATHL as size_t, true) }.is_ok();
     if ok_c && ok_s {
         return unsafe { strcmp(buf_c.as_ptr(), buf_s.as_ptr()) } != 0;
     }

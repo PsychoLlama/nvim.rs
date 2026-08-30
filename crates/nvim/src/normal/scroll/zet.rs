@@ -32,7 +32,7 @@ use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, OK, OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
+    Failed, OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
 };
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
@@ -109,7 +109,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
 ///
 /// Answers `FAIL` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
-pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
+pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<(), Failed> {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
@@ -118,12 +118,12 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
         nchar = unsafe { read_command_char() };
         if unsafe { vim_strchr(c"gGwW".as_ptr(), nchar) }.is_null() {
             clear_op_beep(ca.op());
-            return OK;
+            return Ok(());
         }
         undo = true;
     }
     if check_clear_op(ca.op()) {
-        return OK;
+        return Ok(());
     }
 
     // Three ways to find the word, in order: the selection, the
@@ -131,7 +131,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
     let mut word: *mut c_char = ptr::null_mut();
     let mut len: size_t = 0;
     if visual_active() && !unsafe { get_visual_text(cap, &raw mut word, &raw mut len) } {
-        return FAIL;
+        return Err(Failed);
     }
     if word.is_null() {
         let pos = cur_win().w_cursor;
@@ -152,7 +152,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
         len =
             unsafe { find_ident_under_cursor(&raw mut word, FIND_IDENT as c_int, ptr::null_mut()) };
         if len == 0 {
-            return FAIL;
+            return Err(Failed);
         }
     }
     debug_assert!(len <= c_int::MAX as size_t);
@@ -171,7 +171,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> c_int {
         ca.count1
     };
     unsafe { spell_add_word(word, len as c_int, what, index, undo) };
-    OK
+    Ok(())
 }
 
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
@@ -507,7 +507,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
             }
             // `zg`/`zG`/`zw`/`zW`/`zu…`: the spellfile.
             Ok(b'u' | b'g' | b'w' | b'G' | b'W') => {
-                if unsafe { nv_zg_zw(cap, nchar) } == FAIL {
+                if unsafe { nv_zg_zw(cap, nchar) }.is_err() {
                     return;
                 }
                 None

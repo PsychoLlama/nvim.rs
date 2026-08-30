@@ -266,7 +266,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
     }
 
     if args.ty(cmd_idx) != VAR_LIST {
-        unsafe { do_cmdline_cmd(arg_string(&mut numbuf, args.get(cmd_idx))) };
+        let _ = unsafe { do_cmdline_cmd(arg_string(&mut numbuf, args.get(cmd_idx))) };
     } else if !unsafe { args.get(cmd_idx).vval.v_list }.is_null() {
         let list = unsafe { args.get(cmd_idx).vval.v_list };
         // The List is held across the run: a command may drop the
@@ -282,7 +282,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
         let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE | DoCmdOpts::REPEAT | DoCmdOpts::KEYTYPED;
         // SAFETY: `cookie` is the walk state this frame owns and outlives
         // the call, which is what `get_list_line` asks for.
-        unsafe { do_cmdline(ptr::null_mut(), getline, cookie, opts) };
+        let _ = unsafe { do_cmdline(ptr::null_mut(), getline, cookie, opts) };
         unsafe { tv_list_unref(list) };
     }
 

@@ -78,7 +78,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         || unsafe { path_is_absolute((*eap).arg) };
     if source {
         let mut errormsg = None;
-        if unsafe { expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) } == FAIL {
+        if unsafe { expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) }.is_err() {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }
@@ -105,7 +105,7 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
         // SAFETY: sourcing the file the user named.
         unsafe { do_source(arg, false, DOSO_NONE as c_int, ::core::ptr::null_mut()) == FAIL }
     } else {
-        unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) == FAIL }
+        unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) }.is_err()
     };
     if failed {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

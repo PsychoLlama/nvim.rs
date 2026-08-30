@@ -12,7 +12,6 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::*;
-use crate::types::FAIL;
 
 /// The ids of a cluster list, which is a NUL-terminated `int16_t` array.
 ///
@@ -242,7 +241,8 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
 
         while let Some((opt_len, list_op)) = unsafe { cluster_op(rest) } {
             let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
-            if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) } == FAIL
+            if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) }
+                .is_err()
             {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let rest = unsafe { c_str(rest) };

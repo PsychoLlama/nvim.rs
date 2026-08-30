@@ -71,8 +71,8 @@ use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, LuaRef, OK, buf_T, exarg_T,
-    expand_T, int64_t, size_t, ucmd_T,
+    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, buf_T,
+    exarg_T, expand_T, int64_t, size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
 use ::libc::strlen;
@@ -370,7 +370,7 @@ pub(crate) unsafe fn uc_add_command(
     addr_type: CmdAddr,
     luaref: LuaRef,
     force: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut rep_buf: *mut c_char = ptr::null_mut();
     let out = &raw mut rep_buf;
     let (no_flags, no_did_simplify, cpo) = (0, ptr::null_mut(), p_cpo.get());
@@ -423,7 +423,7 @@ pub(crate) unsafe fn uc_add_command(
             let name = unsafe { c_str(name) };
             semsg!("E174: Command already exists: add ! to replace it: {name}");
             unsafe { free_new_command(rep_buf, compl_arg, luaref, compl_luaref, preview_luaref) };
-            return FAIL;
+            return Err(Failed);
         }
         // Everything the old entry owned bar its name, taken out of the
         // table before it is released: freeing a Lua reference re-enters,
@@ -484,7 +484,7 @@ pub(crate) unsafe fn uc_add_command(
     };
     // SAFETY: module contract; `store` is a leaf.
     unsafe { table.with_mut(store) };
-    OK
+    Ok(())
 }
 
 /// Release a reference and mark the field free. No-op on `LUA_NOREF`.
@@ -599,7 +599,7 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
         let def = def as int64_t;
         let (no_compl, no_preview, no_cb) = (LUA_NOREF, LUA_NOREF, LUA_NOREF);
         // SAFETY: module contract; `uc_add_command` takes `compl_arg`.
-        unsafe {
+        let _ = unsafe {
             uc_add_command(
                 name,
                 name_len,

@@ -230,7 +230,7 @@ pub(crate) unsafe fn do_one_cmd(
         ea.cookie = cookie;
         ea.cstack = cstack;
 
-        if unsafe { mods.parse(&raw mut ea, &mut errormsg) } == FAIL {
+        if unsafe { mods.parse(&raw mut ea, &mut errormsg) }.is_err() {
             break 'doend;
         }
         unsafe { mods.apply() };
@@ -443,7 +443,7 @@ pub(crate) unsafe fn do_one_cmd(
         // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
         if ea.argt.has(ExArgt::ARGOPT) {
             while byte_at(ea.arg, 0) == '+' as c_int && byte_at(ea.arg, 1) == '+' as c_int {
-                if unsafe { getargopt(&raw mut ea) } == FAIL && !ni {
+                if unsafe { getargopt(&raw mut ea) }.is_err() && !ni {
                     errormsg = Some(ex_msg(e_invarg.as_ptr()));
                     break 'doend;
                 }
@@ -526,7 +526,7 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         unsafe { parse_register(&raw mut ea) };
-        if unsafe { parse_count(&raw mut ea, &mut errormsg, true) } == FAIL {
+        if unsafe { parse_count(&raw mut ea, &mut errormsg, true) }.is_err() {
             break 'doend;
         }
 
@@ -552,7 +552,7 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         let mut retv: c_int = 0;
-        if unsafe { execute_cmd0(&raw mut retv, &raw mut ea, &mut errormsg, false) } == FAIL {
+        if unsafe { execute_cmd0(&raw mut retv, &raw mut ea, &mut errormsg, false) }.is_err() {
             break 'doend;
         }
 

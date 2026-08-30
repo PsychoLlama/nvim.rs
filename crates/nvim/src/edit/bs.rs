@@ -27,7 +27,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{BsFlag, CpoFlag, FAIL, FoFlag, NUL};
+use crate::types::{BsFlag, CpoFlag, Failed, FoFlag, NUL};
 
 /// Which backwards-delete key is running.
 ///
@@ -68,13 +68,13 @@ pub(crate) fn ins_del() {
     // SAFETY: every `unsafe` call in this function is an editor-wide routine
     // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
     // with.
-    if unsafe { stop_arrow() } == FAIL {
+    if unsafe { stop_arrow() }.is_err() {
         return;
     }
     if char_at_cursor() == NUL {
         // Delete the newline.
         let temp = cur_win().w_cursor.col;
-        if !can_bs(BsFlag::EOL) || unsafe { do_join(2, false, true, false, false) } == FAIL {
+        if !can_bs(BsFlag::EOL) || unsafe { do_join(2, false, true, false, false) }.is_err() {
             beep_backspace();
         } else {
             cur_win().w_cursor.col = temp;
@@ -86,7 +86,7 @@ pub(crate) fn ins_del() {
                 orig_line_count.set(cur_buf().b_ml.ml_line_count);
             }
         }
-    } else if delete_one_char() == FAIL {
+    } else if delete_one_char().is_err() {
         // Delete the character under the cursor.
         beep_backspace();
     }
@@ -141,7 +141,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     // SAFETY: every `unsafe` call in this function is an editor-wide routine
     // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
     // with.
-    if unsafe { stop_arrow() } == FAIL {
+    if unsafe { stop_arrow() }.is_err() {
         return false;
     }
 
@@ -275,7 +275,7 @@ fn bs_join_line() -> bool {
         // SAFETY: every `unsafe` call in this function is an editor-wide
         // routine whose only precondition is the live `curwin`/`curbuf`
         // Insert mode runs with.
-        if u_save(cur_win().w_cursor.lnum - 2, cur_win().w_cursor.lnum + 1) == FAIL {
+        if u_save(cur_win().w_cursor.lnum - 2, cur_win().w_cursor.lnum + 1).is_err() {
             return false;
         }
         let lnum = Insstart.get().lnum - 1;
@@ -318,7 +318,7 @@ fn bs_join_line() -> bool {
             }
         }
 
-        unsafe { do_join(2, false, false, false, false) };
+        let _ = unsafe { do_join(2, false, false, false, false) };
         if temp == NUL && char_at_cursor() != NUL {
             cursor_forward();
         }
@@ -411,7 +411,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
                 replace_do_bs(-1);
             }
         } else {
-            delete_one_char();
+            let _ = delete_one_char();
         }
     }
 
@@ -484,7 +484,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
                 let next = unsafe { p0.offset(utf_ptr2len(p0) as isize) };
                 has_composing = unsafe { utf_composinglike(p0, next, ::core::ptr::null_mut()) };
             }
-            delete_one_char();
+            let _ = delete_one_char();
             // With combining characters and 'delcombine' set, move the
             // cursor back -- but never before the base character.
             if has_composing {
@@ -539,7 +539,7 @@ fn cursor_back() -> c_int {
 
 /// Delete the character under the cursor, leaving the cursor where it is.
 #[inline(always)]
-fn delete_one_char() -> c_int {
+fn delete_one_char() -> Result<(), Failed> {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
     unsafe { del_char(false) }
 }

@@ -26,7 +26,7 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{
-    CMD_sunhide, CMD_unhide, FAIL, OK, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T,
+    CMD_sunhide, CMD_unhide, FAIL, Failed, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -102,7 +102,7 @@ fn move_win_after(mut win: Win, mut after: Win) {
     unsafe { win_move_after(win.raw(), after.raw()) };
 }
 
-fn split_below_room() -> c_int {
+fn split_below_room() -> Result<(), Failed> {
     win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int)
 }
 
@@ -147,7 +147,7 @@ fn buf_hidden(mut buf: Buf) -> bool {
     unsafe { buf_hide(buf.raw()) }
 }
 
-fn auto_write(mut buf: Buf) -> c_int {
+fn auto_write(mut buf: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer; `false` is upstream's `forceit`.
     unsafe { autowrite(buf.raw(), false) }
 }
@@ -191,7 +191,7 @@ fn with_clean_error_state(f: impl FnOnce()) {
 pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- the command being executed.
     let eap = unsafe { &*eap };
-    let mut split_ret = OK;
+    let mut split_ret = Ok(());
     let mut open_wins = 0;
     let had_tab = cmdmod.with(|m| m.cmod_tab);
 
@@ -308,7 +308,7 @@ fn open_window_for(
     buf: Buf,
     all: bool,
     had_tab: c_int,
-    split_ret: &mut c_int,
+    split_ret: &mut Result<(), Failed>,
     open_wins: &mut c_int,
 ) -> bool {
     // Check whether this buffer needs a window.
@@ -329,7 +329,7 @@ fn open_window_for(
         wp
     };
 
-    if wp.is_none() && *split_ret == OK {
+    if wp.is_none() && split_ret.is_ok() {
         let bufref = BufRef::of(buf);
         // Split the window and put the buffer in it.
         let p_ea_save = p_ea.get();
@@ -338,7 +338,7 @@ fn open_window_for(
         *split_ret = split_below_room();
         *open_wins += 1;
         p_ea.set(p_ea_save);
-        if *split_ret == FAIL {
+        if split_ret.is_err() {
             return true;
         }
 
@@ -388,7 +388,7 @@ fn close_extra_windows(count: linenr_T, open_wins: &mut c_int) {
         let Some(win) = wp else { break };
         let r = (buf_hidden(win.buffer())
             || !buf_changed(win.buffer())
-            || auto_write(win.buffer()) == OK)
+            || auto_write(win.buffer()).is_ok())
             && !is_aucmd(win);
         if !is_valid(win.raw()) {
             // A BufWrite autocommand made the window invalid; start over.

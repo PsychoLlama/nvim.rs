@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::keycodes::Ctrl_N;
-use crate::types::{ExpandContext, FAIL, NUL, OK};
+use crate::types::{ExpandContext, Failed, NUL};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
@@ -177,7 +177,7 @@ pub unsafe fn get_list_range(
     str: *mut *mut ::core::ffi::c_char,
     num1: *mut ::core::ffi::c_int,
     num2: *mut ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut len: ::core::ffi::c_int = 0;
     let mut num: varnumber_T = 0;
     let mut first = false;
@@ -201,7 +201,7 @@ pub unsafe fn get_list_range(
         };
         unsafe { *str = (*str).offset(len as isize) };
         if num > INT_MAX as varnumber_T {
-            return FAIL;
+            return Err(Failed);
         }
         unsafe { *num1 = num as ::core::ffi::c_int };
         first = true;
@@ -227,15 +227,15 @@ pub unsafe fn get_list_range(
         if len > 0 {
             unsafe { *str = skipwhite((*str).offset(len as isize)) };
             if num > INT_MAX as varnumber_T {
-                return FAIL;
+                return Err(Failed);
             }
             unsafe { *num2 = num as ::core::ffi::c_int };
         } else if !first {
-            return FAIL;
+            return Err(Failed);
         }
     } else if first {
         // only one number given
         unsafe { *num2 = *num1 };
     }
-    OK
+    Ok(())
 }

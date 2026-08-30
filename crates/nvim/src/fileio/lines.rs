@@ -10,7 +10,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, OptionSetFlags};
+use crate::types::OptionSetFlags;
 
 /// What a pass of line splitting decided.
 pub(crate) enum Split {
@@ -70,7 +70,7 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
     // The loops below run once for every character read, so keep them
     // fast.
     let mut appended = |line_start: *mut c_char, len: colnr_T| -> bool {
-        if unsafe { ml_append(st.lnum, line_start, len, st.newfile) } == FAIL {
+        if unsafe { ml_append(st.lnum, line_start, len, st.newfile) }.is_err() {
             return false;
         }
         if st.read_undo_file {

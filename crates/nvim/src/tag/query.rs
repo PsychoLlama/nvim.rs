@@ -11,7 +11,7 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
 use crate::smsg;
-use crate::types::{FAIL, Failed, MAXPATHL, OK};
+use crate::types::{Failed, MAXPATHL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -30,7 +30,7 @@ pub unsafe fn expand_tags(
     pat: *mut c_char,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise; `find_tags` fills both out-parameters,
     // and the matches it answers are ours to rewrite and free.
     let mut flags = (TAG_REGEXP | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
@@ -49,7 +49,7 @@ pub unsafe fn expand_tags(
     let mincount = TAG_MANY as c_int;
     let buf_ffname = cur_buf().b_ffname;
     let ret = unsafe { find_tags(pat, num_file, file, flags, mincount, buf_ffname) };
-    if ret == OK && !tagnames {
+    if ret.is_ok() && !tagnames {
         // One scratch buffer for the whole set, as upstream keeps.
         let mut head = Vec::with_capacity(128);
         for i in 0..unsafe { *num_file } as usize {
@@ -105,7 +105,11 @@ unsafe fn reshape_match(entry: *mut c_char, head: &mut Vec<c_char>) {
 ///
 /// # Safety
 /// `list` must be live and `pat` NUL-terminated.
-pub unsafe fn get_tags(list: *mut list_T, pat: *mut c_char, buf_fname: *mut c_char) -> c_int {
+pub unsafe fn get_tags(
+    list: *mut list_T,
+    pat: *mut c_char,
+    buf_fname: *mut c_char,
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise; `find_tags` fills both locals, and the
     // matches it answers become ours.
     let mut num_matches = 0;
@@ -115,14 +119,14 @@ pub unsafe fn get_tags(list: *mut list_T, pat: *mut c_char, buf_fname: *mut c_ch
     let flags2 = (TAG_REGEXP | TAG_NOIC) as c_int;
     let mincount = MAXCOL as c_int;
     let mut ret = unsafe { find_tags(pat, num_matches2, matchesp, flags2, mincount, buf_fname) };
-    if ret != OK || num_matches <= 0 {
+    if ret.is_err() || num_matches <= 0 {
         return ret;
     }
 
     for i in 0..num_matches as usize {
         let entry = unsafe { *matches.add(i) };
         if !unsafe { describe_match(list, entry) } {
-            ret = FAIL;
+            ret = Err(Failed);
         }
         unsafe { xfree(entry.cast()) };
     }

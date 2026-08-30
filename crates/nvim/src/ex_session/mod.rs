@@ -71,7 +71,7 @@ use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OK,
+    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL,
     OptionSetFlags, Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
 };
 use crate::winlayer::Win;
@@ -341,7 +341,7 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, gap: *mut garray_T, fullname
         let mut full = ptr::null_mut::<c_char>();
         if fullname {
             full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-            unsafe { vim_full_name(name, full, MAXPATHL as size_t, false) };
+            let _ = unsafe { vim_full_name(name, full, MAXPATHL as size_t, false) };
             name = full;
         }
         let escaped = unsafe { ses_escape_fname(name) };
@@ -501,7 +501,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
             }
             // The 'viewdir' may still need creating.
             if !os_isdir(p_vdir.get()) {
-                vim_mkdir_emsg(p_vdir.get(), 0o755);
+                let _ = vim_mkdir_emsg(p_vdir.get(), 0o755);
             }
             view_file
         } else if *arg != NUL as c_char {
@@ -529,7 +529,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
         } else if cmdidx == CMD_mksession {
             // A successful session write sets v:this_session.
             let full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-            if unsafe { vim_full_name(fname, full, MAXPATHL as size_t, false) } == OK {
+            if unsafe { vim_full_name(fname, full, MAXPATHL as size_t, false) }.is_ok() {
                 unsafe { set_vim_var_string(Vv::ThisSession, full, -1) };
             }
             unsafe { xfree(full.cast::<c_void>()) };
@@ -633,7 +633,8 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
     // SAFETY: `dirnow` is our own MAXPATHL buffer, and `fname` is the
     // caller's.
     let dirnow = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-    if unsafe { os_dirname(dirnow, MAXPATHL as size_t) } == FAIL || unsafe { os_chdir(dirnow) } != 0
+    if unsafe { os_dirname(dirnow, MAXPATHL as size_t) }.is_err()
+        || unsafe { os_chdir(dirnow) } != 0
     {
         unsafe { *dirnow = NUL as c_char };
     }
@@ -642,7 +643,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
     let to_globaldir =
         known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();
     if to_sesdir {
-        if unsafe { vim_chdirfile(fname, flag::kCdCauseOther) } == OK {
+        if unsafe { vim_chdirfile(fname, flag::kCdCauseOther) }.is_ok() {
             unsafe { shorten_fnames(1) };
         }
     } else if to_globaldir && unsafe { os_chdir(globaldir.get()) } == 0 {

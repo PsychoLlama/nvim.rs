@@ -820,7 +820,7 @@ pub(crate) unsafe fn do_sub(
 pub(super) unsafe fn save_undo_once(st: &mut Sub) {
     if !st.did_save {
         // SAFETY: caller's contract.
-        u_save_cursor();
+        let _ = u_save_cursor();
         st.did_save = true;
     }
 }

@@ -43,16 +43,16 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, putc};
 use crate::os::fs::os_fopen;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
-use crate::types::{FILE, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
+use crate::types::{FILE, Failed, NUL, fromto_T, garray_T, size_t, time_t, uintmax_t};
 use ::libc::{fclose, fputc, fwrite, qsort, strcmp, strlen, time};
 
 use super::wordtree::wordnode_T;
 use super::{
-    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, EOF, FAIL, OK, PFX_FLAGS,
-    SAL_COLLAPSE, SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO,
-    SN_MAP, SN_MIDWORD, SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION,
-    SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED,
-    VIMSPELLMAGIC, VIMSPELLMAGICL, VIMSPELLVERSION, WF_AFX, WF_REGION, spellinfo_T,
+    BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, EOF, PFX_FLAGS, SAL_COLLAPSE,
+    SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD,
+    SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL,
+    SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, VIMSPELLMAGIC,
+    VIMSPELLMAGICL, VIMSPELLVERSION, WF_AFX, WF_REGION, spellinfo_T,
 };
 
 /// A `.spl` file being written.
@@ -132,7 +132,10 @@ pub(super) unsafe extern "C" fn rep_compare(s1: *const c_void, s2: *const c_void
 ///
 /// `fname` must be a NUL-terminated path and `spin` must hold finished,
 /// compressed trees.
-pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char) -> c_int {
+pub(super) unsafe fn write_vim_spell(
+    spin: &mut spellinfo_T,
+    fname: *mut c_char,
+) -> Result<(), Failed> {
     // SAFETY: every pointer read below comes from `spin`, whose strings are
     // arena-allocated and NUL-terminated, or from the word trees.
     let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
@@ -140,10 +143,10 @@ pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char)
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");
-        return FAIL;
+        return Err(Failed);
     }
     let mut w = SplWriter { fd, ok: true };
-    let mut retval = OK;
+    let mut retval = Ok(());
 
     unsafe { w.payload(VIMSPELLMAGIC.as_ptr().cast(), VIMSPELLMAGICL) };
     // A failed magic write means the file is unusable; the C skipped
@@ -171,17 +174,17 @@ pub(super) unsafe fn write_vim_spell(spin: &mut spellinfo_T, fname: *mut c_char)
         // The trailing byte the reader uses to tell a complete file
         // from a truncated one.
         if w.byte(0) == EOF {
-            retval = FAIL;
+            retval = Err(Failed);
         }
     }
 
     if unsafe { fclose(fd) } == EOF {
-        retval = FAIL;
+        retval = Err(Failed);
     }
     if !w.ok {
-        retval = FAIL;
+        retval = Err(Failed);
     }
-    if retval == FAIL {
+    if retval.is_err() {
         emsg(gettext(e_write));
     }
     retval

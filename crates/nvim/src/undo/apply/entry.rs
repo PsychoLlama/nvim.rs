@@ -282,7 +282,7 @@ unsafe fn apply_entry(
                 emptied = true;
             }
             // SAFETY: that same line, which is still there.
-            unsafe { ml_delete(top + 1 + i) };
+            let _ = unsafe { ml_delete(top + 1 + i) };
         }
     }
     // Make sure the cursor is on a line that still exists.
@@ -297,10 +297,10 @@ unsafe fn apply_entry(
             let line = unsafe { *(*uep).ue_array.offset(i as isize) };
             if emptied && top + i == 0 {
                 // SAFETY: the dummy line the delete above left behind.
-                unsafe { ml_replace(1, line, true) };
+                let _ = unsafe { ml_replace(1, line, true) };
             } else {
                 // SAFETY: a line of the buffer, or 0 for "before the first".
-                unsafe { ml_append_flags(top + i, line, 0, 0) };
+                let _ = unsafe { ml_append_flags(top + i, line, 0, 0) };
             }
             // SAFETY: the entry's own allocation, which the buffer copied.
             unsafe { xfree(line as *mut c_void) };

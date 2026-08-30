@@ -171,7 +171,7 @@ fn run_now(menu: Menu, bit: usize) {
 /// Put the rhs into the typeahead, as if the user had typed it.
 fn feed_typeahead(menu: Menu, bit: usize) {
     // SAFETY: the rhs is NUL-terminated and `ins_typebuf` copies it.
-    unsafe {
+    let _ = unsafe {
         ins_typebuf(
             menu.strings[bit],
             menu.noremap[bit],

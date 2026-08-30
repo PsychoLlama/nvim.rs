@@ -81,7 +81,7 @@ impl Drop for Reader {
             unsafe { fclose(fd) };
         }
         if self.vc.vc_type != CONV_NONE {
-            unsafe { convert_setup(&raw mut self.vc, ptr::null_mut(), ptr::null_mut()) };
+            let _ = unsafe { convert_setup(&raw mut self.vc, ptr::null_mut(), ptr::null_mut()) };
         }
     }
 }
@@ -128,7 +128,7 @@ impl Reader {
         };
         // SAFETY: the caller's strings are NUL-terminated.
         if !enc.is_null() && unsafe { *enc } != 0 {
-            unsafe { convert_setup(&raw mut reader.vc, enc, p_enc.get()) };
+            let _ = unsafe { convert_setup(&raw mut reader.vc, enc, p_enc.get()) };
         }
         if !efile.is_null() {
             let fd = if unsafe { strequal(efile, c"-".as_ptr()) } {

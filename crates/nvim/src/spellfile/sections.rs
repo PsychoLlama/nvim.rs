@@ -847,5 +847,5 @@ unsafe fn set_spell_charflags(flags_in: *const c_char, cnt: c_int, fol: *const c
             }
         }
     }
-    set_spell_finish(&new_st);
+    let _ = set_spell_finish(&new_st);
 }

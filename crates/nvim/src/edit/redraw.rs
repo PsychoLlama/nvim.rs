@@ -58,7 +58,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
         if unsafe { syntax_present(curwin.get()) } && must_redraw.get() != 0 {
-            unsafe { update_screen() };
+            let _ = unsafe { update_screen() };
         }
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
@@ -90,7 +90,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         if before != unsafe { *tick } {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
-            u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
+            let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
         }
     };
 
@@ -125,7 +125,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     unsafe { pum_check_clear() };
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     } else {
         unsafe { redraw_statuslines() };
         if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {

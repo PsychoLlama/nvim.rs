@@ -584,7 +584,7 @@ pub unsafe fn f_strftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
     let mut conv: vimconv_T = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
-    unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
+    let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
     if conv.vc_type != CONV_NONE {
         p = unsafe { string_convert(&raw mut conv, p, ptr::null_mut()) };
     }
@@ -597,13 +597,13 @@ pub unsafe fn f_strftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
     // The reverse conversion reuses `conv`, so it must be set up again
     // in the other direction before the result is converted back.
-    unsafe { convert_setup(&raw mut conv, enc, p_enc.get()) };
+    let _ = unsafe { convert_setup(&raw mut conv, enc, p_enc.get()) };
     rettv.vval.v_string = if conv.vc_type != CONV_NONE {
         unsafe { string_convert(&raw mut conv, out.as_mut_ptr(), ptr::null_mut()) }
     } else {
         unsafe { xstrdup(out.as_mut_ptr()) }
     };
-    unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
+    let _ = unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
     unsafe { xfree(enc.cast::<c_void>()) };
 }
 
@@ -624,7 +624,7 @@ pub unsafe fn f_strptime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let str = arg_string(&mut str_buf, args.get(1)) as *mut c_char;
     let mut conv: vimconv_T = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
-    unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
+    let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
     if conv.vc_type != CONV_NONE {
         fmt = unsafe { string_convert(&raw mut conv, fmt, ptr::null_mut()) };
     }
@@ -647,7 +647,7 @@ pub unsafe fn f_strptime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     if conv.vc_type != CONV_NONE {
         unsafe { xfree(fmt.cast::<c_void>()) };
     }
-    unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
+    let _ = unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
     unsafe { xfree(enc.cast::<c_void>()) };
 }
 

@@ -17,7 +17,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::FAIL;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -142,7 +141,7 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut diff_T, idx1: usize, idx2: usize)
     }
     // SAFETY: `curtab` is set from startup to exit.
     let tp = unsafe { TabPage::current() };
-    if unsafe { diff_check_sanity(tp, dp) } == FAIL {
+    if unsafe { diff_check_sanity(tp, dp) }.is_err() {
         return false;
     }
     for i in 0..unsafe { (*dp).df_count[idx1] } {

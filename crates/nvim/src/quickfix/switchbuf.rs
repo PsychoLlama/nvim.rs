@@ -14,7 +14,7 @@
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
 use crate::optionstr::empty_option;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
 use core::ffi::{c_int, c_uint};
@@ -59,7 +59,7 @@ pub(crate) unsafe fn jump_to_help_window(
     qi: *mut qf_info_T,
     newwin: bool,
     opened_window: *mut bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
@@ -73,7 +73,7 @@ pub(crate) unsafe fn jump_to_help_window(
         // SAFETY: a live window, from the window list.
         unsafe { win_enter(wp.raw(), true) };
         restart_edit.set(0);
-        return OK;
+        return Ok(());
     }
 
     // Put the split at the very top when no position was asked for and
@@ -88,8 +88,8 @@ pub(crate) unsafe fn jump_to_help_window(
     if share_loclist {
         flags |= WSP_NEWLOC as c_int;
     }
-    if win_split(0, flags) == FAIL {
-        return FAIL;
+    if win_split(0, flags).is_err() {
+        return Err(Failed);
     }
     unsafe { *opened_window = true };
     if (cur_win().w_height as OptInt) < p_hh.get() {
@@ -100,7 +100,7 @@ pub(crate) unsafe fn jump_to_help_window(
     }
     // Do not want insert mode in a help file.
     restart_edit.set(0);
-    OK
+    Ok(())
 }
 
 /// Go to a window showing the buffer, in any tab page.
@@ -124,15 +124,15 @@ pub(crate) fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
 /// # Safety
 ///
 /// `ll_ref` must be null or a live location list stack.
-unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> c_int {
+unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> Result<(), Failed> {
     // SAFETY: forwarded from the caller.
     let mut flags = WSP_ABOVE as c_int;
     if !ll_ref.is_null() {
         flags |= WSP_NEWLOC as c_int;
     }
-    if win_split(0, flags) == FAIL {
+    if win_split(0, flags).is_err() {
         // Not enough room for a window.
-        return FAIL;
+        return Err(Failed);
     }
     // Do not split again for the next entry.
     p_swb.set(empty_option());
@@ -144,7 +144,7 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> c_int {
         // SAFETY: the caller's promise -- a live stack, tested for null.
         win_set_loclist(cur_win(), unsafe { Qi::new(ll_ref) });
     }
-    OK
+    Ok(())
 }
 
 /// Enter a window to show a file in, jumping from a *location list* window.
@@ -246,7 +246,7 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     qf_fnum: c_int,
     newwin: bool,
     opened_window: *mut bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: forwarded from the caller.
     // A new window must not share the location list the current window
     // is showing, or two windows would refer to the same one.
@@ -269,8 +269,8 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     let only_the_quickfix_window =
         firstwin.get() == lastwin.get() && buf_is_quickfix(current_buf());
     if only_the_quickfix_window || !usable_win || newwin {
-        if unsafe { qf_open_new_file_win(ll_ref) } != OK {
-            return FAIL;
+        if unsafe { qf_open_new_file_win(ll_ref) }.is_err() {
+            return Err(Failed);
         }
         // Close it again if the jump fails.
         unsafe { *opened_window = true };
@@ -279,5 +279,5 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     } else {
         qf_goto_win_with_qfl_file(qf_fnum);
     }
-    OK
+    Ok(())
 }

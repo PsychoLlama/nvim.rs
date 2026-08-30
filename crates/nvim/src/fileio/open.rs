@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::buffer::BufFlags;
+use crate::fileio::Loaded;
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -24,7 +25,7 @@ use crate::types::event_T;
 use core::ffi::CStr;
 
 use super::*;
-use crate::types::{FAIL, MAXPATHL, OK, ShmFlag};
+use crate::types::{Failed, MAXPATHL, ShmFlag};
 
 /// `filemess` about the current buffer, with a translated note.
 fn filemess_note(fname: *mut c_char, note: &'static CStr) {
@@ -72,7 +73,7 @@ pub(crate) struct Opened {
 
 /// Open what `readfile` was asked to read.
 ///
-/// `Err` carries the value `readfile` should return: FAIL, or NOTDONE for a
+/// `Err` carries the answer `readfile` should give: a failure, or a
 /// directory, or OK when an autocommand did the reading itself.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn open_source(
@@ -83,11 +84,11 @@ pub(crate) unsafe fn open_source(
     how: How,
     silent: bool,
     msg_save: c_int,
-) -> Result<Opened, c_int> {
+) -> Result<Opened, Result<Loaded, Failed>> {
     let mut fname = fname;
     let mut sfname = sfname;
     let set_options = how.set_options;
-    let mut retval = FAIL;
+    let mut retval = Err(Failed);
     let mut fd = if stdin_fd.get() >= 0 {
         stdin_fd.get()
     } else {
@@ -142,18 +143,26 @@ pub(crate) unsafe fn open_source(
 
         if how.newfile {
             if unsafe { read_autocmd(EVENT_BUFREADCMD, sfname, eap, false) } {
-                retval = if aborting() { FAIL } else { OK };
+                retval = if aborting() {
+                    Err(Failed)
+                } else {
+                    Ok(Loaded::Read)
+                };
                 // The BufReadCmd code usually uses ":read" to get the
                 // text and perhaps ":file" to change the buffer name,
                 // but this should work like ":edit", so reset
                 // BufFlags::NOTEDITED and let ":write" overwrite the file.
-                if retval == OK {
+                if retval.is_ok() {
                     cur_buf().b_flags.clear(BufFlags::NOTEDITED);
                 }
                 return Err(retval);
             }
         } else if unsafe { read_autocmd(EVENT_FILEREADCMD, sfname, eap, true) } {
-            retval = if aborting() { FAIL } else { OK };
+            retval = if aborting() {
+                Err(Failed)
+            } else {
+                Ok(Loaded::Read)
+            };
             return Err(retval);
         }
 
@@ -162,7 +171,7 @@ pub(crate) unsafe fn open_source(
         if how.nofile {
             // NOTDONE rather than FAIL, so that BufEnter can still be
             // triggered and other operations don't fail.
-            retval = NOTDONE;
+            retval = Ok(Loaded::Skipped);
             return Err(retval);
         }
     }
@@ -191,7 +200,7 @@ pub(crate) unsafe fn open_source(
             }
             unsafe { msg_end() };
             msg_scroll.set(msg_save);
-            retval = NOTDONE;
+            retval = Ok(Loaded::Skipped);
             return Err(retval);
         }
     }
@@ -209,7 +218,7 @@ pub(crate) unsafe fn open_source(
                 if !silent {
                     filemess_note(fname, msg_is_a_directory);
                 }
-                retval = NOTDONE;
+                retval = Ok(Loaded::Skipped);
             } else {
                 filemess_note(fname, c"is not a file");
             }
@@ -316,7 +325,7 @@ pub(crate) unsafe fn open_source(
             if !aborting() {
                 // Autocommands may abort script processing; a new file
                 // is not an error.
-                retval = OK;
+                retval = Ok(Loaded::Read);
             }
             return Err(retval);
         }

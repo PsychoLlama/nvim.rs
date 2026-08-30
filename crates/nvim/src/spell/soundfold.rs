@@ -77,7 +77,7 @@ pub unsafe fn spell_soundfold(
         let mut fword = [0 as c_char; MAXWLEN];
         let (win, out) = (curwin.get(), fword.as_mut_ptr());
         let len = unsafe { strlen(inword) } as c_int;
-        unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
+        let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
     }
 }

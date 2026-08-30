@@ -20,7 +20,7 @@
 use super::*;
 use crate::path::ExpandFlags;
 
-use crate::types::{FAIL, MAXPATHL, OK, OptionSetFlags};
+use crate::types::{FAIL, Failed, MAXPATHL, OK, OptionSetFlags};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -401,18 +401,18 @@ unsafe fn splice_cached_path(
 ///
 /// # Safety
 /// `fname` must be a writable NUL-terminated path.
-unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
+unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), Failed> {
     // SAFETY: `fname` is the caller's path.
     let ffname = unsafe { package_root(fname) };
     if ffname.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `ffname` is an owned NUL-terminated string, freed below.
     let fname_len = unsafe { strlen(ffname) };
     let points = unsafe { find_insert_points(ffname, fname_len) };
 
     let mut afterdir = ptr::null_mut();
-    let mut retval = FAIL;
+    let mut retval = Err(Failed);
     if let Some(points) = points {
         // SAFETY: `fname` is NUL-terminated; `afterdir` is owned and freed
         // below.
@@ -459,7 +459,7 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> c_int {
                 };
             }
             unsafe { xfree(spliced.rtp.cast()) };
-            retval = OK;
+            retval = Ok(());
         }
     }
 
@@ -482,7 +482,7 @@ const FTDETECT_PATTERN: &CStr = c"%s/ftdetect/*";
 ///
 /// # Safety
 /// `fname` must be a NUL-terminated path.
-unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
+unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `fname` is the caller's path; `ffname` and `pat` are owned and
     // freed below.
     let ffname = unsafe { fix_fname(fname) };
@@ -494,21 +494,23 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> c_int {
     };
 
     unsafe { vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname) };
-    unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
+    let _ =
+        unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
 
     // When runtime/filetype.lua has not been loaded yet, these scripts
     // are found when it is.
     let cmd = unsafe { xstrdup(c"g:did_load_filetypes".as_ptr()) };
     if opt && unsafe { eval_to_number(cmd, false) } > 0 {
-        unsafe { do_cmdline_cmd(c"augroup filetypedetect".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"augroup filetypedetect".as_ptr()) };
         unsafe { vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname) };
-        unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
-        unsafe { do_cmdline_cmd(c"augroup END".as_ptr()) };
+        let patp = &raw mut pat;
+        let _ = unsafe { gen_expand_wildcards_and_cb(1, patp, ExpandFlags::FILE, true, visitor) };
+        let _ = unsafe { do_cmdline_cmd(c"augroup END".as_ptr()) };
     }
     unsafe { xfree(cmd.cast()) };
     unsafe { xfree(pat.cast()) };
     unsafe { xfree(ffname.cast()) };
-    OK
+    Ok(())
 }
 
 /// Whether `fname` is already an entry of 'runtimepath'.
@@ -556,7 +558,7 @@ unsafe fn add_pack_plugins(
     if PackWork::adds_dir(work) {
         for &fname in fnames {
             // SAFETY: one of the caller's paths.
-            if unsafe { !rtp_has_entry(fname) && add_pack_dir_to_rtp(fname, false) == FAIL } {
+            if unsafe { !rtp_has_entry(fname) && add_pack_dir_to_rtp(fname, false).is_err() } {
                 return;
             }
             did_one = true;
@@ -573,7 +575,7 @@ unsafe fn add_pack_plugins(
     if PackWork::sources(work) {
         for &fname in fnames {
             // SAFETY: as above.
-            unsafe { load_pack_plugin(opt, fname) };
+            let _ = unsafe { load_pack_plugin(opt, fname) };
             if !all {
                 break;
             }
@@ -643,7 +645,8 @@ unsafe fn pack_has_entries(buf: *mut c_char) -> bool {
             &raw mut files,
             ExpandFlags::DIR,
         )
-    } == OK
+    }
+    .is_ok()
     {
         unsafe { free_wild(num_files, files) };
     }
@@ -676,7 +679,7 @@ unsafe fn add_pack_start_dir(
             unsafe { xstrlcpy(buf.as_mut_ptr(), fname, MAXPATHL as size_t) };
             unsafe { xstrlcat(buf.as_mut_ptr(), start_pat.as_ptr(), buf.len()) };
             if unsafe { pack_has_entries(buf.as_mut_ptr()) } {
-                unsafe { add_pack_dir_to_rtp(buf.as_mut_ptr(), true) };
+                let _ = unsafe { add_pack_dir_to_rtp(buf.as_mut_ptr(), true) };
             }
         }
         if !all {
@@ -752,7 +755,8 @@ pub unsafe fn load_plugins() {
     }
     unsafe { time_msg_now(c"loading packages") };
 
-    unsafe { source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER) };
+    let _ =
+        unsafe { source_runtime_vim_lua(plugin_pattern, RuntimeOpts::ALL | RuntimeOpts::AFTER) };
     unsafe { time_msg_now(c"loading after plugins") };
 }
 

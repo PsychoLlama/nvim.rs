@@ -26,7 +26,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::semsg;
 use crate::strings::xstrnsave;
-use crate::types::{CmdAddr, ExArgt, ExpandContext, NUL, size_t};
+use crate::types::{CmdAddr, ExArgt, ExpandContext, Failed, NUL, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::slice;
 
@@ -87,13 +87,13 @@ pub(crate) unsafe fn parse_addr_type_arg(
     value: *mut c_char,
     vallen: c_int,
     addr_type_arg: *mut CmdAddr,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: caller contract.
     let typed = unsafe { slice::from_raw_parts(value.cast::<u8>(), vallen as usize) };
     if let Some(row) = ADDR_TYPES.iter().find(|row| row.name.to_bytes() == typed) {
         // SAFETY: caller contract.
         unsafe { *addr_type_arg = row.expand };
-        return OK;
+        return Ok(());
     }
 
     // SAFETY: caller contract; the walk stops at the NUL.
@@ -107,7 +107,7 @@ pub(crate) unsafe fn parse_addr_type_arg(
     // SAFETY: `value` is now NUL-terminated at the word.
     let shown = unsafe { c_str(value) };
     semsg!("E180: Invalid address type value: {shown}");
-    FAIL
+    Err(Failed)
 }
 
 /// Parse a `-complete=` value: a name from [`COMMAND_COMPLETE`], optionally
@@ -125,7 +125,7 @@ pub(crate) unsafe fn parse_compl_arg(
     complp: &mut ExpandContext,
     argt: &mut ExArgt,
     compl_arg: &mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: caller contract.
     let typed = unsafe { slice::from_raw_parts(value.cast::<u8>(), vallen as usize) };
     // The argument part is whatever follows the first comma.
@@ -141,7 +141,7 @@ pub(crate) unsafe fn parse_compl_arg(
         // SAFETY: caller contract.
         let value = unsafe { c_str(value) };
         semsg!("E180: Invalid complete value: {value}");
-        return FAIL;
+        return Err(Failed);
     };
     *complp = expand;
     if expand == ExpandContext::Buffers {
@@ -159,19 +159,19 @@ pub(crate) unsafe fn parse_compl_arg(
         let msg = c"E468: Completion argument only allowed for custom completion".as_ptr();
         // SAFETY: the message is a static string.
         unsafe { emsg(gettext_ptr(msg)) };
-        return FAIL;
+        return Err(Failed);
     }
     if custom && arg.is_none() {
         let msg = c"E467: Custom completion requires a function argument".as_ptr();
         // SAFETY: as above.
         unsafe { emsg(gettext_ptr(msg)) };
-        return FAIL;
+        return Err(Failed);
     }
     if let Some(arg) = arg {
         // SAFETY: `arg` is a sub-slice of `value`, which is live.
         *compl_arg = unsafe { xstrnsave(arg.as_ptr().cast::<c_char>(), arg.len()) };
     }
-    OK
+    Ok(())
 }
 
 /// Everything one attribute can change about a command being defined.
@@ -255,7 +255,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
                 let got =
                     unsafe { parse_compl_arg(text, len, into.complp, into.argt, into.compl_arg) };
                 match got {
-                    FAIL => Err(Bad::Reported),
+                    Err(Failed) => Err(Bad::Reported),
                     _ => Ok(()),
                 }
             }
@@ -268,7 +268,7 @@ pub(super) unsafe fn uc_scan_attr(attr: *mut c_char, len: size_t, into: Attribut
             Some(v) => match unsafe {
                 parse_addr_type_arg(value_ptr(v), v.len() as c_int, into.addr_type_arg)
             } {
-                FAIL => Err(Bad::Reported),
+                Err(Failed) => Err(Bad::Reported),
                 _ => {
                     if *into.addr_type_arg != CmdAddr::Lines {
                         *into.argt |= ExArgt::ZEROR;

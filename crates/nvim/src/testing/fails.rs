@@ -308,7 +308,7 @@ pub(crate) unsafe fn f_assert_fails(
     let no_prompt = Suppress::wait_return();
 
     let cmd = unsafe { numbuf.string_chk(arg(argvars, 0)) };
-    unsafe { do_cmdline_cmd(cmd) };
+    let _ = unsafe { do_cmdline_cmd(cmd) };
 
     // Reset here for any errors reported below.
     trylevel.set(save_trylevel);

@@ -42,7 +42,7 @@ use crate::options::{
 use crate::os::cshim::{gettext_ptr, memmove, strncmp};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_index, CMD_setglobal, CMD_setlocal, FAIL, IOSIZE, NUL, OK, OptIndex, OptInt, OptVal,
+    CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
     OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
 };
 use ::libc::strlen;
@@ -89,7 +89,7 @@ pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
     if unsafe { (*eap).forceit } != 0 {
         flags |= OptionSetFlags::ONECOLUMN;
     }
-    unsafe { do_set((*eap).arg, flags) };
+    let _ = unsafe { do_set((*eap).arg, flags) };
 }
 
 /// The operator at `arg`, if the two characters there are one.
@@ -142,40 +142,40 @@ unsafe fn validate_opt_idx(
     flags: uint32_t,
     prefix: Prefix,
     errmsg: &mut *const c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     if prefix != Prefix::None && !option_has_type(opt_idx, kOptValTypeBoolean) {
         *errmsg = e_invarg.as_ptr();
-        return FAIL;
+        return Err(Failed);
     }
     // A `:set` sweeping over windows or buffers only wants its own kind.
     if opt_flags.has(OptionSetFlags::WINONLY) && !option_is_window_local(opt_idx) {
-        return FAIL;
+        return Err(Failed);
     }
     if opt_flags.has(OptionSetFlags::NOWIN) && option_is_window_local(opt_idx) {
-        return FAIL;
+        return Err(Failed);
     }
     if opt_flags.has(OptionSetFlags::MODELINE) {
         if flags & kOptFlagSecure as uint32_t != 0 {
             *errmsg = E_NOT_ALLOWED_IN_MODELINE.as_ptr();
-            return FAIL;
+            return Err(Failed);
         }
         if flags & kOptFlagMLE as uint32_t != 0 && p_mle.get() == 0 {
             *errmsg = E_MODELINE_NEEDS_MODELINEEXPR.as_ptr();
-            return FAIL;
+            return Err(Failed);
         }
         // A modeline must not undo what `:diffthis` set up.
         // SAFETY: the caller's window is live.
         if unsafe { (*win).w_onebuf_opt.wo_diff != 0 }
             && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap)
         {
-            return FAIL;
+            return Err(Failed);
         }
     }
     if sandbox.get() != 0 && flags & kOptFlagSecure as uint32_t != 0 {
         *errmsg = e_sandbox.as_ptr();
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// The end of a terminal option's name at `arg`, or null when `arg` does not
@@ -456,7 +456,7 @@ unsafe fn do_one_set_option(
     let flags = get_option(opt_idx).flags;
     let varp = get_varp_scope(opt_idx, opt_flags);
 
-    if unsafe { validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) } == FAIL
+    if unsafe { validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) }.is_err()
     {
         return;
     }
@@ -593,7 +593,7 @@ unsafe fn show_one(
 /// # Safety
 ///
 /// `arg` must be NUL-terminated.
-pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_int {
+pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Result<(), Failed> {
     let mut did_show = false;
     let mut arg = arg;
 
@@ -639,7 +639,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
             }
             if !errmsg.is_null() {
                 unsafe { report(errmsg, startarg, arg) };
-                return FAIL;
+                return Err(Failed);
             }
         }
         arg = unsafe { skipwhite(arg) };
@@ -654,7 +654,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> c_in
         silent_mode.set(true);
         info_message.set(false);
     }
-    OK
+    Ok(())
 }
 
 /// Report a rejected argument as "message: argument".

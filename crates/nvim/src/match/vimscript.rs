@@ -11,7 +11,7 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg;
-use crate::types::{FAIL, MB_MAXCHAR, OK, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{Failed, MB_MAXCHAR, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
 
 /// How many `posN` keys a saved position match can carry.
 ///
@@ -59,11 +59,11 @@ unsafe fn matchadd_dict_arg(
     conceal_char: *mut *const c_char,
     win: *mut *mut win_T,
     numbuf: &mut NumBuf,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's typval and out-parameters.
     if unsafe { (*tv).v_type } != VAR_DICT {
         emsg(gettext(e_dictreq));
-        return FAIL;
+        return Err(Failed);
     }
     let dict = unsafe { (*tv).vval.v_dict };
 
@@ -74,14 +74,14 @@ unsafe fn matchadd_dict_arg(
 
     let di = unsafe { find(dict, "window") };
     if di.is_null() {
-        return OK;
+        return Ok(());
     }
     let Some(found) = (unsafe { find_win_by_nr_or_id(&raw mut (*di).di_tv) }) else {
         emsg(gettext(e_invalwindow));
-        return FAIL;
+        return Err(Failed);
     };
     unsafe { *win = found.raw() };
-    OK
+    Ok(())
 }
 
 /// `clearmatches([win])`.
@@ -310,7 +310,8 @@ unsafe fn optional_args(
                         &raw mut win,
                         numbuf,
                     )
-                } == FAIL
+                }
+                .is_err()
             {
                 return None;
             }

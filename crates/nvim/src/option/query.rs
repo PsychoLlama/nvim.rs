@@ -32,7 +32,7 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, Callback_data, CpoFlag, FAIL, NUL, OK, OptInt, OptVal, OptValData,
+    BsFlag, Callback, Callback_data, CpoFlag, Failed, NUL, OptInt, OptVal, OptValData,
     OptionSetFlags, ShmFlag, VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
     uint8_t,
 };
@@ -112,7 +112,7 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 /// # Safety
 ///
 /// `val`, where given, must outlive the call.
-pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> c_int {
+pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> Result<(), Failed> {
     let mut p = match val {
         Some(val) => val.as_ptr().cast_mut(),
         None => wp.w_onebuf_opt.wo_culopt,
@@ -136,7 +136,7 @@ pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> c_int
         }
         // Anything the words above did not consume is a syntax error.
         if unsafe { *p } != b',' as c_char && unsafe { *p } != 0 {
-            return FAIL;
+            return Err(Failed);
         }
         if unsafe { *p } == b',' as c_char {
             p = unsafe { p.add(1) };
@@ -147,10 +147,10 @@ pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> c_int
     if flags as c_int & kOptCuloptFlagLine as c_int != 0
         && flags as c_int & kOptCuloptFlagScreenline as c_int != 0
     {
-        return FAIL;
+        return Err(Failed);
     }
     wp.w_p_culopt_flags = flags;
-    OK
+    Ok(())
 }
 
 /// Whether patterns are magic right now — `\v`/`\V` in the pattern override
@@ -170,11 +170,14 @@ pub(crate) fn magic_isset() -> bool {
 ///
 /// `optval`, when non-null, must be NUL-terminated; `optcb` must point at a
 /// live `Callback` this call may replace.
-pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> c_int {
+pub(crate) unsafe fn option_set_callback_func(
+    optval: *mut c_char,
+    optcb: *mut Callback,
+) -> Result<(), Failed> {
     // SAFETY: the caller's pointers are valid for the call.
     if optval.is_null() || unsafe { *optval } == 0 {
         unsafe { callback_free(optcb) };
-        return OK;
+        return Ok(());
     }
     // A lambda, `function(...)` or `funcref(...)` is an expression; a
     // bare name is the function's name.
@@ -184,7 +187,7 @@ pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut C
     {
         let tv = unsafe { eval_expr(optval, ptr::null_mut::<exarg_T>()) };
         if tv.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         tv
     } else {
@@ -201,12 +204,12 @@ pub(crate) unsafe fn option_set_callback_func(optval: *mut c_char, optcb: *mut C
     };
     if !unsafe { callback_from_typval(&raw mut cb, tv) } || cb.type_0 == kCallbackNone {
         unsafe { tv_free(tv) };
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { callback_free(optcb) };
     unsafe { *optcb = cb };
     unsafe { tv_free(tv) };
-    OK
+    Ok(())
 }
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never

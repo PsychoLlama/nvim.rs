@@ -23,7 +23,8 @@ use crate::lua::ffi::{
 };
 use crate::main::g_min_log_level;
 use crate::types::{
-    CmdModFlags, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T, win_execute_T,
+    CmdModFlags, Failed, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T,
+    win_execute_T,
 };
 use crate::window::win_find_tabpage;
 
@@ -52,7 +53,7 @@ const WIN_EXECUTE_INIT: win_execute_T = win_execute_T {
         coladd: 0,
     },
     cwd: [0; 4096],
-    cwd_status: 0,
+    cwd_status: Err(Failed),
     apply_acd: false,
     save_sfname: ptr::null_mut(),
     switchwin: switchwin_T {

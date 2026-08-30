@@ -428,7 +428,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
         // registered with it.
         unsafe { close_cb.expect("non-null function pointer")(data) };
         if buf_handle != 0 {
-            do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1);
+            let _ = do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, 1);
         }
     }
     s.got_bsl_o
@@ -559,7 +559,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {
         // SAFETY: redraws the screen.
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     } else {
         // SAFETY: redraws the status lines only.
         unsafe { redraw_statuslines() };
@@ -619,7 +619,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
             let (none, data) = (::core::ptr::null_mut(), ::core::ptr::null_mut::<c_void>());
             // SAFETY: runs the command the key carries, which is read back
             // by `getcmdkeycmd` rather than passed here.
-            unsafe { do_cmdline(none, Some(getcmdkeycmd), data, DoCmdOpts::NONE) };
+            let _ = unsafe { do_cmdline(none, Some(getcmdkeycmd), data, DoCmdOpts::NONE) };
             return 1;
         }
         K_LUA => {

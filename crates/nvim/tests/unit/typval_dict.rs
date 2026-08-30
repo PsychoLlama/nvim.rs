@@ -23,7 +23,7 @@ use neovim::main::{emsg_skip, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::ops::NUMBUFLEN;
-use neovim::types::{Callback, Failed, OK, VarLock, dict_T, vimconv_T};
+use neovim::types::{Callback, Failed, VarLock, dict_T, vimconv_T};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Pt, Tv};
@@ -1210,7 +1210,7 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
                 cstr("utf-8").as_ptr().cast_mut(),
                 cstr("latin1").as_ptr().cast_mut(),
             ),
-            OK
+            Ok(())
         );
 
         let d = tv::new_dict(&copy_corpus());
@@ -1241,7 +1241,7 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
 
         tv_dict_free(deep);
         tv_dict_free(d);
-        convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
+        let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
     }
 }
 

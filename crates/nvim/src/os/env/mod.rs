@@ -37,7 +37,7 @@ use crate::os::fs::{os_dirname, os_realpath};
 use crate::os::uv_error::{UV_EINVAL, UV_ENOBUFS, UV_ENOENT, UV_UNKNOWN};
 use crate::path::{path_is_absolute, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::strings::striequal;
-use crate::types::{IOSIZE, MAXPATHL, OK, expand_T, int64_t, size_t};
+use crate::types::{IOSIZE, MAXPATHL, expand_T, int64_t, size_t};
 use ::libc::{getpid, strcasecmp, strcmp, strcpy, strlen, strpbrk, uname, utsname};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -389,7 +389,7 @@ pub fn init_homedir() {
             var = resolved.as_mut_ptr();
         }
         // Last resort: wherever nvim was started.
-        if (var.is_null() || *var == 0) && os_dirname(cwd.as_mut_ptr(), MAXPATHL as usize) == OK {
+        if (var.is_null() || *var == 0) && os_dirname(cwd.as_mut_ptr(), MAXPATHL as usize).is_ok() {
             var = cwd.as_mut_ptr();
         }
         if !var.is_null() {

@@ -23,7 +23,7 @@ use crate::path::ExpandFlags;
 use crate::semsg;
 use crate::smsg;
 
-use crate::types::{ExpandContext, FAIL, MAXPATHL, OK};
+use crate::types::{ExpandContext, FAIL, Failed, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -82,7 +82,7 @@ pub unsafe fn ex_runtime(eap: *mut exarg_T) {
     let where_len = unsafe { skiptowhite(arg).offset_from(arg) } as size_t;
     flags |= unsafe { get_runtime_cmd_flags(&raw mut arg, where_len) };
     debug_assert!(!arg.is_null(), "arg != NULL");
-    unsafe { source_runtime(arg, flags) };
+    let _ = unsafe { source_runtime(arg, flags) };
 }
 
 /// Set the completion context for the `:runtime` command.
@@ -317,7 +317,7 @@ pub(crate) unsafe fn expand_name_patterns(
         // reads it.
         *did_one |=
             unsafe { gen_expand_wildcards_and_cb(1, pats.as_mut_ptr(), ew_flags, do_all, visitor) }
-                == OK;
+                .is_ok();
     }
 }
 
@@ -741,7 +741,7 @@ pub unsafe fn do_in_runtimepath(
     mut flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
     cookie: *mut c_void,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut success = FAIL;
     if !flags.has(RuntimeOpts::NORTP) {
         // SAFETY: `name` is null or NUL-terminated.
@@ -764,7 +764,7 @@ pub unsafe fn do_in_runtimepath(
         // SAFETY: as above.
         success |= unsafe { do_in_path_and_pp(p_rtp.get(), name, flags, callback, cookie) };
     }
-    success
+    if success == FAIL { Err(Failed) } else { Ok(()) }
 }
 
 /// Source the file `name` from all directories in 'runtimepath'.  `name` may
@@ -772,7 +772,7 @@ pub unsafe fn do_in_runtimepath(
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-pub unsafe fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> c_int {
+pub unsafe fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
     // SAFETY: `source_callback` takes a null cookie.
     unsafe {
         do_in_runtimepath(
@@ -788,7 +788,7 @@ pub unsafe fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> c_int {
 ///
 /// # Safety
 /// As [`source_runtime`].
-pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: RuntimeOpts) -> c_int {
+pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
     // SAFETY: as `source_runtime`.
     unsafe {
         do_in_runtimepath(
@@ -835,16 +835,16 @@ pub(crate) unsafe fn gen_expand_wildcards_and_cb(
     flags: ExpandFlags,
     all: bool,
     visitor: Visitor,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut num_files: c_int = 0;
     let mut files: *mut *mut c_char = ptr::null_mut();
     // SAFETY: the caller's patterns; the two out-parameters are ours.
     if unsafe { gen_expand_wildcards(num_pat, pats, &raw mut num_files, &raw mut files, flags) }
-        != OK
+        .is_err()
     {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { visitor.invoke(num_files, files, all) };
     unsafe { free_wild(num_files, files) };
-    OK
+    Ok(())
 }

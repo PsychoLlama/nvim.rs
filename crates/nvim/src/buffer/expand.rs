@@ -23,7 +23,7 @@ use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{FAIL, OK, buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
+use crate::types::{Failed, buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -119,7 +119,7 @@ pub unsafe fn expand_buf_names(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     options: WildOpts,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut matches: *mut bufmatch_T = ptr::null_mut();
     let mut to_free = false;
 
@@ -130,7 +130,7 @@ pub unsafe fn expand_buf_names(
     *file = ptr::null_mut();
 
     if options.has(BUF_DIFF_FILTER) && current_win().w_onebuf_opt.wo_diff == 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     let fuzzy = wants_fuzzy(pat);
@@ -183,7 +183,7 @@ pub unsafe fn expand_buf_names(
                     if to_free {
                         free(patc);
                     }
-                    return FAIL;
+                    return Err(Failed);
                 }
                 p = buflist_match(&mut regmatch, buf, p_wic.get() != 0);
             } else {
@@ -268,7 +268,7 @@ pub unsafe fn expand_buf_names(
     }
 
     *num_file = count;
-    if count == 0 { FAIL } else { OK }
+    if count == 0 { Err(Failed) } else { Ok(()) }
 }
 
 /// Sort `matches` by last-used time into `files`, putting the current buffer

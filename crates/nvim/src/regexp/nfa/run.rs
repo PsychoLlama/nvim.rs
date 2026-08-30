@@ -34,7 +34,7 @@ use crate::regexp::{
     nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out, reg_getline,
     reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
 };
-use crate::types::{FAIL, OK, colnr_T, uint8_t};
+use crate::types::{Failed, colnr_T, uint8_t};
 use ::libc::strlen;
 
 /// Is `c` a member of the `[:name:]` class `cls` stands for?
@@ -42,7 +42,7 @@ use ::libc::strlen;
 /// The ranges are upstream's and are not uniform: some classes only ever
 /// answer for ASCII, others run the whole Latin-1 range or defer to a
 /// multibyte predicate.
-pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
+pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Failed> {
     // SAFETY: the ctype table is indexed only inside the guards below.
     let ctype = |mask: c_int| unsafe {
         *(*__ctype_b_loc()).offset(c as isize) as c_int & mask as c_ushort as c_int != 0
@@ -71,10 +71,10 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> c_int {
         NFA_CLASS_FNAME => unsafe { vim_isfilec(c) },
         _ => {
             siemsg!("E877: (NFA regexp) Invalid character class: {}", cls as i64);
-            return FAIL;
+            return Err(Failed);
         }
     };
-    if member { OK } else { FAIL }
+    if member { Ok(()) } else { Err(Failed) }
 }
 
 /// Match what capture group `subidx` captured. On success `*bytelen` is how
@@ -359,16 +359,16 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
 /// Move `*colp` forward to the next occurrence of `c` in the line, or fail
 /// if there is none. The whole machine cannot match before the character
 /// every match must start with.
-pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> c_int {
+pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> Result<(), Failed> {
     // SAFETY: `rex.line` is the NUL-terminated line being matched and
     // `*colp` is a column inside it.
     let from = unsafe { (rex.line() as *mut c_char).offset(*colp as isize) };
     let found = unsafe { cstrchr(rex, from, c) };
     if found.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     *colp = unsafe { found.offset_from(rex.line() as *mut c_char) } as colnr_T;
-    OK
+    Ok(())
 }
 
 /// A pattern that is one literal run needs no machine at all: look for the
@@ -430,7 +430,7 @@ pub(crate) fn find_match_text(
             return 1;
         }
         col += regstart_len;
-        if skip_to_start(rex, regstart, &mut col) == FAIL {
+        if skip_to_start(rex, regstart, &mut col).is_err() {
             break;
         }
     }

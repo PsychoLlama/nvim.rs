@@ -786,8 +786,8 @@ pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
     let mut op = ca.op();
     let n = ca.count1;
     let found = match u8::try_from(ca.nchar).unwrap_or(0) {
-        b'w' => unsafe { current_word(op.raw(), n, include, false) != 0 },
-        b'W' => unsafe { current_word(op.raw(), n, include, true) != 0 },
+        b'w' => unsafe { current_word(op.raw(), n, include, false).is_ok() },
+        b'W' => unsafe { current_word(op.raw(), n, include, true).is_ok() },
         b'b' | b'(' | b')' => block(op, n, include, '(', ')'),
         b'B' | b'{' | b'}' => block(op, n, include, '{', '}'),
         b'[' | b']' => block(op, n, include, '[', ']'),
@@ -799,7 +799,7 @@ pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
             unsafe { current_tagblock(op.raw(), n, include) != 0 }
         }
         b'p' => unsafe { current_par(op.raw(), n, include, 'p' as c_int) != 0 },
-        b's' => unsafe { current_sent(op.raw(), n, include) != 0 },
+        b's' => unsafe { current_sent(op.raw(), n, include).is_ok() },
         b'"' | b'\'' | b'`' => unsafe { current_quote(op.raw(), n, include, ca.nchar) },
         _ => false,
     };
@@ -828,5 +828,5 @@ fn cur_win() -> Win {
 /// cursor, `n` levels out.
 fn block(op: Op, n: c_int, include: bool, open: char, close: char) -> bool {
     // SAFETY: `op` is a live operator and the cursor is in its own buffer.
-    unsafe { current_block(op.raw(), n, include, open as c_int, close as c_int) != 0 }
+    unsafe { current_block(op.raw(), n, include, open as c_int, close as c_int).is_ok() }
 }

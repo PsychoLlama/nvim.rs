@@ -57,7 +57,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as scid_T));
     for i in 0..count {
-        unsafe { do_cmdline_cmd(*cmds.offset(i as isize)) };
+        let _ = unsafe { do_cmdline_cmd(*cmds.offset(i as isize)) };
     }
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
@@ -81,7 +81,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
     current_sctx.set(current_sctx.get().with_sid(SID_CARG as scid_T).with_seq(0));
     for i in 0..parm.n_commands {
         let cmd = parm.commands[i as usize];
-        unsafe { do_cmdline_cmd(cmd) };
+        let _ = unsafe { do_cmdline_cmd(cmd) };
         if parm.cmds_tofree[i as usize] != 0 {
             unsafe { xfree(cmd as *mut c_void) };
         }
@@ -242,7 +242,7 @@ pub(crate) unsafe fn do_user_initialization() -> bool {
     // behind.
     let do_exrc = p_exrc.get() != 0;
 
-    if unsafe { execute_env(c"VIMINIT".as_ptr() as *mut c_char) } == OK {
+    if unsafe { execute_env(c"VIMINIT".as_ptr() as *mut c_char) }.is_ok() {
         return p_exrc.get() != 0;
     }
 
@@ -273,7 +273,7 @@ pub(crate) unsafe fn do_user_initialization() -> bool {
         return do_exrc;
     }
 
-    if unsafe { execute_env(c"EXINIT".as_ptr() as *mut c_char) } == OK {
+    if unsafe { execute_env(c"EXINIT".as_ptr() as *mut c_char) }.is_ok() {
         return p_exrc.get() != 0;
     }
     do_exrc

@@ -23,7 +23,7 @@ use crate::memline::ml_replace;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::strings::xstrnsave;
-use crate::types::{FAIL, NUL, size_t};
+use crate::types::{NUL, size_t};
 use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come
@@ -109,7 +109,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // May start one line earlier, but not at the start of a paragraph.
     if prev_line && !unsafe { paragraph_start(cur_win().w_cursor.lnum) } {
         cur_win().w_cursor.lnum -= 1;
-        if u_save_cursor() == FAIL {
+        if u_save_cursor().is_err() {
             return;
         }
     }
@@ -140,7 +140,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
             let plinep = unsafe { xstrnsave(linep, len as size_t + 2) };
             unsafe { *plinep.offset(len as isize) = ' ' as c_char };
             unsafe { *plinep.offset(len as isize + 1) = NUL as c_char };
-            unsafe { ml_replace(cur_win().w_cursor.lnum, plinep, false) };
+            let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, plinep, false) };
             // Remove the space later.
             did_add_space.set(true);
         } else {
@@ -178,7 +178,7 @@ pub unsafe fn check_auto_format(end_insert: bool) {
     }
     if c != NUL {
         // The space is no longer at the end of the line: delete it.
-        unsafe { del_char(false) };
+        let _ = unsafe { del_char(false) };
         did_add_space.set(false);
     }
 }

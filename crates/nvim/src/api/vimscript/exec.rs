@@ -117,7 +117,7 @@ pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
     api_try(&mut error, |_| {
         // SAFETY: `cmd` is the caller's NUL-terminated command line.
-        unsafe { do_cmdline_cmd(cmd.data()) };
+        let _ = unsafe { do_cmdline_cmd(cmd.data()) };
     });
     ().reported(error)
 }

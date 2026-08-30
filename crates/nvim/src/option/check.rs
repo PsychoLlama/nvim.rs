@@ -130,8 +130,8 @@ pub(crate) fn didset_options() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
     unsafe { init_chartab() };
     unsafe { didset_string_options() };
-    spell_check_msm();
-    unsafe { spell_check_sps() };
+    let _ = spell_check_msm();
+    let _ = unsafe { spell_check_sps() };
     unsafe { compile_cap_prog(cur_win().w_s) };
     unsafe { did_set_spell_option() };
     unsafe { did_set_cedit(ptr::null_mut::<optset_T>()) };
@@ -150,7 +150,7 @@ pub(crate) fn didset_options2() {
     unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
     let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
     unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
-    unsafe { check_opt_wim() };
+    let _ = unsafe { check_opt_wim() };
     let buf = curbuf.get();
     unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
     unsafe { tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array) };

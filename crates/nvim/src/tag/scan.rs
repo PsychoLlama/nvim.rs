@@ -19,7 +19,7 @@ use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;
-use crate::types::{CONV_NONE, FAIL, NUL, OK};
+use crate::types::{CONV_NONE, Failed, NUL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -506,7 +506,8 @@ impl FindTags {
         unsafe { fclose(self.fp) };
         self.fp = ptr::null_mut();
         if self.vimconv.vc_type != CONV_NONE {
-            unsafe { convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut()) };
+            let _ =
+                unsafe { convert_setup(&raw mut self.vimconv, ptr::null_mut(), ptr::null_mut()) };
         }
         if margs.sort_error {
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
@@ -699,7 +700,7 @@ pub unsafe fn find_tags(
     flags: c_int,
     mincount: c_int,
     buf_ffname: *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's pattern outlives the search, and `saved_pat` is
     // declared before the state that points into it, so it is dropped
     // after it.
@@ -757,11 +758,13 @@ pub unsafe fn find_tags(
     st.orgpat.prepare(has_re);
     drop(no_emsg);
 
-    let mut retval = FAIL;
+    let mut retval = Err(Failed);
     if !(has_re && st.orgpat.regmatch.regprog.is_null()) {
-        retval = st.apply_tagfunc(pat, buf_ffname);
-        if retval == NOTDONE {
-            retval = FAIL;
+        // `apply_tagfunc` still answers the C's three statuses; `NOTDONE`
+        // means there is no 'tagfunc' and the tag files are searched below.
+        let tagfunc = st.apply_tagfunc(pat, buf_ffname);
+        retval = if tagfunc == OK { Ok(()) } else { Err(Failed) };
+        if tagfunc == NOTDONE {
             // A ".txt" help file keeps "en" as its language.
             let fname = cur_buf().b_fname;
             if flags & TAG_KEEP_LANG as c_int != 0
@@ -786,7 +789,7 @@ pub unsafe fn find_tags(
                     st.tag_fname = name;
                     st.in_file(buf_ffname);
                     if st.stop_searching {
-                        retval = OK;
+                        retval = Ok(());
                         break;
                     }
                 }
@@ -806,12 +809,12 @@ pub unsafe fn find_tags(
                 if !st.did_open && flags & TAG_VERBOSE as c_int != 0 {
                     tag_emsg(c"E433: No tags file");
                 }
-                retval = OK;
+                retval = Ok(());
             }
         }
     }
 
-    if retval == FAIL {
+    if retval.is_err() {
         st.match_count = 0;
     }
     unsafe { *num_matches = st.into_matches(matchesp) };

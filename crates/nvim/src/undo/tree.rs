@@ -276,11 +276,11 @@ pub unsafe fn u_undoline() {
     // Bound first: rustfmt puts a call wider than 60 columns on one line per
     // argument, and every one of those lines is inside the region.
     let lnum = cur_buf().b_u_line_lnum;
-    if u_savecommon(cur_buf(), lnum - 1, lnum + 1, 0, false) == FAIL {
+    if u_savecommon(cur_buf(), lnum - 1, lnum + 1, 0, false).is_err() {
         return;
     }
     let oldp: *mut c_char = unsafe { u_save_line(cur_buf().b_u_line_lnum) };
-    unsafe { ml_replace(cur_buf().b_u_line_lnum, cur_buf().b_u_line_ptr, true) };
+    let _ = unsafe { ml_replace(cur_buf().b_u_line_lnum, cur_buf().b_u_line_ptr, true) };
     unsafe {
         extmark_splice_cols(
             curbuf.get(),

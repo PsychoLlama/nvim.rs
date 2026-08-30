@@ -12,7 +12,7 @@ use super::*;
 use crate::guard::Lock;
 use crate::semsg;
 use crate::types::{
-    FAIL, IOSIZE, NUL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    Failed, IOSIZE, NUL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -62,7 +62,7 @@ impl CompleteFuncCb {
     ///
     /// # Safety
     /// `value` must be a live NUL-terminated option string, or null.
-    pub(crate) unsafe fn set_from_option(self, value: *mut c_char) -> c_int {
+    pub(crate) unsafe fn set_from_option(self, value: *mut c_char) -> Result<(), Failed> {
         // SAFETY: the caller's promise; the slot is this cell's own.
         unsafe { option_set_callback_func(value, self.slot()) }
     }
@@ -300,12 +300,12 @@ pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
         unsafe { option_set_callback_func((*args).os_newval.string.data(), &raw mut buf.b_cfu_cb) }
     } else {
         let retval = unsafe { cfu_cb().set_from_option((*args).os_newval.string.data()) };
-        if retval == OK && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
             set_buflocal_cfu_callback(buf);
         }
         retval
     };
-    if retval == FAIL {
+    if retval.is_err() {
         e_invarg.as_ptr()
     } else {
         ptr::null()
@@ -328,12 +328,12 @@ pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
         unsafe { option_set_callback_func((*args).os_newval.string.data(), &raw mut buf.b_ofu_cb) }
     } else {
         let retval = unsafe { ofu_cb().set_from_option((*args).os_newval.string.data()) };
-        if retval == OK && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
             set_buflocal_ofu_callback(buf);
         }
         retval
     };
-    if retval == FAIL {
+    if retval.is_err() {
         e_invarg.as_ptr()
     } else {
         ptr::null()
@@ -405,10 +405,10 @@ pub fn set_buflocal_cpt_callbacks(mut buf: Buf) {
 
 /// Parse `'complete'` and (re)build the `F{func}` callbacks; entries other
 /// than `F{func}` are counted but leave their slot empty.
-pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
+pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     if curbuf.get().is_null() {
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { clear_cpt_callbacks(&raw mut (*curbuf.get()).b_p_cpt_cb, cur_buf().b_p_cpt_count) };
@@ -416,7 +416,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
 
     let count = unsafe { get_cpt_sources_count() };
     if count == 0 {
-        return OK;
+        return Ok(());
     }
     cur_buf().b_p_cpt_cb =
         unsafe { xcalloc(count as size_t, size_of::<Callback>()) }.cast::<Callback>();
@@ -438,7 +438,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
                     unsafe { *caret = NUL as c_char };
                 }
                 let slot = unsafe { cur_buf().b_p_cpt_cb.offset(idx) };
-                if unsafe { option_set_callback_func(part.as_mut_ptr().offset(1), slot) } != OK {
+                if unsafe { option_set_callback_func(part.as_mut_ptr().offset(1), slot) }.is_err() {
                     unsafe { (*slot).type_0 = kCallbackNone };
                 }
             }
@@ -450,7 +450,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> c_int {
         // ':set' was used instead of ':setlocal': cache the callback array.
         unsafe { cpt_cb().replace_from(cur_buf().b_p_cpt_cb, cur_buf().b_p_cpt_count) };
     }
-    OK
+    Ok(())
 }
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
@@ -469,7 +469,7 @@ pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
         }
         retval
     };
-    if retval == FAIL {
+    if retval.is_err() {
         e_invarg.as_ptr()
     } else {
         ptr::null()
@@ -665,7 +665,7 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
         } else {
             let mut startcol = 0;
             if unsafe { get_userdefined_compl_info(cur_win().w_cursor.col, cb, &raw mut startcol) }
-                == FAIL
+                .is_err()
             {
                 if startcol == -3 {
                     cpt_sources().update(idx, |source| source.cs_refresh_always = false);
@@ -687,14 +687,14 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
 }
 
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
-pub(crate) unsafe fn advance_cpt_sources_index_safe() -> c_int {
+pub(crate) unsafe fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
     let idx = cpt_sources().index();
     if idx >= 0 && idx < cpt_sources().rows().len() as c_int - 1 {
         cpt_sources().set_index(idx + 1);
-        return OK;
+        return Ok(());
     }
     semsg!("E684: List index out of range: {}", idx);
-    FAIL
+    Err(Failed)
 }
 
 /// Build the per-`'complete'`-entry state: the source letter and its `^N`
@@ -796,7 +796,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                 let ret = unsafe {
                     get_userdefined_compl_info(cur_win().w_cursor.col, cb, &raw mut startcol)
                 };
-                if ret == FAIL {
+                if ret.is_err() {
                     if startcol == -3 {
                         cpt_sources().update(idx, |source| source.cs_refresh_always = false);
                     } else {
@@ -806,7 +806,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                     startcol = cur_win().w_cursor.col;
                 }
                 cpt_sources().update(idx, |source| source.cs_startcol = startcol);
-                if ret == OK {
+                if ret.is_ok() {
                     compl_source_start_timer(idx);
                     unsafe { get_cpt_func_completion_matches(cb) };
                 }
@@ -817,7 +817,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
         // SAFETY: `p` walks `'complete'` and `skipped` has `IOSIZE` bytes.
         unsafe { next_cpt_part(&raw mut p, skipped.as_mut_ptr(), IOSIZE as size_t) };
         if unsafe { may_advance_cpt_index(p) } {
-            unsafe { advance_cpt_sources_index_safe() };
+            let _ = unsafe { advance_cpt_sources_index_safe() };
         }
     }
     cpt_sources().set_index(-1);

@@ -96,7 +96,7 @@ fn path_arg_raw(args: Args<'_>, i: usize, buf: &mut NumBuf) -> *mut c_char {
 /// not say.
 fn os_cwd(cwd: &Owned) -> bool {
     // SAFETY: `cwd` holds `MAXPATHL` bytes and a terminator slot after them.
-    unsafe { os_dirname(cwd.0, MAXPATHL as size_t) != FAIL }
+    unsafe { os_dirname(cwd.0, MAXPATHL as size_t).is_ok() }
 }
 
 /// Copy the NUL-terminated `from` into `cwd`, truncating at [`MAXPATHL`].
@@ -531,7 +531,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     }
     if result == FAIL as varnumber_T {
         // SAFETY: `dir` is NUL-terminated; the callee reports its own error.
-        result = unsafe { vim_mkdir_emsg(dir, prot) } as varnumber_T;
+        result = varnumber_T::from(unsafe { vim_mkdir_emsg(dir, prot) }.is_ok());
     }
     rettv.vval.v_number = result;
 

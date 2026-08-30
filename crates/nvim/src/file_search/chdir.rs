@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::types::{
-    FAIL, MAXPATHL, OK, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
+    Failed, MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -97,18 +97,18 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
 /// Caller must call `shorten_fnames()`.
 ///
 /// @return  OK or FAIL
-pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> c_int {
+pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result<(), Failed> {
     let mut cwd = [0 as c_char; MAXPATHL as usize];
     let mut dir = [0 as c_char; MAXPATHL as usize];
     unsafe { xstrlcpy(dir.as_mut_ptr(), fname, MAXPATHL as usize) };
     unsafe { *path_tail_with_sep(dir.as_mut_ptr()) = 0 };
 
     let name_buff = cwd.as_mut_ptr();
-    if unsafe { os_dirname(name_buff, MAXPATHL as usize) } != OK {
+    if unsafe { os_dirname(name_buff, MAXPATHL as usize) }.is_err() {
         unsafe { *name_buff = 0 };
     }
     if unsafe { pathcmp(dir.as_ptr(), name_buff, -1) } == 0 {
-        return OK; // nothing to do
+        return Ok(()); // nothing to do
     }
 
     let announce = cause != kCdCauseOther;
@@ -116,12 +116,12 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> c_int 
         unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, true) };
     }
     if unsafe { os_chdir(dir.as_ptr()) } != 0 {
-        return FAIL;
+        return Err(Failed);
     }
     if announce {
         unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, false) };
     }
-    OK
+    Ok(())
 }
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.

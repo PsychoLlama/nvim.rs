@@ -271,7 +271,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
             // SAFETY: `line` is the NUL-terminated command built above, and
             // the getline pair is the caller's own.
-            unsafe { do_cmdline(line, getline, cookie, opts) };
+            let _ = unsafe { do_cmdline(line, getline, cookie, opts) };
         }
     }
 

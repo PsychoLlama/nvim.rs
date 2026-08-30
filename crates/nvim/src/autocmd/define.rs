@@ -13,7 +13,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{FAIL, OK, RefcountSize};
+use crate::types::{Failed, RefcountSize};
 use crate::winlayer::{Live, Win, tabs};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
@@ -159,7 +159,8 @@ pub unsafe fn do_autocmd(
                     forceit != 0,
                     group,
                 )
-            } == FAIL
+            }
+            .is_err()
             {
                 break;
             }
@@ -182,7 +183,7 @@ pub unsafe fn do_all_autocmd_events(
     group: ::core::ffi::c_int,
 ) {
     for event in 0..NUM_EVENTS {
-        if unsafe { do_autocmd_event(event, pat, once, nested, cmd, del, group) } == FAIL {
+        if unsafe { do_autocmd_event(event, pat, once, nested, cmd, del, group) }.is_err() {
             return;
         }
     }
@@ -201,7 +202,7 @@ pub unsafe fn do_autocmd_event(
     cmd: *const ::core::ffi::c_char,
     del: bool,
     group: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // Listing all patterns goes through `au_show_for_event` instead.
     debug_assert!(unsafe { *pat } != 0 || del);
 
@@ -216,7 +217,7 @@ pub unsafe fn do_autocmd_event(
     // `:autocmd! {event}`: every pattern goes.
     if unsafe { *pat } == 0 && del {
         aucmd_del_for_event_and_group(event, findgroup);
-        return OK;
+        return Ok(());
     }
 
     let mut patlen = unsafe { aucmd_span_pattern(pat, &raw mut pat) } as ::core::ffi::c_int;
@@ -260,7 +261,7 @@ pub unsafe fn do_autocmd_event(
 
         if is_adding_cmd {
             let mut handler_fn = CALLBACK_INIT;
-            unsafe {
+            let _ = unsafe {
                 autocmd_register(
                     0,
                     event,
@@ -281,7 +282,7 @@ pub unsafe fn do_autocmd_event(
 
     // The patterns and commands marked above can really go now.
     au_cleanup();
-    OK
+    Ok(())
 }
 
 /// Create one autocommand: the only place an `AutoPat`/`AutoCmd` pair is
@@ -300,12 +301,12 @@ pub unsafe fn autocmd_register(
     desc: *mut ::core::ffi::c_char,
     handler_cmd: *const ::core::ffi::c_char,
     handler_fn: *mut Callback,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // 0 is not a valid group.
     debug_assert!(group != 0);
 
     if patlen > unsafe { strlen(pat) } as ::core::ffi::c_int {
-        return FAIL;
+        return Err(Failed);
     }
 
     let findgroup = if group == AUGROUP_ALL {
@@ -349,7 +350,7 @@ pub unsafe fn autocmd_register(
         // A buffer-local pattern needs a buffer that exists.
         if is_buflocal && (buflocal_nr == 0 || find_buf(buflocal_nr).is_none()) {
             semsg!("E680: <buffer={}>: invalid buffer number ", buflocal_nr);
-            return FAIL;
+            return Err(Failed);
         }
 
         ap = unsafe { xmalloc(::core::mem::size_of::<AutoPat>()) }.cast::<AutoPat>();
@@ -374,7 +375,7 @@ pub unsafe fn autocmd_register(
             unsafe { xfree(reg_pat.cast::<::core::ffi::c_void>()) };
             if reg_pat.is_null() || new_pat.reg_prog.is_null() {
                 unsafe { xfree(ap.cast::<::core::ffi::c_void>()) };
-                return FAIL;
+                return Err(Failed);
             }
         }
 
@@ -470,7 +471,7 @@ pub unsafe fn autocmd_register(
         unsafe { xstrdup(desc) }
     };
 
-    OK
+    Ok(())
 }
 
 /// The length of the first pattern in a comma-separated list, with `start`

@@ -786,7 +786,7 @@ pub unsafe fn showmatch(c: c_int) {
     so.set(0); // don't use 'scrolloff' here
     siso.set(0); // don't use 'sidescrolloff' here
     unsafe { show_cursor_info_later(false) };
-    unsafe { update_screen() }; // show the new char
+    let _ = unsafe { update_screen() }; // show the new char
     unsafe { setcursor() };
     unsafe { ui_flush() };
     // Restore dollar_vcol: setcursor() may call curs_rows(), which

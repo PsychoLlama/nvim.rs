@@ -21,7 +21,7 @@
 use super::*;
 use crate::os::cshim::gettext_ptr;
 use crate::types::event_T;
-use crate::types::{FAIL, OK, Refcount};
+use crate::types::{Failed, Refcount};
 use crate::winlayer::{Buf, Ea, Live, Win, windows};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -662,19 +662,22 @@ pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -
 /// # Safety
 ///
 /// `qi` must be a live stack.
-pub(crate) unsafe fn qf_restore_list(qi: *mut qf_info_T, save_qfid: ::core::ffi::c_uint) -> c_int {
+pub(crate) unsafe fn qf_restore_list(
+    qi: *mut qf_info_T,
+    save_qfid: ::core::ffi::c_uint,
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if unsafe { (*qf_get_curlist(qi.raw())).qf_id } == save_qfid {
-        return OK;
+        return Ok(());
     }
     let curlist = unsafe { qf_id2nr(qi.raw().cast_const(), save_qfid) };
     if curlist < 0 {
-        return FAIL;
+        return Err(Failed);
     }
     qi.qf_curlist = curlist;
-    OK
+    Ok(())
 }
 
 /// Copy a window's location list stack to another window, list by list.

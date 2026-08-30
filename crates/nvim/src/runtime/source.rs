@@ -634,7 +634,7 @@ unsafe fn strip_bom(conv: *mut vimconv_T, firstline: *mut c_char) -> *mut c_char
     if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {
         return firstline;
     }
-    unsafe { convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc.get()) };
+    let _ = unsafe { convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc.get()) };
     let rest = unsafe { firstline.add(3) };
     let mut recoded = unsafe { string_convert(conv, rest, ptr::null_mut()) };
     if recoded.is_null() {
@@ -676,7 +676,7 @@ unsafe fn execute_source(
     let firstline = unsafe { strip_bom(&raw mut cookie.conv, first) };
     let flags = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::REPEAT;
     let reader = Some(getsourceline as LineGetterFn);
-    unsafe { do_cmdline(firstline, reader, ptr::from_mut(cookie).cast(), flags) };
+    let _ = unsafe { do_cmdline(firstline, reader, ptr::from_mut(cookie).cast(), flags) };
     firstline
 }
 
@@ -694,7 +694,7 @@ unsafe fn finish_source(cookie: &mut source_cookie_T, firstline: *mut c_char) {
     }
     unsafe { xfree(cookie.nextline.cast()) };
     unsafe { xfree(firstline.cast()) };
-    unsafe { convert_setup(&raw mut cookie.conv, ptr::null_mut(), ptr::null_mut()) };
+    let _ = unsafe { convert_setup(&raw mut cookie.conv, ptr::null_mut(), ptr::null_mut()) };
 }
 
 /// Everything from opening the script to closing it, in the order it has to

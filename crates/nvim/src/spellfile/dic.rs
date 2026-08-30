@@ -53,7 +53,7 @@ use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
 use crate::types::{
-    CONV_NONE, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
+    CONV_NONE, Failed, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
 };
 use crate::ui::ui_flush;
 use ::libc::{fclose, strlen};
@@ -61,10 +61,10 @@ use ::libc::{fclose, strlen};
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
 use super::{
-    AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, FAIL, MAXLINELEN, MAXWLEN, OK,
-    WF_BANNED, WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT,
-    WF_NOCOMPBEF, WF_NOSUGGEST, WF_RARE, affentry_T, afffile_T, affheader_T, compitem_T,
-    spell_message_fmt, spellinfo_T, vim_regexec_prog,
+    AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, MAXLINELEN, MAXWLEN, WF_BANNED,
+    WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT, WF_NOCOMPBEF,
+    WF_NOSUGGEST, WF_RARE, affentry_T, afffile_T, affheader_T, compitem_T, spell_message_fmt,
+    spellinfo_T, vim_regexec_prog,
 };
 
 /// Read a `.dic` file: a count line, then one stem per line with the affix
@@ -78,7 +78,7 @@ pub(super) unsafe fn spell_read_dic(
     spin: *mut spellinfo_T,
     fname: *mut c_char,
     affile: *mut afffile_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller promises the path and the affix file; every buffer
     // below is sized for what is written into it.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
@@ -86,7 +86,7 @@ pub(super) unsafe fn spell_read_dic(
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");
-        return FAIL;
+        return Err(Failed);
     }
 
     let mut ht: hashtab_T = unsafe { core::mem::zeroed() };
@@ -115,7 +115,7 @@ pub(super) unsafe fn spell_read_dic(
     let mut lnum: c_int = 1;
     let mut non_ascii = 0;
     let mut duplicate = 0;
-    let mut retval = OK;
+    let mut retval = Ok(());
     let mut last_msg_time: Timestamp = 0;
 
     while !unsafe { vim_fgets(line.as_mut_ptr(), MAXLINELEN, fd) } && !got_int.get() {
@@ -200,7 +200,7 @@ pub(super) unsafe fn spell_read_dic(
         // point at it for the rest of the run.
         let dw = unsafe { (*spin).si_arena.save_str(w) };
         if dw.is_null() {
-            retval = FAIL;
+            retval = Err(Failed);
             unsafe { xfree(pc.cast()) };
             break;
         }
@@ -251,8 +251,8 @@ pub(super) unsafe fn spell_read_dic(
         let region = unsafe { (*spin).si_region };
         let afx = store_afflist.as_ptr();
         let stored = unsafe { store_word(&mut *spin, dw, flags, region, afx, need_affix) };
-        if stored == FAIL {
-            retval = FAIL;
+        if stored.is_err() {
+            retval = Err(Failed);
         }
 
         if !afflist.is_null() {
@@ -272,13 +272,13 @@ pub(super) unsafe fn spell_read_dic(
                 pfxlist: store_afflist.as_mut_ptr(),
                 pfxlen,
             };
-            if unsafe { store_aff_word(call) } == FAIL {
-                retval = FAIL;
+            if unsafe { store_aff_word(call) }.is_err() {
+                retval = Err(Failed);
             }
             call.ht = pref;
             call.xht = core::ptr::null_mut();
-            if unsafe { store_aff_word(call) } == FAIL {
-                retval = FAIL;
+            if unsafe { store_aff_word(call) }.is_err() {
+                retval = Err(Failed);
             }
         }
         unsafe { xfree(pc.cast()) };
@@ -446,7 +446,7 @@ pub(super) struct AffWord {
 ///
 /// `word` and `afflist` must be NUL-terminated; `ht` and `affile` live;
 /// `pfxlist`, when given, must have room past `pfxlen` for more ids.
-pub(super) unsafe fn store_aff_word(call: AffWord) -> c_int {
+pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
     let AffWord {
         spin,
         word,
@@ -465,12 +465,12 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> c_int {
     let mut newword: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut retval = OK;
+    let mut retval = Ok(());
     let wordlen = unsafe { strlen(word) };
 
     let mut todo = unsafe { (*ht).ht_used } as c_int;
     let mut hi = unsafe { (*ht).ht_array };
-    while todo > 0 && retval == OK {
+    while todo > 0 && retval.is_ok() {
         if unsafe { (*hi).hi_key }.is_null()
             || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
         {
@@ -613,8 +613,8 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> c_int {
                     let stored = unsafe {
                         store_word(&mut *spin, nw, use_flags, region, use_pfxlist, need_affix)
                     };
-                    if stored == FAIL {
-                        retval = FAIL;
+                    if stored.is_err() {
+                        retval = Err(Failed);
                     }
 
                     // A suffix may follow, if this affix allows one.
@@ -632,8 +632,8 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> c_int {
                             pfxlist: use_pfxlist,
                             pfxlen,
                         };
-                        if unsafe { store_aff_word(deep) } == FAIL {
-                            retval = FAIL;
+                        if unsafe { store_aff_word(deep) }.is_err() {
+                            retval = Err(Failed);
                         }
                     }
 
@@ -654,11 +654,11 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> c_int {
                         };
                         let a = unsafe { store_aff_word(cross) };
                         cross.afflist = unsafe { (*ae).ae_flags };
-                        if a == FAIL
+                        if a.is_err()
                             || (!cross.afflist.is_null()
-                                && unsafe { store_aff_word(cross) } == FAIL)
+                                && unsafe { store_aff_word(cross) }.is_err())
                         {
-                            retval = FAIL;
+                            retval = Err(Failed);
                         }
                     }
                 }

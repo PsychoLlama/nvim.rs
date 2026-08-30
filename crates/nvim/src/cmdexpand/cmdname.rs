@@ -43,7 +43,7 @@ use crate::types::{
     CMD_unmenu, CMD_unsilent, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_vmap,
     CMD_vmapclear, CMD_vmenu, CMD_vnoremap, CMD_vnoremenu, CMD_vunmap, CMD_vunmenu, CMD_while,
     CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, ExArgt, ExpandContext,
-    FAIL, NUL, OptionSetFlags,
+    NUL, OptionSetFlags,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -696,7 +696,7 @@ pub unsafe fn expand_cmdline(
     }
 
     // Find all files that match the description.
-    if unsafe { expand_from_context(xp.raw(), file_str, matches, matchcount, options) } == FAIL {
+    if unsafe { expand_from_context(xp.raw(), file_str, matches, matchcount, options) }.is_err() {
         unsafe { *matchcount = 0 };
         unsafe { *matches = ptr::null_mut() };
     }

@@ -29,7 +29,7 @@ use super::*;
 use crate::guard::Keys;
 use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
 use crate::r#move::WinValid;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
 
 /// Set Insert mode up, run the state loop until it really ends, and tear it
 /// down again.
@@ -640,7 +640,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
     disable_fold_update.set(disable_fold_update.get() + 1);
     // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all the
     // completion machine and 'smartindent' ask for.
-    if unsafe { ins_complete(s.c, true) } == FAIL {
+    if unsafe { ins_complete(s.c, true) }.is_err() {
         compl_status_clear();
     }
     disable_fold_update.set(disable_fold_update.get() - 1);
@@ -758,7 +758,7 @@ fn key_available() -> bool {
 #[inline(always)]
 fn stop_arrow_ok() -> bool {
     // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { stop_arrow() == OK }
+    unsafe { stop_arrow().is_ok() }
 }
 
 /// Does 'cinkeys' list `c` for `when`?  `line_is_white` says whether the

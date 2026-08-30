@@ -207,7 +207,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     setpcmark();
     if is_split_cmd || cmdmod.with(|m| m.cmod_tab) != 0 {
         // Split the window, or create a new tab page, first.
-        if win_split(0, 0) == FAIL {
+        if win_split(0, 0).is_err() {
             return;
         }
         // RESET_BINDING: the new window scrolls and cursors on its own.
@@ -237,14 +237,14 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
     // is held across it.
     let opened = unsafe { do_ecmd(0, name, none, eap.raw(), last, flags, wp) };
-    if opened == FAIL {
+    if opened.is_err() {
         // It failed (Abort for an already-edited file, say): restore the
         // argument index of whichever window is current now.
         set_cur_arg_idx(old_arg_idx);
     } else if cmdidx != CMD_argdo as c_int {
         // Like Vi: set the mark where the cursor is in the file.
         // SAFETY: sets the `'` mark at the cursor.
-        unsafe { setmark('\'' as c_int) };
+        let _ = unsafe { setmark('\'' as c_int) };
     }
 }
 

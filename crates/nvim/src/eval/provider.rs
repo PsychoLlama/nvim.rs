@@ -451,7 +451,7 @@ pub unsafe fn prompt_invoke_callback() {
 
     // SAFETY: `lnum` is the buffer's last line, and the literal is
     // NUL-terminated.
-    unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as colnr_T, false) };
+    let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as colnr_T, false) };
     // SAFETY: the line was just appended.
     unsafe { appended_lines_mark(lnum, 1) };
     cur_win().w_cursor.lnum = lnum + 1;

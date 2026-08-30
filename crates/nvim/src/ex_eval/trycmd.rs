@@ -67,7 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{FAIL, NUL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
+use crate::types::{NUL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -92,7 +92,7 @@ pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
     if unsafe { (*eap).skip } != 0 || value.is_null() {
         return;
     }
-    if unsafe { throw_exception(value.cast(), ET_USER, ptr::null_mut()) } == FAIL {
+    if unsafe { throw_exception(value.cast(), ET_USER, ptr::null_mut()) }.is_err() {
         unsafe { xfree(value.cast()) };
     } else {
         unsafe { do_throw((*eap).cstack) };

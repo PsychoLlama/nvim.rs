@@ -30,7 +30,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
 use crate::types::{
-    FAIL, NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, Vv,
+    NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, Vv,
     cmdarg_T,
 };
 use crate::undo::{u_redo, u_undo, u_undoline};
@@ -52,7 +52,7 @@ unsafe fn replay(cap: *mut cmdarg_T, regname: c_int) {
     let mut ca = unsafe { CmdArg::new(cap) };
     while ca.count1 != 0 && !got_int.get() {
         ca.count1 -= 1;
-        if unsafe { do_execreg(regname, 0, 0, 0) } == 0 {
+        if unsafe { do_execreg(regname, 0, 0, 0) }.is_err() {
             clear_op_beep(ca.op());
             break;
         }
@@ -153,7 +153,7 @@ pub(crate) unsafe fn nv_dot(cap: *mut cmdarg_T) {
     // The insert half is only replayed when insert mode was left by a
     // command rather than by an arrow key, which ends the change.
     let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
-    if unsafe { start_redo(ca.count0, repeat_insert) } == 0 {
+    if unsafe { start_redo(ca.count0, repeat_insert) }.is_err() {
         clear_op_beep(ca.op());
     }
 }
@@ -235,7 +235,7 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     ca.op().motion_type = kMTLineWise;
     let mut op = ca.op();
-    if unsafe { cursor_down(ca.count1 - 1, op.op_type == OP_NOP) } == 0 {
+    if unsafe { cursor_down(ca.count1 - 1, op.op_type == OP_NOP) }.is_err() {
         clear_op_beep(op);
     } else if (op.op_type == OP_DELETE
         && op.motion_force != 'v' as c_int
@@ -271,7 +271,7 @@ pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
         }
         stuff_readbuf_char(ca.nchar);
         stuff_readbuf_char(-(253 + ((KE_CMDWIN as c_int) << 8)));
-    } else if reg_executing.get() == 0 && unsafe { do_record(ca.nchar) } == FAIL {
+    } else if reg_executing.get() == 0 && unsafe { do_record(ca.nchar) }.is_err() {
         clear_op_beep(ca.op());
     }
 }

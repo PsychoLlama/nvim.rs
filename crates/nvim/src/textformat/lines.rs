@@ -42,7 +42,7 @@ use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
-    CmdModFlags, FAIL, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
+    CmdModFlags, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
     OptionSetFlags, Vv, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t, varnumber_T,
 };
 use crate::ui::ui_cursor_shape;
@@ -62,7 +62,7 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
 
     // Put the cursor where the command was given, so `u` can put it back.
     cur_win().w_cursor = oap.cursor_start;
-    if u_save(oap.start.lnum - 1, oap.end.lnum + 1) == FAIL {
+    if u_save(oap.start.lnum - 1, oap.end.lnum + 1).is_err() {
         return;
     }
     cur_win().w_cursor = oap.start;
@@ -202,7 +202,7 @@ unsafe fn join_next_line(
 ) -> bool {
     cur_win().w_cursor.lnum += 1;
     cur_win().w_cursor.col = 0;
-    if line_count < 0 && u_save_cursor() == FAIL {
+    if line_count < 0 && u_save_cursor().is_err() {
         return false;
     }
     let strip = if next_leader_len > 0 {
@@ -214,11 +214,11 @@ unsafe fn join_next_line(
         0
     };
     if strip > 0 {
-        unsafe { del_bytes(strip as colnr_T, false, false) };
+        let _ = unsafe { del_bytes(strip as colnr_T, false, false) };
         unsafe { mark_col_adjust(cur_win().w_cursor.lnum, 0, 0, -(strip as colnr_T), 0) };
     }
     cur_win().w_cursor.lnum -= 1;
-    if unsafe { do_join(2 as size_t, true, false, false, false) } == FAIL {
+    if unsafe { do_join(2 as size_t, true, false, false, false) }.is_err() {
         beep_flush();
         return false;
     }

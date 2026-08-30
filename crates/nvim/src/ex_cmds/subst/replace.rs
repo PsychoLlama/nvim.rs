@@ -33,7 +33,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::memmove;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
-use crate::types::{NUL, OK, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
+use crate::types::{NUL, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use crate::winlayer::{Buf, Win};
 use ::libc::{strcat, strlen};
@@ -82,11 +82,11 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
         } else if here == CAR {
             // Prepare for undo of the line about to be split.
             // SAFETY: `lnum` is a line of the buffer.
-            if u_inssub(st.lnum) == OK {
+            if u_inssub(st.lnum).is_ok() {
                 // SAFETY: the pieces are all live; the appended line is the
                 // text up to the CR, which is then removed from the buffer.
                 unsafe { *p1 = NUL as c_char }; // truncate up to the CR
-                unsafe {
+                let _ = unsafe {
                     ml_append(
                         st.lnum - 1 as linenr_T,
                         st.new_start,
@@ -329,13 +329,13 @@ pub(super) unsafe fn build_replacement(
 unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
     st.lnum += 1;
     // SAFETY: the lines below `lnum` are the ones the match spanned.
-    if u_savedel(st.lnum, st.nmatch_tl) != OK {
+    if u_savedel(st.lnum, st.nmatch_tl).is_err() {
         return false;
     }
     let mut i = 0 as linenr_T;
     while i < st.nmatch_tl {
         // SAFETY: as above.
-        unsafe { ml_delete(st.lnum) };
+        let _ = unsafe { ml_delete(st.lnum) };
         i += 1;
     }
     // SAFETY: as above.
@@ -380,11 +380,11 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.prev_matchcol = old_len - st.prev_matchcol;
 
     // SAFETY: `lnum` is a line of the buffer.
-    if u_savesub(st.lnum) != OK {
+    if u_savesub(st.lnum).is_err() {
         return false;
     }
     // SAFETY: `ml_replace` takes ownership of the rebuilt line.
-    unsafe { ml_replace(st.lnum, st.new_start, true) };
+    let _ = unsafe { ml_replace(st.lnum, st.new_start, true) };
 
     // Call extmark_splice for each match on this line.
     for m in &st.line_matches {

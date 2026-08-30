@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 
@@ -78,12 +78,13 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
             }
         }
         let parsed = if *diffstyle == DiffStyle::Ed {
-            (line[0] as u8).is_ascii_digit() && unsafe { parse_diff_ed(line.as_ptr(), hunk) } == OK
+            (line[0] as u8).is_ascii_digit()
+                && unsafe { parse_diff_ed(line.as_ptr(), hunk) }.is_ok()
         } else {
             debug_assert_eq!(*diffstyle, DiffStyle::Unified);
             unsafe {
                 strncmp(line.as_ptr(), c"@@ ".as_ptr(), 3) == 0
-                    && parse_diff_unified(line.as_ptr(), hunk) == OK
+                    && parse_diff_unified(line.as_ptr(), hunk).is_ok()
             }
         };
         if parsed {
@@ -266,7 +267,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio
 ///
 /// An `a` hunk adds after `f1`, so its original range is empty and starts on
 /// the *next* line; a `d` hunk is the mirror image.
-unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
+unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     let f1 = unsafe { getdigits_int32(&raw mut p, true, 0) };
     let l1 = if unsafe { *p } == b',' as c_char {
@@ -277,7 +278,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
     };
     let difftype = unsafe { *p } as u8;
     if !matches!(difftype, b'a' | b'c' | b'd') {
-        return FAIL;
+        return Err(Failed);
     }
     p = unsafe { p.offset(1) };
     let f2 = unsafe { getdigits_int(&raw mut p, true, 0) };
@@ -288,7 +289,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
         f2
     };
     if l1 < f1 || l2 < f2 {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe {
         *hunk = diffhunk_T {
@@ -298,7 +299,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
             count_new: if difftype == b'd' { 0 } else { l2 - f2 + 1 },
         }
     };
-    OK
+    Ok(())
 }
 
 /// `@@ -f1[,c1] +f2[,c2] @@` -- one unified hunk header.
@@ -306,10 +307,10 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
 /// An omitted count is 1, and a count of *zero* means the hunk adds or
 /// deletes at that point rather than covering it, which shifts the line
 /// number by one.
-unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> c_int {
+unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     if unsafe { strncmp(p, c"@@ -".as_ptr(), 4) } != 0 {
-        return FAIL;
+        return Err(Failed);
     }
     p = unsafe { p.add(4) };
     let mut oldline = unsafe { getdigits_int32(&raw mut p, true, 0) };
@@ -320,7 +321,7 @@ unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> c_in
         1
     };
     if unsafe { strncmp(p, c" +".as_ptr(), 2) } != 0 {
-        return FAIL;
+        return Err(Failed);
     }
     p = unsafe { p.add(2) };
     let mut newline = unsafe { getdigits_int(&raw mut p, true, 0) };
@@ -345,5 +346,5 @@ unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> c_in
             count_new: newcount,
         }
     };
-    OK
+    Ok(())
 }

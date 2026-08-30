@@ -26,7 +26,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CmdModFlags, FAIL, FileID, OK, linenr_T};
+use crate::types::{CmdModFlags, Failed, FileID, linenr_T};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------
@@ -103,19 +103,23 @@ fn current_win() -> Win {
 // Looking a name up
 
 /// The file name and remembered line number of buffer `fnum`.
-pub unsafe fn buflist_name_nr(fnum: c_int, fname: *mut *mut c_char, lnum: *mut linenr_T) -> c_int {
+pub unsafe fn buflist_name_nr(
+    fnum: c_int,
+    fname: *mut *mut c_char,
+    lnum: *mut linenr_T,
+) -> Result<(), Failed> {
     let Some(mut buf) = find_buf(fnum) else {
-        return FAIL;
+        return Err(Failed);
     };
     if buf.b_fname.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: the caller's promise -- two out-parameters to fill in.
     let (fname, lnum) = unsafe { (&mut *fname, &mut *lnum) };
     *fname = buf.b_fname;
     // SAFETY: a live buffer.
     *lnum = unsafe { buflist_findlnum(buf) };
-    OK
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +134,7 @@ pub unsafe fn setfname(
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
     message: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut b = buf;
     let mut ffname = ffname_arg;
     let mut sfname = sfname_arg;
@@ -153,7 +157,7 @@ pub unsafe fn setfname(
         unsafe { fname_expand(buf, &raw mut ffname, &raw mut sfname) };
         if ffname.is_null() {
             // Out of memory.
-            return FAIL;
+            return Err(Failed);
         }
 
         // If the file name is already used in another buffer:
@@ -175,7 +179,7 @@ pub unsafe fn setfname(
                     err(tr(c"E95: Buffer with this name already exists"));
                 }
                 free(ffname);
-                return FAIL;
+                return Err(Failed);
             }
             // Delete it from the list.
             // SAFETY: a live, unloaded buffer shown in no window.
@@ -197,7 +201,7 @@ pub unsafe fn setfname(
 
     // SAFETY: a live buffer.
     unsafe { buf_name_changed(buf) };
-    OK
+    Ok(())
 }
 
 /// A crude way of changing a buffer's name; use with care. The name is
@@ -265,7 +269,7 @@ pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
     let mut fname: *mut c_char = ptr::null_mut();
     let mut dummy: linenr_T = 0;
     // SAFETY: two locals to fill in.
-    if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) } == FAIL {
+    if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_err() {
         if errmsg {
             err(tr_raw(e_noalt.as_ptr()));
         }

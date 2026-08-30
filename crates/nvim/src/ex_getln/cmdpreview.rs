@@ -10,7 +10,7 @@
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
-use crate::types::{CmdModFlags, ExArgt, FAIL, OptionSetFlags};
+use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -54,7 +54,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
     let retv = unsafe { rename_buffer(c"[Preview]".as_ptr().cast_mut()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
 
-    if retv == FAIL {
+    if retv.is_err() {
         return ::core::ptr::null_mut::<buf_T>();
     }
 
@@ -79,7 +79,8 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
     if win_split(
         p_cwh.get() as ::core::ffi::c_int,
         WSP_BOT as ::core::ffi::c_int,
-    ) == FAIL
+    )
+    .is_err()
     {
         return ::core::ptr::null_mut::<win_T>();
     }
@@ -99,7 +100,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
     );
     unsafe { try_leave(&raw mut tstate, &mut err) };
 
-    if err.is_set() || result == FAIL {
+    if err.is_set() || result.is_err() {
         err.clear();
         return ::core::ptr::null_mut::<win_T>();
     }
@@ -487,7 +488,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // A nonzero answer means the screen has to be updated now.
         if cmdpreview_type != 0 {
             let _redraw = Allow::redraw();
-            unsafe { update_screen() };
+            let _ = unsafe { update_screen() };
         }
 
         // Close the preview window if it is open.

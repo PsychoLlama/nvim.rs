@@ -24,7 +24,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::guard::Keys;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::NUL;
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
 pub(crate) fn ins_ctrl_v() {
@@ -193,7 +193,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
         let (p, len) = (name.as_mut_ptr(), unsafe { strlen(name.as_ptr()) } as c_int);
         c = unsafe { *p.offset((len - 1) as isize) } as uint8_t as c_int;
         if len > 2 {
-            if unsafe { stop_arrow() } == FAIL {
+            if unsafe { stop_arrow() }.is_err() {
                 return;
             }
             unsafe { *p.offset((len - 1) as isize) = NUL as c_char };
@@ -202,7 +202,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
             ctrlv = 0;
         }
     }
-    if unsafe { stop_arrow() } == OK {
+    if unsafe { stop_arrow() }.is_ok() {
         let flags = if ctrlv != 0 {
             INSCHAR_CTRLV as c_int
         } else {

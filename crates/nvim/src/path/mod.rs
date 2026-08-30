@@ -44,7 +44,7 @@ use crate::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::types::{
-    Directory, FAIL, FileComparison, FileID, FileInfo, MAXPATHL, OK, PATHSEPSTR, file_comparison,
+    Directory, Failed, FileComparison, FileID, FileInfo, MAXPATHL, PATHSEPSTR, file_comparison,
     garray_T, regmatch_T, size_t,
 };
 use ::libc::{qsort, strcasecmp, strcmp, strcpy, strlen};
@@ -129,7 +129,7 @@ pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
         return core::ptr::null_mut();
     }
     let buf: *mut c_char = unsafe { xmalloc(MAXPATHL as size_t) }.cast();
-    if unsafe { vim_full_name(fname, buf, MAXPATHL as size_t, force) } == FAIL {
+    if unsafe { vim_full_name(fname, buf, MAXPATHL as size_t, force) }.is_err() {
         unsafe { xfree(buf.cast()) };
         return unsafe { xstrdup(fname) };
     }
@@ -404,21 +404,21 @@ pub unsafe fn vim_full_name(
     buf: *mut c_char,
     len: size_t,
     force: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { *buf = 0 };
     if fname.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     if unsafe { strlen(fname) } > len.wrapping_sub(1) {
         unsafe { xstrlcpy(buf, fname, len) }; // truncate
-        return FAIL;
+        return Err(Failed);
     }
     if unsafe { path_with_url(fname) } != 0 {
         unsafe { xstrlcpy(buf, fname, len) };
-        return OK;
+        return Ok(());
     }
     let rv = unsafe { path_to_absolute(fname, buf, len, force) };
-    if rv == FAIL {
+    if rv.is_err() {
         unsafe { xstrlcpy(buf, fname, len) }; // something failed; use the file name
     }
     rv
@@ -445,22 +445,22 @@ pub unsafe fn path_full_dir_name(
     directory: *mut c_char,
     buffer: *mut c_char,
     len: size_t,
-) -> c_int {
+) -> Result<(), Failed> {
     if unsafe { *directory } == 0 {
         return unsafe { os_dirname(buffer, len) };
     }
     if !unsafe { os_realpath(directory, buffer, len) }.is_null() {
-        return OK;
+        return Ok(());
     }
     // The path does not exist (yet). An absolute one fails, and the
     // caller uses it as it is.
     if unsafe { path_is_absolute(directory) } {
-        return FAIL;
+        return Err(Failed);
     }
     // A relative one is taken from the current directory.
     let mut old_dir = [0 as c_char; MAXPATHL as usize];
-    if unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) } == FAIL {
-        return FAIL;
+    if unsafe { os_dirname(old_dir.as_mut_ptr(), MAXPATHL as size_t) }.is_err() {
+        return Err(Failed);
     }
     unsafe { xstrlcpy(buffer, old_dir.as_ptr(), len) };
     unsafe { append_path(buffer, directory, len) }
@@ -472,7 +472,11 @@ pub unsafe fn path_full_dir_name(
 /// # Safety
 /// `path` must be a NUL-terminated string writable for `max_len` bytes, and
 /// `to_append` a NUL-terminated string.
-pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: size_t) -> c_int {
+pub unsafe fn append_path(
+    path: *mut c_char,
+    to_append: *const c_char,
+    max_len: size_t,
+) -> Result<(), Failed> {
     let mut current_length = unsafe { CStr::from_ptr(path) }.to_bytes().len();
     let to_append_length = unsafe { CStr::from_ptr(to_append) }.to_bytes().len();
     // The separator, without its NUL.
@@ -480,7 +484,7 @@ pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: 
 
     // Do not append an empty string, or a dot.
     if to_append_length == 0 || unsafe { strcmp(to_append, c".".as_ptr()) } == 0 {
-        return OK;
+        return Ok(());
     }
 
     // Join them with a separator, when there is not one there already.
@@ -489,7 +493,7 @@ pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: 
     {
         // The separator and the NUL at the end.
         if current_length + sep_len + 1 > max_len {
-            return FAIL;
+            return Err(Failed);
         }
         unsafe {
             xstrlcpy(
@@ -503,7 +507,7 @@ pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: 
 
     // The name and the NUL at the end.
     if current_length + to_append_length + 1 > max_len {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe {
         xstrlcpy(
@@ -512,7 +516,7 @@ pub unsafe fn append_path(path: *mut c_char, to_append: *const c_char, max_len: 
             (max_len - current_length) as size_t,
         )
     };
-    OK
+    Ok(())
 }
 
 /// Put the full path of `fname` in `buf`, which holds `len` bytes. What
@@ -529,7 +533,7 @@ unsafe fn path_to_absolute(
     buf: *mut c_char,
     len: size_t,
     force: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     unsafe { *buf = 0 };
     let name = unsafe { CStr::from_ptr(fname) }.to_bytes();
     // What the name is relative to: everything up to and including its
@@ -562,8 +566,8 @@ unsafe fn path_to_absolute(
             };
         }
 
-        if unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) } == FAIL {
-            return FAIL;
+        if unsafe { path_full_dir_name(relative_directory.as_mut_ptr(), buf, len) }.is_err() {
+            return Err(Failed);
         }
     }
     unsafe { append_path(buf, end_of_path, len) }
@@ -585,7 +589,7 @@ pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize
         unsafe { xstrlcpy(buf, argv0, bufsize) };
     } else if unsafe { *argv0 } == b'.' as c_char || !unsafe { strchr(argv0, PATHSEP) }.is_null() {
         // Relative to the current directory.
-        if unsafe { os_dirname(buf, MAXPATHL as size_t) } != OK {
+        if unsafe { os_dirname(buf, MAXPATHL as size_t) }.is_err() {
             unsafe { *buf = 0 };
         }
         unsafe { xstrlcat(buf, PATHSEPSTR.as_ptr(), bufsize) };

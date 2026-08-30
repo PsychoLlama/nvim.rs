@@ -244,11 +244,11 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
         if linenr <= buf.line_count() {
             // SAFETY: a live buffer and a line of it, taking the row this
             // terminal's own line buffer holds.
-            unsafe { ml_replace_buf(buf.raw(), linenr, text, true, false) };
+            let _ = unsafe { ml_replace_buf(buf.raw(), linenr, text, true, false) };
             changed += 1;
         } else {
             // SAFETY: as above, appending past the last line.
-            unsafe { ml_append_buf(buf.raw(), linenr - 1, text, 0 as colnr_T, false) };
+            let _ = unsafe { ml_append_buf(buf.raw(), linenr - 1, text, 0 as colnr_T, false) };
             added += 1;
         }
     }

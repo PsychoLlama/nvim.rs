@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_int, c_ulong, c_void};
 use super::*;
 use crate::edit::BeginlineOpts;
 use crate::ex_docmd::cmdmod_has;
-use crate::types::{FAIL, IOSIZE, NUL};
+use crate::types::{IOSIZE, NUL};
 
 /// `<` and `>` over the operator's region.
 ///
@@ -41,7 +41,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
     // The "N lines >ed M times" report; upstream shares `IObuff` for it.
     let mut report = [0 as c_char; IOSIZE as usize];
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
-    if u_save(above, below) == FAIL {
+    if u_save(above, below).is_err() {
         return;
     }
 
@@ -346,7 +346,7 @@ fn shift_block(oap: Op, amount: c_int) {
         shift_block_right(&mut bd, total)
     };
 
-    unsafe { ml_replace(lnum, shifted.line, false) };
+    let _ = unsafe { ml_replace(lnum, shifted.line, false) };
     unsafe { changed_bytes(lnum, bd.textcol) };
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
     unsafe { extmark_splice_cols(curbuf.get(), lnum as c_int - 1, at, old, new, kExtmarkUndo) };

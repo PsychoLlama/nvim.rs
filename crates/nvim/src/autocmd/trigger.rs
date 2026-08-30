@@ -14,7 +14,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::message_fmt::c_str;
 use crate::smsg;
-use crate::types::{FAIL, OK, OptionSetFlags};
+use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::{Buf, first_buffer};
 
 /// A `multiqueue` event's argument vector with nothing in it.
@@ -29,7 +29,7 @@ pub unsafe fn do_doautocmd(
     arg_start: *mut ::core::ffi::c_char,
     do_msg: bool,
     did_something: *mut bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let mut arg = arg_start;
     let mut nothing_done = true;
 
@@ -46,14 +46,14 @@ pub unsafe fn do_doautocmd(
     // SAFETY: still inside the caller's NUL-terminated argument.
     if unsafe { *arg } == b'*' as ::core::ffi::c_char {
         emsg(gettext(c"E217: Can't execute autocommands for ALL events"));
-        return FAIL;
+        return Err(Failed);
     }
 
     // Validate every event name before running any of them.
     // SAFETY: as above.
     let fname = unsafe { arg_event_skip(arg, group != AUGROUP_ALL) };
     if fname.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `arg_event_skip` answered a pointer into the same string.
     let fname = unsafe { skipwhite(fname) };
@@ -93,7 +93,7 @@ pub unsafe fn do_doautocmd(
         unsafe { *did_something = !nothing_done };
     }
 
-    if aborting() { FAIL } else { OK }
+    if aborting() { Err(Failed) } else { Ok(()) }
 }
 
 /// `:doautoall`: run the event in every loaded buffer, the current one
@@ -111,7 +111,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
 
-    let mut retval = OK;
+    let mut retval = Ok(());
     let mut next = first_buffer();
     while let Some(mut buf) = next {
         // Loaded buffers only, and the current one is done last. The step
@@ -139,8 +139,8 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
             unsafe { aucmd_restbuf(&raw mut aco) };
 
             // Stop on an error, or if the buffer was deleted under us.
-            if retval == FAIL || !bufref.valid() {
-                retval = FAIL;
+            if retval.is_err() || !bufref.valid() {
+                retval = Err(Failed);
                 break;
             }
         }
@@ -148,9 +148,9 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
         next = buf.next();
     }
 
-    if retval == OK {
+    if retval.is_ok() {
         // SAFETY: as above.
-        unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
+        let _ = unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
         if call_do_modelines && did_aucmd {
             do_modelines(OptionSetFlags::NONE);
         }

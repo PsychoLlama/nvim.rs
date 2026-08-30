@@ -26,7 +26,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, FoFlag, NUL};
+use crate::types::{CpoFlag, FoFlag, NUL};
 
 /// `i_CTRL-T` and `i_CTRL-D`: add or remove one 'shiftwidth' of indent.
 ///
@@ -47,7 +47,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
         // SAFETY: every `unsafe` call in this function is an editor-wide
         // routine whose only precondition is the live `curwin`/`curbuf`
         // Insert mode runs with.
-        unsafe { del_char(false) };
+        let _ = unsafe { del_char(false) };
         if State.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
         }
@@ -406,7 +406,7 @@ fn walk_col(pos: &pos_T, vreplace: bool) -> colnr_T {
 #[inline(always)]
 fn stop_arrow_failed() -> bool {
     // SAFETY: `curbuf` is live for the whole session.
-    unsafe { stop_arrow() == FAIL }
+    unsafe { stop_arrow().is_err() }
 }
 
 /// The cursor's virtual column, as it would be with 'list' off.

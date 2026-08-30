@@ -11,7 +11,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
-use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, Pos, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
@@ -106,7 +106,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                         // SAFETY: `buf` is one NUL-terminated pattern, and
                         // the two out-parameters are this frame's locals.
                         let ok = unsafe { expand_wildcards(1, &raw mut buf, n, out, flags) };
-                        ok != OK
+                        ok.is_err()
                     };
                     if backtick || failed {
                         count = 0;
@@ -491,7 +491,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 pub(crate) unsafe fn get_next_default_completion(
     st: *mut ins_compl_next_state_T,
     start_pos: *mut pos_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares
     // `IObuff` for it, which the message machinery also writes.
     let mut word = [0 as c_char; IOSIZE as usize];
@@ -542,11 +542,11 @@ pub(crate) unsafe fn get_next_default_completion(
             // SAFETY: `at` is a position in `buf` and `leader` is
             // NUL-terminated; `start_pos` is the caller's own position.
             let hit = unsafe { search_for_fuzzy_match(buf, at, leader, dir, start_pos) };
-            found_new_match = FAIL;
+            found_new_match = Err(Failed);
             if let Some(hit) = hit {
                 (ptr, len) = (hit.ptr, hit.len);
                 score = hit.score.unwrap_or(score);
-                found_new_match = OK;
+                found_new_match = Ok(());
             }
         } else if ctrl_x_mode_whole_line()
             || ctrl_x_mode_eval()
@@ -560,7 +560,7 @@ pub(crate) unsafe fn get_next_default_completion(
             // running completion's NUL-terminated pattern.
             found_new_match = unsafe { search_for_exact_line(ins_buf, at, dir, pat) };
         } else {
-            found_new_match = unsafe {
+            let found = unsafe {
                 searchit(
                     None,
                     ins_buf,
@@ -575,6 +575,7 @@ pub(crate) unsafe fn get_next_default_completion(
                     ptr::null_mut(),
                 )
             };
+            found_new_match = if found == FAIL { Err(Failed) } else { Ok(()) };
         }
         drop(silenced);
 
@@ -598,7 +599,7 @@ pub(crate) unsafe fn get_next_default_completion(
                 (*st).set_match_pos = false;
             }
         } else if first.lnum == last.lnum && first.col == last.col {
-            found_new_match = FAIL;
+            found_new_match = Err(Failed);
         } else {
             // Passing the previous match going forwards (or backwards) is
             // the wrap-around; the second time round there is nothing new.
@@ -611,14 +612,14 @@ pub(crate) unsafe fn get_next_default_completion(
             };
             if passed {
                 if looped_around {
-                    found_new_match = FAIL;
+                    found_new_match = Err(Failed);
                 } else {
                     looped_around = true;
                 }
             }
         }
         unsafe { (*st).prev_match_pos = pos };
-        if found_new_match == FAIL {
+        if found_new_match.is_err() {
             break;
         }
 
@@ -668,7 +669,7 @@ pub(crate) unsafe fn get_next_default_completion(
             {
                 compl_num_bests.set(compl_num_bests.get() + 1);
             }
-            found_new_match = OK;
+            found_new_match = Ok(());
             break;
         }
     }

@@ -21,7 +21,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, OK, OptionSetFlags, buf_T, optset_T};
+use crate::types::{NUL, OptionSetFlags, buf_T, optset_T};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
@@ -107,7 +107,7 @@ pub unsafe fn did_set_complete(args: *mut optset_T) -> *const c_char {
 
     // The "F" source names a function, which is resolved last because
     // it can fail for a reason the letter walk cannot see.
-    if unsafe { set_cpt_callbacks(args) } != OK {
+    if unsafe { set_cpt_callbacks(args) }.is_err() {
         return unsafe { illegal_char_after_chr(buf, buflen, c_int::from(b'F')) };
     }
     ptr::null()
@@ -242,7 +242,7 @@ pub unsafe fn did_set_helplang(_args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_mkspellmem(_args: *mut optset_T) -> *const c_char {
-    if spell_check_msm() != OK {
+    if spell_check_msm().is_err() {
         return invalid();
     }
     ptr::null()
@@ -331,7 +331,7 @@ pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_spellsuggest(_args: *mut optset_T) -> *const c_char {
     // SAFETY: re-reads the option's own value.
-    if unsafe { spell_check_sps() } != OK {
+    if unsafe { spell_check_sps() }.is_err() {
         return invalid();
     }
     ptr::null()

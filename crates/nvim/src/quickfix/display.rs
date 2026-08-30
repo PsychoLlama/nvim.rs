@@ -203,7 +203,7 @@ pub unsafe fn qf_list(eap: *mut exarg_T) {
     }
     let mut idx1: c_int = 1;
     let mut idx2: c_int = -1;
-    if unsafe { get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) } == 0
+    if unsafe { get_list_range(&raw mut arg, &raw mut idx1, &raw mut idx2) }.is_err()
         || unsafe { *arg } != 0
     {
         // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
@@ -506,10 +506,10 @@ pub unsafe fn qf_view_result(split: bool) {
     }
     if split {
         unsafe { qf_jump_newwin(qi.raw(), 0, cur_win().w_cursor.lnum as c_int, 0, true) };
-        unsafe { do_cmdline_cmd(c"clearjumps".as_ptr()) };
+        let _ = unsafe { do_cmdline_cmd(c"clearjumps".as_ptr()) };
         return;
     }
-    unsafe {
+    let _ = unsafe {
         do_cmdline_cmd(if in_ll_window {
             c".ll".as_ptr()
         } else {

@@ -64,8 +64,8 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, CdCause, ExtmarkOp, MarkAdjustMode, MarkTree, MetaIndex, OptValType,
-    UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
+    AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, MarkAdjustMode, MarkTree, MetaIndex, OK,
+    OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
     dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values, linenr_T,
     uint32_t, varnumber_T,
 };
@@ -432,10 +432,16 @@ pub(crate) fn fire_named(event: event_T, mut buf: Buf) -> bool {
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
-pub(crate) fn fire_retval(event: event_T, mut buf: Buf, retval: &mut c_int) {
+pub(crate) fn fire_retval<T>(event: event_T, mut buf: Buf, retval: &mut Result<T, Failed>) {
     let (none, raw) = (ptr::null_mut(), buf.raw());
+    let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.
-    unsafe { apply_autocmds_retval(event, none, none, false, raw, retval) };
+    unsafe { apply_autocmds_retval(event, none, none, false, raw, &raw mut status) };
+    // The event can only *lose* the read, never claim one: `FAIL` is the
+    // only value `apply_autocmds_retval` writes.
+    if status == FAIL {
+        *retval = Err(Failed);
+    }
 }
 
 pub(crate) fn block_autocmds_now() {
@@ -468,7 +474,7 @@ pub(crate) fn xfree_clear<T>(slot: &mut *mut T) {
 /// `ml_delete()` on the current buffer.
 pub(crate) fn delete_line(lnum: linenr_T) {
     // SAFETY: the caller has checked the line is in the current buffer.
-    unsafe { ml_delete(lnum) };
+    let _ = unsafe { ml_delete(lnum) };
 }
 
 /// `unchanged()`: clear `'modified'`, and with `ff` the file-format flags.
@@ -533,7 +539,7 @@ pub(crate) fn edit_file(
     newlnum: linenr_T,
     flags: c_int,
     mut win: Win,
-) -> c_int {
+) -> Result<(), Failed> {
     let raw = win.raw();
     // SAFETY: a live window, and the caller's own arguments passed on.
     unsafe { do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, raw) }
@@ -549,7 +555,7 @@ fn layout_unlock() {
 
 fn run_cmdline(cmd: &CStr) {
     // SAFETY: a NUL-terminated command line.
-    unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
 }
 
 /// `buf_free_count++`: one more buffer has been freed, so every [`BufRef`]

@@ -17,7 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 
 /// The buffer `.` repeats, by address.
 ///
@@ -93,7 +93,11 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 ///
 /// # Safety
 /// Must run with a live `curwin`.
-pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> c_int {
+pub(crate) unsafe fn stuff_inserted(
+    c: c_int,
+    mut count: c_int,
+    no_esc: c_int,
+) -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
@@ -101,7 +105,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
     let mut insert = unsafe { get_last_insert() }; // text to be inserted
     if insert.data().is_null() {
         emsg(gettext(e_noinstext));
-        return FAIL;
+        return Err(Failed);
     }
 
     // May want to stuff the command character, to start Insert mode.
@@ -153,7 +157,7 @@ pub(crate) unsafe fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -
     if no_esc == 0 {
         stuff_readbuf_char(ESC);
     }
-    OK
+    Ok(())
 }
 
 /// The last inserted text, without the command that started the insert.

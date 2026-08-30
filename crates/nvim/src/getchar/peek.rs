@@ -432,7 +432,7 @@ unsafe fn read_from_typeahead(
             && must_redraw.get() != 0
             && !need_wait_return.get()
         {
-            unsafe { update_screen() };
+            let _ = unsafe { update_screen() };
             unsafe { setcursor() }; // put the cursor back where it belongs
         }
 

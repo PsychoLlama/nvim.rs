@@ -32,8 +32,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Direction, EvalFuncData, NUL, OK, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T,
-    pos_T, typval_T, varnumber_T, win_T,
+    Direction, EvalFuncData, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T, pos_T,
+    typval_T, varnumber_T, win_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -511,7 +511,7 @@ fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
         }
         // A mark name is exactly one byte after the quote.
         [b'\'', c] => {
-            if unsafe { setmark_pos(*c as c_int, &raw mut pos, fnum, ptr::null_mut()) } == OK {
+            if unsafe { setmark_pos(*c as c_int, &raw mut pos, fnum, ptr::null_mut()) }.is_ok() {
                 rettv.vval.v_number = 0;
             }
         }

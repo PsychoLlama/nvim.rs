@@ -693,7 +693,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
     // SAFETY: module contract; `buf` is the expanded body this frame owns.
     unsafe {
         let (getline, cookie) = ((*eap).ea_getline, (*eap).cookie);
-        do_cmdline(buf, getline, cookie, opts)
+        let _ = do_cmdline(buf, getline, cookie, opts);
     };
     drop(script_ctx);
     // SAFETY: the block is this function's.

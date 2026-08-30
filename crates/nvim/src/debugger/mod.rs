@@ -57,8 +57,8 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::{
-    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, FAIL, MAXPATHL, NUL, OK,
-    buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
+    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, Failed, MAXPATHL, NUL, buf_T,
+    colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
     tasave_T, typval_T, uint8_t,
 };
 use ::libc::{atoi, strcmp, strcpy, strlen};
@@ -311,7 +311,7 @@ unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
 ///
 /// # Safety
 /// `arg` must be NUL-terminated.
-unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
+unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<(), Failed> {
     // SAFETY: growing by one reserves the scratch slot every branch writes.
     list.cell().with_mut(|ga| unsafe { ga_grow(ga, 1) });
     // SAFETY: just reserved.
@@ -328,14 +328,14 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
         } else if debugger && strncmp(arg, c"here".as_ptr(), 4) == 0 {
             if (*curbuf.get()).b_ffname.is_null() {
                 semsg!("E32: No file name");
-                return FAIL;
+                return Err(Failed);
             }
             (DBG_FILE, true)
         } else if debugger && strncmp(arg, c"expr".as_ptr(), 4) == 0 {
             (DBG_EXPR, false)
         } else {
             semsg!("E475: Invalid argument: {}", c_str(arg));
-            return FAIL;
+            return Err(Failed);
         }
     };
     // SAFETY: `bp` is the reserved scratch entry.
@@ -373,7 +373,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
         // SAFETY: caller contract.
         let arg = unsafe { c_str(arg) };
         semsg!("E475: Invalid argument: {arg}");
-        return FAIL;
+        return Err(Failed);
     }
 
     // SAFETY: `p` is inside `arg`; every branch leaves `dbg_name` owning an
@@ -403,12 +403,12 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
             // `$DIR/file` expands when `$DIR` is itself `~/dir`.
             let once = expand_env_save(p);
             if once.is_null() {
-                return FAIL;
+                return Err(Failed);
             }
             let twice = expand_env_save(once);
             xfree(once.cast());
             if twice.is_null() {
-                return FAIL;
+                return Err(Failed);
             }
             if *twice as c_int != '*' as c_int {
                 let fixed = fix_fname(twice);
@@ -421,7 +421,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> c_int {
     };
     // SAFETY: `bp` is the scratch entry; `name` is owned or null.
     unsafe { (*bp).dbg_name = name };
-    if name.is_null() { FAIL } else { OK }
+    if name.is_null() { Err(Failed) } else { Ok(()) }
 }
 
 /// `:breakadd`, and `:profile func`/`:profile file`.
@@ -432,7 +432,7 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
     // SAFETY: caller contract.
     let (list, arg, forceit) = unsafe { (BreakList::of(&*eap), (*eap).arg, (*eap).forceit) };
     // SAFETY: `arg` is the NUL-terminated argument.
-    if unsafe { dbg_parsearg(arg, list) } != OK {
+    if unsafe { dbg_parsearg(arg, list) }.is_err() {
         return;
     }
 
@@ -526,7 +526,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
         // `:breakdel {func|file|expr} [lnum] {name}` -- parse it into the
         // scratch entry and look for the closest match.
         // SAFETY: `arg` is NUL-terminated.
-        if unsafe { dbg_parsearg(arg, list) } == FAIL {
+        if unsafe { dbg_parsearg(arg, list) }.is_err() {
             return;
         }
         // SAFETY: the parser filled the scratch slot; it is re-read here for

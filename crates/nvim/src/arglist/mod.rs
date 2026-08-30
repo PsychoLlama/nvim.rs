@@ -53,7 +53,7 @@ use crate::path::{
     path_full_compare,
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext, *};
+use crate::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext, Failed, *};
 use crate::undo::buf_is_changed;
 use crate::version::list_in_columns;
 use crate::window::{
@@ -470,7 +470,7 @@ pub unsafe fn get_arglist_exp(
     fcountp: *mut c_int,
     fnamesp: *mut *mut *mut c_char,
     wig: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     const EXPAND: ExpandFlags = ExpandFlags::FILE
         .or(ExpandFlags::NOTFOUND)
         .or(ExpandFlags::NOTWILD);
@@ -689,7 +689,7 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
         let filesp = &raw mut exp_files;
         let result = unsafe { expand_wildcards(new_ga.ga_len, names, countp, filesp, ANY_NAME) };
         unsafe { ga_clear(&raw mut new_ga) };
-        let expanded = result != FAIL && exp_count != 0;
+        let expanded = result.is_ok() && exp_count != 0;
         if !expanded {
             crate::semsg!("E479: No match");
             return false;

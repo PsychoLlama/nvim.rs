@@ -15,7 +15,7 @@ use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
 };
-use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL, OK};
+use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
@@ -411,7 +411,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         Ctrl_L => {
             let (firstc, is_state) = (s.firstc, s.is_state());
-            if unsafe { may_add_char_to_search(firstc, &mut s.c, is_state) } == OK {
+            if unsafe { may_add_char_to_search(firstc, &mut s.c, is_state) }.is_ok() {
                 return Some(unsafe { command_line_not_changed(s) });
             }
             // Completion: the longest common part.
@@ -467,7 +467,8 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
         Ctrl_G | Ctrl_T => {
             if unsafe {
                 may_do_command_line_next_incsearch(s.firstc, s.count, s.is_state(), s.c == Ctrl_G)
-            } == FAIL
+            }
+            .is_err()
             {
                 return Some(unsafe { command_line_not_changed(s) });
             }

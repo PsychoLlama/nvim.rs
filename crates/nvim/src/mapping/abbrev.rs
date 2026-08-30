@@ -181,7 +181,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
         let silent = mp.m_silent != 0;
         // SAFETY: `tb` is NUL-terminated at `j` and outlives the call, which
         // copies out of it.
-        unsafe { ins_typebuf(keys, 1, 0, true, silent) };
+        let _ = unsafe { ins_typebuf(keys, 1, 0, true, silent) };
     }
 
     // Copy the values out here: eval_map_expr() may make "mp" invalid.
@@ -200,7 +200,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
         // SAFETY: `s` is NUL-terminated, either the mapping's own RHS or the
         // allocation `eval_map_expr` handed back, freed just below.
         unsafe {
-            ins_typebuf(s, noremap, 0, true, silent);
+            let _ = ins_typebuf(s, noremap, 0, true, silent);
             // No abbreviation for these chars.
             typeahead().add_no_abbr_cnt(strlen(s) as c_int + j as c_int + 1);
             if expr {
@@ -215,7 +215,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     let keys = tb.as_mut_ptr().cast();
     for _ in 0..clen {
         // SAFETY: as the `ins_typebuf` above — a NUL-terminated `tb`.
-        unsafe { ins_typebuf(keys, 1, 0, true, silent) };
+        let _ = unsafe { ins_typebuf(keys, 1, 0, true, silent) };
     }
     true
 }

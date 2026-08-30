@@ -94,7 +94,7 @@ pub unsafe fn nvim_get_runtime_file(
         let cookie = (&raw mut cookie).cast::<::core::ffi::c_void>();
         // SAFETY: `pat` is NUL-terminated and `cookie` is this frame's own,
         // live for the whole walk.
-        unsafe { do_in_runtimepath(pat, flags, found, cookie) };
+        let _ = unsafe { do_in_runtimepath(pat, flags, found, cookie) };
     });
     // SAFETY: `arena` is the caller's and `cookie.rv` this frame's own.
     unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) }.reported(error)

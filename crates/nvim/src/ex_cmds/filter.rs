@@ -13,7 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{FAIL, READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
+use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
@@ -55,7 +55,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, NUL, OK, OptInt, exarg_T, linenr_T};
+use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::{Buf, Win, buffers};
@@ -380,7 +380,7 @@ unsafe fn do_filter(
                     eap,
                     WriteRequest::filter(),
                 )
-            } == FAIL
+            }.is_err()
         {
             if !ui_has(kUIMessages) {
                 // SAFETY: message state. Keep message from buf_write().
@@ -412,7 +412,7 @@ unsafe fn do_filter(
 
             if do_out {
                 // SAFETY: `line2` is a line of the current buffer.
-                if u_save(line2, line2 + 1) == FAIL {
+                if u_save(line2, line2 + 1).is_err() {
                     // SAFETY: `cmd_buf` is our own allocation.
                     unsafe { xfree(cmd_buf.cast()) };
                     break 'error;
@@ -455,7 +455,7 @@ unsafe fn do_filter(
                         false,
                     )
                 };
-                if read != OK {
+                if read.is_err() {
                     if !aborting() {
                         // SAFETY: message state; one `%s` for one string.
                         unsafe { msg_putchar('\n' as c_int) };

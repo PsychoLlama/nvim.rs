@@ -17,7 +17,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 use crate::winlayer::Win;
 
 crate::flag_set! {
@@ -68,7 +68,7 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
 ///
 /// # Safety
 /// Must run with a live `curwin` whose cursor is on a valid position.
-pub(crate) unsafe fn oneright() -> c_int {
+pub(crate) unsafe fn oneright() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
@@ -91,15 +91,15 @@ pub(crate) unsafe fn oneright() -> c_int {
         win.w_set_curswant = true;
         // OK if the cursor moved, FAIL otherwise (at the window edge).
         return if prevpos.col != win.w_cursor.col || prevpos.coladd != win.w_cursor.coladd {
-            OK
+            Ok(())
         } else {
-            FAIL
+            Err(Failed)
         };
     }
 
     let ptr = cursor_pos_ptr();
     if unsafe { *ptr } as c_int == NUL {
-        return FAIL; // already at the very end
+        return Err(Failed); // already at the very end
     }
 
     // Move "l" bytes right, but do not end up on the NUL unless
@@ -108,20 +108,20 @@ pub(crate) unsafe fn oneright() -> c_int {
     if unsafe { *ptr.offset(l as isize) } as c_int == NUL
         && get_ve_flags(win) & kOptVeFlagOnemore as c_int as ::core::ffi::c_uint == 0
     {
-        return FAIL;
+        return Err(Failed);
     }
     win.w_cursor.col += l;
 
     win.w_set_curswant = true;
     adjust_skipcol_now();
-    OK
+    Ok(())
 }
 
 /// Move one character left, answering `OK` or `FAIL` at column 0.
 ///
 /// # Safety
 /// Must run with a live `curwin` whose cursor is on a valid position.
-pub(crate) unsafe fn oneleft() -> c_int {
+pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
@@ -131,7 +131,7 @@ pub(crate) unsafe fn oneleft() -> c_int {
     if virtual_edit(win) {
         let v = viscol();
         if v == 0 {
-            return FAIL;
+            return Err(Failed);
         }
 
         // One screen column left may land on the same virtual column --
@@ -160,11 +160,11 @@ pub(crate) unsafe fn oneleft() -> c_int {
 
         win.w_set_curswant = true;
         adjust_skipcol_now();
-        return OK;
+        return Ok(());
     }
 
     if win.w_cursor.col == 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     win.w_set_curswant = true;
@@ -172,7 +172,7 @@ pub(crate) unsafe fn oneleft() -> c_int {
     // The byte to the left may be the tail of a multi-byte character.
     unsafe { mb_adjust_cursor() };
     adjust_skipcol_now();
-    OK
+    Ok(())
 }
 
 /// Move `wp`'s cursor up `n` lines, counting a closed fold as one line.
@@ -222,10 +222,10 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool)
 ///
 /// # Safety
 /// Must run with a live `curwin`.
-pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> c_int {
+pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> Result<(), Failed> {
     let win = cur_win();
     if n > 0 && win.w_cursor.lnum <= 1 {
-        return FAIL;
+        return Err(Failed);
     }
     cursor_up_inner(win, n, false);
 
@@ -236,7 +236,7 @@ pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> c_int {
     if upd_topline {
         update_topline(win); // make sure w_topline is valid
     }
-    OK
+    Ok(())
 }
 
 /// Move `wp`'s cursor down `n` lines, counting a closed fold as one line.
@@ -279,12 +279,12 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
 ///
 /// # Safety
 /// Must run with a live `curwin`.
-pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> c_int {
+pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
     let win = cur_win();
     let mut lnum = win.w_cursor.lnum;
     fold_end(win, lnum, &mut lnum);
     if n > 0 && lnum >= win.buffer().b_ml.ml_line_count {
-        return FAIL;
+        return Err(Failed);
     }
     cursor_down_inner(win, n, false);
 
@@ -295,7 +295,7 @@ pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> c_int {
     if upd_topline {
         update_topline(win); // make sure w_topline is valid
     }
-    OK
+    Ok(())
 }
 
 /// Keep 'smoothscroll''s skipped column in range after a cursor move.

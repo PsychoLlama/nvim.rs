@@ -16,7 +16,7 @@ use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -87,7 +87,7 @@ impl Df {
     /// [`diff_check_sanity`].
     pub(crate) fn is_sane(self, tp: TabPage) -> bool {
         // SAFETY: a live block and a live tab page.
-        unsafe { diff_check_sanity(tp, self.raw()) != 0 }
+        unsafe { diff_check_sanity(tp, self.raw()).is_ok() }
     }
 }
 
@@ -172,14 +172,14 @@ pub(crate) unsafe fn diff_write_buffer(
     m: *mut mmfile_t,
     start: linenr_T,
     mut end: linenr_T,
-) -> c_int {
+) -> Result<(), Failed> {
     if end < 0 {
         end = buf.b_ml.ml_line_count;
     }
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
         // SAFETY: the caller's out-parameter.
         unsafe { *m = MMFILE_INIT };
-        return OK;
+        return Ok(());
     }
 
     let len = (start..=end)
@@ -217,7 +217,7 @@ pub(crate) unsafe fn diff_write_buffer(
         out[at] = NL as u8;
         at += 1;
     }
-    OK
+    Ok(())
 }
 
 /// Copy `line` into `out` with every character case-folded, answering how
@@ -273,7 +273,7 @@ unsafe fn diff_write(
     din: *mut diffin_T,
     start: linenr_T,
     mut end: linenr_T,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's input side.
     let mut din = unsafe { Live::<diffin_T>::new(din) };
     if din.din_fname.is_null() {
@@ -285,7 +285,7 @@ unsafe fn diff_write(
     // change the window layout -- and re-entering `winframe_remove` is a
     // use after free.
     if frames_locked() {
-        return FAIL;
+        return Err(Failed);
     }
     if end < 0 {
         end = buf.b_ml.ml_line_count;
@@ -358,7 +358,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 || dio.dio_new.din_fname.is_null()
                 || dio.dio_diff.dout_fname.is_null()
                 // SAFETY: the caller's diff run.
-                || unsafe { check_external_diff(dio.raw()) } == FAIL
+                || unsafe { check_external_diff(dio.raw()) }.is_err()
             {
                 break 'theend;
             }
@@ -394,7 +394,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 // SAFETY: a live buffer, and two locals of this frame with
                 // room for `MAX_DIFF_ANCHORS` line numbers.
                 let ok = unsafe { parse_diffanchors(false, Buf::new(buf), into, count) };
-                if ok != OK {
+                if ok.is_err() {
                     let msg = e_failed_to_find_all_diff_anchors.as_ptr();
                     // SAFETY: a static message string.
                     unsafe { emsg(gettext_ptr(msg)) };
@@ -442,7 +442,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
             // SAFETY: a live buffer of the diff, and `dio`'s own input side.
             let wrote =
                 unsafe { diff_write(Buf::new(tp.tp_diffbuf[idx_orig]), orig_in, start, end) };
-            if wrote == FAIL {
+            if wrote.is_err() {
                 if !orig_diff.is_null() {
                     tp.tp_first_diff = orig_diff;
                     // SAFETY: the current tab page is live.
@@ -458,8 +458,8 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
                 }
                 let (start, end) = segment(idx_new);
                 // SAFETY: a live buffer, and `dio`'s own sides.
-                if unsafe { diff_write(Buf::new(buf), new_in, start, end) } != FAIL
-                    && unsafe { diff_file(dio.raw()) } != FAIL
+                if unsafe { diff_write(Buf::new(buf), new_in, start, end) }.is_ok()
+                    && unsafe { diff_file(dio.raw()) }.is_ok()
                 {
                     unsafe { diff_read(idx_orig as c_int, idx_new as c_int, dio.raw()) };
                     unsafe { clear_diffin(new_in) };

@@ -41,6 +41,7 @@ use crate::os::fs::os_dirname;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
+use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int};
@@ -125,7 +126,7 @@ use crate::quickfix::qf_mark_adjust;
 ///
 /// # Safety
 /// The editor's globals must be live, which they are from startup to exit.
-pub unsafe fn setmark(c: c_int) -> c_int {
+pub unsafe fn setmark(c: c_int) -> Result<(), Failed> {
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let (win, buf) = unsafe { (Win::current(), Buf::current()) };
     let mut view = mark_view_make_at(win, win.w_cursor);
@@ -251,11 +252,16 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
 /// # Safety
 /// `pos` must point at a live position; `view_pt` must be null or point at a
 /// live `fmarkv_T`.
-pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut fmarkv_T) -> c_int {
+pub unsafe fn setmark_pos(
+    c: c_int,
+    pos: *mut pos_T,
+    fnum: c_int,
+    view_pt: *mut fmarkv_T,
+) -> Result<(), Failed> {
     // SAFETY: the caller promised a live position, and a live view or null.
     let (at, view) = unsafe { (*pos, if view_pt.is_null() { NO_VIEW } else { *view_pt }) };
     if c < 0 {
-        return FAIL;
+        return Err(Failed);
     }
     // `''` and `` '` `` are the same slot, and it is the window's rather than
     // the buffer's: setting it from the cursor pushes a jumplist entry, while
@@ -270,10 +276,10 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
         } else {
             win.w_pcmark = at;
         }
-        return OK;
+        return Ok(());
     }
     let Some(mut buf) = find_buf(fnum) else {
-        return FAIL;
+        return Err(Failed);
     };
     let handle = buf.handle as c_int;
 
@@ -296,13 +302,13 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
         buf.last_cursor().replace(at, handle, view);
     } else if c == ':' as c_int {
         if !buf_is_prompt(Some(buf)) {
-            return FAIL;
+            return Err(Failed);
         }
         buf.prompt_start().replace(at, handle, view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
-        return OK;
+        return Ok(());
     } else if ascii_islower(c) {
         // A buffer-local mark keeps the *caller's* `fnum` rather than the
         // buffer's own handle. The two agree everywhere but `nvim_buf_set_mark`.
@@ -310,11 +316,11 @@ pub unsafe fn setmark_pos(c: c_int, pos: *mut pos_T, fnum: c_int, view_pt: *mut 
     } else if ascii_isupper(c) || ascii_isdigit(c) {
         GlobalMarks::at(lookup::mark_global_index(mark_name(c))).replace(at, fnum, view);
     } else {
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `pos` and `buf` are the caller's, both live.
     unsafe { do_markset_autocmd(mark_name(c), pos, buf.raw()) };
-    OK
+    Ok(())
 }
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the
@@ -478,7 +484,7 @@ pub(super) unsafe fn fname2fnum(fm: *mut xfmark_T) {
     } else {
         unsafe { xstrlcpy(name_buf, fname, MAXPATHL as size_t) };
     }
-    unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
+    let _ = unsafe { os_dirname(dir_buf, IOSIZE as size_t) };
     let short = unsafe { path_shorten_fname(name_buf, dir_buf) };
     unsafe { buflist_new(name_buf, short, 1, 0) };
 }

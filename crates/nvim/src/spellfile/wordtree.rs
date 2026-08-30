@@ -48,11 +48,11 @@ use crate::message::{msg_clr_eos, msg_puts, msg_start};
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
-use crate::types::{NUL, hashtab_T, int16_t, uint8_t, uint16_t};
+use crate::types::{Failed, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 use ::libc::strlen;
 
-use super::{FAIL, MAXWLEN, OK, WF_KEEPCAP, spell_message_fmt, spellinfo_T};
+use super::{MAXWLEN, WF_KEEPCAP, spell_message_fmt, spellinfo_T};
 
 /// Bytes handed out per arena block.
 const SBLOCKSIZE: usize = 16000;
@@ -285,20 +285,20 @@ pub(super) unsafe fn store_word(
     region: c_int,
     pfxlist: *const c_char,
     need_affix: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller promises terminated strings; `foldword` is a
     // MAXWLEN buffer, which is the bound spell_casefold is given.
     let len = unsafe { strlen(word) } as c_int;
     let ct = unsafe { captype(word, word.offset(len as isize)) };
     let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut res = OK;
+    let mut res = Ok(());
 
     if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
-        return FAIL;
+        return Err(Failed);
     }
 
     let (win, out) = (curwin.get(), foldword.as_mut_ptr());
-    unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
+    let _ = unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
 
     let root = spin.si_foldroot;
     let folded = foldword.as_ptr();
@@ -306,7 +306,7 @@ pub(super) unsafe fn store_word(
     res = unsafe { add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix) };
     spin.si_foldwcount += 1;
 
-    if res == OK && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
+    if res.is_ok() && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
         let root = spin.si_keeproot;
         res = unsafe { add_per_affix(spin, word, root, flags, region, pfxlist, need_affix) };
         spin.si_keepwcount += 1;
@@ -332,12 +332,12 @@ unsafe fn add_per_affix(
     region: c_int,
     pfxlist: *const c_char,
     need_affix: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller promises the strings and the root; the walk stops
     // at `pfxlist`'s NUL.
-    let mut res = OK;
+    let mut res = Ok(());
     let mut p = pfxlist;
-    while res == OK {
+    while res.is_ok() {
         let affix_id = if p.is_null() {
             0
         } else {
@@ -370,7 +370,7 @@ pub(super) unsafe fn tree_add_word(
     flags: c_int,
     region: c_int,
     affixID: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: nodes come from the arena and outlive the call; the walk
     // follows `word` only up to its NUL.
     let mut node = root;
@@ -388,7 +388,7 @@ pub(super) unsafe fn tree_add_word(
             while !copyp.is_null() {
                 let np = get_wordnode(spin);
                 if np.is_null() {
-                    return FAIL;
+                    return Err(Failed);
                 }
                 unsafe { (*np).wn_child = (*copyp).wn_child };
                 if !unsafe { (*np).wn_child }.is_null() {
@@ -432,7 +432,7 @@ pub(super) unsafe fn tree_add_word(
                     || unsafe { (*node).wn_flags } as c_int != flags & WN_MASK
                     || unsafe { (*node).wn_affixID } as c_int != affixID));
         if need_new && !unsafe { insert_before(spin, &mut node, prev, *word.offset(i)) } {
-            return FAIL;
+            return Err(Failed);
         }
 
         if unsafe { *word.offset(i) } as c_int == NUL {
@@ -477,7 +477,7 @@ pub(super) unsafe fn tree_add_word(
             unsafe { wordtree_compress(spin, spin.si_keeproot, c"keep-case") };
         }
     }
-    OK
+    Ok(())
 }
 
 /// Does `node` sort before the entry being added?

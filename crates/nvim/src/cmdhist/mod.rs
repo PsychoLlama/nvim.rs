@@ -37,7 +37,7 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
-    AdditionalData, CmdModFlags, EvalFuncData, FAIL, HistoryType, IOSIZE, OK, OptInt, Timestamp,
+    AdditionalData, CmdModFlags, EvalFuncData, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
     VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T,
     varnumber_T,
 };
@@ -245,12 +245,12 @@ fn calc_hist_idx(histype: c_int, num: c_int) -> c_int {
 }
 
 /// Clear history `histype`. Returns OK/FAIL.
-fn clr_history(histype: c_int) -> c_int {
+fn clr_history(histype: c_int) -> Result<(), Failed> {
     if get_hislen() != 0 && valid_histype(histype) {
         HISTORY.with_mut(|h| h[histype as usize].clear());
-        return OK;
+        return Ok(());
     }
-    FAIL
+    Err(Failed)
 }
 
 /// Delete all entries of `histype` matching the vim regex `pat`.
@@ -368,7 +368,7 @@ pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             let arg = argvars.offset(1);
             if (*arg).v_type == VAR_UNKNOWN {
                 // Only one argument: clear the whole history.
-                clr_history(histype)
+                clr_history(histype).is_ok() as c_int
             } else if (*arg).v_type == VAR_NUMBER {
                 // Delete by history number.
                 del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
@@ -503,7 +503,7 @@ unsafe fn parse_history_arg(
         let parsed = get_list_range(&raw mut end, &raw mut first, &raw mut last);
         (parsed, CStr::from_ptr(end).to_bytes())
     };
-    if parsed != FAIL && rest.is_empty() {
+    if parsed.is_ok() && rest.is_empty() {
         return Some((histypes, first, last));
     }
     if rest.is_empty() {

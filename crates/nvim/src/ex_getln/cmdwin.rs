@@ -13,7 +13,7 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{CmdModFlags, FAIL, NUL, OK, OptionSetFlags};
+use crate::types::{CmdModFlags, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 
 /// True when the text must not be changed and we cannot switch to another
@@ -138,7 +138,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     if win_split(
         p_cwh.get() as ::core::ffi::c_int,
         WSP_BOT as ::core::ffi::c_int,
-    ) == FAIL
+    )
+    .is_err()
     {
         beep_flush();
         unsafe { ga_clear(&raw mut winsizes) };
@@ -171,21 +172,21 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let newbuf_status =
         unsafe { buf_open_scratch(0, ::core::ptr::null_mut::<::core::ffi::c_char>()) };
     let cmdwin_valid = win_valid(cmdwin_win.get());
-    if newbuf_status == FAIL
+    if newbuf_status.is_err()
         || !cmdwin_valid
         || curwin.get() != cmdwin_win.get()
         || !win_valid(old_curwin)
         || !old_curbuf.valid()
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
-        if newbuf_status == OK {
+        if newbuf_status.is_ok() {
             bufref = BufRef::of_opt(current_buf());
         }
         if cmdwin_valid && !unsafe { last_window(cmdwin_win.get()) } {
             unsafe { win_close(cmdwin_win.get(), true, false) };
         }
         // win_close() autocommands may have already deleted the buffer.
-        if newbuf_status == OK && bufref.valid() && bufref.raw() != curbuf.get() {
+        if newbuf_status.is_ok() && bufref.valid() && bufref.raw() != curbuf.get() {
             wipe_buffer(bufref.raw());
         }
 
@@ -247,7 +248,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
                     i = 0;
                 }
                 if let Some(entry) = hist_entry_ref(histtype, i) {
-                    unsafe { ml_append(lnum, entry.text as *mut ::core::ffi::c_char, 0, false) };
+                    let text = entry.text as *mut ::core::ffi::c_char;
+                    let _ = unsafe { ml_append(lnum, text, 0, false) };
                     lnum += 1;
                 }
                 if i == get_hisidx(histtype) {
@@ -259,7 +261,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Replace the empty last line with the current command line and put
     // the cursor there.
-    unsafe { ml_replace(cur_buf().b_ml.ml_line_count, Cc::current().text(), true) };
+    let _ = unsafe { ml_replace(cur_buf().b_ml.ml_line_count, Cc::current().text(), true) };
     cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     cur_win().w_cursor.col = Cc::current().cmdpos as colnr_T;
     unsafe { changed_line_abv_curs() };

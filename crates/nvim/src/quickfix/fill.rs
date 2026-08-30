@@ -14,9 +14,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
-use crate::types::{
-    FAIL, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, bcount_t,
-};
+use crate::types::{MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, bcount_t};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -35,7 +33,7 @@ impl CurrentDir {
     unsafe fn get(&mut self) -> *mut c_char {
         if self.0[0] == 0 {
             // SAFETY: the buffer is exactly the length passed.
-            unsafe { os_dirname(self.0.as_mut_ptr(), MAXPATHL as size_t) };
+            let _ = unsafe { os_dirname(self.0.as_mut_ptr(), MAXPATHL as size_t) };
         }
         self.0.as_mut_ptr()
     }
@@ -231,7 +229,8 @@ unsafe fn qf_buf_add_line(
             line.as_ptr().cast_mut().cast(),
             line.len() as colnr_T,
             false,
-        ) != FAIL
+        )
+        .is_ok()
     }
 }
 
@@ -323,7 +322,7 @@ unsafe fn clear_qf_buffer() -> bool {
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
     while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if unsafe { ml_delete(1) } == FAIL {
+        if unsafe { ml_delete(1) }.is_err() {
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return false;
         }
@@ -482,7 +481,7 @@ pub(crate) unsafe fn qf_fill_buffer(
         }
         if rewriting {
             // Delete the empty line which is now at the end.
-            unsafe { ml_delete(lnum + 1) };
+            let _ = unsafe { ml_delete(lnum + 1) };
         }
         release_scratch();
     }

@@ -19,7 +19,7 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::tr_plural;
-use crate::types::{CpoFlag, FAIL, NUL, OK, ShmFlag};
+use crate::types::{CpoFlag, FAIL, Failed, NUL, ShmFlag};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -389,7 +389,8 @@ pub unsafe fn searchit(
             options & (SEARCH_HIS | SEARCH_KEEP),
             &raw mut regmatch,
         )
-    } == FAIL
+    }
+    .is_err()
     {
         if options & SEARCH_MSG != 0 && !rc_did_emsg.get() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -697,11 +698,11 @@ pub unsafe fn search_for_exact_line(
     pos: *mut pos_T,
     dir: Direction,
     pat: *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut start: linenr_T = 0;
     let compl_len = ins_compl_len();
     if buf.b_ml.ml_line_count == 0 {
-        return FAIL;
+        return Err(Failed);
     }
     loop {
         unsafe { (*pos).lnum += dir };
@@ -739,7 +740,7 @@ pub unsafe fn search_for_exact_line(
             // not ignored, because it is the *next* line that is
             // wanted. -- Acevedo
             if unsafe { mb_strcmp_ic(p_ic.get() != 0, text, pat) } == 0 {
-                return OK;
+                return Ok(());
             }
         } else if unsafe { *text } as c_int != NUL {
             // Expanding lines or words; ignore empty lines.
@@ -750,9 +751,9 @@ pub unsafe fn search_for_exact_line(
                 unsafe { strncmp(text, pat, compl_len as size_t) }
             };
             if same == 0 {
-                return OK;
+                return Ok(());
             }
         }
     }
-    FAIL
+    Err(Failed)
 }

@@ -191,7 +191,7 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
     update_topline(unsafe { Win::current() });
     if must_redraw.get() != 0 {
         // SAFETY: as above.
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     }
 
     let (one, many) = if yank_type == kMTBlockWise {

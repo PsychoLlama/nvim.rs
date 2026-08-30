@@ -15,7 +15,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
 use crate::register::*;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
 struct Landing {
@@ -192,7 +192,7 @@ impl Put {
             let empty = c"".as_ptr().cast_mut();
             // SAFETY: `last` is the buffer's own last line, and the text is a
             // NUL-terminated literal that `ml_append` copies.
-            if unsafe { ml_append(last, empty, 1, false) } == FAIL {
+            if unsafe { ml_append(last, empty, 1, false) }.is_err() {
                 return false;
             }
             self.nr_lines += 1;
@@ -275,7 +275,7 @@ impl Put {
             memmove(ptr as *mut c_void, rest, columns as size_t);
         }
         // SAFETY: `newp` is a NUL-terminated line the buffer takes over.
-        unsafe { ml_replace(cur_win().w_cursor.lnum, newp, false) };
+        let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newp, false) };
 
         let buf = curbuf.get();
         let at = cur_win().w_cursor.lnum - 1;

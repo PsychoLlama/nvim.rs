@@ -367,6 +367,6 @@ pub(super) unsafe fn file_postponed_prefix(
     }
     let prefroot = unsafe { (*spin).si_prefroot };
     let newID = unsafe { (*st.cur_aff).ah_newID };
-    unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, newID) };
+    let _ = unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, newID) };
     st.did_postpone_prefix = true;
 }

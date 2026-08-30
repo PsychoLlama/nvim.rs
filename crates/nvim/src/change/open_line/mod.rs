@@ -36,7 +36,7 @@ use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_
 use self::smart::smart_indent;
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
-use crate::types::{FAIL, FoFlag, NUL};
+use crate::types::{FoFlag, NUL};
 
 mod comment;
 mod smart;
@@ -77,7 +77,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     // rest of it -- including the NUL -- fits where the prompt was.
     unsafe { memmove(prompt_line.cast(), rest.cast(), strlen(rest) + 1) };
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
-    unsafe { ml_replace(cur_win().w_cursor.lnum, prompt_line, true) };
+    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, prompt_line, true) };
     unsafe { concat_str(prompt, p_extra) }
 }
 
@@ -91,7 +91,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
 /// The cursor must be on a valid line and `p_extra` NUL-terminated.
 unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<bool> {
     if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
-        if unsafe { ml_append(cur_win().w_cursor.lnum, p_extra, 0, false) } == FAIL {
+        if unsafe { ml_append(cur_win().w_cursor.lnum, p_extra, 0, false) }.is_err() {
             return None;
         }
         // changed_lines() is postponed: calling it here would upset
@@ -108,10 +108,10 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
     if cur_win().w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
         // NL to a new line, BS back, NL again: don't save the new line
         // for undo twice. Errors are ignored.
-        u_save_cursor();
+        let _ = u_save_cursor();
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
-    unsafe { ml_replace(cur_win().w_cursor.lnum, p_extra, true) };
+    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, p_extra, true) };
     unsafe { changed_bytes(cur_win().w_cursor.lnum, 0) };
     cur_win().w_cursor.lnum -= 1;
     Some(false)
@@ -191,7 +191,7 @@ unsafe fn truncate_old_line(
     if trunc_line && flags & OPENLINE_KEEPTRAIL == 0 {
         unsafe { truncate_spaces(saved_line, cur_win().w_cursor.col as size_t) };
     }
-    unsafe { ml_replace(cur_win().w_cursor.lnum, saved_line, false) };
+    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, saved_line, false) };
 
     let new_len = unsafe { strlen(saved_line) } as c_int;
     let mut cols_spliced = 0;
@@ -589,7 +589,7 @@ pub unsafe fn open_line(
             let at = cur_win().w_cursor.lnum;
             // SAFETY: `next_line` is this frame's allocation, which the buffer
             // takes over.
-            unsafe { ml_replace(at, next_line, false) };
+            let _ = unsafe { ml_replace(at, next_line, false) };
             cur_win().w_cursor.col = 0;
             cur_win().w_cursor.coladd = 0;
             // SAFETY: `new_text` is this frame's NUL-terminated allocation.

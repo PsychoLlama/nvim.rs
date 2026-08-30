@@ -25,7 +25,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::{env_buf, os_getenv_into};
-use crate::types::{FAIL, OK, expand_T, garray_T, size_t, uv_uid_t};
+use crate::types::{Failed, expand_T, garray_T, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -143,9 +143,9 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
 ///
 /// `users` is null or points to writable `garray_T` storage, which this call
 /// initializes (anything it already held is leaked, as upstream's is).
-pub unsafe fn os_get_usernames(users: *mut garray_T) -> c_int {
+pub unsafe fn os_get_usernames(users: *mut garray_T) -> Result<(), Failed> {
     if users.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     let item_size = c_int::try_from(size_of::<*mut c_char>()).expect("a pointer is small");
     // SAFETY: the caller's array, grown by one before each write, and one
@@ -160,7 +160,7 @@ pub unsafe fn os_get_usernames(users: *mut garray_T) -> c_int {
             ga.ga_len += 1;
         }
     }
-    OK
+    Ok(())
 }
 
 /// Write the name of the user running this process into `s` (`len` bytes,
@@ -169,7 +169,7 @@ pub unsafe fn os_get_usernames(users: *mut garray_T) -> c_int {
 /// # Safety
 ///
 /// `s` is writable for `len` bytes.
-pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
+pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> Result<(), Failed> {
     // SAFETY: `getuid` cannot fail and touches nothing; `s` is the
     // caller's buffer.
     unsafe { os_get_uname(libc::getuid(), s, len) }
@@ -182,7 +182,7 @@ pub unsafe fn os_get_username(s: *mut c_char, len: size_t) -> c_int {
 /// # Safety
 ///
 /// `s` is writable for `len` bytes.
-pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> c_int {
+pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> Result<(), Failed> {
     // SAFETY: `getpwuid` answers null or a pointer into libc's static
     // entry, whose `pw_name` is null or NUL-terminated and which
     // `owned_name` copies out of before anything else runs.
@@ -192,14 +192,14 @@ pub unsafe fn os_get_uname(uid: uv_uid_t, s: *mut c_char, len: size_t) -> c_int 
         // SAFETY: `s` is the caller's `len`-byte buffer and `name` is a
         // NUL-terminated string owned here.
         unsafe { xstrlcpy(s, name.as_ptr(), len) };
-        return OK;
+        return Ok(());
     }
     // `%d`, as upstream: a uid past `INT_MAX` prints signed. No password
     // database issues one, but the digits have to match either way.
     let digits = CString::new(uid.cast_signed().to_string()).expect("decimal digits hold no NUL");
     // SAFETY: as above.
     unsafe { xstrlcpy(s, digits.as_ptr(), len) };
-    FAIL
+    Err(Failed)
 }
 
 /// The home directory of user `name`, or NULL when there is no such user.

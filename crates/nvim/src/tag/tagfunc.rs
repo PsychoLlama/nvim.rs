@@ -58,13 +58,13 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
         unsafe { option_set_callback_func(value, &raw mut buf.b_tfu_cb) }
     } else {
         let retval = unsafe { option_set_callback_func(value, global_tagfunc()) };
-        if retval == OK && !unsafe { (*args).os_flags.has(OptionSetFlags::GLOBAL) } {
+        if retval.is_ok() && !unsafe { (*args).os_flags.has(OptionSetFlags::GLOBAL) } {
             // `:set` without a scope sets the buffer-local copy too.
             set_buflocal_tfu_callback(buf);
         }
         retval
     };
-    if retval == FAIL {
+    if retval.is_err() {
         e_invarg.as_ptr()
     } else {
         ptr::null()

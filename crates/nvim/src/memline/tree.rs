@@ -301,8 +301,8 @@ unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_li
         // mark has to come along.
         let marked = unsafe { *db_index(dp).wrapping_offset(idx as isize) } & DB_MARKED != 0;
         let mark = if marked { ML_APPEND_MARK as c_int } else { 0 };
-        unsafe { ml_append_int(buf, lnum, new_line, new_len, mark) };
-        unsafe { ml_delete_int(buf, lnum, 0) };
+        let _ = unsafe { ml_append_int(buf, lnum, new_line, new_len, mark) };
+        let _ = unsafe { ml_delete_int(buf, lnum, 0) };
         return;
     }
 

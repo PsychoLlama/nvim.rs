@@ -7,7 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
 use crate::autocmd::{EVENT_COLORSCHEME, EVENT_COLORSCHEMEPRE, apply_autocmds};
 use crate::eval::vars::get_var_value;
@@ -17,7 +17,7 @@ use crate::main::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
-use crate::types::{OK, RgbValue};
+use crate::types::{Failed, RgbValue};
 
 use super::do_highlight;
 use crate::eval::typval::NumBuf;
@@ -524,7 +524,7 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
     if !name.is_null() {
         // `load_colors` can free the variable, and with it `name`.
         let copy = unsafe { xstrdup(name) };
-        let okay = unsafe { load_colors(copy) } == OK;
+        let okay = unsafe { load_colors(copy) }.is_ok();
         unsafe { xfree(copy.cast()) };
         if okay {
             return;
@@ -560,12 +560,12 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
 ///
 /// # Safety
 /// Sources a script and fires autocommands; main thread only.
-pub(crate) unsafe fn load_colors(name: *mut c_char) -> c_int {
+pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: `name` is the caller's NUL-terminated scheme name.
     if RECURSIVE.get() {
-        return OK;
+        return Ok(());
     }
     RECURSIVE.set(true);
 
@@ -582,7 +582,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> c_int {
     let pattern = pattern.as_mut_ptr().cast();
     // SAFETY: a NUL-terminated pattern this frame owns.
     let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
-    if retval == OK {
+    if retval.is_ok() {
         let buf = curbuf.get();
         // SAFETY: the editor's current buffer.
         let fname = unsafe { (*buf).b_fname };

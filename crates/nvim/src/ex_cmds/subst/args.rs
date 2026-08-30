@@ -18,7 +18,7 @@ use super::{
 };
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
-use crate::ex_cmds::{FAIL, INT_MAX, kSubIgnoreCase, kSubMatchCase};
+use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
 use crate::memory::{xfree, xstrdup};
@@ -158,7 +158,7 @@ unsafe fn read_pattern(
     }
 
     // SAFETY: as above.
-    if unsafe { check_regexp_delim(*cmd as c_int) } == FAIL {
+    if unsafe { check_regexp_delim(*cmd as c_int) }.is_err() {
         return None;
     }
 
@@ -373,7 +373,7 @@ pub(super) unsafe fn parse_sub(
             &raw mut regmatch,
         )
     };
-    if compiled == FAIL {
+    if compiled.is_err() {
         if subflags.with(|flags| flags.do_error) {
             emsg(gettext(e_invcmd));
         }

@@ -58,7 +58,7 @@ pub unsafe fn shorten_buf_fname(mut buf: Buf, dirname: *mut c_char, force: c_int
 pub unsafe fn shorten_fnames(force: c_int) {
     let mut dirname = [0 as c_char; MAXPATHL as usize];
     // SAFETY: a buffer the caller's stack owns, of the length passed with it.
-    unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) };
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and the directory
         // name just filled in.
@@ -98,7 +98,7 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
     let name: &[u8] = if fname.is_null() || unsafe { *fname } == 0 {
         // With no file name we need the name of the current directory —
         // in full, in case `:cd` is used.
-        if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) } == FAIL
+        if unsafe { os_dirname(cwd.as_mut_ptr(), MAXPATHL as size_t) }.is_err()
             || unsafe { CStr::from_ptr(cwd.as_ptr()) }.is_empty()
         {
             return ptr::null_mut();

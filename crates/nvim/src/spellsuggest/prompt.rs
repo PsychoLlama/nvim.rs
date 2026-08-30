@@ -57,7 +57,7 @@ use crate::spell::{
 };
 use crate::spellsuggest::collect::suggestions;
 use crate::spellsuggest::{
-    MAXWLEN, OK, SPS_BEST, SPS_DOUBLE, Sug, spell_find_cleanup, spell_find_suggest,
+    MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, spell_find_cleanup, spell_find_suggest,
     spell_suggest_timeout, sps_flags, sps_limit, suggest_T, suginfo_T,
 };
 use crate::strings::{vim_snprintf, xstrnsave};
@@ -155,7 +155,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };
     }
 
-    if selected > 0 && selected <= sug.su_ga.ga_len && u_save_cursor() == OK {
+    if selected > 0 && selected <= sug.su_ga.ga_len && u_save_cursor().is_ok() {
         let stp = unsafe { suggestions(&raw mut sug.su_ga) }[selected as usize - 1];
         unsafe { apply_suggestion(&sug, &stp, line) };
     } else {
@@ -433,7 +433,7 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
     append_to_redobuff_char(ESC);
 
     // `newline` may be freed here.
-    unsafe { ml_replace(cur_win().w_cursor.lnum, newline, false) };
+    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newline, false) };
     cur_win().w_cursor.col = col as colnr_T;
     // SAFETY: the cursor is on the line just replaced.
     let lnum = cur_win().w_cursor.lnum;

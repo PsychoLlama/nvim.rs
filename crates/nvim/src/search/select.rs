@@ -14,7 +14,7 @@ use crate::normal::{
 };
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 use core::ptr;
@@ -114,7 +114,7 @@ unsafe fn search_around(
 ///
 /// # Safety
 /// The current window and buffer must be valid.
-pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
+pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     let save_visual = visual_anchor();
 
     // Correct the cursor when 'selection' is exclusive.
@@ -148,7 +148,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
     // SAFETY: the last search pattern and the live window's cursor.
     let zero_width = unsafe { is_zero_width(pat.pat, pat.patlen, true, cursor, FORWARD) };
     if zero_width == -1 {
-        return FAIL; // pattern not found
+        return Err(Failed); // pattern not found
     }
 
     let found = unsafe { search_around(pos, count, forward, skip_first_backward, zero_width != 0) };
@@ -157,7 +157,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
         if visual_active() {
             set_visual_anchor(save_visual);
         }
-        return FAIL;
+        return Err(Failed);
     };
 
     if !visual_active() {
@@ -197,7 +197,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> c_int {
     setmouse();
     redraw_curbuf_later(UPD_INVERTED);
     unsafe { showmode() };
-    OK
+    Ok(())
 }
 
 /// The window the editor is working in.

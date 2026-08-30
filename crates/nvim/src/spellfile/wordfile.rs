@@ -21,12 +21,12 @@ use crate::os::cshim::strncmp;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};
-use crate::types::{CONV_NONE, NUL, linenr_T, size_t, uint8_t};
+use crate::types::{CONV_NONE, Failed, NUL, linenr_T, size_t, uint8_t};
 use ::libc::{fclose, strcpy, strlen};
 
 use super::wordtree::store_word;
 use super::{
-    FAIL, MAXLINELEN, MAXREGIONS, OK, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE, WF_REGION,
+    MAXLINELEN, MAXREGIONS, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE, WF_REGION,
     spell_message_fmt, spellinfo_T,
 };
 
@@ -36,7 +36,10 @@ use super::{
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_char) -> c_int {
+pub(super) unsafe fn spell_read_wordfile(
+    spin: *mut spellinfo_T,
+    fname: *mut c_char,
+) -> Result<(), Failed> {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
     // the bound `vim_fgets` is given.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
@@ -44,7 +47,7 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");
-        return FAIL;
+        return Err(Failed);
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(
@@ -55,7 +58,7 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
     let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
     let mut pc: *mut c_char = core::ptr::null_mut();
     let mut lnum: linenr_T = 0;
-    let mut retval = OK;
+    let mut retval = Ok(());
     let mut did_word = false;
     let mut non_ascii = 0;
 
@@ -142,8 +145,8 @@ pub(super) unsafe fn spell_read_wordfile(spin: *mut spellinfo_T, fname: *mut c_c
         let none = core::ptr::null();
         if unsafe { (*spin).si_ascii } != 0 && unsafe { has_non_ascii(line) } {
             non_ascii += 1;
-        } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) } == FAIL {
-            retval = FAIL;
+        } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) }.is_err() {
+            retval = Err(Failed);
             break;
         } else {
             did_word = true;
@@ -198,7 +201,7 @@ unsafe fn read_wordfile_header(
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
             if unsafe { (*spin).si_ascii } == 0
-                && unsafe { convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) } == FAIL
+                && unsafe { convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) }.is_err()
             {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, line, arg2) =

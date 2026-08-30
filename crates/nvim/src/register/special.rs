@@ -129,7 +129,7 @@ pub unsafe fn get_spec_reg(
         c if c == '%' as c_int => {
             if errmsg {
                 // SAFETY: main thread, with a current buffer; it only reports.
-                unsafe { check_fname() }; // will give an error message
+                let _ = unsafe { check_fname() }; // will give an error message
             }
             value = cur_buf().b_fname;
             true

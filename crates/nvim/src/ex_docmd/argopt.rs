@@ -40,8 +40,8 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::regmatch_T;
 use crate::types::{
-    CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, NUL, OK, exarg_T,
-    expand_T, int32_t, intmax_t, size_t,
+    CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, Failed, NUL, OK,
+    exarg_T, expand_T, int32_t, intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
 
@@ -74,7 +74,7 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
-pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
+pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> Result<(), Failed> {
     if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
         eap.bad_char = BAD_KEEP;
     } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
@@ -82,9 +82,9 @@ pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> c_int {
     } else if utf8len_tab[ubyte(p) as usize] == 1 && byte_at(p, 1) == NUL {
         eap.bad_char = ubyte(p) as c_int;
     } else {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// The completion candidates for `++bad=`.
@@ -104,7 +104,7 @@ pub(crate) fn get_bad_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
-pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
+pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
     let mut arg = unsafe { ea.arg.add(2) };
     let mut bad_char_idx: c_int = 0;
@@ -118,24 +118,24 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
             ea.force_bin = FORCE_BIN;
         }
         if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
-            return FAIL;
+            return Err(Failed);
         }
         ea.arg = skipwhite(arg);
-        return OK;
+        return Ok(());
     }
 
     // `++edit`, and not `++editsomething`.
     if strncmp(arg, c"edit".as_ptr(), 4) == 0 && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
         ea.read_edit = 1;
         ea.arg = unsafe { skipwhite(arg.add(4)) };
-        return OK;
+        return Ok(());
     }
 
     // `++p`, and not `++psomething`.
     if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
         ea.mkdir_p = 1;
         ea.arg = unsafe { skipwhite(arg.add(1)) };
-        return OK;
+        return Ok(());
     }
 
     let pp: *mut c_int = if strncmp(arg, c"ff".as_ptr(), 2) == 0 {
@@ -161,7 +161,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
     };
 
     if pp.is_null() || byte(arg) != '=' as c_int {
-        return FAIL;
+        return Err(Failed);
     }
     arg = unsafe { arg.add(1) };
     unsafe { *pp = arg.offset_from(ea.cmd) as c_int };
@@ -171,7 +171,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
 
     if pp == ea.force_ff_ptr() {
         if unsafe { check_ff_value(ea.cmd.offset(ea.force_ff as isize)) } == FAIL {
-            return FAIL;
+            return Err(Failed);
         }
         // Only the first letter is kept: 'u', 'd' or 'm'.
         ea.force_ff = ubyte_at(ea.cmd, ea.force_ff as isize) as c_int;
@@ -181,10 +181,10 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> c_int {
             unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
             p = unsafe { p.add(1) };
         }
-    } else if unsafe { get_bad_opt(ea.cmd.offset(bad_char_idx as isize), ea) } == FAIL {
-        return FAIL;
+    } else if unsafe { get_bad_opt(ea.cmd.offset(bad_char_idx as isize), ea) }.is_err() {
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// The completion candidates for `++`.
@@ -214,7 +214,7 @@ pub unsafe fn expand_argopt(
     rmp: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the completion context is the caller's, live for the call.
     let mut x = unsafe { Xp::new(xp) };
     // Past an `=`: complete the value, by whichever option name ends
@@ -238,17 +238,17 @@ pub unsafe fn expand_argopt(
             None
         };
         if cb.is_none() {
-            return FAIL;
+            return Err(Failed);
         }
         expand_generic(pat, xp, rmp, matches, num_matches, cb, false);
-        return OK;
+        return Ok(());
     }
     // `++ff` is the only abbreviation worth finishing on its own.
     if x.xp_pattern_len == 2 && strncmp(x.xp_pattern, c"ff".as_ptr(), x.xp_pattern_len) == 0 {
         unsafe { *matches = xmalloc(size_of::<*mut c_char>()) as *mut *mut c_char };
         unsafe { *num_matches = 1 };
         unsafe { **matches = xstrdup(c"fileformat=".as_ptr()) };
-        return OK;
+        return Ok(());
     }
     expand_generic(
         pat,
@@ -259,7 +259,7 @@ pub unsafe fn expand_argopt(
         Some(get_argopt_name),
         false,
     );
-    OK
+    Ok(())
 }
 
 /// Which tab page a `:tab…` command means.
@@ -444,15 +444,15 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 }
 
 /// `mkdir`, reporting the reason it failed.
-pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> c_int {
+pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> Result<(), Failed> {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (name, arg1) = unsafe { (c_str(name), c_str(uv_strerror(ret))) };
         semsg!("E739: Cannot create directory {name}: {arg1}");
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// Open the file `:mkvimrc` and friends are about to write.

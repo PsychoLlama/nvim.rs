@@ -12,7 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -224,7 +224,7 @@ unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
 ///
 /// # Safety
 /// Only that `p_mopt` holds a valid string.
-pub unsafe fn messagesopt_changed() -> c_int {
+pub unsafe fn messagesopt_changed() -> Result<(), Failed> {
     let mut flags = 0;
     let mut wait = 0;
     let mut history = 0;
@@ -253,7 +253,7 @@ pub unsafe fn messagesopt_changed() -> c_int {
         }
         // An unrecognised item leaves `p` where it was, so this rejects it.
         if unsafe { *p } != b',' as c_char && unsafe { *p } != 0 {
-            return FAIL;
+            return Err(Failed);
         }
         if unsafe { *p } == b',' as c_char {
             p = unsafe { p.add(1) };
@@ -262,19 +262,19 @@ pub unsafe fn messagesopt_changed() -> c_int {
 
     // Either "wait" or "hit-enter" is required.
     if flags & (kOptMoptFlagHitEnter as c_int | kOptMoptFlagWait as c_int) == 0 {
-        return FAIL;
+        return Err(Failed);
     }
     // "history" must be set, and both counts must be <= 10000.
     if flags & kOptMoptFlagHistory as c_int == 0 {
-        return FAIL;
+        return Err(Failed);
     }
     debug_assert!(history >= 0);
     if history > 10000 {
-        return FAIL;
+        return Err(Failed);
     }
     debug_assert!(wait >= 0);
     if wait > 10000 {
-        return FAIL;
+        return Err(Failed);
     }
 
     msg_flags.set(flags);
@@ -284,7 +284,7 @@ pub unsafe fn messagesopt_changed() -> c_int {
     msg_hist_max.set(history);
     unsafe { msg_hist_clear(msg_hist_max.get()) };
 
-    OK
+    Ok(())
 }
 
 /// One history entry as the `msg_history_show` UI event carries it:

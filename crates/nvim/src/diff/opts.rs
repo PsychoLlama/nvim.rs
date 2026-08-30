@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::semsg;
-use crate::types::{FAIL, OK};
+use crate::types::Failed;
 use crate::winlayer::{Buf, Win, tabs, windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -84,7 +84,7 @@ pub(crate) unsafe fn parse_diffanchors(
     buf: Buf,
     anchors: *mut linenr_T,
     num_anchors: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut dia = if unsafe { *buf.b_p_dia } == 0 {
         p_dia.get()
     } else {
@@ -99,7 +99,7 @@ pub(crate) unsafe fn parse_diffanchors(
         let shown = windows().find(|w| w.w_buffer == buf.raw() && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && unsafe { *dia } != 0 {
             emsg(gettext(e_diff_anchors_with_hidden_windows));
-            return FAIL;
+            return Err(Failed);
         }
         shown.map_or(::core::ptr::null_mut(), Win::raw)
     };
@@ -109,7 +109,7 @@ pub(crate) unsafe fn parse_diffanchors(
         // An empty item -- a leading or doubled comma -- is not an
         // address, and `get_address` would answer the cursor line.
         if unsafe { *dia } == b',' as c_char {
-            return FAIL;
+            return Err(Failed);
         }
         curbuf.set(buf.raw());
         curwin.set(bufwin);
@@ -132,10 +132,10 @@ pub(crate) unsafe fn parse_diffanchors(
             emsg(msg);
         }
         if dia.is_null() {
-            return FAIL;
+            return Err(Failed);
         }
         if unsafe { *dia } != b',' as c_char && unsafe { *dia } != 0 {
-            return FAIL;
+            return Err(Failed);
         }
         // The validator accepts an address it cannot resolve yet; only
         // the real parse insists the line exists.
@@ -143,7 +143,7 @@ pub(crate) unsafe fn parse_diffanchors(
             && (lnum == MAXLNUM as linenr_T || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
         {
             emsg(gettext(e_invrange));
-            return FAIL;
+            return Err(Failed);
         }
         if !anchors.is_null() {
             unsafe { *anchors.offset(i as isize) = lnum };
@@ -158,19 +158,19 @@ pub(crate) unsafe fn parse_diffanchors(
             "E1549: Cannot have more than {} diff anchors",
             MAX_DIFF_ANCHORS
         );
-        return FAIL;
+        return Err(Failed);
     }
     if !num_anchors.is_null() {
         unsafe { *num_anchors = i };
     }
-    OK
+    Ok(())
 }
 
 /// `'diffanchors'` was set: validate it, and invalidate the diffs it reaches.
 ///
 /// `buflocal` says the buffer-local value changed rather than the global one,
 /// so only tabpages showing the current buffer need recomputing.
-pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
+pub unsafe fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
     let result = unsafe {
         parse_diffanchors(
             true,
@@ -179,7 +179,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
             ::core::ptr::null_mut(),
         )
     };
-    if result != OK || diff_flags.get() & DIFF_ANCHOR == 0 {
+    if result.is_err() || diff_flags.get() & DIFF_ANCHOR == 0 {
         return result;
     }
     for mut tp in tabs() {
@@ -191,7 +191,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> c_int {
 }
 
 /// `'diffopt'` was set: parse it whole, or reject it whole.
-pub unsafe fn diffopt_changed() -> c_int {
+pub unsafe fn diffopt_changed() -> Result<(), Failed> {
     let mut context_new = 6;
     let mut foldcolumn_new = 2;
     let mut linematch_new = 0;
@@ -228,13 +228,13 @@ pub unsafe fn diffopt_changed() -> c_int {
             indent_heuristic = XDF_INDENT_HEURISTIC;
         } else if let Some(rest) = rest.strip_prefix(b"algorithm:") {
             let Some((name, bits)) = ALGORITHMS.iter().find(|(n, _)| rest.starts_with(n)) else {
-                return FAIL;
+                return Err(Failed);
             };
             at += b"algorithm:".len() + name.len();
             algorithm_new = *bits;
         } else if let Some(rest) = rest.strip_prefix(b"inline:") {
             let Some((name, bit)) = INLINE_MODES.iter().find(|(n, _)| rest.starts_with(n)) else {
-                return FAIL;
+                return Err(Failed);
             };
             at += b"inline:".len() + name.len();
             flags_new = flags_new & !ALL_INLINE | bit;
@@ -243,7 +243,7 @@ pub unsafe fn diffopt_changed() -> c_int {
         // unknown spelling is rejected -- and where `context:x` lands too.
         if at < text.len() {
             if text[at] != b',' {
-                return FAIL;
+                return Err(Failed);
             }
             at += 1;
         }
@@ -252,7 +252,7 @@ pub unsafe fn diffopt_changed() -> c_int {
     algorithm_new |= indent_heuristic;
     // The two layouts are mutually exclusive; neither wins.
     if flags_new & DIFF_HORIZONTAL != 0 && flags_new & DIFF_VERTICAL != 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     if diff_flags.get() != flags_new || diff_algorithm.get() != algorithm_new {
@@ -269,7 +269,7 @@ pub unsafe fn diffopt_changed() -> c_int {
     diff_algorithm.set(algorithm_new);
     unsafe { diff_redraw(true) };
     unsafe { check_scrollbind(0, 0) };
-    OK
+    Ok(())
 }
 
 pub fn diffopt_horizontal() -> bool {

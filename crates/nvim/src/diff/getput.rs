@@ -12,7 +12,7 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
-use crate::types::{ExArgt, FAIL, NUL, OK};
+use crate::types::{ExArgt, NUL};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -316,7 +316,7 @@ fn diffgetput(
         let mut count = dp.df_count[idx_to];
         // SAFETY: the editor exists; the short circuit is upstream's.
         let undoable =
-            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as linenr_T, lnum + count) != FAIL;
+            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as linenr_T, lnum + count).is_ok();
         if undoable {
             // With a range, the first and last block of it are only partly
             // copied; `start_skip`/`end_skip` are the parts left out.
@@ -354,7 +354,7 @@ fn diffgetput(
             for _ in 0..count {
                 buf_empty = cur_buf().b_ml.ml_line_count == 1 as linenr_T;
                 // SAFETY: the editor exists and `lnum` is a line of it.
-                if unsafe { ml_delete(lnum) } == OK {
+                if unsafe { ml_delete(lnum) }.is_ok() {
                     added -= 1;
                 }
             }
@@ -369,13 +369,13 @@ fn diffgetput(
                 // SAFETY: a live buffer and a line number inside it.
                 let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
                 // SAFETY: the editor exists; `p` is our own copy of the line.
-                unsafe { ml_append(lnum + i - 1 as linenr_T, p, 0 as colnr_T, false) };
+                let _ = unsafe { ml_append(lnum + i - 1 as linenr_T, p, 0 as colnr_T, false) };
                 unsafe { xfree(p.cast()) };
                 added += 1;
                 if buf_empty && cur_buf().b_ml.ml_line_count == 2 as linenr_T {
                     buf_empty = false;
                     // SAFETY: the buffer holds the two lines just counted.
-                    unsafe { ml_delete(2 as linenr_T) };
+                    let _ = unsafe { ml_delete(2 as linenr_T) };
                 }
                 i += 1;
             }

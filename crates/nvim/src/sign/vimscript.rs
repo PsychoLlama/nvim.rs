@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::funcs::args::{Args, frame};
 use crate::eval::typval::NumBuf;
 use crate::narrow::number_as_int;
-use crate::types::{OK, VAR_DICT, VAR_LIST, kListLenMayKnow};
+use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -367,7 +367,9 @@ unsafe fn sign_define_from_dict(
         numhl = unsafe { numbuf7.dict_string(dict, c"numhl".as_ptr()) }.cast_mut();
         prio = number_as_int(unsafe { tv_dict_get_number_def(dict, c"priority".as_ptr(), -1) });
     }
-    unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) - 1 }
+    let defined =
+        unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) };
+    if defined.is_ok() { 0 } else { -1 }
 }
 
 /// `sign_define()`.
@@ -618,7 +620,7 @@ unsafe fn sign_place_from_dict(
 
     // `sign_place` writes the id back when it was zero (auto-allocate).
     let mut uid = id.cast_unsigned();
-    if unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) } == OK {
+    if unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) }.is_ok() {
         uid.cast_signed()
     } else {
         -1
@@ -687,7 +689,7 @@ pub(crate) unsafe fn f_sign_undefine(
             let retlist = tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t);
             for tv in list_items(args.get(0).vval.v_list) {
                 let name = numbuf.string_chk(tv);
-                let ok = !name.is_null() && sign_undefine_by_name(name) == OK;
+                let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
             }
         };
@@ -703,7 +705,7 @@ pub(crate) unsafe fn f_sign_undefine(
     // SAFETY: the frame's argument slot.
     let name = unsafe { numbuf2.string_chk(args.ptr(0)) };
     // SAFETY: a name the argument owns, NUL-terminated.
-    if !name.is_null() && unsafe { sign_undefine_by_name(name) } == OK {
+    if !name.is_null() && unsafe { sign_undefine_by_name(name) }.is_ok() {
         rettv.vval.v_number = 0;
     }
 }

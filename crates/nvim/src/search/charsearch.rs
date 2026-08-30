@@ -9,7 +9,7 @@
 use super::*;
 use crate::mbyte::MAX_SCHAR_SIZE;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, NUL, OK};
+use crate::types::{CpoFlag, Failed, NUL};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -79,7 +79,7 @@ pub fn set_csearch_until(t_cmd: c_int) {
 ///
 /// # Safety
 /// `cap` and `cap->oap` must be valid.
-pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
+pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> Result<(), Failed> {
     let mut c = unsafe { (*cap).nchar }; // char to search for
     let mut dir = unsafe { (*cap).arg }; // true for searching forward
     let mut t_cmd = t_cmd;
@@ -110,7 +110,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
     } else {
         // Repeat the previous search.
         if lastc.get() as c_int == NUL && lastc_bytelen.get() <= 1 {
-            return FAIL;
+            return Err(Failed);
         }
         dir = if dir != 0 {
             -(lastcdir.get() as c_int) // repeat in the opposite direction
@@ -143,11 +143,11 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
             if dir > 0 {
                 col += unsafe { utfc_ptr2len(line.offset(col as isize)) };
                 if col >= len {
-                    return FAIL;
+                    return Err(Failed);
                 }
             } else {
                 if col == 0 {
-                    return FAIL;
+                    return Err(Failed);
                 }
                 col -= unsafe { utf_head_off(line, line.offset(col as isize - 1)) } + 1;
             }
@@ -176,7 +176,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> c_int {
         }
     }
     cur_win().w_cursor.col = col as colnr_T;
-    OK
+    Ok(())
 }
 
 /// The window the editor is working in.

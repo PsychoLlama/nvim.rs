@@ -22,6 +22,7 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::Failed;
 
 /// One `:sign define` entry.
 struct SignEntry {
@@ -238,7 +239,7 @@ pub(crate) unsafe fn sign_define_by_name(
     culhl: *mut c_char,
     numhl: *mut c_char,
     prio: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's name.
     let found = unsafe { sign_find(name) };
     let mut def = match found {
@@ -273,8 +274,8 @@ pub(crate) unsafe fn sign_define_by_name(
 
     // SAFETY: the caller's text, writable and NUL-terminated, and the
     // definition's own cells.
-    if !text.is_null() && unsafe { init_sign_text(text, def.cells(), true) } != OK {
-        return FAIL;
+    if !text.is_null() && unsafe { init_sign_text(text, def.cells(), true) }.is_err() {
+        return Err(Failed);
     }
 
     def.sn_priority = prio;
@@ -303,7 +304,7 @@ pub(crate) unsafe fn sign_define_by_name(
         // SAFETY: the caller's name.
         unsafe { update_placements(name, def) };
     }
-    OK
+    Ok(())
 }
 
 /// Copies a redefined sign's text and highlights into every placement of it,
@@ -350,7 +351,7 @@ unsafe fn update_placements(name: *const c_char, def: Sign) {
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
+pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> Result<(), Failed> {
     // SAFETY: the caller's name.
     let key = unsafe { CStr::from_ptr(name) };
     let entry = SIGNS.with_mut(|signs| {
@@ -365,11 +366,11 @@ pub(crate) unsafe fn sign_undefine_by_name(name: *const c_char) -> c_int {
         // SAFETY: the caller's name, and a format the message takes.
         let name = unsafe { c_str(name) };
         semsg!("E155: Unknown sign: {name}");
-        return FAIL;
+        return Err(Failed);
     };
     // SAFETY: the icon is this module's own `xstrdup`.
     unsafe { xfree(entry.def.sn_icon.cast()) };
-    OK
+    Ok(())
 }
 
 /// Forgets every definition — `sign_undefine()` with no argument.

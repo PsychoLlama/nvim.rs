@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FAIL, FoFlag, NUL, OK};
+use crate::types::{CpoFlag, Failed, FoFlag, NUL};
 
 /// Where the text of a line starts once its comment leader is skipped, and
 /// whether the line ends *inside* an unclosed comment.
@@ -162,7 +162,7 @@ pub unsafe fn do_join(
     save_undo: bool,
     use_formatoptions: bool,
     setmark: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     debug_assert!(count >= 1);
     // SAFETY: the caller's promise -- the cursor line plus `count - 1` exist.
     // The two arrays are `count` entries each, which is what the walks index.
@@ -170,8 +170,8 @@ pub unsafe fn do_join(
 
     let above = cur_win().w_cursor.lnum - 1;
     let past = cur_win().w_cursor.lnum + count as linenr_T;
-    if save_undo && u_save(above, past) == FAIL {
-        return FAIL;
+    if save_undo && u_save(above, past).is_err() {
+        return Err(Failed);
     }
 
     // The per-line space counts are wanted twice: to size the one
@@ -190,11 +190,11 @@ pub unsafe fn do_join(
         curr_start: ::core::ptr::null_mut(),
     };
 
-    let ret = if measure_join(count, insert_space, setmark, &mut plan) == FAIL {
-        FAIL
+    let ret = if measure_join(count, insert_space, setmark, &mut plan).is_err() {
+        Err(Failed)
     } else {
         assemble_join(count, insert_space, setmark, &mut plan);
-        OK
+        Ok(())
     };
 
     unsafe { xfree(plan.spaces as *mut c_void) };
@@ -211,7 +211,12 @@ pub unsafe fn do_join(
 ///
 /// `plan.spaces` (and `plan.comments`, when non-null) must have `count`
 /// entries; the cursor line plus `count - 1` must exist.
-fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut JoinPlan) -> c_int {
+fn measure_join(
+    count: size_t,
+    insert_space: bool,
+    setmark: bool,
+    plan: &mut JoinPlan,
+) -> Result<(), Failed> {
     // The last character of the line before, and the one before it: the
     // seam rules below are all about those two.
     let mut endcurr1 = NUL;
@@ -320,10 +325,10 @@ fn measure_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Joi
 
         line_breakcheck();
         if got_int.get() {
-            return FAIL;
+            return Err(Failed);
         }
     }
-    OK
+    Ok(())
 }
 
 /// Upstream's `MB_PTR_BACK`: step `p` back over the character in front of it.
@@ -402,7 +407,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         t -= 1;
     }
 
-    unsafe { ml_replace_len(cur_win().w_cursor.lnum, newp, newp_len, false) };
+    let _ = unsafe { ml_replace_len(cur_win().w_cursor.lnum, newp, newp_len, false) };
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let mut buf = cur_win().buffer();

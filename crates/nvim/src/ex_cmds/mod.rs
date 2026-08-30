@@ -50,10 +50,10 @@ use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
-    CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp,
-    FAIL, NUL, OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
-    bcount_t, bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues,
-    linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp, NUL,
+    OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t,
+    bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues, linenr_T,
+    list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -234,7 +234,8 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
             0 as ::core::ffi::c_int
         },
         0 as ::core::ffi::c_int,
-    ) == FAIL
+    )
+    .is_err()
     {
         return false;
     }

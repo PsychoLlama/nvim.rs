@@ -42,8 +42,7 @@ use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{
-    CpoFlag, Direction, FAIL, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T,
-    oparg_T,
+    CpoFlag, Direction, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
 };
 use core::ffi::{c_int, c_uint};
 
@@ -180,7 +179,7 @@ pub(crate) unsafe fn nv_screengo(
             && !unsafe { vim_isprintc(c) }
             && c > 255
         {
-            unsafe { oneright() };
+            let _ = unsafe { oneright() };
         }
         // Landed past the wanted column on a multi-cell character: keep
         // it only if more than half of it is before the wanted column.
@@ -332,7 +331,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
         let at_end = if past_line {
             unsafe { *get_cursor_pos_ptr() as c_int == NUL }
         } else {
-            unsafe { oneright() == 0 }
+            unsafe { oneright().is_err() }
         };
         if at_end {
             if wrap_flag != NUL
@@ -373,7 +372,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
             win.w_set_curswant = true;
             if virtual_active(win) {
                 // SAFETY: the cursor is in its own line.
-                unsafe { oneright() };
+                let _ = unsafe { oneright() };
             } else {
                 // SAFETY: as above.
                 win.w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
@@ -416,7 +415,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
 
     let mut n = ca.count1;
     while n > 0 {
-        if unsafe { oneleft() } == 0 {
+        if unsafe { oneleft() }.is_err() {
             if wrap_flag != NUL
                 && !unsafe { vim_strchr(p_ww.get(), wrap_flag) }.is_null()
                 && win.w_cursor.lnum > 1
@@ -461,7 +460,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
         return;
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_up(ca.count1 as linenr_T, ca.op().op_type == OP_NOP) } == 0 {
+    if unsafe { cursor_up(ca.count1 as linenr_T, ca.op().op_type == OP_NOP) }.is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -498,7 +497,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
         }
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_down(ca.count1, ca.op().op_type == OP_NOP) } == 0 {
+    if unsafe { cursor_down(ca.count1, ca.op().op_type == OP_NOP) }.is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
@@ -532,7 +531,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OP_NOP {
         cur_win().w_curswant = MAXCOL as colnr_T;
     }
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) } == 0 {
+    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) }.is_err() {
         clear_op_beep(ca.op());
     } else {
         unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
@@ -557,7 +556,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     // `t` and `T` stop *before* the character.
     let t_cmd = ca.cmdchar == 't' as c_int || ca.cmdchar == 'T' as c_int;
     ca.op().motion_type = kMTCharWise;
-    if ca.nchar < 0 || unsafe { searchc(cap, t_cmd) } == 0 {
+    if ca.nchar < 0 || unsafe { searchc(cap, t_cmd) }.is_err() {
         clear_op_beep(ca.op());
         if cursor_dec {
             unsafe { adjust_for_sel(cap) };
@@ -642,7 +641,7 @@ pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
     ca.op().use_reg_one = true;
     ca.op().inclusive = false;
     cur_win().w_set_curswant = true;
-    if unsafe { findsent(ca.arg as Direction, ca.count1) } == FAIL {
+    if unsafe { findsent(ca.arg as Direction, ca.count1) }.is_err() {
         clear_op_beep(ca.op());
         return;
     }
@@ -705,7 +704,7 @@ pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     cur_win().w_set_curswant = true;
-    if unsafe { bck_word(ca.count1, ca.arg != 0, false) } == 0 {
+    if unsafe { bck_word(ca.count1, ca.arg != 0, false) }.is_err() {
         clear_op_beep(ca.op());
     } else {
         unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
@@ -744,7 +743,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     if lt(startpos, cur_win().w_cursor) {
         unsafe { adjust_cursor(ca.oap) };
     }
-    if moved == 0 && ca.op().op_type == OP_NOP {
+    if moved.is_err() && ca.op().op_type == OP_NOP {
         clear_op_beep(ca.op());
     } else {
         unsafe { adjust_for_sel(cap) };

@@ -20,7 +20,7 @@ use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
-use crate::ex_eval::{aborting, should_abort};
+use crate::ex_eval::{aborting, should_abort_err};
 use crate::fileio::{
     add_quoted_fname, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
     msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
@@ -54,7 +54,7 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    CmdModFlags, CpoFlag, FAIL, FileInfo, IOSIZE, MAXPATHL, OK, ShmFlag, aco_save_T, buf_T,
+    CmdModFlags, CpoFlag, FAIL, Failed, FileInfo, IOSIZE, MAXPATHL, ShmFlag, aco_save_T, buf_T,
     exarg_T, iconv_t, int64_t, linenr_T, off_T, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t,
     vim_acl_T,
 };
@@ -285,13 +285,13 @@ pub unsafe fn buf_write(
     end: linenr_T,
     eap: *mut exarg_T,
     req: WriteRequest,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut b = unsafe { Buf::new(buf) };
     // The quoted file name the failure path reports against.
     let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     let (mut buf, mut start, mut end) = (buf, start, end);
-    let mut retval = OK;
+    let mut retval = Ok(());
     let msg_save = msg_scroll.get();
     let mut prev_got_int = got_int.get();
     let whole = start == 1 && end == b.b_ml.ml_line_count;
@@ -300,19 +300,19 @@ pub unsafe fn buf_write(
     let bkc = get_bkc_flags(b);
 
     if fname.is_null() || unsafe { *fname } == 0 {
-        return FAIL; // safety check
+        return Err(Failed); // safety check
     }
     if b.b_ml.ml_mfp.is_null() {
         // Can happen during startup, from a stray "w" in the vimrc.
         emsg(gettext(e_empty_buffer));
-        return FAIL;
+        return Err(Failed);
     }
     if check_secure() {
-        return FAIL; // writing is disallowed in secure mode
+        return Err(Failed); // writing is disallowed in secure mode
     }
     if unsafe { strlen(fname) } >= MAXPATHL as size_t {
         emsg(gettext(e_longname)); // avoid a crash for a long name
-        return FAIL;
+        return Err(Failed);
     }
 
     // After writing, changedtick changes; don't display the line.
@@ -331,8 +331,8 @@ pub unsafe fn buf_write(
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
-        if unsafe { set_rw_fname(fname, sfname) } == FAIL {
-            return FAIL;
+        if unsafe { set_rw_fname(fname, sfname) }.is_err() {
+            return Err(Failed);
         }
         buf = curbuf.get(); // just in case autocmds made "buf" invalid
         // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
@@ -479,7 +479,7 @@ pub unsafe fn buf_write(
                     Ok(made) => backup = made,
                     Err(e) => {
                         err = Some(e);
-                        retval = FAIL;
+                        retval = Err(Failed);
                         break 'failed;
                     }
                 }
@@ -806,7 +806,7 @@ pub unsafe fn buf_write(
         // -100 to save some space for a further error message.
         unsafe { add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, b, fname) };
         unsafe { err.emit(&quoted) };
-        retval = FAIL;
+        retval = Err(Failed);
         if end == 0 {
             let hl_id = HLF_E;
             let warning = translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr();
@@ -827,15 +827,15 @@ pub unsafe fn buf_write(
     msg_scroll.set(msg_save);
 
     // Writing the whole file with 'undofile' set writes the undo file too.
-    if retval == OK && write_undo_file {
+    if retval.is_ok() && write_undo_file {
         let mut hash = sha_ctx.finish();
         unsafe { u_write_undo(core::ptr::null(), false, b, hash.as_mut_ptr()) };
     }
 
-    if !should_abort(retval) {
+    if !should_abort_err(retval) {
         unsafe { buf_write_do_post_autocmds(buf, fname, eap, mode) };
         if aborting() {
-            retval = FAIL; // autocmds may abort script processing
+            retval = Err(Failed); // autocmds may abort script processing
         }
     }
 

@@ -74,7 +74,7 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, FAIL, FileInfo, NUL, OK, OptVal, OptValData, OptValType, String_0, StringBuilder,
+    CmdModFlags, Failed, FileInfo, NUL, OptVal, OptValData, OptValType, String_0, StringBuilder,
     Timestamp, bhdr_T, blocknr_T, buf_T, colnr_T, dict_T, file_comparison, flush_buffers_T,
     infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t,
     time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
@@ -297,7 +297,7 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buf` must point at a buffer with no memline open.
-pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
+pub unsafe fn ml_open(buf: *mut buf_T) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -322,7 +322,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         b.b_ml.ml_flags = MlFlags::EMPTY;
         b.b_ml.ml_line_count = 1;
         if unsafe { ml_open_blocks(buf, mfp, &mut hp) } {
-            return OK;
+            return Ok(());
         }
         if !hp.is_null() {
             unsafe { mf_put(mfp, hp, false, false) };
@@ -330,7 +330,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> ::core::ffi::c_int {
         unsafe { mf_close(mfp, true) }; // also frees the swap file's name
     }
     b.b_ml.ml_mfp = ::core::ptr::null_mut();
-    FAIL
+    Err(Failed)
 }
 
 /// Fill in the three blocks a fresh memline starts with. The block still held
@@ -374,7 +374,7 @@ unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhd
         let fileformat = get_fileformat(b) + 1;
         unsafe { (*b0p).set_flags(fileformat) };
         unsafe { set_b0_fname(b0p, buf) };
-        unsafe {
+        let _ = unsafe {
             os_get_username(
                 (&raw mut (*b0p).b0_uname).cast::<::core::ffi::c_char>(),
                 B0_UNAME_SIZE as size_t,

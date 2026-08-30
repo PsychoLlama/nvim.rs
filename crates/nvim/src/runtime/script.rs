@@ -22,7 +22,7 @@ use crate::semsg;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL, OK};
+use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -768,7 +768,7 @@ pub unsafe fn ex_scriptencoding(eap: *mut exarg_T) {
     };
     // Set up for conversion from the specified encoding to 'encoding'.
     let sp = unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie) }.cast::<source_cookie_T>();
-    unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc.get()) };
+    let _ = unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc.get()) };
     if name != unsafe { (*eap).arg } {
         unsafe { xfree(name.cast::<c_void>()) };
     }
@@ -906,7 +906,8 @@ pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: boo
             RuntimeOpts::START,
             Some(source_callback as DoInRuntimepathCBFn),
             (&raw mut ret_sid).cast::<c_void>(),
-        ) == OK
+        )
+        .is_ok()
     };
 
     // SAFETY: still ours -- `ga_loaded` keeps its own copy of the path.

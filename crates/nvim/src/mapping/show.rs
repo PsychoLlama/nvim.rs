@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
-use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, FAIL, NUL, OK};
+use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -307,7 +307,7 @@ pub unsafe fn expand_mappings(
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's promise — `pat` is a live, NUL-terminated pattern.
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
 
@@ -410,7 +410,7 @@ pub unsafe fn expand_mappings(
     unsafe { map_walk::<()>(table, abbr, collect) };
 
     if ga.ga_len == 0 {
-        return FAIL;
+        return Err(Failed);
     }
 
     // SAFETY: the growarray holds `ga_len` elements of the shape `fuzzy`
@@ -449,5 +449,5 @@ pub unsafe fn expand_mappings(
 
     // SAFETY: the caller's writable out-parameter.
     unsafe { *numMatches = count };
-    if count == 0 { FAIL } else { OK }
+    if count == 0 { Err(Failed) } else { Ok(()) }
 }

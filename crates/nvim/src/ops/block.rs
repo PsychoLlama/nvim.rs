@@ -166,7 +166,7 @@ pub(crate) unsafe fn block_insert(
         }
         unsafe { strcpy(newp.offset(offset as isize), oldp) };
 
-        unsafe { ml_replace(lnum, newp, false) };
+        let _ = unsafe { ml_replace(lnum, newp, false) };
         let splice = offset - startcol;
         unsafe {
             extmark_splice_cols(

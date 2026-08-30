@@ -23,7 +23,7 @@ use crate::regexp::{
     save_parse_state, skipchr, skipchr_keepstart, unmagic, wants_nfa,
 };
 use crate::semsg;
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -129,7 +129,7 @@ fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> R
     let (mut minval, mut maxval) = (0, 0);
     // `read_limits` is shared with the backtracking engine and still
     // answers OK/FAIL.
-    if read_limits(&mut minval, &mut maxval) == FAIL {
+    if read_limits(&mut minval, &mut maxval).is_err() {
         semsg!("E870: (NFA regexp) Error reading repetition limits");
         rc_did_emsg.set(true);
         return Repeat::Failed;

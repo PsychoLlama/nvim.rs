@@ -271,7 +271,7 @@ fn append_sep(p: *mut c_char) {
 /// The current directory, into `buf`.
 fn get_dirname(buf: &mut PathBuf) {
     // SAFETY: `buf` is exactly the `MAXPATHL` writable bytes claimed.
-    unsafe { os_dirname(buf.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(buf.as_mut_ptr(), MAXPATHL as size_t) };
 }
 
 /// `src` with the home directory replaced by `~`, into `buf`.

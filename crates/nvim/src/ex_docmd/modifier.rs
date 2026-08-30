@@ -47,8 +47,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdAddr, CmdModFlags,
-    FAIL, NUL, OK, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T,
-    exarg_T, size_t,
+    Failed, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T,
+    size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::{atoi, strlen};
@@ -117,7 +117,7 @@ pub(crate) unsafe fn parse_command_modifiers(
     errormsg: &mut Option<CString>,
     cm: &mut cmdmod_T,
     skip_only: bool,
-) -> c_int {
+) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
     let orig_cmd = ea.cmd;
     let mut cmd_start: *mut c_char = ptr::null_mut();
@@ -165,17 +165,17 @@ pub(crate) unsafe fn parse_command_modifiers(
             if !ea.nextcmd.is_null() {
                 ea.nextcmd = unsafe { ea.nextcmd.add(1) };
             }
-            return FAIL;
+            return Err(Failed);
         }
         if byte(ea.cmd) == '\n' as c_int {
             ea.nextcmd = unsafe { ea.cmd.add(1) };
-            return FAIL;
+            return Err(Failed);
         }
         if byte(ea.cmd) == NUL {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
-            return FAIL;
+            return Err(Failed);
         }
 
         // A modifier may follow a range (`:1,2 silent print`), so the
@@ -326,14 +326,14 @@ pub(crate) unsafe fn parse_command_modifiers(
                             )
                         } as c_int;
                         if ea.cmd.is_null() {
-                            return FAIL;
+                            return Err(Failed);
                         }
                         if tabnr == MAXLNUM as c_int {
                             cm.cmod_tab = tabpage_index(curtab.get()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(ptr::null_mut()) {
                                 *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
-                                return FAIL;
+                                return Err(Failed);
                             }
                             cm.cmod_tab = tabnr + 1;
                         }
@@ -375,7 +375,7 @@ pub(crate) unsafe fn parse_command_modifiers(
     }
 
     unsafe { restore_visual_range(ea, orig_cmd, cmd_start, has_visual_range, use_plus_cmd) };
-    OK
+    Ok(())
 }
 
 /// Put the `'<,'>` this scan stepped over back in front of the command.
@@ -686,7 +686,11 @@ impl CmdModScope {
     ///
     /// # Safety
     /// As [`parse_command_modifiers`].
-    pub(crate) unsafe fn parse(&self, eap: *mut exarg_T, errormsg: &mut Option<CString>) -> c_int {
+    pub(crate) unsafe fn parse(
+        &self,
+        eap: *mut exarg_T,
+        errormsg: &mut Option<CString>,
+    ) -> Result<(), Failed> {
         let mut parsed = cmdmod_T::default();
         // SAFETY: the caller's contract.
         let read = unsafe { parse_command_modifiers(eap, errormsg, &mut parsed, false) };

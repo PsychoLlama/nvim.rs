@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::getchar::typeahead;
-use crate::types::{FAIL, OK, OptionSetFlags};
+use crate::types::{Failed, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
 ///
@@ -113,7 +113,7 @@ pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) ->
 ///
 /// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
 /// the window-local events.
-pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
+pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
     let win = ei != p_ei.get();
     // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
     // value, and every step below stays within it.
@@ -124,11 +124,11 @@ pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
             ei = unsafe { ei.add(usize::from(*ei == b'-' as ::core::ffi::c_char)) };
             let event = unsafe { event_name2nr(ei, &raw mut ei) };
             if event == NUM_EVENTS || (win && event_row(event).event > 0) {
-                return FAIL;
+                return Err(Failed);
             }
         }
     }
-    OK
+    Ok(())
 }
 
 /// The rest of `ei` past a leading `all` item, or `None` when there is not

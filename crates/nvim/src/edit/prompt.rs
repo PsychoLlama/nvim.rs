@@ -86,13 +86,13 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     if start().lnum == win.w_cursor.lnum && prompt_missing() {
         if unsafe { *text } as c_int == NUL {
             // The line is empty: the prompt *is* the line.
-            unsafe { ml_replace(start().lnum, prompt, true) };
+            let _ = unsafe { ml_replace(start().lnum, prompt, true) };
             unsafe { inserted_bytes(start().lnum, 0, 0, prompt_len) };
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
             let lnum = cur_buf().b_ml.ml_line_count;
-            unsafe { ml_append(lnum, prompt, 0, false) };
+            let _ = unsafe { ml_append(lnum, prompt, 0, false) };
             unsafe { appended_lines_mark(lnum, 1) };
             set_start_lnum(cur_buf().b_ml.ml_line_count);
             cur_buf().b_prompt_append_new_line = true;

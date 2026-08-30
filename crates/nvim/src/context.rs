@@ -320,7 +320,7 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
 unsafe fn ctx_restore_funcs(ctx: &Context) {
     // SAFETY: the caller's contract.
     for i in 0..ctx.funcs.size {
-        unsafe { do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data()) };
+        let _ = unsafe { do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data()) };
     }
 }
 

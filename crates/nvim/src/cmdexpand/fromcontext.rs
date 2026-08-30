@@ -11,7 +11,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::path::ExpandFlags;
-use crate::types::{ExpandContext, FAIL, OK};
+use crate::types::{ExpandContext, Failed};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -56,7 +56,7 @@ pub(crate) unsafe fn expand_from_context(
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     options: WildOpts,
-) -> c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -93,15 +93,15 @@ pub(crate) unsafe fn expand_from_context(
             } else {
                 pat as *const c_char
             };
-            if unsafe { find_help_tags(arg, numMatches, matches, false) } != OK {
-                return FAIL;
+            if unsafe { find_help_tags(arg, numMatches, matches, false) }.is_err() {
+                return Err(Failed);
             }
             unsafe { cleanup_help_tags(*numMatches, *matches) };
-            return OK;
+            return Ok(());
         }
         ExpandContext::ShellCmd => {
             unsafe { expand_shellcmd(pat, matches, numMatches, flags) };
-            return OK;
+            return Ok(());
         }
         ExpandContext::OldSetting => return unsafe { expand_old_setting(numMatches, matches) },
         ExpandContext::Buffers => {
@@ -196,7 +196,7 @@ pub(crate) unsafe fn expand_from_context(
         regmatch.regprog = unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
         if regmatch.regprog.is_null() {
             unsafe { xfree(tofree as *mut c_void) };
-            return FAIL;
+            return Err(Failed);
         }
         // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
         regmatch.rm_ic = unsafe { ignorecase(pat) } != 0;

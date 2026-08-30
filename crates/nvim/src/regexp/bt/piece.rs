@@ -158,7 +158,7 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         }
         M_BRACE => {
             let (mut minval, mut maxval) = (0, 0);
-            if read_limits(&mut minval, &mut maxval) == 0 {
+            if read_limits(&mut minval, &mut maxval).is_err() {
                 return core::ptr::null_mut();
             }
             if flags & SIMPLE != 0 {

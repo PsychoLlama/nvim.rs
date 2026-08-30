@@ -16,7 +16,7 @@ use std::ffi::CStr;
 use super::*;
 use crate::guard::Suppress;
 use crate::os::shell::ShellOpts;
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{Failed, MAXPATHL};
 
 /// Whether a `gen_expand_wildcards` is already running. The pieces it calls
 /// can come back round to it — `expand_env` falls back on `expand_one` — and
@@ -131,7 +131,7 @@ pub(crate) unsafe fn expand_in_path(
     flags: ExpandFlags,
 ) -> c_int {
     let mut curdir = vec![0 as c_char; MAXPATHL as usize];
-    unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
+    let _ = unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
 
     let mut path_ga = garray_T::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
@@ -246,7 +246,7 @@ pub unsafe fn gen_expand_wildcards(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     flags: ExpandFlags,
-) -> c_int {
+) -> Result<(), Failed> {
     // `expand_env` is called below to expand things like "~user". If
     // that fails it calls `expand_one`, which brings us back here; go
     // straight to the machine-specific expansion in that case.
@@ -287,7 +287,7 @@ pub unsafe fn gen_expand_wildcards(
                 unsafe { ga_clear_strings(&raw mut ga) };
                 unsafe { *num_file = 0 };
                 unsafe { *file = core::ptr::null_mut() };
-                return FAIL;
+                return Err(Failed);
             }
         } else {
             // Environment variables, "~/" and "~user/" first.
@@ -365,9 +365,9 @@ pub unsafe fn gen_expand_wildcards(
     RECURSIVE.set(false);
 
     if flags.has(ExpandFlags::EMPTYOK) || !ga.ga_data.is_null() {
-        OK
+        Ok(())
     } else {
-        FAIL
+        Err(Failed)
     }
 }
 
@@ -475,8 +475,8 @@ pub unsafe fn expand_wildcards_eval(
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
     flags: ExpandFlags,
-) -> c_int {
-    let mut ret = FAIL;
+) -> Result<(), Failed> {
+    let mut ret = Err(Failed);
     let mut eval_pat = core::ptr::null_mut();
     let mut exp_pat = unsafe { *pat };
     let mut ignored_msg: *const c_char = core::ptr::null();
@@ -516,7 +516,7 @@ pub unsafe fn expand_wildcards_eval(
             unsafe { **file = eval_pat };
             eval_pat = core::ptr::null_mut();
             unsafe { *num_file = 1 };
-            ret = OK;
+            ret = Ok(());
         }
         unsafe { xfree(exp_pat.cast()) };
         unsafe { xfree(eval_pat.cast()) };
@@ -540,9 +540,9 @@ pub unsafe fn expand_wildcards(
     num_files: *mut c_int,
     files: *mut *mut *mut c_char,
     flags: ExpandFlags,
-) -> c_int {
+) -> Result<(), Failed> {
     let retval = unsafe { gen_expand_wildcards(num_pat, pat, num_files, files, flags) };
-    if flags.has(ExpandFlags::KEEPALL) || retval == FAIL {
+    if flags.has(ExpandFlags::KEEPALL) || retval.is_err() {
         return retval;
     }
 
@@ -598,7 +598,7 @@ pub unsafe fn expand_wildcards(
     if unsafe { *num_files } == 0 {
         unsafe { xfree((*files).cast()) };
         unsafe { *files = core::ptr::null_mut() };
-        return FAIL;
+        return Err(Failed);
     }
     retval
 }

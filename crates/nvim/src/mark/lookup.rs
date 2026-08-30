@@ -249,7 +249,7 @@ pub unsafe fn mark_get_motion(
             BACKWARD
         };
         // SAFETY: the editor's globals are live.
-        if unsafe { findsent(dir as Direction, 1) } != 0 {
+        if unsafe { findsent(dir as Direction, 1) }.is_ok() {
             // SAFETY: as above.
             mark = unsafe { pos_to_mark(buf, fmp, winh.w_cursor) };
         }
@@ -482,7 +482,8 @@ pub(super) unsafe fn switch_to_mark_buf(fm: *mut fmark_T, pcmark_on_switch: bool
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
     // SAFETY: the editor's globals are live; `buflist_getfile` loads the file.
-    let ok = unsafe { buflist_getfile(fm.fnum(), fm.lnum(), getfile_flag.cast_signed(), 0) } == OK;
+    let ok =
+        unsafe { buflist_getfile(fm.fnum(), fm.lnum(), getfile_flag.cast_signed(), 0) }.is_ok();
     if ok {
         kMarkSwitchedBuf
     } else {

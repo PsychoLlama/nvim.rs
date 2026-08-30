@@ -351,7 +351,7 @@ pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     // null out-parameters say "report nothing", which each accepts.
     unsafe { check_colorcolumn(ptr::null_mut(), wp) };
     unsafe { briopt_check(ptr::null_mut(), wp) };
-    unsafe { fill_culopt_flags(None, w) };
+    let _ = unsafe { fill_culopt_flags(None, w) };
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
     let fcs = w.w_onebuf_opt.wo_fcs;
@@ -363,7 +363,7 @@ pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     unsafe { parse_winhl_opt(ptr::null(), wp) };
     unsafe { check_blending(wp) };
     unsafe { set_winbar_win(wp, false, valid_cursor) };
-    unsafe { check_signcolumn(ptr::null_mut(), wp) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), wp) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 

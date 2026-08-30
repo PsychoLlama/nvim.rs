@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{FAIL, NUL, OK, VarLock};
+use crate::types::{NUL, OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
 /// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
@@ -210,7 +210,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
                 unsafe { cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
         }
         while cur_win().w_cursor.lnum > compl_lnum.get() {
-            if unsafe { ml_delete(cur_win().w_cursor.lnum) } == FAIL {
+            if unsafe { ml_delete(cur_win().w_cursor.lnum) }.is_err() {
                 unsafe { xfree(remaining.data().cast::<c_void>()) };
                 return;
             }
@@ -222,7 +222,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
     }
 
     if cur_win().w_cursor.col > col {
-        if unsafe { stop_arrow() } == FAIL {
+        if unsafe { stop_arrow() }.is_err() {
             unsafe { xfree(remaining.data().cast::<c_void>()) };
             return;
         }
@@ -544,7 +544,7 @@ pub(crate) unsafe fn ins_compl_next(
     if !started && unsafe { ins_compl_preinsert_longest() } {
         unsafe { ins_compl_insert(true, true) };
         if has_autocomplete_delay {
-            unsafe { update_screen() }; // Show the inserted text right away
+            let _ = unsafe { update_screen() }; // Show the inserted text right away
         }
     } else if compl_no_insert && !started && !compl_preinsert {
         unsafe {
@@ -579,7 +579,7 @@ pub(crate) unsafe fn ins_compl_next(
 
     if !allow_get_expansion {
         // Redraw to show the user what was inserted.
-        unsafe { update_screen() }; // TODO(bfredl): no!
+        let _ = unsafe { update_screen() }; // TODO(bfredl): no!
         if !has_autocomplete_delay {
             // Display the updated popup menu.
             unsafe { ins_compl_show_pum() };

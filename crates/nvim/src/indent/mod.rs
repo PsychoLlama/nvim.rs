@@ -728,9 +728,10 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     let new_offset = n as colnr_T;
     let mut retval = false;
     // Replace the line, unless undo fails.
-    if flags & SIN_UNDO as c_int == 0 || u_savesub(unsafe { (*curwin.get()).w_cursor.lnum }) == OK {
+    if flags & SIN_UNDO as c_int == 0 || u_savesub(unsafe { (*curwin.get()).w_cursor.lnum }).is_ok()
+    {
         // This may free `newline`.
-        unsafe { ml_replace((*curwin.get()).w_cursor.lnum, newline, false) };
+        let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, newline, false) };
         if flags & SIN_NOMARK as c_int == 0 {
             unsafe {
                 extmark_splice_cols(

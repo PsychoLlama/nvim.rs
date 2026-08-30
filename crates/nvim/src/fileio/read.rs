@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::fileio::Loaded;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -21,7 +22,7 @@ use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
-use crate::types::{CmdModFlags, CpoFlag, FAIL, OK, OptionSetFlags};
+use crate::types::{CmdModFlags, CpoFlag, Failed, OptionSetFlags};
 
 mod tail;
 
@@ -55,7 +56,8 @@ pub(crate) struct How {
 /// used. `eap` may be NULL. When not recovering, `lines_to_skip` is 0 and
 /// `lines_to_read` is `MAXLNUM`.
 ///
-/// @return  FAIL for failure, NOTDONE for a directory (also a failure), or OK
+/// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
+/// the reading itself, which are not failures.
 pub(crate) unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
@@ -65,10 +67,10 @@ pub(crate) unsafe fn readfile(
     eap: *mut exarg_T,
     flags: c_int,
     silent: bool,
-) -> c_int {
+) -> Result<Loaded, Failed> {
     let mut fname = fname;
     let mut sfname = sfname;
-    let mut retval = FAIL;
+    let mut retval = Err(Failed);
     let how = How {
         newfile: flags & READ_NEW as c_int != 0,
         filtering: flags & READ_FILTER as c_int != 0,
@@ -142,7 +144,7 @@ pub(crate) unsafe fn readfile(
             && !fname.is_null()
             && cpo_has(CpoFlag::FNAMER)
             && !how.dummy
-            && unsafe { set_rw_fname(fname, sfname) } == FAIL
+            && unsafe { set_rw_fname(fname, sfname) }.is_err()
         {
             break 'theend;
         }
@@ -238,7 +240,7 @@ pub(crate) unsafe fn readfile(
                 }
                 // Delete the lines read so far.
                 while lnum > from {
-                    unsafe { ml_delete(lnum) };
+                    let _ = unsafe { ml_delete(lnum) };
                     lnum -= 1;
                 }
                 file_rewind = false;
@@ -742,7 +744,7 @@ pub(crate) unsafe fn readfile(
             }
             unsafe { *w.ptr = 0 };
             let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
-            if unsafe { ml_append(lnum, w.line_start, len, how.newfile) } == FAIL {
+            if unsafe { ml_append(lnum, w.line_start, len, how.newfile) }.is_err() {
                 error = true;
             } else {
                 if read_undo_file {
@@ -801,7 +803,7 @@ pub(crate) unsafe fn readfile(
         if !recoverymode.get() {
             // The last line, which came from the empty buffer, has to go.
             if how.newfile && wasempty && !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
+                let _ = unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
                 linecnt -= 1;
             }
             cur_buf().deleted_bytes = 0;
@@ -834,7 +836,7 @@ pub(crate) unsafe fn readfile(
                 }
                 msg_scroll.set(msg_save);
                 unsafe { check_marks_read() };
-                retval = OK; // an interrupt isn't really an error
+                retval = Ok(Loaded::Read); // an interrupt isn't really an error
                 break 'theend;
             }
 
@@ -886,11 +888,11 @@ pub(crate) unsafe fn readfile(
         {
             // Autocommands may abort script processing. Note that this
             // skips the swap-file sync below, as upstream does.
-            return FAIL;
+            return Err(Failed);
         }
 
         if !(recoverymode.get() && error) {
-            retval = OK;
+            retval = Ok(Loaded::Read);
         }
     }
 

@@ -452,7 +452,7 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: *mut optset_T) -> *cons
     if (unsafe { *win.w_onebuf_opt.wo_stc }) != NUL as c_char {
         win.w_nrwidth_line_count = 0 as linenr_T;
     }
-    unsafe { check_signcolumn(ptr::null_mut(), win.raw()) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), win.raw()) };
     ptr::null()
 }
 
@@ -808,7 +808,7 @@ pub(crate) unsafe fn do_spelllang_source(win: *mut win_T) {
                 q,
             )
         };
-        unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
+        let _ = unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
     }
 }
 

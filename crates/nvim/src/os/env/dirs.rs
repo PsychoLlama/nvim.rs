@@ -16,7 +16,7 @@ use crate::memory::xmemrchr;
 use crate::os::fs::os_isdir;
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
 use crate::strings::vim_strchr;
-use crate::types::{MAXPATHL, OK, Vv, buf_T};
+use crate::types::{MAXPATHL, Vv, buf_T};
 
 /// The directory a runtime lives in, under `$VIM`.
 const RUNTIME_DIRNAME: &CStr = c"runtime";
@@ -207,7 +207,8 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
                     exe_name.as_mut_ptr(),
                     c"share/nvim/runtime/".as_ptr(),
                     MAXPATHL as usize,
-                ) == OK
+                )
+                .is_ok()
                 {
                     vim_path = exe_name.as_mut_ptr();
                 }

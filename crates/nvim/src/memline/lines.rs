@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::pos::MAXCOL;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
 
 /// A read-only pointer to line `lnum` of the current buffer. Never NULL.
@@ -114,12 +114,12 @@ unsafe fn ml_append_flush(
     line: *mut ::core::ffi::c_char,
     len: colnr_T,
     flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
     if lnum > b.b_ml.ml_line_count {
-        return FAIL; // lnum out of range
+        return Err(Failed); // lnum out of range
     }
     if b.b_ml.cached_lnum() != 0 {
         // This may invoke ml_append_int in turn.
@@ -145,7 +145,7 @@ pub unsafe fn ml_append(
     line: *mut ::core::ffi::c_char,
     len: colnr_T,
     newfile: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { ml_append_flags(lnum, line, len, if newfile { ML_APPEND_NEW } else { 0 }) }
 }
 
@@ -158,12 +158,12 @@ pub unsafe fn ml_append_flags(
     line: *mut ::core::ffi::c_char,
     len: colnr_T,
     flags: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // During startup the memfile may still have to be created.
     if cur_buf().b_ml.ml_mfp.is_null()
-        && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) } == FAIL
+        && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) }.is_err()
     {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { ml_append_flush(curbuf.get(), lnum, line, len, flags) }
 }
@@ -178,12 +178,12 @@ pub unsafe fn ml_append_buf(
     line: *mut ::core::ffi::c_char,
     len: colnr_T,
     newfile: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
     if b.b_ml.ml_mfp.is_null() {
-        return FAIL;
+        return Err(Failed);
     }
     let flags = if newfile { ML_APPEND_NEW } else { 0 };
     unsafe { ml_append_flush(buf, lnum, line, len, flags) }
@@ -245,7 +245,7 @@ pub unsafe fn ml_replace(
     lnum: linenr_T,
     line: *mut ::core::ffi::c_char,
     copy: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { ml_replace_buf(curbuf.get(), lnum, line, copy, false) }
 }
 
@@ -258,7 +258,7 @@ pub unsafe fn ml_replace_len(
     line: *mut ::core::ffi::c_char,
     len: size_t,
     copy: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     unsafe { ml_replace_buf_len(curbuf.get(), lnum, line, len, copy, false) }
 }
 
@@ -272,7 +272,7 @@ pub unsafe fn ml_replace_buf(
     line: *mut ::core::ffi::c_char,
     copy: bool,
     noalloc: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     let len = if line.is_null() {
         -1 as ::core::ffi::c_int as size_t
     } else {
@@ -302,17 +302,17 @@ pub unsafe fn ml_replace_buf_len(
     len_arg: size_t,
     copy: bool,
     noalloc: bool,
-) -> ::core::ffi::c_int {
+) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
     if line_arg.is_null() {
-        return FAIL; // just checking...
+        return Err(Failed); // just checking...
     }
     // During startup the memfile may still have to be created.
-    if b.b_ml.ml_mfp.is_null() && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) } == FAIL
+    if b.b_ml.ml_mfp.is_null() && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) }.is_err()
     {
-        return FAIL;
+        return Err(Failed);
     }
 
     let line = if copy {
@@ -339,7 +339,7 @@ pub unsafe fn ml_replace_buf_len(
         // is common and a scratch allocation per line is a lot of noise.
         unsafe { ml_flush_line(buf, true) };
     }
-    OK
+    Ok(())
 }
 
 /// Delete line `lnum` of `buf`.
@@ -348,7 +348,7 @@ pub unsafe fn ml_replace_buf_len(
 ///
 /// # Safety
 /// `buf` must point at a buffer holding line `lnum`.
-pub unsafe fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> ::core::ffi::c_int {
+pub unsafe fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> Result<(), Failed> {
     unsafe { ml_flush_line(buf, false) };
     unsafe { ml_delete_int(buf, lnum, if message { ML_DEL_MESSAGE } else { 0 }) }
 }
@@ -357,7 +357,7 @@ pub unsafe fn ml_delete_buf(buf: *mut buf_T, lnum: linenr_T, message: bool) -> :
 ///
 /// # Safety
 /// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_delete(lnum: linenr_T) -> ::core::ffi::c_int {
+pub unsafe fn ml_delete(lnum: linenr_T) -> Result<(), Failed> {
     unsafe { ml_delete_flags(lnum, 0) }
 }
 
@@ -365,10 +365,10 @@ pub unsafe fn ml_delete(lnum: linenr_T) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_delete_flags(lnum: linenr_T, flags: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub unsafe fn ml_delete_flags(lnum: linenr_T, flags: ::core::ffi::c_int) -> Result<(), Failed> {
     unsafe { ml_flush_line(curbuf.get(), false) };
     if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count {
-        return FAIL;
+        return Err(Failed);
     }
     unsafe { ml_delete_int(curbuf.get(), lnum, flags) }
 }

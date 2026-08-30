@@ -39,7 +39,7 @@ use crate::quickfix::qf_free_all;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, FAIL, Integer, OK, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T, handle_T,
+    Error, Failed, Integer, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T, handle_T,
     linenr_T, tabpage_T, win_T, winopt_T,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
@@ -83,7 +83,7 @@ fn clear_options(opt: *mut winopt_T) {
 // The first window, and the one autocommands run in
 
 pub unsafe fn win_alloc_first() {
-    if alloc_firstwin(None) == FAIL {
+    if alloc_firstwin(None).is_err() {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
     }
@@ -114,14 +114,14 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
     win.w_onebuf_opt.wo_crb = 0;
 }
 
-pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> c_int {
+pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window or null.
     alloc_firstwin(unsafe { Win::from_raw(oldwin) })
 }
 
 /// Make the first window of a tab page, taking its settings from `oldwin` when
 /// there is one and from the defaults when there is not.
-fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
+fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     // SAFETY: `win_alloc` answers a live window.
     let mut win = unsafe { Win::new(win_alloc(ptr::null_mut::<win_T>(), false)) };
     curwin.set(win.raw());
@@ -134,7 +134,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
             curbuf.set(buf);
             // SAFETY: `buflist_new` answers a live buffer or null.
             let Some(mut buf) = (unsafe { Buf::from_raw(buf) }) else {
-                return FAIL;
+                return Err(Failed);
             };
             win.w_buffer = buf.raw();
             win.w_s = &raw mut buf.b_s;
@@ -154,7 +154,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> c_int {
     topframe.set(frame.raw());
     frame.fr_width = Columns.get();
     frame.fr_height = Rows.get() - p_ch.get() as c_int - global_stl_rows();
-    OK
+    Ok(())
 }
 
 /// Give `wp` a fresh leaf frame of its own.

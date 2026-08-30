@@ -111,7 +111,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         } else {
             DoCmdOpts::NONE
         };
-        unsafe { do_cmdline(ptr::null_mut(), getline, NULL, opts) != 0 }
+        unsafe { do_cmdline(ptr::null_mut(), getline, NULL, opts).is_ok() }
     };
     unsafe { msg_ext_set_trigger(c"".as_ptr()) };
     if !cmd_result {
@@ -197,7 +197,7 @@ pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op_quit(ca.op()) {
         let flags = GETF_SETMARK as c_int | GETF_ALT as c_int;
-        unsafe { buflist_getfile(ca.count0, 0 as linenr_T, flags, 0) };
+        let _ = unsafe { buflist_getfile(ca.count0, 0 as linenr_T, flags, 0) };
     }
 }
 
@@ -224,7 +224,7 @@ pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
     if visual_active() {
         end_visual_mode();
     }
-    unsafe { do_cmdline_cmd(c"st".as_ptr()) };
+    let _ = unsafe { do_cmdline_cmd(c"st".as_ptr()) };
 }
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean

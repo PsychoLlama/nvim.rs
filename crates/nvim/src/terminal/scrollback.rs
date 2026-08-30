@@ -208,7 +208,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
         for _ in 0..diff {
             // SAFETY: a live buffer, deleting the line the row that is
             // about to be dropped was mirrored onto.
-            unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
             term.sb.drop_oldest();
         }
         let (buf, diff) = (buf.raw(), diff as linenr_T);
@@ -259,7 +259,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
     while deleted > 0 && buf.line_count() > old_height as linenr_T {
         // SAFETY: a live buffer, deleting a line the scrollback no longer
         // holds.
-        unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+        let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buf.raw(), 1 as linenr_T, 1 as linenr_T) };
         deleted -= 1;
@@ -274,7 +274,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
         let text = term.textbuf.as_mut_ptr();
         // SAFETY: a live buffer, taking the row this terminal's own line
         // buffer holds.
-        unsafe { ml_append_buf(buf.raw(), at, text, 0 as colnr_T, false) };
+        let _ = unsafe { ml_append_buf(buf.raw(), at, text, 0 as colnr_T, false) };
         // SAFETY: as above, reporting the line just appended.
         unsafe { appended_lines_buf(buf.raw(), at, 1 as linenr_T) };
         term.sb.mark_mirrored();
@@ -285,7 +285,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
     while buf.line_count() > max_line_count {
         let last = buf.line_count();
         // SAFETY: a live buffer, deleting its own last line.
-        unsafe { ml_delete_buf(buf.raw(), last, false) };
+        let _ = unsafe { ml_delete_buf(buf.raw(), last, false) };
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buf.raw(), buf.line_count(), 1 as linenr_T) };
     }

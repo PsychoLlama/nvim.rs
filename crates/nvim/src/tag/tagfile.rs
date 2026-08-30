@@ -211,7 +211,7 @@ impl HelpTags {
         let flags = RuntimeOpts::ALL;
         let callback2 = Some(found_tagfile_cb as DoInRuntimepathCBFn);
         let cookie2 = (&raw mut found).cast();
-        unsafe { do_in_runtimepath(name2, flags, callback2, cookie2) };
+        let _ = unsafe { do_in_runtimepath(name2, flags, callback2, cookie2) };
         HelpTags { found, at: 0 }
     }
 

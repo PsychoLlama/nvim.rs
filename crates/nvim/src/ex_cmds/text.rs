@@ -11,7 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, FAIL, NL, TAB};
+use super::{CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, NL, TAB};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -285,7 +285,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     // SAFETY: `curwin` is live; `u_save` takes the range's guard lines.
     let save_curpos = cur_win().w_cursor;
     // SAFETY: as above.
-    if u_save(line1 - 1, line2 + 1) == FAIL {
+    if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 

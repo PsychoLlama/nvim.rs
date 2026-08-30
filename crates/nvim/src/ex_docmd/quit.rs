@@ -42,8 +42,8 @@ use crate::os::cshim::snprintf;
 
 use crate::types::{
     CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CmdModFlags, FAIL, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T, ptrdiff_t,
-    tabpage_T, win_T,
+    CMD_wq, CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T,
+    ptrdiff_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
@@ -255,7 +255,7 @@ pub(crate) unsafe fn ex_cquit(eap: *mut exarg_T) {
 
 /// The checks `:qall`, `:xall` and `:wqall` share before any of them
 /// starts writing.
-pub unsafe fn before_quit_all(eap: *mut exarg_T) -> c_int {
+pub unsafe fn before_quit_all(eap: *mut exarg_T) -> Result<(), Failed> {
     let mut eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(if eap.forceit != 0 {
@@ -263,23 +263,23 @@ pub unsafe fn before_quit_all(eap: *mut exarg_T) -> c_int {
         } else {
             KE_XF2 as c_int
         }));
-        return FAIL;
+        return Err(Failed);
     }
     if text_locked() {
         text_locked_msg();
-        return FAIL;
+        return Err(Failed);
     }
     // SAFETY: `curwin` is set from startup to exit.
     if unsafe { before_quit_autocmds(curwin.get(), true, eap.forceit != 0) } {
-        return FAIL;
+        return Err(Failed);
     }
-    OK
+    Ok(())
 }
 
 /// `:qall`.
 pub(crate) unsafe fn ex_quitall(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if unsafe { before_quit_all(eap.raw()) } == FAIL {
+    if unsafe { before_quit_all(eap.raw()) }.is_err() {
         return;
     }
     let save_exiting = exiting.get();
@@ -609,7 +609,7 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (eap.cmdidx as c_int == CMD_wq as c_int || curbuf_is_changed())
-        && unsafe { do_write(eap.raw()) } == FAIL
+        && unsafe { do_write(eap.raw()) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
         || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }
         || check_more(true, eap.forceit != 0) == FAIL

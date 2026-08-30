@@ -27,7 +27,7 @@ use crate::regexp::{
     NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART, PimResult, Rex, nfa_endp, nfa_match,
     nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
 };
-use crate::types::{FAIL, NUL};
+use crate::types::NUL;
 
 /// Where a thread's state leaves it.
 pub(crate) enum Step {
@@ -416,7 +416,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, cle
             }
         } else {
             let accepted = if c < 0 {
-                check_char_class(rex, c, curc) != FAIL
+                check_char_class(rex, c, curc).is_ok()
             } else {
                 c == curc || (rex.reg_ic() && utf_fold(curc) == utf_fold(c))
             };

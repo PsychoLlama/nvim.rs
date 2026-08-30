@@ -72,7 +72,7 @@ use crate::spellsuggest::soundalike::{
     suggest_try_soundalike, suggest_try_soundalike_finish, suggest_try_soundalike_prep,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{FAIL, MAXPATHL, NUL, OK, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::types::{MAXPATHL, NUL, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use ::libc::{atoi, strcpy, strlen};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -458,7 +458,7 @@ unsafe fn spell_find_suggest(
     unsafe { xmemcpyz(badword, badptr as *const c_void, su.su_badlen as usize) };
     let fbadword = su.su_fbadword() as *mut c_char;
     let win = curwin.get();
-    unsafe { spell_casefold(win, badptr, su.su_badlen, fbadword, MAXWLEN as c_int) };
+    let _ = unsafe { spell_casefold(win, badptr, su.su_badlen, fbadword, MAXWLEN as c_int) };
     // Upstream note: this breaks if the case-folded text comes out
     // longer than the original, because an illegal byte then throws
     // the pointer arithmetic off.
@@ -691,7 +691,7 @@ unsafe fn suggest_try_change(mut su: Sug) {
     // it may fill the `MAXWLEN - n` that are left.
     let taillen = unsafe { strlen(tail) } as c_int;
     let dest = unsafe { fwordp.offset(n as isize) };
-    unsafe { spell_casefold(curwin.get(), tail, taillen, dest, MAXWLEN as c_int - n) };
+    let _ = unsafe { spell_casefold(curwin.get(), tail, taillen, dest, MAXWLEN as c_int - n) };
 
     // Keep the result no longer than the original text.
     let n = unsafe { strlen(su.su_badptr) } as usize;

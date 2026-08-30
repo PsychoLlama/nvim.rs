@@ -12,7 +12,7 @@ use super::*;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::types::MB_MAXCHAR;
-use crate::types::{FAIL, MB_MAXBYTES, NUL, OK};
+use crate::types::{Failed, MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -63,7 +63,7 @@ pub(crate) unsafe fn put_string_in_typebuf(
     slen: c_int,
     string: *mut u8,
     new_slen: c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     let extra = new_slen - slen;
     // SAFETY (this body): the caller's promise -- `string` is `new_slen + 1`
     // writable bytes and `offset + slen` is within the typeahead, which is
@@ -82,15 +82,16 @@ pub(crate) unsafe fn put_string_in_typebuf(
                 false,
                 false,
             )
-        } == FAIL
+        }
+        .is_err()
         {
-            return FAIL;
+            return Err(Failed);
         }
     }
     // Careful: del_typebuf() and ins_typebuf() may have reallocated
     // typebuf.tb_buf, so the destination is re-derived here.
     unsafe { ptr::copy(string, typeahead().at(offset), new_slen as usize) };
-    OK
+    Ok(())
 }
 
 /// Whether the typeahead starts with a key that Insert-mode completion uses,
@@ -178,7 +179,7 @@ pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
             tb.set_byte(offset + 2, modifier as u8);
             unsafe { put_string_in_typebuf(offset + 3, 1, at, len) }
         };
-        if ok == FAIL {
+        if ok.is_err() {
             return -1;
         }
         return len;
@@ -441,7 +442,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     // for the duration, and append K_SELECT to switch back.
     if visual_active() && visual_select() && mp.m_mode & MODE_VISUAL != 0 {
         set_visual_select(false);
-        unsafe {
+        let _ = unsafe {
             ins_typebuf(
                 K_SELECT_STRING.as_ptr().cast_mut(),
                 REMAP_NONE,
@@ -518,7 +519,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     // RHS the first character is not remapped (but abbreviations still
     // apply); when m_noremap says so, none of it is.
     let inserted = if map_str.is_null() {
-        FAIL
+        Err(Failed)
     } else {
         // A LANGMAP mapping's keys were not recorded above, so they are
         // recorded here instead.
@@ -567,7 +568,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     unsafe { xfree(save_m_keys.cast()) };
     unsafe { xfree(save_alt_m_keys.cast()) };
 
-    if inserted == FAIL {
+    if inserted.is_err() {
         map_result_fail as c_int
     } else {
         map_result_retry as c_int

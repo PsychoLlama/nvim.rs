@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::guard::Suppress;
-use crate::types::{FAIL, NUL, OK};
+use crate::types::{FAIL, Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
@@ -30,14 +30,14 @@ pub(crate) unsafe fn copy_substring_from_pos(
     end: *mut pos_T,
     match_out: *mut *mut c_char,
     match_end: *mut pos_T,
-) -> c_int {
+) -> Result<(), Failed> {
     let exacttext = exacttext();
 
     if unsafe { (*start).lnum } > unsafe { (*end).lnum }
         || (unsafe { (*start).lnum } == unsafe { (*end).lnum }
             && unsafe { (*start).col } >= unsafe { (*end).col })
     {
-        return FAIL; // invalid range
+        return Err(Failed); // invalid range
     }
 
     // A newline, spelled the way `'wildoptions'` wants it: `exacttext`
@@ -113,7 +113,7 @@ pub(crate) unsafe fn copy_substring_from_pos(
     unsafe { (*match_end).lnum = (*end).lnum };
     unsafe { (*match_end).col = segment_len as colnr_T };
 
-    OK
+    Ok(())
 }
 
 /// True if `str` matches the regex pattern `pat`.
@@ -213,7 +213,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
     dir: Direction,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
-) -> c_int {
+) -> Result<(), Failed> {
     let exacttext = exacttext();
     let has_range = search_first_line.get() != 0;
 
@@ -221,7 +221,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
     unsafe { *numMatches = 0 };
 
     if pat.is_null() || unsafe { *pat } as c_int == NUL {
-        return FAIL;
+        return Err(Failed);
     }
 
     let pat_len = unsafe { strlen(pat) } as c_int;
@@ -330,7 +330,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
                     &raw mut full_match,
                     &raw mut word_end_pos,
                 )
-            } == FAIL
+            }
+            .is_err()
             {
                 break;
             }
@@ -398,10 +399,10 @@ pub(crate) unsafe fn expand_pattern_in_buf(
 
     if !completed {
         unsafe { ga_clear_strings(&raw mut ga) };
-        return FAIL;
+        return Err(Failed);
     }
 
     unsafe { *matches = ga.ga_data as *mut *mut c_char };
     unsafe { *numMatches = ga.ga_len };
-    OK
+    Ok(())
 }

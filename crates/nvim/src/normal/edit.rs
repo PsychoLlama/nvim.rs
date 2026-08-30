@@ -136,7 +136,7 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         return;
     }
     if virtual_active(cur_win()) {
-        if u_save_cursor() == 0 {
+        if u_save_cursor().is_err() {
             return;
         }
         if gchar_cursor() == NUL {
@@ -168,12 +168,12 @@ pub(crate) unsafe fn nv_replace(cap: *mut cmdarg_T) {
         stuff_readbuf_char(ESC);
         return;
     }
-    if u_save_cursor() == 0 {
+    if u_save_cursor().is_err() {
         return;
     }
     if literal != Ctrl_V && (ca.nchar == '\r' as c_int || ca.nchar == '\n' as c_int) {
         // Replacing with a line break splits the line, which is an insert.
-        unsafe { del_chars(ca.count1, 0) };
+        let _ = unsafe { del_chars(ca.count1, 0) };
         stuff_readbuf_char('\r' as c_int);
         stuff_readbuf_char(ESC);
         unsafe { invoke_edit(cap, 1, 'r' as c_int, 0) };
@@ -307,7 +307,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
         return;
     }
     unsafe { prep_redo_cmd(cap) };
-    if u_save_cursor() == 0 {
+    if u_save_cursor().is_err() {
         return;
     }
     let startpos = cur_win().w_cursor;
@@ -324,7 +324,7 @@ pub(crate) unsafe fn n_swapchar(cap: *mut cmdarg_T) {
             cur_win().w_cursor.col = 0;
             // Each further line needs its own undo entry.
             if n > 1 {
-                if u_savesub(cur_win().w_cursor.lnum) == 0 {
+                if u_savesub(cur_win().w_cursor.lnum).is_err() {
                     break;
                 }
                 u_clearline(cur_buf());
@@ -449,8 +449,8 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
     } else {
         0
     };
-    let opened =
-        u_save(undo_first, undo_last) != 0 && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
+    let opened = u_save(undo_first, undo_last).is_ok()
+        && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
     if opened {
         if unsafe { win_cursorline_standout(win.raw()) } {
             // The cursor line moved, so its highlight has to be redrawn.
@@ -609,7 +609,7 @@ pub(crate) unsafe fn nv_join(cap: *mut cmdarg_T) {
         ca.nchar,
     );
     // `gJ` arrives with `nchar` set and does not insert or remove spaces.
-    unsafe { do_join(ca.count0 as size_t, ca.nchar == NUL, true, true, true) };
+    let _ = unsafe { do_join(ca.count0 as size_t, ca.nchar == NUL, true, true, true) };
 }
 
 /// `p` and `P`.
@@ -749,7 +749,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
         }
     }
     if emptied && unsafe { *ml_get(cur_buf().b_ml.ml_line_count) } as c_int == NUL {
-        unsafe { ml_delete_flags(cur_buf().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
+        let _ = unsafe { ml_delete_flags(cur_buf().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
         unsafe { deleted_lines(cur_buf().b_ml.ml_line_count + 1, 1) };
         if win.w_cursor.lnum > cur_buf().b_ml.ml_line_count {
             win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;

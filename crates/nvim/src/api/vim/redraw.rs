@@ -191,7 +191,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         validate_cursor(cur);
         update_topline(cur);
         // SAFETY: the editor's own screen.
-        unsafe { update_screen() };
+        let _ = unsafe { update_screen() };
     }
     if opts.cursor {
         // SAFETY: `cwin` is a live window.
