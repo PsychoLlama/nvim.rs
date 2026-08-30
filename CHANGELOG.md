@@ -22,6 +22,12 @@ and this project adheres to [CalVer](https://calver.org/).
   written out where it is raised and checked against its arguments when the
   editor is built. The message a client receives, and the kind it is
   classified as, are unchanged.
+- Reworked how the editor compares, measures and copies text: the C
+  library's string and memory routines are gone from the editor's own code,
+  replaced by operations that carry the length of what they touch, so a
+  comparison, a search or a copy cannot run past the end of what it was
+  given. Every command reads and writes exactly the same bytes as before,
+  including for text that is not valid UTF-8.
 - Reworked how the editor's internals say whether an operation worked: the
   several hundred functions that answered a plain success/failure number now
   answer a result the compiler can check, so an unread answer is a build
