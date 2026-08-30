@@ -15,12 +15,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::{err_expected, err_invalid_ptr};
+use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
@@ -201,7 +202,9 @@ impl Context {
                 let key = c"use_statuscol_lnum".as_ptr();
                 let why = c"out of range".as_ptr();
                 // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(key, why, 0, false) };
+                // SAFETY: both are the caller's NUL-terminated strings.
+                let (key, why) = unsafe { (cstr::at(key), cstr::at(why)) };
+                *err = err_invalid(key, Bad::Bare(why));
                 return None;
             }
             use_bools += 1;

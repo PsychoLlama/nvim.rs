@@ -11,8 +11,9 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
 use crate::api::private::validate::{
-    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected, err_required_ptr,
+    err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
+use crate::cstr;
 use crate::types::{Failed, kObjectTypeLuaRef, kObjectTypeString};
 use crate::winlayer::Live;
 
@@ -56,7 +57,7 @@ pub unsafe fn nvim_create_autocmd(
             if !(!(has_key(opts.is_set__create_autocmd_, 9 as ::core::ffi::c_int))
                 || !(has_key(opts.is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
             {
-                error = unsafe { err_conflict_ptr(c"callback".as_ptr(), c"command".as_ptr()) };
+                error = err_conflict(c"callback", c"command");
             } else {
                 if has_key(
                     opts.is_set__create_autocmd_,
@@ -67,15 +68,13 @@ pub unsafe fn nvim_create_autocmd(
                         kObjectTypeLuaRef => {
                             if !(unsafe { (*callback).data.luaref } != -2 as ::core::ffi::c_int) {
                                 // SAFETY: the value the keyset carried, live for this call.
-                                error = unsafe {
-                                    err_bad_value_ptr(c"callback", c"<no value>".as_ptr())
-                                };
+                                error = err_bad_value(c"callback", c"<no value>");
                                 break '_cleanup;
                             } else if !unsafe { nlua_ref_is_function((*callback).data.luaref) } {
                                 // SAFETY: `error` is this call's own error slot.
                                 let bad = c"<not a function>".as_ptr();
                                 // SAFETY: the value the keyset carried, live for this call.
-                                error = unsafe { err_bad_value_ptr(c"callback", bad) };
+                                error = err_bad_value(c"callback", unsafe { cstr::at(bad) });
                                 break '_cleanup;
                             } else {
                                 handler_fn.type_0 = kCallbackLua;
@@ -104,7 +103,7 @@ pub unsafe fn nvim_create_autocmd(
                 ) {
                     handler_cmd = unsafe { string_to_cstr(opts.command) };
                 } else if true {
-                    error = unsafe { err_required_ptr(c"'command' or 'callback'".as_ptr()) };
+                    error = err_required(c"'command' or 'callback'");
                     break '_cleanup;
                 }
                 au_group = unsafe { get_augroup_from_object(opts.group, &mut error) };
@@ -127,11 +126,11 @@ pub unsafe fn nvim_create_autocmd(
                     if !(!(has_key(opts.is_set__create_autocmd_, 1 as ::core::ffi::c_int))
                         || !(has_key(opts.is_set__create_autocmd_, 5 as ::core::ffi::c_int)))
                     {
-                        error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
+                        error = err_conflict(c"buf", c"buffer");
                     } else if !(!(has_key(opts.is_set__create_autocmd_, 8 as ::core::ffi::c_int))
                         || !has_buf)
                     {
-                        error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
+                        error = err_conflict(c"pattern", c"buf");
                     } else {
                         patterns = unsafe {
                             get_patterns_from_pattern_or_buf(
@@ -153,7 +152,7 @@ pub unsafe fn nvim_create_autocmd(
                                 desc = opts.desc.data();
                             }
                             if !(event_array.size > 0 as size_t) {
-                                error = unsafe { err_required_ptr(c"event".as_ptr()) };
+                                error = err_required(c"event");
                             } else {
                                 autocmd_id = next_autocmd_id.get();
                                 next_autocmd_id.set(autocmd_id + 1);
@@ -173,7 +172,7 @@ pub unsafe fn nvim_create_autocmd(
                                         // the union's string arm.
                                         let bad = unsafe { event_str.data.string }.data();
                                         // SAFETY: the value the keyset carried, live for this call.
-                                        error = unsafe { err_bad_value_ptr(c"event", bad) };
+                                        error = err_bad_value(c"event", unsafe { cstr::at(bad) });
                                         break '_cleanup;
                                     } else {
                                         let mut retval: Result<(), Failed> = Err(Failed);
@@ -277,11 +276,11 @@ pub unsafe fn nvim_clear_autocmds(
     if !(!(has_key(opts.is_set__clear_autocmds_, 1 as ::core::ffi::c_int))
         || !(has_key(opts.is_set__clear_autocmds_, 4 as ::core::ffi::c_int)))
     {
-        error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
+        error = err_conflict(c"buf", c"buffer");
         return ().reported(error);
     }
     if !(!(has_key(opts.is_set__clear_autocmds_, 5 as ::core::ffi::c_int)) || !has_buf) {
-        error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
+        error = err_conflict(c"pattern", c"buf");
         return ().reported(error);
     }
     let mut au_group: ::core::ffi::c_int =
@@ -325,7 +324,7 @@ pub unsafe fn nvim_clear_autocmds(
                 < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 // SAFETY: the value the keyset carried, live for this call.
-                error = unsafe { err_bad_value_ptr(c"event", event_str.data.string.data()) };
+                error = err_bad_value(c"event", unsafe { event_str.data.string.as_cstr() });
                 return ().reported(error);
             }
             let mut pat_object_index_0: size_t = 0 as size_t;

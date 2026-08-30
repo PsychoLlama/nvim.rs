@@ -100,6 +100,16 @@ use core::ffi::{CStr, c_char};
 use core::slice;
 use std::ffi::CString;
 
+/// [`CStr::from_ptr`], under this module's lifetime convention.
+///
+/// # Safety
+/// `p` points at a NUL-terminated string that stays live and unwritten for
+/// `'a`.
+pub(crate) unsafe fn at<'a>(p: *const c_char) -> &'a CStr {
+    // SAFETY: caller's contract.
+    unsafe { CStr::from_ptr(p) }
+}
+
 /// [`CStr::from_ptr`], answering `None` for a null pointer.
 ///
 /// # Safety

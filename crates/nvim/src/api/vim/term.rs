@@ -10,8 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
-use crate::api::private::validate::err_msg_ptr;
 use crate::api_error;
+use crate::cstr;
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Buf;
@@ -25,7 +25,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
     if b == cmdwin_buf.get() {
         let msg = e_cmdwin.as_ptr();
         // SAFETY: the message the caller handed over, live for this call.
-        slot = unsafe { err_msg_ptr(kErrorTypeException, msg) };
+        slot = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
         return (0 as Integer).reported(slot);
     }
     let mut may_read_buffer: bool = true;
@@ -107,7 +107,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
         unsafe { channel_send((*chan).id, text, len, true, out) };
         if !error.is_null() {
             // SAFETY: `channel_send` left a NUL-terminated message there.
-            slot = unsafe { err_msg_ptr(kErrorTypeValidation, error) };
+            slot = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(error) });
         }
     }
     (unsafe { (*chan).id } as Integer).reported(slot)
@@ -173,7 +173,7 @@ pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error>
     unsafe { channel_send(id, text, len, false, &raw mut error) };
     if !error.is_null() {
         // SAFETY: `channel_send` left a NUL-terminated message there.
-        slot = unsafe { err_msg_ptr(kErrorTypeValidation, error) };
+        slot = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(error) });
     }
     ().reported(slot)
 }

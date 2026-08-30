@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
-use crate::api::private::validate::err_msg_ptr;
+use crate::cstr;
 
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
     let mut rv: Array = arena_array(arena, 2 as size_t);
@@ -86,7 +86,7 @@ pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Re
     if chan.is_null() {
         let msg = e_invchan.as_ptr();
         // SAFETY: the message the caller handed over, live for this call.
-        error = unsafe { err_msg_ptr(kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, unsafe { cstr::at(msg) });
         return ().reported(error);
     }
     unsafe { (*chan).detach = detach };

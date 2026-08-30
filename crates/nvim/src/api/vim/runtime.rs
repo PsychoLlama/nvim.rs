@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_bad_value;
 use crate::kvec::InitVec;
 use crate::types::NUL;
 use crate::winlayer::Live;
@@ -171,9 +171,7 @@ pub unsafe fn nvim__get_runtime(
 
 /// "Invalid `name`: '(too long)'", the one message this file shares.
 fn too_long(err: &mut Error, name: &CStr) {
-    let too_long = c"(too long)".as_ptr();
-    // SAFETY: `err` is the caller's own slot, and both strings are literals.
-    *err = unsafe { err_invalid_ptr(name.as_ptr(), too_long, 0, true) };
+    *err = err_bad_value(name, c"(too long)");
 }
 
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {

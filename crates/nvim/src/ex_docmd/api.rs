@@ -368,7 +368,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
                 break 'end;
             }
             if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
-                errormsg = Some(ex_msg(get_text_locked_msg()));
+                errormsg = Some(ex_msg(get_text_locked_msg().as_ptr()));
                 break 'end;
             }
         }

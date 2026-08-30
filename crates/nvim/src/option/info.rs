@@ -18,7 +18,7 @@ use crate::types::{
     key_value_pair, object, object_data, sctx_T, size_t, win_T,
 };
 
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_bad_value;
 
 use super::{
     find_option_len, get_option, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptScopeBuf,
@@ -90,8 +90,9 @@ pub(crate) unsafe fn get_vimoption(
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
     if opt_idx == kOptInvalid {
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"option (not found)".as_ptr(), name.data(), 0, true) };
+        // SAFETY: the keyset's name is NUL-terminated.
+        let name = unsafe { name.as_cstr() };
+        *err = err_bad_value(c"option (not found)", name);
         return Dict {
             size: 0 as size_t,
             capacity: 0 as size_t,

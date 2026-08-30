@@ -22,6 +22,7 @@
 //! [`unpacker`]: crate::msgpack_rpc::unpacker
 //! [`packer`]: crate::msgpack_rpc::packer
 
+use crate::cstr;
 use crate::os::uv_error::UV_EPIPE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -91,7 +92,6 @@ mod known {
     pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
-use crate::api::private::validate::err_msg_ptr;
 use known::*;
 
 /// The all-nil `Object`, which is what an API call that produced nothing, or
@@ -467,7 +467,8 @@ unsafe fn report_call_error(err: &mut Error, result: &Object) {
     if result.type_0 == kObjectTypeString {
         let text = unsafe { result.data.string }.data();
         // SAFETY: the message is a NUL-terminated string.
-        unsafe { *err = err_msg_ptr(kErrorTypeException, text) };
+        let text = unsafe { cstr::at(text) };
+        *err = Error::from_message(kErrorTypeException, text);
         return;
     }
     if result.type_0 == kObjectTypeArray {
@@ -481,8 +482,9 @@ unsafe fn report_call_error(err: &mut Error, result: &Object) {
                 && message.type_0 == kObjectTypeString
             {
                 let kind = crate::narrow::number_as_int(unsafe { kind.data.integer });
-                // SAFETY: the message is a NUL-terminated string.
-                unsafe { *err = err_msg_ptr(kind, message.data.string.data()) };
+                // SAFETY: the message is the string the frame carried.
+                let text = unsafe { message.data.string.as_cstr() };
+                *err = Error::from_message(kind, text);
                 return;
             }
         }
@@ -639,7 +641,7 @@ pub unsafe fn rpc_set_client_info(id: uint64_t, info: Dict) {
     chan.rpc.info = info;
     // SAFETY: the dict was just stored on this channel, so its strings are
     // live for the classification.
-    let name = unsafe { crate::cstr::at_opt(get_client_info(chan.as_ptr(), c"type".as_ptr())) };
+    let name = unsafe { cstr::at_opt(get_client_info(chan.as_ptr(), c"type".as_ptr())) };
     chan.rpc.client_type = classify_client(name);
     // SAFETY: the channel is live.
     unsafe { channel_info_changed(chan.as_ptr(), false) };

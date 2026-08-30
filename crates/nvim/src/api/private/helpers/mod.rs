@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -93,7 +94,7 @@ const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
     capacity: 0,
     items: ptr::null_mut(),
 };
-use crate::api::private::validate::{err_invalid_ptr, err_msg_ptr};
+use crate::api::private::validate::{Bad, err_bad_number, err_invalid};
 use crate::api_error;
 use crate::message_fmt::{c_str, msg_bytes};
 // -- Handles ---------------------------------------------------------------
@@ -120,7 +121,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: &mut Error) -> *
     if rv.is_null() {
         let id = buffer as int64_t;
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"buffer id".as_ptr(), ptr::null(), id, false) };
+        *err = err_bad_number(c"buffer id", id);
     }
     rv
 }
@@ -134,7 +135,7 @@ pub unsafe fn find_window_by_handle(window: Window, err: &mut Error) -> *mut win
     if rv.is_null() {
         let id = window as int64_t;
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"window id".as_ptr(), ptr::null(), id, false) };
+        *err = err_bad_number(c"window id", id);
     }
     rv
 }
@@ -148,7 +149,7 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: &mut Error) -> *m
     if rv.is_null() {
         let id = tabpage as int64_t;
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"tabpage id".as_ptr(), ptr::null(), id, false) };
+        *err = err_bad_number(c"tabpage id", id);
     }
     rv
 }
@@ -243,7 +244,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
             get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
         };
         // SAFETY: the message is a NUL-terminated string.
-        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
+        *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
         // SAFETY: the list has been rendered into `err`.
         unsafe { free_global_msglist() };
         if should_free {
@@ -259,7 +260,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
         let named = unsafe { *name } != NUL as c_char;
         if !named {
             // SAFETY: the message is a NUL-terminated string.
-            unsafe { *err = err_msg_ptr(kErrorTypeException, value) };
+            *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(value) });
         } else {
             // SAFETY: both are the exception's own NUL-terminated strings.
             let (name, value) = unsafe { (c_str(name), c_str(value)) };
@@ -368,14 +369,14 @@ pub(crate) unsafe fn set_mark(
     } else {
         if col > MAXCOL as Integer {
             // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"column".as_ptr(), out_of_range, 0, false) };
+            *err = err_invalid(c"column", Bad::Bare(unsafe { cstr::at(out_of_range) }));
             return false;
         }
         // SAFETY: `buf` is the caller's buffer, or the current one.
         let line_count = unsafe { (*buf).b_ml.ml_line_count } as Integer;
         if line < 1 || line > line_count {
             // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"line".as_ptr(), out_of_range, 0, false) };
+            *err = err_invalid(c"line", Bad::Bare(unsafe { cstr::at(out_of_range) }));
             return false;
         }
     }

@@ -106,7 +106,6 @@ use crate::api::private::dispatch::{
     key_dict_win_text_height_get_field, ns_opts_table, win_config_table,
 };
 use crate::api::private::helpers::{api_dict_to_keydict, api_keydict_to_dict};
-use crate::api::private::validate::err_msg_ptr;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -374,9 +373,7 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
 
 /// Refuses a call made while the text is locked.
 fn text_locked_error(error: &mut Error) {
-    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
-    // message.
-    *error = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
+    *error = Error::from_message(kErrorTypeException, get_text_locked_msg());
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window

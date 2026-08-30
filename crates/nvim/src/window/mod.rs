@@ -34,6 +34,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -99,7 +100,6 @@ pub use self::snapshot::*;
 pub use self::split::*;
 pub use self::tabpage::*;
 pub use self::winclose::*;
-use crate::api::private::validate::err_msg_ptr;
 
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
@@ -502,7 +502,7 @@ fn first_tab() -> TabPage {
 /// An exception whose whole message is the string at `msg`.
 fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
     // SAFETY: the message the caller handed over, live for this call.
-    *err = unsafe { err_msg_ptr(kErrorTypeException, msg) };
+    *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.

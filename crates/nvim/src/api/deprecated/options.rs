@@ -9,7 +9,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, buffer_by_handle, window_by_handle};
-use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_value, err_expected};
+use crate::cstr;
 use crate::option::NIL_OPTVAL;
 use crate::types::OptionSetFlags;
 use core::ffi::{CStr, c_char, c_void};
@@ -104,7 +105,7 @@ unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_ch
     if name.is_empty() {
         let empty = c"<empty>".as_ptr();
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), empty, 0, true) };
+        *err = err_bad_value(c"option name", unsafe { cstr::at(empty) });
         return None;
     }
     let opt_name = name.data();
@@ -112,7 +113,7 @@ unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_ch
     let opt_idx: OptIndex = find_option(unsafe { CStr::from_ptr(opt_name) });
     if opt_idx == kOptInvalid as OptIndex {
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), opt_name, 0, true) };
+        *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
         return None;
     }
     Some((opt_name, opt_idx))
@@ -149,7 +150,7 @@ unsafe fn get_option_from(
     // the same answer as a name that is not an option's at all.
     if value.type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"option name".as_ptr(), opt_name, 0, true) };
+        *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
         return NIL;
     }
     optval_as_object(value)
@@ -175,7 +176,7 @@ unsafe fn set_option_to(
         let want = c"valid option type";
         let got = api_typename(value.type_0);
         // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_expected_ptr(c"value".as_ptr(), want, Some(got)) };
+        *err = err_expected(c"value", want, Some(got));
         return;
     };
     // A window-local option with no global half is set locally without the

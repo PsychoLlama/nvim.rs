@@ -10,14 +10,14 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_bad_number;
 use crate::api_error;
+use crate::cstr;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg_c;
 use crate::popupmenu::pum_grid_ref;
 
 /// `NULL` where a message names no offending string value.
-const NULL_STR: *const ::core::ffi::c_char = ::core::ptr::null();
 
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
@@ -78,7 +78,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
         // SAFETY: `error` is this frame's own slot and `name` a literal.
-        error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
+        error = err_bad_number(unsafe { cstr::at(name) }, pid);
     } else {
         match os_proc_children(pid as ::core::ffi::c_int) {
             Some(pids) => children = pids,
@@ -139,7 +139,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
         // SAFETY: `error` is this frame's own slot and `name` a literal.
-        error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
+        error = err_bad_number(unsafe { cstr::at(name) }, pid);
         return NIL.reported(error);
     }
     let mut a: Array = Array {
@@ -205,7 +205,7 @@ pub unsafe fn nvim__inspect_cell(
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
             // SAFETY: `error` is this frame's own slot and `name` a literal.
-            error = unsafe { err_invalid_ptr(name, NULL_STR, grid, false) };
+            error = err_bad_number(unsafe { cstr::at(name) }, grid);
             return ret.reported(error);
         }
         g = unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) };

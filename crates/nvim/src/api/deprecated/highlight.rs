@@ -7,7 +7,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 pub unsafe fn nvim_get_hl_by_id(
     hl_id: Integer,
@@ -18,10 +18,7 @@ pub unsafe fn nvim_get_hl_by_id(
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
     if !known {
-        let null = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `error` is this frame's slot; a null value string asks for
-        // the numeric spelling.
-        error = unsafe { err_invalid_ptr(c"highlight id".as_ptr(), null, hl_id, false) };
+        error = err_bad_number(c"highlight id", hl_id);
         return Dict::EMPTY.reported(error);
     }
     // SAFETY: as above.
@@ -39,8 +36,8 @@ pub unsafe fn nvim_get_hl_by_name(
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {
-        // SAFETY: `err` is this frame's slot and `name` a C string.
-        error = unsafe { err_invalid_ptr(c"highlight name".as_ptr(), name.data(), 0, true) };
+        // SAFETY: the caller's highlight name is NUL-terminated.
+        error = err_bad_value(c"highlight name", unsafe { name.as_cstr() });
         return Dict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.

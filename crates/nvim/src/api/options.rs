@@ -27,7 +27,7 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use crate::api::private::validate::{err_expected, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
 use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
@@ -362,9 +362,8 @@ pub unsafe fn nvim_get_option_value(
         if value.type_0 != kOptValTypeNil {
             return optval_as_object(value).reported(err);
         }
-        let (key, got) = (c"option".as_ptr(), name.data());
-        // SAFETY: `err` is this frame's own and `name` is the caller's.
-        err = unsafe { err_invalid_ptr(key, got, 0, true) };
+        // SAFETY: the caller's option name is NUL-terminated.
+        err = err_bad_value(c"option", unsafe { name.as_cstr() });
     }
     optval_free(value);
     NIL.reported(err)

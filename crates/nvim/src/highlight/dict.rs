@@ -18,7 +18,7 @@
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
 use crate::api::private::helpers::{api_dict_to_keydict, arena_dict};
-use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_value, err_expected, err_out_of_range};
 use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
@@ -479,10 +479,7 @@ pub unsafe fn dict2hlattrs(
     if is_set(dict, key::BLEND) {
         let given = dict.blend;
         if !(0..=100).contains(&given) {
-            // SAFETY: the caller's error slot.
-            unsafe {
-                *err = err_invalid_ptr(c"blend".as_ptr(), c"out of range".as_ptr(), 0, false)
-            };
+            *err = err_out_of_range(c"blend");
             return HLATTRS_INIT;
         }
         blend = given as int32_t;
@@ -594,8 +591,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -
     }
     if val.type_0 != kObjectTypeString {
         let expected = c"String or Integer";
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_expected_ptr(key.as_ptr(), expected, None) };
+        *err = err_expected(key, expected, None);
         return 0;
     }
     let str = unsafe { val.data.string };
@@ -609,8 +605,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -
         name_to_ctermcolor(name)
     };
     if color < 0 {
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"highlight color".as_ptr(), str.data(), 0, true) };
+        *err = err_bad_value(c"highlight color", name);
     }
     color
 }

@@ -14,7 +14,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, api_try};
-use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
@@ -201,7 +201,7 @@ pub unsafe fn nvim_call_dict_function(
     } else {
         let want = c"String or Dict";
         // SAFETY: `error` is this frame's slot and both strings are static.
-        error = unsafe { err_expected_ptr(c"dict argument".as_ptr(), want, None) };
+        error = err_expected(c"dict argument", want, None);
         return Object::NIL.reported(error);
     }
     // SAFETY: `rettv` is this frame's; a non-dictionary leaves the union's

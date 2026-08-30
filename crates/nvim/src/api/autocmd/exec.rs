@@ -8,9 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::{
-    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected,
-};
+use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::types::OptionSetFlags;
 use crate::winlayer::Live;
 
@@ -45,7 +43,7 @@ pub unsafe fn nvim_exec_autocmds(
             au_group = unsafe { augroup_find(opts.group.data.string.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 // SAFETY: the value the keyset carried, live for this call.
-                error = unsafe { err_bad_value_ptr(c"group", opts.group.data.string.data()) };
+                error = err_bad_value(c"group", unsafe { opts.group.data.string.as_cstr() });
                 return ().reported(error);
             }
         }
@@ -89,12 +87,12 @@ pub unsafe fn nvim_exec_autocmds(
     if !(!(has_key(opts.is_set__exec_autocmds_, 1 as ::core::ffi::c_int))
         || !(has_key(opts.is_set__exec_autocmds_, 4 as ::core::ffi::c_int)))
     {
-        error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
+        error = err_conflict(c"buf", c"buffer");
         return ().reported(error);
     }
     if has_buf {
         if has_key(opts.is_set__exec_autocmds_, 5 as ::core::ffi::c_int) {
-            error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
+            error = err_conflict(c"pattern", c"buf");
             return ().reported(error);
         }
         b = unsafe { find_buffer_by_handle(buf, &mut error) };
@@ -138,7 +136,7 @@ pub unsafe fn nvim_exec_autocmds(
             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
             // SAFETY: the value the keyset carried, live for this call.
-            error = unsafe { err_bad_value_ptr(c"event", event_str.data.string.data()) };
+            error = err_bad_value(c"event", unsafe { event_str.data.string.as_cstr() });
             return ().reported(error);
         }
         let mut pat_index: size_t = 0 as size_t;

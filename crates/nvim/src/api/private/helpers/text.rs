@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{CAR, NL, arena_string, arena_take_arraybuilder};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_out_of_range;
 use crate::cstr;
 use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -18,7 +18,7 @@ use crate::types::{
     Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, linenr_T, size_t,
 };
 use ::libc::strnlen;
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use core::{mem, slice};
 
 // -- Strings ---------------------------------------------------------------
@@ -41,6 +41,26 @@ impl String_0 {
         }
         // SAFETY: caller's contract.
         unsafe { slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
+    }
+
+    /// The string as a C string.
+    ///
+    /// [`String_0::NULL`] answers `c""`, as [`as_bytes`](String_0::as_bytes)
+    /// answers the empty slice. The bytes are *not* re-measured: a producer
+    /// that terminated its buffer somewhere other than `len` -- which nothing
+    /// in the tree does -- would be believed.
+    ///
+    /// # Safety
+    /// A non-null string is NUL-terminated at `len` and unwritten for `'a`.
+    /// Every `*_to_string`/`*_as_string` in this module terminates; a
+    /// `String` built by hand out of [`from_raw_parts`](String_0::from_raw_parts)
+    /// need not.
+    pub unsafe fn as_cstr<'a>(&self) -> &'a CStr {
+        if self.is_null() {
+            return c"";
+        }
+        // SAFETY: caller's contract.
+        unsafe { CStr::from_ptr(self.data()) }
     }
 }
 
@@ -192,9 +212,7 @@ pub(crate) unsafe fn buf_get_text(
     err: &mut Error,
 ) -> String_0 {
     if lnum >= i64::from(MAXLNUM) {
-        let out_of_range = c"out of range".as_ptr();
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(c"line index".as_ptr(), out_of_range, 0, false) };
+        *err = err_out_of_range(c"line index");
         return String_0::NULL;
     }
     // SAFETY: the caller's promise -- `buf` is a loaded buffer, and `lnum`

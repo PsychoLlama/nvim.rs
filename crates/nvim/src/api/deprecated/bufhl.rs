@@ -10,7 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, buffer_by_handle};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::{Bad, err_invalid};
+use crate::cstr;
 
 pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
@@ -96,12 +97,12 @@ pub unsafe fn nvim_buf_add_highlight(
     let out_of_range = c"out of range".as_ptr();
     if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
         // SAFETY: `err` is this frame's slot and both strings are static.
-        error = unsafe { err_invalid_ptr(c"line number".as_ptr(), out_of_range, 0, false) };
+        error = err_invalid(c"line number", Bad::Bare(unsafe { cstr::at(out_of_range) }));
         return (0 as Integer).reported(error);
     }
     if col_start < 0 as Integer || col_start > MAXCOL as ::core::ffi::c_int as Integer {
         // SAFETY: as above.
-        error = unsafe { err_invalid_ptr(c"column".as_ptr(), out_of_range, 0, false) };
+        error = err_invalid(c"column", Bad::Bare(unsafe { cstr::at(out_of_range) }));
         return (0 as Integer).reported(error);
     }
     if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {

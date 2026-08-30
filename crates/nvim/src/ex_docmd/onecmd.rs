@@ -697,7 +697,7 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
             return Some(ex_msg(e_cmdwin.as_ptr()));
         }
         if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
-            return Some(ex_msg(get_text_locked_msg()));
+            return Some(ex_msg(get_text_locked_msg().as_ptr()));
         }
     }
     None

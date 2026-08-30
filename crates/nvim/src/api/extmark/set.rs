@@ -12,7 +12,7 @@
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
 use crate::api::private::validate::{
-    err_bad_number, err_bad_value_ptr, err_expected, err_out_of_range,
+    Bad, err_bad_number, err_bad_value, err_expected, err_invalid, err_out_of_range,
 };
 use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
@@ -277,7 +277,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         virt_text.pos = kVPosInline;
                     } else if true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = unsafe { err_bad_value_ptr(c"virt_text_pos", str.data()) };
+                        error = err_bad_value(c"virt_text_pos", unsafe { str.as_cstr() });
                         break '_error;
                     }
                 }
@@ -325,7 +325,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                     } else if true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = unsafe { err_bad_value_ptr(c"hl_mode", str_0.data()) };
+                        error = err_bad_value(c"hl_mode", unsafe { str_0.as_cstr() });
                         break '_error;
                     }
                 }
@@ -343,7 +343,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
                     } else if !unsafe { strequal(c"trunc".as_ptr(), str_1.data()) } && true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = unsafe { err_bad_value_ptr(c"virt_lines_overflow", str_1.data()) };
+                        error = err_bad_value(c"virt_lines_overflow", unsafe { str_1.as_cstr() });
                         break '_error;
                     }
                 }
@@ -423,8 +423,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     .is_err()
                     {
-                        // SAFETY: the value the keyset carried, live for this call.
-                        error = unsafe { err_bad_value_ptr(c"sign_text", c"".as_ptr()) };
+                        error = err_invalid(c"sign_text", Bad::Unsaid);
                         break '_error;
                     }
                     sign.flags = (sign.flags as ::core::ffi::c_int

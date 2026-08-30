@@ -28,10 +28,8 @@
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
-use crate::types::{
-    Array, Error, ErrorType, String_0, int64_t, kErrorTypeValidation, kObjectTypeString,
-};
-use core::ffi::{CStr, c_char};
+use crate::types::{Array, Error, String_0, int64_t, kErrorTypeValidation, kObjectTypeString};
+use core::ffi::CStr;
 
 /// Whether `name` is a phrase rather than a single name, which is what
 /// decides between the quoted and unquoted spelling of every message here.
@@ -90,18 +88,6 @@ pub(crate) fn err_invalid(name: &CStr, bad: Bad<'_>) -> Error {
 /// caller spelled wrong.
 pub(crate) fn err_bad_value(name: &CStr, val: &CStr) -> Error {
     err_invalid(name, Bad::Quoted(val))
-}
-
-/// [`err_bad_value`] for a value still held as a raw pointer.
-///
-/// A null `val` keeps upstream's answer for one: the number 0, which is what
-/// `api_err_invalid`'s `val_n` defaulted to at every such call site.
-///
-/// # Safety
-/// `val` must be null or a C string that outlives the call.
-pub(crate) unsafe fn err_bad_value_ptr(name: &CStr, val: *const c_char) -> Error {
-    // SAFETY: the caller's promise.
-    unsafe { err_invalid_ptr(name.as_ptr(), val, 0, true) }
 }
 
 /// "Invalid `name`: `n`", for a number outside what the key accepts.
@@ -170,83 +156,6 @@ pub(crate) fn err_conflict(name: &CStr, name2: &CStr) -> Error {
             "Conflict: '{name}' not allowed with '{name2}'"
         )
     }
-}
-
-// ---------------------------------------------------------------------------
-// The pointer-shaped edge
-//
-// `api_err_invalid`/`api_err_exp`/`api_err_required`/`api_err_conflict` took
-// every name and value as a `*const c_char`, and a hundred call sites still
-// hold theirs that way. These are those four signatures minus the
-// out-parameter; they narrow to the `&CStr` forms above as phase 24's string
-// work reaches each caller.
-
-/// [`err_invalid`] over raw pointers: a null `val` selects `val_n`, and
-/// `quote_val` chooses between `Bad::Quoted` and `Bad::Bare`.
-///
-/// # Safety
-/// `name` is a C string and `val` is null or a C string.
-pub(crate) unsafe fn err_invalid_ptr(
-    name: *const c_char,
-    val: *const c_char,
-    val_n: int64_t,
-    quote_val: bool,
-) -> Error {
-    // SAFETY: the caller's promise.
-    let (name, val) = unsafe { (CStr::from_ptr(name), crate::cstr::at_opt(val)) };
-    match val {
-        Some(val) if quote_val => err_invalid(name, Bad::Quoted(val)),
-        Some(val) => err_invalid(name, Bad::Bare(val)),
-        None => err_invalid(name, Bad::Number(val_n)),
-    }
-}
-
-/// [`err_expected`] for a caller whose *name* is still a pointer -- a keyset
-/// field's `str`, or an option key read out of a table.
-///
-/// # Safety
-/// `name` is a C string.
-pub(crate) unsafe fn err_expected_ptr(
-    name: *const c_char,
-    expected: &CStr,
-    actual: Option<&CStr>,
-) -> Error {
-    // SAFETY: the caller's promise.
-    err_expected(unsafe { CStr::from_ptr(name) }, expected, actual)
-}
-
-/// [`err_required`] over a raw pointer.
-///
-/// # Safety
-/// `name` is a C string.
-pub(crate) unsafe fn err_required_ptr(name: *const c_char) -> Error {
-    // SAFETY: the caller's promise.
-    err_required(unsafe { CStr::from_ptr(name) })
-}
-
-/// [`err_conflict`] over raw pointers.
-///
-/// # Safety
-/// Both names are C strings.
-pub(crate) unsafe fn err_conflict_ptr(name: *const c_char, name2: *const c_char) -> Error {
-    // SAFETY: the caller's promise.
-    let (name, name2) = unsafe { (CStr::from_ptr(name), CStr::from_ptr(name2)) };
-    err_conflict(name, name2)
-}
-
-/// A failure of kind `kind` whose whole message is the string at `msg`:
-/// upstream's `api_set_error(err, kind, "%s", msg)`, and its bare
-/// `api_set_error(err, kind, msg)` too.
-///
-/// The bare form passed the message *as the format*, so a `%` in it printed
-/// as a conversion. Nothing in the tree ever put one there, and this spelling
-/// cannot.
-///
-/// # Safety
-/// `msg` is a C string.
-pub(crate) unsafe fn err_msg_ptr(kind: ErrorType, msg: *const c_char) -> Error {
-    // SAFETY: the caller's promise.
-    Error::from_message(kind, unsafe { CStr::from_ptr(msg) })
 }
 
 /// Whether every element of `arr` is a String, and -- when `disallow_nl` --

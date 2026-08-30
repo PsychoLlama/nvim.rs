@@ -132,6 +132,14 @@ impl String_0 {
     }
 }
 
+impl From<&CStr> for String_0 {
+    /// [`from_cstr`](String_0::from_cstr): a view of `s`, borrowing its
+    /// bytes.
+    fn from(s: &CStr) -> Self {
+        Self::from_cstr(s)
+    }
+}
+
 impl fmt::Debug for String_0 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.data.is_null() {

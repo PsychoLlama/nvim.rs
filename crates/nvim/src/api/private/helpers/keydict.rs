@@ -13,8 +13,9 @@ use super::{
     EMPTY_DICT, NIL, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool,
     api_typename, arena_dict, cstr_as_string, object_to_hl_id,
 };
-use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_expected;
 use crate::api_error;
+use crate::cstr;
 use crate::lua::executor::api_free_luaref;
 use crate::message_fmt::c_str_len;
 use crate::types::{
@@ -132,8 +133,9 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // the same string.
         let mut wrong_type = |want: ObjectType| {
             let (want, got) = (api_typename(want), api_typename(given.type_0));
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_expected_ptr(field.str, want, Some(got)) };
+            // SAFETY: a keyset field's name is a static NUL-terminated string.
+            let name = unsafe { cstr::at(field.str) };
+            *err = err_expected(name, want, Some(got));
         };
 
         match expected {

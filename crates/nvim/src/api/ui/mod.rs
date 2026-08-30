@@ -35,7 +35,7 @@ pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, api_typename, cstr_as_string, string_to_cstr,
 };
-use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
@@ -502,9 +502,7 @@ unsafe fn ui_set_option(
             return;
         };
         if fd < 0 {
-            let null = core::ptr::null();
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"stdin_fd".as_ptr(), null, fd, false) };
+            *err = err_bad_number(c"stdin_fd", fd);
             return;
         }
         // The editor reads its startup input from this descriptor,
@@ -553,9 +551,9 @@ unsafe fn ui_set_option(
             continue;
         }
         let Some(active) = value.as_boolean() else {
-            // SAFETY: the caller's promise about `err`, and `name` is the
-            // caller's C string.
-            unsafe { wrong_type(err, name.data(), kObjectTypeBoolean, value) };
+            // SAFETY: `name` is the caller's NUL-terminated option name.
+            let name = unsafe { name.as_cstr() };
+            wrong_type(err, name, kObjectTypeBoolean, value);
             return;
         };
         // Which protocol a UI speaks is decided at attach: the editor
@@ -571,9 +569,9 @@ unsafe fn ui_set_option(
         return;
     }
 
-    let unknown = name.data();
-    // SAFETY: the names and values are NUL-terminated strings.
-    unsafe { *err = err_invalid_ptr(c"UI option".as_ptr(), unknown, 0, true) };
+    // SAFETY: the caller's option name is NUL-terminated.
+    let unknown = unsafe { name.as_cstr() };
+    *err = err_bad_value(c"UI option", unknown);
 }
 
 /// `value` as the boolean `name` takes, or `None` with `err` set to say
@@ -585,8 +583,7 @@ unsafe fn ui_set_option(
 unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
     let got = value.as_boolean();
     if got.is_none() {
-        // SAFETY: the caller's promise about `err`; `name` is a C string.
-        unsafe { wrong_type(err, name.as_ptr(), kObjectTypeBoolean, value) };
+        wrong_type(err, name, kObjectTypeBoolean, value);
     }
     got
 }
@@ -599,8 +596,7 @@ unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Bo
 unsafe fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<Integer> {
     let got = value.as_integer();
     if got.is_none() {
-        // SAFETY: as [`want_boolean`].
-        unsafe { wrong_type(err, name.as_ptr(), kObjectTypeInteger, value) };
+        wrong_type(err, name, kObjectTypeInteger, value);
     }
     got
 }
@@ -613,8 +609,7 @@ unsafe fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<In
 unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<String_0> {
     let got = value.as_string();
     if got.is_none() {
-        // SAFETY: as [`want_boolean`].
-        unsafe { wrong_type(err, name.as_ptr(), kObjectTypeString, value) };
+        wrong_type(err, name, kObjectTypeString, value);
     }
     got
 }
@@ -624,11 +619,10 @@ unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<Str
 /// # Safety
 ///
 /// `name` a valid C string.
-unsafe fn wrong_type(err: &mut Error, name: *const c_char, expected: ObjectType, value: Object) {
+fn wrong_type(err: &mut Error, name: &CStr, expected: ObjectType, value: Object) {
     let expected = api_typename(expected);
     let actual = api_typename(value.type_0);
-    // SAFETY: the names and values are NUL-terminated strings.
-    unsafe { *err = err_expected_ptr(name, expected, Some(actual)) };
+    *err = err_expected(name, expected, Some(actual));
 }
 
 /// Resizes one grid, for a UI with `ext_multigrid`.

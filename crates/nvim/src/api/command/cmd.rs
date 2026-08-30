@@ -36,7 +36,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, has_key};
-use crate::api::private::validate::{err_bad_value, err_bad_value_ptr, err_expected, err_required};
+use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::cstr;
 use crate::guard::Suppress;
@@ -55,9 +55,10 @@ const EMPTY_ARRAY: Array = Array {
 // is still a pointer into the caller's own text rather than a literal.
 
 /// [`err_bad_value`] where the offending value is a pointer.
-fn err_invalid_ptr(err: &mut Error, name: &CStr, value: *const c_char) {
+fn err_invalid_at(err: &mut Error, name: &CStr, value: *const c_char) {
     // SAFETY: `value` is null or a NUL-terminated string of the caller's.
-    *err = unsafe { err_bad_value_ptr(name, value) };
+    let value = unsafe { cstr::at_opt(value) };
+    *err = err_bad_value(name, value.unwrap_or(c""));
 }
 
 /// [`err_expected`] where what arrived is a pointer.
@@ -728,7 +729,7 @@ unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
         let orig_arg = ea.arg;
         // SAFETY: as above.
         if unsafe { getargopt(ea).is_err() && !is_cmd_ni(ea.cmdidx) } {
-            err_invalid_ptr(err, c"argument ", orig_arg);
+            err_invalid_at(err, c"argument ", orig_arg);
             return false;
         }
     }

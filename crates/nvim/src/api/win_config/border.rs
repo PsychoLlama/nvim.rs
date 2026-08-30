@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::api::private::helpers::array_add;
-use crate::api::private::validate::{err_conflict_ptr, err_expected, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 
 /// "Invalid 'border': expected `want`", the shape every rejection here takes.
@@ -325,8 +325,8 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
             // time any window can be configured.
             Some(style) => Some(unsafe { style_slots(style) }),
             None => {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(c"border".as_ptr(), str.data(), 0, true) };
+                // SAFETY: the keyset's string is NUL-terminated.
+                *err = err_bad_value(c"border", unsafe { str.as_cstr() });
                 None
             }
         }
@@ -343,13 +343,8 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
 }
 
 /// # Safety
-/// `wp` must be null or a live window, `attribute` NUL-terminated and `err` a
-/// writable error slot.
-pub(crate) unsafe fn generate_api_error(
-    wp: *mut win_T,
-    attribute: *const ::core::ffi::c_char,
-    err: &mut Error,
-) {
+/// `wp` must be null or a live window.
+pub(crate) unsafe fn generate_api_error(wp: *mut win_T, attribute: &CStr, err: &mut Error) {
     // SAFETY: the caller's window.
     if !wp.is_null() && unsafe { (*wp).w_floating } {
         // SAFETY: the caller's window.
@@ -360,8 +355,7 @@ pub(crate) unsafe fn generate_api_error(
         );
         *err = e;
     } else {
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_conflict_ptr(attribute, c"non-float window".as_ptr()) };
+        *err = err_conflict(attribute, c"non-float window");
     }
 }
 

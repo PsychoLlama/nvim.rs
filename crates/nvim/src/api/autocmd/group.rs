@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::{err_bad_number, err_bad_value_ptr, err_expected};
+use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::winlayer::Live;
 
 pub unsafe fn nvim_create_augroup(
@@ -101,8 +101,9 @@ pub(crate) unsafe fn get_augroup_from_object(
         kObjectTypeString => {
             au_group = unsafe { augroup_find(group.data.string.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_bad_value_ptr(c"group", group.data.string.data()) };
+                // SAFETY: the object's tag says it is the string.
+                let name = unsafe { group.data.string.as_cstr() };
+                *err = err_bad_value(c"group", name);
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;

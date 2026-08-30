@@ -13,7 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::validate::{self, Bad, err_expected, err_invalid, err_msg_ptr};
+use crate::api::private::validate::{self, Bad, err_expected, err_invalid};
+use crate::cstr;
 use crate::kvec::Kvec;
 use crate::types::{ErrorType, NUL};
 use crate::winfloat::WIN_CONFIG_INIT;
@@ -73,7 +74,7 @@ pub(crate) fn store(err: ErrSlot, e: Error) {
 /// `val`'s bytes must be NUL-terminated.
 pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: String_0, quote_val: bool) {
     // SAFETY: the caller's promise about `val`.
-    let val = unsafe { crate::cstr::at_opt(val.data()) };
+    let val = unsafe { cstr::at_opt(val.data()) };
     let bad = match (val, quote_val) {
         (None, _) => Bad::Number(0),
         (Some(val), true) => Bad::Quoted(val),
@@ -110,7 +111,7 @@ pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
 /// `msg` must be NUL-terminated.
 pub(crate) unsafe fn err_msg_raw(err: ErrSlot, kind: ErrorType, msg: *const c_char) {
     // SAFETY: the caller's promise.
-    store(err, unsafe { err_msg_ptr(kind, msg) });
+    store(err, Error::from_message(kind, unsafe { cstr::at(msg) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -699,5 +700,5 @@ pub(crate) unsafe fn parse_win_config(
 fn generate_error(wp: Option<Win>, attribute: &CStr, err: ErrSlot) {
     let wp = wp.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: `wp` is null or a live window, and `err` names a live slot.
-    unsafe { generate_api_error(wp, attribute.as_ptr(), slot_mut(err)) };
+    unsafe { generate_api_error(wp, attribute, slot_mut(err)) };
 }

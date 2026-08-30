@@ -8,8 +8,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -43,7 +44,7 @@ unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
 unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
     let (what, got) = (what.as_ptr(), name.data());
     // SAFETY: the names and values are NUL-terminated strings.
-    unsafe { *err = err_invalid_ptr(what, got, 0, true) };
+    *err = err_bad_value(unsafe { cstr::at(what) }, unsafe { cstr::at(got) });
 }
 
 /// Remove the global mark `name`.

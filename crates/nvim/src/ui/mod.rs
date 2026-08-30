@@ -80,7 +80,7 @@ use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
 use core::ffi::c_int;
 
-use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tabs};
 /// The screen the editor draws into when nothing else claims a grid.
 const DEFAULT_GRID_HANDLE: handle_T = 1;
@@ -858,9 +858,7 @@ pub fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: &
     }
     let wp = unsafe { get_win_by_grid_handle(grid_handle) };
     if wp.is_null() {
-        let (what, no_text) = (c"window handle".as_ptr(), core::ptr::null());
-        // SAFETY: the names and values are NUL-terminated strings.
-        unsafe { *err = err_invalid_ptr(what, no_text, grid_handle as i64, false) };
+        *err = err_bad_number(c"window handle", grid_handle as i64);
         return;
     }
     // SAFETY: `wp` is the window the grid handle names, checked non-null

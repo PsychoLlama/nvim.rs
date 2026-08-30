@@ -14,6 +14,7 @@
 //! everything here starts at bytes the transport handed over and ends at a
 //! handler, a waiting call frame or a closed channel.
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -36,7 +37,6 @@ use crate::ui_client::ui_client_event_raw_line;
 use super::envelope::serialize_response;
 use super::known::*;
 use super::{Chan, NIL, RequestEvent, chan_close_on_err, trace};
-use crate::api::private::validate::err_msg_ptr;
 
 // ---------------------------------------------------------------------------
 // Receiving
@@ -363,7 +363,7 @@ unsafe fn send_error(
     let mut e = Error::none();
     let mut answer = NIL;
     // SAFETY: the message the caller handed over, live for this call.
-    e = unsafe { err_msg_ptr(kErrorTypeException, err) };
+    e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });
     let (to, out) = (chan.as_ptr(), &raw mut answer);
     unsafe { serialize_response(to, handler, type_0, id, &mut e, out) };
     e.clear();

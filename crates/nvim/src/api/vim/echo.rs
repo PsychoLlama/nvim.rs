@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
-use crate::api::private::validate::{err_expected, err_invalid_ptr, err_required_ptr};
+use crate::api::private::validate::{err_expected, err_out_of_range, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
@@ -88,11 +88,10 @@ pub unsafe fn nvim_echo(
             error = err_expected(c"status", names, got);
             true
         } else if is_progress && !(0..=100).contains(&opts.percent) {
-            let range = c"out of range".as_ptr();
-            error = err_invalid_ptr(c"percent".as_ptr(), range, 0, false);
+            error = err_out_of_range(c"percent");
             true
         } else if is_progress && opts.source.is_empty() {
-            error = err_required_ptr(c"opts.source".as_ptr());
+            error = err_required(c"opts.source");
             true
         } else if opts.id.type_0 == kObjectTypeInteger && !msg_id_exists(opts.id.data.integer) {
             let id = opts.id.data.integer;

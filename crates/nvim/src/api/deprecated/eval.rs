@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
 
@@ -68,13 +68,13 @@ pub unsafe fn nvim_call_atomic(
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
                 // SAFETY: `err` is this frame's slot and the names are
                 // `api_typename`'s own statics.
-                error = unsafe { err_expected_ptr(c"'calls' item".as_ptr(), want, Some(got)) };
+                error = err_expected(c"'calls' item", want, Some(got));
                 break '_theend;
             };
             if call.size != 2 as size_t {
                 let want = c"2-item Array";
                 // SAFETY: as above.
-                error = unsafe { err_expected_ptr(c"'calls' item".as_ptr(), want, None) };
+                error = err_expected(c"'calls' item", want, None);
                 break '_theend;
             }
             // SAFETY: the pair has both of its items.
@@ -82,13 +82,13 @@ pub unsafe fn nvim_call_atomic(
             let Some(name) = head.as_string() else {
                 let (want, got) = (api_typename(kObjectTypeString), api_typename(head.type_0));
                 // SAFETY: as above.
-                error = unsafe { err_expected_ptr(c"name".as_ptr(), want, Some(got)) };
+                error = err_expected(c"name", want, Some(got));
                 break '_theend;
             };
             let Some(args) = tail.as_array() else {
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.type_0));
                 // SAFETY: as above.
-                error = unsafe { err_expected_ptr(c"call args".as_ptr(), want, Some(got)) };
+                error = err_expected(c"call args", want, Some(got));
                 break '_theend;
             };
 

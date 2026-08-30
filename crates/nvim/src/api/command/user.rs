@@ -11,7 +11,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
-use crate::api::private::validate::{err_bad_number, err_expected_ptr, err_invalid_ptr};
+use crate::api::private::validate::{
+    Bad, err_bad_number, err_bad_value, err_expected, err_invalid,
+};
 use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::c_str;
@@ -122,15 +124,15 @@ pub unsafe fn create_user_command(
         // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
         let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
         if !named {
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"command name".as_ptr(), cmd_name, 0, true) };
+            // SAFETY: the caller's command name is NUL-terminated.
+            *err = err_bad_value(c"command name", unsafe { name.as_cstr() });
             break '_err;
         }
         // SAFETY: the name validated, so it has at least one byte.
         if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
-            let what = c"command name (must start with uppercase)".as_ptr();
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(what, cmd_name, 0, true) };
+            let what = c"command name (must start with uppercase)";
+            // SAFETY: the caller's command name is NUL-terminated.
+            *err = err_bad_value(what, unsafe { name.as_cstr() });
             break '_err;
         }
         let is_set = opts.is_set__user_command_;
@@ -153,8 +155,8 @@ pub unsafe fn create_user_command(
         } else if let Some(nargs) = opts.nargs.as_string() {
             let value = nargs.data();
             if nargs.len() > 1 {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
+                // SAFETY: the keyset's string is NUL-terminated.
+                *err = err_bad_value(c"nargs", unsafe { nargs.as_cstr() });
                 break '_err;
             }
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable
@@ -165,14 +167,13 @@ pub unsafe fn create_user_command(
                 b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
                 b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
                 _ => {
-                    // SAFETY: the names and values are NUL-terminated strings.
-                    unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
+                    // SAFETY: the keyset's string is NUL-terminated.
+                    *err = err_bad_value(c"nargs", unsafe { nargs.as_cstr() });
                     break '_err;
                 }
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__nargs) {
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), c"".as_ptr(), 0, true) };
+            *err = err_invalid(c"nargs", Bad::Unsaid);
             break '_err;
         }
 
@@ -190,8 +191,7 @@ pub unsafe fn create_user_command(
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
             let percent = unsafe { *range.data() } as u8 == b'%';
             if !(percent && range.len() == 1) {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
+                *err = err_invalid(c"range", Bad::Unsaid);
                 break '_err;
             }
             argt |= ExArgt::RANGE | ExArgt::DFLALL;
@@ -201,8 +201,7 @@ pub unsafe fn create_user_command(
             def = range;
             addr_type_arg = CmdAddr::Lines;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__range) {
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
+            *err = err_invalid(c"range", Bad::Unsaid);
             break '_err;
         }
 
@@ -217,8 +216,7 @@ pub unsafe fn create_user_command(
             addr_type_arg = CmdAddr::Other;
             def = count;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__count) {
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_invalid_ptr(c"count".as_ptr(), c"".as_ptr(), 0, true) };
+            *err = err_invalid(c"count", Bad::Unsaid);
             break '_err;
         }
 
@@ -226,8 +224,7 @@ pub unsafe fn create_user_command(
             let Some(addr) = opts.addr.as_string() else {
                 let expected = api_typename(kObjectTypeString);
                 let actual = api_typename(opts.addr.type_0);
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_expected_ptr(c"addr".as_ptr(), expected, Some(actual)) };
+                *err = err_expected(c"addr", expected, Some(actual));
                 break '_err;
             };
             let value = addr.data();
@@ -237,8 +234,8 @@ pub unsafe fn create_user_command(
             // `vallen` readable bytes, and `slot` is this frame's.
             let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
             if parsed.is_err() {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(c"addr".as_ptr(), value, 0, true) };
+                // SAFETY: the keyset's string is NUL-terminated.
+                *err = err_bad_value(c"addr", unsafe { addr.as_cstr() });
                 break '_err;
             }
             argt |= ExArgt::RANGE;
@@ -284,14 +281,13 @@ pub unsafe fn create_user_command(
             let parsed =
                 unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
             if parsed.is_err() {
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_invalid_ptr(c"complete".as_ptr(), value, 0, true) };
+                // SAFETY: the keyset's string is NUL-terminated.
+                *err = err_bad_value(c"complete", unsafe { complete.as_cstr() });
                 break '_err;
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__complete) {
             let expected = c"Function or String";
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_expected_ptr(c"complete".as_ptr(), expected, None) };
+            *err = err_expected(c"complete", expected, None);
             break '_err;
         }
 
@@ -299,8 +295,7 @@ pub unsafe fn create_user_command(
             let Some(preview) = opts.preview.as_luaref() else {
                 let expected = api_typename(kObjectTypeLuaRef);
                 let actual = api_typename(opts.preview.type_0);
-                // SAFETY: the names and values are NUL-terminated strings.
-                unsafe { *err = err_expected_ptr(c"preview".as_ptr(), expected, Some(actual)) };
+                *err = err_expected(c"preview", expected, Some(actual));
                 break '_err;
             };
             argt |= ExArgt::PREVIEW;
@@ -321,8 +316,7 @@ pub unsafe fn create_user_command(
             rep = body.data().cast_const();
         } else {
             let expected = c"Function or String";
-            // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_expected_ptr(c"command".as_ptr(), expected, None) };
+            *err = err_expected(c"command", expected, None);
             break '_err;
         }
 

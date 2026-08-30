@@ -10,7 +10,8 @@
 
 use super::{EMPTY_HL_MESSAGE, NIL, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;
-use crate::api::private::validate::{err_expected_ptr, err_invalid_ptr};
+use crate::api::private::validate::{err_bad_value, err_expected};
+use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::kvec::InitVec;
@@ -417,7 +418,7 @@ pub(crate) unsafe fn api_object_to_bool(
         return nil_value;
     }
     // SAFETY: the names and values are NUL-terminated strings.
-    unsafe { *err = err_expected_ptr(what, c"boolean", None) };
+    *err = err_expected(unsafe { cstr::at(what) }, c"boolean", None);
     false
 }
 
@@ -437,7 +438,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut
         return if (1..=known).contains(&id) { id } else { 0 };
     }
     // SAFETY: the names and values are NUL-terminated strings.
-    unsafe { *err = err_invalid_ptr(c"hl_group".as_ptr(), what, 0, true) };
+    *err = err_bad_value(c"hl_group", unsafe { cstr::at(what) });
     0
 }
 
@@ -469,7 +470,7 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) 
         let Some(chunk) = item.as_array() else {
             let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
             // SAFETY: the names and values are NUL-terminated strings.
-            unsafe { *err = err_expected_ptr(c"chunk".as_ptr(), want, Some(got)) };
+            *err = err_expected(c"chunk", want, Some(got));
             // SAFETY: `hl_msg` is this frame's, and owns its chunks.
             unsafe { hl_msg_free(hl_msg) };
             return EMPTY_HL_MESSAGE;

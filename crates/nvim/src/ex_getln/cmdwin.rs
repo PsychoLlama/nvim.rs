@@ -12,9 +12,9 @@ use crate::buffer::{BufRef, current_buf};
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::Ctrl_C;
-use crate::os::cshim::gettext_ptr;
 use crate::types::{CmdModFlags, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.
@@ -31,15 +31,15 @@ pub unsafe fn text_locked() -> bool {
 /// Report a command that is not allowed while the cmdline window is open or
 /// the command line is being edited another way.
 pub unsafe fn text_locked_msg() {
-    unsafe { emsg(gettext_ptr(get_text_locked_msg())) };
+    emsg(gettext(get_text_locked_msg()));
 }
 
 /// The message [`text_locked_msg`] gives: which of the two locks is on.
-pub fn get_text_locked_msg() -> *const ::core::ffi::c_char {
+pub fn get_text_locked_msg() -> &'static CStr {
     if cmdwin_type.get() != 0 {
-        e_cmdwin.as_ptr()
+        e_cmdwin
     } else {
-        e_textlock.as_ptr()
+        e_textlock
     }
 }
 

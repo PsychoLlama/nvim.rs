@@ -1470,9 +1470,7 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
         r#"
 /// Refuses a call made while the text is locked.
 fn text_locked_error(error: &mut Error) {
-    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
-    // message.
-    *error = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
+    *error = Error::from_message(kErrorTypeException, get_text_locked_msg());
 }
 "#,
     ),
@@ -1734,7 +1732,6 @@ fn generate(
         "use crate::api::private::helpers::{{{}}};",
         helpers.join(", ")
     ));
-    uses.push("use crate::api::private::validate::err_msg_ptr;".into());
     uses.push("use crate::api_error;".into());
     uses.push("use crate::message_fmt::msg_cstr;".into());
     if referenced.contains("expr_map_locked") {
@@ -2680,9 +2677,7 @@ const LUA_READERS: &[(&str, &str)] = &[
         r#"
 /// Refuses a call made while the text is locked.
 fn text_locked_error(err: &mut Error) {
-    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
-    // message.
-    *err = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
+    *err = Error::from_message(kErrorTypeException, get_text_locked_msg());
 }
 "#,
     ),
@@ -3320,7 +3315,6 @@ fn generate_lua(
         ])
         .join(", ")
     ));
-    uses.push("use crate::api::private::validate::err_msg_ptr;".into());
     uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());

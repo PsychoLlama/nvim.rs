@@ -11,9 +11,7 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, NIL, Reported, array_add, dict_put, dict_put_str, has_key,
 };
-use crate::api::private::validate::{
-    err_bad_number, err_bad_value_ptr, err_conflict_ptr, err_expected,
-};
+use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
@@ -63,7 +61,8 @@ pub unsafe fn nvim_get_autocmds(
                 group = unsafe { augroup_find(opts.group.data.string.data()) };
                 if !(group >= 0 as ::core::ffi::c_int) {
                     // SAFETY: the value the keyset carried, live for this call.
-                    error = unsafe { err_bad_value_ptr(c"group", opts.group.data.string.data()) };
+                    let name = unsafe { opts.group.data.string.as_cstr() };
+                    error = err_bad_value(c"group", name);
                     break '_cleanup;
                 }
             }
@@ -111,7 +110,7 @@ pub unsafe fn nvim_get_autocmds(
                         < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                     {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = unsafe { err_bad_value_ptr(c"event", v.data.string.data()) };
+                        error = err_bad_value(c"event", unsafe { v.data.string.as_cstr() });
                         break '_cleanup;
                     }
                     event_set[event_nr as usize] = true;
@@ -138,8 +137,8 @@ pub unsafe fn nvim_get_autocmds(
                             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                         {
                             // SAFETY: the value the keyset carried, live for this call.
-                            error =
-                                unsafe { err_bad_value_ptr(c"event", event_v.data.string.data()) };
+                            let name = unsafe { event_v.data.string.as_cstr() };
+                            error = err_bad_value(c"event", name);
                             break '_cleanup;
                         }
                         event_set[event_nr_0 as usize] = true;
@@ -165,9 +164,9 @@ pub unsafe fn nvim_get_autocmds(
         if !(!(has_key(opts.is_set__get_autocmds_, 2 as ::core::ffi::c_int))
             || !(has_key(opts.is_set__get_autocmds_, 5 as ::core::ffi::c_int)))
         {
-            error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
+            error = err_conflict(c"buf", c"buffer");
         } else if !(!(has_key(opts.is_set__get_autocmds_, 6 as ::core::ffi::c_int)) || !has_buf) {
-            error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
+            error = err_conflict(c"pattern", c"buf");
         } else {
             pattern_filter_count = 0 as ::core::ffi::c_int;
             's_506: {

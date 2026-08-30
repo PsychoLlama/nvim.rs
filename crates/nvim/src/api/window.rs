@@ -19,7 +19,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
 
-use crate::api::private::validate::{err_expected, err_invalid_ptr, err_out_of_range};
+use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_close, e_cmdwin};
 use crate::message::emsg;
@@ -369,9 +369,7 @@ pub fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
         return ().reported(err);
     };
     if ns_id < -1 {
-        let (name, empty) = (c"namespace".as_ptr(), c"".as_ptr());
-        // SAFETY: `err` is this frame's own; the arguments are static strings.
-        err = unsafe { err_invalid_ptr(name, empty, 0, true) };
+        err = err_invalid(c"namespace", Bad::Unsaid);
         return ().reported(err);
     }
     w.w_ns_hl = number_as_int(ns_id);

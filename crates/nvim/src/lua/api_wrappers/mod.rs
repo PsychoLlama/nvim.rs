@@ -120,7 +120,6 @@ use crate::api::private::helpers::{
     api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
     api_luarefs_free_object,
 };
-use crate::api::private::validate::err_msg_ptr;
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -509,9 +508,7 @@ unsafe fn bind(
 
 /// Refuses a call made while the text is locked.
 fn text_locked_error(err: &mut Error) {
-    // SAFETY: `get_text_locked_msg` answers with a static NUL-terminated
-    // message.
-    *err = unsafe { err_msg_ptr(kErrorTypeException, get_text_locked_msg()) };
+    *err = Error::from_message(kErrorTypeException, get_text_locked_msg());
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
