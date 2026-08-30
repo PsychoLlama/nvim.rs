@@ -9,6 +9,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
+use crate::api_error;
+use crate::message_fmt::c_str;
 
 /// The current buffer's handle and the cursor's line, as the deprecated
 /// `buffer_*_line` trio take them -- a zero-based index.
@@ -56,16 +58,14 @@ pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
 /// `name` must name its own bytes and `arena` must be the caller's.
 pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the caller's promise about `name`.
     let mut di = unsafe { find_globvar(name) };
     if di.is_null() {
         // SAFETY: as above.
         let loaded = unsafe { script_autoload(name.data(), name.len(), false) };
         if !loaded || aborting() {
-            // SAFETY: `err` is this frame's own slot, and the format takes the
-            // one C string it is given.
-            unsafe { key_not_found(err, name) };
+            // SAFETY: `name` names its own NUL-terminated bytes.
+            error = unsafe { key_not_found(name) };
             return NIL.reported(error);
         }
         // SAFETY: as above.
@@ -73,7 +73,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
     }
     if di.is_null() {
         // SAFETY: as above.
-        unsafe { key_not_found(err, name) };
+        error = unsafe { key_not_found(name) };
         return NIL.reported(error);
     }
     // SAFETY: `di` is the live dictionary item just found, and `arena` is the
@@ -94,11 +94,11 @@ unsafe fn find_globvar(name: String_0) -> *mut dictitem_T {
 /// "Key not found: `name`".
 ///
 /// # Safety
-/// `err` must be the caller's error slot and `name` must be NUL-terminated.
-unsafe fn key_not_found(err: *mut Error, name: String_0) {
-    let fmt = c"Key not found: %s".as_ptr();
-    // SAFETY: the caller's promise; the format takes the one C string given.
-    unsafe { api_set_error(err, kErrorTypeValidation, fmt, name.data()) };
+/// `name` must be NUL-terminated.
+unsafe fn key_not_found(name: String_0) -> Error {
+    // SAFETY: the caller's promise.
+    let name = unsafe { c_str(name.data()) };
+    api_error!(kErrorTypeValidation, "Key not found: {name}")
 }
 
 /// Set the global variable `name` to `value`.

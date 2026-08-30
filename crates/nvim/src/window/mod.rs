@@ -37,7 +37,6 @@
 use core::ffi::c_int;
 use core::ptr;
 
-use crate::api::private::helpers::api_set_error;
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
 use crate::buffer::{buf_hide, buf_is_quickfix};
 use crate::cursor::check_cursor;
@@ -100,6 +99,7 @@ pub use self::snapshot::*;
 pub use self::split::*;
 pub use self::tabpage::*;
 pub use self::winclose::*;
+use crate::api::private::validate::err_msg_ptr;
 
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleMinimal: WinStyle = 1;
@@ -502,8 +502,8 @@ fn first_tab() -> TabPage {
 
 /// `api_set_error(err, kErrorTypeException, "%s", msg)`.
 fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
-    // SAFETY: an error slot to fill in, and a NUL-terminated message static.
-    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+    // SAFETY: the message the caller handed over, live for this call.
+    *err = unsafe { err_msg_ptr(kErrorTypeException, msg) };
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.

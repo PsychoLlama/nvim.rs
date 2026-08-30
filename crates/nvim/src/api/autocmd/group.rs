@@ -10,38 +10,10 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::err_bad_value_ptr;
+use crate::api::private::validate::err_expected;
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
-use core::ptr;
-
-/// "Invalid `name`: `n`", for a handle or id that names nothing.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
-    let none = ptr::null();
-    // SAFETY: the caller's promise; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
-}
-
-/// "Invalid `name`: expected `want`", naming `got` when it says.
-///
-/// # Safety
-/// `err` must be the caller's error slot, `want` a C string and `got` null
-/// or a C string.
-unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
-}
-
-/// "Invalid `name`: '`val`'", for a value the caller spelled wrong.
-///
-/// # Safety
-/// `err` must be the caller's error slot and `val` null or a C string.
-unsafe fn err_bad_value(err: *mut Error, name: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_invalid(err, name.as_ptr(), val, 0, true) };
-}
 
 pub unsafe fn nvim_create_augroup(
     channel_id: uint64_t,
@@ -51,7 +23,6 @@ pub unsafe fn nvim_create_augroup(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut augroup_name_0: *mut ::core::ffi::c_char = name.data();
     let mut clear_autocmds: bool = if opts.is_set__create_augroup_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
@@ -69,7 +40,7 @@ pub unsafe fn nvim_create_augroup(
         // The guard restores on the way out regardless -- upstream's
         // `WITH_SCRIPT_CONTEXT` puts the restore *after* the block, so
         // this `return` skips it there.
-        unsafe { api_set_error(err, kErrorTypeException, c"Failed to set augroup".as_ptr()) };
+        error = Error::from_message(kErrorTypeException, c"Failed to set augroup");
         return (-1 as Integer).reported(error);
     }
     if clear_autocmds {
@@ -134,8 +105,8 @@ pub(crate) unsafe fn get_augroup_from_object(
         kObjectTypeString => {
             au_group = unsafe { augroup_find(group.data.string.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_bad_value(err, c"group", group.data.string.data()) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_bad_value_ptr(c"group", group.data.string.data()) };
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;
@@ -148,18 +119,18 @@ pub(crate) unsafe fn get_augroup_from_object(
                 augroup_name(au_group)
             };
             if !unsafe { augroup_exists(name) } {
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_bad_number(err, c"group", au_group as int64_t) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_bad_number(c"group", au_group as int64_t) };
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;
         }
         _ => {
             if true {
-                let want = c"String or Integer".as_ptr();
+                let want = c"String or Integer";
                 let got = api_typename(group.type_0);
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_expected(err, c"group", want, got) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_expected(c"group", want, Some(got)) };
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
         }

@@ -14,7 +14,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api_error;
 use crate::kvec::InitVec;
+use crate::message_fmt::msg_bytes;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -174,18 +176,19 @@ unsafe fn parse_flags(flags: String_0, err: *mut Error) -> Option<c_int> {
             b'l' => pflags |= kExprFlagsParseLet as c_int,
             // A NUL has no `%c` spelling worth printing.
             0 => {
-                let fmt = c"Invalid flag: '\\0' (%u)".as_ptr();
                 let code = ch as c_uint;
-                // SAFETY: the caller's promise about `err`; the format takes
-                // the one integer it is given.
-                unsafe { api_set_error(err, kErrorTypeValidation, fmt, code) };
+                // SAFETY: the caller's promise about `err`.
+                unsafe { *err = api_error!(kErrorTypeValidation, "Invalid flag: '\\0' ({code})") };
                 return None;
             }
             _ => {
-                let fmt = c"Invalid flag: '%c' (%u)".as_ptr();
-                let (shown, code) = (ch as c_int, ch as c_uint);
-                // SAFETY: as above, with the two integers.
-                unsafe { api_set_error(err, kErrorTypeValidation, fmt, shown, code) };
+                let code = ch as c_uint;
+                let raw = ch as u8;
+                let shown = msg_bytes(core::slice::from_ref(&raw));
+                // SAFETY: as above.
+                unsafe {
+                    *err = api_error!(kErrorTypeValidation, "Invalid flag: '{shown}' ({code})");
+                };
                 return None;
             }
         }

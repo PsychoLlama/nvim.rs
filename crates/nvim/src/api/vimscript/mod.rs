@@ -2,10 +2,9 @@
 
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{
-    api_set_error, api_set_sctx, arena_array, arena_dict, arena_string, cstr_as_string,
-    cstr_to_string, try_enter, try_leave,
+    api_set_sctx, arena_array, arena_dict, arena_string, cstr_as_string, cstr_to_string, try_enter,
+    try_leave,
 };
-use crate::api::private::validate::api_err_exp;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{tv_clear, tv_dict_find};
 use crate::eval::userfunc::call_func;

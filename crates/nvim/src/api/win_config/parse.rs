@@ -13,8 +13,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::api::private::validate;
+use crate::api::private::validate::Bad;
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid;
+use crate::api::private::validate::err_msg_ptr;
 use crate::kvec::Kvec;
-use crate::types::{ErrorType, NUL, ObjectType, handle_T};
+use crate::types::{ErrorType, NUL};
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Live, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -40,52 +45,56 @@ pub(crate) type WinCfg = Live<WinConfig>;
 pub(crate) type ErrSlot = Live<Error>;
 
 // ---------------------------------------------------------------------------
-// The validation messages, as safe calls
+// The validation messages, written through the slot
 //
-// `api/private/validate.rs` spells its four messages as `unsafe fn`s over
-// `*mut Error` and `*const c_char`, so a call site written out in full is
-// seven lines inside an `unsafe` region -- and this family has forty of them.
-// Every name they are handed here is a literal and the slot is always the
-// caller's own, so the promise is discharged once, here.
+// `api/private/validate.rs` answers with an `Error`; this family passes the
+// caller's slot around as an [`ErrSlot`] instead of returning, so each of
+// these is that answer stored. Every name they are handed is a literal and
+// the slot is always the caller's own, so the promise is discharged once,
+// here.
+
+/// Store `e` in the caller's slot -- what every reporter here ends with, and
+/// what a call site with a message of its own spells directly.
+pub(crate) fn store(err: ErrSlot, e: Error) {
+    // SAFETY: `err` names a live slot, which is what `Live` records.
+    unsafe { *err.raw() = e };
+}
 
 /// "Invalid `name`: '`val`'", naming the keyset string that was wrong.
 ///
 /// # Safety
 /// `val`'s bytes must be NUL-terminated.
 pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: String_0, quote_val: bool) {
-    // SAFETY: the caller's promise about `val`; `err` names a live slot.
-    unsafe { api_err_invalid(err.raw(), name.as_ptr(), val.data(), 0, quote_val) };
+    // SAFETY: the caller's promise about `val`.
+    let val = unsafe { crate::cstr::at_opt(val.data()) };
+    let bad = match (val, quote_val) {
+        (None, _) => Bad::Number(0),
+        (Some(val), true) => Bad::Quoted(val),
+        (Some(val), false) => Bad::Bare(val),
+    };
+    store(err, err_invalid(name, bad));
 }
 
 /// "Invalid `name`: expected `expected`", naming what arrived when `actual`
 /// says.
 pub(crate) fn err_exp(err: ErrSlot, name: &CStr, expected: &CStr, actual: Option<&CStr>) {
-    let actual = actual.map_or(ptr::null(), CStr::as_ptr);
-    // SAFETY: as [`err_invalid_str`].
-    unsafe { api_err_exp(err.raw(), name.as_ptr(), expected.as_ptr(), actual) };
+    store(err, err_expected(name, expected, actual));
 }
 
 /// "Required: `name`", for a key the caller left out.
 pub(crate) fn err_required(err: ErrSlot, name: &CStr) {
-    // SAFETY: as [`err_invalid_str`].
-    unsafe { api_err_required(err.raw(), name.as_ptr()) };
+    store(err, validate::err_required(name));
 }
 
 /// "Conflict: `name` not allowed with `name2`", for two keys that exclude
 /// each other.
 pub(crate) fn err_conflict(err: ErrSlot, name: &CStr, name2: &CStr) {
-    // SAFETY: as [`err_invalid_str`].
-    unsafe { api_err_conflict(err.raw(), name.as_ptr(), name2.as_ptr()) };
+    store(err, validate::err_conflict(name, name2));
 }
 
-/// `api_set_error` with a message that takes no arguments.
-///
-/// The message goes through a `%s` rather than being the format itself, which
-/// is the same text for every literal in this family and cannot become
-/// anything else.
+/// A failure of kind `kind` whose whole message is `msg`.
 pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
-    // SAFETY: as [`err_invalid_str`]; the format takes the one string given.
-    unsafe { api_set_error(err.raw(), kind, c"%s".as_ptr(), msg.as_ptr()) };
+    store(err, Error::from_message(kind, msg));
 }
 
 /// [`err_msg`] for the messages `main`'s statics hold rather than a literal.
@@ -93,20 +102,8 @@ pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
 /// # Safety
 /// `msg` must be NUL-terminated.
 pub(crate) unsafe fn err_msg_raw(err: ErrSlot, kind: ErrorType, msg: *const c_char) {
-    // SAFETY: as [`err_invalid_str`]; the format takes the one string given.
-    unsafe { api_set_error(err.raw(), kind, c"%s".as_ptr(), msg) };
-}
-
-/// [`err_msg`] for the messages that name a window handle with a `%d`.
-pub(crate) fn err_msg_handle(err: ErrSlot, kind: ErrorType, fmt: &CStr, handle: handle_T) {
-    // SAFETY: as [`err_invalid_str`]; the format takes the one `int` given.
-    unsafe { api_set_error(err.raw(), kind, fmt.as_ptr(), handle) };
-}
-
-/// [`api_typename`] as a `CStr`: it answers one of a fixed set of literals.
-pub(crate) fn typename(t: ObjectType) -> &'static CStr {
-    // SAFETY: every answer is a string literal with static storage.
-    unsafe { CStr::from_ptr(api_typename(t)) }
+    // SAFETY: the caller's promise.
+    store(err, unsafe { err_msg_ptr(kind, msg) });
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +261,7 @@ unsafe fn parse_bordertext(
     err: ErrSlot,
 ) {
     if bordertext.type_0 != kObjectTypeString && bordertext.type_0 != kObjectTypeArray {
-        let actual = typename(bordertext.type_0);
+        let actual = api_typename(bordertext.type_0);
         err_exp(err, c"title/footer", c"String or Array", Some(actual));
         return;
     }

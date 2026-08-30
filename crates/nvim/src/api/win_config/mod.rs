@@ -6,9 +6,6 @@ use crate::api::private::helpers::{
     cstr_to_string, cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key,
     object_to_hl_id, try_enter, try_leave,
 };
-use crate::api::private::validate::{
-    api_err_conflict, api_err_exp, api_err_invalid, api_err_required,
-};
 use crate::autocmd::{
     EVENT_WINNEW, apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds,
 };

@@ -5,9 +5,7 @@ use crate::api::private::helpers::{
     arena_take_arraybuilder, cstr_as_string, find_buffer_by_handle, string_to_cstr, try_enter,
     try_leave,
 };
-use crate::api::private::validate::{
-    api_err_conflict, api_err_exp, api_err_invalid, api_err_required, check_string_array,
-};
+use crate::api::private::validate::check_string_array;
 use crate::autocmd::{
     EVENT_BUFADD, apply_autocmds_group, au_get_autocmds_for_event, aucmd_del_for_event_and_group,
     aucmd_span_pattern, augroup_add, augroup_del, augroup_exists, augroup_find, augroup_name,

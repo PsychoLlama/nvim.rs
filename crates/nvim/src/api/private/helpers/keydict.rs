@@ -13,7 +13,7 @@ use super::{
     EMPTY_DICT, NIL, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool,
     api_set_error, api_typename, arena_dict, cstr_as_string, object_to_hl_id,
 };
-use crate::api::private::validate::api_err_exp;
+use crate::api::private::validate::err_expected_ptr;
 use crate::lua::executor::api_free_luaref;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
@@ -132,9 +132,8 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // the same string.
         let wrong_type = |want: ObjectType| {
             let (want, got) = (api_typename(want), api_typename(given.type_0));
-            // SAFETY: `err` is the caller's slot, and the names are the
-            // table's own static strings.
-            unsafe { api_err_exp(err, field.str, want, got) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_expected_ptr(field.str, want, Some(got)) };
         };
 
         match expected {

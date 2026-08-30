@@ -21,6 +21,7 @@ use super::*;
 use crate::api::private::helpers::{
     api_set_error, cstr_as_string, find_window_by_handle, try_enter, try_leave,
 };
+use crate::api::private::validate::err_msg_ptr;
 use crate::buffer::do_buffer;
 use crate::decoration::clear_virttext;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -494,8 +495,8 @@ pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
 pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> bool {
     if split_disallowed.get() > 0 {
         let msg = c"E242: Can't split a window while closing another".as_ptr();
-        // SAFETY: a live `Error` and a static message.
-        unsafe { api_set_error(err, kErrorTypeException, msg) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         return false;
     }
     // SAFETY: the caller's promise -- a live window, whose buffer is live.
@@ -505,8 +506,8 @@ pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> b
         != 0
     {
         let msg = e_cannot_split_window_when_closing_buffer.as_ptr();
-        // SAFETY: as above.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         return false;
     }
     true

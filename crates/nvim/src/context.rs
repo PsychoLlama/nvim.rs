@@ -16,9 +16,10 @@
 
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::{
-    api_free_array, api_free_string, api_set_error, arena_dict, copy_array, copy_object,
-    cstr_as_string, string_to_array,
+    api_free_array, api_free_string, arena_dict, copy_array, copy_object, cstr_as_string,
+    string_to_array,
 };
+use crate::api::private::validate::err_msg_ptr;
 use crate::api::vimscript::exec_impl;
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::tv_clear;
@@ -349,7 +350,8 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
     let (data, size) = sbuf.parts_mut();
     if !unsafe { encode_vim_list_to_buf(list_tv.vval.v_list, size, data) } {
         let why = c"E474: Failed to convert list to msgpack string buffer".as_ptr();
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), why) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, why) };
     }
     unsafe { tv_clear(&raw mut list_tv) };
     sbuf

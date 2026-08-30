@@ -242,8 +242,7 @@ pub unsafe fn nvim_parse_cmd(
         match &errormsg {
             // SAFETY: `err` is live; the message takes no argument.
             None => {
-                let msg = c"Parsing command-line".as_ptr();
-                unsafe { api_set_error(err, kErrorTypeException, msg) };
+                error = Error::from_message(kErrorTypeException, c"Parsing command-line");
             }
             // SAFETY: `err` is live and `errormsg` is the parser's own
             // NUL-terminated message, which the format's one `%s` takes.

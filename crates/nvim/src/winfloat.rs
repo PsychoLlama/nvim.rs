@@ -24,7 +24,8 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
-use crate::api::private::helpers::{api_set_error, find_buffer_by_handle, find_window_by_handle};
+use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
+use crate::api::private::validate::err_msg_ptr;
 use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
@@ -309,16 +310,14 @@ fn find_buffer(handle: Buffer, err: &mut Error) -> Option<Buf> {
     unsafe { NonNull::new(find_buffer_by_handle(handle, err)).map(|b| Buf::new(b.as_ptr())) }
 }
 fn set_error(err: &mut Error, msg: &'static CStr) {
-    // SAFETY: the caller's error slot, and a literal format whose one
-    // conversion-free spelling takes no variadic arguments.
-    unsafe { api_set_error(err, kErrorTypeException, msg.as_ptr()) };
+    // SAFETY: the message the caller handed over, live for this call.
+    *err = unsafe { err_msg_ptr(kErrorTypeException, msg.as_ptr()) };
 }
 
 /// Set `err` from a message that is not a literal, as upstream's `"%s"` does.
 fn set_error_str(err: &mut Error, s: *const c_char) {
-    // SAFETY: the caller's error slot; `%s` matches the one NUL-terminated
-    // argument.
-    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), s) };
+    // SAFETY: the message the caller handed over, live for this call.
+    *err = unsafe { err_msg_ptr(kErrorTypeException, s) };
 }
 fn clear_error(err: &mut Error) {
     err.clear();

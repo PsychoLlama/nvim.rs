@@ -11,19 +11,9 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported};
 use crate::guard::Suppress;
 use crate::types::{FAIL, OK};
-use core::ffi::CStr;
 
+use crate::api::private::validate::err_exception;
 use crate::winlayer::Buf;
-
-/// An exception whose whole message is `why`.
-///
-/// # Safety
-/// `err` must be the caller's error slot, and `why` must hold no `%`
-/// directive: upstream passes it as the format itself.
-unsafe fn err_exception(err: *mut Error, why: &CStr) {
-    // SAFETY: the caller's promise.
-    unsafe { api_set_error(err, kErrorTypeException, why.as_ptr()) };
-}
 
 pub unsafe fn nvim_buf_get_var(
     buf: Buffer,
@@ -179,9 +169,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     }
     if ren_ret == FAIL {
         let why = c"Failed to rename buffer";
-        // SAFETY: `err` is this call's own error slot; the
-        // message holds no `%` directive.
-        unsafe { err_exception(err, why) };
+        error = err_exception(why);
     }
     ().reported(error)
 }
@@ -215,9 +203,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
     );
     if result == FAIL {
         let why = c"Failed to unload buffer.";
-        // SAFETY: `err` is this call's own error slot; the
-        // message holds no `%` directive.
-        unsafe { err_exception(err, why) };
+        error = err_exception(why);
         return ().reported(error);
     }
     ().reported(error)

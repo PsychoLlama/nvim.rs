@@ -271,5 +271,5 @@ fn tabpage_closed(mut err: Error) -> Error {
 fn set_msg(err: &mut Error, msg: &CStr) {
     // SAFETY: `err` is the caller's own slot, and the format takes the one C
     // string it is given.
-    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg.as_ptr()) };
+    *err = Error::from_message(kErrorTypeException, msg);
 }

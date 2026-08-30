@@ -19,6 +19,9 @@
 //! An API error quotes file names, patterns and buffer text, none of which is
 //! guaranteed to be UTF-8, so the message is held as a [`CString`] and read
 //! back as a [`CStr`]: byte for byte, the way `vsnprintf` left it.
+//! [`api_error!`](crate::api_error) renders through
+//! [`message_fmt`](crate::message_fmt), whose writer escapes a non-UTF-8 byte
+//! on the way in and restores it on the way out.
 //!
 //! [`Display`] is *lossy*, and is there for [`std::error::Error`]'s sake.
 //! Anything that puts the message on the screen or on the wire reads
@@ -34,8 +37,10 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{ErrorType, kErrorTypeNone};
+use super::{ErrorType, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation};
+use crate::message_fmt::to_message;
 use core::ffi::CStr;
+use core::fmt;
 use std::ffi::CString;
 
 /// The longest message an API error carries, terminator included -- the cap
@@ -64,6 +69,20 @@ impl Error {
         }
     }
 
+    /// A failure of kind `kind`, with the message `args` renders.
+    ///
+    /// Spelled through [`api_error!`](crate::api_error), which checks the
+    /// literal for a leftover C conversion first. The message is truncated to
+    /// [`MAXLEN`] and ends at an interior NUL, exactly where
+    /// `api_set_error`'s `vsnprintf` ended it.
+    pub(crate) fn new(kind: ErrorType, args: fmt::Arguments<'_>) -> Self {
+        debug_assert!(kind != kErrorTypeNone);
+        Self {
+            kind,
+            msg: Some(to_message(args.to_string(), MAXLEN)),
+        }
+    }
+
     /// A failure of kind `kind`, carrying `msg` as its message.
     pub(crate) fn from_message(kind: ErrorType, msg: &CStr) -> Self {
         debug_assert!(kind != kErrorTypeNone);
@@ -73,6 +92,17 @@ impl Error {
             kind,
             msg: Some(CString::new(bytes).unwrap_or_default()),
         }
+    }
+
+    /// `kErrorTypeException`: the call failed. Vim's own errors, and
+    /// whatever a Lua callback threw, arrive as this.
+    pub(crate) fn exception(msg: &CStr) -> Self {
+        Self::from_message(kErrorTypeException, msg)
+    }
+
+    /// `kErrorTypeValidation`: the call's arguments were wrong.
+    pub(crate) fn validation(msg: &CStr) -> Self {
+        Self::from_message(kErrorTypeValidation, msg)
     }
 
     /// Which kind of failure this is, or [`kErrorTypeNone`] for none.
@@ -96,6 +126,39 @@ impl Error {
     pub(crate) fn clear(&mut self) {
         *self = Self::none();
     }
+
+    /// Move the failure out of a slot, leaving it unset. `None` when the slot
+    /// carried none.
+    ///
+    /// This is how a function that still lends an out-parameter to a callee
+    /// turns what the callee left there into its own `Err`.
+    pub(crate) fn take(&mut self) -> Option<Self> {
+        self.is_set().then(|| core::mem::take(self))
+    }
+}
+
+/// Build an [`Error`] from a checked format literal.
+///
+/// `api_error!(kErrorTypeValidation, "Invalid buffer id: {id}")` is the
+/// replacement for `api_set_error(err, kErrorTypeValidation, "Invalid buffer
+/// id: %d", id)`: `format_args!` checks the placeholders against the
+/// arguments, and the `const` block rejects a literal that still holds a C
+/// conversion, so a half-finished conversion fails the build rather than
+/// printing itself.
+///
+/// Unlike the message macros this does *not* consult the catalogue. Upstream
+/// never translated an API error -- a client reads it, not a user -- and the
+/// text is asserted verbatim by the functional suite.
+///
+/// A `%s` argument that may not be UTF-8 goes through
+/// [`msg_cstr`](crate::message_fmt::msg_cstr) or its siblings, which is what
+/// keeps the bytes intact across the render.
+#[macro_export]
+macro_rules! api_error {
+    ($kind:expr, $lit:literal $(, $arg:expr)* $(,)?) => {{
+        const { $crate::message_fmt::check_template($lit) };
+        $crate::types::Error::new($kind, ::core::format_args!($lit $(, $arg)*))
+    }};
 }
 
 impl Default for Error {
@@ -107,7 +170,6 @@ impl Default for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{kErrorTypeException, kErrorTypeValidation};
 
     #[test]
     fn none_is_not_set() {
@@ -122,6 +184,29 @@ mod tests {
         let err = Error::from_message(kErrorTypeValidation, c"caf\xe9");
         assert_eq!(err.kind(), kErrorTypeValidation);
         assert_eq!(err.message_or_empty().to_bytes(), b"caf\xe9");
+    }
+
+    #[test]
+    fn a_formatted_message_keeps_its_bytes() {
+        let name = crate::message_fmt::msg_bytes(b"caf\xe9");
+        let err = api_error!(kErrorTypeValidation, "Invalid file: {name}");
+        assert_eq!(err.kind(), kErrorTypeValidation);
+        assert_eq!(err.message_or_empty().to_bytes(), b"Invalid file: caf\xe9");
+    }
+
+    #[test]
+    fn take_empties_the_slot() {
+        let mut slot = api_error!(kErrorTypeException, "boom");
+        let taken = slot.take().expect("set");
+        assert_eq!(taken.message_or_empty(), c"boom");
+        assert!(!slot.is_set());
+        assert!(slot.take().is_none());
+    }
+
+    #[test]
+    fn a_formatted_message_ends_at_an_interior_nul() {
+        let err = api_error!(kErrorTypeException, "a{}b", '\0');
+        assert_eq!(err.message_or_empty(), c"a");
     }
 
     #[test]

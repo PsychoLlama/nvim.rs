@@ -8,9 +8,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{EMPTY_HL_MESSAGE, NIL, api_set_error, cstr_as_string};
+use super::{EMPTY_HL_MESSAGE, NIL, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_msg_ptr;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
 use crate::kvec::InitVec;
@@ -381,8 +383,8 @@ impl Object {
 // -- Object conversion -----------------------------------------------------
 
 /// The name of `t` as the API's documentation and error messages spell it.
-pub(crate) fn api_typename(t: ObjectType) -> *mut c_char {
-    let name = match t {
+pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
+    match t {
         kObjectTypeNil => c"nil",
         kObjectTypeBoolean => c"Boolean",
         kObjectTypeInteger => c"Integer",
@@ -395,8 +397,7 @@ pub(crate) fn api_typename(t: ObjectType) -> *mut c_char {
         kObjectTypeWindow => c"Window",
         kObjectTypeTabpage => c"Tabpage",
         _ => unreachable!(),
-    };
-    name.as_ptr() as *mut c_char
+    }
 }
 
 /// `obj` as a boolean. An integer is true when nonzero and nil takes
@@ -416,8 +417,8 @@ pub(crate) unsafe fn api_object_to_bool(
     if obj.type_0 == kObjectTypeNil {
         return nil_value;
     }
-    // SAFETY: the caller's promise about `what` and `err`.
-    unsafe { api_err_exp(err, what, c"boolean".as_ptr(), ptr::null()) };
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_expected_ptr(what, c"boolean", None) };
     false
 }
 
@@ -436,8 +437,8 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut
         let id = number as c_int;
         return if (1..=known).contains(&id) { id } else { 0 };
     }
-    // SAFETY: the caller's promise about `what` and `err`.
-    unsafe { api_err_invalid(err, c"hl_group".as_ptr(), what, 0, true) };
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_invalid_ptr(c"hl_group".as_ptr(), what, 0, true) };
     0
 }
 
@@ -468,8 +469,8 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) 
         let item = unsafe { *chunks.items.add(i) };
         let Some(chunk) = item.as_array() else {
             let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
-            // SAFETY: `err` is the caller's slot and the names are static.
-            unsafe { api_err_exp(err, c"chunk".as_ptr(), want, got) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_expected_ptr(c"chunk".as_ptr(), want, Some(got)) };
             // SAFETY: `hl_msg` is this frame's, and owns its chunks.
             unsafe { hl_msg_free(hl_msg) };
             return EMPTY_HL_MESSAGE;
@@ -480,9 +481,8 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) 
             .then(|| unsafe { *chunk.items });
         let Some(text) = head.and_then(Object::as_string) else {
             let msg = c"Invalid chunk: expected Array with 1 or 2 Strings".as_ptr();
-            // SAFETY: `err` is the caller's slot; the format takes the one
-            // C string it is given.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
             // SAFETY: as above.
             unsafe { hl_msg_free(hl_msg) };
             return EMPTY_HL_MESSAGE;

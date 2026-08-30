@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ascii::ascii_iswhite;
 use crate::types::ExArgt;
 use crate::winlayer::Ea;
 use core::ffi::{CStr, c_char, c_int, c_void};

@@ -35,7 +35,9 @@ pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, api_set_error, api_typename, cstr_as_string, string_to_cstr,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_msg_ptr;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
@@ -201,15 +203,11 @@ pub unsafe fn nvim_ui_attach(
         return ().reported(error);
     }
     if !ui_can_attach_more() {
-        let msg = c"Maximum UI count reached".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeException, msg) };
+        error = Error::from_message(kErrorTypeException, c"Maximum UI count reached");
         return ().reported(error);
     }
     if width <= 0 || height <= 0 {
-        let msg = c"Expected width > 0 and height > 0".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Expected width > 0 and height > 0");
         return ().reported(error);
     }
 
@@ -402,9 +400,7 @@ pub unsafe fn nvim_ui_try_resize(
         return ().reported(error);
     }
     if width <= 0 || height <= 0 {
-        let msg = c"Expected width > 0 and height > 0".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Expected width > 0 and height > 0");
         return ().reported(error);
     }
     // SAFETY: `ui` is in the attach table, so it is live.
@@ -519,18 +515,16 @@ unsafe fn ui_set_option(
         };
         if fd < 0 {
             let null = core::ptr::null();
-            // SAFETY: the caller's promise about `err`; a null value string
-            // asks for the numeric spelling.
-            unsafe { api_err_invalid(err, c"stdin_fd".as_ptr(), null, fd, false) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"stdin_fd".as_ptr(), null, fd, false) };
             return;
         }
         // The editor reads its startup input from this descriptor,
         // which only means anything before startup has finished.
         if starting.get() != 2 {
             let msg = c"stdin_fd can only be used with first attached UI".as_ptr();
-            // SAFETY: the caller's promise about `err`; the format takes the
-            // one C string it is given.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
             return;
         }
         stdin_fd.set(fd as c_int);
@@ -582,8 +576,8 @@ unsafe fn ui_set_option(
         // has already sent it events in that protocol's shape.
         if !init && ext == kUILinegrid as usize && active != ui.ui_ext[ext] {
             let msg = c"ext_linegrid option cannot be changed".as_ptr();
-            // SAFETY: the caller's promise about `err`.
-            unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
         }
         ui.ui_ext[ext] = active;
         if !init {
@@ -594,9 +588,8 @@ unsafe fn ui_set_option(
     }
 
     let unknown = name.data();
-    // SAFETY: the caller's promise about `err`, and `name` is the caller's
-    // C string.
-    unsafe { api_err_invalid(err, c"UI option".as_ptr(), unknown, 0, true) };
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_invalid_ptr(c"UI option".as_ptr(), unknown, 0, true) };
 }
 
 /// `value` as the boolean `name` takes, or `None` with `err` set to say
@@ -650,9 +643,8 @@ unsafe fn want_string(err: *mut Error, name: &CStr, value: Object) -> Option<Str
 unsafe fn wrong_type(err: *mut Error, name: *const c_char, expected: ObjectType, value: Object) {
     let expected = api_typename(expected);
     let actual = api_typename(value.type_0);
-    // SAFETY: the caller's promise about `err` and `name`; the type names
-    // are static.
-    unsafe { api_err_exp(err, name, expected, actual) };
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_expected_ptr(name, expected, Some(actual)) };
 }
 
 /// Resizes one grid, for a UI with `ext_multigrid`.
@@ -698,17 +690,16 @@ pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result
         return ().reported(error);
     }
     if height <= 0 {
-        let msg = c"Expected pum height > 0".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Expected pum height > 0");
         return ().reported(error);
     }
     // SAFETY: `ui` is in the attach table, so it is live.
     let mut ui = unsafe { Ui::new(ui) };
     if !ui.ui_ext[kUIPopupmenu as usize] {
-        let msg = c"UI must support the ext_popupmenu option".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(
+            kErrorTypeValidation,
+            c"UI must support the ext_popupmenu option",
+        );
         return ().reported(error);
     }
     ui.pum_nlines = height as c_int;
@@ -738,21 +729,18 @@ pub unsafe fn nvim_ui_pum_set_bounds(
     // SAFETY: `ui` is in the attach table, so it is live.
     let mut ui = unsafe { Ui::new(ui) };
     if !ui.ui_ext[kUIPopupmenu as usize] {
-        let msg = c"UI must support the ext_popupmenu option".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(
+            kErrorTypeValidation,
+            c"UI must support the ext_popupmenu option",
+        );
         return ().reported(error);
     }
     if width <= 0.0 {
-        let msg = c"Expected width > 0".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Expected width > 0");
         return ().reported(error);
     }
     if height <= 0.0 {
-        let msg = c"Expected height > 0".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Expected height > 0");
         return ().reported(error);
     }
     ui.pum_row = row;

@@ -12,7 +12,7 @@
 )]
 
 use crate::api::private::helpers::{ERROR_INIT, Reported, api_typename};
-use crate::api::private::validate::api_err_exp;
+use crate::api::private::validate::err_expected_ptr;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg_c};
@@ -64,7 +64,7 @@ pub unsafe fn nvim_ui_term_event(
         let name = c"termresponse".as_ptr();
         let (want, got) = (api_typename(kObjectTypeString), api_typename(value.type_0));
         // SAFETY: `err` is this frame's own; the type names are static.
-        unsafe { api_err_exp(&raw mut err, name, want, got) };
+        err = unsafe { err_expected_ptr(name, want, Some(got)) };
         return Err(err);
     }
     // SAFETY: the tag says the payload is the string, and it is the caller's.

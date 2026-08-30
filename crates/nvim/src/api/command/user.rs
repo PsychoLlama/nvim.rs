@@ -11,6 +11,10 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_msg_ptr;
 use crate::types::{ExArgt, ExpandContext};
 use crate::winlayer::Live;
 
@@ -122,16 +126,15 @@ pub unsafe fn create_user_command(
         // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
         let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
         if !named {
-            // SAFETY: `err` is the caller's slot and both strings are C
-            // strings.
-            unsafe { api_err_invalid(err, c"command name".as_ptr(), cmd_name, 0, true) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"command name".as_ptr(), cmd_name, 0, true) };
             break '_err;
         }
         // SAFETY: the name validated, so it has at least one byte.
         if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
             let what = c"command name (must start with uppercase)".as_ptr();
-            // SAFETY: as above.
-            unsafe { api_err_invalid(err, what, cmd_name, 0, true) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(what, cmd_name, 0, true) };
             break '_err;
         }
         let is_set = opts.is_set__user_command_;
@@ -139,9 +142,8 @@ pub unsafe fn create_user_command(
             && has_key(is_set, KEYSET_OPTIDX_user_command__count)
         {
             let msg = c"Cannot use both 'range' and 'count'".as_ptr();
-            // SAFETY: `err` is the caller's slot; the format takes one C
-            // string.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
             break '_err;
         }
 
@@ -150,18 +152,16 @@ pub unsafe fn create_user_command(
                 0 => {}
                 1 => argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG,
                 _ => {
-                    let null = ::core::ptr::null();
-                    // SAFETY: `err` is the caller's slot; a null value string
-                    // asks for the numeric spelling.
-                    unsafe { api_err_invalid(err, c"nargs".as_ptr(), null, nargs, false) };
+                    // SAFETY: the caller's error slot.
+                    unsafe { *err = err_bad_number(c"nargs", nargs) };
                     break '_err;
                 }
             }
         } else if let Some(nargs) = opts.nargs.as_string() {
             let value = nargs.data();
             if nargs.len() > 1 {
-                // SAFETY: `err` is the caller's slot and `value` a C string.
-                unsafe { api_err_invalid(err, c"nargs".as_ptr(), value, 0, true) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
                 break '_err;
             }
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable
@@ -172,23 +172,21 @@ pub unsafe fn create_user_command(
                 b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
                 b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
                 _ => {
-                    // SAFETY: as above.
-                    unsafe { api_err_invalid(err, c"nargs".as_ptr(), value, 0, true) };
+                    // SAFETY: the caller's error slot.
+                    unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), value, 0, true) };
                     break '_err;
                 }
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__nargs) {
-            // SAFETY: `err` is the caller's slot; the empty value string asks
-            // for the spelling that names no value at all.
-            unsafe { api_err_invalid(err, c"nargs".as_ptr(), c"".as_ptr(), 0, true) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"nargs".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
 
         if has_key(is_set, KEYSET_OPTIDX_user_command__complete) && argt == ExArgt::NONE {
             let msg = c"'complete' used without 'nargs'".as_ptr();
-            // SAFETY: `err` is the caller's slot; the format takes one C
-            // string.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
             break '_err;
         }
 
@@ -201,9 +199,8 @@ pub unsafe fn create_user_command(
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
             let percent = unsafe { *range.data() } as u8 == b'%';
             if !(percent && range.len() == 1) {
-                // SAFETY: `err` is the caller's slot; the empty value string
-                // asks for the spelling that names no value.
-                unsafe { api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0, true) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
                 break '_err;
             }
             argt |= ExArgt::RANGE | ExArgt::DFLALL;
@@ -213,8 +210,8 @@ pub unsafe fn create_user_command(
             def = range;
             addr_type_arg = CmdAddr::Lines;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__range) {
-            // SAFETY: as the `nargs` spelling above.
-            unsafe { api_err_invalid(err, c"range".as_ptr(), c"".as_ptr(), 0, true) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"range".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
 
@@ -229,8 +226,8 @@ pub unsafe fn create_user_command(
             addr_type_arg = CmdAddr::Other;
             def = count;
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__count) {
-            // SAFETY: as the `nargs` spelling above.
-            unsafe { api_err_invalid(err, c"count".as_ptr(), c"".as_ptr(), 0, true) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"count".as_ptr(), c"".as_ptr(), 0, true) };
             break '_err;
         }
 
@@ -238,9 +235,8 @@ pub unsafe fn create_user_command(
             let Some(addr) = opts.addr.as_string() else {
                 let expected = api_typename(kObjectTypeString);
                 let actual = api_typename(opts.addr.type_0);
-                // SAFETY: `err` is the caller's slot and the type names are
-                // static C strings.
-                unsafe { api_err_exp(err, c"addr".as_ptr(), expected, actual) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_expected_ptr(c"addr".as_ptr(), expected, Some(actual)) };
                 break '_err;
             };
             let value = addr.data();
@@ -250,8 +246,8 @@ pub unsafe fn create_user_command(
             // `vallen` readable bytes, and `slot` is this frame's.
             let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
             if parsed != 1 {
-                // SAFETY: `err` is the caller's slot and `value` a C string.
-                unsafe { api_err_invalid(err, c"addr".as_ptr(), value, 0, true) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_invalid_ptr(c"addr".as_ptr(), value, 0, true) };
                 break '_err;
             }
             argt |= ExArgt::RANGE;
@@ -298,15 +294,14 @@ pub unsafe fn create_user_command(
             let parsed =
                 unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
             if parsed != 1 {
-                // SAFETY: `err` is the caller's slot and `value` a C string.
-                unsafe { api_err_invalid(err, c"complete".as_ptr(), value, 0, true) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_invalid_ptr(c"complete".as_ptr(), value, 0, true) };
                 break '_err;
             }
         } else if has_key(is_set, KEYSET_OPTIDX_user_command__complete) {
-            let expected = c"Function or String".as_ptr();
-            let null = ::core::ptr::null();
-            // SAFETY: `err` is the caller's slot and both strings are static.
-            unsafe { api_err_exp(err, c"complete".as_ptr(), expected, null) };
+            let expected = c"Function or String";
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_expected_ptr(c"complete".as_ptr(), expected, None) };
             break '_err;
         }
 
@@ -314,9 +309,8 @@ pub unsafe fn create_user_command(
             let Some(preview) = opts.preview.as_luaref() else {
                 let expected = api_typename(kObjectTypeLuaRef);
                 let actual = api_typename(opts.preview.type_0);
-                // SAFETY: `err` is the caller's slot and the type names are
-                // static C strings.
-                unsafe { api_err_exp(err, c"preview".as_ptr(), expected, actual) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_expected_ptr(c"preview".as_ptr(), expected, Some(actual)) };
                 break '_err;
             };
             argt |= ExArgt::PREVIEW;
@@ -336,10 +330,9 @@ pub unsafe fn create_user_command(
         } else if let Some(body) = cmd.as_string() {
             rep = body.data().cast_const();
         } else {
-            let expected = c"Function or String".as_ptr();
-            let null = ::core::ptr::null();
-            // SAFETY: `err` is the caller's slot and both strings are static.
-            unsafe { api_err_exp(err, c"command".as_ptr(), expected, null) };
+            let expected = c"Function or String";
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_expected_ptr(c"command".as_ptr(), expected, None) };
             break '_err;
         }
 
@@ -367,8 +360,8 @@ pub unsafe fn create_user_command(
         };
         if added != 1 {
             let msg = c"Failed to create user command".as_ptr();
-            // SAFETY: `err` is the caller's slot.
-            unsafe { api_set_error(err, kErrorTypeException, msg) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         }
         // `uc_add_command` owns what it was handed, so nothing below runs.
         return;
@@ -410,9 +403,7 @@ pub unsafe fn nvim_buf_get_commands(
     let builtin = unsafe { (*opts).builtin };
     if buf == -1 {
         if builtin {
-            let msg = c"builtin=true not implemented".as_ptr();
-            // SAFETY: `err` is this frame's slot.
-            unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+            error = Error::from_message(kErrorTypeValidation, c"builtin=true not implemented");
             return Dict::EMPTY.reported(error);
         }
         // SAFETY: a null buffer names the global table, and `arena` is the

@@ -20,6 +20,9 @@ use core::ptr;
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api_error;
 use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
     win_opt,
@@ -67,8 +70,7 @@ pub unsafe fn nvim_eval_statusline(
         // checker's own static text.
         let errmsg = unsafe { check_stl_option(str.data()) };
         if let Some(errmsg) = errmsg {
-            // SAFETY: the caller's error slot.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), errmsg.as_ptr()) };
+            error = Error::from_message(kErrorTypeValidation, &errmsg);
             return empty.reported(error);
         }
     }
@@ -164,9 +166,8 @@ impl Context {
                     && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
             };
             if !single {
-                let (key, want) = (c"fillchar".as_ptr(), c"single character".as_ptr());
                 // SAFETY: the caller's error slot.
-                unsafe { api_err_exp(err, key, want, ptr::null()) };
+                unsafe { *err = err_expected(c"fillchar", c"single character", None) };
                 return None;
             }
             let mut c = 0;
@@ -187,10 +188,11 @@ impl Context {
         // SAFETY: null or a live window.
         let win = unsafe { win_opt(wp) };
         let Some(win) = win else {
-            let (fmt, winid) = (c"unknown winid %d".as_ptr(), opts.winid);
-            // SAFETY: the caller's error slot; the lookup may already have
-            // set one, which upstream overwrites with this.
-            unsafe { api_set_error(err, kErrorTypeException, fmt, winid) };
+            // The lookup may already have set an error, which upstream
+            // overwrites with this.
+            let winid = opts.winid;
+            // SAFETY: the caller's error slot.
+            unsafe { *err = api_error!(kErrorTypeException, "unknown winid {winid}") };
             return None;
         };
 
@@ -204,7 +206,7 @@ impl Context {
                 let key = c"use_statuscol_lnum".as_ptr();
                 let why = c"out of range".as_ptr();
                 // SAFETY: the caller's error slot.
-                unsafe { api_err_invalid(err, key, why, 0, false) };
+                unsafe { *err = err_invalid_ptr(key, why, 0, false) };
                 return None;
             }
             use_bools += 1;
@@ -212,8 +214,8 @@ impl Context {
         if use_bools > 1 {
             const E: &CStr =
                 c"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'";
-            // SAFETY: the caller's error slot and a static message.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), E.as_ptr()) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = Error::from_message(kErrorTypeValidation, E) };
             return None;
         }
 
@@ -404,15 +406,15 @@ pub unsafe fn nvim__complete_set(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rv = arena_dict(arena, 2);
     // SAFETY: the API dispatcher's own frame.
     let opts = unsafe { &*opts };
     // SAFETY: reads the 'completeopt' flags.
     if unsafe { get_cot_flags() } & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
-        let msg = c"completeopt option does not include popup".as_ptr();
-        // SAFETY: the caller's error slot and a static message.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+        error = Error::from_message(
+            kErrorTypeException,
+            c"completeopt option does not include popup",
+        );
         return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {

@@ -8,8 +8,6 @@ use crate::api::private::helpers::{
     arena_string, cstr_as_string, cstrn_as_string, find_buffer_by_handle, string_to_cstr,
     try_enter, try_leave,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
-use crate::ascii::ascii_iswhite;
 use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::{

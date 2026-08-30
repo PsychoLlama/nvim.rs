@@ -338,8 +338,8 @@ pub unsafe fn modify_keymap(
             break 'fail_and_free;
         }
         if parsed_args.lhs_len == 0 {
-            // SAFETY: as above; a static text with no conversion.
-            unsafe { api_set_error(err, kErrorTypeValidation, c"Invalid (empty) LHS".as_ptr()) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = Error::from_message(kErrorTypeValidation, c"Invalid (empty) LHS") };
             break 'fail_and_free;
         }
 

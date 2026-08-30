@@ -142,10 +142,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
     let mut err = ERROR_INIT;
     let ret = api_try(&mut err, |_| create_buf(listed, scratch));
     if ret == 0 && !err.is_set() {
-        let (fmt, msg) = (c"%s".as_ptr(), c"Failed to create buffer".as_ptr());
-        // SAFETY: `err` is this frame's own slot, and the format takes the
-        // one C string given.
-        unsafe { api_set_error(&raw mut err, kErrorTypeException, fmt, msg) };
+        err = Error::exception(c"Failed to create buffer");
     }
     ret.reported(err)
 }

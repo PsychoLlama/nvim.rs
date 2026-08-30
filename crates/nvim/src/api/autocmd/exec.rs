@@ -8,39 +8,12 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, has_key};
+use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::err_bad_value_ptr;
+use crate::api::private::validate::err_conflict_ptr;
+use crate::api::private::validate::err_expected;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
-use core::ptr;
-
-/// "Invalid `name`: `n`", for a handle or id that names nothing.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
-    let none = ptr::null();
-    // SAFETY: the caller's promise; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
-}
-
-/// "Invalid `name`: '`val`'", for a value the caller spelled wrong.
-///
-/// # Safety
-/// `err` must be the caller's error slot and `val` null or a C string.
-unsafe fn err_bad_value(err: *mut Error, name: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_invalid(err, name.as_ptr(), val, 0, true) };
-}
-
-/// "Invalid `name`: expected `want`", naming `got` when it says.
-///
-/// # Safety
-/// `err` must be the caller's error slot, `want` a C string and `got` null
-/// or a C string.
-unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
-}
 
 pub unsafe fn nvim_exec_autocmds(
     event: Object,
@@ -73,8 +46,8 @@ pub unsafe fn nvim_exec_autocmds(
         kObjectTypeString => {
             au_group = unsafe { augroup_find(opts.group.data.string.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_bad_value(err, c"group", opts.group.data.string.data()) };
+                // SAFETY: the value the keyset carried, live for this call.
+                error = unsafe { err_bad_value_ptr(c"group", opts.group.data.string.data()) };
                 return ().reported(error);
             }
         }
@@ -87,17 +60,15 @@ pub unsafe fn nvim_exec_autocmds(
                 augroup_name(au_group)
             };
             if !unsafe { augroup_exists(name) } {
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_bad_number(err, c"group", au_group as int64_t) };
+                error = err_bad_number(c"group", au_group as int64_t);
                 return ().reported(error);
             }
         }
         _ => {
             if true {
-                let want = c"String or Integer".as_ptr();
+                let want = c"String or Integer";
                 let got = api_typename(opts.group.type_0);
-                // SAFETY: `err` is this call's own error slot.
-                unsafe { err_expected(err, c"group", want, got) };
+                error = err_expected(c"group", want, Some(got));
                 return ().reported(error);
             }
         }
@@ -120,12 +91,12 @@ pub unsafe fn nvim_exec_autocmds(
     if !(!(has_key(opts.is_set__exec_autocmds_, 1 as ::core::ffi::c_int))
         || !(has_key(opts.is_set__exec_autocmds_, 4 as ::core::ffi::c_int)))
     {
-        unsafe { api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr()) };
+        error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
         return ().reported(error);
     }
     if has_buf {
         if has_key(opts.is_set__exec_autocmds_, 5 as ::core::ffi::c_int) {
-            unsafe { api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr()) };
+            error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
             return ().reported(error);
         }
         b = unsafe { find_buffer_by_handle(buf, err) };
@@ -168,8 +139,8 @@ pub unsafe fn nvim_exec_autocmds(
         if !((event_nr as ::core::ffi::c_uint)
             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
-            // SAFETY: `err` is this call's own error slot.
-            unsafe { err_bad_value(err, c"event", event_str.data.string.data()) };
+            // SAFETY: the value the keyset carried, live for this call.
+            error = unsafe { err_bad_value_ptr(c"event", event_str.data.string.data()) };
             return ().reported(error);
         }
         let mut pat_index: size_t = 0 as size_t;

@@ -1,11 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_set_error, arena_array, arena_dict, arena_string, buf_get_text, cstr_as_string,
-    dict_get_value, dict_set_var, find_buffer_by_handle, normalize_index, set_mark, try_enter,
-    try_leave,
+    arena_array, arena_dict, arena_string, buf_get_text, cstr_as_string, dict_get_value,
+    dict_set_var, find_buffer_by_handle, normalize_index, set_mark, try_enter, try_leave,
 };
-use crate::api::private::validate::{api_err_invalid, check_string_array};
+use crate::api::private::validate::check_string_array;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{buf_ensure_loaded, buf_get_changedtick, buf_meta_total, do_buffer};
 use crate::buffer_updates::{buf_updates_register, buf_updates_unregister};
@@ -38,8 +37,8 @@ use crate::types::{
     Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair,
     LuaRef, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType, WinSplit,
     WinStyle, aco_save_T, bcount_t, buf_T, colnr_T, dobuf_action_values, dobuf_start_values,
-    except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
-    linenr_T, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, uint64_t, win_T,
+    except_T, fmark_T, int64_t, kErrorTypeException, kErrorTypeNone, linenr_T, lua_State,
+    msglist_T, pos_T, ptrdiff_t, size_t, uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
 use ::libc::{memcpy, strlen};

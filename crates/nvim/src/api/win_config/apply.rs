@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api_error;
 use crate::winlayer::{TabPage, Win};
 
 /// `NULL` for "the current tab page", which is how the window family spells
@@ -126,8 +127,11 @@ unsafe fn win_config_split(
                 if curwin.get() == win {
                     // SAFETY: the caller's window.
                     let handle = unsafe { (*win).handle };
-                    let fmt = c"Failed to switch away from window %d";
-                    err_msg_handle(err, kErrorTypeException, fmt, handle);
+                    let why = api_error!(
+                        kErrorTypeException,
+                        "Failed to switch away from window {handle}"
+                    );
+                    store(err, why);
                     return false;
                 }
                 win_tp = win_find_tabpage(win);
@@ -282,8 +286,11 @@ unsafe fn win_config_split(
             if !err.is_set() {
                 // SAFETY: the caller's window.
                 let handle = unsafe { (*win).handle };
-                let fmt = c"Failed to move window %d into split";
-                err_msg_handle(err, kErrorTypeException, fmt, handle);
+                let why = api_error!(
+                    kErrorTypeException,
+                    "Failed to move window {handle} into split"
+                );
+                store(err, why);
             }
         }
         if curwin_moving_tp && win_valid(win) {
@@ -351,8 +358,11 @@ unsafe fn win_config_float_tp(
                 if curwin.get() == win {
                     // SAFETY: the caller's window.
                     let handle = unsafe { (*win).handle };
-                    let fmt = c"Failed to switch away from window %d";
-                    err_msg_handle(err, kErrorTypeException, fmt, handle);
+                    let why = api_error!(
+                        kErrorTypeException,
+                        "Failed to switch away from window {handle}"
+                    );
+                    store(err, why);
                     return false;
                 }
                 win_tp = win_find_tabpage(win);

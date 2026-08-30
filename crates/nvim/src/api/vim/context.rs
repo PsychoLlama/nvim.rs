@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
+use crate::api::private::validate::err_invalid_ptr;
 
 /// The `types` key's spellings, and the `kCtx*` bit each one names.
 const NAMES: [&::core::ffi::CStr; 6] = [c"regs", c"jumps", c"bufs", c"gvars", c"sfuncs", c"funcs"];
@@ -29,7 +30,6 @@ pub unsafe fn nvim_get_context(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut types: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -62,7 +62,7 @@ pub unsafe fn nvim_get_context(
                     int_types |= FLAGS[which];
                 } else {
                     // SAFETY: `err` is this frame's own slot.
-                    unsafe { api_err_invalid(err, c"type".as_ptr(), s, 0, true) };
+                    error = unsafe { err_invalid_ptr(c"type".as_ptr(), s, 0, true) };
                     return Dict {
                         size: 0 as size_t,
                         capacity: 0 as size_t,

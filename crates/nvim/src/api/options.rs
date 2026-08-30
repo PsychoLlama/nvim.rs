@@ -16,10 +16,9 @@
 )]
 
 use crate::api::private::helpers::{
-    ERROR_INIT, NIL, Reported, api_set_error, api_set_sctx, api_try, api_typename,
-    buffer_by_handle, has_key, window_by_handle,
+    ERROR_INIT, NIL, Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key,
+    window_by_handle,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::autocmd::{
     EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
     unblock_autocmds,
@@ -28,9 +27,15 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
 use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
 use crate::memory::xstrdup;
+use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::{
     find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
@@ -94,10 +99,8 @@ unsafe fn option_target(
 
     // SAFETY: `opts` is the caller's, per this function's contract.
     let set = move |key| unsafe { has_key((*opts).is_set__option_, key) };
-    // SAFETY: `err` is the caller's, and `msg` is always a static string.
-    let fail = move |msg: &CStr| unsafe {
-        api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg.as_ptr());
-    };
+    // SAFETY: `err` is the caller's.
+    let fail = move |msg: &CStr| unsafe { *err = Error::validation(msg) };
 
     let mut opt_flags = OptionSetFlags::NONE;
     if set(OPTIDX_SCOPE) {
@@ -107,9 +110,8 @@ unsafe fn option_target(
             b"local" => OptionSetFlags::LOCAL,
             b"global" => OptionSetFlags::GLOBAL,
             _ => {
-                let (key, want) = (c"scope".as_ptr(), c"'local' or 'global'".as_ptr());
-                // SAFETY: `err` is the caller's; the strings are static.
-                unsafe { api_err_exp(err, key, want, ptr::null()) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_expected(c"scope", c"'local' or 'global'", None) };
                 return None;
             }
         };
@@ -154,9 +156,10 @@ unsafe fn option_target(
     // SAFETY: `name` is the caller's C string.
     let opt_idx = find_option(unsafe { CStr::from_ptr(name) });
     if opt_idx == kOptInvalid {
-        let fmt = c"Unknown option '%s'".as_ptr();
-        // SAFETY: `err` is the caller's and the format takes `name`.
-        unsafe { api_set_error(err, kErrorTypeValidation, fmt, name) };
+        // SAFETY: `name` is the caller's C string.
+        let name = unsafe { c_str(name) };
+        // SAFETY: `err` is the caller's.
+        unsafe { *err = api_error!(kErrorTypeValidation, "Unknown option '{name}'") };
     } else if (scope == kOptScopeBuf || scope == kOptScopeWin) && !option_has_scope(opt_idx, scope)
     {
         let tgt = if scope == kOptScopeBuf {
@@ -176,10 +179,16 @@ unsafe fn option_target(
         } else {
             c""
         };
-        let fmt = c"'%s' cannot be passed for %s%soption '%s'".as_ptr();
-        let (tgt, global, req) = (tgt.as_ptr(), global.as_ptr(), req.as_ptr());
-        // SAFETY: `err` is the caller's; three static strings and `name`.
-        unsafe { api_set_error(err, kErrorTypeValidation, fmt, tgt, global, req, name) };
+        let (tgt, global, req) = (msg_cstr(tgt), msg_cstr(global), msg_cstr(req));
+        // SAFETY: `name` is the caller's C string.
+        let name = unsafe { c_str(name) };
+        // SAFETY: `err` is the caller's.
+        unsafe {
+            *err = api_error!(
+                kErrorTypeValidation,
+                "'{tgt}' cannot be passed for {global}{req}option '{name}'"
+            );
+        };
     }
     // SAFETY: `err` is the caller's.
     if unsafe { (*err).kind() } != kErrorTypeNone {
@@ -222,7 +231,9 @@ unsafe fn do_ft_buf(
         return ptr::null_mut::<buf_T>();
     }
     // SAFETY: `err` is the caller's; the format takes nothing.
-    let fail = move |msg: &CStr| unsafe { api_set_error(err, kErrorTypeException, msg.as_ptr()) };
+    let fail = move |msg: &CStr| // SAFETY: the message the caller handed over, live for this call.
+ // SAFETY: the caller's error slot.
+ unsafe { *err = err_msg_ptr(kErrorTypeException, msg.as_ptr()) };
 
     // SAFETY: a dummy buffer of no name, which owns everything it holds.
     let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as linenr_T, BLN_DUMMY) };
@@ -375,7 +386,7 @@ pub unsafe fn nvim_get_option_value(
         }
         let (key, got) = (c"option".as_ptr(), name.data());
         // SAFETY: `err` is this frame's own and `name` is the caller's.
-        unsafe { api_err_invalid(&raw mut err, key, got, 0, true) };
+        err = unsafe { err_invalid_ptr(key, got, 0, true) };
     }
     optval_free(value);
     NIL.reported(err)
@@ -408,9 +419,7 @@ pub unsafe fn nvim_set_option_value(
     }
     let Some(optval) = object_as_optval(value) else {
         let got = api_typename(value.type_0);
-        let (key, want) = (c"value".as_ptr(), c"valid option type".as_ptr());
-        // SAFETY: `err` is this frame's own; the strings are static.
-        unsafe { api_err_exp(&raw mut err, key, want, got) };
+        err = err_expected(c"value", c"valid option type", Some(got));
         return ().reported(err);
     };
     // Whoever made this API call owns the write, so that `:verbose set` names

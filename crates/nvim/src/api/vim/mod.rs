@@ -4,13 +4,11 @@ use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
 use crate::api::private::converter::vim_to_object;
 use crate::api::private::helpers::{
-    api_metadata, api_set_error, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
+    api_metadata, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
     arena_take_arraybuilder, copy_array, copy_dict, copy_object, copy_string, cstr_as_string,
     dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle, get_default_stl_hl,
     parse_hl_msg, set_mark, string_to_array,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid, api_err_required};
-use crate::ascii::ascii_isdigit;
 use crate::autocmd::{
     EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume,
     unblock_autocmds,

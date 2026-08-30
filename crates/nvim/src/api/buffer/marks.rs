@@ -8,16 +8,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
-use core::ffi::{CStr, c_char};
-
-/// "Invalid `name`: '`val`'", for a value the caller spelled wrong.
-///
-/// # Safety
-/// `err` must be the caller's error slot and `val` null or a C string.
-unsafe fn err_bad_value(err: *mut Error, name: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_invalid(err, name.as_ptr(), val, 0, true) };
-}
+use crate::api::private::validate::err_bad_value_ptr;
+use crate::api::private::validate::err_invalid_ptr;
 
 pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
@@ -30,8 +22,8 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         return (res as Boolean).reported(error);
     }
     if !(name.len() == 1 as size_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_value(err, c"mark name (must be a single char)", name.data()) };
+        // SAFETY: the value the keyset carried, live for this call.
+        error = unsafe { err_bad_value_ptr(c"mark name (must be a single char)", name.data()) };
         return (res as Boolean).reported(error);
     }
     let mut fm: *mut fmark_T = unsafe {
@@ -44,7 +36,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         )
     };
     if fm.is_null() {
-        unsafe { api_err_invalid(err, c"mark name".as_ptr(), name.data(), 0 as int64_t, true) };
+        error = unsafe { err_invalid_ptr(c"mark name".as_ptr(), name.data(), 0 as int64_t, true) };
         return (res as Boolean).reported(error);
     }
     if unsafe { (*fm).mark.lnum } != 0 as linenr_T
@@ -70,8 +62,8 @@ pub unsafe fn nvim_buf_set_mark(
         return (res as Boolean).reported(error);
     }
     if !(name.len() == 1 as size_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_value(err, c"mark name (must be a single char)", name.data()) };
+        // SAFETY: the value the keyset carried, live for this call.
+        error = unsafe { err_bad_value_ptr(c"mark name (must be a single char)", name.data()) };
         return (res as Boolean).reported(error);
     }
     res = unsafe { set_mark(b, name, line, col, err) };
@@ -97,8 +89,8 @@ pub unsafe fn nvim_buf_get_mark(
         return rv.reported(error);
     }
     if !(name.len() == 1 as size_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_value(err, c"mark name (must be a single char)", name.data()) };
+        // SAFETY: the value the keyset carried, live for this call.
+        error = unsafe { err_bad_value_ptr(c"mark name (must be a single char)", name.data()) };
         return rv.reported(error);
     }
     let mut fm: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
@@ -118,7 +110,7 @@ pub unsafe fn nvim_buf_get_mark(
         )
     };
     if fm.is_null() {
-        unsafe { api_err_invalid(err, c"mark name".as_ptr(), name.data(), 0 as int64_t, true) };
+        error = unsafe { err_invalid_ptr(c"mark name".as_ptr(), name.data(), 0 as int64_t, true) };
         return rv.reported(error);
     }
     if unsafe { (*fm).fnum } != unsafe { (*b).handle } {

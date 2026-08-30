@@ -17,10 +17,13 @@
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
-use crate::api::private::helpers::{api_dict_to_keydict, api_set_error, arena_dict};
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
+use crate::api::private::helpers::{api_dict_to_keydict, arena_dict};
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
+use crate::message_fmt::msg_cstr;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Boolean, Dict, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
@@ -123,8 +126,8 @@ pub unsafe fn hl_get_attr_by_id(
     }
     // SAFETY: the caller's arena and error slot.
     if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
-        let fmt = c"Invalid attribute id: %ld".as_ptr();
-        unsafe { api_set_error(err, kErrorTypeException, fmt, attr_id) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}") };
         return empty;
     }
     let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
@@ -478,7 +481,10 @@ pub unsafe fn dict2hlattrs(
     if is_set(dict, key::BLEND) {
         let given = dict.blend;
         if !(0..=100).contains(&given) {
-            unsafe { api_err_invalid(err, c"blend".as_ptr(), c"out of range".as_ptr(), 0, false) };
+            // SAFETY: the caller's error slot.
+            unsafe {
+                *err = err_invalid_ptr(c"blend".as_ptr(), c"out of range".as_ptr(), 0, false)
+            };
             return HLATTRS_INIT;
         }
         blend = given as int32_t;
@@ -488,8 +494,9 @@ pub unsafe fn dict2hlattrs(
         let global = is_set(dict, key::LINK_GLOBAL);
         let Some(link_id) = link_id else {
             let name = if global { c"link_global" } else { c"link" };
-            let fmt = c"Invalid Key: '%s'".as_ptr();
-            unsafe { api_set_error(err, kErrorTypeValidation, fmt, name.as_ptr()) };
+            let name = msg_cstr(name);
+            // SAFETY: the caller's error slot.
+            unsafe { *err = api_error!(kErrorTypeValidation, "Invalid Key: '{name}'") };
             return HLATTRS_INIT;
         };
         if global {
@@ -598,9 +605,9 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
         return unsafe { val.data.integer } as int32_t;
     }
     if val.type_0 != kObjectTypeString {
-        let expected = c"String or Integer".as_ptr();
+        let expected = c"String or Integer";
         // SAFETY: the caller's error slot.
-        unsafe { api_err_exp(err, key.as_ptr(), expected, ::core::ptr::null()) };
+        unsafe { *err = err_expected_ptr(key.as_ptr(), expected, None) };
         return 0;
     }
     let str = unsafe { val.data.string };
@@ -614,7 +621,8 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -
         name_to_ctermcolor(name)
     };
     if color < 0 {
-        unsafe { api_err_invalid(err, c"highlight color".as_ptr(), str.data(), 0, true) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(c"highlight color".as_ptr(), str.data(), 0, true) };
     }
     color
 }

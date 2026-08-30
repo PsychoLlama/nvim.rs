@@ -10,7 +10,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add};
+use crate::api::private::validate::err_expected_ptr;
 use crate::api::vim::nvim_exec_lua;
+use crate::api::vimscript::exec_impl;
 
 pub unsafe fn nvim_exec(
     channel_id: uint64_t,
@@ -52,7 +54,6 @@ pub unsafe fn nvim_call_atomic(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // "results" and the error report, and one result per call.
     let mut rv: Array = arena_array(arena, 2 as size_t);
     let mut results: Array = arena_array(arena, calls.size);
@@ -69,13 +70,13 @@ pub unsafe fn nvim_call_atomic(
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
                 // SAFETY: `err` is this frame's slot and the names are
                 // `api_typename`'s own statics.
-                unsafe { api_err_exp(err, c"'calls' item".as_ptr(), want, got) };
+                error = unsafe { err_expected_ptr(c"'calls' item".as_ptr(), want, Some(got)) };
                 break '_theend;
             };
             if call.size != 2 as size_t {
-                let want = c"2-item Array".as_ptr();
+                let want = c"2-item Array";
                 // SAFETY: as above.
-                unsafe { api_err_exp(err, c"'calls' item".as_ptr(), want, ::core::ptr::null()) };
+                error = unsafe { err_expected_ptr(c"'calls' item".as_ptr(), want, None) };
                 break '_theend;
             }
             // SAFETY: the pair has both of its items.
@@ -83,13 +84,13 @@ pub unsafe fn nvim_call_atomic(
             let Some(name) = head.as_string() else {
                 let (want, got) = (api_typename(kObjectTypeString), api_typename(head.type_0));
                 // SAFETY: as above.
-                unsafe { api_err_exp(err, c"name".as_ptr(), want, got) };
+                error = unsafe { err_expected_ptr(c"name".as_ptr(), want, Some(got)) };
                 break '_theend;
             };
             let Some(args) = tail.as_array() else {
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.type_0));
                 // SAFETY: as above.
-                unsafe { api_err_exp(err, c"call args".as_ptr(), want, got) };
+                error = unsafe { err_expected_ptr(c"call args".as_ptr(), want, Some(got)) };
                 break '_theend;
             };
 

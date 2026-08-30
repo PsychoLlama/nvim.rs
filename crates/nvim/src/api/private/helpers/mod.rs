@@ -22,7 +22,6 @@
 use core::ffi::{VaList, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::api::private::validate::api_err_invalid;
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
@@ -38,8 +37,8 @@ use crate::runtime::script_is_lua;
 use crate::types::{
     Buffer, Dict, Error, ErrorType, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState,
     Window, buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
-    kErrorTypeNone, kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T,
-    size_t, tabpage_T, uint64_t, win_T,
+    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T, size_t, tabpage_T,
+    uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 use std::ffi::CString;
@@ -96,6 +95,8 @@ const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
     capacity: 0,
     items: ptr::null_mut(),
 };
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_msg_ptr;
 // -- Handles ---------------------------------------------------------------
 
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
@@ -119,9 +120,8 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *
     let rv = handle_get_buffer(buffer);
     if rv.is_null() {
         let id = buffer as int64_t;
-        // SAFETY: `err` is the caller's out-parameter; a null value string
-        // asks for the numeric spelling.
-        unsafe { api_err_invalid(err, c"buffer id".as_ptr(), ptr::null(), id, false) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(c"buffer id".as_ptr(), ptr::null(), id, false) };
     }
     rv
 }
@@ -134,8 +134,8 @@ pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win
     let rv = handle_get_window(window);
     if rv.is_null() {
         let id = window as int64_t;
-        // SAFETY: as [`find_buffer_by_handle`].
-        unsafe { api_err_invalid(err, c"window id".as_ptr(), ptr::null(), id, false) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(c"window id".as_ptr(), ptr::null(), id, false) };
     }
     rv
 }
@@ -148,8 +148,8 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *m
     let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
     if rv.is_null() {
         let id = tabpage as int64_t;
-        // SAFETY: as [`find_buffer_by_handle`].
-        unsafe { api_err_invalid(err, c"tabpage id".as_ptr(), ptr::null(), id, false) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(c"tabpage id".as_ptr(), ptr::null(), id, false) };
     }
     rv
 }
@@ -234,8 +234,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
             unsafe { discard_current_exception() };
         }
         let msg = c"Keyboard interrupt".as_ptr();
-        // SAFETY: `err` is the caller's slot.
-        unsafe { api_set_error(err, kErrorTypeException, msg) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         got_int.set(false);
     } else if pending {
         let mut should_free = false;
@@ -245,9 +245,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
             let head = (*list).cast::<c_void>();
             get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
         };
-        // SAFETY: `err` is the caller's slot; the format takes the one C
-        // string it is given.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, msg) };
         // SAFETY: the list has been rendered into `err`.
         unsafe { free_global_msglist() };
         if should_free {
@@ -262,8 +261,8 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
         // script to name.
         let named = unsafe { *name } != NUL as c_char;
         if !named {
-            // SAFETY: `err` is the caller's slot; one C string.
-            unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), value) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_msg_ptr(kErrorTypeException, value) };
         } else if lnum != 0 {
             let fmt = c"%s, line %d: %s".as_ptr();
             // SAFETY: as above, with two C strings and a line number.
@@ -371,10 +370,10 @@ pub(crate) trait Reported: Sized {
 }
 
 impl<T> Reported for T {
-    fn reported(self, err: Error) -> Result<Self, Error> {
-        match err.kind() {
-            kErrorTypeNone => Ok(self),
-            _ => Err(err),
+    fn reported(self, mut err: Error) -> Result<Self, Error> {
+        match err.take() {
+            Some(err) => Err(err),
+            None => Ok(self),
         }
     }
 }
@@ -400,15 +399,15 @@ pub(crate) unsafe fn set_mark(
         deleting = true;
     } else {
         if col > MAXCOL as Integer {
-            // SAFETY: `err` is the caller's slot and both strings are static.
-            unsafe { api_err_invalid(err, c"column".as_ptr(), out_of_range, 0, false) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"column".as_ptr(), out_of_range, 0, false) };
             return false;
         }
         // SAFETY: `buf` is the caller's buffer, or the current one.
         let line_count = unsafe { (*buf).b_ml.ml_line_count } as Integer;
         if line < 1 || line > line_count {
-            // SAFETY: as above.
-            unsafe { api_err_invalid(err, c"line".as_ptr(), out_of_range, 0, false) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_invalid_ptr(c"line".as_ptr(), out_of_range, 0, false) };
             return false;
         }
     }

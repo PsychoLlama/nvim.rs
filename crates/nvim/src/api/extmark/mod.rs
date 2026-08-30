@@ -1,10 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_set_error, api_typename, arena_array, arena_dict, copy_string, cstr_as_string,
-    find_buffer_by_handle, find_window_by_handle, has_key, object_to_hl_id, string_to_cstr,
+    api_typename, arena_array, arena_dict, copy_string, cstr_as_string, find_buffer_by_handle,
+    find_window_by_handle, has_key, object_to_hl_id, string_to_cstr,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::charset::{transstr, vim_isprintc};
 use crate::decoration::{
     clear_virtlines, clear_virttext, decor_free, decor_put_sh, decor_put_vt, decor_range_add_sh,
@@ -41,9 +40,9 @@ use crate::types::{
     KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef,
     MHPutStatus, MTKey, MTPair, Map_String_int, Map_uint32_t_uint32_t, MapHash, NS, Object,
     OptionalKeys, Set_ptr_t, Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText,
-    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, int64_t, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger, kObjectTypeString,
-    linenr_T, ptr_t, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray,
+    kObjectTypeInteger, kObjectTypeString, linenr_T, ptr_t, schar_T, size_t, uint8_t, uint16_t,
+    uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

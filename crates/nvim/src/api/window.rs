@@ -14,13 +14,15 @@ use crate::api::private::helpers::{
     buffer_by_handle, dict_get_value, dict_put, dict_set_var, has_key, normalize_index,
     window_by_handle,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
 
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_out_of_range;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_close, e_cmdwin};
 use crate::message::emsg;
@@ -120,16 +122,14 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
             .map(|(row, col)| (row.data.integer as int64_t, col.data.integer as int64_t))
     };
     let Some((row, col)) = rowcol else {
-        let (name, want) = (c"pos".as_ptr(), c"[row, col] array".as_ptr());
-        // SAFETY: `err` is this frame's own; the arguments are static strings.
-        unsafe { api_err_exp(&raw mut err, name, want, ptr::null()) };
+        err = err_expected(c"pos", c"[row, col] array", None);
         return ().reported(err);
     };
     if row <= 0 || row > int64_t::from(w.buffer().line_count()) {
-        return Err(out_of_range(err, c"cursor line"));
+        return Err(err_out_of_range(c"cursor line"));
     }
     if col > int64_t::from(MAXCOL) || col < 0 {
-        return Err(out_of_range(err, c"cursor column"));
+        return Err(err_out_of_range(c"cursor column"));
     }
     w.w_cursor.lnum = number_as_int(row);
     w.w_cursor.col = number_as_int(col);
@@ -384,7 +384,7 @@ pub fn nvim_win_set_hl_ns(win: Window, ns_id: Integer) -> Result<(), Error> {
     if ns_id < -1 {
         let (name, empty) = (c"namespace".as_ptr(), c"".as_ptr());
         // SAFETY: `err` is this frame's own; the arguments are static strings.
-        unsafe { api_err_invalid(&raw mut err, name, empty, 0, true) };
+        err = unsafe { err_invalid_ptr(name, empty, 0, true) };
         return ().reported(err);
     }
     w.w_ns_hl = number_as_int(ns_id);
@@ -457,7 +457,7 @@ pub unsafe fn nvim_win_text_height(
         // SAFETY: as above.
         start_vcol = unsafe { (*opts).start_vcol as int64_t };
         if !(0..=int64_t::from(MAXCOL)).contains(&start_vcol) {
-            return Err(out_of_range(err, c"start_vcol"));
+            return Err(err_out_of_range(c"start_vcol"));
         }
     }
     let mut end_vcol: int64_t = -1;
@@ -468,14 +468,14 @@ pub unsafe fn nvim_win_text_height(
         // SAFETY: as above.
         end_vcol = unsafe { (*opts).end_vcol as int64_t };
         if !(0..=int64_t::from(MAXCOL)).contains(&end_vcol) {
-            return Err(out_of_range(err, c"end_vcol"));
+            return Err(err_out_of_range(c"end_vcol"));
         }
     }
     // SAFETY: as above.
     let max: int64_t = if set(OPTIDX_MAX_HEIGHT) {
         let max_height = unsafe { (*opts).max_height };
         if max_height <= 0 {
-            return Err(out_of_range(err, c"max_height"));
+            return Err(err_out_of_range(c"max_height"));
         }
         max_height as int64_t
     } else {
@@ -507,15 +507,6 @@ pub unsafe fn nvim_win_text_height(
     unsafe { dict_put(&mut rv, c"end_row", end_row) };
     unsafe { dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol)) };
     rv.reported(err)
-}
-
-/// `err` reporting that `what` was out of range -- the message
-/// `api_err_invalid` builds for a value it will not print.
-fn out_of_range(mut err: Error, what: &'static ::core::ffi::CStr) -> Error {
-    let (name, why) = (what.as_ptr(), c"out of range".as_ptr());
-    // SAFETY: `err` is the caller's, moved in; both strings are static.
-    unsafe { api_err_invalid(&raw mut err, name, why, 0, false) };
-    err
 }
 
 /// `err` reporting `msg` verbatim as a validation failure.

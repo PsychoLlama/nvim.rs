@@ -4,11 +4,9 @@ use crate::api::buffer::{nvim_buf_get_lines, nvim_buf_set_lines};
 use crate::api::extmark::{nvim_buf_clear_namespace, nvim_create_namespace, parse_virt_text};
 use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
 use crate::api::private::helpers::{
-    api_free_object, api_set_error, api_set_sctx, api_typename, arena_array, copy_object,
-    copy_string, cstr_as_string, dict_set_var,
+    api_free_object, api_set_sctx, api_typename, arena_array, copy_object, copy_string,
+    cstr_as_string, dict_set_var,
 };
-use crate::api::private::validate::{api_err_exp, api_err_invalid};
-use crate::api::vimscript::exec_impl;
 use crate::decoration::{clear_virttext, decor_find_virttext, kHlModeUnknown, kVPosEndOfLine};
 use crate::eval::vars::get_globvar_dict;
 use crate::extmark::extmark_set;

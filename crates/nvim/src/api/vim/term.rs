@@ -10,6 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key};
+use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
 use crate::guard::Lock;
 use crate::winlayer::Buf;
 
@@ -22,18 +24,19 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
     }
     if b == cmdwin_buf.get() {
         let msg = e_cmdwin.as_ptr();
-        // SAFETY: `err` is this frame's slot and `e_cmdwin` a static message.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), msg) };
+        // SAFETY: the message the caller handed over, live for this call.
+        slot = unsafe { err_msg_ptr(kErrorTypeException, msg) };
         return (0 as Integer).reported(slot);
     }
     let mut may_read_buffer: bool = true;
     if !unsafe { (*b).terminal }.is_null() {
         if unsafe { terminal_running((*b).terminal) } {
-            let fmt = c"Terminal already connected to buffer %d".as_ptr();
-            // SAFETY: `b` is the live buffer, and `err` is this frame's slot.
+            // SAFETY: `b` is the live buffer.
             let handle = unsafe { (*b).handle };
-            // SAFETY: as above; the format takes the one `int` given.
-            unsafe { api_set_error(err, kErrorTypeException, fmt, handle) };
+            slot = api_error!(
+                kErrorTypeException,
+                "Terminal already connected to buffer {handle}"
+            );
             return (0 as Integer).reported(slot);
         }
         buf_close_terminal(unsafe { Buf::new(b) });
@@ -98,12 +101,13 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
     unsafe { channel_decref(chan) };
     if contents.size > 0 as size_t {
         let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let (text, len, slot) = (contents.items, contents.size, &raw mut error);
+        let (text, len, out) = (contents.items, contents.size, &raw mut error);
         // SAFETY: `chan` is the channel just made, `contents` this frame's
         // own lines, and `error` its own out-parameter.
-        unsafe { channel_send((*chan).id, text, len, true, slot) };
+        unsafe { channel_send((*chan).id, text, len, true, out) };
         if !error.is_null() {
-            unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error) };
+            // SAFETY: `channel_send` left a NUL-terminated message there.
+            slot = unsafe { err_msg_ptr(kErrorTypeValidation, error) };
         }
     }
     (unsafe { (*chan).id } as Integer).reported(slot)
@@ -159,7 +163,6 @@ unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
 
 pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
     let mut slot = ERROR_INIT;
-    let err = &raw mut slot;
     let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if data.is_empty() {
         return ().reported(slot);
@@ -169,7 +172,8 @@ pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error>
     // out-parameter.
     unsafe { channel_send(id, text, len, false, &raw mut error) };
     if !error.is_null() {
-        unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), error) };
+        // SAFETY: `channel_send` left a NUL-terminated message there.
+        slot = unsafe { err_msg_ptr(kErrorTypeValidation, error) };
     }
     ().reported(slot)
 }

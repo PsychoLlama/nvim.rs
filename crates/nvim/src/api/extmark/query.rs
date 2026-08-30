@@ -11,29 +11,9 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, array_add, dict_put};
+use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::err_expected;
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
-use core::ptr;
-
-/// "Invalid `name`: `n`", for a handle or id that names nothing.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
-    let none = ptr::null();
-    // SAFETY: the caller's promise; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
-}
-
-/// "Invalid `name`: expected `want`", naming `got` when it says.
-///
-/// # Safety
-/// `err` must be the caller's error slot, `want` a C string and `got` null
-/// or a C string.
-unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
-}
 
 pub unsafe fn virt_text_to_array(
     mut vt: VirtText,
@@ -155,8 +135,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         return rv.reported(error);
     }
     if !ns_initialized(ns_id as uint32_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_number(err, c"ns_id", ns_id) };
+        error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
     let mut details: bool = opts.details;
@@ -193,8 +172,7 @@ pub unsafe fn nvim_buf_get_extmarks(
         return rv.reported(error);
     }
     if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_number(err, c"ns_id", ns_id) };
+        error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
     let mut details: bool = opts.details;
@@ -217,10 +195,11 @@ pub unsafe fn nvim_buf_get_extmarks(
         } else if unsafe { strequal(opts.type_0.data(), c"highlight".as_ptr()) } {
             type_0 = kExtmarkHighlight;
         } else if true {
-            let want = c"sign, virt_text, virt_lines or highlight".as_ptr();
+            let want = c"sign, virt_text, virt_lines or highlight";
             let got = opts.type_0.data();
-            // SAFETY: `err` is this call's own error slot.
-            unsafe { err_expected(err, c"type", want, got) };
+            // SAFETY: the keyset's string names its own NUL-terminated bytes.
+            let got = unsafe { crate::cstr::at_opt(got) };
+            error = err_expected(c"type", want, got);
             return rv.reported(error);
         }
     }
@@ -329,15 +308,15 @@ unsafe fn extmark_get_index_from_obj(
             unsafe { *col = MAXCOL as ::core::ffi::c_int as colnr_T };
             return true;
         } else if id < 0 as Integer && true {
-            // SAFETY: `err` is this call's own error slot.
-            unsafe { err_bad_number(err, c"mark id", id) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_bad_number(c"mark id", id) };
             return false;
         }
         let mut extmark: MTPair =
             unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
         if !(extmark.start.pos.row >= 0 as int32_t) {
-            // SAFETY: `err` is this call's own error slot.
-            unsafe { err_bad_number(err, c"mark id (not found)", id) };
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_bad_number(c"mark id (not found)", id) };
             return false;
         }
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
@@ -353,10 +332,9 @@ unsafe fn extmark_get_index_from_obj(
             && unsafe { (*pos.items.add(1)).type_0 } as ::core::ffi::c_uint
                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
-            let want = c"2 Integer items".as_ptr();
-            let got = ::core::ptr::null::<::core::ffi::c_char>();
-            // SAFETY: `err` is this call's own error slot.
-            unsafe { err_expected(err, c"mark position", want, got) };
+            let want = c"2 Integer items";
+            // SAFETY: the caller's error slot.
+            unsafe { *err = err_expected(c"mark position", want, None) };
             return false;
         }
         let mut pos_row: Integer = unsafe { (*pos.items).data.integer };
@@ -377,10 +355,9 @@ unsafe fn extmark_get_index_from_obj(
         unsafe { *col = c };
         return true;
     } else if true {
-        let want = c"mark id Integer or 2-item Array".as_ptr();
-        let got = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_expected(err, c"mark position", want, got) };
+        let want = c"mark id Integer or 2-item Array";
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_expected(c"mark position", want, None) };
         return false;
     }
     panic!("Reached end of non-void function without returning");

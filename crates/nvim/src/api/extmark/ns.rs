@@ -14,8 +14,8 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, Reported, array_add, dict_put_str, has_key, set_key,
 };
+use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tab_windows};
-use core::ffi::CStr;
 use core::ptr;
 
 #[inline]
@@ -154,16 +154,6 @@ impl LocalScopes {
     }
 }
 
-/// "Invalid `name`: `n`", for a handle or id that names nothing.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
-    let none = ptr::null();
-    // SAFETY: the caller's promise; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
-}
-
 /// Whether `win`'s buffer holds any extmark in namespace `ns_id`.
 ///
 /// `b_extmark_ns` is declared as the untyped map header, so upstream casts it
@@ -245,8 +235,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     let mut error = ERROR_INIT;
     let err = &raw mut error;
     if !ns_initialized(ns_id as uint32_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_number(err, c"ns_id", ns_id) };
+        error = err_bad_number(c"ns_id", ns_id);
         return ().reported(error);
     }
     let mut set_scoped: bool = true;
@@ -319,14 +308,12 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
 
 pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut opts: KeyDict_ns_opts = KEYDICT_INIT;
     let mut windows: Array = ARRAY_DICT_INIT;
     opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
     opts.wins = windows;
     if !ns_initialized(ns_id as uint32_t) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_bad_number(err, c"ns_id", ns_id) };
+        error = err_bad_number(c"ns_id", ns_id);
         return opts.reported(error);
     }
     if !local_scopes().contains(ns_id as uint32_t) {

@@ -9,7 +9,12 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api::private::validate::err_required_ptr;
+use crate::api_error;
 use crate::guard::Suppress;
+use crate::message_fmt::c_str;
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char};
 
@@ -73,23 +78,28 @@ pub unsafe fn nvim_echo(
     // frame's own slot.
     let rejected = unsafe {
         if !is_progress && has_progress_keys {
-            let fmt = c"Conflict: title/source/status/percent/data not allowed with kind='%s'";
-            api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), kind);
+            let kind = c_str(kind);
+            error = api_error!(
+                kErrorTypeValidation,
+                "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"
+            );
             true
         } else if is_progress && !status_named(opts.status) {
-            let names = c"success|failed|running|cancel".as_ptr();
-            api_err_exp(err, c"status".as_ptr(), names, opts.status.data());
+            let names = c"success|failed|running|cancel";
+            // SAFETY: the keyset's string names its own NUL-terminated bytes.
+            let got = crate::cstr::at_opt(opts.status.data());
+            error = err_expected(c"status", names, got);
             true
         } else if is_progress && !(0..=100).contains(&opts.percent) {
             let range = c"out of range".as_ptr();
-            api_err_invalid(err, c"percent".as_ptr(), range, 0, false);
+            error = err_invalid_ptr(c"percent".as_ptr(), range, 0, false);
             true
         } else if is_progress && opts.source.is_empty() {
-            api_err_required(err, c"opts.source".as_ptr());
+            error = err_required_ptr(c"opts.source".as_ptr());
             true
         } else if opts.id.type_0 == kObjectTypeInteger && !msg_id_exists(opts.id.data.integer) {
-            let fmt = c"Invalid 'id': %ld".as_ptr();
-            api_set_error(err, kErrorTypeValidation, fmt, opts.id.data.integer);
+            let id = opts.id.data.integer;
+            error = api_error!(kErrorTypeValidation, "Invalid 'id': {id}");
             true
         } else {
             false

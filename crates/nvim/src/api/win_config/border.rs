@@ -24,6 +24,9 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::api::private::helpers::array_add;
+use crate::api::private::validate::err_conflict_ptr;
+use crate::api::private::validate::err_expected;
+use crate::api::private::validate::err_invalid_ptr;
 
 /// "Invalid 'border': expected `want`", the shape every rejection here takes.
 /// `got` names what arrived when it is not null.
@@ -32,11 +35,10 @@ use crate::api::private::helpers::array_add;
 /// six call sites is one line rather than six.
 ///
 /// # Safety
-/// `err` must be the caller's error slot and `got` null or a C string.
-unsafe fn err_border(err: *mut Error, want: &CStr, got: *const c_char) {
-    let name = c"border".as_ptr();
-    // SAFETY: the caller's promise; `name` and `want` are C strings.
-    unsafe { api_err_exp(err, name, want.as_ptr(), got) };
+/// `err` must be the caller's error slot.
+unsafe fn err_border(err: *mut Error, want: &CStr, got: Option<&CStr>) {
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_expected(c"border", want, got) };
 }
 
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
@@ -191,14 +193,14 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         let arr = unsafe { item.data.array };
         if arr.size == 0 || arr.size > 2 {
             // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"1 or 2-item Array", NULL_STR) };
+            unsafe { err_border(err, c"1 or 2-item Array", None) };
             return None;
         }
         // SAFETY: a non-empty array has an item at index 0.
         let first = unsafe { *arr.items };
         if first.type_0 != kObjectTypeString {
             // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"Array of Strings", NULL_STR) };
+            unsafe { err_border(err, c"Array of Strings", None) };
             return None;
         }
         // SAFETY: the tag says the string arm is live.
@@ -221,7 +223,7 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         return Some((unsafe { item.data.string }, 0));
     }
     // SAFETY: the caller's error slot.
-    unsafe { err_border(err, c"String or Array", api_typename(item.type_0)) };
+    unsafe { err_border(err, c"String or Array", Some(api_typename(item.type_0))) };
     None
 }
 
@@ -240,9 +242,6 @@ unsafe fn cell_of(string: String_0) -> BorderChar {
     out
 }
 
-/// The `NULL` a validation message passes for "no third argument".
-const NULL_STR: *const c_char = ::core::ptr::null();
-
 /// The eight border cells and the eight highlight ids that go with them --
 /// `WinConfig`'s `border_chars` and `border_hl_ids`, filled together.
 type Slots = ([BorderChar; 8], [c_int; 8]);
@@ -260,7 +259,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
     let size = arr.size;
     if size == 0 || size > 8 || !size.is_power_of_two() {
         // SAFETY: the caller's error slot.
-        unsafe { err_border(err, c"1, 2, 4, or 8 chars", NULL_STR) };
+        unsafe { err_border(err, c"1, 2, 4, or 8 chars", None) };
         return None;
     }
 
@@ -274,7 +273,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
             // SAFETY: the caller's error slot.
-            unsafe { err_border(err, c"only one-cell chars", NULL_STR) };
+            unsafe { err_border(err, c"only one-cell chars", None) };
             return None;
         }
         // SAFETY: as above.
@@ -299,7 +298,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
         || corner_gap(&chars, 5, 7, 6)
     {
         // SAFETY: the caller's error slot.
-        unsafe { err_border(err, c"corner char between edge chars", NULL_STR) };
+        unsafe { err_border(err, c"corner char between edge chars", None) };
     }
     Some((chars, hl_ids))
 }
@@ -339,8 +338,8 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *m
             // time any window can be configured.
             Some(style) => Some(unsafe { style_slots(style) }),
             None => {
-                // SAFETY: the caller's error slot and a live API string.
-                unsafe { api_err_invalid(err, c"border".as_ptr(), str.data(), 0, true) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_invalid_ptr(c"border".as_ptr(), str.data(), 0, true) };
                 None
             }
         }
@@ -372,8 +371,8 @@ pub(crate) unsafe fn generate_api_error(
         // window handle.
         unsafe { api_set_error(err, kErrorTypeValidation, fmt, (*wp).handle) };
     } else {
-        // SAFETY: the caller's error slot and attribute name.
-        unsafe { api_err_conflict(err, attribute, c"non-float window".as_ptr()) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_conflict_ptr(attribute, c"non-float window".as_ptr()) };
     }
 }
 

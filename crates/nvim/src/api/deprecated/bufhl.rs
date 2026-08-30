@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, buffer_by_handle};
+use crate::api::private::validate::err_invalid_ptr;
 
 pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
@@ -90,19 +91,18 @@ pub unsafe fn nvim_buf_add_highlight(
     mut col_end: Integer,
 ) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
     let out_of_range = c"out of range".as_ptr();
     if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
         // SAFETY: `err` is this frame's slot and both strings are static.
-        unsafe { api_err_invalid(err, c"line number".as_ptr(), out_of_range, 0, false) };
+        error = unsafe { err_invalid_ptr(c"line number".as_ptr(), out_of_range, 0, false) };
         return (0 as Integer).reported(error);
     }
     if col_start < 0 as Integer || col_start > MAXCOL as ::core::ffi::c_int as Integer {
         // SAFETY: as above.
-        unsafe { api_err_invalid(err, c"column".as_ptr(), out_of_range, 0, false) };
+        error = unsafe { err_invalid_ptr(c"column".as_ptr(), out_of_range, 0, false) };
         return (0 as Integer).reported(error);
     }
     if col_end < 0 as Integer || col_end > MAXCOL as ::core::ffi::c_int as Integer {
@@ -156,9 +156,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
         return (0 as Integer).reported(error);
     };
     if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
-        let msg = c"Line number outside range".as_ptr();
-        // SAFETY: `err` is this frame's slot.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        error = Error::from_message(kErrorTypeValidation, c"Line number outside range");
         return (0 as Integer).reported(error);
     }
     let ns_id = src2ns(&mut src_id);

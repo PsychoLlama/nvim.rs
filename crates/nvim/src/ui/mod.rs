@@ -35,7 +35,6 @@ pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
 
 use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
-use crate::api::private::validate::api_err_invalid;
 use crate::api::ui::remote_ui_option_set;
 use crate::autocmd::do_autocmd_uienter;
 use crate::buffer::resettitle;
@@ -50,6 +49,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
+use crate::main::bo_flags;
 use crate::main::{
     State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, curwin, emsg_silent,
     exiting, expr_map_lock, full_screen, in_assert_fails, normal_bg, normal_fg, normal_sp, p_debug,
@@ -80,6 +80,7 @@ use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
 use core::ffi::c_int;
 
+use crate::api::private::validate::err_invalid_ptr;
 use crate::winlayer::{Win, tabs};
 /// The screen the editor draws into when nothing else claims a grid.
 const DEFAULT_GRID_HANDLE: handle_T = 1;
@@ -389,8 +390,6 @@ pub fn ui_busy_stop() {
 ///
 /// Reads `'debug'` and may emit a message.
 pub unsafe fn vim_beep(val: core::ffi::c_uint) {
-    use crate::main::bo_flags;
-
     called_vim_beep.set(true);
     if emsg_silent.get() != 0 || in_assert_fails.get() {
         return;
@@ -861,8 +860,8 @@ pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int,
     let wp = unsafe { get_win_by_grid_handle(grid_handle) };
     if wp.is_null() {
         let (what, no_text) = (c"window handle".as_ptr(), core::ptr::null());
-        // SAFETY: `err` is the caller's slot and `what` is a static string.
-        unsafe { api_err_invalid(err, what, no_text, grid_handle as i64, false) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(what, no_text, grid_handle as i64, false) };
         return;
     }
     // SAFETY: `wp` is the window the grid handle names, checked non-null

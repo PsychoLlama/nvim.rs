@@ -10,7 +10,6 @@ use core::ffi::c_char;
 use core::ptr;
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
-use crate::api::private::validate::api_err_invalid;
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
@@ -18,6 +17,8 @@ use crate::types::{
     int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     key_value_pair, object, object_data, sctx_T, size_t, win_T,
 };
+
+use crate::api::private::validate::err_invalid_ptr;
 
 use super::{
     find_option_len, get_option, kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptScopeBuf,
@@ -89,7 +90,8 @@ pub(crate) unsafe fn get_vimoption(
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
     if opt_idx == kOptInvalid {
-        unsafe { api_err_invalid(err, c"option (not found)".as_ptr(), name.data(), 0, true) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_invalid_ptr(c"option (not found)".as_ptr(), name.data(), 0, true) };
         return Dict {
             size: 0 as size_t,
             capacity: 0 as size_t,

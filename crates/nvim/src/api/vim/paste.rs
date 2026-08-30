@@ -9,6 +9,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try, array_add};
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_invalid_ptr;
 use crate::getchar::PastePhase;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active};
@@ -43,7 +45,7 @@ pub unsafe fn nvim_paste(
     if !(-1..=3).contains(&phase) {
         let name = c"phase".as_ptr();
         // SAFETY: `err` is this frame's own slot and `name` a literal.
-        unsafe { api_err_invalid(err, name, ::core::ptr::null(), phase, false) };
+        error = unsafe { err_invalid_ptr(name, ::core::ptr::null(), phase, false) };
         return false.reported(error);
     }
     let whole = phase == -1;
@@ -122,7 +124,6 @@ pub unsafe fn nvim_put(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut reg = yankreg_T {
         y_array: ::core::ptr::null_mut::<String_0>(),
         y_size: 0,
@@ -135,7 +136,7 @@ pub unsafe fn nvim_put(
     let typed = unsafe { prepare_yankreg_from_object(&raw mut reg, type_0, lines.size) };
     if !typed {
         // SAFETY: `err` is this frame's own slot and `type_0` NUL-terminated.
-        unsafe { api_err_invalid(err, c"type".as_ptr(), type_0.data(), 0, true) };
+        error = unsafe { err_invalid_ptr(c"type".as_ptr(), type_0.data(), 0, true) };
         return ().reported(error);
     }
     if lines.size == 0 as size_t {
@@ -152,7 +153,7 @@ pub unsafe fn nvim_put(
             let (want, got) = (api_typename(kObjectTypeString), api_typename(item.type_0));
             // SAFETY: `err` is this frame's own slot, and both type names are
             // static strings.
-            unsafe { api_err_exp(err, c"line".as_ptr(), want, got) };
+            error = unsafe { err_expected_ptr(c"line".as_ptr(), want, Some(got)) };
             return ().reported(error);
         }
         // SAFETY: the tag above says the string arm is the live one, and

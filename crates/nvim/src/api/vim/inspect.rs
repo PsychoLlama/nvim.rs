@@ -10,6 +10,8 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
+use crate::api::private::validate::err_invalid_ptr;
+use crate::api_error;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg_c;
 use crate::popupmenu::pum_grid_ref;
@@ -77,7 +79,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
         // SAFETY: `err` is this frame's own slot and `name` a literal.
-        unsafe { api_err_invalid(err, name, NULL_STR, pid, false) };
+        error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
     } else {
         match os_proc_children(pid as ::core::ffi::c_int) {
             Some(pids) => children = pids,
@@ -118,10 +120,10 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
                 != kErrorTypeNone as ::core::ffi::c_int)
             {
-                let fmt = c"Failed to get process children. pid=%ld error=%d";
-                // SAFETY: `err` is this frame's own slot, and the format takes
-                // the `long` and the `int` it is given.
-                unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), pid, rv) };
+                error = api_error!(
+                    kErrorTypeException,
+                    "Failed to get process children. pid={pid} error={rv}"
+                );
             }
         } else {
             rvobj = arena_array(arena, children.len() as size_t);
@@ -140,7 +142,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
         // SAFETY: `err` is this frame's own slot and `name` a literal.
-        unsafe { api_err_invalid(err, name, NULL_STR, pid, false) };
+        error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
         return NIL.reported(error);
     }
     let mut a: Array = Array {
@@ -183,10 +185,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
         != kErrorTypeNone as ::core::ffi::c_int)
     {
-        let fmt = c"Failed to get process info. pid=%ld";
-        // SAFETY: `err` is this frame's own slot, and the format takes the
-        // one `long` it is given.
-        unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), pid) };
+        error = api_error!(kErrorTypeException, "Failed to get process info. pid={pid}");
     }
     rvobj.reported(error)
 }
@@ -212,7 +211,7 @@ pub unsafe fn nvim__inspect_cell(
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
             // SAFETY: `err` is this frame's own slot and `name` a literal.
-            unsafe { api_err_invalid(err, name, NULL_STR, grid, false) };
+            error = unsafe { err_invalid_ptr(name, NULL_STR, grid, false) };
             return ret.reported(error);
         }
         g = unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) };

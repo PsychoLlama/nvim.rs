@@ -11,11 +11,13 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api_error;
 use crate::getchar::typeahead;
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
 };
+use crate::message_fmt::msg_bytes;
 
 pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     let mut remap: bool = true;
@@ -109,7 +111,6 @@ pub unsafe fn nvim_input_mouse(
     col: Integer,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut code: ::core::ffi::c_int = 0;
     let mut modmask: ::core::ffi::c_int = 0;
     may_trigger_vim_suspend_resume(false);
@@ -165,11 +166,11 @@ pub unsafe fn nvim_input_mouse(
                     let mut mod_0: ::core::ffi::c_int =
                         name_to_mod_mask(byte as ::core::ffi::c_int);
                     if !(mod_0 != 0 as ::core::ffi::c_int) {
-                        let fmt = c"Invalid modifier: %c".as_ptr();
-                        let byte = byte as ::core::ffi::c_int;
-                        // SAFETY: `err` is this frame's own slot, and the
-                        // format takes the one `int` given.
-                        unsafe { api_set_error(err, kErrorTypeValidation, fmt, byte) };
+                        // `%c` wrote the one byte, whatever it was; the
+                        // adaptor keeps it rather than widening it to a char.
+                        let raw = byte as u8;
+                        let byte = msg_bytes(core::slice::from_ref(&raw));
+                        error = api_error!(kErrorTypeValidation, "Invalid modifier: {byte}");
                         return ().reported(error);
                     }
                     modmask |= mod_0;
@@ -186,10 +187,7 @@ pub unsafe fn nvim_input_mouse(
             return ().reported(error);
         }
     }
-    let msg = c"invalid button or action".as_ptr();
-    // SAFETY: `err` is this frame's own slot, and the format takes the one C
-    // string given.
-    unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+    error = Error::from_message(kErrorTypeValidation, c"invalid button or action");
     ().reported(error)
 }
 

@@ -11,40 +11,14 @@ use super::*;
 use crate::api::private::helpers::{
     ERROR_INIT, NIL, Reported, array_add, dict_put, dict_put_str, has_key,
 };
+use crate::api::private::validate::err_bad_number;
+use crate::api::private::validate::err_bad_value_ptr;
+use crate::api::private::validate::err_conflict_ptr;
+use crate::api::private::validate::err_expected;
+use crate::api_error;
 use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::kvec::InitVec;
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
-use core::ptr;
-
-/// "Invalid `name`: `n`", for a handle or id that names nothing.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_bad_number(err: *mut Error, name: &CStr, n: int64_t) {
-    let none = ptr::null();
-    // SAFETY: the caller's promise; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), none, n, false) };
-}
-
-/// "Invalid `name`: '`val`'", for a value the caller spelled wrong.
-///
-/// # Safety
-/// `err` must be the caller's error slot and `val` null or a C string.
-unsafe fn err_bad_value(err: *mut Error, name: &CStr, val: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_invalid(err, name.as_ptr(), val, 0, true) };
-}
-
-/// "Invalid `name`: expected `want`", naming `got` when it says.
-///
-/// # Safety
-/// `err` must be the caller's error slot, `want` a C string and `got` null
-/// or a C string.
-unsafe fn err_expected(err: *mut Error, name: &CStr, want: *const c_char, got: *const c_char) {
-    // SAFETY: the caller's promise; `name` is a C string too.
-    unsafe { api_err_exp(err, name.as_ptr(), want, got) };
-}
 
 pub unsafe fn nvim_get_autocmds(
     opts: *mut KeyDict_get_autocmds,
@@ -89,8 +63,8 @@ pub unsafe fn nvim_get_autocmds(
             kObjectTypeString => {
                 group = unsafe { augroup_find(opts.group.data.string.data()) };
                 if !(group >= 0 as ::core::ffi::c_int) {
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_bad_value(err, c"group", opts.group.data.string.data()) };
+                    // SAFETY: the value the keyset carried, live for this call.
+                    error = unsafe { err_bad_value_ptr(c"group", opts.group.data.string.data()) };
                     break '_cleanup;
                 }
             }
@@ -103,17 +77,17 @@ pub unsafe fn nvim_get_autocmds(
                     augroup_name(group)
                 };
                 if !unsafe { augroup_exists(name) } {
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_bad_number(err, c"group", opts.group.data.integer) };
+                    // SAFETY: the tag says the integer arm is live.
+                    let group = unsafe { opts.group.data.integer };
+                    error = err_bad_number(c"group", group);
                     break '_cleanup;
                 }
             }
             _ => {
                 if true {
-                    let want = c"String or Integer".as_ptr();
+                    let want = c"String or Integer";
                     let got = api_typename(opts.group.type_0);
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_expected(err, c"group", want, got) };
+                    error = err_expected(c"group", want, Some(got));
                     break '_cleanup;
                 }
             }
@@ -137,8 +111,8 @@ pub unsafe fn nvim_get_autocmds(
                     if !((event_nr as ::core::ffi::c_uint)
                         < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                     {
-                        // SAFETY: `err` is this call's own error slot.
-                        unsafe { err_bad_value(err, c"event", v.data.string.data()) };
+                        // SAFETY: the value the keyset carried, live for this call.
+                        error = unsafe { err_bad_value_ptr(c"event", v.data.string.data()) };
                         break '_cleanup;
                     }
                     event_set[event_nr as usize] = true;
@@ -156,8 +130,7 @@ pub unsafe fn nvim_get_autocmds(
                         {
                             let want = api_typename(kObjectTypeString);
                             let got = api_typename(event_v.type_0);
-                            // SAFETY: `err` is this call's own error slot.
-                            unsafe { err_expected(err, c"event item", want, got) };
+                            error = err_expected(c"event item", want, Some(got));
                             break '_cleanup;
                         }
                         let mut event_nr_0: event_T =
@@ -165,18 +138,17 @@ pub unsafe fn nvim_get_autocmds(
                         if !((event_nr_0 as ::core::ffi::c_uint)
                             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                         {
-                            // SAFETY: `err` is this call's own error slot.
-                            unsafe { err_bad_value(err, c"event", event_v.data.string.data()) };
+                            // SAFETY: the value the keyset carried, live for this call.
+                            error =
+                                unsafe { err_bad_value_ptr(c"event", event_v.data.string.data()) };
                             break '_cleanup;
                         }
                         event_set[event_nr_0 as usize] = true;
                         event_v_index = event_v_index.wrapping_add(1);
                     }
                 } else if true {
-                    let want = c"String or Array".as_ptr();
-                    let got = ::core::ptr::null::<::core::ffi::c_char>();
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_expected(err, c"event", want, got) };
+                    let want = c"String or Array";
+                    error = err_expected(c"event", want, None);
                     break '_cleanup;
                 }
             }
@@ -194,9 +166,9 @@ pub unsafe fn nvim_get_autocmds(
         if !(!(has_key(opts.is_set__get_autocmds_, 2 as ::core::ffi::c_int))
             || !(has_key(opts.is_set__get_autocmds_, 5 as ::core::ffi::c_int)))
         {
-            unsafe { api_err_conflict(err, c"buf".as_ptr(), c"buffer".as_ptr()) };
+            error = unsafe { err_conflict_ptr(c"buf".as_ptr(), c"buffer".as_ptr()) };
         } else if !(!(has_key(opts.is_set__get_autocmds_, 6 as ::core::ffi::c_int)) || !has_buf) {
-            unsafe { api_err_conflict(err, c"pattern".as_ptr(), c"buf".as_ptr()) };
+            error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
         } else {
             pattern_filter_count = 0 as ::core::ffi::c_int;
             's_506: {
@@ -215,11 +187,11 @@ pub unsafe fn nvim_get_autocmds(
                         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
                     {
                         if !(unsafe { v_0.data.array }.size <= 256 as size_t) {
-                            let fmt = c"Too many patterns (maximum of %d)".as_ptr();
                             let max = 256 as ::core::ffi::c_int;
-                            // SAFETY: `err` is this call's own error slot, and
-                            // the `%d` takes the one `c_int` it is given.
-                            unsafe { api_set_error(err, kErrorTypeValidation, fmt, max) };
+                            error = api_error!(
+                                kErrorTypeValidation,
+                                "Too many patterns (maximum of {max})"
+                            );
                             break '_cleanup;
                         }
                         let mut item_index: size_t = 0 as size_t;
@@ -233,8 +205,7 @@ pub unsafe fn nvim_get_autocmds(
                             {
                                 let want = api_typename(kObjectTypeString);
                                 let got = api_typename(item.type_0);
-                                // SAFETY: `err` is this call's own error slot.
-                                unsafe { err_expected(err, c"pattern", want, got) };
+                                error = err_expected(c"pattern", want, Some(got));
                                 break '_cleanup;
                             }
                             pattern_filters[pattern_filter_count as usize] =
@@ -243,10 +214,9 @@ pub unsafe fn nvim_get_autocmds(
                             item_index = item_index.wrapping_add(1);
                         }
                     } else if true {
-                        let want = c"String or Array".as_ptr();
+                        let want = c"String or Array";
                         let got = api_typename(v_0.type_0);
-                        // SAFETY: `err` is this call's own error slot.
-                        unsafe { err_expected(err, c"pattern", want, got) };
+                        error = err_expected(c"pattern", want, Some(got));
                         break '_cleanup;
                     }
                 }
@@ -291,10 +261,9 @@ pub unsafe fn nvim_get_autocmds(
                             || bufnr.type_0 as ::core::ffi::c_uint
                                 == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint)
                         {
-                            let want = c"Integer".as_ptr();
+                            let want = c"Integer";
                             let got = api_typename(bufnr.type_0);
-                            // SAFETY: `err` is this call's own error slot.
-                            unsafe { err_expected(err, c"buffer", want, got) };
+                            error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
                         }
                         let mut b_0: *mut buf_T =
@@ -317,9 +286,8 @@ pub unsafe fn nvim_get_autocmds(
                         bufnr_index = bufnr_index.wrapping_add(1);
                     }
                 } else if has_buf && true {
-                    let want = c"Integer or Array".as_ptr();
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_expected(err, c"buffer", want, api_typename(buf.type_0)) };
+                    let want = c"Integer or Array";
+                    error = err_expected(c"buffer", want, Some(api_typename(buf.type_0)));
                     break '_cleanup;
                 }
             }

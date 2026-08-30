@@ -14,9 +14,14 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, api_try};
+use crate::api::private::validate::err_expected_ptr;
+use crate::api::private::validate::err_msg_ptr;
+use crate::api_error;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::message_fmt::c_str;
+use crate::message_fmt::c_str_len;
 use crate::types::{FAIL, OK};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// Clear the abort/throw state, but only for a call that is not nested inside
@@ -61,11 +66,12 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
         if ok == FAIL {
             // The expression is quoted back at the user, capped so a huge
             // one does not become the whole message.
-            let fmt = c"Failed to evaluate expression: '%.*s'".as_ptr();
-            let (cap, text) = (256 as c_int, expr.data());
-            // SAFETY: `error` is this frame's slot; the format takes the
-            // length and the string it is given.
-            unsafe { api_set_error(&raw mut error, kErrorTypeException, fmt, cap, text) };
+            // SAFETY: `expr` names its own bytes, per this call's contract.
+            let text = unsafe { c_str_len(expr.data(), 256) };
+            error = api_error!(
+                kErrorTypeException,
+                "Failed to evaluate expression: '{text}'"
+            );
         } else {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
             rv = unsafe { vim_to_object(&raw mut rettv, arena, false) };
@@ -91,8 +97,8 @@ unsafe fn call_function_with(
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     if args.size > MAX_FUNC_ARGS as size_t {
         let msg = c"Function called with too many arguments".as_ptr();
-        // SAFETY: the caller's promise about `err`.
-        unsafe { api_set_error(err, kErrorTypeValidation, msg) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeValidation, msg) };
         return Object::NIL;
     }
     // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
@@ -196,9 +202,9 @@ pub unsafe fn nvim_call_dict_function(
         // SAFETY: `dict` is the caller's and `rettv`/`err` are this frame's.
         unsafe { object_to_vim(dict, &raw mut rettv, err) };
     } else {
-        let want = c"String or Dict".as_ptr();
+        let want = c"String or Dict";
         // SAFETY: `err` is this frame's slot and both strings are static.
-        unsafe { api_err_exp(err, c"dict argument".as_ptr(), want, ptr::null::<c_char>()) };
+        error = unsafe { err_expected_ptr(c"dict argument".as_ptr(), want, None) };
         return Object::NIL.reported(error);
     }
     // SAFETY: `rettv` is this frame's; a non-dictionary leaves the union's
@@ -232,12 +238,8 @@ unsafe fn call_in_dict(
 ) -> Object {
     // Every refusal below is a validation error, with or without the name
     // it is about.
-    // SAFETY: the caller's promise about `err`; the message takes nothing.
-    let refuse = |msg: &CStr| unsafe { api_set_error(err, kErrorTypeValidation, msg.as_ptr()) };
-    // SAFETY: as above; the format takes the one C string it is given.
-    let refuse_named = |fmt: &CStr, name: *const c_char| unsafe {
-        api_set_error(err, kErrorTypeValidation, fmt.as_ptr(), name);
-    };
+    // SAFETY: the caller's promise about `err`.
+    let refuse = |msg: &CStr| unsafe { *err = Error::validation(msg) };
 
     if rettv.v_type != VAR_DICT || self_dict.is_null() {
         refuse(c"dict not found");
@@ -250,7 +252,10 @@ unsafe fn call_in_dict(
         let di: *mut dictitem_T =
             unsafe { tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t) };
         if di.is_null() {
-            refuse_named(c"Not found: %s", fn_0.data());
+            // SAFETY: `fn_0` names its own NUL-terminated bytes.
+            let name = unsafe { c_str(fn_0.data()) };
+            // SAFETY: the caller's promise about `err`.
+            unsafe { *err = api_error!(kErrorTypeValidation, "Not found: {name}") };
             return Object::NIL;
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
@@ -260,7 +265,10 @@ unsafe fn call_in_dict(
             return Object::NIL;
         }
         if v_type != VAR_FUNC {
-            refuse_named(c"Not a function: %s", fn_0.data());
+            // SAFETY: `fn_0` names its own NUL-terminated bytes.
+            let name = unsafe { c_str(fn_0.data()) };
+            // SAFETY: the caller's promise about `err`.
+            unsafe { *err = api_error!(kErrorTypeValidation, "Not a function: {name}") };
             return Object::NIL;
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
@@ -269,7 +277,8 @@ unsafe fn call_in_dict(
         *fn_0 = String_0::from_raw_parts(name, unsafe { strlen(name) });
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
-        refuse_named(c"Invalid function name: %s", c"(empty)".as_ptr());
+        // SAFETY: the caller's promise about `err`.
+        unsafe { *err = Error::validation(c"Invalid function name: (empty)") };
         return Object::NIL;
     }
     // SAFETY: `fn_0` names its own bytes and `self_dict` is the live

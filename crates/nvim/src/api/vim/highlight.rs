@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported, dict_put_str, has_key};
+use crate::api::private::validate::err_invalid_ptr;
 use crate::highlight::HlAttrFlags;
 
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
@@ -38,7 +39,7 @@ pub unsafe fn nvim_set_hl(
     if !(hl_id != 0 as ::core::ffi::c_int) {
         let (what, got) = (c"highlight name".as_ptr(), name.data());
         // SAFETY: `err` is this frame's own slot and `name` is the caller's.
-        unsafe { api_err_invalid(err, what, got, 0, true) };
+        error = unsafe { err_invalid_ptr(what, got, 0, true) };
         return ().reported(error);
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -46,7 +47,7 @@ pub unsafe fn nvim_set_hl(
         unsafe { (*val).is_set__highlight_ },
         KEYSET_OPTIDX_highlight__url,
     ) {
-        unsafe { api_set_error(err, kErrorTypeValidation, c"Invalid key: 'url'".as_ptr()) };
+        error = Error::from_message(kErrorTypeValidation, c"Invalid key: 'url'");
         return ().reported(error);
     }
     let mut update: bool = has_key(
@@ -98,12 +99,11 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
 
 pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     if !(ns_id >= 0 as Integer) {
         let what = c"namespace".as_ptr();
         let none = ::core::ptr::null::<::core::ffi::c_char>();
         // SAFETY: `err` is this frame's own slot and `what` is a literal.
-        unsafe { api_err_invalid(err, what, none, ns_id, false) };
+        error = unsafe { err_invalid_ptr(what, none, ns_id, false) };
         return ().reported(error);
     }
     ns_hl_global.set(ns_id as NS);

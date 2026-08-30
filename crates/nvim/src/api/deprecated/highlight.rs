@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, Reported};
+use crate::api::private::validate::err_invalid_ptr;
 
 pub unsafe fn nvim_get_hl_by_id(
     hl_id: Integer,
@@ -21,7 +22,7 @@ pub unsafe fn nvim_get_hl_by_id(
         let null = ::core::ptr::null::<::core::ffi::c_char>();
         // SAFETY: `err` is this frame's slot; a null value string asks for
         // the numeric spelling.
-        unsafe { api_err_invalid(err, c"highlight id".as_ptr(), null, hl_id, false) };
+        error = unsafe { err_invalid_ptr(c"highlight id".as_ptr(), null, hl_id, false) };
         return Dict::EMPTY.reported(error);
     }
     // SAFETY: as above.
@@ -36,12 +37,11 @@ pub unsafe fn nvim_get_hl_by_name(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {
         // SAFETY: `err` is this frame's slot and `name` a C string.
-        unsafe { api_err_invalid(err, c"highlight name".as_ptr(), name.data(), 0, true) };
+        error = unsafe { err_invalid_ptr(c"highlight name".as_ptr(), name.data(), 0, true) };
         return Dict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.

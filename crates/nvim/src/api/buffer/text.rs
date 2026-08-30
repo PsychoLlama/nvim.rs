@@ -9,42 +9,13 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add};
+use crate::api::private::validate::err_exception;
+use crate::api::private::validate::err_out_of_range;
+use crate::api::private::validate::err_validation;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
 use crate::winlayer::{Buf, Pos, Win, tab_windows};
-use core::ffi::CStr;
-
-/// An exception whose whole message is `why`.
-///
-/// # Safety
-/// `err` must be the caller's error slot, and `why` must hold no `%`
-/// directive: upstream passes it as the format itself.
-unsafe fn err_exception(err: *mut Error, why: &CStr) {
-    // SAFETY: the caller's promise.
-    unsafe { api_set_error(err, kErrorTypeException, why.as_ptr()) };
-}
-
-/// "Invalid `name`: out of range", what every bounds check here answers.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_out_of_range(err: *mut Error, name: &CStr) {
-    let why = c"out of range".as_ptr();
-    // SAFETY: the caller's promise about `err`; `name` is a C string.
-    unsafe { api_err_invalid(err, name.as_ptr(), why, 0, false) };
-}
-
-/// A validation failure whose whole message is `why`.
-///
-/// # Safety
-/// `err` must be the caller's error slot.
-unsafe fn err_validation(err: *mut Error, why: &CStr) {
-    let fmt = c"%s".as_ptr();
-    // SAFETY: the caller's promise; `%s` takes the one C string it is given,
-    // so nothing in `why` is read as a directive.
-    unsafe { api_set_error(err, kErrorTypeValidation, fmt, why.as_ptr()) };
-}
 
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
@@ -82,14 +53,12 @@ pub unsafe fn nvim_buf_set_text(
     let mut oob: bool = false;
     start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_out_of_range(err, c"start_row") };
+        error = err_out_of_range(c"start_row");
         return ().reported(error);
     }
     end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_out_of_range(err, c"end_row") };
+        error = err_out_of_range(c"end_row");
         return ().reported(error);
     }
     let mut str_at_start: *mut ::core::ffi::c_char =
@@ -102,8 +71,7 @@ pub unsafe fn nvim_buf_set_text(
         start_col
     };
     if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_out_of_range(err, c"start_col") };
+        error = err_out_of_range(c"start_col");
         return ().reported(error);
     }
     let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as linenr_T) };
@@ -115,27 +83,17 @@ pub unsafe fn nvim_buf_set_text(
         end_col
     };
     if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_out_of_range(err, c"end_col") };
+        error = err_out_of_range(c"end_col");
         return ().reported(error);
     }
     if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
         let why = c"'start' is higher than 'end'";
-        // SAFETY: `err` is this call's own error slot.
-        unsafe { err_validation(err, why) };
+        error = err_validation(why);
         return ().reported(error);
     }
     let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
-    if !unsafe {
-        check_string_array(
-            replacement,
-            c"replacement string".as_ptr() as *mut ::core::ffi::c_char,
-            disallow_nl,
-            err,
-        )
-    } {
-        return ().reported(error);
-    }
+    // SAFETY: `replacement` is the caller's array.
+    unsafe { check_string_array(replacement, c"replacement string", disallow_nl) }?;
     let mut new_len: size_t = replacement.size;
     let mut new_byte: bcount_t = 0 as bcount_t;
     let mut old_byte: bcount_t = 0 as bcount_t;
@@ -238,9 +196,7 @@ pub unsafe fn nvim_buf_set_text(
     's_652: {
         if unsafe { (*b).b_p_ma } == 0 {
             let why = c"Buffer is not 'modifiable'";
-            // SAFETY: `err` is this call's own error slot; the
-            // message holds no `%` directive.
-            unsafe { err_exception(err, why) };
+            error = err_exception(why);
         } else if u_save_buf(
             unsafe { Buf::new(b) },
             start_row as linenr_T - 1 as linenr_T,
@@ -248,9 +204,7 @@ pub unsafe fn nvim_buf_set_text(
         ) == 0 as ::core::ffi::c_int
         {
             let why = c"Failed to save undo information";
-            // SAFETY: `err` is this call's own error slot; the
-            // message holds no `%` directive.
-            unsafe { err_exception(err, why) };
+            error = err_exception(why);
         } else {
             let mut extra: ptrdiff_t = 0 as ptrdiff_t;
             let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
@@ -265,9 +219,7 @@ pub unsafe fn nvim_buf_set_text(
                     == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to delete line";
-                    // SAFETY: `err` is this call's own error slot; the
-                    // message holds no `%` directive.
-                    unsafe { err_exception(err, why) };
+                    error = err_exception(why);
                     break 's_652;
                 } else {
                     i_1 = i_1.wrapping_add(1);
@@ -282,17 +234,14 @@ pub unsafe fn nvim_buf_set_text(
                 let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
                 if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_validation(err, why) };
+                    error = err_validation(why);
                     break 's_652;
                 } else if unsafe {
                     ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
                 } == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to replace line";
-                    // SAFETY: `err` is this call's own error slot; the
-                    // message holds no `%` directive.
-                    unsafe { err_exception(err, why) };
+                    error = err_exception(why);
                     break 's_652;
                 } else {
                     i_2 = i_2.wrapping_add(1);
@@ -303,17 +252,14 @@ pub unsafe fn nvim_buf_set_text(
                 let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
                 if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
-                    // SAFETY: `err` is this call's own error slot.
-                    unsafe { err_validation(err, why) };
+                    error = err_validation(why);
                     break 's_652;
                 } else if unsafe {
                     ml_append_buf(b, lnum_1 as linenr_T, *lines.add(i_3), 0 as colnr_T, false)
                 } == 0 as ::core::ffi::c_int
                 {
                     let why = c"Failed to insert line";
-                    // SAFETY: `err` is this call's own error slot; the
-                    // message holds no `%` directive.
-                    unsafe { err_exception(err, why) };
+                    error = err_exception(why);
                     break 's_652;
                 } else {
                     extra += 1;

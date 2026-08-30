@@ -91,6 +91,7 @@ mod known {
     pub(super) const CLOSE_MSG_MAX: usize = 256;
 }
 
+use crate::api::private::validate::err_msg_ptr;
 use known::*;
 
 /// The all-nil `Object`, which is what an API call that produced nothing, or
@@ -466,7 +467,8 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
     // below is guarded by the `type_0` it belongs to.
     if result.type_0 == kObjectTypeString {
         let text = unsafe { result.data.string }.data();
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), text) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = err_msg_ptr(kErrorTypeException, text) };
         return;
     }
     if result.type_0 == kObjectTypeArray {
@@ -480,13 +482,15 @@ unsafe fn report_call_error(err: *mut Error, result: &Object) {
                 && message.type_0 == kObjectTypeString
             {
                 let kind = crate::narrow::number_as_int(unsafe { kind.data.integer });
-                unsafe { api_set_error(err, kind, c"%s".as_ptr(), message.data.string.data()) };
+                // SAFETY: the caller's error slot.
+                unsafe { *err = err_msg_ptr(kind, message.data.string.data()) };
                 return;
             }
         }
     }
     let unknown = c"unknown error".as_ptr();
-    unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), unknown) };
+    // SAFETY: the caller's error slot.
+    unsafe { *err = err_msg_ptr(kErrorTypeException, unknown) };
 }
 
 /// Hands an already-encoded message to a channel. Takes ownership of `buffer`.

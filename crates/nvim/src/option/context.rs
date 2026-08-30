@@ -12,7 +12,6 @@
 use core::ffi::{c_char, c_void};
 use core::ptr;
 
-use crate::api::private::helpers::api_set_error;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
@@ -113,9 +112,10 @@ impl OptionContext {
                     == FAIL
                 {
                     unsafe { restore_win_noblock(switchwin, true) };
-                    if unsafe { (*err).kind() } == kErrorTypeNone {
-                        let why = c"Problem while switching windows".as_ptr();
-                        unsafe { api_set_error(err, kErrorTypeException, why) };
+                    // SAFETY: the caller's error slot.
+                    if !unsafe { (*err).is_set() } {
+                        // SAFETY: as above.
+                        unsafe { *err = Error::exception(c"Problem while switching windows") };
                     }
                     return false;
                 }
@@ -202,8 +202,8 @@ pub(crate) unsafe fn set_option_value_for(
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
     if let Some(errmsg) = errmsg {
-        // SAFETY: `err` is valid and `errmsg` NUL-terminated.
-        unsafe { api_set_error(err, kErrorTypeException, c"%s".as_ptr(), errmsg.as_ptr()) };
+        // SAFETY: the caller's error slot.
+        unsafe { *err = Error::from_message(kErrorTypeException, &errmsg) };
     }
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.

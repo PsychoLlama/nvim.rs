@@ -18,7 +18,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::api::private::helpers::{api_free_object, api_set_error};
+use crate::api::private::helpers::api_free_object;
 use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
@@ -36,6 +36,7 @@ use crate::ui_client::ui_client_event_raw_line;
 use super::envelope::serialize_response;
 use super::known::*;
 use super::{Chan, NIL, RequestEvent, chan_close_on_err, trace};
+use crate::api::private::validate::err_msg_ptr;
 
 // ---------------------------------------------------------------------------
 // Receiving
@@ -361,8 +362,8 @@ unsafe fn send_error(
 ) {
     let mut e = Error::none();
     let mut answer = NIL;
-    // SAFETY: the caller's message, and two stack locals.
-    unsafe { api_set_error(&raw mut e, kErrorTypeException, c"%s".as_ptr(), err) };
+    // SAFETY: the message the caller handed over, live for this call.
+    e = unsafe { err_msg_ptr(kErrorTypeException, err) };
     let (to, err, out) = (chan.as_ptr(), &raw mut e, &raw mut answer);
     unsafe { serialize_response(to, handler, type_0, id, err, out) };
     e.clear();

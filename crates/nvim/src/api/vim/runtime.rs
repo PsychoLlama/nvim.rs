@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, api_try};
+use crate::api::private::validate::err_invalid_ptr;
 use crate::kvec::InitVec;
 use crate::types::NUL;
 use crate::winlayer::Live;
@@ -145,16 +146,12 @@ pub unsafe fn nvim__get_runtime(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { Live::new(opts) };
     // SAFETY: the Lua state exists from startup to exit.
     let deferred_safe = unsafe { nlua_is_deferred_safe() };
     if opts.do_source && !deferred_safe {
-        let msg = c"'do_source' used in fast callback".as_ptr();
-        // SAFETY: `err` is this frame's own slot, and the format takes the
-        // one C string given.
-        unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+        error = Error::from_message(kErrorTypeValidation, c"'do_source' used in fast callback");
         return Array::EMPTY.reported(error);
     }
     // SAFETY: `pat` is the caller's array and `arena` its own.
@@ -177,7 +174,7 @@ pub unsafe fn nvim__get_runtime(
 fn too_long(err: &mut Error, name: &CStr) {
     let too_long = c"(too long)".as_ptr();
     // SAFETY: `err` is the caller's own slot, and both strings are literals.
-    unsafe { api_err_invalid(err, name.as_ptr(), too_long, 0, true) };
+    *err = unsafe { err_invalid_ptr(name.as_ptr(), too_long, 0, true) };
 }
 
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {

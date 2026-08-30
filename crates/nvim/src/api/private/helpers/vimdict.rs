@@ -8,11 +8,13 @@
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL, api_set_error};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
+use crate::api_error;
 use crate::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc_len,
     tv_dict_item_remove, tv_dict_watcher_notify,
 };
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
+use crate::message_fmt::c_str;
 use crate::types::{
     Arena, Error, Object, String_0, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, kErrorTypeException,
     kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, typval_T, typval_vval_union,
@@ -34,10 +36,10 @@ pub(crate) unsafe fn dict_get_value(
     // caller's text.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
     if di.is_null() {
-        let fmt = c"Key not found: %s".as_ptr();
-        // SAFETY: `err` is the caller's slot; the format takes the one C
-        // string it is given.
-        unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+        // SAFETY: `key` borrows the caller's NUL-terminated text.
+        let key = unsafe { c_str(key.data()) };
+        // SAFETY: `err` is the caller's slot.
+        unsafe { *err = api_error!(kErrorTypeValidation, "Key not found: {key}") };
         return NIL;
     }
     // SAFETY: the lookup answered a live item of `dict`.
@@ -61,18 +63,19 @@ pub(crate) unsafe fn dict_check_writable(
         // SAFETY: the lookup answered a live item.
         let flags = unsafe { (*di).di_flags } as c_int;
         let refused = if flags & DI_FLAGS_RO != 0 {
-            Some(c"Key is read-only: %s")
+            Some("read-only")
         } else if flags & DI_FLAGS_LOCK != 0 {
-            Some(c"Key is locked: %s")
+            Some("locked")
         } else if del && flags & DI_FLAGS_FIX != 0 {
-            Some(c"Key is fixed: %s")
+            Some("fixed")
         } else {
             None
         };
-        if let Some(fmt) = refused {
-            // SAFETY: `err` is the caller's slot; the format takes the one C
-            // string it is given.
-            unsafe { api_set_error(err, kErrorTypeException, fmt.as_ptr(), key.data()) };
+        if let Some(why) = refused {
+            // SAFETY: `key` borrows the caller's NUL-terminated text.
+            let key = unsafe { c_str(key.data()) };
+            // SAFETY: `err` is the caller's slot.
+            unsafe { *err = api_error!(kErrorTypeException, "Key is {why}: {key}") };
         }
         return di;
     }
@@ -87,8 +90,8 @@ pub(crate) unsafe fn dict_check_writable(
         None
     };
     if let Some((kind, msg)) = refused {
-        // SAFETY: `err` is the caller's slot; the message takes no argument.
-        unsafe { api_set_error(err, kind, msg.as_ptr()) };
+        // SAFETY: `err` is the caller's slot.
+        unsafe { *err = Error::from_message(kind, msg) };
     }
     di
 }
@@ -116,10 +119,10 @@ pub(crate) unsafe fn dict_set_var(
 
     if del {
         if di.is_null() {
-            let fmt = c"Key not found: %s".as_ptr();
-            // SAFETY: `err` is the caller's slot; the format takes the one C
-            // string it is given.
-            unsafe { api_set_error(err, kErrorTypeValidation, fmt, key.data()) };
+            // SAFETY: `key` borrows the caller's NUL-terminated text.
+            let key = unsafe { c_str(key.data()) };
+            // SAFETY: `err` is the caller's slot.
+            unsafe { *err = api_error!(kErrorTypeValidation, "Key not found: {key}") };
             return rv;
         }
         // SAFETY: `di` is the live item the lookup found. A raw pointer

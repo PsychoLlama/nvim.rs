@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, dict_put};
+use crate::api::private::validate::err_msg_ptr;
 
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
     let mut rv: Array = arena_array(arena, 2 as size_t);
@@ -81,12 +82,11 @@ pub unsafe fn nvim_set_client_info(
 
 pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
         let msg = e_invchan.as_ptr();
-        // SAFETY: `err` is this frame's own slot and `e_invchan` is static.
-        unsafe { api_set_error(err, kErrorTypeValidation, c"%s".as_ptr(), msg) };
+        // SAFETY: the message the caller handed over, live for this call.
+        error = unsafe { err_msg_ptr(kErrorTypeValidation, msg) };
         return ().reported(error);
     }
     unsafe { (*chan).detach = detach };
