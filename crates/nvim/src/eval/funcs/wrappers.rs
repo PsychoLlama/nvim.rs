@@ -477,7 +477,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
         let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
         semsg_multiline!(c"emsg", "E5555: API call: {msg}");
     } else {
-        unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true, &raw mut err) };
+        unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true) };
     }
     // Only some handlers allocate their result; the row's handler says
     // which.

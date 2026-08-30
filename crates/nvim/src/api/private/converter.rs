@@ -33,13 +33,13 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    Arena, Array, BoolVarValue, Dict, Error, Float, Integer, KeyValuePair, LuaRef, Object,
-    String_0, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_UNKNOWN, VarLock, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString,
-    kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t,
-    size_t, typval_T, typval_vval_union,
+    Arena, Array, BoolVarValue, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN,
+    VarLock, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse, kBoolVarTrue,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t, size_t, typval_T,
+    typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -401,27 +401,21 @@ pub unsafe fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata
 ///
 /// # Safety
 /// `tv` must point at writable typval storage.
-pub unsafe fn object_to_vim(obj: Object, tv: *mut typval_T, err: *mut Error) {
+pub unsafe fn object_to_vim(obj: Object, tv: *mut typval_T) {
     let mut obj = obj;
-    unsafe { object_to_vim_take_luaref(&raw mut obj, tv, false, err) };
+    unsafe { object_to_vim_take_luaref(&raw mut obj, tv, false) };
 }
 /// As [`object_to_vim`], but consuming every `LuaRef` nested in `obj`.
 ///
 /// Useful where `obj` sits on an arena, which cannot free the Lua registry
 /// references its objects hold.
 ///
-/// `err` is vestigial: upstream threads it through the recursion and never
-/// reads it, and it is part of the signature both callers spell.
+/// Upstream threads an `Error` out-parameter through the recursion and never
+/// reads it; there is nothing here that can fail, so this does not take one.
 ///
 /// # Safety
 /// As [`object_to_vim`]; `obj` must point at a live object tree.
-#[allow(clippy::only_used_in_recursion)]
-pub unsafe fn object_to_vim_take_luaref(
-    obj: *mut Object,
-    tv: *mut typval_T,
-    take_luaref: bool,
-    err: *mut Error,
-) {
+pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, take_luaref: bool) {
     // SAFETY: the caller's promise -- `tv` is writable typval storage and
     // `obj` a live object, both for the length of the call.
     let mut tv = unsafe { Live::<typval_T>::new(tv) };
@@ -474,7 +468,7 @@ pub unsafe fn object_to_vim_take_luaref(
                 // SAFETY: `i` is below `size`, so the slot is inside
                 // `items`, and `li_tv` is this frame's.
                 unsafe {
-                    object_to_vim_take_luaref(array.items.add(i), &raw mut li_tv, take_luaref, err);
+                    object_to_vim_take_luaref(array.items.add(i), &raw mut li_tv, take_luaref);
                     tv_list_append_owned_tv(list, li_tv);
                 }
             }
@@ -495,7 +489,7 @@ pub unsafe fn object_to_vim_take_luaref(
                     let item: *mut KeyValuePair = pairs.items.add(i);
                     let di: *mut dictitem_T = tv_dict_item_alloc((*item).key.data());
                     let value = &raw mut (*item).value;
-                    object_to_vim_take_luaref(value, &raw mut (*di).di_tv, take_luaref, err);
+                    object_to_vim_take_luaref(value, &raw mut (*di).di_tv, take_luaref);
                     tv_dict_add(dict, di);
                 }
             }

@@ -87,15 +87,10 @@ const DEFAULT_GRID_HANDLE: Integer = 1;
 static connected_uis: GlobalCell<Vec<*mut RemoteUI>> = GlobalCell::new(Vec::new());
 
 /// The UI attached to `chan_id`, or null with `err` set.
-///
-/// # Safety
-///
-/// `err` must be writable or null.
-unsafe fn get_ui_or_err(chan_id: u64, err: *mut Error) -> *mut RemoteUI {
+fn get_ui_or_err(chan_id: u64, err: &mut Error) -> *mut RemoteUI {
     let ui = find_ui(chan_id).unwrap_or(core::ptr::null_mut());
-    if ui.is_null() && !err.is_null() {
-        // SAFETY: the caller's promise about `err`.
-        unsafe { *err = api_error!(kErrorTypeException, "UI not attached to channel: {chan_id}") };
+    if ui.is_null() {
+        *err = api_error!(kErrorTypeException, "UI not attached to channel: {chan_id}");
     }
     ui
 }
@@ -132,9 +127,8 @@ unsafe fn remote_ui_destroy(ui: *mut RemoteUI) {
 /// # Safety
 ///
 /// `err` must be writable or null.
-pub unsafe fn remote_ui_disconnect(channel_id: u64, err: *mut Error, send_error_exit: bool) {
-    // SAFETY: the caller's promise about `err`.
-    let ui = unsafe { get_ui_or_err(channel_id, err) };
+pub unsafe fn remote_ui_disconnect(channel_id: u64, err: &mut Error, send_error_exit: bool) {
+    let ui = get_ui_or_err(channel_id, err);
     if ui.is_null() {
         return;
     }
@@ -193,7 +187,6 @@ pub unsafe fn nvim_ui_attach(
     options: Dict,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     if find_ui(channel_id).is_some() {
         error = api_error!(
             kErrorTypeException,
@@ -221,9 +214,9 @@ pub unsafe fn nvim_ui_attach(
     for i in 0..options.size {
         // SAFETY: `i` is below `size`, so the slot is inside `items`.
         let option = unsafe { *options.items.add(i) };
-        // SAFETY: `raw` is live, `err` is this frame's slot, and the value
+        // SAFETY: `raw` is live, `error` is this frame's slot, and the value
         // lives as long as the caller's dictionary.
-        unsafe { ui_set_option(raw, true, option.key, option.value, err) };
+        unsafe { ui_set_option(raw, true, option.key, option.value, &mut error) };
         if error.is_set() {
             // Nothing has been published yet, so the half-configured UI
             // can simply be dropped. `term_name` is the only owned
@@ -332,11 +325,11 @@ pub unsafe fn ui_attach(
 ///
 /// # Safety
 ///
-/// `error` must be writable.
-pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, error: *mut Error) {
-    // SAFETY: the caller's promise about `error`.
-    if unsafe { get_ui_or_err(channel_id, error) }.is_null() {
-        return;
+/// The editor must be running.
+pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    if get_ui_or_err(channel_id, &mut error).is_null() {
+        return Err(error);
     }
     if gained {
         // Whichever UI was focused last is the one `nvim_get_current_ui`
@@ -345,6 +338,7 @@ pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, error: *mut Er
         may_trigger_vim_suspend_resume(false);
     }
     do_autocmd_focusgained(gained);
+    Ok(())
 }
 
 /// Detaches the UI on `channel_id`.
@@ -354,8 +348,7 @@ pub unsafe fn nvim_ui_set_focus(channel_id: u64, gained: Boolean, error: *mut Er
 /// `err` must be writable.
 pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    unsafe { remote_ui_disconnect(channel_id, err, false) };
+    unsafe { remote_ui_disconnect(channel_id, &mut error, false) };
     ().reported(error)
 }
 
@@ -367,9 +360,8 @@ pub unsafe fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 /// # Safety
 ///
 /// `err` must be writable and `server_addr` a valid C string.
-pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: *mut Error) {
-    // SAFETY: the caller's promise about `err`.
-    let ui = unsafe { get_ui_or_err(channel_id, err) };
+pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: &mut Error) {
+    let ui = get_ui_or_err(channel_id, err);
     if ui.is_null() {
         return;
     }
@@ -392,9 +384,7 @@ pub unsafe fn nvim_ui_try_resize(
     height: Integer,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `err` is this frame's slot.
-    let ui = unsafe { get_ui_or_err(channel_id, err) };
+    let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);
     }
@@ -417,18 +407,20 @@ pub unsafe fn nvim_ui_try_resize(
 ///
 /// # Safety
 ///
-/// `error` must be writable and `value` valid for the duration.
+/// `value` must stay valid for the duration.
 pub unsafe fn nvim_ui_set_option(
     channel_id: u64,
     name: String_0,
     value: Object,
-    error: *mut Error,
-) {
-    let ui = unsafe { get_ui_or_err(channel_id, error) };
+) -> Result<(), Error> {
+    let mut error = ERROR_INIT;
+    let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
-        return;
+        return Err(error);
     }
-    unsafe { ui_set_option(ui, false, name, value, error) };
+    // SAFETY: the UI just looked up, and the caller's value.
+    unsafe { ui_set_option(ui, false, name, value, &mut error) };
+    ().reported(error)
 }
 
 /// Applies one option to `ui`.
@@ -445,7 +437,7 @@ unsafe fn ui_set_option(
     init: bool,
     name: String_0,
     value: Object,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     // SAFETY: the caller's promise -- `ui` is live for the call. `Live`
     // hands out a borrow only for the length of one field access, so the
@@ -597,7 +589,7 @@ unsafe fn ui_set_option(
 /// # Safety
 ///
 /// `err` must be writable.
-unsafe fn want_boolean(err: *mut Error, name: &CStr, value: Object) -> Option<Boolean> {
+unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
     let got = value.as_boolean();
     if got.is_none() {
         // SAFETY: the caller's promise about `err`; `name` is a C string.
@@ -611,7 +603,7 @@ unsafe fn want_boolean(err: *mut Error, name: &CStr, value: Object) -> Option<Bo
 /// # Safety
 ///
 /// As [`want_boolean`].
-unsafe fn want_integer(err: *mut Error, name: &CStr, value: Object) -> Option<Integer> {
+unsafe fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<Integer> {
     let got = value.as_integer();
     if got.is_none() {
         // SAFETY: as [`want_boolean`].
@@ -625,7 +617,7 @@ unsafe fn want_integer(err: *mut Error, name: &CStr, value: Object) -> Option<In
 /// # Safety
 ///
 /// As [`want_boolean`].
-unsafe fn want_string(err: *mut Error, name: &CStr, value: Object) -> Option<String_0> {
+unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<String_0> {
     let got = value.as_string();
     if got.is_none() {
         // SAFETY: as [`want_boolean`].
@@ -639,7 +631,7 @@ unsafe fn want_string(err: *mut Error, name: &CStr, value: Object) -> Option<Str
 /// # Safety
 ///
 /// `err` must be writable and `name` a valid C string.
-unsafe fn wrong_type(err: *mut Error, name: *const c_char, expected: ObjectType, value: Object) {
+unsafe fn wrong_type(err: &mut Error, name: *const c_char, expected: ObjectType, value: Object) {
     let expected = api_typename(expected);
     let actual = api_typename(value.type_0);
     // SAFETY: the caller's error slot.
@@ -658,20 +650,18 @@ pub unsafe fn nvim_ui_try_resize_grid(
     height: Integer,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `err` is this frame's slot.
-    if unsafe { get_ui_or_err(channel_id, err) }.is_null() {
+    if get_ui_or_err(channel_id, &mut error).is_null() {
         return ().reported(error);
     }
     if grid == DEFAULT_GRID_HANDLE {
         // The default grid is the screen, so resizing it is a window
         // resize like any other.
-        // SAFETY: `err` is this frame's slot.
+        // SAFETY: `error` is this frame's slot.
         return unsafe { nvim_ui_try_resize(channel_id, width, height) };
     }
     let (grid, width, height) = (grid as handle_T, width as c_int, height as c_int);
-    // SAFETY: `err` is this frame's slot.
-    unsafe { ui_grid_resize(grid, width, height, err) };
+    // SAFETY: `error` is this frame's slot.
+    unsafe { ui_grid_resize(grid, width, height, &mut error) };
     ().reported(error)
 }
 
@@ -682,9 +672,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
 /// `err` must be writable.
 pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `err` is this frame's slot.
-    let ui = unsafe { get_ui_or_err(channel_id, err) };
+    let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);
     }
@@ -719,9 +707,7 @@ pub unsafe fn nvim_ui_pum_set_bounds(
     col: Float,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `err` is this frame's slot.
-    let ui = unsafe { get_ui_or_err(channel_id, err) };
+    let ui = get_ui_or_err(channel_id, &mut error);
     if ui.is_null() {
         return ().reported(error);
     }

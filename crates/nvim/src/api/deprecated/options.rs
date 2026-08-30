@@ -17,12 +17,12 @@ use core::ffi::{CStr, c_char, c_void};
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let (buf, win) = (curbuf.get(), curwin.get());
     // SAFETY: `name` is the caller's, the two globals name the current
-    // buffer and window, and `arena`/`err` are the caller's and this
+    // buffer and window, and `arena`/`error` are the caller's and this
     // frame's slot.
-    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win, arena, err) }.reported(error)
+    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win, arena, &mut error) }
+        .reported(error)
 }
 
 pub unsafe fn nvim_set_option(
@@ -31,17 +31,15 @@ pub unsafe fn nvim_set_option(
     value: Object,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the global scope names no object, so `NULL` is what it takes.
-    unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, err) };
+    unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, &mut error) };
     ().reported(error)
 }
 
 pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: as `nvim_set_option`.
-    unsafe { get_option_from(NULL, kOptScopeGlobal, name, err) }.reported(error)
+    unsafe { get_option_from(NULL, kOptScopeGlobal, name, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
@@ -52,7 +50,7 @@ pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Obje
     let from = buf.raw().cast::<c_void>();
     // SAFETY: `from` is that live buffer, which is what `kOptScopeBuf` says
     // it is; `error` is this frame's slot.
-    unsafe { get_option_from(from, kOptScopeBuf, name, &raw mut error) }.reported(error)
+    unsafe { get_option_from(from, kOptScopeBuf, name, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_set_option(
@@ -66,9 +64,8 @@ pub unsafe fn nvim_buf_set_option(
         return ().reported(error);
     };
     let to = buf.raw().cast::<c_void>();
-    let err = &raw mut error;
     // SAFETY: as `nvim_buf_get_option`.
-    unsafe { set_option_to(channel_id, to, kOptScopeBuf, name, value, err) };
+    unsafe { set_option_to(channel_id, to, kOptScopeBuf, name, value, &mut error) };
     ().reported(error)
 }
 
@@ -80,7 +77,7 @@ pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Obje
     let from = win.raw().cast::<c_void>();
     // SAFETY: `from` is that live window, which is what `kOptScopeWin` says
     // it is; `error` is this frame's slot.
-    unsafe { get_option_from(from, kOptScopeWin, name, &raw mut error) }.reported(error)
+    unsafe { get_option_from(from, kOptScopeWin, name, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_win_set_option(
@@ -94,9 +91,8 @@ pub unsafe fn nvim_win_set_option(
         return ().reported(error);
     };
     let to = win.raw().cast::<c_void>();
-    let err = &raw mut error;
     // SAFETY: as `nvim_win_get_option`.
-    unsafe { set_option_to(channel_id, to, kOptScopeWin, name, value, err) };
+    unsafe { set_option_to(channel_id, to, kOptScopeWin, name, value, &mut error) };
     ().reported(error)
 }
 
@@ -105,7 +101,7 @@ pub unsafe fn nvim_win_set_option(
 ///
 /// # Safety
 /// `err` must be the caller's error slot.
-unsafe fn resolve_option(name: String_0, err: *mut Error) -> Option<(*const c_char, OptIndex)> {
+unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_char, OptIndex)> {
     if name.is_empty() {
         let empty = c"<empty>".as_ptr();
         // SAFETY: the caller's error slot.
@@ -132,7 +128,7 @@ unsafe fn get_option_from(
     from: *mut c_void,
     scope: OptScope,
     name: String_0,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // SAFETY: the caller's promise about `err`.
     let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {
@@ -147,8 +143,7 @@ unsafe fn get_option_from(
         };
         // SAFETY: the caller's promise about `from` and `err`.
         value = unsafe { get_option_value_for(opt_idx, flags, scope, from, err) };
-        // SAFETY: as above.
-        if unsafe { (*err).kind() } != kErrorTypeNone {
+        if err.kind() != kErrorTypeNone {
             return NIL;
         }
     }
@@ -172,7 +167,7 @@ unsafe fn set_option_to(
     scope: OptScope,
     name: String_0,
     value: Object,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     // SAFETY: the caller's promise about `err`.
     let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {

@@ -23,8 +23,7 @@ pub unsafe fn nvim_get_hl(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, err).reported(error) }
+    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, &mut error).reported(error) }
 }
 
 pub unsafe fn nvim_set_hl(
@@ -34,11 +33,10 @@ pub unsafe fn nvim_set_hl(
     val: *mut KeyDict_highlight,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
         let (what, got) = (c"highlight name".as_ptr(), name.data());
-        // SAFETY: `err` is this frame's own slot and `name` is the caller's.
+        // SAFETY: `error` is this frame's own slot and `name` is the caller's.
         error = unsafe { err_invalid_ptr(what, got, 0, true) };
         return ().reported(error);
     }
@@ -72,8 +70,9 @@ pub unsafe fn nvim_set_hl(
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
-    let mut attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, err) };
-    if !(unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
+    let mut attrs: HlAttrs =
+        unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, &mut error) };
+    if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let _sctx = api_set_sctx(channel_id);
         unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
     }
@@ -82,12 +81,11 @@ pub unsafe fn nvim_set_hl(
 
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     if has_key(
         unsafe { (*opts).is_set__get_ns_ },
         KEYSET_OPTIDX_get_ns__winid,
     ) {
-        let mut win: *mut win_T = unsafe { find_window_by_handle((*opts).winid, err) };
+        let mut win: *mut win_T = unsafe { find_window_by_handle((*opts).winid, &mut error) };
         if win.is_null() {
             return (0 as Integer).reported(error);
         }

@@ -472,25 +472,24 @@ unsafe fn dispatch_fast(
 /// `lstate` is the running Lua state and `call` is the binding's own, with
 /// an error set.
 unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
-    let err = &raw mut call.err;
-    // SAFETY: the caller's stack; `err` points at the binding's own error,
-    // whose message this consumes, and `err_param`, when set, at a static
-    // NUL-terminated name.
+    let message = call.err.message_or_empty().as_ptr();
+    // SAFETY: the caller's stack; `message` is the binding's own error text,
+    // live until the `clear` below, and `err_param`, when set, points at a
+    // static NUL-terminated name.
     unsafe {
         luaL_where(lstate, 1);
         if !call.err_param.is_null() {
             lua_pushstring(lstate, c"Invalid '".as_ptr());
             lua_pushstring(lstate, call.err_param);
             lua_pushstring(lstate, c"': ".as_ptr());
-            lua_pushstring(lstate, (*err).message_or_empty().as_ptr());
-            (*err).clear();
+            lua_pushstring(lstate, message);
             lua_concat(lstate, 5);
         } else {
-            lua_pushstring(lstate, (*err).message_or_empty().as_ptr());
-            (*err).clear();
+            lua_pushstring(lstate, message);
             lua_concat(lstate, 2);
         }
     }
+    call.err.clear();
 }
 
 /// One entry of the `vim.api` table.

@@ -271,7 +271,9 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     let chan = unsafe { Chan::new((*argv).cast::<Channel>()) };
     // SAFETY: as above.
     unsafe { channel_decref(chan.as_ptr()) };
-    unsafe { remote_ui_disconnect(chan.id, ptr::null_mut(), false) };
+    // Nothing reads the reason a closing channel's UI could not be found.
+    let mut ignored = Error::none();
+    unsafe { remote_ui_disconnect(chan.id, &mut ignored, false) };
 
     if ui_client_channel_id.get() != 0 && chan.id == ui_client_channel_id.get() {
         // A `--remote-ui` client whose server went away: try to reconnect
@@ -399,12 +401,11 @@ pub unsafe fn rpc_send_call(
     method_name: *const c_char,
     args: Array,
     result_mem: *mut ArenaMem,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // SAFETY: the channel table is live whenever the editor is.
     let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
-        // SAFETY: the caller's error slot.
-        unsafe { *err = api_error!(kErrorTypeException, "Invalid channel: {id}") };
+        *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
         return NIL;
     };
     // SAFETY: the channel is live; this reference is dropped below.
@@ -436,8 +437,7 @@ pub unsafe fn rpc_send_call(
     chan.rpc.call_stack.pop();
 
     if !frame.returned {
-        // SAFETY: the caller's error slot, and the reference taken above.
-        unsafe { *err = api_error!(kErrorTypeException, "Invalid channel: {id}") };
+        *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
         unsafe { channel_decref(chan.as_ptr()) };
         return NIL;
     }
@@ -461,7 +461,7 @@ pub unsafe fn rpc_send_call(
 ///
 /// # Safety
 /// `err` points at a writable `Error` and `result` is a live decoded object.
-unsafe fn report_call_error(err: *mut Error, result: &Object) {
+unsafe fn report_call_error(err: &mut Error, result: &Object) {
     // SAFETY: the caller's error slot and decoded result. Every union read
     // below is guarded by the `type_0` it belongs to.
     if result.type_0 == kObjectTypeString {

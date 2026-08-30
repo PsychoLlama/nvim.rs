@@ -101,7 +101,6 @@ unsafe fn buf_set_sign(
             false,
             true,
             true,
-            ::core::ptr::null_mut::<Error>(),
         )
     };
 }

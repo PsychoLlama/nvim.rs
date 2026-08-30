@@ -233,7 +233,6 @@ pub fn ns_initialized(mut ns: uint32_t) -> bool {
 
 pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return ().reported(error);
@@ -253,7 +252,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
         let mut i: size_t = 0 as size_t;
         while i < unsafe { (*opts).wins.size } {
             let mut win: Integer = unsafe { (*(*opts).wins.items.add(i)).data.integer };
-            let mut wp: *mut win_T = unsafe { find_window_by_handle(win as Window, err) };
+            let mut wp: *mut win_T = unsafe { find_window_by_handle(win as Window, &mut error) };
             if wp.is_null() {
                 return ().reported(error);
             }

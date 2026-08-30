@@ -205,7 +205,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                 c"nvim__chan_set_detach".as_ptr(),
                 array_of(&mut detach_items),
                 &raw mut result_mem,
-                &raw mut err,
+                &mut err,
             );
             if err.is_set() {
                 break 'fail_2;
@@ -235,7 +235,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                     c"nvim_create_autocmd".as_ptr(),
                     array_of(&mut autocmd_items),
                     &raw mut result_mem,
-                    &raw mut err,
+                    &mut err,
                 );
                 if err.is_set() {
                     break 'fail_2;
@@ -251,7 +251,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                 c"nvim_get_vvar".as_ptr(),
                 array_of(&mut name_items),
                 &raw mut result_mem,
-                &raw mut err,
+                &mut err,
             );
             if err.is_set() {
                 break 'fail_2;
@@ -319,7 +319,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
             c"nvim_eval".as_ptr(),
             array_of(&mut chanclose_items),
             &raw mut result_mem,
-            &raw mut err,
+            &mut err,
         );
         err.clear();
         arena_mem_free(result_mem);
@@ -389,7 +389,7 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
     }
 
     let mut err2 = Error::none();
-    unsafe { remote_ui_disconnect((*chan).id, &raw mut err2, true) };
+    unsafe { remote_ui_disconnect((*chan).id, &mut err2, true) };
     if err2.is_set() {
         emsg(err2.message_or_empty().as_ptr());
         err2.clear();
@@ -425,7 +425,7 @@ pub(crate) unsafe fn ex_connect(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let stop_server = eap.forceit != 0 && ui_active() == 1;
     let mut err = Error::none();
-    unsafe { remote_ui_connect(current_ui.get(), eap.arg, &raw mut err) };
+    unsafe { remote_ui_connect(current_ui.get(), eap.arg, &mut err) };
     if err.is_set() {
         emsg(err.message_or_empty().as_ptr());
         err.clear();
@@ -468,7 +468,7 @@ fn rpc_send_call(
     method_name: *const c_char,
     args: Array,
     result_mem: *mut ArenaMem,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::msgpack_rpc::channel::rpc_send_call(id, method_name, args, result_mem, err) }

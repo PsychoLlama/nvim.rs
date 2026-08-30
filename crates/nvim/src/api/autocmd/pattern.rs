@@ -19,7 +19,7 @@ pub(crate) unsafe fn unpack_string_or_array(
     mut k: *mut ::core::ffi::c_char,
     mut required: bool,
     mut arena: *mut Arena,
-    mut err: *mut Error,
+    err: &mut Error,
 ) -> Array {
     if v.type_0 as ::core::ffi::c_uint
         == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -34,8 +34,7 @@ pub(crate) unsafe fn unpack_string_or_array(
         let key = unsafe { core::ffi::CStr::from_ptr(k) };
         // SAFETY: the array is the caller's.
         if let Err(e) = unsafe { check_string_array(v.data.array, key, true) } {
-            // SAFETY: the caller's error slot.
-            unsafe { *err = e };
+            *err = e;
             return Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -51,8 +50,7 @@ pub(crate) unsafe fn unpack_string_or_array(
         let got = api_typename(v.type_0);
         // SAFETY: `k` is a NUL-terminated key.
         let k = unsafe { core::ffi::CStr::from_ptr(k) };
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_expected(k, c"Array or String", Some(got)) };
+        *err = err_expected(k, c"Array or String", Some(got));
         return Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
@@ -72,7 +70,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     mut buf: Buffer,
     mut fallback: *mut ::core::ffi::c_char,
     mut arena: *mut Arena,
-    mut err: *mut Error,
+    err: &mut Error,
 ) -> Array {
     let mut patterns: ArrayBuilder = ArrayBuilder {
         size: 0 as size_t,
@@ -117,8 +115,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         {
             // SAFETY: the array is the caller's.
             if let Err(e) = unsafe { check_string_array(pattern.data.array, c"pattern", true) } {
-                // SAFETY: the caller's error slot.
-                unsafe { *err = e };
+                *err = e;
                 return Array {
                     size: 0 as size_t,
                     capacity: 0 as size_t,
@@ -152,8 +149,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         } else if true {
             let want = c"String or Table";
             let got = api_typename(pattern.type_0);
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_expected(c"pattern", want, Some(got)) };
+            *err = err_expected(c"pattern", want, Some(got));
             return Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,
@@ -162,7 +158,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         }
     } else if has_buf {
         let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
-        if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,
                 capacity: 0 as size_t,

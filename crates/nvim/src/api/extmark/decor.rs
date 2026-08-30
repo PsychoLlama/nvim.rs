@@ -23,8 +23,7 @@ pub unsafe fn nvim_buf_del_extmark(
     id: Integer,
 ) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
     }
@@ -42,8 +41,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     mut line_end: Integer,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -146,7 +144,7 @@ pub unsafe fn nvim_set_decoration_provider(
 
 pub unsafe fn parse_virt_text(
     mut chunks: Array,
-    mut err: *mut Error,
+    err: &mut Error,
     mut width: *mut ::core::ffi::c_int,
 ) -> VirtText {
     let mut virt_text: VirtText = VirtText {
@@ -164,8 +162,7 @@ pub unsafe fn parse_virt_text(
                 let want = api_typename(kObjectTypeArray);
                 // SAFETY: `i` is below `chunks.size`.
                 let got = unsafe { api_typename((*chunks.items.add(i)).type_0) };
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_expected(c"chunk", want, Some(got)) };
+                *err = err_expected(c"chunk", want, Some(got));
                 break '_free_exit;
             }
             let mut chunk: Array = unsafe { (*chunks.items.add(i)).data.array };
@@ -175,8 +172,7 @@ pub unsafe fn parse_virt_text(
                     == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_validation(why) };
+                *err = err_validation(why);
                 break '_free_exit;
             }
             let mut str: String_0 = unsafe { (*chunk.items).data.string };
@@ -199,7 +195,7 @@ pub unsafe fn parse_virt_text(
                             let what = c"virt_text highlight".as_ptr();
                             // SAFETY: `err` is the caller's error slot.
                             hl_id = unsafe { object_to_hl_id(item, what, err) };
-                            if unsafe { (*err).kind() } as ::core::ffi::c_int
+                            if err.kind() as ::core::ffi::c_int
                                 != kErrorTypeNone as ::core::ffi::c_int
                             {
                                 break '_free_exit;
@@ -221,8 +217,7 @@ pub unsafe fn parse_virt_text(
                         let what = c"virt_text highlight".as_ptr();
                         // SAFETY: `err` is the caller's error slot.
                         hl_id = unsafe { object_to_hl_id(hl, what, err) };
-                        if unsafe { (*err).kind() } as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
+                        if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
                         {
                             break '_free_exit;
                         }

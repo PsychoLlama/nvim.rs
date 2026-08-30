@@ -20,9 +20,8 @@ pub unsafe fn nvim_exec2(
     opts: *mut KeyDict_exec_opts,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `src`/`opts` are the caller's and `err` this frame's slot.
-    let output: String_0 = unsafe { exec_impl(channel_id, src, opts, err) };
+    // SAFETY: `src`/`opts` are the caller's and `error` this frame's slot.
+    let output: String_0 = unsafe { exec_impl(channel_id, src, opts, &mut error) };
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let wanted = unsafe { (*opts).output };
     if error.is_set() || !wanted {
@@ -46,7 +45,7 @@ pub unsafe fn exec_impl(
     channel_id: uint64_t,
     src: String_0,
     opts: *mut KeyDict_exec_opts,
-    err: *mut Error,
+    err: &mut Error,
 ) -> String_0 {
     // Read once: `opts` is the dispatcher's own copy of the keyword
     // arguments, which nothing the sourced script can do reaches.
@@ -87,8 +86,7 @@ pub unsafe fn exec_impl(
     // is the caller's slot.
     unsafe { try_leave(&raw mut tstate, err) };
 
-    // SAFETY: `err` is the caller's slot.
-    let caught = unsafe { (*err).kind() } != kErrorTypeNone;
+    let caught = err.kind() != kErrorTypeNone;
     // The capture always starts with the newline that separated the first
     // message from whatever was on screen; drop it. A one-byte capture is
     // that newline alone, i.e. nothing was printed.

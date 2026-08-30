@@ -13,11 +13,10 @@ use crate::api::private::validate::err_invalid_ptr;
 
 pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut res: bool = false;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -42,7 +41,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
     if unsafe { (*fm).mark.lnum } != 0 as linenr_T
         && unsafe { (*fm).fnum } == unsafe { (*b).handle }
     {
-        res = unsafe { set_mark(b, name, 0 as Integer, 0 as Integer, err) };
+        res = unsafe { set_mark(b, name, 0 as Integer, 0 as Integer, &mut error) };
     }
     (res as Boolean).reported(error)
 }
@@ -55,9 +54,8 @@ pub unsafe fn nvim_buf_set_mark(
     _opts: *mut KeyDict_empty,
 ) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut res: bool = false;
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, err) };
+    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -66,7 +64,7 @@ pub unsafe fn nvim_buf_set_mark(
         error = unsafe { err_bad_value_ptr(c"mark name (must be a single char)", name.data()) };
         return (res as Boolean).reported(error);
     }
-    res = unsafe { set_mark(b, name, line, col, err) };
+    res = unsafe { set_mark(b, name, line, col, &mut error) };
     (res as Boolean).reported(error)
 }
 
@@ -76,7 +74,6 @@ pub unsafe fn nvim_buf_get_mark(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut rv: Array = Array {
@@ -84,7 +81,7 @@ pub unsafe fn nvim_buf_get_mark(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }

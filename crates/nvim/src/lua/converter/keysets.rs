@@ -88,7 +88,7 @@ pub unsafe fn nlua_pop_keydict(
     hashy: FieldHashfn,
     err_opt: *mut *mut c_char,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     unsafe {
         if lua_type(lstate, -1) != LUA_TTABLE {
@@ -148,7 +148,7 @@ pub unsafe fn nlua_pop_keydict(
                 _ => abort(),
             }
 
-            if (*err).is_set() {
+            if err.is_set() {
                 *err_opt = (*field).str;
                 break;
             }

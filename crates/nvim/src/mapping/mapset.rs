@@ -246,7 +246,7 @@ pub unsafe fn modify_keymap(
     lhs: String_0,
     rhs: String_0,
     opts: *mut KeyDict_keymap,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     let mut lua_funcref = LUA_NOREF;
     let global = buffer == -1;
@@ -289,8 +289,7 @@ pub unsafe fn modify_keymap(
 
     'fail_and_free: {
         if parsed_args.replace_keycodes && !parsed_args.expr {
-            // SAFETY: `err` is the caller's slot.
-            unsafe { *err = Error::validation(REQUIRES_EXPR) };
+            *err = Error::validation(REQUIRES_EXPR);
             break 'fail_and_free;
         }
 
@@ -309,13 +308,10 @@ pub unsafe fn modify_keymap(
         {
             // SAFETY: `lhs` is a live API string.
             let lhs = unsafe { c_str(lhs.data()) };
-            // SAFETY: `err` is the caller's slot.
-            unsafe {
-                *err = api_error!(
-                    kErrorTypeValidation,
-                    "LHS exceeds maximum map length: {lhs}"
-                );
-            };
+            *err = api_error!(
+                kErrorTypeValidation,
+                "LHS exceeds maximum map length: {lhs}"
+            );
             break 'fail_and_free;
         }
 
@@ -331,15 +327,11 @@ pub unsafe fn modify_keymap(
         if !mode.is_empty() && consumed != mode.len() {
             // SAFETY: `mode` is a live API string.
             let mode = unsafe { c_str(mode.data()) };
-            // SAFETY: `err` is the caller's slot.
-            unsafe {
-                *err = api_error!(kErrorTypeValidation, "Invalid mode shortname: \"{mode}\"")
-            };
+            *err = api_error!(kErrorTypeValidation, "Invalid mode shortname: \"{mode}\"");
             break 'fail_and_free;
         }
         if parsed_args.lhs_len == 0 {
-            // SAFETY: the caller's error slot.
-            unsafe { *err = Error::from_message(kErrorTypeValidation, c"Invalid (empty) LHS") };
+            *err = Error::from_message(kErrorTypeValidation, c"Invalid (empty) LHS");
             break 'fail_and_free;
         }
 
@@ -417,8 +409,7 @@ pub unsafe fn modify_keymap(
             _ => None,
         };
         if let Some(e) = refused {
-            // SAFETY: `err` is the caller's slot.
-            unsafe { *err = e };
+            *err = e;
         }
     }
 

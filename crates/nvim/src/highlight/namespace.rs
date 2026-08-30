@@ -232,7 +232,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         let name = c"hl_def".as_ptr();
         let (args, arena) = (args.array(), ::core::ptr::null_mut());
         // SAFETY: the namespace's own callback reference.
-        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena, &raw mut err) };
+        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena, &mut err) };
         RECURSIVE.set(RECURSIVE.get() - 1);
 
         // Anything but a dict means the callback declined; fall back.
@@ -247,9 +247,9 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             let mut dict = KeyDict_highlight::default();
             let field: FieldHashfn = Some(key_dict_highlight_get_field);
             let target = (&raw mut dict).cast();
-            if unsafe { api_dict_to_keydict(target, field, ret.data.dict, &raw mut err) } {
+            if unsafe { api_dict_to_keydict(target, field, ret.data.dict, &mut err) } {
                 let link_id = &mut item.link_id;
-                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &raw mut err) };
+                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &mut err) };
                 let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;
                 fallback = !asked || dict.fallback;
                 provisional = dict.fallback;

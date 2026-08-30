@@ -114,7 +114,7 @@ unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> typval_T {
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.
     let info = unsafe { channel_info(id, arena) };
-    unsafe { object_to_vim(dict_obj(info), &raw mut tv, ptr::null_mut()) };
+    unsafe { object_to_vim(dict_obj(info), &raw mut tv) };
     debug_assert!(tv.v_type == VAR_DICT);
     tv
 }

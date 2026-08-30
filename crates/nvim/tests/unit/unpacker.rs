@@ -54,7 +54,7 @@ fn decode(bytes: &[u8]) -> Decoded {
             bytes.as_ptr().cast::<c_char>(),
             bytes.len(),
             &raw mut arena,
-            &raw mut error,
+            &mut error,
         )
     };
     Decoded {

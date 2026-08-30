@@ -78,11 +78,10 @@ pub unsafe fn serialize_response(
     handler: MsgpackRpcRequestHandler,
     type_0: MessageType,
     response_id: uint32_t,
-    err: *mut Error,
+    err: &mut Error,
     arg: *mut Object,
 ) {
-    // SAFETY: the caller's error slot.
-    let err_type = unsafe { (*err).kind() };
+    let err_type = err.kind();
     let errored = err_type != kErrorTypeNone;
 
     if errored && type_0 == kMessageTypeNotification {
@@ -103,7 +102,7 @@ pub unsafe fn serialize_response(
         mpack_array(&mut packer.ptr, 2);
         mpack_integer(&mut packer.ptr, Integer::from(err_type));
         // SAFETY: the caller's error slot, whose message is a live string.
-        let why = unsafe { cstr_as_string((*err).message_or_empty().as_ptr()) };
+        let why = unsafe { cstr_as_string(err.message_or_empty().as_ptr()) };
         // SAFETY: `packer` is this frame's own.
         unsafe { mpack_str(why, &mut packer) };
         unsafe { put_byte(&mut packer, wire::NIL) };
@@ -122,7 +121,7 @@ pub unsafe fn serialize_response(
 unsafe fn report_failed_notification(
     channel: *mut Channel,
     handler: MsgpackRpcRequestHandler,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     let is_paste = handler.fn_0.is_some_and(|f| {
         ptr::fn_addr_eq(
@@ -131,11 +130,9 @@ unsafe fn report_failed_notification(
         )
     });
     if is_paste {
-        // SAFETY: the caller's error slot.
-        let msg = unsafe { (*err).message_or_empty() }.to_string_lossy();
+        let msg = err.message_or_empty().to_string_lossy();
         crate::semsg!("paste: {msg}");
-        // SAFETY: as above.
-        unsafe { (*err).clear() };
+        err.clear();
         return;
     }
 
@@ -145,13 +142,13 @@ unsafe fn report_failed_notification(
         Object {
             type_0: kObjectTypeInteger,
             data: crate::types::object_data {
-                integer: Integer::from(unsafe { (*err).kind() }),
+                integer: Integer::from(err.kind()),
             },
         },
         Object {
             type_0: kObjectTypeString,
             data: crate::types::object_data {
-                string: unsafe { cstr_as_string((*err).message_or_empty().as_ptr()) },
+                string: unsafe { cstr_as_string(err.message_or_empty().as_ptr()) },
             },
         },
     ];

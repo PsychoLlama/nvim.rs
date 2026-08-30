@@ -60,7 +60,7 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: *mut Error) {
+pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: &mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
     // `Error` to report through.
     unsafe { set_buf(Win::new(win), Buf::new(buf), &mut *err) };
@@ -320,7 +320,7 @@ fn parent_window(handle: Window) -> Option<Win> {
     let mut dummy = Error::none();
     // SAFETY: a live `Error` of ours; the answer is a live window or null.
     unsafe {
-        let win = find_window_by_handle(handle, &raw mut dummy);
+        let win = find_window_by_handle(handle, &mut dummy);
         dummy.clear();
         Win::from_raw(win)
     }
@@ -480,7 +480,7 @@ fn text_height(
 pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     let mut err = Error::none();
     // SAFETY: the caller's promise -- a live window; `err` is ours.
-    let ok = unsafe { check_split_disallowed_err(wp, &raw mut err) };
+    let ok = unsafe { check_split_disallowed_err(wp, &mut err) };
     if err.is_set() {
         // SAFETY: the message `api_set_error` just wrote.
         unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
@@ -490,7 +490,7 @@ pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     if ok { OK } else { FAIL }
 }
 
-pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: *mut Error) -> bool {
+pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: &mut Error) -> bool {
     if split_disallowed.get() > 0 {
         let msg = c"E242: Can't split a window while closing another".as_ptr();
         // SAFETY: the caller's error slot.

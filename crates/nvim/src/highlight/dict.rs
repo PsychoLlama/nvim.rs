@@ -114,7 +114,7 @@ pub unsafe fn hl_get_attr_by_id(
     attr_id: Integer,
     rgb: Boolean,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Dict {
     let empty = Dict {
         size: 0,
@@ -126,8 +126,7 @@ pub unsafe fn hl_get_attr_by_id(
     }
     // SAFETY: the caller's arena and error slot.
     if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
-        // SAFETY: the caller's error slot.
-        unsafe { *err = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}") };
+        *err = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
         return empty;
     }
     let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
@@ -343,7 +342,7 @@ pub unsafe fn dict2hlattrs(
     use_rgb: bool,
     link_id: Option<&mut c_int>,
     base: Option<&HlAttrs>,
-    err: *mut Error,
+    err: &mut Error,
 ) -> HlAttrs {
     let mut fg = base.map_or(-1, |b| b.rgb_fg_color);
     let mut bg = base.map_or(-1, |b| b.rgb_bg_color);
@@ -495,8 +494,7 @@ pub unsafe fn dict2hlattrs(
         let Some(link_id) = link_id else {
             let name = if global { c"link_global" } else { c"link" };
             let name = msg_cstr(name);
-            // SAFETY: the caller's error slot.
-            unsafe { *err = api_error!(kErrorTypeValidation, "Invalid Key: '{name}'") };
+            *err = api_error!(kErrorTypeValidation, "Invalid Key: '{name}'");
             return HLATTRS_INIT;
         };
         if global {
@@ -585,9 +583,8 @@ pub unsafe fn dict2hlattrs(
 ///
 /// # Safety
 /// `err` points at a live [`Error`].
-unsafe fn error_set(err: *mut Error) -> bool {
-    // SAFETY: the caller's error slot.
-    unsafe { (*err).is_set() }
+unsafe fn error_set(err: &mut Error) -> bool {
+    err.is_set()
 }
 
 /// A colour key's value as a colour number: an integer verbatim, a name
@@ -599,7 +596,7 @@ unsafe fn error_set(err: *mut Error) -> bool {
 /// # Safety
 /// `val` must carry a value matching its tag, and a string value must be
 /// NUL-terminated. `err` points at a live [`Error`].
-unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: *mut Error) -> int32_t {
+unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -> int32_t {
     // SAFETY: the tag says which union arm is live.
     if val.type_0 == kObjectTypeInteger {
         return unsafe { val.data.integer } as int32_t;

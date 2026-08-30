@@ -267,9 +267,8 @@ pub unsafe fn handle_nvim_ui_set_focus(
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_set_focus(channel_id, arg_1, error) };
-    if error.is_set() {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_set_focus(channel_id, arg_1) } {
+        return failure(error, e);
     }
     NIL
 }
@@ -311,9 +310,8 @@ pub unsafe fn handle_nvim_ui_set_option(
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2, error) };
-    if error.is_set() {
-        return NIL;
+    if let Err(e) = unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2) } {
+        return failure(error, e);
     }
     NIL
 }

@@ -76,10 +76,10 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
 
         let mut err = ERROR_INIT;
         let mut arena: Arena = ARENA_EMPTY;
-        let prefix_len = nlua_pop_integer(lstate, &raw mut arena, &raw mut err) as ptrdiff_t;
+        let prefix_len = nlua_pop_integer(lstate, &raw mut arena, &mut err) as ptrdiff_t;
         let mut matches: Vec<*mut c_char> = Vec::new();
         if !err.is_set() && prefix_len <= patlen {
-            let completions = nlua_pop_array(lstate, &raw mut arena, &raw mut err);
+            let completions = nlua_pop_array(lstate, &raw mut arena, &mut err);
             'cleanup_array: {
                 if err.is_set() {
                     break 'cleanup_array;

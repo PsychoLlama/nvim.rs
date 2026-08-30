@@ -110,7 +110,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 vim_args.as_mut_ptr(),
                 &raw mut funcexe,
             );
-            try_leave(&raw mut tstate, &raw mut err);
+            try_leave(&raw mut tstate, &mut err);
             drop(sctx);
 
             if !err.is_set() {
@@ -189,7 +189,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     .cast::<Object>();
                 }
                 *args.items.add(args.size) =
-                    nlua_pop_object(lstate, false, &raw mut arena, &raw mut err);
+                    nlua_pop_object(lstate, false, &raw mut arena, &mut err);
                 args.size = args.size.wrapping_add(1);
                 if err.is_set() {
                     break 'check_err;
@@ -198,7 +198,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
 
             if request {
                 let mut res_mem: ArenaMem = ptr::null_mut::<consumed_blk>();
-                let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &raw mut err);
+                let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &mut err);
                 if !err.is_set() {
                     nlua_push_object(lstate, &raw mut result, 0);
                     arena_mem_free(res_mem);

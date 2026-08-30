@@ -104,7 +104,7 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
         ..WIN_CONFIG_INIT
     };
     // SAFETY: a hidden float over a fresh scratch buffer, and a live `Error`.
-    let win = unsafe { win_new_float(ptr::null_mut::<win_T>(), true, fconfig, &raw mut err) };
+    let win = unsafe { win_new_float(ptr::null_mut::<win_T>(), true, fconfig, &mut err) };
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
     unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win };
     // SAFETY: `win_new_float` answers a live window here.

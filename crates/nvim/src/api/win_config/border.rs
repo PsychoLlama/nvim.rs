@@ -37,9 +37,8 @@ use crate::api_error;
 ///
 /// # Safety
 /// `err` must be the caller's error slot.
-unsafe fn err_border(err: *mut Error, want: &CStr, got: Option<&CStr>) {
-    // SAFETY: the caller's error slot.
-    unsafe { *err = err_expected(c"border", want, got) };
+unsafe fn err_border(err: &mut Error, want: &CStr, got: Option<&CStr>) {
+    *err = err_expected(c"border", want, got);
 }
 
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
@@ -188,7 +187,7 @@ unsafe fn style_slots(style: &BorderStyle) -> Slots {
 ///
 /// # Safety
 /// `item` must be a live API object and `err` a writable error slot.
-unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, c_int)> {
+unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, c_int)> {
     if item.type_0 == kObjectTypeArray {
         // SAFETY: the tag says the array arm is live.
         let arr = unsafe { item.data.array };
@@ -213,8 +212,7 @@ unsafe fn parse_border_item(item: Object, err: *mut Error) -> Option<(String_0, 
         // error slot.
         let hl_id =
             unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr(), err) };
-        // SAFETY: as above.
-        if unsafe { (*err).kind() } != kErrorTypeNone {
+        if err.kind() != kErrorTypeNone {
             return None;
         }
         return Some((string, hl_id));
@@ -256,7 +254,7 @@ type Slots = ([BorderChar; 8], [c_int; 8]);
 ///
 /// # Safety
 /// `arr` must be a live API array and `err` a writable error slot.
-unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
+unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
     let size = arr.size;
     if size == 0 || size > 8 || !size.is_power_of_two() {
         // SAFETY: the caller's error slot.
@@ -310,7 +308,7 @@ unsafe fn parse_border_array(arr: Array, err: *mut Error) -> Option<Slots> {
 /// # Safety
 /// `fconfig` must be writable, `style` a live API object and `err` a
 /// writable error slot.
-pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *mut Error) {
+pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &mut Error) {
     // The config is written a field at a time rather than through one
     // long-lived `&mut`: everything below can re-enter the editor, which owns
     // it. That is what `WinCfg` is -- a `Live<WinConfig>` reborrowing per
@@ -362,7 +360,7 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: *m
 pub(crate) unsafe fn generate_api_error(
     wp: *mut win_T,
     attribute: *const ::core::ffi::c_char,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     // SAFETY: the caller's window.
     if !wp.is_null() && unsafe { (*wp).w_floating } {
@@ -372,8 +370,7 @@ pub(crate) unsafe fn generate_api_error(
             kErrorTypeValidation,
             "Required: 'relative' when reconfiguring floating window {handle}"
         );
-        // SAFETY: the caller's error slot.
-        unsafe { *err = e };
+        *err = e;
     } else {
         // SAFETY: the caller's error slot.
         unsafe { *err = err_conflict_ptr(attribute, c"non-float window".as_ptr()) };
@@ -392,7 +389,7 @@ pub(crate) unsafe fn generate_api_error(
 pub unsafe fn parse_winborder(
     fconfig: *mut WinConfig,
     border_opt: *mut ::core::ffi::c_char,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if fconfig.is_null() {
         return false;

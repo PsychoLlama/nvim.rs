@@ -35,9 +35,8 @@ pub unsafe fn nvim_parse_expression(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `flags` is the caller's string and `err` this frame's slot.
-    let Some(pflags) = (unsafe { parse_flags(flags, err) }) else {
+    // SAFETY: `flags` is the caller's string and `error` this frame's slot.
+    let Some(pflags) = (unsafe { parse_flags(flags, &mut error) }) else {
         return Dict::EMPTY.reported(error);
     };
 
@@ -165,7 +164,7 @@ pub unsafe fn nvim_parse_expression(
 ///
 /// # Safety
 /// `err` must be the caller's error slot.
-unsafe fn parse_flags(flags: String_0, err: *mut Error) -> Option<c_int> {
+unsafe fn parse_flags(flags: String_0, err: &mut Error) -> Option<c_int> {
     let mut pflags: c_int = 0;
     for i in 0..flags.len() {
         // SAFETY: `i` is below `len`, so the byte is inside the string.
@@ -177,18 +176,14 @@ unsafe fn parse_flags(flags: String_0, err: *mut Error) -> Option<c_int> {
             // A NUL has no `%c` spelling worth printing.
             0 => {
                 let code = ch as c_uint;
-                // SAFETY: the caller's promise about `err`.
-                unsafe { *err = api_error!(kErrorTypeValidation, "Invalid flag: '\\0' ({code})") };
+                *err = api_error!(kErrorTypeValidation, "Invalid flag: '\\0' ({code})");
                 return None;
             }
             _ => {
                 let code = ch as c_uint;
                 let raw = ch as u8;
                 let shown = msg_bytes(core::slice::from_ref(&raw));
-                // SAFETY: as above.
-                unsafe {
-                    *err = api_error!(kErrorTypeValidation, "Invalid flag: '{shown}' ({code})");
-                };
+                *err = api_error!(kErrorTypeValidation, "Invalid flag: '{shown}' ({code})");
                 return None;
             }
         }

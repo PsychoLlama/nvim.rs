@@ -18,8 +18,8 @@ use crate::memory::ARENA_EMPTY;
 use crate::mpack::conv::mpack_unpack_boolean;
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::types::{
-    Array, GridLineEvent, RawLine, Unpacker, mpack_token_t, mpack_token_type_t, sattr_T, schar_T,
-    size_t,
+    Array, Error, GridLineEvent, RawLine, Unpacker, mpack_token_t, mpack_token_type_t, sattr_T,
+    schar_T, size_t,
 };
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
 use ::libc::abort;
@@ -204,11 +204,13 @@ fn parse_redraw(u: &mut Unpacker, cursor: &mut Cursor) -> Result<bool, Halt> {
         if tok.length as size_t > cursor.size {
             return Err(Halt::Incomplete);
         }
-        // SAFETY: the name is `tok.length` readable bytes of the cursor's
-        // buffer, which the check above bounds.
-        *ui_handler = unsafe {
-            ui_client_get_redraw_handler(cursor.data, tok.length as size_t, core::ptr::null_mut())
-        };
+        // Nothing reads why a name did not resolve: the caller only asks
+        // whether it resolved to `grid_line`.
+        let ignored = &mut Error::none();
+        let len = tok.length as size_t;
+        // SAFETY: the name is `len` readable bytes of the cursor's buffer,
+        // which the check above bounds.
+        *ui_handler = unsafe { ui_client_get_redraw_handler(cursor.data, len, ignored) };
         cursor.take(tok.length as size_t);
 
         *nevents -= 1;

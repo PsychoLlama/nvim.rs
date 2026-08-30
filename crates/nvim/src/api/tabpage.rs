@@ -67,7 +67,7 @@ pub unsafe fn nvim_tabpage_get_var(
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
     // `name` and `arena` are the caller's, per this function's contract.
-    let value = unsafe { dict_get_value(tab.tp_vars, name, arena, &raw mut err) };
+    let value = unsafe { dict_get_value(tab.tp_vars, name, arena, &mut err) };
     value.reported(err)
 }
 
@@ -87,8 +87,8 @@ pub unsafe fn nvim_tabpage_set_var(
     // SAFETY: as `nvim_tabpage_get_var`; `value` is the caller's and the
     // store takes it over.
     let no_arena = ptr::null_mut::<Arena>();
-    let (vars, slot) = (tab.tp_vars, &raw mut err);
-    unsafe { dict_set_var(vars, name, value, false, false, no_arena, slot) };
+    let vars = tab.tp_vars;
+    unsafe { dict_set_var(vars, name, value, false, false, no_arena, &mut err) };
     ().reported(err)
 }
 
@@ -103,8 +103,8 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(
     };
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let no_arena = ptr::null_mut::<Arena>();
-    let (vars, slot) = (tab.tp_vars, &raw mut err);
-    unsafe { dict_set_var(vars, name, NIL, true, false, no_arena, slot) };
+    let vars = tab.tp_vars;
+    unsafe { dict_set_var(vars, name, NIL, true, false, no_arena, &mut err) };
     ().reported(err)
 }
 
@@ -239,7 +239,7 @@ pub unsafe fn nvim_open_tabpage(
             autocmd_no_enter.set(autocmd_no_enter.get() + 1);
             autocmd_no_leave.set(autocmd_no_leave.get() + 1);
         }
-        unsafe { win_set_buf(w.raw(), b.raw(), &raw mut err) };
+        unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
         if au_no_enter_leave {
             autocmd_no_enter.set(autocmd_no_enter.get() - 1);
             autocmd_no_leave.set(autocmd_no_leave.get() - 1);

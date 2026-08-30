@@ -49,7 +49,7 @@ use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
 use crate::log::LOGLVL_DBG;
 use crate::lua::executor::{
-    api_free_luaref, nlua_call_ref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
+    api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
 use crate::main::{
     Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, curwin, did_emsg, e_cmdwin,

@@ -395,7 +395,7 @@ pub(crate) unsafe fn ui_client_set_size(width: c_int, height: c_int) {
 pub(crate) unsafe fn ui_client_get_redraw_handler(
     name: *const c_char,
     name_len: usize,
-    _error: *mut Error,
+    _error: &mut Error,
 ) -> UIClientHandler {
     let name = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), name_len) };
     EVENT_HANDLERS
@@ -752,12 +752,12 @@ unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
             (&raw mut dict).cast::<c_void>(),
             Some(key_dict_highlight_get_field),
             d,
-            &raw mut err,
+            &mut err,
         )
     } {
         return HLATTRS_INIT;
     }
-    let mut attrs = unsafe { dict2hlattrs(&dict, rgb, None, None, &raw mut err) };
+    let mut attrs = unsafe { dict2hlattrs(&dict, rgb, None, None, &mut err) };
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
     if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {

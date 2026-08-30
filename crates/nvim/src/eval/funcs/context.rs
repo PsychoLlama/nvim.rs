@@ -73,7 +73,7 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         type_0: kObjectTypeDict,
         data: object_data { dict: ctx_dict },
     };
-    unsafe { object_to_vim(dict, rettv, &raw mut err) };
+    unsafe { object_to_vim(dict, rettv) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     err.clear();
 }
@@ -150,7 +150,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let dict = unsafe { vim_to_object(args.ptr(0), &raw mut arena, true).data.dict };
     let mut tmp = CONTEXT_INIT;
     let mut err = NO_ERROR;
-    unsafe { ctx_from_dict(dict, &raw mut tmp, &raw mut err) };
+    unsafe { ctx_from_dict(dict, &raw mut tmp, &mut err) };
     if err.is_set() {
         // The message is whatever the API layer produced, so it keeps
         // the variadic call rather than assuming UTF-8.

@@ -28,7 +28,6 @@ pub unsafe fn nvim_create_autocmd(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_autocmd>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut au_group: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;
     let mut buf: Buffer = 0;
@@ -52,11 +51,11 @@ pub unsafe fn nvim_create_autocmd(
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             true,
             arena,
-            err,
+            &mut error,
         )
     };
     '_cleanup: {
-        if unsafe { (*err).kind() } as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+        if error.kind() as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
             if !(!(has_key(opts.is_set__create_autocmd_, 9 as ::core::ffi::c_int))
                 || !(has_key(opts.is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
             {
@@ -76,7 +75,7 @@ pub unsafe fn nvim_create_autocmd(
                                 };
                                 break '_cleanup;
                             } else if !unsafe { nlua_ref_is_function((*callback).data.luaref) } {
-                                // SAFETY: `err` is this call's own error slot.
+                                // SAFETY: `error` is this call's own error slot.
                                 let bad = c"<not a function>".as_ptr();
                                 // SAFETY: the value the keyset carried, live for this call.
                                 error = unsafe { err_bad_value_ptr(c"callback", bad) };
@@ -111,7 +110,7 @@ pub unsafe fn nvim_create_autocmd(
                     error = unsafe { err_required_ptr(c"'command' or 'callback'".as_ptr()) };
                     break '_cleanup;
                 }
-                au_group = unsafe { get_augroup_from_object(opts.group, err) };
+                au_group = unsafe { get_augroup_from_object(opts.group, &mut error) };
                 if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
                     has_buf = has_key(
                         opts.is_set__create_autocmd_,
@@ -144,10 +143,10 @@ pub unsafe fn nvim_create_autocmd(
                                 buf,
                                 c"*".as_ptr() as *mut ::core::ffi::c_char,
                                 arena,
-                                err,
+                                &mut error,
                             )
                         };
-                        if unsafe { (*err).kind() } as ::core::ffi::c_int
+                        if error.kind() as ::core::ffi::c_int
                             == kErrorTypeNone as ::core::ffi::c_int
                         {
                             if has_key(
@@ -251,17 +250,16 @@ pub unsafe fn nvim_clear_autocmds(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_clear_autocmds>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut event_array: Array = unsafe {
         unpack_string_or_array(
             opts.event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             false,
             arena,
-            err,
+            &mut error,
         )
     };
-    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     let mut has_buf: bool = has_key(
@@ -289,7 +287,8 @@ pub unsafe fn nvim_clear_autocmds(
         error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
         return ().reported(error);
     }
-    let mut au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group, err) };
+    let mut au_group: ::core::ffi::c_int =
+        unsafe { get_augroup_from_object(opts.group, &mut error) };
     if au_group == AUGROUP_ERROR as ::core::ffi::c_int {
         return ().reported(error);
     }
@@ -300,10 +299,10 @@ pub unsafe fn nvim_clear_autocmds(
             buf as Buffer,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
-            err,
+            &mut error,
         )
     };
-    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     if event_array.size == 0 as size_t {
@@ -313,7 +312,7 @@ pub unsafe fn nvim_clear_autocmds(
             while pat_object_index < patterns.size {
                 let mut pat_object: Object = unsafe { *patterns.items.add(pat_object_index) };
                 let mut pat: *mut ::core::ffi::c_char = unsafe { pat_object.data.string }.data();
-                if !unsafe { clear_autocmd(event, pat, au_group, err) } {
+                if !unsafe { clear_autocmd(event, pat, au_group, &mut error) } {
                     return ().reported(error);
                 }
                 pat_object_index = pat_object_index.wrapping_add(1);
@@ -337,7 +336,7 @@ pub unsafe fn nvim_clear_autocmds(
                 let mut pat_object_0: Object = unsafe { *patterns.items.add(pat_object_index_0) };
                 let mut pat_0: *mut ::core::ffi::c_char =
                     unsafe { pat_object_0.data.string }.data();
-                if !unsafe { clear_autocmd(event_nr, pat_0, au_group, err) } {
+                if !unsafe { clear_autocmd(event_nr, pat_0, au_group, &mut error) } {
                     return ().reported(error);
                 }
                 pat_object_index_0 = pat_object_index_0.wrapping_add(1);
@@ -352,12 +351,11 @@ unsafe fn clear_autocmd(
     mut event: event_T,
     mut pat: *mut ::core::ffi::c_char,
     mut au_group: ::core::ffi::c_int,
-    mut err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) } == FAIL {
         let why = c"Failed to clear autocmd";
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_exception(why) };
+        *err = err_exception(why);
         return false;
     }
     true

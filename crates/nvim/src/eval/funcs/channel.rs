@@ -343,8 +343,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let chan_id = unsafe { args.get(0).vval.v_number } as uint64_t;
     let method = arg_string(&mut numbuf, args.get(1));
     let mut res_mem: ArenaMem = ptr::null_mut();
-    let result =
-        unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &raw mut err) };
+    let result = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 
     if let Some(scope) = scope {
@@ -380,7 +379,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             );
         }
     } else {
-        unsafe { object_to_vim(result, rettv, &raw mut err) };
+        unsafe { object_to_vim(result, rettv) };
     }
     unsafe { arena_mem_free(res_mem) };
     err.clear();
@@ -430,8 +429,8 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         const PEERS: &str = "return require('vim._core.server').serverlist(...)";
         let code = PEERS.as_ptr() as *mut c_char;
         let code = String_0::from_raw_parts(code, PEERS.len());
-        let (mem, out) = (&raw mut arena, &raw mut err);
-        let rv = unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem, out) };
+        let mem = &raw mut arena;
+        let rv = unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem, &mut err) };
         if err.is_set() {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.

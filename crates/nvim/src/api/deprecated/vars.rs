@@ -24,7 +24,7 @@ pub unsafe fn buffer_set_var(
     let vars = buf.b_vars;
     // SAFETY: `vars` is that buffer's own dictionary, `arena` the caller's
     // and `error` this frame's slot.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn buffer_del_var(
@@ -38,7 +38,7 @@ pub unsafe fn buffer_del_var(
     };
     let vars = buf.b_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn window_set_var(
@@ -53,7 +53,7 @@ pub unsafe fn window_set_var(
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`, for that window's dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn window_del_var(
@@ -67,7 +67,7 @@ pub unsafe fn window_del_var(
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn tabpage_set_var(
@@ -82,7 +82,7 @@ pub unsafe fn tabpage_set_var(
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`, for that tab page's dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn tabpage_del_var(
@@ -96,7 +96,7 @@ pub unsafe fn tabpage_del_var(
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn vim_set_var(
@@ -107,12 +107,12 @@ pub unsafe fn vim_set_var(
     let mut error = ERROR_INIT;
     let vars = get_globvar_dict();
     // SAFETY: as `buffer_set_var`, for the global dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
     let vars = get_globvar_dict();
     // SAFETY: as `vim_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &raw mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
 }

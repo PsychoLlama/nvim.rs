@@ -144,7 +144,6 @@ pub unsafe fn nvim_notify(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
@@ -152,7 +151,7 @@ pub unsafe fn nvim_notify(
     let code = String_0::from_cstr(c"return vim.notify(...)");
     let (args, no_name) = (args.array(), ::core::ptr::null());
     // SAFETY: `code` borrows a static, `args` borrows this frame's buffer
-    // for the length of the call, and `arena`/`err` are the caller's and
+    // for the length of the call, and `arena`/`error` are the caller's and
     // this frame's slot.
-    unsafe { nlua_exec(code, no_name, args, kRetObject, arena, err) }.reported(error)
+    unsafe { nlua_exec(code, no_name, args, kRetObject, arena, &mut error) }.reported(error)
 }

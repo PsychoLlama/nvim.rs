@@ -191,9 +191,9 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         let fast = unsafe { is_fast(name, args) };
         let event = name.as_ptr().cast_mut();
         let no_arena = core::ptr::null_mut::<Arena>();
-        let slot = &raw mut err;
         // SAFETY: `name` is a static protocol name, `args` is handed over to
         // the callee, and `err` is this frame's own.
+        let slot = Some(&mut err);
         let res =
             unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, slot) };
         ui_event_ns_id.set(0);

@@ -12,14 +12,13 @@ use super::*;
 use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, dict_put, has_key};
 use crate::winlayer::{Buf, Live};
 
-pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, mut err: *mut Error) -> *mut buf_T {
+pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, err: &mut Error) -> *mut buf_T {
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
     if b.is_null() {
         return ::core::ptr::null_mut::<buf_T>();
     }
     if unsafe { (*b).b_ml.ml_mfp }.is_null() && !buf_ensure_loaded(unsafe { Buf::new(b) }) {
-        // SAFETY: the caller's error slot.
-        unsafe { *err = Error::from_message(kErrorTypeException, c"Failed to load buffer") };
+        *err = Error::from_message(kErrorTypeException, c"Failed to load buffer");
         return ::core::ptr::null_mut::<buf_T>();
     }
     b
@@ -34,8 +33,7 @@ pub unsafe fn nvim_buf_attach(
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Live::<KeyDict_buf_attach>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
     }
@@ -78,8 +76,7 @@ pub unsafe fn nvim_buf_attach(
 
 pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
     }
@@ -89,8 +86,7 @@ pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boole
 
 pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return NIL.reported(error);
     }
@@ -119,18 +115,17 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
             args,
             kRetLuaref,
             ::core::ptr::null_mut::<Arena>(),
-            err,
+            &mut error,
         )
     };
     unsafe { aucmd_restbuf(&raw mut aco) };
-    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { try_leave(&raw mut tstate, &mut error) };
     res.reported(error)
 }
 
 pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return Dict {
             size: 0 as size_t,

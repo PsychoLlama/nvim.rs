@@ -95,7 +95,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
     retval: *mut c_void,
     hashy: FieldHashfn,
     dict: Dict,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     for i in 0..dict.size {
         // SAFETY: `i` is below `size`, so the pair is inside `items`.
@@ -109,8 +109,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         if field.is_null() {
             // SAFETY: `key` names its own bytes.
             let key = unsafe { c_str_len(key.data(), key.len()) };
-            // SAFETY: `err` is the caller's slot.
-            unsafe { *err = api_error!(kErrorTypeValidation, "Invalid key: '{key}'") };
+            *err = api_error!(kErrorTypeValidation, "Invalid key: '{key}'");
             return false;
         }
         // SAFETY: the lookup answered a row of the generated table, which is
@@ -131,7 +130,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         let expected = field.type_0 as ObjectType;
         // A mismatch reports the field's name, not the key's: they are
         // the same string.
-        let wrong_type = |want: ObjectType| {
+        let mut wrong_type = |want: ObjectType| {
             let (want, got) = (api_typename(want), api_typename(given.type_0));
             // SAFETY: the caller's error slot.
             unsafe { *err = err_expected_ptr(field.str, want, Some(got)) };
@@ -146,8 +145,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 if given.type_0 != kObjectTypeNil {
                     // SAFETY: `given` is live and `err` the caller's slot.
                     hl_id = unsafe { object_to_hl_id(given, key.data(), err) };
-                    // SAFETY: `err` is the caller's slot.
-                    if unsafe { (*err).kind() } != kErrorTypeNone {
+                    if err.kind() != kErrorTypeNone {
                         return false;
                     }
                 }
@@ -178,8 +176,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 let on = unsafe { api_object_to_bool(given, field.str, false, err) };
                 // SAFETY: the row says a `Boolean` lives at `mem`.
                 unsafe { *mem.cast::<Boolean>() = on };
-                // SAFETY: `err` is the caller's slot.
-                if unsafe { (*err).kind() } != kErrorTypeNone {
+                if err.kind() != kErrorTypeNone {
                     return false;
                 }
             }
@@ -231,8 +228,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     kErrorTypeValidation,
                     "Invalid key: '{key}' is only allowed from Lua"
                 );
-                // SAFETY: `err` is the caller's slot.
-                unsafe { *err = e };
+                *err = e;
                 return false;
             }
             // SAFETY: the generated tables name no other type.

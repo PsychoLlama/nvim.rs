@@ -152,7 +152,7 @@ pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
             args,
             kRetNilBool,
             ptr::null_mut(),
-            &raw mut err,
+            &mut err,
         )
     };
     if err.is_set() {

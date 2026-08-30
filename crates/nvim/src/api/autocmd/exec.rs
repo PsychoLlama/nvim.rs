@@ -23,7 +23,6 @@ pub unsafe fn nvim_exec_autocmds(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut modeline: bool = true;
     let mut b: *mut buf_T = curbuf.get();
@@ -34,10 +33,10 @@ pub unsafe fn nvim_exec_autocmds(
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             true,
             arena,
-            err,
+            &mut error,
         )
     };
-    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -99,8 +98,8 @@ pub unsafe fn nvim_exec_autocmds(
             error = unsafe { err_conflict_ptr(c"pattern".as_ptr(), c"buf".as_ptr()) };
             return ().reported(error);
         }
-        b = unsafe { find_buffer_by_handle(buf, err) };
-        if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+        b = unsafe { find_buffer_by_handle(buf, &mut error) };
+        if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return ().reported(error);
         }
     }
@@ -111,10 +110,10 @@ pub unsafe fn nvim_exec_autocmds(
             buf,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
-            err,
+            &mut error,
         )
     };
-    if unsafe { (*err).kind() } as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
+    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
     if has_key(

@@ -114,7 +114,7 @@ pub(crate) fn handle_get_window(handle: handle_T) -> *mut win_T {
 
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
 /// set — when it names nothing.
-pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *mut buf_T {
+pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: &mut Error) -> *mut buf_T {
     if buffer == 0 {
         return curbuf.get();
     }
@@ -128,7 +128,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: *mut Error) -> *
 }
 
 /// [`find_buffer_by_handle`] for a window.
-pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win_T {
+pub unsafe fn find_window_by_handle(window: Window, err: &mut Error) -> *mut win_T {
     if window == 0 {
         return curwin.get();
     }
@@ -142,7 +142,7 @@ pub unsafe fn find_window_by_handle(window: Window, err: *mut Error) -> *mut win
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
-pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: *mut Error) -> *mut tabpage_T {
+pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: &mut Error) -> *mut tabpage_T {
     if tabpage == 0 {
         return curtab.get();
     }
@@ -218,7 +218,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
 
 /// Stop catching, report whatever was caught through `err`, and restore what
 /// [`try_enter`] saved into `tstate`.
-pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
+pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
     debug_assert!(trylevel.get() > 0);
     trylevel.set(trylevel.get() - 1);
     did_emsg.set(0);
@@ -267,13 +267,10 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: *mut Error) {
         } else {
             // SAFETY: both are the exception's own NUL-terminated strings.
             let (name, value) = unsafe { (c_str(name), c_str(value)) };
-            // SAFETY: the caller's error slot.
-            unsafe {
-                *err = if lnum != 0 {
-                    api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
-                } else {
-                    api_error!(kErrorTypeException, "{name}: {value}")
-                };
+            *err = if lnum != 0 {
+                api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
+            } else {
+                api_error!(kErrorTypeException, "{name}: {value}")
             };
         }
         // SAFETY: the exception has been rendered into `err`.
@@ -320,7 +317,7 @@ pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) ->
 /// out-parameter. C's `ERROR_INIT`.
 pub(crate) const ERROR_INIT: Error = Error::none();
 
-/// Answering with what a helper that still reports through an `*mut Error`
+/// Answering with what a helper that still reports through an error
 /// out-parameter produced.
 pub(crate) trait Reported: Sized {
     /// `self`, unless the lent [`ERROR_INIT`] slot `err` says why the call
@@ -363,7 +360,7 @@ pub(crate) unsafe fn set_mark(
     name: String_0,
     line: Integer,
     col: Integer,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     let buf = if buf.is_null() { curbuf.get() } else { buf };
     let mut col = col;
@@ -404,13 +401,10 @@ pub(crate) unsafe fn set_mark(
         // `%c` wrote the one byte, whatever it was.
         let byte = mark as u8;
         let mark = msg_bytes(core::slice::from_ref(&byte));
-        // SAFETY: `err` is the caller's slot.
-        unsafe {
-            *err = if deleting {
-                api_error!(kErrorTypeException, "Failed to delete named mark: {mark}")
-            } else {
-                api_error!(kErrorTypeException, "Failed to set named mark: {mark}")
-            };
+        *err = if deleting {
+            api_error!(kErrorTypeException, "Failed to delete named mark: {mark}")
+        } else {
+            api_error!(kErrorTypeException, "Failed to set named mark: {mark}")
         };
     }
     res

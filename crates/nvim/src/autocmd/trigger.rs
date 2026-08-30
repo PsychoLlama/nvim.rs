@@ -233,7 +233,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     // The buffer may well have gone since the event was queued, which is
     // why the *handle* was stored and is resolved here.
     // SAFETY: `err` is this frame's own.
-    let buf = unsafe { find_buffer_by_handle((*e).buf, &raw mut err) };
+    let buf = unsafe { find_buffer_by_handle((*e).buf, &mut err) };
     if !buf.is_null() {
         let mut save_v_event = save_v_event_T::default();
         // SAFETY: `save_v_event` is this frame's own storage, and the
@@ -247,7 +247,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 let item = unsafe { *items.items.add(i) };
                 let mut tv = TV_INITIAL_VALUE;
                 // SAFETY: `tv` and `err` are this frame's own.
-                unsafe { object_to_vim(item.value, &raw mut tv, &raw mut err) };
+                unsafe { object_to_vim(item.value, &raw mut tv) };
                 // A value `v:event` cannot hold is dropped, not fatal.
                 if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is

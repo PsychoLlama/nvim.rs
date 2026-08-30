@@ -28,7 +28,6 @@ pub unsafe fn nvim_buf_set_text(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut scratch: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -46,7 +45,7 @@ pub unsafe fn nvim_buf_set_text(
         unsafe { array_add(&mut scratch, put_value) };
         replacement = scratch;
     }
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, err) };
+    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -354,7 +353,7 @@ pub unsafe fn nvim_buf_set_text(
             }
         }
     }
-    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { try_leave(&raw mut tstate, &mut error) };
     ().reported(error)
 }
 

@@ -167,7 +167,7 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
 pub unsafe fn nlua_pop_string(
     lstate: *mut lua_State,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> String_0 {
     unsafe {
         if lua_type(lstate, -1) != LUA_TSTRING {
@@ -192,7 +192,7 @@ pub unsafe fn nlua_pop_string(
 pub unsafe fn nlua_pop_integer(
     lstate: *mut lua_State,
     _arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Integer {
     unsafe {
         if lua_type(lstate, -1) != LUA_TNUMBER {
@@ -220,7 +220,7 @@ pub unsafe fn nlua_pop_integer(
 pub unsafe fn nlua_pop_boolean(
     lstate: *mut lua_State,
     _arena: *mut Arena,
-    _err: *mut Error,
+    _err: &mut Error,
 ) -> Boolean {
     unsafe {
         let ret = lua_toboolean(lstate, -1) != 0;
@@ -234,7 +234,7 @@ pub unsafe fn nlua_pop_boolean(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: *mut Error) -> Boolean {
+pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: &mut Error) -> Boolean {
     unsafe {
         let ret = match lua_type(lstate, -1) {
             LUA_TBOOLEAN => lua_toboolean(lstate, -1) != 0,
@@ -254,16 +254,17 @@ pub unsafe fn nlua_pop_boolean_strict(lstate: *mut lua_State, err: *mut Error) -
 /// asked for. Leaves the stack alone; the caller pops.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state with a value on top; `err` may be null.
+/// `lstate` must be a live Lua state with a value on top.
 #[inline]
 unsafe fn nlua_check_type(
     lstate: *mut lua_State,
-    err: *mut Error,
+    err: Option<&mut Error>,
     type_0: ObjectType,
 ) -> LuaTableProps {
     unsafe {
+        let mut err = err;
         if lua_type(lstate, -1) != LUA_TTABLE {
-            if !err.is_null() {
+            if let Some(err) = err.as_deref_mut() {
                 let wanted = if type_0 == kObjectTypeFloat {
                     c"number"
                 } else {
@@ -284,7 +285,9 @@ unsafe fn nlua_check_type(
         {
             table_props.type_0 = kObjectTypeDict;
         }
-        if table_props.type_0 != type_0 && !err.is_null() {
+        if table_props.type_0 != type_0
+            && let Some(err) = err
+        {
             let want = msg_cstr(api_typename(type_0));
             *err = api_error!(kErrorTypeValidation, "Expected {want}-like Lua table");
         }
@@ -296,14 +299,14 @@ unsafe fn nlua_check_type(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_float(lstate: *mut lua_State, _arena: *mut Arena, err: *mut Error) -> Float {
+pub unsafe fn nlua_pop_float(lstate: *mut lua_State, _arena: *mut Arena, err: &mut Error) -> Float {
     unsafe {
         if lua_type(lstate, -1) == LUA_TNUMBER {
             let ret = lua_tonumber(lstate, -1);
             lua_pop(lstate, 1);
             return ret;
         }
-        let table_props = nlua_check_type(lstate, err, kObjectTypeFloat);
+        let table_props = nlua_check_type(lstate, Some(err), kObjectTypeFloat);
         lua_pop(lstate, 1);
         if table_props.type_0 != kObjectTypeFloat {
             return 0.0;
@@ -320,7 +323,7 @@ unsafe fn nlua_pop_array_unchecked(
     lstate: *mut lua_State,
     table_props: LuaTableProps,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Array {
     unsafe {
         let mut ret = arena_array(arena, table_props.maxidx);
@@ -332,7 +335,7 @@ unsafe fn nlua_pop_array_unchecked(
         for i in 1..=table_props.maxidx {
             lua_rawgeti(lstate, -1, i as c_int);
             let val = nlua_pop_object(lstate, false, arena, err);
-            if (*err).is_set() {
+            if err.is_set() {
                 lua_pop(lstate, 1);
                 if arena.is_null() {
                     api_free_array(ret);
@@ -351,9 +354,9 @@ unsafe fn nlua_pop_array_unchecked(
 ///
 /// # Safety
 /// As [`nlua_pop_string`].
-pub unsafe fn nlua_pop_array(lstate: *mut lua_State, arena: *mut Arena, err: *mut Error) -> Array {
+pub unsafe fn nlua_pop_array(lstate: *mut lua_State, arena: *mut Arena, err: &mut Error) -> Array {
     unsafe {
-        let table_props = nlua_check_type(lstate, err, kObjectTypeArray);
+        let table_props = nlua_check_type(lstate, Some(err), kObjectTypeArray);
         if table_props.type_0 != kObjectTypeArray {
             return Array::EMPTY;
         }
@@ -370,7 +373,7 @@ unsafe fn nlua_pop_dict_unchecked(
     table_props: LuaTableProps,
     ref_0: bool,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Dict {
     unsafe {
         let mut ret = arena_dict(arena, table_props.string_keys_num);
@@ -388,14 +391,14 @@ unsafe fn nlua_pop_dict_unchecked(
             // The key is popped from a copy, so lua_next still has its own.
             lua_pushvalue(lstate, -2);
             let key = nlua_pop_string(lstate, arena, err);
-            if !(*err).is_set() {
+            if !err.is_set() {
                 let value = nlua_pop_object(lstate, ref_0, arena, err);
                 *ret.items.add(ret.size) = key_value_pair { key, value };
                 ret.size = ret.size.wrapping_add(1);
             } else {
                 lua_pop(lstate, 1);
             }
-            if (*err).is_set() {
+            if err.is_set() {
                 if arena.is_null() {
                     api_free_dict(ret);
                 }
@@ -418,10 +421,10 @@ pub unsafe fn nlua_pop_dict(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Dict {
     unsafe {
-        let table_props = nlua_check_type(lstate, err, kObjectTypeDict);
+        let table_props = nlua_check_type(lstate, Some(err), kObjectTypeDict);
         if table_props.type_0 != kObjectTypeDict {
             lua_pop(lstate, 1);
             return Dict::EMPTY;
@@ -437,7 +440,7 @@ pub unsafe fn nlua_pop_dict(
 pub unsafe fn nlua_pop_luaref(
     lstate: *mut lua_State,
     _arena: *mut Arena,
-    _err: *mut Error,
+    _err: &mut Error,
 ) -> LuaRef {
     unsafe {
         let rv = nlua_ref_global(lstate, -1);
@@ -453,7 +456,7 @@ pub unsafe fn nlua_pop_luaref(
 pub unsafe fn nlua_pop_handle(
     lstate: *mut lua_State,
     _arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> handle_T {
     unsafe {
         let ret = if lua_type(lstate, -1) != LUA_TNUMBER {

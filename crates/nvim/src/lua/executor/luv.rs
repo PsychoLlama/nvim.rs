@@ -215,7 +215,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         lua_pop(lstate, 1);
 
         let mut err = ERROR_INIT;
-        let pat: Array = nlua_pop_array(lstate, ptr::null_mut::<Arena>(), &raw mut err);
+        let pat: Array = nlua_pop_array(lstate, ptr::null_mut::<Arena>(), &mut err);
         if err.is_set() {
             luaL_where(lstate, 1);
             lua_pushstring(lstate, err.message_or_empty().as_ptr());

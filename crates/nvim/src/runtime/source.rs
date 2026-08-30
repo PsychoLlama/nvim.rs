@@ -613,7 +613,7 @@ unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither; the result's union is read under its own tag.
     let nil = ptr::null_mut();
-    let result = unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &raw mut err) };
+    let result = unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &mut err) };
     let is_lua = !err.is_set()
         && result.type_0 == kObjectTypeBoolean as ObjectType
         && unsafe { result.data.boolean };

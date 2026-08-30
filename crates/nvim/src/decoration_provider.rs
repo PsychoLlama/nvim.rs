@@ -139,10 +139,10 @@ unsafe fn decor_provider_invoke(
 
     let locked = Lock::text();
     let mode = if want_list { kRetMulti } else { kRetNilBool };
-    let (no_arena, slot) = (ptr::null_mut(), &raw mut err);
+    let no_arena = ptr::null_mut();
     // SAFETY: the caller's callback and name; `nlua_call_ref` owns `args`
     // from here, and `err` is this frame's own.
-    let ret = unsafe { nlua_call_ref(callback, name, args, mode, no_arena, slot) };
+    let ret = unsafe { nlua_call_ref(callback, name, args, mode, no_arena, &mut err) };
     drop(locked);
 
     if !err.is_set() {
@@ -152,9 +152,9 @@ unsafe fn decor_provider_invoke(
             *res = unsafe { ret.data.array };
             return true;
         }
-        let (what, slot) = (c"provider %s retval".as_ptr(), &raw mut err);
+        let what = c"provider %s retval".as_ptr();
         // SAFETY: the callback's return value, and this frame's own `err`.
-        if unsafe { api_object_to_bool(ret, what, default_true, slot) } {
+        if unsafe { api_object_to_bool(ret, what, default_true, &mut err) } {
             return true;
         }
     }

@@ -247,8 +247,8 @@ fn has_wsl() -> bool {
             items: ptr::null_mut(),
         };
         let arena = ptr::null_mut::<Arena>();
-        let out = &raw mut err;
-        let o: Object = unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena, out) };
+        let o: Object =
+            unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena, &mut err) };
         debug_assert!(!err.is_set());
         // SAFETY: the union member is the one the type tag names.
         let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == 1;
@@ -295,7 +295,7 @@ pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
 pub unsafe fn f_api_info(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value; a null `Error` out-pointer
     // is what the converter's infallible path takes.
-    unsafe { object_to_vim(api_metadata(), rettv, ptr::null_mut()) };
+    unsafe { object_to_vim(api_metadata(), rettv) };
 }
 
 /// `did_filetype()` — whether a FileType autocommand has fired for this

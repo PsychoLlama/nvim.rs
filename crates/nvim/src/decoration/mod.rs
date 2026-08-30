@@ -560,13 +560,12 @@ pub unsafe fn bufhl_add_hl_pos_offset(
         let no_id = ptr::null_mut();
         let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
         let flags = MT_FLAG_DECOR_HL as uint16_t;
-        let no_err = ptr::null_mut();
         // SAFETY: `buf` is the caller's live buffer and `decor` is the
         // inline decoration built above, which the mark takes over.
         unsafe {
             extmark_set(
                 buf, ns, no_id, row, hl_start, end_row, hl_end, decor, flags, true, false, true,
-                false, no_err,
+                false,
             )
         };
     }

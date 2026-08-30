@@ -99,7 +99,7 @@ impl OptionContext {
     ///
     /// `from` must be the live window or buffer this context's scope names,
     /// and `err` a valid error slot.
-    pub(crate) unsafe fn enter(&mut self, from: *mut c_void, err: *mut Error) -> bool {
+    pub(crate) unsafe fn enter(&mut self, from: *mut c_void, err: &mut Error) -> bool {
         // SAFETY: the caller's `from` matches the scope, and `err` is valid.
         match self {
             OptionContext::Global => false,
@@ -112,10 +112,8 @@ impl OptionContext {
                     == FAIL
                 {
                     unsafe { restore_win_noblock(switchwin, true) };
-                    // SAFETY: the caller's error slot.
-                    if !unsafe { (*err).is_set() } {
-                        // SAFETY: as above.
-                        unsafe { *err = Error::exception(c"Problem while switching windows") };
+                    if !err.is_set() {
+                        *err = Error::exception(c"Problem while switching windows");
                     }
                     return false;
                 }
@@ -159,13 +157,12 @@ pub(crate) unsafe fn get_option_value_for(
     opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
-    err: *mut Error,
+    err: &mut Error,
 ) -> OptVal {
     let mut ctx = OptionContext::new(scope);
     // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
     let switched = unsafe { ctx.enter(from, err) };
-    // SAFETY: `err` is valid.
-    if unsafe { (*err).kind() } != kErrorTypeNone {
+    if err.kind() != kErrorTypeNone {
         return NIL_OPTVAL;
     }
     let value = get_option_value(opt_idx, opt_flags);
@@ -190,20 +187,18 @@ pub(crate) unsafe fn set_option_value_for(
     opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     let mut ctx = OptionContext::new(scope);
     // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
     let switched = unsafe { ctx.enter(from, err) };
-    // SAFETY: `err` is valid.
-    if unsafe { (*err).kind() } != kErrorTypeNone {
+    if err.kind() != kErrorTypeNone {
         return;
     }
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
     if let Some(errmsg) = errmsg {
-        // SAFETY: the caller's error slot.
-        unsafe { *err = Error::from_message(kErrorTypeException, &errmsg) };
+        *err = Error::from_message(kErrorTypeException, &errmsg);
     }
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.

@@ -57,7 +57,6 @@ fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
 /// own items.
 pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the caller's keyset, live for the whole call.
     let mut opts = unsafe { Redraw::new(opts) };
     let keys = opts.is_set__redraw_;
@@ -65,8 +64,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
     let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
     if set(KEYSET_OPTIDX_redraw__win) {
-        // SAFETY: `err` is this frame's own slot.
-        win = unsafe { find_window_by_handle(opts.win, err) };
+        // SAFETY: `error` is this frame's own slot.
+        win = unsafe { find_window_by_handle(opts.win, &mut error) };
         if error.is_set() {
             return ().reported(error);
         }
@@ -76,8 +75,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             report(&mut error, c"cannot use both 'buf' and 'win'");
             return ().reported(error);
         }
-        // SAFETY: `err` is this frame's own slot.
-        buf = unsafe { find_buffer_by_handle(opts.buf, err) };
+        // SAFETY: `error` is this frame's own slot.
+        buf = unsafe { find_buffer_by_handle(opts.buf, &mut error) };
         if error.is_set() {
             return ().reported(error);
         }

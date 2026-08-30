@@ -490,7 +490,7 @@ pub(crate) unsafe fn win_new_float(
     wp: *mut win_T,
     last: bool,
     fconfig: WinConfig,
-    err: *mut Error,
+    err: &mut Error,
 ) -> *mut win_T {
     // SAFETY: the caller's promise -- a writable error slot, and `wp` null or
     // a live window.

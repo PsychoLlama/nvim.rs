@@ -13,12 +13,12 @@ use crate::api::private::helpers::{ERROR_INIT, NIL, Reported, array_add, has_key
 use crate::api::private::validate::err_msg_ptr;
 use crate::api_error;
 use crate::guard::Lock;
+use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Buf;
 
 pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
     let mut slot = ERROR_INIT;
-    let err = &raw mut slot;
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, err) };
+    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
     if b.is_null() {
         return (0 as Integer).reported(slot);
     }
@@ -143,10 +143,10 @@ unsafe fn term_write(
     }
     let _locked = Lock::text();
     let (name, no_arena) = (c"input".as_ptr(), ::core::ptr::null_mut::<Arena>());
-    let no_err = ::core::ptr::null_mut::<Error>();
+
     // SAFETY: `cb` is a live Lua reference and `args` this frame's own; the
     // handler reports nothing, so it is given no error slot.
-    unsafe { nlua_call_ref(cb, name, args, kRetNilBool, no_arena, no_err) };
+    unsafe { nlua_call_ref_quiet(cb, name, args, kRetNilBool, no_arena) };
 }
 
 fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::core::ffi::c_void) {}

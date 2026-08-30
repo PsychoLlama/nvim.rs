@@ -293,10 +293,10 @@ pub(crate) unsafe fn api_metadata() -> Object {
         let mut arena = ARENA_EMPTY;
         let mut err = Error::none();
         let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
-        let (len, ar, e) = (PACKED_API_METADATA.len(), &raw mut arena, &raw mut err);
+        let (len, ar) = (PACKED_API_METADATA.len(), &raw mut arena);
         // SAFETY: the blob is a compile-time constant of `len` bytes and a
         // valid msgpack map; `arena` and `err` are this frame's.
-        METADATA.set(unsafe { unpack(blob, len, ar, e) });
+        METADATA.set(unsafe { unpack(blob, len, ar, &mut err) });
         if err.is_set() || METADATA.with(|m| m.type_0) != kObjectTypeDict {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };
@@ -406,7 +406,7 @@ pub(crate) unsafe fn api_object_to_bool(
     obj: Object,
     what: *const c_char,
     nil_value: bool,
-    err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if let Some(on) = obj.as_boolean() {
         return on;
@@ -424,7 +424,7 @@ pub(crate) unsafe fn api_object_to_bool(
 
 /// `obj` as a highlight group id, defining the group if it was named and does
 /// not exist yet. Zero for the empty name and for an id out of range.
-pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: *mut Error) -> c_int {
+pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut Error) -> c_int {
     if let Some(str) = obj.as_string() {
         if str.is_empty() {
             return 0;
@@ -462,7 +462,7 @@ unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
 
 /// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into a
 /// highlighted message. Empty, with `err` set, on the first bad chunk.
-pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: *mut Error) -> HlMessage {
+pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) -> HlMessage {
     let mut hl_msg = EMPTY_HL_MESSAGE;
     for i in 0..chunks.size {
         // SAFETY: `i` is below `size`, so the item is inside `items`.

@@ -648,8 +648,8 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
             unsafe { (*buf).b_locked += 1 };
-            unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer, &raw mut err) };
-            unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer, &raw mut err) };
+            unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer, &mut err) };
+            unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer, &mut err) };
             unsafe { (*buf).b_locked -= 1 };
 
             if unsafe { terminal_live(chan) } {
@@ -675,7 +675,7 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 ///
 /// # Safety
 /// `buf` is a live buffer and `err` a live out-parameter.
-unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Error) {
+unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: &mut Error) {
     let value = object {
         type_0: kObjectTypeInteger,
         data: object_data { integer: value },
@@ -685,5 +685,5 @@ unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: *mut Er
     let vars = unsafe { (*buf).b_vars };
     let name = unsafe { cstr_as_string(name.as_ptr()) };
     unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
-    unsafe { (*err).clear() };
+    err.clear();
 }

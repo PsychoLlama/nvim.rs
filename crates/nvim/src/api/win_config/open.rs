@@ -28,14 +28,13 @@ pub unsafe fn nvim_open_win(
     config: *mut KeyDict_win_config,
 ) -> Result<Window, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: `error` is this frame's own slot, live for the whole call, and
     // `config` is the caller's keyset.
-    let (report, keys) = unsafe { (ErrSlot::new(err), CfgKeys::new(config)) };
+    let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
     let mut bufref = BufRef::NONE;
-    // SAFETY: `err` is this frame's slot; the lookup answers a live buffer or
+    // SAFETY: `error` is this frame's slot; the lookup answers a live buffer or
     // a null.
-    let b = unsafe { find_buffer_by_handle(buf, err) };
+    let b = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Window).reported(error);
     }
@@ -74,8 +73,8 @@ pub unsafe fn nvim_open_win(
     };
     '_cleanup: {
         if keys.win > 0 {
-            // SAFETY: `err` is this frame's slot.
-            parent = unsafe { find_window_by_handle(fconfig.window, err) };
+            // SAFETY: `error` is this frame's slot.
+            parent = unsafe { find_window_by_handle(fconfig.window, &mut error) };
             if parent.is_null() {
                 break '_cleanup;
             }
@@ -96,8 +95,8 @@ pub unsafe fn nvim_open_win(
             } else {
                 parent
             };
-            // SAFETY: `target` is a live window and `err` this frame's slot.
-            if !unsafe { check_split_disallowed_err(target, err) } {
+            // SAFETY: `target` is a live window and `error` this frame's slot.
+            if !unsafe { check_split_disallowed_err(target, &mut error) } {
                 break '_cleanup;
             }
             // `vertical` without `split` picks the side from 'splitright' and
@@ -148,8 +147,8 @@ pub unsafe fn nvim_open_win(
                 unsafe { restore_win(&raw mut switchwin, true) };
             }
             // SAFETY: `tstate` is what the `try_enter` above filled in, and
-            // `err` is this frame's slot.
-            unsafe { try_leave(&raw mut tstate, err) };
+            // `error` is this frame's slot.
+            unsafe { try_leave(&raw mut tstate, &mut error) };
             if !wp.is_null() {
                 // SAFETY: `wp` is the window the split just made.
                 let (width, height) = unsafe {
@@ -175,8 +174,9 @@ pub unsafe fn nvim_open_win(
                 err_msg(report, kErrorTypeException, msg);
                 break '_cleanup;
             }
-            // SAFETY: `err` is this frame's slot.
-            wp = unsafe { win_new_float(::core::ptr::null_mut::<win_T>(), false, fconfig, err) };
+            // SAFETY: `error` is this frame's slot.
+            let (none, slot) = (::core::ptr::null_mut::<win_T>(), &mut error);
+            wp = unsafe { win_new_float(none, false, fconfig, slot) };
         }
         if wp.is_null() {
             if !report.is_set() {
@@ -230,8 +230,8 @@ pub unsafe fn nvim_open_win(
                 autocmd_no_enter.set(autocmd_no_enter.get() + 1);
                 autocmd_no_leave.set(autocmd_no_leave.get() + 1);
             }
-            // SAFETY: `wp` and `b` are live, and `err` is this frame's slot.
-            unsafe { win_set_buf(wp, b, err) };
+            // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
+            unsafe { win_set_buf(wp, b, &mut error) };
             if !noautocmd {
                 tp = win_find_tabpage(wp);
             }
@@ -241,8 +241,7 @@ pub unsafe fn nvim_open_win(
             }
         }
         if tp.is_null() {
-            // SAFETY: `err` is this frame's own slot.
-            unsafe { (*err).clear() };
+            error.clear();
             err_msg(
                 report,
                 kErrorTypeException,
@@ -345,7 +344,7 @@ pub(crate) fn win_split_flags(mut split: WinSplit, mut toplevel: bool) -> ::core
 /// # Safety
 /// `wp` must be a live window, `tp` a live tab page and `err` the caller's
 /// error slot.
-pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: *mut Error) -> bool {
+pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: &mut Error) -> bool {
     // SAFETY: the caller's error slot.
     let report = unsafe { ErrSlot::new(err) };
     let other_tab = if tp == curtab.get() {

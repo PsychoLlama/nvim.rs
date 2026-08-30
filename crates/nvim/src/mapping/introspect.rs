@@ -310,7 +310,7 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
             let local = c_int::from(found.local);
             let dict = mapblock_fill_dict(mp, alt, local, abbr, true, &raw mut arena);
             let mut obj = Object::dict(dict);
-            object_to_vim_take_luaref(&raw mut obj, rettv, true, ptr::null_mut());
+            object_to_vim_take_luaref(&raw mut obj, rettv, true);
             arena_mem_free(arena_finish(&raw mut arena));
         }
     } else {
@@ -377,7 +377,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             unsafe {
                 let dict = mapblock_fill_dict(mp, alt, buffer_local, abbr, true, &raw mut arena);
                 let mut obj = Object::dict(dict);
-                object_to_vim_take_luaref(&raw mut obj, &raw mut d, true, ptr::null_mut());
+                object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
                 debug_assert_eq!(d.v_type, VAR_DICT);
                 tv_list_append_dict((*rettv).vval.v_list, d.vval.v_dict);
                 arena_mem_free(arena_finish(&raw mut arena));

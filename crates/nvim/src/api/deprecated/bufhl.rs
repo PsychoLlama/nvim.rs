@@ -67,7 +67,6 @@ unsafe fn set_decor(
             false,
             false,
             false,
-            ::core::ptr::null_mut::<Error>(),
         );
     }
 }
@@ -151,7 +150,6 @@ pub unsafe fn nvim_buf_set_virtual_text(
     _opts: *mut KeyDict_empty,
 ) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
@@ -161,9 +159,9 @@ pub unsafe fn nvim_buf_set_virtual_text(
     }
     let ns_id = src2ns(&mut src_id);
     let mut width: ::core::ffi::c_int = 0;
-    // SAFETY: `chunks` is the caller's array, and `err`/`width` are this
+    // SAFETY: `chunks` is the caller's array, and `error`/`width` are this
     // frame's.
-    let virt_text: VirtText = unsafe { parse_virt_text(chunks, err, &raw mut width) };
+    let virt_text: VirtText = unsafe { parse_virt_text(chunks, &mut error, &raw mut width) };
     if error.is_set() {
         return (0 as Integer).reported(error);
     }

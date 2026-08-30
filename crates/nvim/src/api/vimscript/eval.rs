@@ -92,7 +92,7 @@ unsafe fn call_function_with(
     args: Array,
     self_0: *mut dict_T,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     if args.size > MAX_FUNC_ARGS as size_t {
@@ -106,7 +106,7 @@ unsafe fn call_function_with(
     for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
         // SAFETY: `i` is below `size`, so the object is inside `items`; the
         // slot is this frame's and `err` the caller's.
-        unsafe { object_to_vim(*args.items.add(i), slot, err) };
+        unsafe { object_to_vim(*args.items.add(i), slot) };
     }
 
     let mut rv = Object::NIL;
@@ -133,8 +133,7 @@ unsafe fn call_function_with(
         // SAFETY: `tstate` is what the `try_enter` above filled in, and
         // `err` is the caller's slot.
         unsafe { try_leave(&raw mut tstate, err) };
-        // SAFETY: the caller's promise about `err`.
-        if unsafe { (*err).kind() } == kErrorTypeNone {
+        if err.kind() == kErrorTypeNone {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
             rv = unsafe { vim_to_object(ret, arena, false) };
         }
@@ -155,10 +154,10 @@ pub unsafe fn nvim_call_function(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `fn_0`/`args`/`arena` are the caller's, and `err` this
+    // SAFETY: `fn_0`/`args`/`arena` are the caller's, and `error` this
     // frame's slot; a null self dictionary means a plain function call.
-    let rv = unsafe { call_function_with(fn_0, args, ptr::null_mut::<dict_T>(), arena, err) };
+    let rv =
+        unsafe { call_function_with(fn_0, args, ptr::null_mut::<dict_T>(), arena, &mut error) };
     rv.reported(error)
 }
 
@@ -170,7 +169,6 @@ pub unsafe fn nvim_call_dict_function(
 ) -> Result<Object, Error> {
     let mut evalarg = EVALARG_EVALUATE;
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rettv: typval_T = TV_INITIAL_VALUE;
     // Only the evaluated form owns what it produced.
     let mut mustfree = false;
@@ -187,7 +185,7 @@ pub unsafe fn nvim_call_dict_function(
         // SAFETY: `evalarg` is this frame's.
         unsafe { clear_evalarg(ea, no_eap) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.
-        unsafe { try_leave(&raw mut tstate, err) };
+        unsafe { try_leave(&raw mut tstate, &mut error) };
         if error.is_set() {
             return Object::NIL.reported(error);
         }
@@ -199,11 +197,11 @@ pub unsafe fn nvim_call_dict_function(
         }
         mustfree = true;
     } else if dict.type_0 == kObjectTypeDict {
-        // SAFETY: `dict` is the caller's and `rettv`/`err` are this frame's.
-        unsafe { object_to_vim(dict, &raw mut rettv, err) };
+        // SAFETY: `dict` is the caller's and `rettv`/`error` are this frame's.
+        unsafe { object_to_vim(dict, &raw mut rettv) };
     } else {
         let want = c"String or Dict";
-        // SAFETY: `err` is this frame's slot and both strings are static.
+        // SAFETY: `error` is this frame's slot and both strings are static.
         error = unsafe { err_expected_ptr(c"dict argument".as_ptr(), want, None) };
         return Object::NIL.reported(error);
     }
@@ -212,7 +210,7 @@ pub unsafe fn nvim_call_dict_function(
     // refuses after checking `v_type`.
     let self_dict: *mut dict_T = unsafe { rettv.vval.v_dict };
     // SAFETY: as above, plus `fn_0`/`args`/`arena` are the caller's.
-    let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, err) };
+    let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, &mut error) };
     if mustfree {
         // SAFETY: the evaluated value is this frame's.
         unsafe { tv_clear(&raw mut rettv) };
@@ -234,12 +232,12 @@ unsafe fn call_in_dict(
     self_dict: *mut dict_T,
     rettv: &typval_T,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // Every refusal below is a validation error, with or without the name
     // it is about.
     // SAFETY: the caller's promise about `err`.
-    let refuse = |msg: &CStr| unsafe { *err = Error::validation(msg) };
+    let mut refuse = |msg: &CStr| *err = Error::validation(msg);
 
     if rettv.v_type != VAR_DICT || self_dict.is_null() {
         refuse(c"dict not found");
@@ -254,8 +252,7 @@ unsafe fn call_in_dict(
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
-            // SAFETY: the caller's promise about `err`.
-            unsafe { *err = api_error!(kErrorTypeValidation, "Not found: {name}") };
+            *err = api_error!(kErrorTypeValidation, "Not found: {name}");
             return Object::NIL;
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
@@ -267,8 +264,7 @@ unsafe fn call_in_dict(
         if v_type != VAR_FUNC {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
-            // SAFETY: the caller's promise about `err`.
-            unsafe { *err = api_error!(kErrorTypeValidation, "Not a function: {name}") };
+            *err = api_error!(kErrorTypeValidation, "Not a function: {name}");
             return Object::NIL;
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
@@ -277,8 +273,7 @@ unsafe fn call_in_dict(
         *fn_0 = String_0::from_raw_parts(name, unsafe { strlen(name) });
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
-        // SAFETY: the caller's promise about `err`.
-        unsafe { *err = Error::validation(c"Invalid function name: (empty)") };
+        *err = Error::validation(c"Invalid function name: (empty)");
         return Object::NIL;
     }
     // SAFETY: `fn_0` names its own bytes and `self_dict` is the live

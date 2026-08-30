@@ -911,7 +911,7 @@ unsafe fn dict_lookup(dict: *mut dict_T, key: *const c_char) -> Object {
     // SAFETY: forwarded to this function's own caller; `err` is this
     // function's and is released before it returns.
     unsafe {
-        let obj = dict_get_value(dict, cstr_as_string(key), no_arena, &raw mut err);
+        let obj = dict_get_value(dict, cstr_as_string(key), no_arena, &mut err);
         err.clear();
         obj
     }

@@ -153,7 +153,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 }
             }
         }
-        try_leave(&raw mut tstate, &raw mut err);
+        try_leave(&raw mut tstate, &mut err);
 
         drop(mods);
         if log_level >= 0 {

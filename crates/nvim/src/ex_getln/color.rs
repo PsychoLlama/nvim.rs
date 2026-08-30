@@ -229,7 +229,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                     &raw mut color_cb,
                 )
             };
-            unsafe { try_leave(&raw mut tstate, &raw mut err) };
+            unsafe { try_leave(&raw mut tstate, &mut err) };
             can_free_cb = true;
         } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
             unsafe { color_expr_cmdline(colored_ccline, ccline_colors) };
@@ -273,7 +273,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         if got_int.get() {
             getln_interrupted_highlight.set(true);
         }
-        unsafe { try_leave(&raw mut tstate, &raw mut err) };
+        unsafe { try_leave(&raw mut tstate, &mut err) };
 
         if err.is_set() || !cbcall_ret {
             break 'body Label::Error;

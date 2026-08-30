@@ -235,8 +235,8 @@ pub unsafe fn nvim_set_keymap(
     opts: *mut KeyDict_keymap,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    unsafe { modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, err) };
+    let slot = &mut error;
+    unsafe { modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, slot) };
     ().reported(error)
 }
 

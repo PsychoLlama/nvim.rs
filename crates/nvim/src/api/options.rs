@@ -29,7 +29,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::validate::err_expected;
 use crate::api::private::validate::err_invalid_ptr;
-use crate::api::private::validate::err_msg_ptr;
 use crate::api_error;
 use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
@@ -42,8 +41,8 @@ use crate::option::{
 };
 use crate::types::{
     Arena, Dict, Error, FAIL, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData,
-    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, linenr_T, uint64_t,
+    OptValType, OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation,
+    linenr_T, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -87,7 +86,7 @@ struct OptionTarget {
 unsafe fn option_target(
     opts: *mut KeyDict_option,
     name: *mut c_char,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Option<OptionTarget> {
     // `opts`' keys, by their index in its `is_set` mask. Function-local so
     // that they cannot collide in the flat namespace `tools/ffigen` renders
@@ -99,9 +98,6 @@ unsafe fn option_target(
 
     // SAFETY: `opts` is the caller's, per this function's contract.
     let set = move |key| unsafe { has_key((*opts).is_set__option_, key) };
-    // SAFETY: `err` is the caller's.
-    let fail = move |msg: &CStr| unsafe { *err = Error::validation(msg) };
-
     let mut opt_flags = OptionSetFlags::NONE;
     if set(OPTIDX_SCOPE) {
         // SAFETY: as above; `scope` is a NUL-terminated key of `opts`.
@@ -110,8 +106,7 @@ unsafe fn option_target(
             b"local" => OptionSetFlags::LOCAL,
             b"global" => OptionSetFlags::GLOBAL,
             _ => {
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_expected(c"scope", c"'local' or 'global'", None) };
+                *err = err_expected(c"scope", c"'local' or 'global'", None);
                 return None;
             }
         };
@@ -124,14 +119,13 @@ unsafe fn option_target(
         // SAFETY: `err` is the caller's, and the handle is an integer.
         let win = unsafe { window_by_handle((*opts).win, &mut *err) };
         from = win.map_or(ptr::null_mut(), |w| w.raw().cast());
-        // SAFETY: `err` is the caller's.
-        if unsafe { (*err).kind() } != kErrorTypeNone {
+        if err.kind() != kErrorTypeNone {
             return None;
         }
     }
     if set(OPTIDX_BUF) {
         if set(OPTIDX_SCOPE) && opt_flags == OptionSetFlags::GLOBAL {
-            fail(c"cannot use both global 'scope' and 'buf'");
+            *err = Error::validation(c"cannot use both global 'scope' and 'buf'");
             return None;
         }
         opt_flags = OptionSetFlags::LOCAL;
@@ -139,17 +133,16 @@ unsafe fn option_target(
         // SAFETY: as the window lookup above.
         let buf = unsafe { buffer_by_handle((*opts).buf, &mut *err) };
         from = buf.map_or(ptr::null_mut(), |b| b.raw().cast());
-        // SAFETY: `err` is the caller's.
-        if unsafe { (*err).kind() } != kErrorTypeNone {
+        if err.kind() != kErrorTypeNone {
             return None;
         }
     }
     if set(OPTIDX_FILETYPE) && (set(OPTIDX_BUF) || set(OPTIDX_SCOPE) || set(OPTIDX_WIN)) {
-        fail(c"cannot use 'filetype' with 'scope', 'buf' or 'win'");
+        *err = Error::validation(c"cannot use 'filetype' with 'scope', 'buf' or 'win'");
         return None;
     }
     if set(OPTIDX_WIN) && set(OPTIDX_BUF) {
-        fail(c"cannot use both 'buf' and 'win'");
+        *err = Error::validation(c"cannot use both 'buf' and 'win'");
         return None;
     }
 
@@ -158,8 +151,7 @@ unsafe fn option_target(
     if opt_idx == kOptInvalid {
         // SAFETY: `name` is the caller's C string.
         let name = unsafe { c_str(name) };
-        // SAFETY: `err` is the caller's.
-        unsafe { *err = api_error!(kErrorTypeValidation, "Unknown option '{name}'") };
+        *err = api_error!(kErrorTypeValidation, "Unknown option '{name}'");
     } else if (scope == kOptScopeBuf || scope == kOptScopeWin) && !option_has_scope(opt_idx, scope)
     {
         let tgt = if scope == kOptScopeBuf {
@@ -182,16 +174,12 @@ unsafe fn option_target(
         let (tgt, global, req) = (msg_cstr(tgt), msg_cstr(global), msg_cstr(req));
         // SAFETY: `name` is the caller's C string.
         let name = unsafe { c_str(name) };
-        // SAFETY: `err` is the caller's.
-        unsafe {
-            *err = api_error!(
-                kErrorTypeValidation,
-                "'{tgt}' cannot be passed for {global}{req}option '{name}'"
-            );
-        };
+        *err = api_error!(
+            kErrorTypeValidation,
+            "'{tgt}' cannot be passed for {global}{req}option '{name}'"
+        );
     }
-    // SAFETY: `err` is the caller's.
-    if unsafe { (*err).kind() } != kErrorTypeNone {
+    if err.kind() != kErrorTypeNone {
         return None;
     }
 
@@ -223,27 +211,22 @@ unsafe fn do_ft_buf(
     filetype: *const c_char,
     aco: *mut aco_save_T,
     aco_used: *mut bool,
-    err: *mut Error,
+    err: &mut Error,
 ) -> *mut buf_T {
     // SAFETY: `aco_used` is the caller's out-parameter.
     unsafe { *aco_used = false };
     if filetype.is_null() {
         return ptr::null_mut::<buf_T>();
     }
-    // SAFETY: `err` is the caller's; the format takes nothing.
-    let fail = move |msg: &CStr| // SAFETY: the message the caller handed over, live for this call.
- // SAFETY: the caller's error slot.
- unsafe { *err = err_msg_ptr(kErrorTypeException, msg.as_ptr()) };
-
     // SAFETY: a dummy buffer of no name, which owns everything it holds.
     let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as linenr_T, BLN_DUMMY) };
     if ftbuf.is_null() {
-        fail(c"Could not create internal buffer");
+        *err = Error::exception(c"Could not create internal buffer");
         return ptr::null_mut::<buf_T>();
     }
     // SAFETY: `ftbuf` is the buffer just created.
     if unsafe { ml_open(ftbuf) } == FAIL {
-        fail(c"Could not load internal buffer");
+        *err = Error::exception(c"Could not load internal buffer");
         return ftbuf;
     }
     // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
@@ -278,20 +261,17 @@ unsafe fn do_ft_buf(
     }
     // SAFETY: `ftbuf` is live; the autocommands may delete it, which the
     // `bufref` below re-checks.
-    // SAFETY: `err` is the caller's.
-    let did_au_ft = api_try(unsafe { &mut *err }, |_| {
+    let did_au_ft = api_try(&mut *err, |_| {
         do_filetype_autocmd(unsafe { Buf::new(ftbuf) }, true)
     });
     if !bufref.valid() {
-        // SAFETY: `err` is the caller's.
-        if unsafe { (*err).kind() } == kErrorTypeNone {
-            fail(c"Internal buffer was deleted");
+        if err.kind() == kErrorTypeNone {
+            *err = Error::exception(c"Internal buffer was deleted");
         }
         return ptr::null_mut::<buf_T>();
     }
-    // SAFETY: `err` is the caller's.
-    if !did_au_ft && unsafe { (*err).kind() } == kErrorTypeNone {
-        fail(c"Could not execute FileType autocommands");
+    if !did_au_ft && err.kind() == kErrorTypeNone {
+        *err = Error::exception(c"Could not execute FileType autocommands");
     }
     ftbuf
 }
@@ -341,16 +321,16 @@ pub unsafe fn nvim_get_option_value(
     let mut err = ERROR_INIT;
     // SAFETY: `name` and `opts` are the caller's, per this function's
     // contract, and `err` is this frame's own.
-    let Some(target) = (unsafe { option_target(opts, name.data(), &raw mut err) }) else {
+    let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
         return NIL.reported(err);
     };
 
     let mut aco: aco_save_T = aco_save_T::default();
     let mut aco_used: bool = false;
-    let (paco, pused, slot) = (&raw mut aco, &raw mut aco_used, &raw mut err);
+    let (paco, pused) = (&raw mut aco, &raw mut aco_used);
     // SAFETY: `aco` and `aco_used` are this frame's own; `target.filetype`
     // borrows `opts`, which outlives the call.
-    let ftbuf = unsafe { do_ft_buf(target.filetype, paco, pused, slot) };
+    let ftbuf = unsafe { do_ft_buf(target.filetype, paco, pused, &mut err) };
     // SAFETY: `aco` is this frame's own and `ftbuf` is the scratch buffer.
     let mut leave_ft_buf = |ftbuf: *mut buf_T| unsafe {
         if aco_used {
@@ -376,7 +356,7 @@ pub unsafe fn nvim_get_option_value(
     let (idx, flags, scope) = (target.opt_idx, target.opt_flags, target.scope);
     // SAFETY: `from` is null or the live object `scope` names, and `err` is
     // this frame's own.
-    let value = unsafe { get_option_value_for(idx, flags, scope, from, &raw mut err) };
+    let value = unsafe { get_option_value_for(idx, flags, scope, from, &mut err) };
     if !ftbuf.is_null() {
         leave_ft_buf(ftbuf);
     }
@@ -405,7 +385,7 @@ pub unsafe fn nvim_set_option_value(
 ) -> Result<(), Error> {
     let mut err = ERROR_INIT;
     // SAFETY: as `nvim_get_option_value`.
-    let Some(target) = (unsafe { option_target(opts, name.data(), &raw mut err) }) else {
+    let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
         return ().reported(err);
     };
     // Setting a window-local option without saying local or global writes the
@@ -426,10 +406,10 @@ pub unsafe fn nvim_set_option_value(
     // them rather than whatever ran last.
     let _sctx = api_set_sctx(channel_id);
     let (key, idx) = (name.data(), target.opt_idx);
-    let (scope, from, slot) = (target.scope, target.from, &raw mut err);
+    let (scope, from) = (target.scope, target.from);
     // SAFETY: `name` is the caller's, `target.from` is null or the live
     // object `scope` names, and `err` is this frame's own.
-    unsafe { set_option_value_for(key, idx, optval, opt_flags, scope, from, slot) };
+    unsafe { set_option_value_for(key, idx, optval, opt_flags, scope, from, &mut err) };
     ().reported(err)
 }
 
@@ -454,7 +434,7 @@ pub unsafe fn nvim_get_option_info2(
 ) -> Result<Dict, Error> {
     let mut err = ERROR_INIT;
     // SAFETY: as `nvim_get_option_value`.
-    let Some(target) = (unsafe { option_target(opts, name.data(), &raw mut err) }) else {
+    let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
         return Dict::EMPTY.reported(err);
     };
     // The metadata is read off a buffer and a window whatever the scope, so
@@ -469,6 +449,6 @@ pub unsafe fn nvim_get_option_info2(
     };
     // SAFETY: `buf` and `win` are live, `name` and `arena` are the caller's,
     // and `err` is this frame's own.
-    let info = unsafe { get_vimoption(name, target.opt_flags, buf, win, arena, &raw mut err) };
+    let info = unsafe { get_vimoption(name, target.opt_flags, buf, win, arena, &mut err) };
     info.reported(err)
 }

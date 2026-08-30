@@ -28,7 +28,7 @@ use crate::global_cell::GlobalCell;
 use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
-use crate::lua::executor::{nlua_call_ref, nlua_set_sctx};
+use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin,

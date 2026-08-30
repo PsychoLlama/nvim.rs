@@ -20,10 +20,9 @@ pub unsafe fn nvim_exec(
     output: Boolean,
 ) -> Result<String_0, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut opts = KeyDict_exec_opts { output };
-    // SAFETY: `src` is the caller's and `opts`/`err` are this frame's.
-    unsafe { exec_impl(channel_id, src, &raw mut opts, err) }.reported(error)
+    // SAFETY: `src` is the caller's and `opts`/`error` are this frame's.
+    unsafe { exec_impl(channel_id, src, &raw mut opts, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_command_output(
@@ -31,10 +30,9 @@ pub unsafe fn nvim_command_output(
     command: String_0,
 ) -> Result<String_0, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut opts = KeyDict_exec_opts { output: true };
     // SAFETY: as `nvim_exec`.
-    unsafe { exec_impl(channel_id, command, &raw mut opts, err) }.reported(error)
+    unsafe { exec_impl(channel_id, command, &raw mut opts, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_execute_lua(

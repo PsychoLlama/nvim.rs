@@ -95,7 +95,7 @@ pub unsafe extern "C" fn unpack(
     mut data: *const c_char,
     mut size: size_t,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // SAFETY: the caller's buffer, arena and error slot. `api_parse_enter`
     // navigates back here through the parser's `data` field, so every access

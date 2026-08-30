@@ -15,20 +15,19 @@ pub unsafe fn nvim_get_hl_by_id(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
     if !known {
         let null = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `err` is this frame's slot; a null value string asks for
+        // SAFETY: `error` is this frame's slot; a null value string asks for
         // the numeric spelling.
         error = unsafe { err_invalid_ptr(c"highlight id".as_ptr(), null, hl_id, false) };
         return Dict::EMPTY.reported(error);
     }
     // SAFETY: as above.
     let attrcode = unsafe { syn_id2attr(hl_id as ::core::ffi::c_int) };
-    // SAFETY: `arena` is the caller's and `err` this frame's slot.
-    unsafe { hl_get_attr_by_id(attrcode as Integer, rgb, arena, err) }.reported(error)
+    // SAFETY: `arena` is the caller's and `error` this frame's slot.
+    unsafe { hl_get_attr_by_id(attrcode as Integer, rgb, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_get_hl_by_name(

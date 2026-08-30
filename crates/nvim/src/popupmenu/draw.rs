@@ -301,7 +301,7 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
     }
 
     let mut err = Error::none();
-    if !unsafe { parse_winborder(&raw mut *config, p_pumborder.get(), &raw mut err) } {
+    if !unsafe { parse_winborder(&raw mut *config, p_pumborder.get(), &mut err) } {
         if err.is_set() {
             unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
         }

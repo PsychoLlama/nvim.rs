@@ -70,14 +70,14 @@ pub unsafe fn nlua_pop_object(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     unsafe {
         let mut ret = Object::NIL;
         let initial_size = lua_gettop(lstate);
         let mut stack = ObjPopStack::new();
         stack.push(ObjPopStackItem::leaf(&raw mut ret));
-        while !(*err).is_set() && !stack.is_empty() {
+        while !err.is_set() && !stack.is_empty() {
             let mut cur = stack.last();
             stack.pop();
             if cur.container {
@@ -218,7 +218,7 @@ pub unsafe fn nlua_pop_object(
                 lua_pop(lstate, 1);
             }
         }
-        if (*err).is_set() {
+        if err.is_set() {
             if arena.is_null() {
                 api_free_object(ret);
             }

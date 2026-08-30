@@ -66,7 +66,7 @@ pub fn nvim_win_set_buf(win: Window, buf: Buffer) -> Result<(), Error> {
         return Err(Error::exception(e_cmdwin));
     }
     // SAFETY: both handles named a live object, and `err` is this frame's own.
-    unsafe { win_set_buf(w.raw(), b.raw(), &raw mut err) };
+    unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
     ().reported(err)
 }
 
@@ -198,7 +198,7 @@ pub unsafe fn nvim_win_get_var(
     };
     // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
     // `arena` are the caller's, per this function's contract.
-    let value = unsafe { dict_get_value(w.w_vars, name, arena, &raw mut err) };
+    let value = unsafe { dict_get_value(w.w_vars, name, arena, &mut err) };
     value.reported(err)
 }
 
@@ -213,7 +213,7 @@ pub unsafe fn nvim_win_set_var(win: Window, name: String_0, value: Object) -> Re
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_get_var`; the store takes `value` over.
-    unsafe { dict_set_var(w.w_vars, name, value, false, false, no_arena, &raw mut err) };
+    unsafe { dict_set_var(w.w_vars, name, value, false, false, no_arena, &mut err) };
     ().reported(err)
 }
 
@@ -228,7 +228,7 @@ pub unsafe fn nvim_win_del_var(win: Window, name: String_0) -> Result<(), Error>
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
-    unsafe { dict_set_var(w.w_vars, name, NIL, true, false, no_arena, &raw mut err) };
+    unsafe { dict_set_var(w.w_vars, name, NIL, true, false, no_arena, &mut err) };
     ().reported(err)
 }
 
@@ -290,7 +290,7 @@ pub fn nvim_win_hide(win: Window) -> Result<(), Error> {
     let mut err = ERROR_INIT;
     // SAFETY: `w` is live, and `err` is this frame's own.
     let Some(w) = window_by_handle(win, &mut err)
-        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &raw mut err) })
+        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
     else {
         return ().reported(err);
     };
@@ -319,7 +319,7 @@ pub fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
     let mut err = ERROR_INIT;
     // SAFETY: `w` is live, and `err` is this frame's own.
     let Some(w) = window_by_handle(win, &mut err)
-        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &raw mut err) })
+        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
     else {
         return ().reported(err);
     };

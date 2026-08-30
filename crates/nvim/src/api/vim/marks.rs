@@ -20,7 +20,7 @@ use core::ptr;
 ///
 /// # Safety
 /// `name` must name its own bytes and `err` must be the caller's error slot.
-unsafe fn global_mark_name(name: String_0, err: *mut Error) -> Option<c_char> {
+unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
     if name.len() != 1 {
         // SAFETY: the caller's promise about `name` and `err`.
         unsafe { reject(err, c"mark name (must be a single char)", name) };
@@ -40,7 +40,7 @@ unsafe fn global_mark_name(name: String_0, err: *mut Error) -> Option<c_char> {
 ///
 /// # Safety
 /// `name` must be NUL-terminated and `err` must be the caller's error slot.
-unsafe fn reject(err: *mut Error, what: &CStr, name: String_0) {
+unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
     let (what, got) = (what.as_ptr(), name.data());
     // SAFETY: the caller's error slot.
     unsafe { *err = err_invalid_ptr(what, got, 0, true) };
@@ -52,14 +52,13 @@ unsafe fn reject(err: *mut Error, what: &CStr, name: String_0) {
 /// `name` must name its own bytes.
 pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `name` is the caller's and `err` this frame's own slot.
-    if unsafe { global_mark_name(name, err) }.is_none() {
+    // SAFETY: `name` is the caller's and `error` this frame's own slot.
+    if unsafe { global_mark_name(name, &mut error) }.is_none() {
         return false.reported(error);
     }
     let no_buf = ptr::null_mut::<buf_T>();
-    // SAFETY: a global mark takes no buffer, and `err` is this frame's own.
-    let res = unsafe { set_mark(no_buf, name, 0, 0, err) };
+    // SAFETY: a global mark takes no buffer, and `error` is this frame's own.
+    let res = unsafe { set_mark(no_buf, name, 0, 0, &mut error) };
     res.reported(error)
 }
 
@@ -76,9 +75,8 @@ pub unsafe fn nvim_get_mark(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `name` is the caller's and `err` this frame's own slot.
-    let Some(mark) = (unsafe { global_mark_name(name, err) }) else {
+    // SAFETY: `name` is the caller's and `error` this frame's own slot.
+    let Some(mark) = (unsafe { global_mark_name(name, &mut error) }) else {
         return Array::EMPTY.reported(error);
     };
     // SAFETY: `mark_get_global` answers a live global mark for every name

@@ -128,9 +128,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -165,9 +164,8 @@ pub unsafe fn nvim_buf_get_extmarks(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rv: Array = ARRAY_DICT_INIT;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -218,13 +216,16 @@ pub unsafe fn nvim_buf_get_extmarks(
     }
     let mut l_row: ::core::ffi::c_int = 0;
     let mut l_col: colnr_T = 0;
-    if !unsafe { extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col, err) }
-    {
+    if !unsafe {
+        extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col, &mut error)
+    } {
         return rv.reported(error);
     }
     let mut u_row: ::core::ffi::c_int = 0;
     let mut u_col: colnr_T = 0;
-    if !unsafe { extmark_get_index_from_obj(b, ns_id, end, &raw mut u_row, &raw mut u_col, err) } {
+    if !unsafe {
+        extmark_get_index_from_obj(b, ns_id, end, &raw mut u_row, &raw mut u_col, &mut error)
+    } {
         return rv.reported(error);
     }
     let mut rv_limit: size_t = limit as size_t;
@@ -293,7 +294,7 @@ unsafe fn extmark_get_index_from_obj(
     mut obj: Object,
     mut row: *mut ::core::ffi::c_int,
     mut col: *mut colnr_T,
-    mut err: *mut Error,
+    err: &mut Error,
 ) -> bool {
     if obj.type_0 as ::core::ffi::c_uint
         == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -308,15 +309,13 @@ unsafe fn extmark_get_index_from_obj(
             unsafe { *col = MAXCOL as ::core::ffi::c_int as colnr_T };
             return true;
         } else if id < 0 as Integer && true {
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_bad_number(c"mark id", id) };
+            *err = err_bad_number(c"mark id", id);
             return false;
         }
         let mut extmark: MTPair =
             unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
         if !(extmark.start.pos.row >= 0 as int32_t) {
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_bad_number(c"mark id (not found)", id) };
+            *err = err_bad_number(c"mark id (not found)", id);
             return false;
         }
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
@@ -333,8 +332,7 @@ unsafe fn extmark_get_index_from_obj(
                 == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
             let want = c"2 Integer items";
-            // SAFETY: the caller's error slot.
-            unsafe { *err = err_expected(c"mark position", want, None) };
+            *err = err_expected(c"mark position", want, None);
             return false;
         }
         let mut pos_row: Integer = unsafe { (*pos.items).data.integer };
@@ -356,8 +354,7 @@ unsafe fn extmark_get_index_from_obj(
         return true;
     } else if true {
         let want = c"mark id Integer or 2-item Array";
-        // SAFETY: the caller's error slot.
-        unsafe { *err = err_expected(c"mark position", want, None) };
+        *err = err_expected(c"mark position", want, None);
         return false;
     }
     panic!("Reached end of non-void function without returning");
@@ -369,8 +366,7 @@ pub unsafe fn nvim__buf_debug_extmarks(
     dot: Boolean,
 ) -> Result<String_0, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return String_0::NULL.reported(error);
     }

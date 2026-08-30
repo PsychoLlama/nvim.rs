@@ -90,7 +90,7 @@ unsafe fn win_config_split(
             parent_tp = curtab.get();
         } else if config.win > 0 {
             // SAFETY: `err` names the caller's error slot.
-            parent = unsafe { find_window_by_handle(fconfig.window, err.raw()) };
+            parent = unsafe { find_window_by_handle(fconfig.window, slot_mut(err)) };
             if parent.is_null() {
                 return false;
             }
@@ -104,12 +104,12 @@ unsafe fn win_config_split(
                 return false;
             }
             // SAFETY: both windows are live, and `err` is the caller's slot.
-            if win_tp != parent_tp && !unsafe { win_can_move_tp(win, win_tp, err.raw()) } {
+            if win_tp != parent_tp && !unsafe { win_can_move_tp(win, win_tp, slot_mut(err)) } {
                 return false;
             }
         }
         // SAFETY: the caller's window and error slot.
-        if !unsafe { check_split_disallowed_err(win, err.raw()) } {
+        if !unsafe { check_split_disallowed_err(win, slot_mut(err)) } {
             return false;
         }
         let mut to_split_ok = false;
@@ -269,7 +269,7 @@ unsafe fn win_config_split(
             }
             // SAFETY: `tstate` is what the `try_enter` above filled in, and
             // `err` is the caller's slot.
-            unsafe { try_leave(&raw mut tstate, err.raw()) };
+            unsafe { try_leave(&raw mut tstate, slot_mut(err)) };
             if to_split_ok {
                 // SAFETY: `win_tp` is a live tab page.
                 let stale = win_tp != parent_tp && unsafe { (*win_tp).tp_curwin } == win;
@@ -334,7 +334,7 @@ unsafe fn win_config_float_tp(
     let mut parent_tp: *mut tabpage_T = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
-        parent = unsafe { find_window_by_handle(fconfig.window, err.raw()) };
+        parent = unsafe { find_window_by_handle(fconfig.window, slot_mut(err)) };
         if parent.is_null() {
             return false;
         }
@@ -345,7 +345,7 @@ unsafe fn win_config_float_tp(
     '_restore_curwin: {
         if win_tp != parent_tp {
             // SAFETY: the caller's window and error slot.
-            if !unsafe { win_can_move_tp(win, win_tp, err.raw()) } {
+            if !unsafe { win_can_move_tp(win, win_tp, slot_mut(err)) } {
                 return false;
             }
             // SAFETY: the caller's window, still in its tab page.
@@ -372,7 +372,7 @@ unsafe fn win_config_float_tp(
                     break '_restore_curwin;
                 }
                 // SAFETY: as above.
-                if win_tp != parent_tp && !unsafe { win_can_move_tp(win, win_tp, err.raw()) } {
+                if win_tp != parent_tp && !unsafe { win_can_move_tp(win, win_tp, slot_mut(err)) } {
                     break '_restore_curwin;
                 }
                 // SAFETY: as above.
@@ -384,7 +384,7 @@ unsafe fn win_config_float_tp(
         if !unsafe { (*win).w_floating } {
             let config = (*fconfig).clone();
             // SAFETY: the caller's window and error slot.
-            if unsafe { win_new_float(win, false, config, err.raw()) }.is_null() {
+            if unsafe { win_new_float(win, false, config, slot_mut(err)) }.is_null() {
                 break '_restore_curwin;
             }
             // SAFETY: as above.
@@ -433,13 +433,12 @@ pub unsafe fn nvim_win_set_config(
     config: *mut KeyDict_win_config,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: `error` is this frame's own slot, live for the whole call, and
     // `config` is the caller's keyset.
-    let (report, keys) = unsafe { (ErrSlot::new(err), CfgKeys::new(config)) };
-    // SAFETY: `err` is this frame's slot; the lookup answers a live window or
+    let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
+    // SAFETY: `error` is this frame's slot; the lookup answers a live window or
     // a null.
-    let w = unsafe { find_window_by_handle(win, err) };
+    let w = unsafe { find_window_by_handle(win, &mut error) };
     if w.is_null() {
         return ().reported(error);
     }

@@ -68,7 +68,6 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
 
 pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rv: ::core::ffi::c_int = 0;
     let mut rvobj: Array = Array {
         size: 0 as size_t,
@@ -78,7 +77,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     let mut children: Vec<::core::ffi::c_int> = Vec::new();
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
-        // SAFETY: `err` is this frame's own slot and `name` a literal.
+        // SAFETY: `error` is this frame's own slot and `name` a literal.
         error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
     } else {
         match os_proc_children(pid as ::core::ffi::c_int) {
@@ -111,14 +110,13 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
             let name = ::core::ptr::null::<::core::ffi::c_char>();
             // SAFETY: `a` is the one-slot block above, `arena` is the
-            // caller's and `err` this frame's own slot.
-            let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, err) };
+            // caller's and `error` this frame's own slot.
+            let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
             if o.type_0 as ::core::ffi::c_uint
                 == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
             {
                 rvobj = unsafe { o.data.array };
-            } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
-                != kErrorTypeNone as ::core::ffi::c_int)
+            } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
             {
                 error = api_error!(
                     kErrorTypeException,
@@ -137,11 +135,10 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
 
 pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rvobj: Object = NIL;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
-        // SAFETY: `err` is this frame's own slot and `name` a literal.
+        // SAFETY: `error` is this frame's own slot and `name` a literal.
         error = unsafe { err_invalid_ptr(name, NULL_STR, pid, false) };
         return NIL.reported(error);
     }
@@ -171,8 +168,8 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     let code = String_0::from_cstr(c"return vim._os_proc_info(...)");
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
-    // `err` this frame's own slot.
-    let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, err) };
+    // `error` this frame's own slot.
+    let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
     if o.type_0 as ::core::ffi::c_uint
         == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
         && unsafe { o.data.array }.size == 0 as size_t
@@ -182,9 +179,7 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
     {
         rvobj = o;
-    } else if !(unsafe { (*err).kind() } as ::core::ffi::c_int
-        != kErrorTypeNone as ::core::ffi::c_int)
-    {
+    } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         error = api_error!(kErrorTypeException, "Failed to get process info. pid={pid}");
     }
     rvobj.reported(error)
@@ -197,7 +192,6 @@ pub unsafe fn nvim__inspect_cell(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut ret: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -210,7 +204,7 @@ pub unsafe fn nvim__inspect_cell(
         let mut wp: *mut win_T = unsafe { get_win_by_grid_handle(grid as handle_T) };
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
-            // SAFETY: `err` is this frame's own slot and `name` a literal.
+            // SAFETY: `error` is this frame's own slot and `name` a literal.
             error = unsafe { err_invalid_ptr(name, NULL_STR, grid, false) };
             return ret.reported(error);
         }
@@ -230,8 +224,8 @@ pub unsafe fn nvim__inspect_cell(
     unsafe { schar_get(sc_buf, g.char_at(off)) };
     unsafe { array_add(&mut ret, Object::string(cstr_as_string(sc_buf))) };
     let mut attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
-    // SAFETY: `arena` and `err` are this frame's own.
-    let hl = unsafe { Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, err)) };
+    // SAFETY: `arena` and `error` are this frame's own.
+    let hl = unsafe { Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, &mut error)) };
     // SAFETY: `ret` has room for the three items the arena sized it for.
     unsafe { array_add(&mut ret, hl) };
     if !unsafe { highlight_use_hlstate() } {
@@ -251,6 +245,5 @@ pub unsafe fn nvim__invalidate_glyph_cache() {
 
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    unsafe { unpack(str.data(), str.len(), arena, err).reported(error) }
+    unsafe { unpack(str.data(), str.len(), arena, &mut error).reported(error) }
 }

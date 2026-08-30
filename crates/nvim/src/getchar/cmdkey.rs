@@ -159,7 +159,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
             ARRAY_DICT_INIT,
             kRetNilBool,
             ptr::null_mut(),
-            &raw mut err,
+            &mut err,
         )
     };
     if err.is_set() {

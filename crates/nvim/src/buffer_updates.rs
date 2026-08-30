@@ -30,7 +30,7 @@ use crate::api::private::helpers::arena_array;
 use crate::buffer::buf_get_changedtick;
 use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg_c};
-use crate::lua::executor::{api_free_luaref, nlua_call_ref};
+use crate::lua::executor::{api_free_luaref, nlua_call_ref_quiet};
 use crate::main::{cmdpreview, curbuf};
 use crate::memline::ml_flush_deleted_bytes;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
@@ -207,11 +207,11 @@ fn textlock_wrap<R>(f: impl FnOnce() -> R) -> R {
 /// One callback invocation, inside [`textlock_wrap`] as upstream has it.
 fn call_ref(cb: LuaRef, name: &'static CStr, args: Array, mode: LuaRetMode) -> Object {
     textlock_wrap(|| {
-        let (no_arena, no_err) = (ptr::null_mut(), ptr::null_mut());
+        let no_arena = ptr::null_mut();
         // SAFETY: `cb` is a reference this buffer owns, `args` borrows the
         // caller's frame, and a null arena and error are what upstream
         // passes — the callee treats both as "not interested".
-        unsafe { nlua_call_ref(cb, name.as_ptr(), args, mode, no_arena, no_err) }
+        unsafe { nlua_call_ref_quiet(cb, name.as_ptr(), args, mode, no_arena) }
     })
 }
 

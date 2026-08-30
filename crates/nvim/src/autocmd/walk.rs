@@ -17,6 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::lua::executor::nlua_call_ref_quiet;
 use crate::message_fmt::c_str;
 use crate::smsg;
 
@@ -189,12 +190,11 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     // SAFETY: `callback` is Lua-typed, so `luaref` is the live union field;
     // `args` stands for the length of the call.
     let result = unsafe {
-        nlua_call_ref(
+        nlua_call_ref_quiet(
             callback.data.luaref,
             ::core::ptr::null(),
             args.array(),
             kRetNilBool,
-            ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
         )
     };

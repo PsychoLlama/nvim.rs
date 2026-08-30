@@ -539,7 +539,7 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
     };
     let mut err = Error::none();
     // SAFETY: the caller's C string, and two locals the parser writes into.
-    let ok = unsafe { parse_winborder(&raw mut fconfig, border_opt, &raw mut err) };
+    let ok = unsafe { parse_winborder(&raw mut fconfig, border_opt, &mut err) };
     // Whatever the call left behind is dropped rather than reported.
     err.clear();
     ok

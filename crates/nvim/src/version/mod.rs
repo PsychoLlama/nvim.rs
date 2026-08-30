@@ -310,8 +310,8 @@ pub(crate) unsafe fn list_lua_version() {
         items: ptr::null_mut(),
     };
     let (chunk, name) = (static_cstring(CODE), ptr::null());
-    let (arena, slot) = (ptr::null_mut::<Arena>(), &raw mut err);
-    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, slot) };
+    let arena = ptr::null_mut::<Arena>();
+    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, &mut err) };
     debug_assert!(!err.is_set(), "a literal chunk cannot fail");
     // Not a debug assertion: the union field read below depends on it.
     assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");

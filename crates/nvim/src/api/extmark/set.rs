@@ -34,7 +34,6 @@ pub unsafe fn nvim_buf_set_extmark(
     opts: *mut KeyDict_set_extmark,
 ) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Opts::new(opts) };
     let mut id: uint32_t = 0;
@@ -82,7 +81,7 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut has_hl: bool = false;
     let mut has_hl_multiple: bool = false;
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     '_error: {
         if !b.is_null() {
             // SAFETY: non-null, so the handle named a live buffer; nothing
@@ -164,7 +163,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     object_to_hl_id(
                                         *arr.items.offset(0 as ::core::ffi::c_int as isize),
                                         c"hl_group item".as_ptr(),
-                                        err,
+                                        &mut error,
                                     )
                                 };
                                 if error.is_set() {
@@ -180,7 +179,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     object_to_hl_id(
                                         *arr.items.add(i),
                                         c"hl_group item".as_ptr(),
-                                        err,
+                                        &mut error,
                                     )
                                 };
                                 if error.is_set() {
@@ -193,7 +192,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                         } else {
                             hl.hl_id = unsafe {
-                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr(), err)
+                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr(), &mut error)
                             };
                             if error.is_set() {
                                 break '_error;
@@ -256,8 +255,10 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text,
                 ) {
+                    let slot = &mut error;
+                    let width = &raw mut virt_text.width;
                     virt_text.data.virt_text =
-                        unsafe { parse_virt_text(opts.virt_text, err, &raw mut virt_text.width) };
+                        unsafe { parse_virt_text(opts.virt_text, slot, width) };
                     if error.is_set() {
                         break '_error;
                     }
@@ -370,8 +371,9 @@ pub unsafe fn nvim_buf_set_extmark(
                                 break '_error;
                             }
                             let mut dummig: ::core::ffi::c_int = 0;
+                            let (slot, dummy_width) = (&mut error, &raw mut dummig);
                             let mut jtem: VirtText = unsafe {
-                                parse_virt_text((*a.items.add(j)).data.array, err, &raw mut dummig)
+                                parse_virt_text((*a.items.add(j)).data.array, slot, dummy_width)
                             };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             // SAFETY: `virt_lines` was built with the lines arm.
@@ -645,7 +647,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         object_to_hl_id(
                                             *arr_0.items.add(i_0),
                                             c"hl_group item".as_ptr(),
-                                            err,
+                                            &mut error,
                                         )
                                     };
                                     if hl_id_0 > 0 as ::core::ffi::c_int {
@@ -721,7 +723,6 @@ pub unsafe fn nvim_buf_set_extmark(
                                         1
                                     } == 0,
                                     opts.invalidate,
-                                    err,
                                 )
                             };
                             if error.is_set() {

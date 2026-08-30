@@ -27,7 +27,6 @@ pub unsafe fn nvim_get_autocmds(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut id: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;
@@ -228,10 +227,8 @@ pub unsafe fn nvim_get_autocmds(
                         == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
                 {
                     let mut b: *mut buf_T =
-                        unsafe { find_buffer_by_handle(buf.data.integer as Buffer, err) };
-                    if unsafe { (*err).kind() } as ::core::ffi::c_int
-                        != kErrorTypeNone as ::core::ffi::c_int
-                    {
+                        unsafe { find_buffer_by_handle(buf.data.integer as Buffer, &mut error) };
+                    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_cleanup;
                     }
                     let mut pat: String_0 =
@@ -264,9 +261,10 @@ pub unsafe fn nvim_get_autocmds(
                             error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
                         }
-                        let mut b_0: *mut buf_T =
-                            unsafe { find_buffer_by_handle(bufnr.data.integer as Buffer, err) };
-                        if unsafe { (*err).kind() } as ::core::ffi::c_int
+                        let mut b_0: *mut buf_T = unsafe {
+                            find_buffer_by_handle(bufnr.data.integer as Buffer, &mut error)
+                        };
+                        if error.kind() as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
                             break '_cleanup;

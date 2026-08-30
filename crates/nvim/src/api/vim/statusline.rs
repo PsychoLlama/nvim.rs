@@ -52,7 +52,6 @@ pub unsafe fn nvim_eval_statusline(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let empty = Dict {
         size: 0,
         capacity: 0,
@@ -81,7 +80,7 @@ pub unsafe fn nvim_eval_statusline(
         hl_id: 0,
     }; SIGN_SHOW_MAX as usize];
     // SAFETY: the caller's error slot and the editor's own window list.
-    let Some(ctx) = (unsafe { Context::of(opts, err, &mut statuscol, &mut sattrs) }) else {
+    let Some(ctx) = (unsafe { Context::of(opts, &mut error, &mut statuscol, &mut sattrs) }) else {
         return empty.reported(error);
     };
 
@@ -150,7 +149,7 @@ impl Context {
     /// outlive the expansion.
     unsafe fn of(
         opts: &KeyDict_eval_statusline,
-        err: *mut Error,
+        err: &mut Error,
         statuscol: &mut statuscol_T,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
     ) -> Option<Context> {
@@ -166,8 +165,7 @@ impl Context {
                     && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
             };
             if !single {
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_expected(c"fillchar", c"single character", None) };
+                *err = err_expected(c"fillchar", c"single character", None);
                 return None;
             }
             let mut c = 0;
@@ -191,8 +189,7 @@ impl Context {
             // The lookup may already have set an error, which upstream
             // overwrites with this.
             let winid = opts.winid;
-            // SAFETY: the caller's error slot.
-            unsafe { *err = api_error!(kErrorTypeException, "unknown winid {winid}") };
+            *err = api_error!(kErrorTypeException, "unknown winid {winid}");
             return None;
         };
 
@@ -214,8 +211,7 @@ impl Context {
         if use_bools > 1 {
             const E: &CStr =
                 c"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'";
-            // SAFETY: the caller's error slot.
-            unsafe { *err = Error::from_message(kErrorTypeValidation, E) };
+            *err = Error::from_message(kErrorTypeValidation, E);
             return None;
         }
 

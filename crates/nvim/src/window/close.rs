@@ -240,7 +240,7 @@ pub(crate) fn can_close_floats(tp: Option<TabPage>) -> bool {
     true
 }
 
-pub unsafe fn can_close_in_cmdwin(win: *mut win_T, err: *mut Error) -> bool {
+pub unsafe fn can_close_in_cmdwin(win: *mut win_T, err: &mut Error) -> bool {
     // SAFETY: the caller's promise -- a live window and a writable error slot.
     unsafe { cmdwin_allows(Win::new(win), &mut *err) }
 }

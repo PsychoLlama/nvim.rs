@@ -212,7 +212,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
             args,
             kRetObject,
             ptr::null_mut::<Arena>(),
-            &raw mut err,
+            &mut err,
         )
     };
     err.clear();

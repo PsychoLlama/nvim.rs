@@ -55,7 +55,6 @@ pub unsafe fn nvim_create_augroup(
 
 pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -72,13 +71,12 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
         augroup_name(id as ::core::ffi::c_int)
     };
     unsafe { augroup_del(name, false) };
-    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { try_leave(&raw mut tstate, &mut error) };
     ().reported(error)
 }
 
 pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -90,13 +88,13 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     };
     unsafe { try_enter(&raw mut tstate) };
     unsafe { augroup_del(name.data(), false) };
-    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { try_leave(&raw mut tstate, &mut error) };
     ().reported(error)
 }
 
 pub(crate) unsafe fn get_augroup_from_object(
     mut group: Object,
-    mut err: *mut Error,
+    err: &mut Error,
 ) -> ::core::ffi::c_int {
     let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -119,8 +117,7 @@ pub(crate) unsafe fn get_augroup_from_object(
                 augroup_name(au_group)
             };
             if !unsafe { augroup_exists(name) } {
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_bad_number(c"group", au_group as int64_t) };
+                *err = err_bad_number(c"group", au_group as int64_t);
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;
@@ -129,8 +126,7 @@ pub(crate) unsafe fn get_augroup_from_object(
             if true {
                 let want = c"String or Integer";
                 let got = api_typename(group.type_0);
-                // SAFETY: the caller's error slot.
-                unsafe { *err = err_expected(c"group", want, Some(got)) };
+                *err = err_expected(c"group", want, Some(got));
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
         }

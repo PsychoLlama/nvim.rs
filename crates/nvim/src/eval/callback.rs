@@ -17,12 +17,12 @@ use crate::eval::{
     partial_name,
 };
 use crate::lua::executor::{
-    nlua_call_ref, nlua_is_table_from_lua, nlua_register_table_as_callable,
+    nlua_call_ref_quiet, nlua_is_table_from_lua, nlua_register_table_as_callable,
 };
 use crate::main::{e_command_too_recursive, p_mfd};
 use crate::memory::xstrdup;
 use crate::types::{
-    Arena, Callback, CallbackReader, Error, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
+    Arena, Callback, CallbackReader, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, funcexe_T, ht_stack_T,
     kObjectTypeBoolean, list_stack_T, partial_T, size_t, typval_T, typval_vval_union,
 };
@@ -180,12 +180,12 @@ pub unsafe fn callback_call(
             // this is the "is it still wanted" question, not a
             // general-purpose call.
             let no_args = ARRAY_DICT_INIT;
-            let (arena, err) = (null_mut::<Arena>(), null_mut::<Error>());
+            let arena = null_mut::<Arena>();
             // SAFETY: `kCallbackLua` says `luaref` is the live member.
             let luaref = unsafe { cb.data.luaref };
             // SAFETY: the reference is the one the callback owns, and the
             // call is handed no arguments, no arena and no error sink.
-            let rv = unsafe { nlua_call_ref(luaref, null(), no_args, kRetNilBool, arena, err) };
+            let rv = unsafe { nlua_call_ref_quiet(luaref, null(), no_args, kRetNilBool, arena) };
             // SAFETY: a boolean object holds its value inline.
             return rv.type_0 == kObjectTypeBoolean && unsafe { rv.data.boolean };
         }

@@ -30,7 +30,7 @@ pub(crate) unsafe fn dict_get_value(
     dict: *mut dict_T,
     key: String_0,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
@@ -38,8 +38,7 @@ pub(crate) unsafe fn dict_get_value(
     if di.is_null() {
         // SAFETY: `key` borrows the caller's NUL-terminated text.
         let key = unsafe { c_str(key.data()) };
-        // SAFETY: `err` is the caller's slot.
-        unsafe { *err = api_error!(kErrorTypeValidation, "Key not found: {key}") };
+        *err = api_error!(kErrorTypeValidation, "Key not found: {key}");
         return NIL;
     }
     // SAFETY: the lookup answered a live item of `dict`.
@@ -55,7 +54,7 @@ pub(crate) unsafe fn dict_check_writable(
     dict: *mut dict_T,
     key: String_0,
     del: bool,
-    err: *mut Error,
+    err: &mut Error,
 ) -> *mut dictitem_T {
     // SAFETY: as `dict_get_value`.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
@@ -74,8 +73,7 @@ pub(crate) unsafe fn dict_check_writable(
         if let Some(why) = refused {
             // SAFETY: `key` borrows the caller's NUL-terminated text.
             let key = unsafe { c_str(key.data()) };
-            // SAFETY: `err` is the caller's slot.
-            unsafe { *err = api_error!(kErrorTypeException, "Key is {why}: {key}") };
+            *err = api_error!(kErrorTypeException, "Key is {why}: {key}");
         }
         return di;
     }
@@ -90,8 +88,7 @@ pub(crate) unsafe fn dict_check_writable(
         None
     };
     if let Some((kind, msg)) = refused {
-        // SAFETY: `err` is the caller's slot.
-        unsafe { *err = Error::from_message(kind, msg) };
+        *err = Error::from_message(kind, msg);
     }
     di
 }
@@ -105,13 +102,12 @@ pub(crate) unsafe fn dict_set_var(
     del: bool,
     retval: bool,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     let mut rv = NIL;
     // SAFETY: as `dict_get_value`.
     let mut di = unsafe { dict_check_writable(dict, key, del, err) };
-    // SAFETY: `err` is the caller's slot.
-    if unsafe { (*err).kind() } != kErrorTypeNone {
+    if err.kind() != kErrorTypeNone {
         return rv;
     }
     // SAFETY: `dict` is live.
@@ -121,8 +117,7 @@ pub(crate) unsafe fn dict_set_var(
         if di.is_null() {
             // SAFETY: `key` borrows the caller's NUL-terminated text.
             let key = unsafe { c_str(key.data()) };
-            // SAFETY: `err` is the caller's slot.
-            unsafe { *err = api_error!(kErrorTypeValidation, "Key not found: {key}") };
+            *err = api_error!(kErrorTypeValidation, "Key not found: {key}");
             return rv;
         }
         // SAFETY: `di` is the live item the lookup found. A raw pointer
@@ -147,7 +142,7 @@ pub(crate) unsafe fn dict_set_var(
         vval: typval_vval_union { v_number: 0 },
     };
     // SAFETY: `tv` is this frame's and `err` the caller's slot.
-    unsafe { object_to_vim(value, &raw mut tv, err) };
+    unsafe { object_to_vim(value, &raw mut tv) };
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.
     let mut oldtv = typval_T {
@@ -184,8 +179,7 @@ pub(crate) unsafe fn dict_set_var(
                     kErrorTypeValidation,
                     "Setting v:{key} to value with wrong type"
                 );
-                // SAFETY: `err` is the caller's slot.
-                unsafe { *err = e };
+                *err = e;
             }
             return rv;
         }

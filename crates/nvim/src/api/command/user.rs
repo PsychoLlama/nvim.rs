@@ -34,9 +34,8 @@ pub unsafe fn nvim_create_user_command(
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `opts` is the caller's keydict and `err` this frame's slot.
-    unsafe { create_user_command(channel_id, name, cmd, opts, 0, err) };
+    // SAFETY: `opts` is the caller's keydict and `error` this frame's slot.
+    unsafe { create_user_command(channel_id, name, cmd, opts, 0, &mut error) };
     ().reported(error)
 }
 
@@ -53,9 +52,8 @@ pub unsafe fn nvim_buf_create_user_command(
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    // SAFETY: `err` is this frame's slot.
-    let target_buf = unsafe { find_buffer_by_handle(buf, err) };
+    // SAFETY: `error` is this frame's slot.
+    let target_buf = unsafe { find_buffer_by_handle(buf, &mut error) };
     if error.is_set() {
         return ().reported(error);
     }
@@ -64,20 +62,19 @@ pub unsafe fn nvim_buf_create_user_command(
     let save_curbuf = curbuf.get();
     curbuf.set(target_buf);
     let flags = UC_BUFFER as ::core::ffi::c_int;
-    // SAFETY: `opts` is the caller's keydict and `err` this frame's slot.
-    unsafe { create_user_command(channel_id, name, cmd, opts, flags, err) };
+    // SAFETY: `opts` is the caller's keydict and `error` this frame's slot.
+    unsafe { create_user_command(channel_id, name, cmd, opts, flags, &mut error) };
     curbuf.set(save_curbuf);
     ().reported(error)
 }
 
 pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let table = if buf == -1 {
         Table::Global
     } else {
-        // SAFETY: `err` is this frame's slot.
-        let b = unsafe { find_buffer_by_handle(buf, err) };
+        // SAFETY: `error` is this frame's slot.
+        let b = unsafe { find_buffer_by_handle(buf, &mut error) };
         if error.is_set() {
             return ().reported(error);
         }
@@ -108,7 +105,7 @@ pub unsafe fn create_user_command(
     cmd: Object,
     opts: *mut KeyDict_user_command,
     flags: ::core::ffi::c_int,
-    err: *mut Error,
+    err: &mut Error,
 ) {
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let mut opts = unsafe { UserCmdOpts::new(opts) };
@@ -153,8 +150,7 @@ pub unsafe fn create_user_command(
                 0 => {}
                 1 => argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG,
                 _ => {
-                    // SAFETY: the caller's error slot.
-                    unsafe { *err = err_bad_number(c"nargs", nargs) };
+                    *err = err_bad_number(c"nargs", nargs);
                     break '_err;
                 }
             }
@@ -275,8 +271,7 @@ pub unsafe fn create_user_command(
 
         // Everything above reports through `err` without stopping, so a
         // failure that fell through to here still has to skip the rest.
-        // SAFETY: `err` is the caller's slot.
-        if unsafe { (*err).kind() } != kErrorTypeNone {
+        if err.kind() != kErrorTypeNone {
             break '_err;
         }
 
@@ -399,7 +394,6 @@ pub unsafe fn nvim_buf_get_commands(
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let builtin = unsafe { (*opts).builtin };
     if buf == -1 {
@@ -412,8 +406,8 @@ pub unsafe fn nvim_buf_get_commands(
         let global = ::core::ptr::null_mut::<buf_T>();
         return unsafe { commands_array(global, arena) }.reported(error);
     }
-    // SAFETY: `err` is this frame's slot.
-    let b = unsafe { find_buffer_by_handle(buf, err) };
+    // SAFETY: `error` is this frame's slot.
+    let b = unsafe { find_buffer_by_handle(buf, &mut error) };
     if builtin || b.is_null() {
         return Dict::EMPTY.reported(error);
     }

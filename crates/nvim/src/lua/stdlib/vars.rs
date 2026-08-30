@@ -47,7 +47,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
             b"g" => get_globvar_dict(),
             b"v" => get_vimvar_dict(),
             b"b" => {
-                let buf = find_buffer_by_handle(handle as Buffer, &raw mut err);
+                let buf = find_buffer_by_handle(handle as Buffer, &mut err);
                 if buf.is_null() {
                     ptr::null_mut()
                 } else {
@@ -55,7 +55,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
                 }
             }
             b"w" => {
-                let win = find_window_by_handle(handle as Window, &raw mut err);
+                let win = find_window_by_handle(handle as Window, &mut err);
                 if win.is_null() {
                     ptr::null_mut()
                 } else {
@@ -63,7 +63,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
                 }
             }
             b"t" => {
-                let tabpage = find_tab_by_handle(handle as Tabpage, &raw mut err);
+                let tabpage = find_tab_by_handle(handle as Tabpage, &mut err);
                 if tabpage.is_null() {
                     ptr::null_mut()
                 } else {
@@ -102,7 +102,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
         let mut err = ERROR_INIT;
-        let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, &raw mut err);
+        let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, &mut err);
         if error_set(&err) {
             nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
             err.clear();

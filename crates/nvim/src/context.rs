@@ -301,8 +301,8 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.push(0);
         let mut opts = KeyDict_exec_opts { output: true };
         let src = unsafe { cstr_as_string(cmd.as_ptr() as *const c_char) };
-        let (o, e) = (&raw mut opts, &raw mut err);
-        let func_body = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o, e) };
+        let o = &raw mut opts;
+        let func_body = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o, &mut err) };
         if !err.is_set() {
             let body = object {
                 type_0: kObjectTypeString,
@@ -329,7 +329,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 ///
 /// # Safety
 /// Main-thread editor call; `err` is a live error object.
-unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
+unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     let mut sbuf = String_0::NULL;
     let mut list_tv = typval_T {
         v_type: VAR_UNKNOWN,
@@ -342,7 +342,7 @@ unsafe fn array_to_string(array: Array, err: *mut Error) -> String_0 {
         type_0: kObjectTypeArray,
         data: object_data { array },
     };
-    unsafe { object_to_vim(wrapped, &raw mut list_tv, err) };
+    unsafe { object_to_vim(wrapped, &raw mut list_tv) };
     debug_assert!(
         list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type == VAR_LIST"
@@ -400,13 +400,13 @@ pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict {
 ///
 /// # Safety
 /// Main-thread editor call; `ctx` is a live context and `err` a live error.
-pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: *mut Error) -> c_int {
+pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: &mut Error) -> c_int {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut types = 0;
     // SAFETY: the caller's dict, context and error.
     let ctx = unsafe { &mut *ctx };
     for i in 0..dict.size {
-        if unsafe { (*err).kind() } as c_int != kErrorTypeNone as c_int {
+        if err.kind() as c_int != kErrorTypeNone as c_int {
             break;
         }
         let item: KeyValuePair = unsafe { *dict.items.add(i) };

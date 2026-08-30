@@ -230,7 +230,7 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
             args,
             kRetNilBool,
             ptr::null_mut::<Arena>(),
-            &raw mut err,
+            &mut err,
         );
         xfree(str.cast::<c_void>());
         err.clear();

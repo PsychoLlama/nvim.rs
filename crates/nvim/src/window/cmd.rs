@@ -644,7 +644,7 @@ fn detach_window() {
     };
     let mut error = ERROR_INIT;
     // SAFETY: a live window, its own size, and an error slot of ours.
-    let made = unsafe { win_new_float(curwin.get(), false, config, &raw mut error) };
+    let made = unsafe { win_new_float(curwin.get(), false, config, &mut error) };
     if made.is_null() {
         err_raw(error.message_or_empty().as_ptr());
         // SAFETY: an error the call above filled in, which owns its message.

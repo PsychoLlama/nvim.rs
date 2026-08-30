@@ -485,7 +485,7 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     unsafe { try_enter(&raw mut tstate) };
     cmdline_autocmd(EVENT_CMDLINECHANGED, firstcbuf.as_mut_ptr());
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
-    unsafe { try_leave(&raw mut tstate, &raw mut err) };
+    unsafe { try_leave(&raw mut tstate, &mut err) };
 
     if err.is_set() {
         if !ui_has(kUIMessages) {

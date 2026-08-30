@@ -258,7 +258,6 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
     let mut p: *mut c_char = ptr::null_mut();
     if luaref != LUA_NOREF {
         let mut err = Error::none();
-        let out = &raw mut err;
         // SAFETY: `luaref` is the mapping's own reference, and `err` is a
         // live, initialised slot for the call's error.
         let ret = unsafe {
@@ -268,7 +267,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
                 ARRAY_DICT_INIT,
                 kRetObject,
                 ptr::null_mut(),
-                out,
+                &mut err,
             )
         };
         if ret.type_0 == kObjectTypeString as _ {
@@ -282,7 +281,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
             // SAFETY: `err.msg` is the NUL-terminated text the call set.
             unsafe {
                 semsg_multiline!(c"emsg", "E5108: {}", c_str(err.message_or_empty().as_ptr()));
-                (*out).clear();
+                err.clear();
             }
         }
     } else {

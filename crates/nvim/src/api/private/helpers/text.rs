@@ -190,7 +190,7 @@ pub(crate) unsafe fn buf_get_text(
     lnum: int64_t,
     start_col: int64_t,
     end_col: int64_t,
-    err: *mut Error,
+    err: &mut Error,
 ) -> String_0 {
     if lnum >= i64::from(MAXLNUM) {
         let out_of_range = c"out of range".as_ptr();

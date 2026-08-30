@@ -248,9 +248,8 @@ fn layout_locked(cmd: cmdidx_T) -> bool {
     locked
 }
 
-pub unsafe fn window_layout_locked_err(cmd: cmdidx_T, err: *mut Error) -> bool {
-    // SAFETY: the caller's promise -- a writable error slot.
-    locked_err(cmd, unsafe { &mut *err })
+pub unsafe fn window_layout_locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
+    locked_err(cmd, &mut *err)
 }
 
 /// [`layout_locked`], reporting through `err` instead of the message area.

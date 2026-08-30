@@ -193,8 +193,8 @@ pub(crate) unsafe fn remote_request(
     let mut err = Error::none();
     let script =
         String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
-    let (no_arena, at_err) = (ptr::null_mut::<Arena>(), &raw mut err);
-    let reply = unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena, at_err) };
+    let no_arena = ptr::null_mut::<Arena>();
+    let reply = unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena, &mut err) };
 
     unsafe { xfree(args.items as *mut c_void) };
     args.size = 0;

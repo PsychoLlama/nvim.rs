@@ -19,8 +19,7 @@ use crate::winlayer::{Buf, tab_windows};
 
 pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);
     }
@@ -42,13 +41,12 @@ pub unsafe fn nvim_buf_get_lines(
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut rv: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -87,8 +85,7 @@ pub unsafe fn nvim_buf_set_lines(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, err) };
+    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -286,7 +283,7 @@ pub unsafe fn nvim_buf_set_lines(
             }
         }
     }
-    unsafe { try_leave(&raw mut tstate, err) };
+    unsafe { try_leave(&raw mut tstate, &mut error) };
     ().reported(error)
 }
 
@@ -302,14 +299,13 @@ pub unsafe fn nvim_buf_get_text(
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let mut str: String_0 = String_0::NULL;
     let mut rv: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -337,8 +333,8 @@ pub unsafe fn nvim_buf_get_text(
     let first = start_row as int64_t;
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
-        // SAFETY: `b` is the live buffer and `err` this call's error slot.
-        let line: String_0 = unsafe { buf_get_text(b, first, from, to, err) };
+        // SAFETY: `b` is the live buffer and `error` this call's error slot.
+        let line: String_0 = unsafe { buf_get_text(b, first, from, to, &mut error) };
         if !error.is_set() {
             let (data, len) = (line.data(), line.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -348,8 +344,8 @@ pub unsafe fn nvim_buf_get_text(
     } else {
         let from = start_col as int64_t;
         let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
-        // SAFETY: `b` is the live buffer and `err` this call's error slot.
-        str = unsafe { buf_get_text(b, first, from, to, err) };
+        // SAFETY: `b` is the live buffer and `error` this call's error slot.
+        str = unsafe { buf_get_text(b, first, from, to, &mut error) };
         if !error.is_set() {
             let (data, len) = (str.data(), str.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -362,8 +358,8 @@ pub unsafe fn nvim_buf_get_text(
             }
             let last = end_row as int64_t;
             let to = end_col as int64_t;
-            // SAFETY: `b` is the live buffer and `err` this call's error slot.
-            str = unsafe { buf_get_text(b, last, 0 as int64_t, to, err) };
+            // SAFETY: `b` is the live buffer and `error` this call's error slot.
+            str = unsafe { buf_get_text(b, last, 0 as int64_t, to, &mut error) };
             if !error.is_set() {
                 let (data, len) = (str.data(), str.len());
                 let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
@@ -380,8 +376,7 @@ pub unsafe fn nvim_buf_get_text(
 
 pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);
     }

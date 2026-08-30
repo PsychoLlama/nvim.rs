@@ -334,8 +334,8 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         if type_0 == kMessageTypeRequest || error.is_set() {
             let mut answer = result;
             // SAFETY: the channel is live and both slots are stack locals.
-            let (to, err, out) = (chan.as_ptr(), &raw mut error, &raw mut answer);
-            unsafe { serialize_response(to, handler, type_0, request_id, err, out) };
+            let (to, out) = (chan.as_ptr(), &raw mut answer);
+            unsafe { serialize_response(to, handler, type_0, request_id, &mut error, out) };
         }
         if handler.ret_alloc {
             // SAFETY: the handler said it allocated the result.
@@ -364,7 +364,7 @@ unsafe fn send_error(
     let mut answer = NIL;
     // SAFETY: the message the caller handed over, live for this call.
     e = unsafe { err_msg_ptr(kErrorTypeException, err) };
-    let (to, err, out) = (chan.as_ptr(), &raw mut e, &raw mut answer);
-    unsafe { serialize_response(to, handler, type_0, id, err, out) };
+    let (to, out) = (chan.as_ptr(), &raw mut answer);
+    unsafe { serialize_response(to, handler, type_0, id, &mut e, out) };
     e.clear();
 }

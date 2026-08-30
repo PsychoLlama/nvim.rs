@@ -25,7 +25,7 @@ use crate::marktree::key::{
     mt_flags, mt_invalid, mt_paired,
 };
 use crate::types::{
-    DecorInline, Error, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint16_t, uint32_t, uint64_t,
+    DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint16_t, uint32_t, uint64_t,
 };
 
 /// Create or update an extmark.
@@ -45,7 +45,6 @@ pub unsafe fn extmark_set(
     end_right_gravity: bool,
     no_undo: bool,
     invalidate: bool,
-    _err: *mut Error,
 ) {
     // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
     // NULL or points at a mark id.

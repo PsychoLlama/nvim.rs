@@ -21,11 +21,10 @@ pub unsafe fn nvim_exec_lua(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `code` and `args` are the caller's, `arena` is the caller's
-    // own and `err` is this frame's slot.
-    unsafe { nlua_exec(code, name, args, kRetObject, arena, err) }.reported(error)
+    // own and `error` is this frame's slot.
+    unsafe { nlua_exec(code, name, args, kRetObject, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim__exec_lua_fast(

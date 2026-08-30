@@ -92,7 +92,7 @@ pub unsafe fn get_foldtext(
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
                 let mut err = Error::none();
-                unsafe { *vt = parse_virt_text(obj.data.array, &raw mut err, ptr::null_mut()) };
+                unsafe { *vt = parse_virt_text(obj.data.array, &mut err, ptr::null_mut()) };
                 if !err.is_set() {
                     unsafe { *buf = NUL as c_char };
                     text = buf;

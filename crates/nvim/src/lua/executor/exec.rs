@@ -274,7 +274,7 @@ pub unsafe fn nlua_exec(
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
     unsafe {
         let lstate = get_global_lstate();
@@ -295,7 +295,7 @@ pub unsafe fn nlua_exec(
             set_lua_error(err, kErrorTypeException, lstate);
             return Object::NIL;
         }
-        nlua_call_pop_retval(lstate, mode, arena, top, err)
+        nlua_call_pop_retval(lstate, mode, arena, top, Some(err))
     }
 }
 
@@ -303,7 +303,7 @@ pub unsafe fn nlua_exec(
 ///
 /// # Safety
 /// `err` must be writable and the error value be on top of the stack.
-unsafe fn set_lua_error(err: *mut Error, type_0: ErrorType, lstate: *mut lua_State) {
+unsafe fn set_lua_error(err: &mut Error, type_0: ErrorType, lstate: *mut lua_State) {
     unsafe {
         let mut len: size_t = 0;
         let errstr = lua_tolstring(lstate, -1, &raw mut len);
@@ -322,9 +322,24 @@ pub unsafe fn nlua_call_ref(
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Object {
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, err) }
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, Some(err)) }
+}
+
+/// [`nlua_call_ref`] for a caller with nowhere to report to: a failing
+/// callback shows its error rather than answering with one.
+///
+/// # Safety
+/// As [`nlua_call_ref`].
+pub unsafe fn nlua_call_ref_quiet(
+    ref_0: LuaRef,
+    name: *const c_char,
+    args: Array,
+    mode: LuaRetMode,
+    arena: *mut Arena,
+) -> Object {
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, None) }
 }
 
 /// How many results `mode` wants off the call.
@@ -340,8 +355,7 @@ fn mode_ret(mode: LuaRetMode) -> c_int {
 /// callback and which reports rather than returns a failure.
 ///
 /// # Safety
-/// `ref_0` must be a live reference and `err` the caller's error slot or
-/// null.
+/// `ref_0` must be a live reference.
 pub unsafe fn nlua_call_ref_ctx(
     fast: bool,
     ref_0: LuaRef,
@@ -349,7 +363,7 @@ pub unsafe fn nlua_call_ref_ctx(
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: *mut Error,
+    err: Option<&mut Error>,
 ) -> Object {
     unsafe {
         let lstate = get_global_lstate();
@@ -364,17 +378,19 @@ pub unsafe fn nlua_call_ref_ctx(
             nlua_push_object(lstate, args.items.add(i), 0);
         }
 
+        let mut err = err;
         if fast {
             if nlua_fast_cfpcall(lstate, nargs, mode_ret(mode), -1) < 0 {
-                *err = Error::from_message(kErrorTypeException, c"fast context failure");
+                if let Some(err) = err.as_deref_mut() {
+                    *err = Error::exception(c"fast context failure");
+                }
                 return Object::NIL;
             }
         } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {
-            if err.is_null() {
+            match err.as_deref_mut() {
                 // Nobody to report to: show it instead.
-                nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
-            } else {
-                set_lua_error(err, kErrorTypeException, lstate);
+                None => nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr()),
+                Some(err) => set_lua_error(err, kErrorTypeException, lstate),
             }
             return Object::NIL;
         }
@@ -394,7 +410,7 @@ unsafe fn nlua_call_pop_retval(
     mode: LuaRetMode,
     arena: *mut Arena,
     pretop: c_int,
-    err: *mut Error,
+    err: Option<&mut Error>,
 ) -> Object {
     unsafe {
         if mode != kRetMulti && lua_type(lstate, -1) == LUA_TNIL {
@@ -402,7 +418,7 @@ unsafe fn nlua_call_pop_retval(
             return Object::NIL;
         }
         let mut dummy = ERROR_INIT;
-        let perr: *mut Error = if err.is_null() { &raw mut dummy } else { err };
+        let perr: &mut Error = err.unwrap_or(&mut dummy);
         match mode {
             kRetNilBool => {
                 let bool_value = lua_toboolean(lstate, -1) != 0;

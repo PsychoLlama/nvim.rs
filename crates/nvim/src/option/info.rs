@@ -85,7 +85,7 @@ pub(crate) unsafe fn get_vimoption(
     buf: *mut buf_T,
     win: *mut win_T,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Dict {
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });

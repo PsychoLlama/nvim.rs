@@ -108,7 +108,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
     ns_id: NS,
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
-    err: *mut Error,
+    err: &mut Error,
 ) -> Dict {
     // SAFETY: the caller's keydict, arena and error slot.
     let link =
@@ -153,7 +153,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
         return attrs;
     }
 
-    if unsafe { (*err).kind() } != kErrorTypeNone {
+    if err.kind() != kErrorTypeNone {
         return NO_DICT;
     }
 

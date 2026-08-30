@@ -37,12 +37,11 @@ pub unsafe fn nvim_echo(
     opts: *mut KeyDict_echo_opts,
 ) -> Result<Object, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { EchoOpts::new(opts) };
     let mut id = Object::integer(-1);
-    // SAFETY: the caller's chunk array, and `err` is this frame's own slot.
-    let hl_msg: HlMessage = unsafe { parse_hl_msg(chunks, opts.err, err) };
+    // SAFETY: the caller's chunk array, and `error` is this frame's own slot.
+    let hl_msg: HlMessage = unsafe { parse_hl_msg(chunks, opts.err, &mut error) };
     if error.is_set() {
         // SAFETY: the message this frame just built and nothing else owns.
         unsafe { hl_msg_free(hl_msg) };
@@ -74,7 +73,7 @@ pub unsafe fn nvim_echo(
         || opts.percent != 0
         || opts.data.size != 0
         || !opts.source.is_empty();
-    // SAFETY: the keyset's strings are NUL-terminated, and `err` is this
+    // SAFETY: the keyset's strings are NUL-terminated, and `error` is this
     // frame's own slot.
     let rejected = unsafe {
         if !is_progress && has_progress_keys {

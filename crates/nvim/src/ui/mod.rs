@@ -852,7 +852,7 @@ fn ext_name(widget: usize) -> *const core::ffi::c_char {
 /// # Safety
 ///
 /// `err` must be writable.
-pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: *mut Error) {
+pub unsafe fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: &mut Error) {
     if grid_handle == DEFAULT_GRID_HANDLE {
         unsafe { screen_resize(width, height) };
         return;

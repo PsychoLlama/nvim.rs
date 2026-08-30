@@ -40,11 +40,10 @@ pub unsafe fn nvim_paste(
     arena: *mut Arena,
 ) -> Result<Boolean, Error> {
     let mut error = ERROR_INIT;
-    let err = &raw mut error;
     static cancelled: GlobalCell<bool> = GlobalCell::new(false);
     if !(-1..=3).contains(&phase) {
         let name = c"phase".as_ptr();
-        // SAFETY: `err` is this frame's own slot and `name` a literal.
+        // SAFETY: `error` is this frame's own slot and `name` a literal.
         error = unsafe { err_invalid_ptr(name, ::core::ptr::null(), phase, false) };
         return false.reported(error);
     }
@@ -75,9 +74,9 @@ pub unsafe fn nvim_paste(
         }
         let handler = String_0::from_cstr(c"return vim.paste(...)");
         let name = ::core::ptr::null::<::core::ffi::c_char>();
-        // SAFETY: `args` is this frame's own and `arena`/`err` the caller's
+        // SAFETY: `args` is this frame's own and `arena`/`error` the caller's
         // and this frame's; the handler re-enters the editor through Lua.
-        let rv = unsafe { nlua_exec(handler, name, args, kRetNilBool, arena, err) };
+        let rv = unsafe { nlua_exec(handler, name, args, kRetNilBool, arena, &mut error) };
         // SAFETY: the tag says the boolean arm is the live one.
         let refused = rv.type_0 == kObjectTypeBoolean && !unsafe { rv.data.boolean };
         if error.is_set() || refused {

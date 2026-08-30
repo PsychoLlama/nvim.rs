@@ -296,8 +296,8 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, an empty argument array, and our error slot.
     let chunk = static_cstring(c"return require'vim._core.help'.resolve_tag()");
-    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
-    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetObject, arena, slot) };
+    let (name, arena) = (ptr::null(), ptr::null_mut());
+    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetObject, arena, &mut err) };
     // SAFETY: `res` is the chunk's answer and `err` our slot; both are
     // consumed here.
     let tag = if !err.is_set()
@@ -533,8 +533,8 @@ pub(crate) unsafe fn find_help_tags(
     // SAFETY: a static chunk, an argument array borrowing `args`, and our
     // own error slot.
     let chunk = static_cstring(c"return require'vim._core.help'.escape_subject(...)");
-    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
-    let res = unsafe { nlua_exec(chunk, name, args.array(), kRetObject, arena, slot) };
+    let (name, arena) = (ptr::null(), ptr::null_mut());
+    let res = unsafe { nlua_exec(chunk, name, args.array(), kRetObject, arena, &mut err) };
 
     // SAFETY: `err` is our slot and `res` the chunk's answer.
     if err.is_set() {
@@ -690,8 +690,8 @@ pub(crate) unsafe fn get_local_additions() {
     let mut err = NO_ERROR;
     // SAFETY: a static chunk, no arguments, and our own error slot.
     let chunk = static_cstring(c"return require'vim._core.help'.local_additions()");
-    let (name, arena, slot) = (ptr::null(), ptr::null_mut(), &raw mut err);
-    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetNilBool, arena, slot) };
+    let (name, arena) = (ptr::null(), ptr::null_mut());
+    let res = unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetNilBool, arena, &mut err) };
     if err.is_set() {
         let why = err.message_or_empty().as_ptr();
         unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
