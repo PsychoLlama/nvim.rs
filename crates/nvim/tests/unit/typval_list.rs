@@ -947,7 +947,7 @@ fn a_converting_copy_rewrites_every_string() {
                 cstr("utf-8").as_ptr().cast_mut(),
                 cstr("latin1").as_ptr().cast_mut(),
             ),
-            OK as c_int
+            OK
         );
 
         let mut l_tv = copy_corpus().build();
@@ -1236,7 +1236,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         let mut results = Vec::new();
         for (l1, l2) in [(ptr::null_mut(), l), (l, ptr::null_mut())] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), OK as c_int);
+            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
             assert_eq!((*l).lv_refcount.get(), 1);
             assert_eq!(rettv.v_type, VAR_LIST);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![f(1.0), DICT]));
@@ -1255,7 +1255,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         let mut rettv = Tv::Unknown.build();
         assert_eq!(
             tv_list_concat(ptr::null_mut(), ptr::null_mut(), &raw mut rettv),
-            OK as c_int
+            Ok(())
         );
         assert_eq!(rettv.v_type, VAR_LIST);
         assert_eq!(tv::read(&raw const rettv), Tv::NullList);
@@ -1287,7 +1287,7 @@ fn concatenating_two_lists_copies_both() {
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
-        assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), OK as c_int);
+        assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
         assert_eq!(((*l1).lv_refcount.get(), (*d).dv_refcount.get()), (1, 2));
         assert_eq!(
             ((*l2).lv_refcount.get(), (*inner).lv_refcount.get()),
@@ -1326,7 +1326,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
-        assert_eq!(tv_list_concat(l, l, &raw mut rettv), OK as c_int);
+        assert_eq!(tv_list_concat(l, l, &raw mut rettv), Ok(()));
         assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
         let out = rettv.vval.v_list;
         let items = tv::list_items(out);
@@ -1363,7 +1363,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
         let mut kept = Vec::new();
         for (l1, l2, refs) in [(l, le, 2), (le, l, 3)] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), OK as c_int);
+            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
             assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, refs));
             assert_eq!(((*le).lv_refcount.get(), (*le2).lv_refcount.get()), (1, 1));
             let out = rettv.vval.v_list;
@@ -1378,7 +1378,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
 
         for (l1, l2) in [(le, le), (le, le2)] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), OK as c_int);
+            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
             assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
             log.check(&[alloc::list(rettv.vval.v_list)]);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
@@ -1404,10 +1404,7 @@ fn joining_a_list_renders_every_item() {
     unsafe {
         let join = |l: *mut list_T, sep: &str| -> String {
             let mut ga = tv::ga_alloc(1, 80);
-            assert_eq!(
-                tv_list_join(&raw mut ga, l, cstr(sep).as_ptr()),
-                OK as c_int
-            );
+            assert_eq!(tv_list_join(&raw mut ga, l, cstr(sep).as_ptr()), Ok(()));
             let out = if ga.ga_data.is_null() {
                 String::new()
             } else {

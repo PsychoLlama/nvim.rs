@@ -188,7 +188,7 @@ impl Tv {
                     let mut value_tv = unsafe { value.build_at(path) };
                     unsafe { tv_copy(&raw const value_tv, &raw mut (*di).di_tv) };
                     unsafe { tv_clear(&raw mut value_tv) };
-                    unsafe { tv_dict_add(d, di) };
+                    let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();
                 (VAR_DICT, typval_vval_union { v_dict: d })
@@ -668,7 +668,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
             &raw mut evalarg,
         )
     };
-    (ok != 0).then_some(tv)
+    ok.is_ok().then_some(tv)
 }
 
 /// An API `Object`, as `test/unit/api/testutil.lua`'s `obj2lua` spelled one.

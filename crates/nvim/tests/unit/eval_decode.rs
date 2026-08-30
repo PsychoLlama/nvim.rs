@@ -10,7 +10,7 @@ use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
 use neovim::main::emsg_silent;
 use neovim::memory::{xfree, xmemdup};
-use neovim::types::{VAR_UNKNOWN, VarLock, typval_T, typval_vval_union};
+use neovim::types::{Failed, VAR_UNKNOWN, VarLock, typval_T, typval_vval_union};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};
@@ -78,7 +78,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
             let buf = cstr(text);
             assert_eq!(
                 json_decode_string(buf.as_ptr(), len, &raw mut rettv),
-                0,
+                Err(Failed),
                 "{text:?} at {len}"
             );
             assert_eq!(rettv.v_type, VAR_UNKNOWN, "{text:?} at {len}");
@@ -105,7 +105,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
             let one = xmemdup((&raw const byte).cast(), 1);
             assert_eq!(
                 json_decode_string(one.cast(), 1, &raw mut rettv),
-                0,
+                Err(Failed),
                 "{:?}",
                 byte as char
             );
@@ -140,7 +140,7 @@ fn a_decoder_error_quotes_no_more_than_it_read() {
                 || json_decode_string(buf.as_ptr().cast(), len, &raw mut rettv),
                 Some(msg),
             );
-            assert_eq!(ret, 0, "{:?}", String::from_utf8_lossy(text));
+            assert_eq!(ret, Err(Failed), "{:?}", String::from_utf8_lossy(text));
             assert_eq!(rettv.v_type, VAR_UNKNOWN);
             log.clear();
         };

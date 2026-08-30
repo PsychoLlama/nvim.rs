@@ -33,8 +33,8 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Callback, Callback_data, FAIL, OK, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown,
-    listitem_T, listwatch_T, ptrdiff_t,
+    Callback, Callback_data, Failed, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown, listitem_T,
+    listwatch_T, ptrdiff_t,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -206,7 +206,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         (*di).di_tv.vval.v_string = value;
         log.check(&[alloc::di(di, 0), alloc::string(value, 4)]);
 
-        assert_eq!(tv_dict_add(d, di), OK);
+        assert_eq!(tv_dict_add(d, di), Ok(()));
         log.check(&[]);
 
         // The same key again. The hashtab reports it and nothing is
@@ -216,7 +216,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
             || tv_dict_add(d, di),
             Some(r#"E685: Internal error: hash_add(): duplicate key """#),
         );
-        assert_eq!(again, FAIL);
+        assert_eq!(again, Err(Failed));
         log.clear();
 
         tv_dict_item_remove(d, di);

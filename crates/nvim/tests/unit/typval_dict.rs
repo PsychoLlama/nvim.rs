@@ -7,7 +7,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
@@ -23,7 +23,7 @@ use neovim::main::{emsg_skip, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::ops::NUMBUFLEN;
-use neovim::types::{Callback, FAIL, OK, VarLock, dict_T, vimconv_T};
+use neovim::types::{Callback, Failed, OK, VarLock, dict_T, vimconv_T};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Pt, Tv};
@@ -732,7 +732,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
         assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
         log.clear();
 
-        assert_eq!(tv_dict_add(d, di), OK as c_int);
+        assert_eq!(tv_dict_add(d, di), Ok(()));
         log.check(&[]);
         assert_eq!(
             tv::read_dict(d),
@@ -745,7 +745,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
                 || tv_dict_add(d, di),
                 Some(&duplicate("t-est"))
             ),
-            FAIL as c_int
+            Err(Failed)
         );
 
         log.clear();
@@ -775,7 +775,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         ];
         log.clear();
 
-        type Add = Box<dyn Fn(*mut dict_T, usize) -> c_int>;
+        type Add = Box<dyn Fn(*mut dict_T, usize) -> Result<(), Failed>>;
         let adds: Vec<(&str, Add, Tv, bool)> = vec![
             (
                 "list",
@@ -822,7 +822,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             log.clear();
             assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
 
-            assert_eq!(add(d, 0), OK as c_int, "{name}");
+            assert_eq!(add(d, 0), Ok(()), "{name}");
             let di = tv::di_of(d, "tes");
             if copies {
                 // `add_str` duplicates the value before the item.
@@ -845,7 +845,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             // The same key again reports and frees the item it made.
             assert_eq!(
                 check_emsg(log.editor(), || add(d, 1), Some(&duplicate("tes"))),
-                FAIL as c_int,
+                Err(Failed),
                 "{name}"
             );
             log.clear();
@@ -854,7 +854,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             emsg_skip.set(emsg_skip.get() + 1);
             assert_eq!(
                 check_emsg(log.editor(), || add(d, 2), None),
-                FAIL as c_int,
+                Err(Failed),
                 "{name}"
             );
             emsg_skip.set(emsg_skip.get() - 1);
@@ -894,7 +894,7 @@ fn clearing_a_dict_frees_its_items() {
         tv_dict_clear(d);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
-        tv_dict_add_str(d, cstr("TEST").as_ptr(), 3, cstr("tEsT").as_ptr());
+        let _ = tv_dict_add_str(d, cstr("TEST").as_ptr(), 3, cstr("tEsT").as_ptr());
         let di = tv::di_of(d, "TES");
         let value = (*di).di_tv.vval.v_string;
         log.check(&[
@@ -1210,7 +1210,7 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
                 cstr("utf-8").as_ptr().cast_mut(),
                 cstr("latin1").as_ptr().cast_mut(),
             ),
-            OK as c_int
+            OK
         );
 
         let d = tv::new_dict(&copy_corpus());
@@ -1303,7 +1303,7 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         let mut d_tv = Tv::Dict(vec![]).build();
         let d = d_tv.vval.v_dict;
         assert_eq!((*d).dv_refcount.get(), 1);
-        tv_dict_add_dict(d, cstr("test").as_ptr(), 4, d);
+        let _ = tv_dict_add_dict(d, cstr("test").as_ptr(), 4, d);
         assert_eq!((*d).dv_refcount.get(), 2);
 
         let copy = tv_dict_copy(ptr::null(), d, true, 2);

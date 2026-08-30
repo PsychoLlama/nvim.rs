@@ -15,9 +15,6 @@ use neovim::hashtab::{
 use neovim::memory::{xcalloc, xfree};
 use neovim::types::{hashitem_T, hashtab_T};
 
-/// `hash_add` answers OK/FAIL, spelled as the C's `OK`.
-const OK: std::ffi::c_int = 1;
-
 const EMPTY_ITEM: hashitem_T = hashitem_T {
     hi_hash: 0,
     hi_key: ptr::null_mut(),
@@ -58,8 +55,8 @@ fn a_collision_lands_on_the_second_probe() {
     unsafe {
         hash_init(&raw mut ht);
         assert_eq!(ht.ht_mask, 15);
-        assert_eq!(hash_add(&raw mut ht, owned_key("a")), OK);
-        assert_eq!(hash_add(&raw mut ht, owned_key("q")), OK);
+        assert_eq!(hash_add(&raw mut ht, owned_key("a")), Ok(()));
+        assert_eq!(hash_add(&raw mut ht, owned_key("q")), Ok(()));
         assert_eq!(slot_of(&ht, c"a"), 1);
         assert_eq!(slot_of(&ht, c"q"), 7);
         assert_eq!(ht.ht_used, 2);
@@ -76,8 +73,8 @@ fn a_removed_key_leaves_a_reusable_tombstone() {
     let mut ht = ZEROED;
     unsafe {
         hash_init(&raw mut ht);
-        hash_add(&raw mut ht, owned_key("a"));
-        hash_add(&raw mut ht, owned_key("q"));
+        let _ = hash_add(&raw mut ht, owned_key("a"));
+        let _ = hash_add(&raw mut ht, owned_key("q"));
         // Lock the table: removing would otherwise be free to compact the
         // tombstone away immediately.
         hash_lock(&raw mut ht);
@@ -95,7 +92,7 @@ fn a_removed_key_leaves_a_reusable_tombstone() {
         // not the empty slot that ended the walk.
         assert_eq!(slot_of(&ht, c"A"), 1);
 
-        hash_add(&raw mut ht, owned_key("A"));
+        let _ = hash_add(&raw mut ht, owned_key("A"));
         assert_eq!(slot_of(&ht, c"A"), 1);
         assert_eq!(ht.ht_used, 2);
         assert_eq!(ht.ht_filled, 2, "reusing a tombstone fills nothing new");
@@ -118,7 +115,10 @@ fn growing_off_the_small_array_keeps_every_key() {
         hash_init(&raw mut ht);
         let small = (&raw mut ht.ht_smallarray) as *mut hashitem_T;
         for key in &keys {
-            assert_eq!(hash_add(&raw mut ht, owned_key(key.to_str().unwrap())), OK);
+            assert_eq!(
+                hash_add(&raw mut ht, owned_key(key.to_str().unwrap())),
+                Ok(())
+            );
         }
         assert_eq!(ht.ht_used, 64);
         assert_eq!(ht.ht_filled, 64);
@@ -170,7 +170,7 @@ fn clear_all_frees_the_allocation_the_key_sits_in() {
             (*entry).key[1] = text.as_bytes()[1] as c_char;
             assert_eq!(
                 hash_add(&raw mut ht, (&raw mut (*entry).key) as *mut c_char),
-                OK
+                Ok(())
             );
         }
         assert_eq!(ht.ht_used, 2);
