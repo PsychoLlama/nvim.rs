@@ -17,7 +17,7 @@
   "derive_copy": 643,
   "manual_alloc": 1760,
   "garray_sites": 304,
-  "ptr_arith": 6352,
+  "ptr_arith": 6357,
   "t_suffix_types": 216,
   "raw_win_buf_sigs": 625,
   "curwin_raw": 1250,

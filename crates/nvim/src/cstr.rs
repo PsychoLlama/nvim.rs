@@ -57,8 +57,8 @@
 //! | C | slice |
 //! | --- | --- |
 //! | `strlen(p)` | [`bytes_at(p)`](bytes_at)`.len()` |
-//! | `strcmp(a, b)` | `bytes_at(a) == bytes_at(b)`, or `.cmp(…)` |
-//! | `strncmp(a, b, n)` | [`prefix_at(a, n)`](prefix_at)` == prefix_at(b, n)` |
+//! | `strcmp(a, b)` | [`eq(a, b)`](eq), or [`cmp`] |
+//! | `strncmp(a, b, n)` | [`prefix_eq(a, b, n)`](prefix_eq), or [`prefix_cmp`] |
 //! | `strchr(s, c)` | `bytes_at(s).iter().position(…)` |
 //! | `strstr(h, n)` | `bytes_at(h).windows(n.len()).position(…)` |
 //! | `memcmp(a, b, n)` | [`slice_at(a, n)`](slice_at)` == slice_at(b, n)` |
@@ -85,6 +85,15 @@
 //!    terminator rather than null. `bytes_at(s).iter().position(…)` cannot
 //!    find a NUL at all, because the terminator is not in the slice; such a
 //!    site wants `bytes_at(s).len()`.
+//! 5. **Measuring both operands is not comparing them.** `bytes_at(a) ==
+//!    bytes_at(b)` and `prefix_at(a, n) == prefix_at(b, n)` read *every*
+//!    byte of both strings before they look at the first pair, where the C
+//!    call stops at the first difference. Where the caller is a filter
+//!    rejecting candidates — completion's duplicate scan, a maphash bucket
+//!    walk — that turns an O(match) test into O(length) and doubles the
+//!    loop. Use [`eq`]/[`cmp`]/[`prefix_eq`]/[`prefix_cmp`]/[`starts_with`],
+//!    which walk the two together. [`prefix_at`] is for the sites that want
+//!    the *span* itself, not a comparison.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -161,53 +170,93 @@ pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
 /// [`bytes_at`]'s contract, for both.
 pub(crate) unsafe fn eq(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: caller's contract.
-    unsafe { bytes_at(a) == bytes_at(b) }
+    unsafe { cmp(a, b) }.is_eq()
 }
 
 /// How two NUL-terminated strings order -- `strcmp(a, b)`, as an
 /// [`Ordering`] rather than a sign.
 ///
+/// Walks the two together and stops at the first difference, as
+/// [`prefix_cmp`] does and for the same reason: `bytes_at(a).cmp(bytes_at(b))`
+/// measures both operands in full before it looks at a single byte.
+///
 /// # Safety
 /// [`bytes_at`]'s contract, for both.
 pub(crate) unsafe fn cmp(a: *const c_char, b: *const c_char) -> Ordering {
-    // SAFETY: caller's contract.
-    unsafe { bytes_at(a).cmp(bytes_at(b)) }
+    let mut i = 0;
+    loop {
+        // SAFETY: caller's contract -- both are NUL-terminated, and the
+        // terminator ends the walk.
+        let (x, y) = unsafe { (*a.cast::<u8>().add(i), *b.cast::<u8>().add(i)) };
+        let ord = x.cmp(&y);
+        if ord != Ordering::Equal || x == 0 {
+            return ord;
+        }
+        i += 1;
+    }
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --
 /// `strncmp(a, b, n) == 0`.
 ///
-/// One call rather than two [`prefix_at`]s so that the comparison still fits
-/// on one line: a wrapped expression inside an `unsafe` block costs the
-/// ratchet three to seven unchecked lines for nothing.
-///
 /// # Safety
 /// [`prefix_at`]'s contract, for both.
 pub(crate) unsafe fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
     // SAFETY: caller's contract.
-    unsafe { prefix_at(a, n) == prefix_at(b, n) }
+    unsafe { prefix_cmp(a, b, n) }.is_eq()
 }
 
 /// How two NUL-terminated strings order over their first `n` bytes --
 /// `strncmp(a, b, n)`, as an [`Ordering`](Ordering) rather than a
 /// sign. `as c_int` recovers the -1/0/1 a `qsort` comparator wants.
 ///
+/// **Walks the two together and stops at the first difference**, the way
+/// `strncmp` does, rather than measuring each operand and comparing the two
+/// spans. Measuring first is what the obvious `prefix_at(a, n) ==
+/// prefix_at(b, n)` does, and it reads every byte of both operands even when
+/// the first pair already differs -- which is the whole cost when the caller
+/// is a filter rejecting thousands of candidates. `ins_compl_add`'s
+/// duplicate scan and `mapping/table.rs`'s bucket walk are both that shape,
+/// and both roughly doubled on the measured-first form (p24-9).
+///
 /// # Safety
 /// [`prefix_at`]'s contract, for both.
 pub(crate) unsafe fn prefix_cmp(a: *const c_char, b: *const c_char, n: usize) -> Ordering {
-    // SAFETY: caller's contract.
-    unsafe { prefix_at(a, n).cmp(prefix_at(b, n)) }
+    for i in 0..n {
+        // SAFETY: caller's contract -- every byte up to and including each
+        // terminator is readable, and the loop stops at the first one.
+        let (x, y) = unsafe { (*a.cast::<u8>().add(i), *b.cast::<u8>().add(i)) };
+        let ord = x.cmp(&y);
+        // A terminator on both sides ends the comparison: C says the bytes
+        // after a NUL are not compared.
+        if ord != Ordering::Equal || x == 0 {
+            return ord;
+        }
+    }
+    Ordering::Equal
 }
 
 /// Whether the string at `p` starts with `prefix` -- `strncmp(p, prefix,
 /// prefix.len()) == 0`, without the length that has to be kept in step with
 /// the literal.
 ///
+/// Short-circuits like [`prefix_cmp`], and for the same reason.
+///
 /// # Safety
 /// [`prefix_at`]'s contract.
 pub(crate) unsafe fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
-    // SAFETY: caller's contract.
-    unsafe { prefix_at(p, prefix.len()) == prefix }
+    for (i, &want) in prefix.iter().enumerate() {
+        // SAFETY: caller's contract -- `p`'s terminator is readable and ends
+        // the walk, since `prefix` reaching a NUL means `want` matched it.
+        let got = unsafe { *p.cast::<u8>().add(i) };
+        if got != want {
+            return false;
+        }
+        if got == 0 {
+            break;
+        }
+    }
+    true
 }
 
 /// Exactly `n` bytes at `p`, terminator or not.
