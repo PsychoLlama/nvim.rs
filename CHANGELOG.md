@@ -9,48 +9,47 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Reworked how the editor holds the text of its own messages: the shared
-  message constants, the translation lookup and the `emsg`/`msg` entry
-  points now carry a string rather than a pointer to one, and every message
-  that fills in a name, a number or a file path is now written out where it
-  is reported and checked against its arguments when the editor is built.
-  Translation still applies; messages that quote text keep its bytes
-  exactly, and every message still reads exactly as before.
-- Reworked how a failing API call reports why: the error now owns its own
-  message and releases it on its own, rather than being a pointer the caller
-  had to remember to free, and every one of the API's refusal messages is
-  written out where it is raised and checked against its arguments when the
-  editor is built. The message a client receives, and the kind it is
-  classified as, are unchanged.
-- Reworked how the editor compares, measures and copies text: the C
-  library's string and memory routines are gone from the editor's own code,
-  replaced by operations that carry the length of what they touch, so a
-  comparison, a search or a copy cannot run past the end of what it was
-  given. Every command reads and writes exactly the same bytes as before,
-  including for text that is not valid UTF-8.
-- Reworked how the editor turns its own behaviour off for the duration of an
-  operation — suppressing messages, holding the buffer list still, keeping
-  autocommands from firing while a window is swapped out. Every such
-  suppression is now released by the language when the operation ends,
-  whichever way it ends. Five cases where an error part way through an
-  operation left the suppression in force for the rest of the session are
-  fixed as a result: `:all` after a window could not be split, opening a line
-  when the buffer would not take it, `CTRL-A`/`CTRL-X` on a block, an error
-  inside a `:s///c` prompt, and an error inside a Lua callback from the event
-  loop.
-- Reworked the `$NVIM_LOG_FILE` log: each line is now written out with its
-  values where it is logged and checked against them when the editor is
-  built, and a line the current log level would discard no longer costs
-  anything to prepare. The lines say the same thing, with two exceptions: a
-  missing string prints as `[NULL]` rather than `(null)`, and one over-long
-  server address is cut to the same forty bytes by a different route.
-- Reworked how the editor's internals say whether an operation worked: the
-  several hundred functions that answered a plain success/failure number now
-  answer a result the compiler can check, so an unread answer is a build
-  error rather than a bug, and the handful of operations that had a third
-  answer ("nothing was done, and nothing is wrong") now say so in their own
-  words. Every command behaves exactly as before, including in the corners
-  where that third answer decides what happens next.
+- Rewrote every message and error the editor shows: what `:messages` lists,
+  the errors commands report, what a UI receives as `msg_show`, and the
+  translation of all of them. Messages that quote text keep its bytes
+  exactly, and every message reads exactly as before.
+- Rewrote the error a failing API call reports, both over RPC and from Lua.
+  The message a client receives, and the kind it is classified as, are
+  unchanged.
+- Rewrote how the editor compares, measures and copies text, which reaches
+  every command that searches, completes, sorts or copies. Every command
+  reads and writes exactly the same bytes as before, including for text that
+  is not valid UTF-8.
+- Rewrote how the editor holds its own behaviour back for the duration of an
+  operation: messages kept quiet, the buffer list held still, autocommands
+  kept from firing while a window is swapped out, fold and extmark updates
+  deferred. Such a hold is now always lifted when the operation ends,
+  whichever way it ends, which fixes the five cases below.
+- Rewrote the `$NVIM_LOG_FILE` log. Its lines say the same thing, with two
+  exceptions: a missing string prints as `[NULL]` rather than `(null)`, and
+  one over-long server address is cut to the same forty bytes by a different
+  route.
+- Rewrote how the editor's internals report whether an operation worked,
+  which reaches every command, Vimscript evaluation, and the files
+  `:mksession` and `:mkview` write. Everything behaves exactly as before.
+
+### Fixed
+
+- `:all` and `:tab drop` no longer suppress `WinEnter` and `WinLeave`
+  autocommands for the rest of the session when a window cannot be split.
+- Opening a line in a buffer that will not take it no longer suppresses every
+  later extmark update for the rest of the session.
+- `CTRL-A` and `CTRL-X` over a Visual block no longer leave fold updates
+  turned off for the rest of the session.
+- Setting `'cpoptions'` from a `CTRL-R =` expression inside a `:s///c` prompt
+  no longer leaves undo synchronisation off, which ran later edits together
+  into one undo block.
+- An error inside a Lua callback from the event loop no longer leaves the
+  editor treating every later callback as a fast one, where much of
+  `vim.api` refuses to run.
+- The warning the editor prints when it cannot create the directory for
+  `$NVIM_LOG_FILE` now names that directory, rather than whatever was left
+  in freed memory.
 
 ## [2026.08.29-f6c6cf531e]
 
