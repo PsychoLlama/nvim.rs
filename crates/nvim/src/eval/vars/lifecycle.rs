@@ -288,11 +288,11 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
     var.di_tv.v_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key[0] = NUL as c_char;
-    // Both of these leave the dictionary pointing at *itself* -- `ht_array`
-    // at the inline `ht_smallarray`, the watcher queue's head at its own
-    // node -- so they go last: a borrow of the whole `dict_T` afterwards
-    // would invalidate the pointer each has just stored. The plain field
-    // writes above are independent of both.
+    // The watcher queue's head points at its own node, so `queue_init` goes
+    // last: a borrow of the whole `dict_T` afterwards would invalidate the
+    // pointer it has just stored. The hash table has no such constraint any
+    // more -- it owns its slots -- but `hash_init` writes over storage that
+    // must not already hold a table, which is what a fresh `dict_T` is.
     unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
     unsafe { queue_init(&raw mut (*dict).watchers) };
 }

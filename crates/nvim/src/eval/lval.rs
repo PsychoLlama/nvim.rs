@@ -162,9 +162,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     lp.ll_dict = unsafe { container.vval.v_dict };
     // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
     lp.ll_di = unsafe { tv_dict_find(lp.ll_dict, key, len as ptrdiff_t) };
-    // `dict_T` holds a `hashtab_T`, which points at its own inline array,
-    // so it is not a pointee a `Live` may wrap — see `winlayer::live`'s
-    // note. The one field this needs is read through the pointer.
+    // The one field this needs, read through the pointer.
     // SAFETY: `ll_dict` is the live Dict just resolved.
     let dv_scope = unsafe { (*lp.ll_dict).dv_scope };
 
