@@ -368,7 +368,7 @@ pub unsafe fn tv_blob_copy(from: *mut blob_T, to: *mut typval_T) {
 
     unsafe { tv_blob_alloc_ret(to) };
     let len = unsafe { (*from).bv_ga.ga_len };
-    let ga = bv_ga(dst.blob());
+    let ga = bv_ga(dst.blob_or_null());
     if len > 0 {
         unsafe { (*ga).ga_data = xmemdup((*from).bv_ga.ga_data, len as size_t) };
     }

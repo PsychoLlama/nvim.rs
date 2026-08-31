@@ -838,8 +838,9 @@ pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
     if val.v_type == VAR_STRING || val.v_type == VAR_FUNC {
-        if !val.string().is_null() {
-            unsafe { ga_concat(&raw mut ga, (*tv).vval.v_string) };
+        let s = val.string_or_func_name();
+        if !s.is_null() {
+            unsafe { ga_concat(&raw mut ga, s) };
         }
     } else {
         let eve_ret = unsafe { encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr()) };

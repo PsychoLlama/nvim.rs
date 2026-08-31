@@ -29,11 +29,10 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     match val.v_type {
-        VAR_NUMBER => return val.number(),
+        VAR_NUMBER => return val.as_number().unwrap_or(0),
         VAR_STRING => {
             let mut n = 0;
-            if !val.string().is_null() {
-                let s = val.string();
+            if let Some(s) = val.as_string().filter(|s| !s.is_null()) {
                 let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
                 let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
                 let all = STR2NR_ALL as ::core::ffi::c_int;
@@ -42,7 +41,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             }
             return n;
         }
-        VAR_BOOL => return varnumber_T::from(val.boolean() == kBoolVarTrue),
+        VAR_BOOL => return varnumber_T::from(val.as_bool() == Some(kBoolVarTrue)),
         VAR_SPECIAL => return 0,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
             unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
@@ -93,7 +92,7 @@ pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     if val.v_type == VAR_STRING
-        && !val.string().is_null()
+        && !val.string_or_null().is_null()
         && unsafe { *(*tv).vval.v_string } as ::core::ffi::c_int == '$' as ::core::ffi::c_int
         && unsafe { *(*tv).vval.v_string.add(1) } as ::core::ffi::c_int == NUL
         && !buf.is_null()
@@ -109,8 +108,8 @@ pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let message = match val.v_type {
-        VAR_NUMBER => return val.number() as float_T,
-        VAR_FLOAT => return val.float(),
+        VAR_NUMBER => return val.as_number().unwrap_or(0) as float_T,
+        VAR_FLOAT => return val.as_float().unwrap_or(0.0),
         VAR_PARTIAL | VAR_FUNC => c"E891: Using a Funcref as a Float",
         VAR_STRING => c"E892: Using a String as a Float",
         VAR_LIST => c"E893: Using a List as a Float",
@@ -140,7 +139,7 @@ pub unsafe fn tv_get_string_buf_chk(
     let val = unsafe { Tv::new(tv.cast_mut()) };
     match val.v_type {
         VAR_NUMBER => {
-            let n = val.number();
+            let n = val.as_number().unwrap_or(0);
             let size = NUMBUFLEN as size_t;
             unsafe { snprintf(buf, size, c"%ld".as_ptr(), n) };
             buf
@@ -150,11 +149,8 @@ pub unsafe fn tv_get_string_buf_chk(
             buf
         }
         VAR_STRING => {
-            if val.string().is_null() {
-                c"".as_ptr()
-            } else {
-                val.string()
-            }
+            let s = val.string_or_null();
+            if s.is_null() { c"".as_ptr() } else { s }
         }
         VAR_BOOL => {
             let names = (&raw const encode_bool_var_names).cast::<*const ::core::ffi::c_char>();
@@ -240,25 +236,25 @@ pub unsafe fn tv2bool(tv: *const typval_T) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let tv = unsafe { Tv::new(tv.cast_mut()) };
     match tv.v_type {
-        VAR_NUMBER => tv.number() != 0,
-        VAR_FLOAT => tv.float() != 0.0,
-        VAR_PARTIAL => !tv.partial().is_null(),
+        VAR_NUMBER => tv.as_number().unwrap_or(0) != 0,
+        VAR_FLOAT => tv.as_float().unwrap_or(0.0) != 0.0,
+        VAR_PARTIAL => !tv.partial_or_null().is_null(),
         VAR_FUNC | VAR_STRING => {
-            let s = tv.string();
+            let s = tv.string_or_func_name();
             !s.is_null() && unsafe { *s } as ::core::ffi::c_int != NUL
         }
         VAR_LIST => {
-            let l = tv.list();
+            let l = tv.list_or_null();
             !l.is_null() && unsafe { (*l).lv_len } > 0
         }
         VAR_DICT => {
-            let d = tv.dict();
+            let d = tv.dict_or_null();
             !d.is_null() && unsafe { (*d).dv_hashtab.ht_used } > 0
         }
-        VAR_BOOL => tv.boolean() == kBoolVarTrue,
-        VAR_SPECIAL => tv.special() != kSpecialVarNull,
+        VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
+        VAR_SPECIAL => tv.as_special().is_some_and(|s| s != kSpecialVarNull),
         VAR_BLOB => {
-            let b = tv.blob();
+            let b = tv.blob_or_null();
             !b.is_null() && unsafe { (*b).bv_ga.ga_len } > 0
         }
         _ => false,

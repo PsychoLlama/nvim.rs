@@ -59,7 +59,7 @@ pub(crate) unsafe fn tv_strlen(tv: *const typval_T) -> size_t {
     // SAFETY: the caller's promise: a live VAR_STRING typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     debug_assert!(val.v_type == VAR_STRING);
-    if val.string().is_null() {
+    if val.string_or_null().is_null() {
         0
     } else {
         unsafe { cstr::bytes_at((*tv).vval.v_string) }.len()
@@ -177,7 +177,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
         VAR_NUMBER => unsafe { sink.conv_number(tv, (*tv).vval.v_number) },
         VAR_FLOAT => item_hook!(unsafe { sink.conv_float(tv, (*tv).vval.v_float) }),
         VAR_BLOB => {
-            let blob = val.blob();
+            let blob = val.blob_or_null();
             unsafe { sink.conv_blob(tv, blob, tv_blob_len(blob)) };
         }
         VAR_FUNC => {
@@ -188,7 +188,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             unsafe { sink.conv_func_end(tv, copyid) };
         }
         VAR_PARTIAL => {
-            let pt = val.partial();
+            let pt = val.partial_or_null();
             let fun = if pt.is_null() {
                 ptr::null_mut()
             } else {
@@ -213,12 +213,12 @@ unsafe fn convert_one_value<S: TypvalSink>(
                 saved_copyid: copyid - 1,
                 frame: Frame::Partial {
                     stage: PartialStage::Args,
-                    pt: val.partial(),
+                    pt: val.partial_or_null(),
                 },
             });
         }
         VAR_LIST => {
-            let list = val.list();
+            let list = val.list_or_null();
             if list.is_null() || unsafe { tv_list_len(list) } == 0 {
                 unsafe { sink.conv_empty_list(tv) };
             } else {
@@ -244,18 +244,18 @@ unsafe fn convert_one_value<S: TypvalSink>(
         VAR_BOOL => {
             // Upstream switches over the two named values and ignores
             // anything else.
-            let b = val.boolean();
+            let b = val.as_bool().unwrap_or(kBoolVarFalse);
             if b == kBoolVarTrue || b == kBoolVarFalse {
                 unsafe { sink.conv_bool(tv, b == kBoolVarTrue) };
             }
         }
         VAR_SPECIAL => {
-            if val.special() == kSpecialVarNull {
+            if val.as_special() == Some(kSpecialVarNull) {
                 unsafe { sink.conv_nil(tv) };
             }
         }
         VAR_DICT => {
-            let dict = val.dict();
+            let dict = val.dict_or_null();
             // SAFETY: the typval's own dictionary, live while the typval is.
             let d = unsafe { Dt::new(dict) };
             if dict.is_null() || d.dv_hashtab.ht_used == 0 {
@@ -346,7 +346,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_NUMBER {
                 return Ok(None);
             }
-            unsafe { sink.conv_bool(tv, val.number() != 0) };
+            unsafe { sink.conv_bool(tv, val.as_number().unwrap_or(0) != 0) };
         }
         SpecialKind::Integer => {
             // A list of four integers: a sign (nominally ±1), then the
@@ -355,7 +355,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list();
+            let val_list = val.list_or_null();
             if unsafe { tv_list_len(val_list) } != 4 {
                 return Ok(None);
             }
@@ -393,7 +393,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_FLOAT {
                 return Ok(None);
             }
-            let f = val.float();
+            let f = val.as_float().unwrap_or(0.0);
             return Ok(Some(unsafe { sink.conv_float(tv, f) }));
         }
         SpecialKind::String => {
@@ -402,7 +402,8 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             }
             let mut len: size_t = 0;
             let mut buf: *mut c_char = ptr::null_mut();
-            if !unsafe { encode_vim_list_to_buf(val.list(), &raw mut len, &raw mut buf) } {
+            let val_list = val.list_or_null();
+            if !unsafe { encode_vim_list_to_buf(val_list, &raw mut len, &raw mut buf) } {
                 return Ok(None);
             }
             let flow = unsafe { sink.conv_str_string(tv, buf, len) };
@@ -415,7 +416,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list();
+            let val_list = val.list_or_null();
             let saved_copyid = unsafe { tv_list_copyid(val_list) };
             {
                 let path = ConvPath { stack, objname };
@@ -443,7 +444,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list();
+            let val_list = val.list_or_null();
             if val_list.is_null() || unsafe { tv_list_len(val_list) } == 0 {
                 unsafe { sink.conv_empty_dict(tv, None) };
                 return Ok(Some(Flow::Go));
@@ -487,7 +488,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_LIST {
                 return Ok(None);
             }
-            let val_list = val.list();
+            let val_list = val.list_or_null();
             if unsafe { tv_list_len(val_list) } != 2 {
                 return Ok(None);
             }

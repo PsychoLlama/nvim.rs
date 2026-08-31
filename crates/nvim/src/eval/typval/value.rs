@@ -82,7 +82,7 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
     let src = unsafe { Tv::new(from.cast_mut()) };
     match src.v_type {
         VAR_STRING | VAR_FUNC => {
-            if !src.string().is_null() {
+            if !src.string_or_func_name().is_null() {
                 unsafe { (*to).vval.v_string = xstrdup((*from).vval.v_string) };
                 if src.v_type == VAR_FUNC {
                     unsafe { func_ref((*to).vval.v_string) };
@@ -95,13 +95,13 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
             }
         }
         VAR_BLOB => {
-            if !src.blob().is_null() {
+            if !src.blob_or_null().is_null() {
                 unsafe { (*(*to).vval.v_blob).bv_refcount.retain() };
             }
         }
         VAR_LIST => unsafe { tv_list_ref((*to).vval.v_list) },
         VAR_DICT => {
-            if !src.dict().is_null() {
+            if !src.dict_or_null().is_null() {
                 unsafe { (*(*to).vval.v_dict).dv_refcount.retain() };
             }
         }
@@ -144,7 +144,7 @@ pub unsafe fn tv_item_lock(
     let val = unsafe { Tv::new(tv) };
     match val.v_type {
         VAR_BLOB => {
-            let b = val.blob();
+            let b = val.blob_or_null();
             // SAFETY: the typval's own blob.
             let bl = unsafe { Bl::new(b) };
             if !b.is_null() && !(check_refcount && bl.bv_refcount.is_shared()) {
@@ -152,7 +152,7 @@ pub unsafe fn tv_item_lock(
             }
         }
         VAR_LIST => {
-            let l = val.list();
+            let l = val.list_or_null();
             // SAFETY: the typval's own list.
             let ls = unsafe { Ls::new(l) };
             if !l.is_null() && !(check_refcount && ls.lv_refcount.is_shared()) {
@@ -167,7 +167,7 @@ pub unsafe fn tv_item_lock(
             }
         }
         VAR_DICT => {
-            let d = val.dict();
+            let d = val.dict_or_null();
             // SAFETY: the typval's own dictionary.
             let dt = unsafe { Dt::new(d) };
             if !d.is_null() && !(check_refcount && dt.dv_refcount.is_shared()) {
@@ -309,8 +309,8 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             unsafe { tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic) }
         }
         VAR_PARTIAL | VAR_FUNC => {
-            if (a.v_type == VAR_PARTIAL && a.partial().is_null())
-                || (b.v_type == VAR_PARTIAL && b.partial().is_null())
+            if a.as_partial().is_some_and(|p| p.is_null())
+                || b.as_partial().is_some_and(|p| p.is_null())
             {
                 return false;
             }
@@ -318,8 +318,8 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             unsafe { func_equal(tv1, tv2, ic) }
         }
         VAR_BLOB => unsafe { tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob) },
-        VAR_NUMBER => a.number() == b.number(),
-        VAR_FLOAT => a.float() == b.float(),
+        VAR_NUMBER => a.as_number() == b.as_number(),
+        VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {
             let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
             let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
@@ -327,8 +327,8 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             let s2 = unsafe { tv_get_string_buf(tv2, buf2.as_mut_ptr()) };
             (unsafe { mb_strcmp_ic(ic, s1, s2) }) == 0
         }
-        VAR_BOOL => a.boolean() == b.boolean(),
-        VAR_SPECIAL => a.special() == b.special(),
+        VAR_BOOL => a.as_bool() == b.as_bool(),
+        VAR_SPECIAL => a.as_special() == b.as_special(),
         // VAR_UNKNOWN can be the result of an invalid expression, let's say
         // it does not equal anything, not even self.
         VAR_UNKNOWN => false,

@@ -129,7 +129,7 @@ impl TypvalSink for NothingSink {
         let mut val = unsafe { Tv::new(tv) };
         val.v_lock = VarLock::Unlocked;
         if val.v_type == VAR_PARTIAL {
-            let pt = val.partial();
+            let pt = val.partial_or_null();
             // SAFETY: the typval's own partial.
             let mut part = unsafe { Pt::new(pt) };
             if !pt.is_null() && part.pt_refcount.is_shared() {
@@ -155,7 +155,7 @@ impl TypvalSink for NothingSink {
         if val.v_type != VAR_PARTIAL {
             return;
         }
-        let pt = val.partial();
+        let pt = val.partial_or_null();
         if pt.is_null() {
             return;
         }
@@ -213,7 +213,7 @@ impl TypvalSink for NothingSink {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
         val.v_lock = VarLock::Unlocked;
-        let list = val.list();
+        let list = val.list_or_null();
         // SAFETY: the typval's own list.
         let mut ls = unsafe { Ls::new(list) };
         if ls.lv_refcount.is_shared() {

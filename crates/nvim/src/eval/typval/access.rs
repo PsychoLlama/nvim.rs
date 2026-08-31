@@ -119,74 +119,88 @@ pub(crate) fn bv_ga(b: *mut blob_T) -> *mut garray_T {
     field_of(b, ::core::mem::offset_of!(blob_T, bv_ga))
 }
 
-/// The union members of a live `typval_T`, read as ordinary safe code.
+/// The tag-checked readers for `typval_T`'s union, generated nine times over
+/// the one shape they all have.
 ///
 /// Reading a union field is `unsafe` in Rust because a member the union does
 /// not currently hold may have an invalid bit pattern for its type.
 /// `typval_vval_union` has none: its nine members are a `varnumber_T`, two
 /// `c_uint` tags, an `f64` and five raw pointers, and *every* bit pattern is
-/// a valid value of each. So for an initialised `typval_T` — which is what
-/// [`Live::new`] promises — reading any member is defined however the
-/// `v_type` tag reads, and these are safe projections rather than an escape
-/// hatch.
+/// a valid value of each. So the read itself is defined however the `v_type`
+/// tag reads. What it is not is *meaningful* — a `v_list` read out of a
+/// `VAR_NUMBER` is a pointer synthesised from a user's integer, and following
+/// it is the hoisted-union-read bug that only AddressSanitizer has ever
+/// caught here.
 ///
-/// The tag still says which member is *meaningful*; that is the caller's
-/// business, exactly as it was when the read spelled itself `(*tv).vval.v_x`.
+/// So every accessor below tests `v_type` first and the union read is
+/// unreachable when the tag says otherwise. The `as_*` form answers `None`;
+/// the `*_or_null` form answers the NULL that this family already treats as
+/// "empty" everywhere (`tv_list_len(NULL) == 0`, `partial_name(NULL)`, …),
+/// which is what a site whose tag was established by an earlier
+/// `tv_check_for_*_arg` wants to write.
+///
+/// Written as a macro so that the whole family's unchecked surface is the
+/// single read below rather than nine copies of it.
+macro_rules! union_readers {
+    ($(
+        $tag:ident, $member:ident, $ty:ty, $as_fn:ident $(, $or_null_fn:ident)?;
+    )*) => {
+        impl typval_T {
+            $(
+                #[doc = concat!("`vval.", stringify!($member), "`, or `None` unless the tag is `", stringify!($tag), "`.")]
+                #[inline(always)]
+                pub(crate) fn $as_fn(&self) -> Option<$ty> {
+                    if self.v_type == $tag {
+                        // SAFETY: every bit pattern is a valid value of every
+                        // member, so the read is defined for any initialised
+                        // typval; the tag test is what makes it meaningful.
+                        Some(unsafe { self.vval.$member })
+                    } else {
+                        None
+                    }
+                }
+
+                $(
+                    #[doc = concat!("`vval.", stringify!($member), "`, or NULL unless the tag is `", stringify!($tag), "`.")]
+                    #[inline(always)]
+                    pub(crate) fn $or_null_fn(&self) -> $ty {
+                        self.$as_fn().unwrap_or(::core::ptr::null_mut())
+                    }
+                )?
+            )*
+        }
+    };
+}
+
+union_readers! {
+    VAR_NUMBER,  v_number,  varnumber_T,               as_number;
+    VAR_BOOL,    v_bool,    BoolVarValue,              as_bool;
+    VAR_SPECIAL, v_special, SpecialVarValue,           as_special;
+    VAR_FLOAT,   v_float,   float_T,                   as_float;
+    VAR_STRING,  v_string,  *mut ::core::ffi::c_char,  as_string,    string_or_null;
+    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char,  as_func_name, func_name_or_null;
+    VAR_LIST,    v_list,    *mut list_T,               as_list,      list_or_null;
+    VAR_DICT,    v_dict,    *mut dict_T,               as_dict,      dict_or_null;
+    VAR_PARTIAL, v_partial, *mut partial_T,            as_partial,   partial_or_null;
+    VAR_BLOB,    v_blob,    *mut blob_T,               as_blob,      blob_or_null;
+}
+
+impl typval_T {
+    /// `vval.v_string` under either tag that puts one there — `VAR_STRING`'s
+    /// text or `VAR_FUNC`'s function name — and NULL under any other.
+    ///
+    /// The arms that treat the two alike (`tv2bool`, `tv_copy`, the encoders)
+    /// are the reason this exists; a site that means only one of them wants
+    /// [`typval_T::string_or_null`] or [`typval_T::func_name_or_null`].
+    #[inline(always)]
+    pub(crate) fn string_or_func_name(&self) -> *mut ::core::ffi::c_char {
+        self.as_string()
+            .or_else(|| self.as_func_name())
+            .unwrap_or(::core::ptr::null_mut())
+    }
+}
+
 impl Tv {
-    /// `vval.v_number`.
-    #[inline(always)]
-    pub(crate) fn number(self) -> varnumber_T {
-        unsafe { self.vval.v_number }
-    }
-
-    /// `vval.v_bool`.
-    #[inline(always)]
-    pub(crate) fn boolean(self) -> BoolVarValue {
-        unsafe { self.vval.v_bool }
-    }
-
-    /// `vval.v_special`.
-    #[inline(always)]
-    pub(crate) fn special(self) -> SpecialVarValue {
-        unsafe { self.vval.v_special }
-    }
-
-    /// `vval.v_float`.
-    #[inline(always)]
-    pub(crate) fn float(self) -> float_T {
-        unsafe { self.vval.v_float }
-    }
-
-    /// `vval.v_string`.
-    #[inline(always)]
-    pub(crate) fn string(self) -> *mut ::core::ffi::c_char {
-        unsafe { self.vval.v_string }
-    }
-
-    /// `vval.v_list`.
-    #[inline(always)]
-    pub(crate) fn list(self) -> *mut list_T {
-        unsafe { self.vval.v_list }
-    }
-
-    /// `vval.v_dict`.
-    #[inline(always)]
-    pub(crate) fn dict(self) -> *mut dict_T {
-        unsafe { self.vval.v_dict }
-    }
-
-    /// `vval.v_partial`.
-    #[inline(always)]
-    pub(crate) fn partial(self) -> *mut partial_T {
-        unsafe { self.vval.v_partial }
-    }
-
-    /// `vval.v_blob`.
-    #[inline(always)]
-    pub(crate) fn blob(self) -> *mut blob_T {
-        unsafe { self.vval.v_blob }
-    }
-
     /// The *address* of `vval.v_dict`, for the sinks that are handed a
     /// `*mut *mut dict_T` so they can clear the slot; see [`field_of`].
     #[inline(always)]
@@ -210,16 +224,16 @@ impl Li {
         self.li_tv.v_type
     }
 
-    /// `li_tv.vval.v_number`; see [`Tv::number`].
+    /// `li_tv.vval.v_number`; see [`typval_T::as_number`].
     #[inline(always)]
     pub(crate) fn number(self) -> varnumber_T {
-        self.tv().number()
+        self.tv().as_number().unwrap_or(0)
     }
 
-    /// `li_tv.vval.v_list`; see [`Tv::list`].
+    /// `li_tv.vval.v_list`; see [`typval_T::list_or_null`].
     #[inline(always)]
     pub(crate) fn list(self) -> *mut list_T {
-        self.tv().list()
+        self.tv().list_or_null()
     }
 }
 
@@ -712,4 +726,86 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
 #[inline(always)]
 pub fn tv_is_func(tv: typval_T) -> bool {
     tv.v_type == VAR_FUNC || tv.v_type == VAR_PARTIAL
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::VarType;
+
+    /// A typval carrying `bits` in its union under `tag`, without going near
+    /// a constructor: the point is to prove the *tag* gates the read, so the
+    /// payload has to be one no honest constructor would pair with it.
+    fn tagged(v_type: VarType, bits: varnumber_T) -> typval_T {
+        typval_T {
+            v_type,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_number: bits },
+        }
+    }
+
+    #[test]
+    fn a_reader_answers_only_for_its_own_tag() {
+        // 0xdead_beef is what a hoisted read would follow as a pointer.
+        let num = tagged(VAR_NUMBER, 0xdead_beef);
+        assert_eq!(num.as_number(), Some(0xdead_beef));
+        assert_eq!(num.as_list(), None);
+        assert_eq!(num.as_dict(), None);
+        assert_eq!(num.as_blob(), None);
+        assert_eq!(num.as_partial(), None);
+        assert_eq!(num.as_string(), None);
+        assert_eq!(num.as_float(), None);
+        assert_eq!(num.as_bool(), None);
+        assert_eq!(num.as_special(), None);
+    }
+
+    #[test]
+    fn the_null_form_is_the_option_form_with_the_familys_empty_value() {
+        let num = tagged(VAR_NUMBER, 0xdead_beef);
+        assert!(num.list_or_null().is_null());
+        assert!(num.dict_or_null().is_null());
+        assert!(num.blob_or_null().is_null());
+        assert!(num.partial_or_null().is_null());
+        assert!(num.string_or_null().is_null());
+        assert!(num.func_name_or_null().is_null());
+        assert!(num.string_or_func_name().is_null());
+    }
+
+    #[test]
+    fn a_list_reads_back_as_the_pointer_it_was_given() {
+        // Any address will do: nothing here dereferences it.
+        let l = ::core::ptr::without_provenance_mut::<list_T>(0x1000);
+        let tv = typval_T::list(l);
+        assert_eq!(tv.as_list(), Some(l));
+        assert_eq!(tv.list_or_null(), l);
+        // The same bits under any other tag are not a list.
+        assert_eq!(tagged(VAR_DICT, l as varnumber_T).as_list(), None);
+    }
+
+    #[test]
+    fn the_two_tags_that_share_v_string_stay_apart() {
+        let text = c"x".as_ptr().cast_mut();
+        let string = typval_T::string(text);
+        assert_eq!(string.as_string(), Some(text));
+        assert_eq!(string.as_func_name(), None);
+        assert_eq!(string.string_or_func_name(), text);
+
+        let func = typval_T {
+            v_type: VAR_FUNC,
+            v_lock: VarLock::Unlocked,
+            vval: typval_vval_union { v_string: text },
+        };
+        assert_eq!(func.as_string(), None);
+        assert_eq!(func.as_func_name(), Some(text));
+        assert_eq!(func.string_or_func_name(), text);
+    }
+
+    #[test]
+    fn an_unknown_typval_reads_as_nothing_at_all() {
+        let unknown = TV_INITIAL_VALUE;
+        assert_eq!(unknown.as_number(), None);
+        assert_eq!(unknown.as_string(), None);
+        assert!(unknown.list_or_null().is_null());
+        assert!(unknown.string_or_func_name().is_null());
+    }
 }

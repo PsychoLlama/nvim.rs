@@ -404,7 +404,7 @@ pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         emsg(gettext(e_invarg));
         return;
     }
-    let l = args.list();
+    let l = args.list_or_null();
     if l.is_null() {
         return;
     }

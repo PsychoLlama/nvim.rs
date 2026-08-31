@@ -76,7 +76,7 @@ pub(crate) unsafe fn item_compare(
             if b.v_type != VAR_STRING || sort_info.item_compare_numeric {
                 p1 = c"'".as_ptr().cast_mut();
             } else {
-                p1 = a.string();
+                p1 = a.string_or_null();
             }
         } else {
             p1 = unsafe { encode_tv2string(tv1, ::core::ptr::null_mut()) };
@@ -86,7 +86,7 @@ pub(crate) unsafe fn item_compare(
             if a.v_type != VAR_STRING || sort_info.item_compare_numeric {
                 p2 = c"'".as_ptr().cast_mut();
             } else {
-                p2 = b.string();
+                p2 = b.string_or_null();
             }
         } else {
             p2 = unsafe { encode_tv2string(tv2, ::core::ptr::null_mut()) };
@@ -373,9 +373,9 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 
     // optional second argument: {func}
     if arg1.v_type == VAR_FUNC {
-        sort_info.item_compare_func = arg1.string();
+        sort_info.item_compare_func = arg1.func_name_or_null();
     } else if arg1.v_type == VAR_PARTIAL {
-        sort_info.item_compare_partial = arg1.partial();
+        sort_info.item_compare_partial = arg1.partial_or_null();
     } else {
         let mut error = false;
         let nr = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) } as ::core::ffi::c_int;
@@ -456,7 +456,7 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
     } else {
         c"uniq() argument".as_ptr()
     };
-    let l = args.list();
+    let l = args.list_or_null();
     if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
         unsafe { tv_list_set_ret(rettv, l) };
         if unsafe { tv_list_len(l) } > 1
