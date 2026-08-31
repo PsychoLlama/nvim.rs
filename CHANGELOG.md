@@ -7,6 +7,14 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the hash table that holds every name the editor knows: Dictionary
+  keys, variables and functions, syntax keywords, and the tables a spell
+  file is read into. The order those come back in is unchanged, which is
+  what `keys()`, `items()`, `:echo` of a Dictionary and every listing that
+  walks one show.
+
 ## [2026.08.31-2f51c2ec04]
 
 ### Changed
