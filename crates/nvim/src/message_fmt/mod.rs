@@ -191,6 +191,30 @@ pub(crate) unsafe fn c_str_len<'a>(p: *const c_char, len: usize) -> BytesDisplay
 /// pointer, which vim's printf writes as `[NULL]` whatever the precision.
 pub(crate) struct BytesDisplay<'a>(Option<&'a [u8]>);
 
+impl BytesDisplay<'_> {
+    /// Write a null pointer as *nothing*, the way the **C library**'s `%.*s`
+    /// does at precision zero, rather than as vim's `[NULL]`.
+    ///
+    /// The two printfs disagree on exactly this input: vim's substitutes
+    /// `[NULL]` whatever the precision, while the C library never reads the
+    /// pointer when the precision is zero and so writes no bytes at all. The
+    /// API's refusals are formatted by upstream's `api_set_error`, which goes
+    /// through the C library — and an API `String` carrying no bytes *is*
+    /// `(data: NULL, size: 0)`, so `Invalid key: '%.*s'` on such a key reads
+    /// `Invalid key: ''` and an RPC client sees that text.
+    ///
+    /// Only for arguments whose null pointer always arrives with a zero
+    /// length, which is every `String` the API decodes and every
+    /// `lua_tolstring` that refused. A null pointer with a *real* length is
+    /// the C library's `(null)`, which this does not spell.
+    pub(crate) fn null_as_empty(self) -> Self {
+        match self.0 {
+            None => BytesDisplay(Some(&[])),
+            some => BytesDisplay(some),
+        }
+    }
+}
+
 impl fmt::Display for BytesDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {

@@ -109,7 +109,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         let field = unsafe { hashy.expect("non-null function pointer")(key.data(), key.len()) };
         if field.is_null() {
             // SAFETY: `key` names its own bytes.
-            let key = unsafe { c_str_len(key.data(), key.len()) };
+            let key = unsafe { c_str_len(key.data(), key.len()) }.null_as_empty();
             *err = api_error!(kErrorTypeValidation, "Invalid key: '{key}'");
             return false;
         }
@@ -225,7 +225,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
             }
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
-                let key = unsafe { c_str_len(key.data(), key.len()) };
+                let key = unsafe { c_str_len(key.data(), key.len()) }.null_as_empty();
                 let e = api_error!(
                     kErrorTypeValidation,
                     "Invalid key: '{key}' is only allowed from Lua"

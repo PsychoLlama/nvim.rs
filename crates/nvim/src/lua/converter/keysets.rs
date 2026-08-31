@@ -107,7 +107,7 @@ pub unsafe fn nlua_pop_keydict(
             let s = lua_tolstring(lstate, -2, &raw mut len);
             let field: *const KeySetLink = hashy.expect("non-null function pointer")(s, len);
             if field.is_null() {
-                let key = c_str_len(s, len);
+                let key = c_str_len(s, len).null_as_empty();
                 *err = api_error!(kErrorTypeValidation, "invalid key: {key}");
                 lua_pop(lstate, 3);
                 return;

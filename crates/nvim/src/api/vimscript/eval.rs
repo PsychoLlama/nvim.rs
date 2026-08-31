@@ -68,7 +68,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
             // is: `expr` need not hold 256 bytes.
             let shown = expr.len().min(256);
             // SAFETY: `expr` names its own bytes, per this call's contract.
-            let text = unsafe { c_str_len(expr.data(), shown) };
+            let text = unsafe { c_str_len(expr.data(), shown) }.null_as_empty();
             error = api_error!(
                 kErrorTypeException,
                 "Failed to evaluate expression: '{text}'"
