@@ -12,10 +12,10 @@ compile_commands.json
 .exrc
 .nvim.lua
 
-# Rust build output
-/target
+# Rust build output (any directory level; a nested target-tmp/ once reached a commit)
+target/
 # Alternate CARGO_TARGET_DIRs (the CGU-1 bench builds use one).
-/target-*
+target-*/
 *.log
 
 # Build/deps dir
