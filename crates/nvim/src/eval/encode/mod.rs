@@ -278,7 +278,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `hi` is either
                 // NULL or one past a slot of its hash table.
                 let hi = if hi.is_null() {
-                    unsafe { (*dict).dv_hashtab.ht_array }
+                    unsafe { (*dict).dv_hashtab.slot_ptr() }
                 } else {
                     unsafe { hi.sub(1) }
                 };

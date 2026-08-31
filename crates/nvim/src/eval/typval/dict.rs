@@ -177,9 +177,9 @@ pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
         unsafe { tv_dict_watcher_free(tv_dict_watcher_node_data(w)) };
     }
 
-    unsafe { hash_clear(&raw mut (*d).dv_hashtab) };
     dict.dv_hashtab.ht_locked -= 1;
-    unsafe { hash_init(&raw mut (*d).dv_hashtab) };
+    // SAFETY: the caller's dictionary, now empty of items.
+    hash_reset(unsafe { &mut (*d).dv_hashtab });
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `dict_T` itself.

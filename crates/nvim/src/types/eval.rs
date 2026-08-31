@@ -418,7 +418,7 @@ pub struct lval_T {
     pub ll_newkey: *mut ::core::ffi::c_char,
     pub ll_blob: *mut blob_T,
 }
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct save_v_event_T {
     pub sve_did_save: bool,
     pub sve_hashtab: hashtab_T,

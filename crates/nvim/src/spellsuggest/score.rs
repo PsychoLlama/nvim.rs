@@ -38,7 +38,7 @@
 use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite;
 use crate::cstr;
-use crate::hashtab::{hash_find, hash_removed};
+use crate::hashtab::hash_find;
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
 use crate::memory::xmemcpyz;
@@ -48,7 +48,7 @@ use crate::spellsuggest::{
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
     suginfo_T,
 };
-use crate::types::{MB_MAXCHAR, NUL, hashitem_T, size_t, slang_T, wordcount_T};
+use crate::types::{MB_MAXCHAR, NUL, size_t, slang_T, wordcount_T};
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 
@@ -127,13 +127,11 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
     // the NUL-terminated string just past that key's terminator.
     let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
     buf[len as usize] = 0;
-    let hi: *mut hashitem_T = unsafe { hash_find(&raw const slang.sl_map_hash, buf.as_ptr()) };
-    let key = unsafe { (*hi).hi_key };
-    if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
-        0
-    } else {
-        unsafe { utf_ptr2char(key.add(cstr::bytes_at(key).len() + 1)) }
+    let hi = unsafe { &*hash_find(&raw const slang.sl_map_hash, buf.as_ptr()) };
+    if !hi.is_kept() {
+        return 0;
     }
+    unsafe { utf_ptr2char(hi.hi_key.add(cstr::bytes_at(hi.hi_key).len() + 1)) }
 }
 
 /// Discount the score of a word the dictionary counted as common.
@@ -154,13 +152,11 @@ pub(super) unsafe fn score_wordcount_adj(
     // SAFETY: the caller guarantees a NUL-terminated word; the hash table
     // stores `wordcount_T`s whose key is an inline field at `WC_KEY_OFF`,
     // so stepping back by that offset recovers the record.
-    let hi = unsafe { hash_find(&raw const slang.sl_wordcount, word) };
-    let key = unsafe { (*hi).hi_key };
-    if key.is_null() || core::ptr::eq(key, &raw const hash_removed) {
+    let hi = unsafe { &*hash_find(&raw const slang.sl_wordcount, word) };
+    if !hi.is_kept() {
         return score;
     }
-    let wc = unsafe { key.sub(WC_KEY_OFF) } as *mut wordcount_T;
-    let count = unsafe { (*wc).wc_count } as c_int;
+    let count = unsafe { (*(hi.hi_key.sub(WC_KEY_OFF) as *mut wordcount_T)).wc_count } as c_int;
 
     let bonus = if count < SCORE_THRES2 {
         SCORE_COMMON1

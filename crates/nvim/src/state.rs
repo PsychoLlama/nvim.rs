@@ -36,9 +36,7 @@ use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
-use crate::types::{
-    Direction, NUL, ProcType, VimState, hashitem_T, hashtab_T, save_v_event_T, uint8_t,
-};
+use crate::types::{Direction, NUL, ProcType, VimState, hashtab_T, save_v_event_T, uint8_t};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
@@ -449,18 +447,7 @@ pub unsafe fn may_trigger_modechanged() {
 
     let mut save_v_event = save_v_event_T {
         sve_did_save: false,
-        sve_hashtab: hashtab_T {
-            ht_mask: 0,
-            ht_used: 0,
-            ht_filled: 0,
-            ht_changed: 0,
-            ht_locked: 0,
-            ht_array: ptr::null_mut::<hashitem_T>(),
-            ht_smallarray: [hashitem_T {
-                hi_hash: 0,
-                hi_key: ptr::null_mut::<c_char>(),
-            }; 16],
-        },
+        sve_hashtab: hashtab_T::new(),
     };
     // SAFETY: the editor is initialized; `v_event` is borrowed from
     // `save_v_event`, which outlives the `restore_v_event` that ends it, and

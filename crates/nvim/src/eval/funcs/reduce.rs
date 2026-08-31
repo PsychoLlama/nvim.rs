@@ -12,7 +12,6 @@ use crate::eval::typval::{
     tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
-use crate::hashtab::hash_removed;
 use crate::main::called_emsg;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
@@ -96,23 +95,16 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             if unsafe { tv_dict_len(tv.vval.v_dict) } == 0 {
                 return;
             }
-            let ht = unsafe { &raw mut (*tv.vval.v_dict).dv_hashtab };
-            let mut todo = unsafe { (*ht).ht_used };
-            let mut hi = unsafe { (*ht).ht_array };
-            while todo != 0 {
-                let key = unsafe { (*hi).hi_key };
-                if !key.is_null() && !core::ptr::eq(key, &raw const hash_removed) {
-                    todo -= 1;
-                    let di = unsafe { key.offset(-DI_KEY_OFFSET) } as *mut dictitem_T;
-                    let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
-                    if error {
-                        return;
-                    }
-                    if better(i, n) {
-                        n = i;
-                    }
+            let ht = unsafe { &(*tv.vval.v_dict).dv_hashtab };
+            for hi in ht.items() {
+                let di = unsafe { hi.hi_key.offset(-DI_KEY_OFFSET) } as *mut dictitem_T;
+                let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
+                if error {
+                    return;
                 }
-                hi = unsafe { hi.add(1) };
+                if better(i, n) {
+                    n = i;
+                }
             }
         }
         _ => {

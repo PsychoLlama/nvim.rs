@@ -35,7 +35,7 @@ use crate::eval::typval::{callback_free, tv_dict_add, tv_dict_item_copy};
 use crate::eval::vars::{unref_var_dict, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
-use crate::hashtab::{hash_find, hash_init, hash_remove};
+use crate::hashtab::{hash_find, hash_remove};
 use crate::main::{
     autocmd_busy, curbuf, curtab, curwin, e_auabort, exiting, firstbuf, lastbuf, updating_screen,
 };
@@ -238,7 +238,6 @@ fn clear_buf_vars(buf: Buf) {
         debug_assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
         hash_remove(vars, changedtick_hi);
         vars_clear(vars);
-        hash_init(vars);
     }
 }
 

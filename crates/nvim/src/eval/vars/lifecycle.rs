@@ -197,7 +197,7 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
 pub unsafe fn del_menutrans_vars() {
     let ht = get_globvar_ht();
     // The walk removes entries as it goes, so the table has to be locked
-    // against the rehash that would otherwise move `ht_array`.
+    // against the rehash that would otherwise move the slot array.
     unsafe { hash_lock(ht) };
     for hi in tv_ht_iter(unsafe { &*ht }) {
         if unsafe { cstr::starts_with((*hi).hi_key, b"menutrans_") } {
@@ -338,8 +338,8 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
             unsafe { xfree(v.raw().cast()) };
         }
     }
-    unsafe { hash_clear(ht) };
-    unsafe { hash_init(ht) };
+    // SAFETY: the caller's table, whose items have all been freed.
+    hash_reset(unsafe { &mut *ht });
 }
 
 /// Remove the variable `hi` names from `ht` and free it.

@@ -7,7 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{mem, ptr};
+use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::converter::object_to_vim;
@@ -28,7 +28,7 @@ use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
     Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN, VarLock,
-    event_T, hashtab_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
+    event_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
     kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data, save_v_event_T, typval_T,
     typval_vval_union, uint64_t,
 };
@@ -201,10 +201,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let chan = unsafe { *argv }.cast::<Channel>();
     let event = unsafe { *argv.add(1) }.expose_provenance() as event_T;
 
-    let mut save_v_event = save_v_event_T {
-        sve_did_save: false,
-        sve_hashtab: unsafe { mem::zeroed::<hashtab_T>() },
-    };
+    let mut save_v_event = save_v_event_T::default();
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     let mut arena: Arena = ARENA_EMPTY;
     let retval = unsafe { info_tv((*chan).id, &raw mut arena) };

@@ -34,7 +34,7 @@ use crate::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init
 use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
-use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
+use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::help::{cleanup_help_tags, find_help_tags};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{

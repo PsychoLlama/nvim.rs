@@ -59,10 +59,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
             // Check if this name was already found.
             let hash = unsafe { hash_hash(name.add(pathlen)) };
             let hi = unsafe { hash_lookup(ht, name.add(pathlen), namelen - pathlen, hash) };
-            // HASHITEM_EMPTY().
-            if unsafe { (*hi).hi_key }.is_null()
-                || ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-            {
+            if !unsafe { (*hi).is_kept() } {
                 // Remove the path that was prepended (+1 for the NUL).
                 let into = name.cast::<u8>();
                 unsafe { into.copy_from(name.add(pathlen).cast(), namelen - pathlen + 1) };
@@ -151,8 +148,7 @@ pub(crate) unsafe fn expand_shellcmd(
         ga_data: ptr::null_mut(),
     };
     unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
-    let mut found_ht: hashtab_T = unsafe { core::mem::zeroed() };
-    unsafe { hash_init(&raw mut found_ht) };
+    let mut found_ht = hashtab_T::init();
     let mut s = path;
     loop {
         // Length of the path portion of buf, including trailing slash.
@@ -245,7 +241,6 @@ pub(crate) unsafe fn expand_shellcmd(
     if mustfree {
         unsafe { xfree(path as *mut c_void) };
     }
-    unsafe { hash_clear(&raw mut found_ht) };
 }
 
 /// Call `user_expand_func` to invoke a user defined Vim script function.

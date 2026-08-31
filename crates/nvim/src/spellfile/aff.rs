@@ -38,7 +38,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::charset::skipdigits;
 use crate::fileio::vim_fgets;
-use crate::hashtab::{hash_add, hash_find, hash_init, hash_removed};
+use crate::hashtab::{hash_add, hash_find, hash_init};
 use crate::main::{got_int, p_enc};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
@@ -669,9 +669,7 @@ unsafe fn handle_line(
     if unsafe { cstr::bytes_at(items[0]) == b"COMMON" } {
         for &item in &items[1..] {
             let hi = unsafe { hash_find(&raw mut (*spin).si_commonwords, item) };
-            if unsafe { (*hi).hi_key }.is_null()
-                || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
-            {
+            if !unsafe { (*hi).is_kept() } {
                 let _ = unsafe { hash_add(&raw mut (*spin).si_commonwords, xstrdup(item)) };
             }
         }

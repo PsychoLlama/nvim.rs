@@ -40,9 +40,7 @@ use core::ffi::{CStr, c_char, c_int};
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::fileio::vim_fgets;
-use crate::hashtab::{
-    hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lookup, hash_removed,
-};
+use crate::hashtab::{hash_add_item, hash_find, hash_hash, hash_lookup};
 use crate::main::{got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
@@ -90,8 +88,7 @@ pub(super) unsafe fn spell_read_dic(
         return Err(Failed);
     }
 
-    let mut ht: hashtab_T = unsafe { core::mem::zeroed() };
-    unsafe { hash_init(&raw mut ht) };
+    let mut ht = hashtab_T::init();
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(
         unsafe { &*spin },
@@ -210,9 +207,7 @@ pub(super) unsafe fn spell_read_dic(
         let hash: hash_T = unsafe { hash_hash(dw) };
         let hi: *mut hashitem_T =
             unsafe { hash_lookup(&raw mut ht, dw, cstr::bytes_at(dw).len(), hash) };
-        if unsafe { (*hi).hi_key }.is_null()
-            || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
-        {
+        if !unsafe { (*hi).is_kept() } {
             unsafe { hash_add_item(&raw mut ht, hi, dw, hash) };
         } else {
             // Report every duplicate when 'verbose' is on, otherwise
@@ -301,7 +296,6 @@ pub(super) unsafe fn spell_read_dic(
             non_ascii
         );
     }
-    unsafe { hash_clear(&raw mut ht) };
     unsafe { fclose(fd) };
     retval
 }
@@ -357,9 +351,7 @@ unsafe fn get_pfxlist(
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
             let hi = unsafe { hash_find(&raw mut (*affile).af_pref, key.as_mut_ptr()) };
-            if !unsafe { (*hi).hi_key }.is_null()
-                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-            {
+            if unsafe { (*hi).is_kept() } {
                 // Only prefixes that were actually postponed have an
                 // id; the rest were expanded into the word list.
                 let id = unsafe { (*affheader_T::of_key((*hi).hi_key)).ah_newID };
@@ -393,9 +385,7 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
             let hi = unsafe { hash_find(&raw mut (*affile).af_comp, key.as_mut_ptr()) };
-            if !unsafe { (*hi).hi_key }.is_null()
-                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-            {
+            if unsafe { (*hi).is_kept() } {
                 unsafe {
                     *store_afflist.offset(cnt as isize) =
                         (*compitem_T::of_key((*hi).hi_key)).ci_newID as uint8_t as c_char
@@ -471,17 +461,11 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
     let mut retval = Ok(());
     let wordlen = unsafe { cstr::bytes_at(word) }.len();
 
-    let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut hi = unsafe { (*ht).ht_array };
-    while todo > 0 && retval.is_ok() {
-        if unsafe { (*hi).hi_key }.is_null()
-            || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
-        {
-            hi = unsafe { hi.add(1) };
-            continue;
+    for hi in unsafe { &*ht }.items() {
+        if retval.is_err() {
+            break;
         }
-        todo -= 1;
-        let ah = unsafe { affheader_T::of_key((*hi).hi_key) };
+        let ah = unsafe { affheader_T::of_key(hi.hi_key) };
 
         if (condit & CONDIT_COMB == 0 || unsafe { (*ah).ah_combine } != 0)
             && unsafe { flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag) }
@@ -668,7 +652,6 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                 ae = unsafe { (*ae).ae_next };
             }
         }
-        hi = unsafe { hi.add(1) };
     }
     retval
 }

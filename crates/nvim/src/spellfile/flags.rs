@@ -37,7 +37,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
-use crate::hashtab::{hash_add, hash_clear, hash_find, hash_removed};
+use crate::hashtab::{hash_add, hash_clear, hash_find};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
 use crate::strings::vim_strchr;
@@ -259,9 +259,7 @@ pub(super) unsafe fn process_compflags(
             };
             let hi: *mut hashitem_T =
                 unsafe { hash_find(&raw mut (*aff).af_comp, key.as_mut_ptr()) };
-            let id = if !unsafe { (*hi).hi_key }.is_null()
-                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-            {
+            let id = if unsafe { (*hi).is_kept() } {
                 unsafe { (*compitem_T::of_key((*hi).hi_key)).ci_newID }
             } else {
                 let ci = unsafe { (*spin).si_arena.alloc::<compitem_T>() };
@@ -321,28 +319,21 @@ pub(super) unsafe fn spell_free_aff(aff: *mut afffile_T) {
     // only heap allocations the entries own.
     unsafe { xfree((*aff).af_enc.cast()) };
 
-    for ht in [unsafe { &raw mut (*aff).af_pref }, unsafe {
-        &raw mut (*aff).af_suff
-    }] {
-        let mut todo = unsafe { (*ht).ht_used } as c_int;
-        let mut hi: *mut hashitem_T = unsafe { (*ht).ht_array };
-        while todo > 0 {
-            if !unsafe { (*hi).hi_key }.is_null()
-                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-            {
-                todo -= 1;
-                let ah = unsafe { affheader_T::of_key((*hi).hi_key) };
-                let mut ae = unsafe { (*ah).ah_first };
-                while !ae.is_null() {
-                    unsafe { vim_regfree((*ae).ae_prog) };
-                    ae = unsafe { (*ae).ae_next };
-                }
+    for ht in [unsafe { &(*aff).af_pref }, unsafe { &(*aff).af_suff }] {
+        for hi in ht.items() {
+            let ah = unsafe { affheader_T::of_key(hi.hi_key) };
+            let mut ae = unsafe { (*ah).ah_first };
+            while !ae.is_null() {
+                unsafe { vim_regfree((*ae).ae_prog) };
+                ae = unsafe { (*ae).ae_next };
             }
-            hi = unsafe { hi.add(1) };
         }
     }
 
-    unsafe { hash_clear(&raw mut (*aff).af_pref) };
-    unsafe { hash_clear(&raw mut (*aff).af_suff) };
-    unsafe { hash_clear(&raw mut (*aff).af_comp) };
+    // SAFETY: the caller's affix file, whose three tables are live.
+    unsafe {
+        hash_clear(&mut (*aff).af_pref);
+        hash_clear(&mut (*aff).af_suff);
+        hash_clear(&mut (*aff).af_comp);
+    }
 }

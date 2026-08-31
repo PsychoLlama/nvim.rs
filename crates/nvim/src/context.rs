@@ -26,7 +26,6 @@ use crate::eval::userfunc::func_tbl_get;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::hash_removed;
 use crate::keycodes::K_SPECIAL;
 use crate::memory::{strequal, xrealloc};
 use crate::option::{get_option_value, optval_free, set_option_value};
@@ -37,7 +36,7 @@ use crate::shada::{
 };
 use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, hashitem_T,
+    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock,
     kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair, object, object_data,
     size_t, typval_T, typval_vval_union, uint8_t,
 };
@@ -235,22 +234,9 @@ fn shada_while_restoring() -> OptVal {
 /// # Safety
 /// Main-thread editor call; the function table is live.
 unsafe fn func_names() -> Vec<*const c_char> {
-    let mut names = Vec::new();
-    // SAFETY: `ht_used` bounds how many occupied slots the walk will find,
-    // and the array holds at least that many past the ones it skips.
-    let functbl = func_tbl_get();
-    let mut todo = unsafe { (*functbl).ht_used };
-    let mut hi: *mut hashitem_T = unsafe { (*functbl).ht_array };
-    while todo != 0 {
-        if !unsafe { (*hi).hi_key }.is_null()
-            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-        {
-            todo -= 1;
-            names.push(unsafe { (*hi).hi_key } as *const c_char);
-        }
-        hi = unsafe { hi.offset(1) };
-    }
-    names
+    // SAFETY: the caller's contract -- the function table is live.
+    let functbl = unsafe { &*func_tbl_get() };
+    functbl.items().map(|hi| hi.hi_key.cast_const()).collect()
 }
 
 /// `kv_push` on an API `Array`: grow by doubling from 8 and append, which is

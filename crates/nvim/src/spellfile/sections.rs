@@ -27,7 +27,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use crate::fileio::{get2c, read_string};
 use crate::garray::{ga_grow, ga_init};
-use crate::hashtab::{hash_add_item, hash_hash, hash_init, hash_lookup, hash_removed};
+use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
 use crate::mbyte::{
     mb_charlen, mb_cptr2char_adv, mb_ptr2char_adv, utf_char2bytes, utf_char2len, utf_ptr2len,
 };
@@ -783,7 +783,8 @@ pub(super) unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
     for i in 0..256 {
         unsafe { (*lp).sl_map_array[i] = 0 };
     }
-    unsafe { hash_init(&raw mut (*lp).sl_map_hash) };
+    // SAFETY: the caller's language, whose map table `slang_alloc` set up.
+    hash_reset(unsafe { &mut (*lp).sl_map_hash });
 
     // The first character of a group represents the whole group.
     let mut headc = 0;
@@ -814,9 +815,7 @@ pub(super) unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
         let hash: hash_T = unsafe { hash_hash(b) };
         let hi: *mut hashitem_T =
             unsafe { hash_lookup(&raw mut (*lp).sl_map_hash, b, cstr::bytes_at(b).len(), hash) };
-        if unsafe { (*hi).hi_key }.is_null()
-            || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
-        {
+        if !unsafe { (*hi).is_kept() } {
             unsafe { hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash) };
         } else {
             emsg(gettext(e_duplicate_char_in_map_entry));

@@ -344,9 +344,9 @@ pub struct blobvar_S {
 pub type dict_T = dictvar_S;
 /// A `dict_T`.
 ///
-/// Not `Copy`: it owns its hashtab (itself self-referential), its watcher
-/// queue and a Lua table reference.
-#[derive(Clone)]
+/// Neither `Copy` nor `Clone`: it owns its hashtab -- and through it the
+/// items every key points into -- its watcher queue and a Lua table
+/// reference, none of which a second holder may free.
 pub struct dictvar_S {
     pub dv_lock: VarLock,
     pub dv_scope: ScopeType,
@@ -359,7 +359,8 @@ pub struct dictvar_S {
     pub watchers: QUEUE,
     pub lua_table_ref: LuaRef,
 }
-#[derive(Clone)]
+/// Not `Clone`: it holds `l:` and `a:` by value, and a dictionary owns the
+/// items its hash table indexes.
 pub struct funccall_S {
     pub fc_func: *mut ufunc_T,
     pub fc_linenr: ::core::ffi::c_int,

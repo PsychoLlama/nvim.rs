@@ -26,7 +26,7 @@
 
 use crate::cstr;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init};
-use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_removed};
+use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::highlight_group::HLF_COUNT;
 use crate::main::curwin;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
@@ -282,8 +282,7 @@ pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
     let hash = unsafe { hash_hash(word) };
     let word_len = unsafe { cstr::bytes_at(word) }.len();
     let hi = unsafe { hash_lookup(&raw mut (*su).su_banned, word, word_len, hash) };
-    let key = unsafe { (*hi).hi_key };
-    if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
+    if unsafe { (*hi).is_kept() } {
         return; // already present
     }
     let owned = unsafe { xmemdupz(word as *const c_void, word_len) } as *mut c_char;

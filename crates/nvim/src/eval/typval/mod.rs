@@ -17,7 +17,7 @@ use crate::eval::{
 use crate::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init};
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{
-    hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
+    hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset, hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::main::{

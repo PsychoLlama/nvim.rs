@@ -408,7 +408,7 @@ impl Dict {
     #[inline(always)]
     pub(crate) fn items(self) -> impl Iterator<Item = DictItem> {
         let (mut slot, mut todo) = self.get().map_or((core::ptr::null_mut(), 0), |d| {
-            (d.dv_hashtab.ht_array, d.dv_hashtab.ht_used)
+            (d.dv_hashtab.slot_ptr(), d.dv_hashtab.ht_used)
         });
         core::iter::from_fn(move || {
             while todo != 0 {

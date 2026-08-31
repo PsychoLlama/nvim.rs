@@ -21,8 +21,8 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK,
     OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
-    file_comparison, fromto_T, garray_T, hashitem_T, hashtab_T, regprog_T, size_t, spelltab_T,
-    time_t, vimconv_T,
+    file_comparison, fromto_T, garray_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t,
+    vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -172,7 +172,6 @@ pub struct spellinfo_T {
 /// file as a struct image, none is named by `tools/ffigen/unit-cdefs.h` or
 /// the ABI ledger, and none crosses an `extern` boundary — so none of them
 /// carries `repr(C)`, and the compiler is free to lay them out.
-#[derive(Clone)]
 pub struct afffile_T {
     pub af_enc: *mut ::core::ffi::c_char,
     pub af_flagtype: ::core::ffi::c_int,
@@ -359,18 +358,7 @@ impl spellinfo_T {
             si_nocompoundsugs: 0,
             si_followup: 0,
             si_collapse: 0,
-            si_commonwords: hashtab_T {
-                ht_mask: 0,
-                ht_used: 0,
-                ht_filled: 0,
-                ht_changed: 0,
-                ht_locked: 0,
-                ht_array: ::core::ptr::null_mut(),
-                ht_smallarray: [hashitem_T {
-                    hi_hash: 0,
-                    hi_key: ::core::ptr::null_mut(),
-                }; 16],
-            },
+            si_commonwords: hashtab_T::new(),
             si_sugtime: 0,
             si_rem_accents: 0,
             si_map: NO_GARRAY,

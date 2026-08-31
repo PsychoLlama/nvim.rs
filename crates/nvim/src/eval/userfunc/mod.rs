@@ -187,18 +187,7 @@ pub const E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR: &CStr =
 pub const E_MISSING_HEREDOC_END_MARKER_STR: &CStr = c"E1145: Missing heredoc end marker: %s";
 pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
     c"E1300: Cannot use a partial with dictionary for :defer";
-static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T {
-    ht_mask: 0,
-    ht_used: 0,
-    ht_filled: 0,
-    ht_changed: 0,
-    ht_locked: 0,
-    ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-    ht_smallarray: [hashitem_T {
-        hi_hash: 0,
-        hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    }; 16],
-});
+static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T::new());
 
 /// The arguments of the calls currently in progress, innermost last.
 ///

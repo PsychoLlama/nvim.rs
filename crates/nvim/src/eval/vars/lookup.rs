@@ -87,7 +87,7 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
         }
         done.set(n + 1);
         hi.set(if n == 0 {
-            unsafe { (*ht).ht_array }
+            unsafe { (*ht).slot_ptr() }
         } else {
             unsafe { hi.get().add(1) }
         });

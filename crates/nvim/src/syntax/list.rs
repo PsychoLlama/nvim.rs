@@ -472,22 +472,18 @@ impl KeywordOpts {
 unsafe fn syn_list_keywords(id: c_int, ht: *const hashtab_T, mut did_header: bool) -> bool {
     let mut prev = KeywordOpts::none();
 
-    let mut todo = unsafe { (*ht).ht_used };
-    let mut hi = unsafe { (*ht).ht_array };
-    while todo > 0 && !got_int.get() {
-        if !unsafe { (*hi).is_kept() } {
-            hi = unsafe { hi.offset(1) };
-            continue;
+    // SAFETY: the caller's table, which nothing here mutates.
+    for hi in unsafe { &*ht }.items() {
+        if got_int.get() {
+            break;
         }
-        todo -= 1;
-        let mut kp = unsafe { key_to_entry((*hi).hi_key) };
+        let mut kp = unsafe { key_to_entry(hi.hi_key) };
         while !kp.is_null() && !got_int.get() {
             if unsafe { (*kp).k_syn.id } as c_int == id {
                 did_header = unsafe { put_keyword(kp, id, did_header, &mut prev) };
             }
             kp = unsafe { (*kp).ke_next };
         }
-        hi = unsafe { hi.offset(1) };
     }
     did_header
 }

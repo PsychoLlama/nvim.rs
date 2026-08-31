@@ -53,7 +53,6 @@ use crate::eval::{
 };
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::hash_removed;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
 use crate::main::{
     channels, garbage_collect_at_exit, may_garbage_collect, p_verbose, want_garbage_collect,
@@ -107,8 +106,8 @@ pub unsafe fn get_copy_id() -> c_int {
 ///
 /// # Safety
 /// `hi` must be a live entry of a dictionary's hashtab.
-unsafe fn hi2di(hi: *mut hashitem_T) -> *mut dictitem_T {
-    unsafe { (*hi).hi_key.sub(offset_of!(dictitem_T, di_key)) as *mut dictitem_T }
+unsafe fn hi2di(hi: &hashitem_T) -> *mut dictitem_T {
+    unsafe { hi.hi_key.sub(offset_of!(dictitem_T, di_key)) as *mut dictitem_T }
 }
 
 /// Mark one root's variable, with neither stack: the collector recurses
@@ -449,22 +448,15 @@ pub unsafe fn set_ref_in_ht(
         if !abort {
             // A nested hashtab is pushed onto `ht_stack`, a nested list
             // onto the caller's `list_stack`.
-            let mut todo = unsafe { (*cur_ht).ht_used };
-            let mut hi: *mut hashitem_T = unsafe { (*cur_ht).ht_array };
-            while todo != 0 {
-                if !unsafe { (*hi).hi_key }.is_null()
-                    && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-                {
-                    todo -= 1;
-                    // SAFETY: `hi` is a live entry, so the item its inline
-                    // key belongs to is live too; `ht_stack` is this
-                    // frame's and `list_stack` the caller's.
-                    let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
-                    let stack = &raw mut ht_stack;
-                    // SAFETY: as above.
-                    abort = abort || unsafe { set_ref_in_item(tv, copy_id, stack, list_stack) };
-                }
-                hi = unsafe { hi.add(1) };
+            // SAFETY: the caller's table, or one this walk pushed.
+            for hi in unsafe { &*cur_ht }.items() {
+                // SAFETY: `hi` is a live entry, so the item its inline key
+                // belongs to is live too; `ht_stack` is this frame's and
+                // `list_stack` the caller's.
+                let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
+                let stack = &raw mut ht_stack;
+                // SAFETY: as above.
+                abort = abort || unsafe { set_ref_in_item(tv, copy_id, stack, list_stack) };
             }
         }
         // The stack is drained even while aborting, so nothing leaks.

@@ -427,18 +427,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
 
     let mut save_v_event = save_v_event_T {
         sve_did_save: false,
-        sve_hashtab: hashtab_T {
-            ht_mask: 0,
-            ht_used: 0,
-            ht_filled: 0,
-            ht_changed: 0,
-            ht_locked: 0,
-            ht_array: ::core::ptr::null_mut(),
-            ht_smallarray: [hashitem_T {
-                hi_hash: 0,
-                hi_key: ::core::ptr::null_mut(),
-            }; 16],
-        },
+        sve_hashtab: hashtab_T::new(),
     };
     // SAFETY: `save_v_event` is a writable local that outlives the matching
     // `restore_v_event` below.

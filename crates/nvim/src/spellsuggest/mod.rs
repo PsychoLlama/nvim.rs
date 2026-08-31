@@ -76,7 +76,7 @@ use crate::types::{MAXPATHL, NUL, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
-use core::{mem, ptr};
+use core::ptr;
 
 use crate::highlight_group::HLF_COUNT;
 /// The longest word the spell code handles, and so the size of every word
@@ -258,6 +258,36 @@ pub(crate) struct suginfo_T {
     pub su_sallang: *mut slang_T,
 }
 
+impl suginfo_T {
+    /// An empty one, as `spell_find_suggest` expects to be handed. Replaces
+    /// the zeroed struct the transpiled code started from, which a table that
+    /// owns its slots no longer permits.
+    pub(crate) fn new() -> Self {
+        const NO_GARRAY: garray_T = garray_T {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 0,
+            ga_data: ptr::null_mut(),
+        };
+        Self {
+            su_ga: NO_GARRAY,
+            su_maxcount: 0,
+            su_maxscore: 0,
+            su_sfmaxscore: 0,
+            su_sga: NO_GARRAY,
+            su_badptr: ptr::null_mut(),
+            su_badlen: 0,
+            su_badflags: 0,
+            su_badword: [0; MAXWLEN],
+            su_fbadword: [0; MAXWLEN],
+            su_sal_badword: [0; MAXWLEN],
+            su_banned: hashtab_T::new(),
+            su_sallang: ptr::null_mut(),
+        }
+    }
+}
+
 /// One suggestion.
 #[derive(Copy, Clone)]
 pub(crate) struct suggest_T {
@@ -376,7 +406,7 @@ pub(crate) unsafe fn spell_suggest_list(
 ) {
     // SAFETY: the caller guarantees the pointers; each string built below
     // is sized from the two pieces copied into it.
-    let mut sug: suginfo_T = unsafe { mem::zeroed() };
+    let mut sug = suginfo_T::new();
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
     unsafe { spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive) };
@@ -387,9 +417,8 @@ pub(crate) unsafe fn spell_suggest_list(
         // A suggestion may replace only part of `word`; what it does
         // not replace goes on the end.
         let tail = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
-        let wcopy =
-            unsafe { xmalloc(stp.st_wordlen as usize + cstr::bytes_at(tail).len() as usize + 1) }
-                as *mut c_char;
+        let wcopy = unsafe { xmalloc(stp.st_wordlen as usize + cstr::bytes_at(tail).len() + 1) }
+            as *mut c_char;
         unsafe { strcpy(wcopy, stp.st_word) };
         unsafe { strcpy(wcopy.offset(stp.st_wordlen as isize), tail) };
         unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = wcopy };

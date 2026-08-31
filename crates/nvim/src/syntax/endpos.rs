@@ -562,9 +562,7 @@ unsafe fn match_keyword(
     cur_si: Option<Item>,
 ) -> *mut keyentry_T {
     let hi = unsafe { hash_find(ht, keyword) };
-    if unsafe { (*hi).hi_key }.is_null()
-        || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-    {
+    if !unsafe { (*hi).is_kept() } {
         return ::core::ptr::null_mut();
     }
     // The hash key IS the entry's trailing `keyword[]` array, so the entry

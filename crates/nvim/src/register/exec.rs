@@ -93,18 +93,7 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
 unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
     let mut save_v_event = save_v_event_T {
         sve_did_save: false,
-        sve_hashtab: hashtab_T {
-            ht_mask: 0,
-            ht_used: 0,
-            ht_filled: 0,
-            ht_changed: 0,
-            ht_locked: 0,
-            ht_array: ::core::ptr::null_mut(),
-            ht_smallarray: [hashitem_T {
-                hi_hash: 0,
-                hi_key: ::core::ptr::null_mut(),
-            }; 16],
-        },
+        sve_hashtab: hashtab_T::new(),
     };
     // SAFETY: `save_v_event` is a writable local, which is saved into here
     // and read back by `restore_v_event` at the end.

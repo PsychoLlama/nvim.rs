@@ -254,12 +254,11 @@ pub(crate) unsafe fn var_shada_iter(
     flavour: var_flavour_T,
 ) -> *const c_void {
     let globvarht = get_globvar_ht();
-    let first = unsafe { (*globvarht).ht_array };
-    let count = unsafe { (*globvarht).ht_mask } + 1;
+    let first = unsafe { (*globvarht).slot_ptr() };
+    let count = unsafe { (*globvarht).size() };
     let wanted = |hi: *const hashitem_T| {
-        !unsafe { (*hi).hi_key.is_null() }
-            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-            && unsafe { var_flavour((*hi).hi_key) } & flavour != 0
+        let live = unsafe { (*hi).is_kept() };
+        live && unsafe { var_flavour((*hi).hi_key) } & flavour != 0
     };
 
     unsafe { *name = core::ptr::null() };

@@ -40,7 +40,6 @@ pub struct salitem_T {
     pub sm_oneof_w: *mut ::core::ffi::c_int,
     pub sm_to_w: *mut ::core::ffi::c_int,
 }
-#[derive(Clone)]
 pub struct slang_S {
     pub sl_next: *mut slang_T,
     pub sl_name: *mut ::core::ffi::c_char,

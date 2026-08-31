@@ -9,7 +9,6 @@
 
 use super::*;
 use crate::cstr;
-use crate::hashtab::hash_removed;
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
     kSpecialVarNull,
@@ -351,26 +350,22 @@ impl Field {
 /// `d` must be a live dictionary.
 unsafe fn string_fields(d: *mut dict_T) -> Vec<Field> {
     let mut fields = Vec::new();
-    // SAFETY: the caller's promise; the walk visits `ht_used` live items
-    // and every item's key and value are part of it.
-    let ht = unsafe { &raw mut (*d).dv_hashtab };
-    let mut todo = unsafe { (*ht).ht_used };
-    let mut hi = unsafe { (*ht).ht_array };
-    while todo != 0 {
-        let key = unsafe { (*hi).hi_key };
-        if !key.is_null() && key != (&raw const hash_removed).cast_mut() {
-            todo -= 1;
-            let di = unsafe { key.byte_sub(core::mem::offset_of!(dictitem_T, di_key)) }
-                .cast::<dictitem_T>();
-            let tv = unsafe { &raw mut (*di).di_tv };
-            if unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() } {
-                fields.push(Field {
-                    key: (unsafe { &raw const (*di).di_key }).cast(),
-                    value: unsafe { (*tv).vval.v_string },
-                });
-            }
+    // SAFETY: the caller's promise; every live item's key and value are
+    // part of the dictionary.
+    let ht = unsafe { &(*d).dv_hashtab };
+    for hi in ht.items() {
+        let di = unsafe {
+            hi.hi_key
+                .byte_sub(core::mem::offset_of!(dictitem_T, di_key))
         }
-        hi = unsafe { hi.add(1) };
+        .cast::<dictitem_T>();
+        let tv = unsafe { &raw mut (*di).di_tv };
+        if unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() } {
+            fields.push(Field {
+                key: (unsafe { &raw const (*di).di_key }).cast(),
+                value: unsafe { (*tv).vval.v_string },
+            });
+        }
     }
     fields
 }

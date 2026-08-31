@@ -112,9 +112,9 @@ use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, Callback_data, Direction, EvalFuncData,
     ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T,
-    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashitem_T, hashtab_T, linenr_T,
-    list_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t,
-    typval_T, typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
+    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashtab_T, linenr_T, list_T, optset_T,
+    pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T,
+    typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -290,18 +290,7 @@ pub(crate) const POS_T_INIT: pos_T = pos_T {
 /// A zeroed `save_v_event_T`, which `get_v_event` fills in.
 pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
     sve_did_save: false,
-    sve_hashtab: hashtab_T {
-        ht_mask: 0,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ptr::null_mut(),
-        ht_smallarray: [hashitem_T {
-            hi_hash: 0,
-            hi_key: ptr::null_mut(),
-        }; 16],
-    },
+    sve_hashtab: hashtab_T::new(),
 };
 /// A zeroed `extmark_undo_vec_t`, which is what C's `kv_destroy` leaves.
 pub(crate) const EXTMARK_UNDO_VEC_INIT: extmark_undo_vec_t = extmark_undo_vec_t {

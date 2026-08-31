@@ -33,7 +33,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
+use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc};
@@ -49,7 +49,7 @@ use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, WF_CAPMASK,
     WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sps_flags, suginfo_T,
 };
-use crate::types::{NUL, hashitem_T, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
+use crate::types::{NUL, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -88,7 +88,8 @@ pub(super) unsafe fn suggest_try_soundalike_prep() {
         // SAFETY: `lp` came out of the window's language list, so
         // `lp_slang` is a loaded language -- what both calls here need.
         if unsafe { has_sound_tree(lp.lp_slang) } {
-            unsafe { hash_init(&raw mut (*lp.lp_slang).sl_sounddone) };
+            // SAFETY: as above; `slang_alloc` set the table up.
+            hash_reset(unsafe { &mut (*lp.lp_slang).sl_sounddone });
         }
     }
 }
@@ -141,33 +142,17 @@ pub(super) unsafe fn suggest_try_soundalike_finish() {
         }
 
         // SAFETY: `slang` is a loaded language, so it carries a hash table.
-        let done = unsafe { &raw mut (*slang).sl_sounddone };
-        // SAFETY: `done` is that table, so its header may be read.
-        let mut todo = unsafe { (*done).ht_used } as c_int;
-        // SAFETY: as above; `ht_array` is the table's entry array.
-        let mut hi: *mut hashitem_T = unsafe { (*done).ht_array };
-        while todo > 0 {
-            // SAFETY: `todo` counts the used entries still to be seen and
-            // the array holds at least that many beyond `hi`, so `hi` is
-            // still inside it.
-            let key = unsafe { (*hi).hi_key };
-            if !(key.is_null() || ptr::eq(key, &raw const hash_removed)) {
-                // SAFETY: every key in this table is the inline word of a
-                // `sftword_T` this module allocated, so stepping back by
-                // `SFT_WORD_OFF` recovers that allocation's start.
-                unsafe { xfree(key.sub(SFT_WORD_OFF) as *mut c_void) };
-                todo -= 1;
-            }
-            // SAFETY: as above -- `hi` walks the table's entry array.
-            hi = unsafe { hi.add(1) };
+        let done = unsafe { &mut (*slang).sl_sounddone };
+        for hi in done.items() {
+            // SAFETY: every key in this table is the inline word of a
+            // `sftword_T` this module allocated, so stepping back by
+            // `SFT_WORD_OFF` recovers that allocation's start.
+            unsafe { xfree(hi.hi_key.sub(SFT_WORD_OFF) as *mut c_void) };
         }
 
         // Another region may reuse the table, so leave it empty rather
         // than freed.
-        //
-        // SAFETY: `done` is the language's hash table, now key-free.
-        unsafe { hash_clear(done) };
-        unsafe { hash_init(done) };
+        hash_reset(done);
     }
 }
 
@@ -232,8 +217,7 @@ pub(super) unsafe fn add_sound_suggest(
     let hash = unsafe { hash_hash(goodword) };
     let goodword_len = unsafe { cstr::bytes_at(goodword).len() };
     let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
-    let key = unsafe { (*hi).hi_key };
-    if key.is_null() || ptr::eq(key, &raw const hash_removed) {
+    if !unsafe { (*hi).is_kept() } {
         // SAFETY: the allocation is `SFT_WORD_OFF + goodword_len + 1`
         // bytes, so the record's header and the word after it both fit,
         // and `goodword` really is `goodword_len + 1` bytes with its NUL.
@@ -245,7 +229,7 @@ pub(super) unsafe fn add_sound_suggest(
     } else {
         // SAFETY: the key is the inline word of a `sftword_T` allocated
         // above, so stepping back by `SFT_WORD_OFF` recovers the record.
-        let sft = unsafe { key.sub(SFT_WORD_OFF) } as *mut sftword_T;
+        let sft = unsafe { (*hi).hi_key.sub(SFT_WORD_OFF) } as *mut sftword_T;
         if score >= unsafe { (*sft).sft_score } as c_int {
             return;
         }

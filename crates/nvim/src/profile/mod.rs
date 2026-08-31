@@ -34,7 +34,6 @@ use crate::eval::userfunc::{func_tbl_get, get_current_funccal};
 use crate::eval::vars::set_vim_var_nr;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::hashtab::hash_removed;
 use crate::main::{current_sctx, do_profiling};
 use crate::memory::xcalloc;
 use crate::message::emsg;
@@ -714,23 +713,13 @@ unsafe fn prl_item(si: &scriptitem_T, idx: isize) -> *mut sn_prl_T {
 unsafe fn profiled_functions() -> Vec<*mut ufunc_T> {
     let mut found = Vec::new();
     // SAFETY: the caller's contract. A hash item's key points at the
-    // `uf_name` field of its `ufunc_T`, which is what the offset undoes;
-    // `ht_used` bounds how many occupied slots the walk will find, and the
-    // array is NUL/removed-padded up to that many.
-    let functbl = func_tbl_get();
-    let mut todo = unsafe { (*functbl).ht_used };
-    let mut hi = unsafe { (*functbl).ht_array };
-    while todo > 0 {
-        if !unsafe { (*hi).hi_key }.is_null()
-            && !core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-        {
-            todo -= 1;
-            let fp = unsafe { (*hi).hi_key.offset(-UF_NAME_OFFSET) } as *mut ufunc_T;
-            if unsafe { (*fp).uf_prof_initialized } != 0 {
-                found.push(fp);
-            }
+    // `uf_name` field of its `ufunc_T`, which is what the offset undoes.
+    let functbl = unsafe { &*func_tbl_get() };
+    for hi in functbl.items() {
+        let fp = unsafe { hi.hi_key.offset(-UF_NAME_OFFSET) } as *mut ufunc_T;
+        if unsafe { (*fp).uf_prof_initialized } != 0 {
+            found.push(fp);
         }
-        hi = unsafe { hi.offset(1) };
     }
     found
 }

@@ -159,7 +159,6 @@
 {"path":"neovim::hashtab::hash_add","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_clear_all","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_find","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
-{"path":"neovim::hashtab::hash_init","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_lock","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_remove","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::hashtab::hash_unlock","kind":"fn","file":"crates/nvim/src/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}

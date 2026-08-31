@@ -283,7 +283,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     frame: Frame::Dict {
                         dict,
                         dictp,
-                        hi: d.dv_hashtab.ht_array,
+                        hi: d.dv_hashtab.slot_ptr(),
                         todo: d.dv_hashtab.ht_used,
                     },
                 });
@@ -712,7 +712,7 @@ unsafe fn walk<S: TypvalSink>(
                                 frame: Frame::Dict {
                                     dict,
                                     dictp,
-                                    hi: frame_dict.dv_hashtab.ht_array,
+                                    hi: frame_dict.dv_hashtab.slot_ptr(),
                                     todo: used,
                                 },
                             });

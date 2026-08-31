@@ -49,7 +49,7 @@ unsafe fn free_entry(kp: *mut keyentry_T) {
 pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
     unsafe { hash_lock(ht) };
     let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut hi = unsafe { (*ht).ht_array };
+    let mut hi = unsafe { (*ht).slot_ptr() };
     while todo > 0 {
         if !unsafe { (*hi).is_kept() } {
             hi = unsafe { hi.offset(1) };
@@ -89,7 +89,7 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
 /// Empty a whole keyword table.
 pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
     let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut hi = unsafe { (*ht).ht_array };
+    let mut hi = unsafe { (*ht).slot_ptr() };
     while todo > 0 {
         if unsafe { (*hi).is_kept() } {
             todo -= 1;
@@ -102,8 +102,8 @@ pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
         }
         hi = unsafe { hi.offset(1) };
     }
-    unsafe { hash_clear(ht) };
-    unsafe { hash_init(ht) };
+    // SAFETY: the caller's table.
+    hash_reset(unsafe { &mut *ht });
 }
 
 /// Everything a run of `:syntax keyword` gives every keyword it defines.

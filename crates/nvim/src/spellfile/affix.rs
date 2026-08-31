@@ -26,7 +26,7 @@ use crate::smsg;
 use core::ffi::{c_char, c_int};
 
 use crate::garray::ga_append_via_ptr;
-use crate::hashtab::{hash_add, hash_find, hash_removed};
+use crate::hashtab::{hash_add, hash_find};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
 use crate::os::cshim::snprintf;
@@ -71,9 +71,7 @@ pub(super) unsafe fn handle_affix_header(
     let hi: *mut hashitem_T = unsafe { hash_find(tp, key.as_mut_ptr()) };
     let combines = unsafe { *items[2] } as c_int == b'Y' as c_int;
 
-    if !unsafe { (*hi).hi_key }.is_null()
-        && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-    {
+    if unsafe { (*hi).is_kept() } {
         // A continued block for an affix already defined.
         st.cur_aff = unsafe { affheader_T::of_key((*hi).hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {

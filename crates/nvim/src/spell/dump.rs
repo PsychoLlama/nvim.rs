@@ -32,7 +32,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use crate::buffer::buf_is_empty;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::hashtab::{hash_find, hash_removed};
+use crate::hashtab::hash_find;
 use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted};
 use crate::main::{curbuf, curwin, got_int, p_ic};
 use crate::mbyte::{mb_strnicmp, utf_ptr2char, utfc_ptr2len};
@@ -389,9 +389,7 @@ unsafe fn dump_word(
         if dumpflags & DUMPFLAG_COUNT != 0 {
             // ":spelldump!" wants the word's COMMON count.
             let hi: *mut hashitem_T = unsafe { hash_find(&raw mut (*slang).sl_wordcount, tw) };
-            if !(unsafe { (*hi).hi_key }.is_null()
-                || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed))
-            {
+            if unsafe { (*hi).is_kept() } {
                 let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
                 let (buf, size) = (counted.as_mut_ptr(), IOSIZE as size_t);
                 let fmt = c"%s\t%d".as_ptr();

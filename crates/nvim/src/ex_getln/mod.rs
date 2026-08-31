@@ -148,9 +148,9 @@ use crate::types::{
     OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
     RemapValues, Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T,
     buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
-    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashitem_T,
-    hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T,
-    pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
+    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashtab_T,
+    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T,
+    proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
     time_t, typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
     xp_prefix_T,
 };
@@ -689,18 +689,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
 
 pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
     sve_did_save: false,
-    sve_hashtab: hashtab_T {
-        ht_mask: 0,
-        ht_used: 0,
-        ht_filled: 0,
-        ht_changed: 0,
-        ht_locked: 0,
-        ht_array: ::core::ptr::null_mut::<hashitem_T>(),
-        ht_smallarray: [hashitem_T {
-            hi_hash: 0,
-            hi_key: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }; 16],
-    },
+    sve_hashtab: hashtab_T::new(),
 };
 
 static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);

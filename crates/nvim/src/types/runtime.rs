@@ -61,7 +61,8 @@ pub struct scriptitem_T {
     pub sn_prl_idx: linenr_T,
     pub sn_prl_execed: ::core::ffi::c_int,
 }
-#[derive(Clone)]
+/// Not `Clone`: it holds a script's `s:` scope by value, and a dictionary
+/// owns the items its hash table indexes.
 pub struct scriptvar_T {
     pub sv_var: ScopeDictDictItem,
     pub sv_dict: dict_T,

@@ -621,7 +621,7 @@ impl Iterator for DictIter {
 /// The live-item count is snapshotted before the first step, exactly as the
 /// macro does.  That is what lets a body remove entries as it goes — but only
 /// with the hashtab locked, since an unlocked `hash_remove` may rehash and
-/// invalidate `ht_array` underneath the walk.
+/// invalidate the slot array underneath the walk.
 ///
 /// The borrow is momentary — it reads the two hashtab header fields and is
 /// gone before the first step, so a body may write through the caller's raw
@@ -639,7 +639,7 @@ pub(crate) fn tv_dict_iter(d: &dict_T) -> DictIter {
 #[inline]
 pub(crate) fn tv_ht_iter(ht: &hashtab_T) -> DictIter {
     DictIter {
-        hi: ht.ht_array,
+        hi: ht.slot_ptr(),
         todo: ht.ht_used,
     }
 }

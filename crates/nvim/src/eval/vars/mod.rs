@@ -41,7 +41,7 @@ use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
-    hash_add, hash_clear, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_unlock,
+    hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset, hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
@@ -263,20 +263,9 @@ pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
     unsafe { (*script_item(sid)).sn_vars }
 }
 
-/// A `hashtab_T` before `hash_init`: the shape every zeroed table has, and
-/// what the three `static` ones below start as.
-const EMPTY_HASHTAB: hashtab_T = hashtab_T {
-    ht_mask: 0,
-    ht_used: 0,
-    ht_filled: 0,
-    ht_changed: 0,
-    ht_locked: 0,
-    ht_array: ::core::ptr::null_mut(),
-    ht_smallarray: [hashitem_T {
-        hi_hash: 0,
-        hi_key: ::core::ptr::null_mut(),
-    }; 16],
-};
+/// A `hashtab_T` before `hash_init`: no slots yet, which is what the three
+/// `static` ones below start as.
+const EMPTY_HASHTAB: hashtab_T = hashtab_T::new();
 
 /// A scope dictionary before `init_var_dict`.
 const EMPTY_SCOPE_DICT: dict_T = dict_T {

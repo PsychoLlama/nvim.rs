@@ -35,7 +35,6 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
-use crate::hashtab::hash_removed;
 use crate::main::{
     Columns, Rows, curtab, curwin, firstwin, globaldir, p_shm, p_stal, p_wh, p_wiw, topframe,
 };
@@ -49,7 +48,7 @@ use crate::os::env::home_replace_save;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
     NUL, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T, dictitem_T,
-    frame_T, hashitem_T, int64_t, typval_T, win_T,
+    frame_T, int64_t, typval_T, win_T,
 };
 use crate::window::tabpage_index;
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
@@ -575,18 +574,9 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     // SAFETY: caller contract. The hashtab walk is upstream's: skip the
     // empty and the tombstone slots, and step back from the key to the item
     // it is embedded in.
-    let ht = unsafe { &raw mut (*get_globvar_dict()).dv_hashtab };
-    let mut todo = unsafe { (*ht).ht_used };
-    let mut hi: *mut hashitem_T = unsafe { (*ht).ht_array };
-    while todo != 0 {
-        let key_ptr = unsafe { (*hi).hi_key };
-        let live = !key_ptr.is_null() && key_ptr != (&raw const hash_removed).cast_mut().cast();
-        if !live {
-            hi = unsafe { hi.offset(1) };
-            continue;
-        }
-        todo -= 1;
-        let item = unsafe { key_ptr.byte_sub(DI_KEY_OFFSET) }.cast::<dictitem_T>();
+    let ht = unsafe { &(*get_globvar_dict()).dv_hashtab };
+    for hi in ht.items() {
+        let item = unsafe { hi.hi_key.byte_sub(DI_KEY_OFFSET) }.cast::<dictitem_T>();
         let key = (unsafe { &raw mut (*item).di_key }).cast::<c_char>();
         let kind = unsafe { (*item).di_tv.v_type };
         let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
@@ -611,7 +601,6 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
                 return false;
             }
         }
-        hi = unsafe { hi.offset(1) };
     }
     true
 }

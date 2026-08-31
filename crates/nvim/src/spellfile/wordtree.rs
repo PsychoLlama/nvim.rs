@@ -42,7 +42,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
 use crate::global_cell::GlobalCell;
-use crate::hashtab::{hash_add_item, hash_clear, hash_hash, hash_init, hash_lookup, hash_removed};
+use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::main::{curwin, got_int, msg_col, msg_didout, p_verbose};
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
 use crate::message::{msg_clr_eos, msg_puts, msg_start};
@@ -625,8 +625,7 @@ pub(super) unsafe fn wordtree_compress(
         return;
     }
 
-    let mut ht: hashtab_T = unsafe { mem::zeroed() };
-    unsafe { hash_init(&raw mut ht) };
+    let mut ht = hashtab_T::init();
     let mut tot: c_int = 0;
     let n = unsafe { node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot) };
 
@@ -638,7 +637,6 @@ pub(super) unsafe fn wordtree_compress(
             format_args!("Compressed {name}: {n} of {tot} nodes; {left} ({perc}%) remaining"),
         );
     }
-    unsafe { hash_clear(&raw mut ht) };
 }
 
 /// What share of `total` nodes survived compression, as a percentage, given
@@ -693,9 +691,7 @@ unsafe fn node_compress(
             let key = digest_key(child);
             let hash = unsafe { hash_hash(key) };
             let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
-            if unsafe { (*hi).hi_key }.is_null()
-                || unsafe { (*hi).hi_key } == (&raw const hash_removed).cast_mut().cast()
-            {
+            if !unsafe { (*hi).is_kept() } {
                 unsafe { hash_add_item(ht, hi, key, hash) };
                 continue;
             }

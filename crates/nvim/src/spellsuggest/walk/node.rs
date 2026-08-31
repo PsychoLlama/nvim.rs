@@ -30,7 +30,7 @@
 use crate::ascii::ascii_iswhite;
 use crate::charset::{skiptowhite, skipwhite};
 use crate::cstr;
-use crate::hashtab::{hash_find, hash_removed};
+use crate::hashtab::hash_find;
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xmemcpyz;
@@ -779,6 +779,5 @@ impl Walk {
 unsafe fn was_banned(su: *mut suginfo_T, word: *const c_char) -> bool {
     // SAFETY: the caller guarantees both; a miss returns an empty item
     // rather than null.
-    let key = unsafe { (*hash_find(&raw const (*su).su_banned, word)).hi_key };
-    !(key.is_null() || ptr::eq(key, &raw const hash_removed))
+    unsafe { (*hash_find(&raw const (*su).su_banned, word)).is_kept() }
 }

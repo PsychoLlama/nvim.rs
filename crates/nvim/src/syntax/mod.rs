@@ -34,8 +34,8 @@ use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
-    hash_add_item, hash_clear, hash_find, hash_hash, hash_init, hash_lock, hash_lookup,
-    hash_remove, hash_removed, hash_unlock,
+    hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
+    hash_reset, hash_unlock,
 };
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,

@@ -36,7 +36,6 @@ use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::fileio::{put_bytes, put_time};
-use crate::hashtab::hash_removed;
 use crate::main::e_write;
 use crate::mbyte::utf_char2bytes;
 use crate::message::emsg;
@@ -379,23 +378,15 @@ unsafe fn put_words(w: &mut SplWriter, spin: &spellinfo_T) {
     w.byte(SN_WORDS as c_int);
     w.byte(0);
     for round in 1..=2 {
-        let mut todo = spin.si_commonwords.ht_used;
-        let mut hi = spin.si_commonwords.ht_array;
         let mut len = 0usize;
-        while todo > 0 {
-            if !unsafe { (*hi).hi_key }.is_null()
-                && unsafe { (*hi).hi_key } != (&raw const hash_removed).cast_mut().cast()
-            {
-                // Keys go out with their terminator, so the reader can
-                // split them apart again.
-                let l = unsafe { cstr::bytes_at((*hi).hi_key) }.len() + 1;
-                len += l;
-                if round == 2 {
-                    unsafe { w.payload((*hi).hi_key.cast(), l) };
-                }
-                todo -= 1;
+        for hi in spin.si_commonwords.items() {
+            // Keys go out with their terminator, so the reader can split
+            // them apart again.
+            let l = unsafe { cstr::bytes_at(hi.hi_key) }.len() + 1;
+            len += l;
+            if round == 2 {
+                unsafe { w.payload(hi.hi_key.cast(), l) };
             }
-            hi = unsafe { hi.add(1) };
         }
         if round == 1 {
             w.u32(len);

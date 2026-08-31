@@ -55,7 +55,7 @@ impl FuncTable {
     /// The bucket array, which every walk starts at.
     pub(crate) fn array(self) -> *mut hashitem_T {
         // SAFETY: as `used`.
-        unsafe { (*self.0).ht_array }
+        unsafe { (*self.0).slot_ptr() }
     }
 
     /// The generation counter: every add and remove bumps it, so a walk can

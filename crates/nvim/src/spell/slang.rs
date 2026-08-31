@@ -26,7 +26,7 @@ use crate::allocator::Owned;
 use crate::buffer::alloc_unregistered_buffer;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::hashtab::{
-    hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_removed,
+    hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_reset,
 };
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
@@ -70,7 +70,13 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
     unsafe { ga_init(&raw mut (*lp).sl_repsal, size_of::<fromto_T>() as c_int, 10) };
     unsafe { (*lp).sl_compmax = MAXWLEN as c_int };
     unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
+    // All three tables, not just the one the caller is about to fill: a
+    // `slang_T` reached by reference must be a valid value throughout, and
+    // `slang_clear` empties `sl_map_hash` whether or not a MAP section was
+    // ever read.
     unsafe { hash_init(&raw mut (*lp).sl_wordcount) };
+    unsafe { hash_init(&raw mut (*lp).sl_map_hash) };
+    unsafe { hash_init(&raw mut (*lp).sl_sounddone) };
 
     lp
 }
@@ -142,7 +148,8 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
     unsafe { ga_clear_strings(&raw mut (*lp).sl_comppat) };
 
     unsafe { hash_clear_all(&raw mut (*lp).sl_wordcount, WC_KEY_OFF as u32) };
-    unsafe { hash_init(&raw mut (*lp).sl_wordcount) };
+    // SAFETY: the caller's language.
+    hash_reset(unsafe { &mut (*lp).sl_wordcount });
 
     unsafe { hash_clear_all(&raw mut (*lp).sl_map_hash, 0) };
 
@@ -190,21 +197,24 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
     let hash: hash_T = unsafe { hash_hash(p) };
     let p_len = unsafe { cstr::bytes_at(p) }.len();
     let hi: *mut hashitem_T = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
-    if unsafe { (*hi).hi_key }.is_null()
-        || core::ptr::eq(unsafe { (*hi).hi_key }, &raw const hash_removed)
-    {
+    if !unsafe { (*hi).is_kept() } {
         let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut wordcount_T;
-        let key = unsafe { &raw mut (*wc).wc_word } as *mut c_char;
+        let key = unsafe { &raw mut (*wc).wc_word }.cast::<c_char>();
         let into = key.cast::<u8>();
         unsafe { into.copy_from_nonoverlapping(p.cast(), p_len + 1) };
         unsafe { (*wc).wc_count = count as uint16_t };
         unsafe { hash_add_item(&raw mut (*lp).sl_wordcount, hi, key, hash) };
     } else {
         let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
-        unsafe { (*wc).wc_count = (*wc).wc_count.wrapping_add(count as uint16_t) };
-        if (unsafe { (*wc).wc_count } as c_int) < count as c_int {
-            unsafe { (*wc).wc_count = MAXWORDCOUNT as uint16_t };
-        }
+        // The C adds and then checks for the wrap, which is a saturate
+        // spelled the long way round.
+        let total = unsafe { (*wc).wc_count }.wrapping_add(count as uint16_t);
+        let capped = if (total as c_int) < count as c_int {
+            MAXWORDCOUNT as uint16_t
+        } else {
+            total
+        };
+        unsafe { (*wc).wc_count = capped };
     }
 }
 

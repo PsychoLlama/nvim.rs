@@ -41,7 +41,6 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
-use crate::hashtab::hash_init;
 use crate::main::{called_emsg, current_sctx, did_emsg};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::was_set_insecurely;
@@ -95,30 +94,17 @@ const UNSET_GA: garray_T = garray_T {
 pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
     // SAFETY: `v:event` is a live dictionary from startup to exit.
     let v_event = unsafe { get_vim_var_dict(Vv::Event) };
-    // Neither pointee may be reached through a `Live`: both hold a
-    // `hashtab_T`, which points at its own inline array, and `DerefMut`
-    // borrows the whole struct — see `winlayer::live`'s note. Their fields
-    // are named by address instead.
     // SAFETY: the caller's promise about `sve`, and `v_event` as above.
-    let saved: *mut hashtab_T = unsafe { &raw mut (*sve).sve_hashtab };
-    // SAFETY: as above.
-    let live: *mut hashtab_T = unsafe { &raw mut (*v_event).dv_hashtab };
-    // SAFETY: as above.
-    let did_save = unsafe { (*live).ht_used } > 0 as size_t;
-    // SAFETY: as above.
+    let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
+    let did_save = live.ht_used > 0 as size_t;
+    // SAFETY: the caller's promise about `sve`.
     unsafe { (*sve).sve_did_save = did_save };
     if did_save {
-        // A hashtab that has not outgrown its inline array holds
-        // `ht_array` pointing *into itself*, so this is a move and not
-        // a copy: the bytes go to `sve` and `hash_init` immediately
-        // makes the source a fresh empty table. `restore_v_event` puts
-        // them back at the address they came from, which is what makes
-        // the self-reference valid again.
-        // SAFETY: both name a whole `hashtab_T`, and the move is the one
-        // the comment above describes.
-        unsafe { saved.write(live.read()) };
-        // SAFETY: `live` is `v:event`'s own hashtab.
-        unsafe { hash_init(live) };
+        // A plain move: the table owns its slots, so what the surrounding
+        // autocommand put in `v:event` travels to `sve` intact and
+        // `v:event` starts the inner one empty. `restore_v_event` moves it
+        // back.
+        *saved = core::mem::replace(live, hashtab_T::init());
     }
     v_event
 }
@@ -130,19 +116,15 @@ pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut dict_T {
 pub unsafe fn restore_v_event(v_event: *mut dict_T, sve: *mut save_v_event_T) {
     // SAFETY: the caller's promise -- the pair `get_v_event` produced.
     unsafe { tv_dict_free_contents(v_event) };
-    // Named by address, not through a `Live`: as [`get_v_event`].
-    // SAFETY: as above.
-    let saved: *mut hashtab_T = unsafe { &raw mut (*sve).sve_hashtab };
-    // SAFETY: as above.
-    let live: *mut hashtab_T = unsafe { &raw mut (*v_event).dv_hashtab };
+    // `tv_dict_free_contents` already left `v:event` with a fresh empty
+    // table, so the not-saved case has nothing left to do.
     // SAFETY: as above.
     if unsafe { (*sve).sve_did_save } {
-        // The move back, to the address [`get_v_event`] took it from.
-        // SAFETY: both name a whole `hashtab_T`.
-        unsafe { live.write(saved.read()) };
-    } else {
-        // SAFETY: `live` is `v:event`'s own hashtab.
-        unsafe { hash_init(live) };
+        // SAFETY: as above.
+        let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
+        // The move back. `sve` is left with a table that owns nothing,
+        // which is what its `Default` is.
+        *live = core::mem::take(saved);
     }
 }
 

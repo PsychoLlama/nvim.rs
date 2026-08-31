@@ -29,7 +29,6 @@ use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
-use crate::hashtab::hash_init;
 use crate::main::{
     Columns, Rows, cmdmod, cmdwin_type, curbuf, curtab, curwin, diff_need_scrollbind, e_cmdwin,
     first_tabpage, firstwin, lastused_tabpage, lastwin, p_ch, p_tpm, postponed_split_tab, prevwin,
@@ -123,7 +122,6 @@ pub(crate) fn free_tab(tp: TabPage) {
     // variable and `hash_init` puts an empty table back.
     unsafe {
         vars_clear(&raw mut (*vars).dv_hashtab);
-        hash_init(&raw mut (*vars).dv_hashtab);
         unref_var_dict(vars);
     }
     if tp.raw() == lastused_tabpage.get() {

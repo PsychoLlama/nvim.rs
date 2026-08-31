@@ -20,7 +20,6 @@ use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
 use crate::global_cell::{ConstTable, GlobalCell};
-use crate::hashtab::hash_removed;
 use crate::main::{
     curbuf, curwin, no_hlsearch, p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose,
 };

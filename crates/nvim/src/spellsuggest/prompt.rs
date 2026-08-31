@@ -69,7 +69,7 @@ use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
 use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
-use core::{mem, ptr};
+use core::ptr;
 
 /// The escape the redo buffer ends the change-word command with.
 const ESC: c_int = 0x1b;
@@ -135,7 +135,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
     // List at most as many as fit on the screen, or as `'spellsuggest'`
     // allows, whichever is smaller.
     let limit = sps_limit.get().min(Rows.get() - 2);
-    let mut sug: suginfo_T = unsafe { mem::zeroed() };
+    let mut sug = suginfo_T::new();
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
     // SAFETY: `line` is the copy of the cursor line taken above, so the

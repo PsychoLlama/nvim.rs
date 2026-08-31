@@ -482,18 +482,10 @@ pub(crate) unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
 /// # Safety
 /// `d` points at a live dict.
 pub(crate) unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem_T)> {
-    let ht = unsafe { &raw const (*d).dv_hashtab };
+    let ht = unsafe { &(*d).dv_hashtab };
     let mut out = Vec::new();
-    let mut todo = unsafe { (*ht).ht_used };
-    let mut i = 0;
-    while todo > 0 {
-        let hi = unsafe { (*ht).ht_array.add(i) };
-        i += 1;
-        if !unsafe { (*hi).is_kept() } {
-            continue;
-        }
-        todo -= 1;
-        let key = unsafe { (*hi).hi_key };
+    for hi in ht.items() {
+        let key = hi.hi_key;
         let di: *mut dictitem_T = unsafe { key.byte_sub(offset_of!(dictitem_T, di_key)) }.cast();
         out.push((unsafe { CStr::from_ptr(key) }.to_bytes().to_vec(), di));
     }

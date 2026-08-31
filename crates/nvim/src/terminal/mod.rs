@@ -499,8 +499,8 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     if is_autocmd_blocked() {
         return;
     }
-    // SAFETY: a plain save area `get_v_event` fills in, restored below.
-    let mut save_v_event: save_v_event_T = unsafe { ::core::mem::zeroed() };
+    // A plain save area `get_v_event` fills in, restored below.
+    let mut save_v_event = save_v_event_T::default();
     // SAFETY: paired with the `restore_v_event` below.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.
