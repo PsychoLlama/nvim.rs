@@ -327,9 +327,7 @@ unsafe fn create_environment(
             vval: typval_vval_union { v_number: 0 },
         };
         let out = &raw mut inherited;
-        let row = EvalFuncData {
-            null: ptr::null_mut(),
-        };
+        let row = EvalFuncData::None;
         // SAFETY: `f_environ` reads no arguments and fills `inherited`.
         unsafe { f_environ(ptr::null_mut(), out, row) };
         unsafe { tv_dict_extend(env, inherited.dict_or_null(), c"force".as_ptr()) };

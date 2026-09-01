@@ -152,9 +152,7 @@ const BLANK: EvalFuncDef = EvalFuncDef {
     base_arg: BASE_NONE,
     fast: false,
     func: None,
-    data: EvalFuncData {
-        null: ptr::null_mut(),
-    },
+    data: EvalFuncData::None,
 };
 
 /// A builtin with a function of its own.
@@ -192,7 +190,7 @@ const fn fast(
 /// A libm operation on one Float argument.
 const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
     EvalFuncDef {
-        data: EvalFuncData { float_func: op },
+        data: EvalFuncData::Float(op),
         ..builtin(name, 1, 1, 1, Some(float_op_wrapper))
     }
 }
@@ -200,11 +198,11 @@ const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
 /// An API method, called through its row of the RPC handler table.
 const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
     EvalFuncDef {
-        data: EvalFuncData {
-            api_handler: (&raw const method_handlers)
+        data: EvalFuncData::Api(
+            (&raw const method_handlers)
                 .cast::<MsgpackRpcRequestHandler>()
                 .wrapping_add(row),
-        },
+        ),
         ..builtin(name, argc, argc, BASE_NONE, Some(api_wrapper))
     }
 }

@@ -431,8 +431,10 @@ pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fpt
     let mut f: float_T = 0.0;
     unsafe { (*rettv).v_type = VAR_FLOAT };
     let value = if unsafe { tv_get_float_chk(argvars, &raw mut f) } {
-        let op = unsafe { fptr.float_func }.expect("non-null function pointer");
-        op(f)
+        let EvalFuncData::Float(op) = fptr else {
+            unreachable!("a float builtin's row carries its operation")
+        };
+        op.expect("non-null function pointer")(f)
     } else {
         0.0
     };
@@ -448,7 +450,10 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
     if check_secure() {
         return;
     }
-    let handler: MsgpackRpcRequestHandler = unsafe { *fptr.api_handler };
+    let EvalFuncData::Api(row) = fptr else {
+        unreachable!("an API builtin's row carries its handler")
+    };
+    let handler: MsgpackRpcRequestHandler = unsafe { *row };
 
     let mut items = [Object {
         type_0: kObjectTypeNil,

@@ -21,12 +21,18 @@ pub struct AdditionalData {
 /// A one-argument float operation, as `float_op_wrapper` calls it. The
 /// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
 pub type FloatFunc = Option<fn(float_T) -> float_T>;
+/// The payload one row of the builtin-function table carries.
+///
+/// There is no tag beside it: which arm a row holds follows from the row's
+/// `func`, because only the two shared wrappers read one at all.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union EvalFuncData {
-    pub float_func: FloatFunc,
-    pub api_handler: *const MsgpackRpcRequestHandler,
-    pub null: *mut ::core::ffi::c_void,
+pub enum EvalFuncData {
+    /// The builtin has a body of its own and carries nothing.
+    None,
+    /// A libm operation, for `float_op_wrapper`.
+    Float(FloatFunc),
+    /// A row of the RPC handler table, for `api_wrapper`.
+    Api(*const MsgpackRpcRequestHandler),
 }
 pub type Loop = loop_0;
 #[derive(Copy, Clone)]
