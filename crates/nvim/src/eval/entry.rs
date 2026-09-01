@@ -246,7 +246,7 @@ pub unsafe fn eval_expr_valid_arg(tv: *const typval_T) -> bool {
     }
     // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
     // a non-null one is NUL-terminated.
-    let s = unsafe { tv.vval.v_string };
+    let s = tv.string_or_null();
     !s.is_null() && unsafe { *s } as c_int != NUL
 }
 
@@ -262,7 +262,7 @@ pub(crate) unsafe fn eval_expr_partial(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so `v_partial` is
     // the union's live member.
-    let partial = unsafe { (*expr).vval.v_partial };
+    let partial = unsafe { (*expr).partial_or_null() };
     if partial.is_null() {
         return Err(Failed);
     }
@@ -293,7 +293,7 @@ pub(crate) unsafe fn eval_expr_func(
     // member, and `buf` outlives the string rendered into it.
     let expr_tv = unsafe { Tv::new(expr.cast_mut()) };
     let s: *const c_char = if expr_tv.v_type == VAR_FUNC {
-        unsafe { expr_tv.vval.v_string as *const c_char }
+        expr_tv.func_name_or_null() as *const c_char
     } else {
         unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) }
     };
@@ -437,7 +437,7 @@ pub(crate) unsafe fn typval2string(tv: *mut typval_T, join_list: bool) -> *mut c
         // SAFETY: `ga` is this frame's.
         unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
         // SAFETY: as above.
-        let l = unsafe { value.vval.v_list };
+        let l = value.list_or_null();
         if !l.is_null() {
             // SAFETY: `l` is the typval's live List.
             let _ = unsafe { tv_list_join(&raw mut ga, l, c"\n".as_ptr()) };
@@ -673,7 +673,7 @@ pub unsafe fn call_func_retlist(
         clear_local(&mut rettv);
         return null_mut();
     }
-    unsafe { rettv.vval.v_list as *mut c_void }
+    rettv.list_or_null() as *mut c_void
 }
 
 /// Run 'foldexpr' for the window's current line. `cp` comes back holding
@@ -703,13 +703,13 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
         let mut retval: varnumber_T = 0;
         if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) }.is_ok() {
             if tv.v_type == VAR_NUMBER {
-                retval = unsafe { tv.vval.v_number };
-            } else if tv.v_type != VAR_STRING || unsafe { tv.vval.v_string }.is_null() {
+                retval = tv.number_or_zero();
+            } else if tv.v_type != VAR_STRING || tv.string_or_null().is_null() {
                 retval = 0;
             } else {
                 // SAFETY: `VAR_STRING` says `v_string` is the live member,
                 // and a non-null one is NUL-terminated.
-                let mut s = unsafe { tv.vval.v_string };
+                let mut s = tv.string_or_null();
                 let first = unsafe { *s };
                 // A leading non-digit that is not a minus sign is the
                 // fold marker; the rest is the level.
@@ -825,9 +825,7 @@ pub unsafe fn typval_tostring(arg: *mut typval_T, quotes: bool) -> *mut c_char {
     // SAFETY: the caller's promise -- a non-null typval outlives the call.
     let value = unsafe { Tv::new(arg) };
     if !quotes && value.v_type == VAR_STRING {
-        // SAFETY: `VAR_STRING` says `v_string` is the union's live member,
-        // and a non-null one is NUL-terminated.
-        let s = unsafe { value.vval.v_string };
+        let s = value.string_or_null();
         let s = if s.is_null() {
             c"".as_ptr()
         } else {

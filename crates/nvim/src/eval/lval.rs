@@ -152,14 +152,14 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // A null Dict is an empty Dict; allocate one now.
     // SAFETY: as above.
-    if unsafe { container.vval.v_dict }.is_null() {
+    if container.dict_or_null().is_null() {
         // SAFETY: `tv_dict_alloc` never answers NULL.
         container.vval.v_dict = unsafe { tv_dict_alloc() };
         // SAFETY: the typval now holds the reference this takes.
-        unsafe { (*container.vval.v_dict).dv_refcount.retain() };
+        unsafe { (*container.dict_or_null()).dv_refcount.retain() };
     }
     // SAFETY: as above.
-    lp.ll_dict = unsafe { container.vval.v_dict };
+    lp.ll_dict = container.dict_or_null();
     // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
     lp.ll_di = unsafe { tv_dict_find(lp.ll_dict, key, len as ptrdiff_t) };
     // The one field this needs, read through the pointer.
@@ -277,7 +277,7 @@ pub(crate) unsafe fn get_lval_blob(
     // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
     let mut lp = unsafe { Lv::new(lp) };
     // SAFETY: as above.
-    let bloblen = unsafe { tv_blob_len(Tv::new(lp.ll_tv).vval.v_blob) };
+    let bloblen = unsafe { tv_blob_len(Tv::new(lp.ll_tv).blob_or_null()) };
     lp.ll_n1 = if empty1 {
         0
     } else {
@@ -295,7 +295,7 @@ pub(crate) unsafe fn get_lval_blob(
         unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
-    lp.ll_blob = unsafe { Tv::new(lp.ll_tv).vval.v_blob };
+    lp.ll_blob = unsafe { Tv::new(lp.ll_tv).blob_or_null() };
     lp.ll_tv = null_mut();
     Ok(())
 }
@@ -338,7 +338,7 @@ pub(crate) unsafe fn get_lval_list(
     unsafe {
         *n1 = first;
         (*rec).ll_dict = null_mut::<dict_T>();
-        (*rec).ll_list = Tv::new((*rec).ll_tv).vval.v_list;
+        (*rec).ll_list = Tv::new((*rec).ll_tv).list_or_null();
     };
     // SAFETY: `ll_list` is the typval's List and `n1` is `lp`'s own field.
     let (list, li) = unsafe {
@@ -430,9 +430,9 @@ pub(crate) unsafe fn get_lval_subscript(
             }
 
             // A null List or Blob works like an empty one; allocate now.
-            if container.v_type == VAR_LIST && unsafe { container.vval.v_list }.is_null() {
+            if container.v_type == VAR_LIST && container.list_or_null().is_null() {
                 unsafe { tv_list_alloc_ret(lp.ll_tv, kListLenUnknown as ptrdiff_t) };
-            } else if container.v_type == VAR_BLOB && unsafe { container.vval.v_blob }.is_null() {
+            } else if container.v_type == VAR_BLOB && container.blob_or_null().is_null() {
                 unsafe { tv_blob_alloc_ret(lp.ll_tv) };
             }
 
@@ -490,9 +490,9 @@ pub(crate) unsafe fn get_lval_subscript(
                     // SAFETY: `rettv` is non-null here; `v_type` names the member read.
                     let sliceable = rettv.is_null()
                         || (unsafe { (*rettv).v_type } == VAR_LIST
-                            && !unsafe { (*rettv).vval.v_list }.is_null())
+                            && !unsafe { (*rettv).list_or_null() }.is_null())
                         || (unsafe { (*rettv).v_type } == VAR_BLOB
-                            && !unsafe { (*rettv).vval.v_blob }.is_null());
+                            && !unsafe { (*rettv).blob_or_null() }.is_null());
                     if !sliceable {
                         if !quiet {
                             emsg_static(c"E709: [:] requires a List or Blob value");
@@ -737,7 +737,7 @@ pub unsafe fn set_var_lval(
         target.v_lock
     } else {
         // SAFETY: as above -- the Dict the key is being added to.
-        unsafe { (*target.vval.v_dict).dv_lock }
+        unsafe { (*target.dict_or_null()).dv_lock }
     };
     if unsafe { value_check_lock(lock, lp.ll_name, TV_CSTRING as size_t) } {
         return;
@@ -760,8 +760,7 @@ pub unsafe fn set_var_lval(
             emsg_static(e_listreq);
             return;
         }
-        // SAFETY: `VAR_LIST` says `v_list` is live; `ll_list` is the target.
-        let src = unsafe { value.vval.v_list };
+        let src = value.list_or_null();
         let (list, n1, n2) = (lp.ll_list, lp.ll_n1, lp.ll_n2);
         let (empty2, name) = (lp.ll_empty2, lp.ll_name);
         // SAFETY: as above.
@@ -804,7 +803,7 @@ pub unsafe fn set_var_lval(
                 return;
             }
             // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
-            let target = unsafe { Tv::new(lp.ll_tv).vval.v_dict };
+            let target = unsafe { Tv::new(lp.ll_tv).dict_or_null() };
             if unsafe { tv_dict_wrong_func_name(target, rettv, lp.ll_newkey) } != 0 {
                 return;
             }

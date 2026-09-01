@@ -694,7 +694,7 @@ pub(crate) unsafe fn eval_interp_string(
         }
         if evaluate {
             // SAFETY: the piece just parsed is a String typval.
-            unsafe { ga_concat(&raw mut ga, tv.vval.v_string) };
+            unsafe { ga_concat(&raw mut ga, tv.string_or_null()) };
             unsafe { tv_clear(two) };
         }
         if cur.byte() != b'{' {

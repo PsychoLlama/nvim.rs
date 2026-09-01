@@ -282,7 +282,7 @@ pub unsafe fn call_user_func(
                     let tv = unsafe { Tv::new(argvars.offset(i as isize)) };
                     if tv.v_type == VAR_NUMBER {
                         // SAFETY: the tag says the union holds a Number.
-                        unsafe { msg_outnum(tv.vval.v_number as c_int) };
+                        unsafe { msg_outnum(tv.number_or_zero() as c_int) };
                     } else {
                         // Do not want errors such as E724 here.
                         let tofree = {
@@ -397,7 +397,7 @@ pub unsafe fn call_user_func(
                 smsg!(0, "{name} aborted");
             } else if ret.v_type == VAR_NUMBER {
                 // SAFETY: the tag says the union holds a Number.
-                let n = unsafe { ret.vval.v_number };
+                let n = ret.number_or_zero();
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let name = unsafe { c_str(name) };
                 smsg!(0, "{name} returning #{}", n);

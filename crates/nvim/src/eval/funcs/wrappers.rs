@@ -393,10 +393,10 @@ pub(crate) unsafe fn non_zero_arg(argvars: *mut typval_T) -> bool {
     // type tag that names it.
     let tv = unsafe { &*argvars };
     match tv.v_type {
-        VAR_NUMBER => (unsafe { tv.vval.v_number }) != 0,
-        VAR_BOOL => (unsafe { tv.vval.v_bool }) == kBoolVarTrue,
+        VAR_NUMBER => tv.number_or_zero() != 0,
+        VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
         VAR_STRING => {
-            !unsafe { tv.vval.v_string }.is_null() && unsafe { *tv.vval.v_string } as c_int != NUL
+            !tv.string_or_null().is_null() && unsafe { *tv.string_or_null() } as c_int != NUL
         }
         _ => false,
     }
@@ -410,8 +410,8 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
     match unsafe { (*tv).v_type } {
-        VAR_FLOAT => unsafe { *ret_f = (*tv).vval.v_float },
-        VAR_NUMBER => unsafe { *ret_f = (*tv).vval.v_number as float_T },
+        VAR_FLOAT => unsafe { *ret_f = (*tv).float_or_zero() },
+        VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as float_T },
         _ => {
             let msg = c"E808: Number or Float required";
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -497,13 +497,13 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     if unsafe { (*tv).v_type } == VAR_NUMBER {
-        return find_buf(unsafe { (*tv).vval.v_number } as c_int)
+        return find_buf(unsafe { (*tv).number_or_zero() } as c_int)
             .map_or(ptr::null_mut(), |mut b| b.raw());
     }
     if unsafe { (*tv).v_type } != VAR_STRING {
         return ptr::null_mut();
     }
-    let name = unsafe { (*tv).vval.v_string };
+    let name = unsafe { (*tv).string_or_null() };
     // The empty string is the current buffer, `$` the last one.
     if name.is_null() || unsafe { *name } as c_int == NUL {
         return curbuf.get();

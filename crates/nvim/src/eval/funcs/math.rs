@@ -25,9 +25,7 @@ pub unsafe fn f_abs(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_FLOAT {
         rettv.v_type = VAR_FLOAT;
-        // SAFETY: the tag says the union holds a float. This is what
-        // `float_op_wrapper` does for the `fabs` row.
-        rettv.vval.v_float = unsafe { args.get(0).vval.v_float }.abs();
+        rettv.vval.v_float = args.get(0).float_or_zero().abs();
         return;
     }
     let mut error = false;
@@ -195,7 +193,7 @@ pub unsafe fn f_float2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// the return value left as it was, which is 0.
 pub unsafe fn f_isinf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    if let Some(f) = as_float(args, 0)
+    if let Some(f) = args.get(0).as_float()
         && f.is_infinite()
     {
         rettv.vval.v_number = if f > 0.0 { 1 } else { -1 };
@@ -205,19 +203,7 @@ pub unsafe fn f_isinf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// `isnan({expr})`.
 pub unsafe fn f_isnan(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = as_float(args, 0).is_some_and(c_double::is_nan) as varnumber_T;
-}
-
-/// Argument `i` if it is a Float. Unlike [`float_arg`] this neither coerces
-/// a Number nor reports an error — `isinf`/`isnan` answer for every type.
-fn as_float(args: Args<'_>, i: usize) -> Option<float_T> {
-    let tv = args.get(i);
-    match tv.v_type {
-        // SAFETY: the tag says the union holds a float. The read has to stay
-        // inside the arm: `then_some` would perform it eagerly.
-        VAR_FLOAT => Some(unsafe { tv.vval.v_float }),
-        _ => None,
-    }
+    rettv.vval.v_number = args.get(0).as_float().is_some_and(c_double::is_nan) as varnumber_T;
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the
@@ -297,10 +283,10 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         };
         // SAFETY throughout: `seed_list` proved all four items are live Numbers.
         let mut state = [
-            unsafe { (*seed[0]).vval.v_number } as u32,
-            unsafe { (*seed[1]).vval.v_number } as u32,
-            unsafe { (*seed[2]).vval.v_number } as u32,
-            unsafe { (*seed[3]).vval.v_number } as u32,
+            unsafe { (*seed[0]).number_or_zero() } as u32,
+            unsafe { (*seed[1]).number_or_zero() } as u32,
+            unsafe { (*seed[2]).number_or_zero() } as u32,
+            unsafe { (*seed[3]).number_or_zero() } as u32,
         ];
         let result = xoshiro128starstar(&mut state);
         for (item, word) in seed.iter().zip(state) {
@@ -320,7 +306,7 @@ fn seed_list(tv: &typval_T) -> Option<[*mut typval_T; 4]> {
     }
     // SAFETY: the tag says the union holds a list pointer, which may be
     // null for an empty list literal; `tv_list_len` answers 0 for null.
-    let l = unsafe { tv.vval.v_list };
+    let l = tv.list_or_null();
     // SAFETY: `l` is a list pointer or null.
     if unsafe { tv_list_len(l) } != 4 {
         return None;
@@ -358,7 +344,7 @@ pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     };
     for _ in 0..4 {
         // SAFETY: the list was just allocated into `rettv`.
-        unsafe { tv_list_append_number(rettv.vval.v_list, splitmix32(&mut x) as varnumber_T) };
+        unsafe { tv_list_append_number(rettv.list_or_null(), splitmix32(&mut x) as varnumber_T) };
     }
 }
 
@@ -437,9 +423,12 @@ pub unsafe fn f_str2float(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
         p = unsafe { skipwhite(p.add(1)) };
     }
+    // The tag goes on before the value is read back: `float_or_zero` answers
+    // for the tag, and upstream's trailing assignment left a window where it
+    // did not say `VAR_FLOAT` yet.
+    rettv.v_type = VAR_FLOAT;
     unsafe { string2float(p, &raw mut rettv.vval.v_float) };
     if negate {
-        rettv.vval.v_float = -unsafe { rettv.vval.v_float };
+        rettv.vval.v_float = -rettv.float_or_zero();
     }
-    rettv.v_type = VAR_FLOAT;
 }

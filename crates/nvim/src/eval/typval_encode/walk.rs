@@ -62,7 +62,7 @@ pub(crate) unsafe fn tv_strlen(tv: *const typval_T) -> size_t {
     if val.string_or_null().is_null() {
         0
     } else {
-        unsafe { cstr::bytes_at((*tv).vval.v_string) }.len()
+        unsafe { cstr::bytes_at((*tv).string_or_null()) }.len()
     }
 }
 
@@ -172,17 +172,17 @@ unsafe fn convert_one_value<S: TypvalSink>(
     let val = unsafe { Tv::new(tv) };
     match val.v_type {
         VAR_STRING => {
-            item_hook!(unsafe { sink.conv_string(tv, (*tv).vval.v_string, tv_strlen(tv)) });
+            item_hook!(unsafe { sink.conv_string(tv, (*tv).string_or_null(), tv_strlen(tv)) });
         }
-        VAR_NUMBER => unsafe { sink.conv_number(tv, (*tv).vval.v_number) },
-        VAR_FLOAT => item_hook!(unsafe { sink.conv_float(tv, (*tv).vval.v_float) }),
+        VAR_NUMBER => unsafe { sink.conv_number(tv, (*tv).number_or_zero()) },
+        VAR_FLOAT => item_hook!(unsafe { sink.conv_float(tv, (*tv).float_or_zero()) }),
         VAR_BLOB => {
             let blob = val.blob_or_null();
             unsafe { sink.conv_blob(tv, blob, tv_blob_len(blob)) };
         }
         VAR_FUNC => {
             let path = ConvPath { stack, objname };
-            item_hook!(unsafe { sink.conv_func_start(tv, (*tv).vval.v_string, c"", &path) });
+            item_hook!(unsafe { sink.conv_func_start(tv, (*tv).func_name_or_null(), c"", &path) });
             unsafe { sink.conv_func_before_args(tv, 0) };
             unsafe { sink.conv_func_before_self(tv, -1) };
             unsafe { sink.conv_func_end(tv, copyid) };
@@ -313,7 +313,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     copyid: c_int,
     objname: *const c_char,
 ) -> Result<Option<Flow>, Refused> {
-    let dict = unsafe { (*tv).vval.v_dict };
+    let dict = unsafe { (*tv).dict_or_null() };
     if unsafe { (*dict).dv_hashtab.ht_used } != 2 {
         return Ok(None);
     }
@@ -325,7 +325,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     if val_di.is_null() {
         return Ok(None);
     }
-    let type_list = unsafe { (*type_di).di_tv.vval.v_list };
+    let type_list = unsafe { (*type_di).di_tv.list_or_null() };
     let found = eval_msgpack_type_lists
         .get()
         .iter()
@@ -346,7 +346,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_NUMBER {
                 return Ok(None);
             }
-            unsafe { sink.conv_bool(tv, val.as_number().unwrap_or(0) != 0) };
+            unsafe { sink.conv_bool(tv, val.number_or_zero() != 0) };
         }
         SpecialKind::Integer => {
             // A list of four integers: a sign (nominally ±1), then the
@@ -393,7 +393,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if val.v_type != VAR_FLOAT {
                 return Ok(None);
             }
-            let f = val.as_float().unwrap_or(0.0);
+            let f = val.float_or_zero();
             return Ok(Some(unsafe { sink.conv_float(tv, f) }));
         }
         SpecialKind::String => {
@@ -455,7 +455,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             while !li.is_null() {
                 let item = li_tv(li);
                 if unsafe { (*item).v_type } != VAR_LIST
-                    || unsafe { tv_list_len((*item).vval.v_list) } != 2
+                    || unsafe { tv_list_len((*item).list_or_null()) } != 2
                 {
                     return Ok(None);
                 }

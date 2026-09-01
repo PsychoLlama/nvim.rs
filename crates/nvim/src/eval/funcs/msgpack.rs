@@ -49,7 +49,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let s: *const c_char = if args.ty(0) == VAR_LIST {
         // SAFETY: the tag says the union holds a List pointer; the two
         // out-parameters are locals.
-        let l = unsafe { args.get(0).vval.v_list };
+        let l = args.get(0).list_or_null();
         let (out_len, out) = (&raw mut len, &raw mut tofree);
         if !unsafe { encode_vim_list_to_buf(l, out_len, out) } {
             semsg!("E474: Failed to convert list to string");
@@ -106,7 +106,7 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // The per-item label the encoder names in its own error messages.
     // One buffer, reused, as the C's 189-byte stack array was.
     let mut label = String::with_capacity(64);
-    let mut li = unsafe { tv_list_first(args.get(0).vval.v_list) };
+    let mut li = unsafe { tv_list_first(args.get(0).list_or_null()) };
     let mut idx: c_int = 0;
     while !li.is_null() {
         label.clear();
@@ -251,8 +251,8 @@ pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     }
     let ret_list = list_alloc_ret(rettv, kListLenMayKnow as isize);
     if args.ty(0) == VAR_LIST {
-        unsafe { msgpackparse_unpack_list(args.get(0).vval.v_list, ret_list) };
+        unsafe { msgpackparse_unpack_list(args.get(0).list_or_null(), ret_list) };
     } else {
-        unsafe { msgpackparse_unpack_blob(args.get(0).vval.v_blob, ret_list) };
+        unsafe { msgpackparse_unpack_blob(args.get(0).blob_or_null(), ret_list) };
     }
 }

@@ -152,7 +152,7 @@ pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let Some(wp) = found else {
         return;
     };
-    unsafe { get_tagstack(wp, rettv.vval.v_dict) };
+    unsafe { get_tagstack(wp, rettv.dict_or_null()) };
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
@@ -166,7 +166,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let Some(wp) = found.filter(|_| check_arg(args, 1, tv_check_for_dict_arg).is_ok()) else {
         return;
     };
-    let d = unsafe { args.get(1).vval.v_dict };
+    let d = args.get(1).dict_or_null();
     if d.is_null() {
         return;
     }

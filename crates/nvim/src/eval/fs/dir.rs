@@ -140,9 +140,7 @@ fn changedir(dir: *mut c_char, scope: CdScope) -> bool {
 /// The String argument `i` holds, raw, because `chdir()` hands the callee
 /// the argument's own storage.
 fn string_of(tv: &typval_T) -> *mut c_char {
-    // SAFETY: only reached under a `VAR_STRING` tag, which is what makes
-    // `v_string` the live arm.
-    unsafe { tv.vval.v_string }
+    tv.string_or_null()
 }
 
 // ---------------------------------------------------------------------
@@ -260,9 +258,7 @@ impl Scope {
 
 /// The Number argument `tv` holds.
 fn number_of(tv: &typval_T) -> varnumber_T {
-    // SAFETY: only reached under a `VAR_NUMBER` tag, which is what makes
-    // `v_number` the live arm.
-    unsafe { tv.vval.v_number }
+    tv.number_or_zero()
 }
 
 // ---------------------------------------------------------------------
@@ -315,7 +311,7 @@ pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     if !changedir(string_of(args.get(0)), scope) {
         // Directory change failed: answer the empty string after all.
         // SAFETY: the answer taken above is nvim's heap, or NULL.
-        unsafe { xfree(rettv.vval.v_string.cast::<c_void>()) };
+        unsafe { xfree(rettv.string_or_null().cast::<c_void>()) };
         rettv.vval.v_string = ptr::null_mut();
     }
 }

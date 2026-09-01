@@ -65,7 +65,7 @@ pub(crate) unsafe fn create_special_dict(
     type_item.di_tv.v_type = VAR_LIST;
     type_item.di_tv.v_lock = VarLock::Unlocked;
     unsafe { (*type_di).di_tv.vval.v_list = msgpack_type_list(type_) };
-    unsafe { tv_list_ref((*type_di).di_tv.vval.v_list) };
+    unsafe { tv_list_ref((*type_di).di_tv.list_or_null()) };
     let _ = unsafe { tv_dict_add(dict, type_di) };
 
     let val_di: *mut dictitem_T =

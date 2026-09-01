@@ -192,7 +192,7 @@ pub(crate) unsafe fn tv_to_optval(
         // is only honest if the string is all '0's and nothing else.
         if !err && tvh.v_type == VAR_STRING && n == 0 {
             // SAFETY: the type tag says the union holds the string arm.
-            let s = unsafe { tvh.vval.v_string };
+            let s = tvh.string_or_null();
             let mut idx = 0;
             while !s.is_null() && unsafe { *s.add(idx) } == b'0' as c_char {
                 idx += 1;

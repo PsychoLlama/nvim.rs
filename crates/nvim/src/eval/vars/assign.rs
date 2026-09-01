@@ -228,7 +228,7 @@ pub unsafe fn ex_let_vars(
     }
     // SAFETY: the type tag says the union holds the List arm, and the list
     // is the caller's for the whole walk below.
-    let l = unsafe { tv.vval.v_list };
+    let l = tv.list_or_null();
     let len = unsafe { tv_list_len(l) };
     if semicolon == 0 && var_count < len {
         emsg_static(c"E687: Less targets than List items");

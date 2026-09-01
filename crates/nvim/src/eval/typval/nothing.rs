@@ -110,7 +110,7 @@ impl TypvalSink for NothingSink {
     }
 
     unsafe fn conv_blob(&mut self, tv: *mut typval_T, _blob: *const blob_T, _len: c_int) {
-        unsafe { tv_blob_unref((*tv).vval.v_blob) };
+        unsafe { tv_blob_unref((*tv).blob_or_null()) };
         unsafe { (*tv).vval.v_blob = ptr::null_mut() };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
@@ -183,7 +183,7 @@ impl TypvalSink for NothingSink {
     }
 
     unsafe fn conv_empty_list(&mut self, tv: *mut typval_T) {
-        unsafe { tv_list_unref((*tv).vval.v_list) };
+        unsafe { tv_list_unref((*tv).list_or_null()) };
         unsafe { (*tv).vval.v_list = ptr::null_mut() };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
@@ -235,7 +235,7 @@ impl TypvalSink for NothingSink {
             // own; `conv_func_end` releases the partial that owns it.
             return;
         }
-        unsafe { tv_list_unref((*tv).vval.v_list) };
+        unsafe { tv_list_unref((*tv).list_or_null()) };
         unsafe { (*tv).vval.v_list = ptr::null_mut() };
     }
 

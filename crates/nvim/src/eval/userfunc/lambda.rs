@@ -265,12 +265,12 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
 
     // SAFETY: the tag says which union member holds the callable, and a
     // partial in it is null or live.
-    let held = unsafe { rv.vval.v_partial };
+    let held = rv.partial_or_null();
     if rv.v_type == VAR_PARTIAL && !held.is_null() && !unsafe { (*held).pt_func }.is_null() {
         fp = unsafe { (*held).pt_func };
     } else {
         let mut fname = if rv.v_type == VAR_FUNC || rv.v_type == VAR_STRING {
-            unsafe { rv.vval.v_string }
+            rv.string_or_func_name()
         } else if held.is_null() {
             ptr::null_mut()
         } else {
@@ -305,13 +305,13 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
     part.pt_auto = true;
     if rv.v_type == VAR_FUNC || rv.v_type == VAR_STRING {
         // Just a function: take over the function name and use selfdict.
-        part.pt_name = unsafe { rv.vval.v_string };
+        part.pt_name = rv.string_or_func_name();
     } else {
         // Partial: copy the function name, use selfdict and copy the
         // arguments.  Neither can be taken over, because the partial may
         // be referenced elsewhere.
         // SAFETY: the tag says the union holds a live partial.
-        let ret_pt = unsafe { Live::new(rv.vval.v_partial) };
+        let ret_pt = unsafe { Live::new(rv.partial_or_null()) };
         if !ret_pt.pt_name.is_null() {
             part.pt_name = unsafe { xstrdup(ret_pt.pt_name) };
             unsafe { func_ref(part.pt_name) };

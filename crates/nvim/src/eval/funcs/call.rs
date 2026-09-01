@@ -77,7 +77,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         return;
     }
     // A null List is v:_null_list, which calls nothing.
-    if unsafe { args.get(1).vval.v_list }.is_null() {
+    if args.get(1).list_or_null().is_null() {
         return;
     }
 
@@ -85,9 +85,9 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // Only the Lua-table arm allocates; the others borrow.
     let mut owned = false;
     let mut func = match args.ty(0) {
-        VAR_FUNC => unsafe { args.get(0).vval.v_string },
+        VAR_FUNC => args.get(0).func_name_or_null(),
         VAR_PARTIAL => {
-            partial = unsafe { args.get(0).vval.v_partial };
+            partial = args.get(0).partial_or_null();
             unsafe { partial_name(partial) }
         }
         _ if unsafe { nlua_is_table_from_lua(args.ptr(0)) } => {
@@ -124,7 +124,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     } else if check_arg(args, 2, tv_check_for_dict_arg).is_err() {
         None
     } else {
-        Some(unsafe { args.get(2).vval.v_dict })
+        Some(args.get(2).dict_or_null())
     };
     if let Some(selfdict) = selfdict {
         let _ = unsafe { func_call(func, args.ptr(1), partial, selfdict, rettv) };
@@ -267,8 +267,8 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
 
     if args.ty(cmd_idx) != VAR_LIST {
         let _ = unsafe { do_cmdline_cmd(arg_string(&mut numbuf, args.get(cmd_idx))) };
-    } else if !unsafe { args.get(cmd_idx).vval.v_list }.is_null() {
-        let list = unsafe { args.get(cmd_idx).vval.v_list };
+    } else if !args.get(cmd_idx).list_or_null().is_null() {
+        let list = args.get(cmd_idx).list_or_null();
         // The List is held across the run: a command may drop the
         // variable holding it.
         unsafe { tv_list_ref(list) };
@@ -363,10 +363,10 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     let mut use_string = false;
     let mut s = match args.ty(0) {
         // function(MyFunc, [arg], dict)
-        VAR_FUNC => unsafe { args.get(0).vval.v_string },
+        VAR_FUNC => args.get(0).func_name_or_null(),
         // function(dict.MyFunc, [arg])
-        VAR_PARTIAL if !unsafe { args.get(0).vval.v_partial }.is_null() => {
-            arg_pt = unsafe { args.get(0).vval.v_partial };
+        VAR_PARTIAL if !args.get(0).partial_or_null().is_null() => {
+            arg_pt = args.get(0).partial_or_null();
             unsafe { partial_name(arg_pt) }
         }
         // function('MyFunc', [arg], dict)
@@ -453,7 +453,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
                 return;
             }
             // v:_null_dict binds nothing.
-            if unsafe { args.get(dict_idx as usize).vval.v_dict }.is_null() {
+            if args.get(dict_idx as usize).dict_or_null().is_null() {
                 dict_idx = 0;
             }
         }
@@ -464,7 +464,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
-            list = unsafe { args.get(arg_idx as usize).vval.v_list };
+            list = args.get(arg_idx as usize).list_or_null();
             if unsafe { tv_list_len(list) } == 0 {
                 arg_idx = 0;
             } else if unsafe { tv_list_len(list) } > MAX_FUNC_ARGS as c_int {
@@ -515,7 +515,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
 
     if dict_idx > 0 {
         // Bound explicitly, so `pt_auto` stays false.
-        unsafe { (*pt).pt_dict = args.get(dict_idx as usize).vval.v_dict };
+        unsafe { (*pt).pt_dict = args.get(dict_idx as usize).dict_or_null() };
         unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
     } else if !arg_pt.is_null() {
         // A dict bound automatically stays bound automatically. This
@@ -580,11 +580,11 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
         return;
     }
-    let libname = unsafe { args.get(0).vval.v_string };
-    let funcname = unsafe { args.get(1).vval.v_string };
+    let libname = args.get(0).string_or_null();
+    let funcname = args.get(1).string_or_null();
     let arg3 = args.get(2);
     let str_in = if arg3.v_type == VAR_STRING {
-        unsafe { arg3.vval.v_string }
+        arg3.string_or_null()
     } else {
         ptr::null_mut()
     };
@@ -592,7 +592,7 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
     // the int-taking prototype, reading the same union as a number.
     // Upstream quirk, preserved.
     let arg = if str_in.is_null() {
-        LibcallArg::Int(unsafe { arg3.vval.v_number } as c_int)
+        LibcallArg::Int(arg3.number_or_zero() as c_int)
     } else {
         LibcallArg::Str(unsafe { CStr::from_ptr(str_in) })
     };

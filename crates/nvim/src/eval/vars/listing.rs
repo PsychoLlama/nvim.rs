@@ -48,7 +48,7 @@ pub unsafe fn list_hashtable_vars(
         }
         if empty
             || unsafe { (*di).di_tv.v_type } != VAR_STRING
-            || !unsafe { (*di).di_tv.vval.v_string }.is_null()
+            || !unsafe { (*di).di_tv.string_or_null() }.is_null()
         {
             unsafe { list_one_var(di, prefix, first) };
         }

@@ -103,7 +103,7 @@ pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let mut argbuf: *mut buf_T = ptr::null_mut();
     let mut filter = Filter::default();
     if args.ty(0) == VAR_DICT {
-        let sel_d = unsafe { args.get(0).vval.v_dict };
+        let sel_d = args.get(0).dict_or_null();
         if !sel_d.is_null() {
             let flag = |key: &CStr| {
                 let di =

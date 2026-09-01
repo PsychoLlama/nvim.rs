@@ -218,8 +218,8 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
     for i in 0..len {
         let key = unsafe { *pairs.add(i * 2) };
         if key.v_type != VAR_STRING
-            || unsafe { key.vval.v_string }.is_null()
-            || unsafe { *key.vval.v_string } == 0
+            || key.string_or_null().is_null()
+            || unsafe { *key.string_or_null() } == 0
         {
             return false;
         }
@@ -230,7 +230,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
     unsafe { *result = typval_T::dict(dict) };
 
     for i in 0..len {
-        let key = unsafe { (*pairs.add(i * 2)).vval.v_string };
+        let key = unsafe { (*pairs.add(i * 2)).string_or_null() };
         let di = unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) };
         if unsafe { tv_dict_add(dict, di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
@@ -252,7 +252,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
 
     // The keys were copied into the items; the originals are ours to free.
     for i in 0..len {
-        unsafe { xfree((*pairs.add(i * 2)).vval.v_string.cast()) };
+        unsafe { xfree((*pairs.add(i * 2)).string_or_null().cast()) };
     }
     true
 }

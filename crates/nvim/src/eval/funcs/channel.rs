@@ -140,10 +140,14 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     }
 
     let mut error = ptr::null::<c_char>();
-    rettv.vval.v_number =
-        unsafe { channel_close(args.get(0).vval.v_number as uint64_t, part, &raw mut error) }
-            as varnumber_T;
-    if unsafe { rettv.vval.v_number } == 0 {
+    rettv.vval.v_number = unsafe {
+        channel_close(
+            args.get(0).number_or_zero() as uint64_t,
+            part,
+            &raw mut error,
+        )
+    } as varnumber_T;
+    if rettv.number_or_zero() == 0 {
         unsafe { emsg_ptr(error) };
     }
 }
@@ -167,7 +171,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let input = if args.ty(1) == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        let b: *const blob_T = unsafe { args.get(1).vval.v_blob };
+        let b: *const blob_T = args.get(1).blob_or_null();
         input_len = unsafe { tv_blob_len(b) } as isize;
         if input_len > 0 {
             unsafe { xmemdup((*b).bv_ga.ga_data, input_len as usize) as *mut c_char }
@@ -184,7 +188,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     let mut error = ptr::null::<c_char>();
-    let id = unsafe { args.get(0).vval.v_number } as uint64_t;
+    let id = args.get(0).number_or_zero() as uint64_t;
     let len = input_len as usize;
     let err = &raw mut error;
     let sent = unsafe { channel_send(id, input, len, true, err) };
@@ -207,7 +211,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     }
     // Channel 0 is the broadcast channel, so zero is allowed here where
     // `rpcrequest()` insists on a real one.
-    if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } < 0 {
+    if args.ty(0) != VAR_NUMBER || args.get(0).number_or_zero() < 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -225,7 +229,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut items = [NIL; MAX_FUNC_ARGS as usize];
     let mut arena: Arena = ARENA_EMPTY;
     let event_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
-    let id = unsafe { args.get(0).vval.v_number } as uint64_t;
+    let id = args.get(0).number_or_zero() as uint64_t;
     let event = arg_string(&mut numbuf, args.get(1));
     let ok = unsafe { rpc_send_event(id, event, event_args) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
@@ -318,7 +322,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_NUMBER || unsafe { args.get(0).vval.v_number } <= 0 {
+    if args.ty(0) != VAR_NUMBER || args.get(0).number_or_zero() <= 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -340,7 +344,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
 
     let mut err = Error::none();
-    let chan_id = unsafe { args.get(0).vval.v_number } as uint64_t;
+    let chan_id = args.get(0).number_or_zero() as uint64_t;
     let method = arg_string(&mut numbuf, args.get(1));
     let mut res_mem: ArenaMem = ptr::null_mut();
     let result = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
@@ -412,7 +416,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     }
 
     if args.ty(0) == VAR_DICT
-        && unsafe { tv_dict_get_bool(args.get(0).vval.v_dict, c"peer".as_ptr(), 0) } != 0
+        && unsafe { tv_dict_get_bool(args.get(0).dict_or_null(), c"peer".as_ptr(), 0) } != 0
     {
         let mut items = [NIL; 1];
         let mut lua_args = ARRAY_DICT_INIT;
@@ -518,9 +522,9 @@ pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
     // v:_null_string stops nothing.
-    if !unsafe { args.get(0).vval.v_string }.is_null() {
+    if !args.get(0).string_or_null().is_null() {
         rettv.vval.v_number =
-            unsafe { server_stop(args.get(0).vval.v_string, false) } as varnumber_T;
+            unsafe { server_stop(args.get(0).string_or_null(), false) } as varnumber_T;
     }
 }
 
@@ -556,7 +560,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     let mut rpc = false;
     let mut on_data = NO_READER;
     if args.ty(2) == VAR_DICT {
-        let opts = unsafe { args.get(2).vval.v_dict };
+        let opts = args.get(2).dict_or_null();
         rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
         if !unsafe { tv_dict_get_callback(opts, c"on_data".as_ptr(), 7, &raw mut on_data.cb) } {
             return;
@@ -590,7 +594,7 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         emsg(gettext(e_invarg));
         return;
     }
-    let opts = unsafe { args.get(0).vval.v_dict };
+    let opts = args.get(0).dict_or_null();
     let mut on_stdin = NO_READER;
     let rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
     if !unsafe { tv_dict_get_callback(opts, c"on_stdin".as_ptr(), 8, &raw mut on_stdin.cb) } {

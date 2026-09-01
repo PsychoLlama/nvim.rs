@@ -110,7 +110,7 @@ pub unsafe fn func_call(
             unsafe { (*partial).pt_argc }
         };
         // SAFETY: the caller's promise -- `args` holds a List or nothing.
-        let items = unsafe { (*args).vval.v_list.as_ref() };
+        let items = unsafe { (*args).list_or_null().as_ref() };
         for item in tv_list_iter(items) {
             if argc == MAX_FUNC_ARGS - bound {
                 emsg(gettext(c"E699: Too many arguments"));

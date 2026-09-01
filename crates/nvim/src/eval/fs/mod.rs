@@ -154,9 +154,7 @@ impl RetList {
 
     /// The List `rettv` already holds.
     pub(crate) fn of(rettv: &typval_T) -> Self {
-        // SAFETY: only reached under a `VAR_LIST` tag, which is what makes
-        // `v_list` the live arm.
-        Self(unsafe { rettv.vval.v_list })
+        Self(rettv.list_or_null())
     }
 
     /// Append a copy of the NUL-terminated `s`.

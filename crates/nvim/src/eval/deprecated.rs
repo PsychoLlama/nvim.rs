@@ -134,7 +134,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut argsl = 0;
     if argv[1].v_type == VAR_LIST {
         // SAFETY: a `VAR_LIST` holds a live list or NULL.
-        args_list = unsafe { argv[1].vval.v_list };
+        args_list = argv[1].list_or_null();
         argsl = unsafe { tv_list_len(args_list) };
         // Assert that all list items are strings.
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
@@ -150,7 +150,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     }
 
     // SAFETY: a `VAR_STRING` holds a NUL-terminated string or NULL.
-    let prog = unsafe { argv[0].vval.v_string };
+    let prog = argv[0].string_or_null();
     if prog.is_null() || unsafe { *prog } == 0 {
         emsg_static(e_api_spawn_failed);
         return;
@@ -224,7 +224,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
     }
 
     // SAFETY: a `VAR_NUMBER` holds its number inline.
-    let id = unsafe { argv[0].vval.v_number } as uint64_t;
+    let id = argv[0].number_or_zero() as uint64_t;
     // If called with a job, stop it; otherwise close the channel.
     // SAFETY: `find_job` only looks the id up.
     if !unsafe { find_job(id, false) }.is_null() {
@@ -287,7 +287,7 @@ pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eva
 
     // SAFETY: `argv[1]` holds a live dictionary, either the caller's or the
     // one allocated above; `f_jobstart` takes the whole argument vector.
-    let dict = unsafe { argv[1].vval.v_dict };
+    let dict = argv[1].dict_or_null();
     // SAFETY: as above -- `dict` is that dictionary.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
     // SAFETY: as above -- the whole argument vector goes to `jobstart()`.

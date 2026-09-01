@@ -59,7 +59,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let src = unsafe { Tv::new(lines) };
     '_cleanup: {
         if src.v_type == VAR_LIST {
-            l = unsafe { src.vval.v_list };
+            l = src.list_or_null();
             if l.is_null() || unsafe { (*l).lv_len } == 0 {
                 break '_cleanup;
             }

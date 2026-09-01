@@ -89,9 +89,9 @@ unsafe fn callable_name(tv: *mut typval_T) -> *mut c_char {
     // SAFETY: the caller's promise -- the tag says which union member holds
     // the callable, and a partial is null or live.
     let name = if unsafe { (*tv).v_type } == VAR_FUNC {
-        unsafe { (*tv).vval.v_string }
+        unsafe { (*tv).func_name_or_null() }
     } else {
-        unsafe { partial_name((*tv).vval.v_partial) }
+        unsafe { partial_name((*tv).partial_or_null()) }
     };
     if !name.is_null() && unsafe { *name } as c_int == NUL {
         return core::ptr::null_mut();
@@ -123,7 +123,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
         if unsafe { (*tv).v_type } == VAR_FUNC {
             core::ptr::null_mut()
         } else {
-            unsafe { (*(*tv).vval.v_partial).pt_dict }
+            unsafe { (*(*tv).partial_or_null()).pt_dict }
         }
     };
     let d1 = dict_of(tv1);
@@ -140,7 +140,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
         if unsafe { (*tv).v_type } == VAR_FUNC {
             0
         } else {
-            unsafe { (*(*tv).vval.v_partial).pt_argc }
+            unsafe { (*(*tv).partial_or_null()).pt_argc }
         }
     };
     let argc = argc_of(tv1);
@@ -156,7 +156,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
     }
     // SAFETY: the count is non-zero, so both unions hold a partial with an
     // argument vector of `argc` values.
-    let (p1, p2) = unsafe { ((*tv1).vval.v_partial, (*tv2).vval.v_partial) };
+    let (p1, p2) = unsafe { ((*tv1).partial_or_null(), (*tv2).partial_or_null()) };
     let (a1, a2) = unsafe { ((*p1).pt_argv, (*p2).pt_argv) };
     (0..argc).all(|i| unsafe { tv_equal(a1.offset(i as isize), a2.offset(i as isize), ic) })
 }
@@ -232,8 +232,8 @@ pub(crate) unsafe fn typval_compare(
     } else if t1 == VAR_BLOB || t2 == VAR_BLOB {
         // SAFETY: `same_type` has held before either closure runs, so the
         // union member each reads is the one the tag names.
-        let same = || unsafe { (*typ1).vval.v_blob == (*typ2).vval.v_blob };
-        let eq = || unsafe { tv_blob_equal((*typ1).vval.v_blob, (*typ2).vval.v_blob) };
+        let same = || unsafe { (*typ1).blob_or_null() == (*typ2).blob_or_null() };
+        let eq = || unsafe { tv_blob_equal((*typ1).blob_or_null(), (*typ2).blob_or_null()) };
         let wrong_type = c"E977: Can only compare Blob with Blob";
         // SAFETY: a message constant is a NUL-terminated literal.
         let wrong_op = unsafe { CStr::from_ptr(e_invalblob.as_ptr()) };
@@ -244,8 +244,8 @@ pub(crate) unsafe fn typval_compare(
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
         // SAFETY: as the Blob arm.
-        let same = || unsafe { (*typ1).vval.v_list == (*typ2).vval.v_list };
-        let eq = || unsafe { tv_list_equal((*typ1).vval.v_list, (*typ2).vval.v_list, ic) };
+        let same = || unsafe { (*typ1).list_or_null() == (*typ2).list_or_null() };
+        let eq = || unsafe { tv_list_equal((*typ1).list_or_null(), (*typ2).list_or_null(), ic) };
         let wrong_type = c"E691: Can only compare List with List";
         let wrong_op = c"E692: Invalid operation for List";
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
@@ -255,8 +255,8 @@ pub(crate) unsafe fn typval_compare(
         }
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
         // SAFETY: as the Blob arm.
-        let same = || unsafe { (*typ1).vval.v_dict == (*typ2).vval.v_dict };
-        let eq = || unsafe { tv_dict_equal((*typ1).vval.v_dict, (*typ2).vval.v_dict, ic) };
+        let same = || unsafe { (*typ1).dict_or_null() == (*typ2).dict_or_null() };
+        let eq = || unsafe { tv_dict_equal((*typ1).dict_or_null(), (*typ2).dict_or_null(), ic) };
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
         let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
@@ -270,18 +270,18 @@ pub(crate) unsafe fn typval_compare(
             unsafe { tv_clear(typ1) };
             return Err(Failed);
         }
-        let equal = if t1 == VAR_PARTIAL && unsafe { (*typ1).vval.v_partial }.is_null()
-            || t2 == VAR_PARTIAL && unsafe { (*typ2).vval.v_partial }.is_null()
+        let equal = if t1 == VAR_PARTIAL && unsafe { (*typ1).partial_or_null() }.is_null()
+            || t2 == VAR_PARTIAL && unsafe { (*typ2).partial_or_null() }.is_null()
         {
             // A null partial is only ever equal to another null one, and
             // both union members are pointers.
-            unsafe { (*typ1).vval.v_partial == (*typ2).vval.v_partial }
+            unsafe { (*typ1).partial_or_null() == (*typ2).partial_or_null() }
         } else if !type_is || (t1 == VAR_FUNC && t2 == VAR_FUNC) {
             // `is` on two plain Funcrefs falls back to comparing names:
             // there is no object for them to be identical to.
             unsafe { tv_equal(typ1, typ2, ic) }
         } else if t1 == VAR_PARTIAL && t2 == VAR_PARTIAL {
-            unsafe { (*typ1).vval.v_partial == (*typ2).vval.v_partial }
+            unsafe { (*typ1).partial_or_null() == (*typ2).partial_or_null() }
         } else {
             false
         };

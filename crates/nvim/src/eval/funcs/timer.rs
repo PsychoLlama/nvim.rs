@@ -80,15 +80,13 @@ pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // this as one `A && B || C && D`; it is the same test.
     let interval = match args.ty(2) {
         VAR_UNKNOWN => 200,
-        VAR_NUMBER if unsafe { args.get(2).vval.v_number } > 0 => unsafe {
-            args.get(2).vval.v_number as c_int
-        },
+        VAR_NUMBER if args.get(2).number_or_zero() > 0 => args.get(2).number_or_zero() as c_int,
         _ => {
             semsg!("E475: Invalid value for argument 3");
             return;
         }
     };
-    let timeout = unsafe { args.get(0).vval.v_number } as c_int;
+    let timeout = args.get(0).number_or_zero() as c_int;
     let expr = *args.get(1);
 
     let tw = unsafe { xmalloc(size_of::<TimeWatcher>()) } as *mut TimeWatcher;
@@ -164,12 +162,12 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> proftime_T {
 unsafe fn list2proftime(arg: *const typval_T) -> Option<proftime_T> {
     // SAFETY: the caller's obligation; the list is only read.
     let arg = unsafe { &*arg };
-    if arg.v_type != VAR_LIST || unsafe { tv_list_len(arg.vval.v_list) } != 2 {
+    if arg.v_type != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
         return None;
     }
     let mut error = false;
-    let n1 = unsafe { tv_list_find_nr(arg.vval.v_list, 0, &raw mut error) };
-    let n2 = unsafe { tv_list_find_nr(arg.vval.v_list, 1, &raw mut error) };
+    let n1 = unsafe { tv_list_find_nr(arg.list_or_null(), 0, &raw mut error) };
+    let n2 = unsafe { tv_list_find_nr(arg.list_or_null(), 1, &raw mut error) };
     if error {
         return None;
     }
@@ -203,8 +201,8 @@ pub unsafe fn f_reltime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     };
     let (high, low) = proftime_halves(res);
     list_alloc_ret(rettv, 2);
-    unsafe { tv_list_append_number(rettv.vval.v_list, high as varnumber_T) };
-    unsafe { tv_list_append_number(rettv.vval.v_list, low as varnumber_T) };
+    unsafe { tv_list_append_number(rettv.list_or_null(), high as varnumber_T) };
+    unsafe { tv_list_append_number(rettv.list_or_null(), low as varnumber_T) };
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
@@ -295,7 +293,7 @@ pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         if check_arg(args, 2, tv_check_for_nonnull_dict_arg).is_err() {
             return;
         }
-        let di = unsafe { tv_dict_find(args.get(2).vval.v_dict, c"repeat".as_ptr(), 6) };
+        let di = unsafe { tv_dict_find(args.get(2).dict_or_null(), c"repeat".as_ptr(), 6) };
         if !di.is_null() {
             repeat = unsafe { tv_get_number(&raw mut (*di).di_tv) } as c_int;
             // A repeat of 0 means "once", the same as the default.

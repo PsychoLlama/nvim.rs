@@ -124,7 +124,7 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         regname = b'"' as c_int;
     }
     dict_alloc_ret(rettv);
-    let dict: *mut dict_T = unsafe { rettv.vval.v_dict };
+    let dict: *mut dict_T = rettv.dict_or_null();
     let list = unsafe { get_reg_contents(regname, kGRegExprSrc as c_int | kGRegList as c_int) }
         as *mut list_T;
     // An unset register has no `regcontents`, and no other key either.
@@ -253,7 +253,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut pointreg: c_char = 0;
 
     if args.ty(1) == VAR_DICT {
-        let d = unsafe { args.get(1).vval.v_dict };
+        let d = args.get(1).dict_or_null();
         // An empty dict clears the register outright.
         if unsafe { tv_dict_len(d) } == 0 {
             let mut empty: [*mut c_char; 2] = [ptr::null_mut(); 2];
@@ -323,7 +323,7 @@ pub unsafe fn f_setreg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     }
 
     if !regcontents.is_null() && unsafe { (*regcontents).v_type } == VAR_LIST {
-        let list = unsafe { (*regcontents).vval.v_list };
+        let list = unsafe { (*regcontents).list_or_null() };
         unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {
         let strval = unsafe { numbuf5.string_chk(regcontents) };

@@ -43,7 +43,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
         semsg!("E475: Invalid argument: dict");
         return;
     }
-    if unsafe { args.get(0).vval.v_dict }.is_null() {
+    if args.get(0).dict_or_null().is_null() {
         // The C spells the name through the read-only-variable message's
         // `%.*s`, with the length `strlen` gives it; the text is fixed.
         semsg!("E46: Cannot change read-only variable \"dictwatcheradd() argument\"");
@@ -65,7 +65,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
     }
     // SAFETY: the tag checked above says the union holds a Dict pointer;
     // the watcher takes the callback over.
-    let d = unsafe { args.get(0).vval.v_dict };
+    let d = args.get(0).dict_or_null();
     unsafe { tv_dict_watcher_add(d, key_pattern, key_pattern_len, callback) };
 }
 
@@ -96,7 +96,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
     }
     // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
     // watcher here and is freed below.
-    let d = unsafe { args.get(0).vval.v_dict };
+    let d = args.get(0).dict_or_null();
     let len = unsafe { cstr::bytes_at(key_pattern) }.len();
     if !unsafe { tv_dict_watcher_remove(d, key_pattern, len, &callback) } {
         semsg!("Couldn't find a watcher matching key and callback");
@@ -167,7 +167,7 @@ pub unsafe fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
     let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = unsafe { xmalloc(len as usize + 1) } as *mut c_char;
-    let out = unsafe { rettv.vval.v_string };
+    let out = rettv.string_or_null();
     let cap = len as usize + 1;
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     unsafe { vim_vsnprintf_typval(out, cap, fmt, ap, base) };

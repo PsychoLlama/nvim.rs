@@ -166,7 +166,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
     let mut list: *mut list_T = ptr::null_mut();
     if r.is_ok() {
         if rettv.v_type == VAR_LIST {
-            list = unsafe { rettv.vval.v_list };
+            list = rettv.list_or_null();
         } else {
             clear_local(&mut rettv);
         }

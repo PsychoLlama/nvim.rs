@@ -246,11 +246,11 @@ pub unsafe fn tv_dict_watcher_notify(
     argv[2].v_type = VAR_DICT;
     argv[2].v_lock = VarLock::Unlocked;
     argv[2].vval.v_dict = unsafe { tv_dict_alloc() };
-    unsafe { (*argv[2].vval.v_dict).dv_refcount.retain() };
+    unsafe { (*argv[2].dict_or_null()).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
     // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
-    let event = unsafe { argv[2].vval.v_dict };
+    let event = argv[2].dict_or_null();
     let add = |name: &str, from: *mut typval_T| {
         let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
         unsafe { tv_copy(from, &raw mut (*v).di_tv) };

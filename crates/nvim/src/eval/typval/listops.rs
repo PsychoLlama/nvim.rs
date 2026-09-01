@@ -303,7 +303,7 @@ pub unsafe fn tv_list_remove(
     rettv: *mut typval_T,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
-    let l = unsafe { (*argvars).vval.v_list };
+    let l = unsafe { (*argvars).list_or_null() };
     if unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
         return;
     }

@@ -55,17 +55,17 @@ pub unsafe fn deref_func_name(
     }
 
     if unsafe { (*tv).v_type } == VAR_FUNC {
-        if unsafe { (*tv).vval.v_string }.is_null() {
+        if unsafe { (*tv).func_name_or_null() }.is_null() {
             // Just in case.
             unsafe { *lenp = 0 };
             return c"".as_ptr() as *mut c_char;
         }
-        unsafe { *lenp = cstr::bytes_at((*tv).vval.v_string).len() as c_int };
-        return unsafe { (*tv).vval.v_string };
+        unsafe { *lenp = cstr::bytes_at((*tv).func_name_or_null()).len() as c_int };
+        return unsafe { (*tv).func_name_or_null() };
     }
 
     if unsafe { (*tv).v_type } == VAR_PARTIAL {
-        let pt = unsafe { (*tv).vval.v_partial };
+        let pt = unsafe { (*tv).partial_or_null() };
         if pt.is_null() {
             // Just in case.
             unsafe { *lenp = 0 };
@@ -457,14 +457,14 @@ pub unsafe fn trans_function_name(
                 unsafe { (*fdp).fd_di = lv.ll_di };
             }
             if unsafe { (*lv.ll_tv).v_type } == VAR_FUNC
-                && !unsafe { (*lv.ll_tv).vval.v_string }.is_null()
+                && !unsafe { (*lv.ll_tv).func_name_or_null() }.is_null()
             {
-                name = unsafe { xstrdup((*lv.ll_tv).vval.v_string) };
+                name = unsafe { xstrdup((*lv.ll_tv).func_name_or_null()) };
                 unsafe { *pp = end as *mut c_char };
             } else if unsafe { (*lv.ll_tv).v_type } == VAR_PARTIAL
-                && !unsafe { (*lv.ll_tv).vval.v_partial }.is_null()
+                && !unsafe { (*lv.ll_tv).partial_or_null() }.is_null()
             {
-                if unsafe { is_luafunc((*lv.ll_tv).vval.v_partial) }
+                if unsafe { is_luafunc((*lv.ll_tv).partial_or_null()) }
                     && unsafe { *end } == b'.' as c_char
                 {
                     len = unsafe { check_luafunc_name(end.add(1), true) };
@@ -479,11 +479,11 @@ pub unsafe fn trans_function_name(
                     unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
                     unsafe { *pp = (end as *mut c_char).add(1).offset(len as isize) };
                 } else {
-                    name = unsafe { xstrdup(partial_name((*lv.ll_tv).vval.v_partial)) };
+                    name = unsafe { xstrdup(partial_name((*lv.ll_tv).partial_or_null())) };
                     unsafe { *pp = end as *mut c_char };
                 }
                 if !partial.is_null() {
-                    unsafe { *partial = (*lv.ll_tv).vval.v_partial };
+                    unsafe { *partial = (*lv.ll_tv).partial_or_null() };
                 }
             } else {
                 if !skip

@@ -81,8 +81,7 @@ fn job_id(arg: &typval_T) -> Option<uint64_t> {
         emsg(gettext(e_invarg));
         return None;
     }
-    // SAFETY: the type tag names the union member.
-    Some(unsafe { arg.vval.v_number } as uint64_t)
+    Some(arg.number_or_zero() as uint64_t)
 }
 
 /// `jobpid({job})`
@@ -121,7 +120,7 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         emsg(gettext(e_invarg));
         return;
     }
-    let data = unsafe { find_job(args.get(0).vval.v_number as uint64_t, true) };
+    let data = unsafe { find_job(args.get(0).number_or_zero() as uint64_t, true) };
     if data.is_null() {
         return;
     }
@@ -131,8 +130,8 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     }
     // SAFETY: the tags checked above say both arguments are Numbers, and
     // `data` is the live channel the id resolved to.
-    let width = unsafe { args.get(1).vval.v_number } as uint16_t;
-    let height = unsafe { args.get(2).vval.v_number } as uint16_t;
+    let width = args.get(1).number_or_zero() as uint16_t;
+    let height = args.get(2).number_or_zero() as uint16_t;
     let pty = unsafe { channel_pty(data) };
     unsafe { pty_proc_resize(pty, width, height) };
     rettv.vval.v_number = 1;
@@ -183,7 +182,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         return;
     }
 
-    let list: *mut list_T = unsafe { args.get(0).vval.v_list };
+    let list: *mut list_T = args.get(0).list_or_null();
     let count = unsafe { tv_list_len(list) };
     let jobs = unsafe { xcalloc(count as usize, size_of::<*mut Channel>()) } as *mut *mut Channel;
     // The waiting jobs' events are parked on a queue of our own so that
@@ -197,7 +196,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             let mut chan = ptr::null_mut::<Channel>();
             if unsafe { (*arg).li_tv.v_type } != VAR_NUMBER
                 || {
-                    chan = find_channel(unsafe { (*arg).li_tv.vval.v_number } as uint64_t);
+                    chan = find_channel(unsafe { (*arg).li_tv.number_or_zero() } as uint64_t);
                     chan.is_null()
                 }
                 || unsafe { (*chan).streamtype } != kChannelStreamProc
@@ -224,8 +223,8 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // A negative or absent timeout means "no limit".
     let mut remaining = -1;
     let mut before = 0u64;
-    if args.ty(1) == VAR_NUMBER && unsafe { args.get(1).vval.v_number } >= 0 {
-        remaining = unsafe { args.get(1).vval.v_number } as c_int;
+    if args.ty(1) == VAR_NUMBER && args.get(1).number_or_zero() >= 0 {
+        remaining = args.get(1).number_or_zero() as c_int;
         before = os_hrtime();
     }
     // Only mark the UI busy when this actually blocks.
@@ -333,8 +332,8 @@ unsafe fn create_environment(
         };
         // SAFETY: `f_environ` reads no arguments and fills `inherited`.
         unsafe { f_environ(ptr::null_mut(), out, row) };
-        unsafe { tv_dict_extend(env, inherited.vval.v_dict, c"force".as_ptr()) };
-        unsafe { tv_dict_free(inherited.vval.v_dict) };
+        unsafe { tv_dict_extend(env, inherited.dict_or_null(), c"force".as_ptr()) };
+        unsafe { tv_dict_free(inherited.dict_or_null()) };
 
         if pty {
             for name in PTY_IGNORED_ENV {
@@ -373,7 +372,7 @@ unsafe fn create_environment(
 
     // The job's own `env` wins over everything above.
     if !job_env.is_null() {
-        unsafe { tv_dict_extend(env, (*job_env).di_tv.vval.v_dict, c"force".as_ptr()) };
+        unsafe { tv_dict_extend(env, (*job_env).di_tv.dict_or_null(), c"force".as_ptr()) };
     }
 
     if pty {
@@ -444,7 +443,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut job_env = ptr::null_mut::<dictitem_T>();
 
     if args.ty(1) == VAR_DICT {
-        job_opts = unsafe { args.get(1).vval.v_dict };
+        job_opts = args.get(1).dict_or_null();
         detach = unsafe { tv_dict_get_number(job_opts, c"detach".as_ptr()) } != 0;
         rpc = unsafe { tv_dict_get_number(job_opts, c"rpc".as_ptr()) } != 0;
         term = unsafe { tv_dict_get_number(job_opts, c"term".as_ptr()) } != 0;
@@ -591,7 +590,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         unsafe { channel_create_event(chan, ptr::null()) };
         return;
     }
-    if unsafe { rettv.vval.v_number } <= 0 {
+    if rettv.number_or_zero() <= 0 {
         return;
     }
     unsafe { attach_terminal(chan, cwd, cmd) };

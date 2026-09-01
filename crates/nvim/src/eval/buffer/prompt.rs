@@ -38,7 +38,7 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
 unsafe fn list_last(lines: *mut typval_T) -> *mut listitem_T {
     // SAFETY: the caller's obligation; under `VAR_LIST` the union's live arm
     // is `v_list`, a live list or NULL.
-    let l = unsafe { (*lines).vval.v_list };
+    let l = unsafe { (*lines).list_or_null() };
     if l.is_null() {
         return ptr::null_mut();
     }
@@ -86,7 +86,7 @@ pub unsafe fn f_prompt_appendbuf(
         };
         let mut tv = unsafe { Tv::new(lines) };
         if tv.v_type == VAR_LIST {
-            let l = unsafe { tv.vval.v_list };
+            let l = tv.list_or_null();
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
                 let mut item = unsafe { Li::new((*l).lv_first) };
                 let itv = item.field_ptr(offset_of!(listitem_T, li_tv));
@@ -105,15 +105,15 @@ pub unsafe fn f_prompt_appendbuf(
     }
     let tv = unsafe { Tv::new(lines) };
     if did_emsg.get() == did_emsg_before {
-        let split = did_concat && unsafe { (*tv.vval.v_list).lv_len } > 1;
+        let split = did_concat && unsafe { (*tv.list_or_null()).lv_len } > 1;
         if split {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked.
-            let l = unsafe { tv.vval.v_list };
+            let l = tv.list_or_null();
             let li = unsafe { (*l).lv_first };
             let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(listitem_T, li_tv));
             unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, rettv) };
-            if unsafe { rettv.vval.v_number } == 0 {
+            if rettv.number_or_zero() == 0 {
                 unsafe { tv_list_item_remove(l, li) };
                 unsafe { set_buffer_lines(buf.raw(), lnum, true, lines, rettv) };
             }
@@ -122,7 +122,7 @@ pub unsafe fn f_prompt_appendbuf(
             unsafe { set_buffer_lines(buf.raw(), lnum, fresh, lines, rettv) };
         }
     }
-    if unsafe { rettv.vval.v_number } == 0 {
+    if rettv.number_or_zero() == 0 {
         let mut buf = buf;
         buf.b_prompt_append_new_line = if tv.v_type == VAR_LIST {
             let last = unsafe { list_last(lines) };

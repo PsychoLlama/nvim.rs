@@ -95,8 +95,7 @@ pub unsafe fn eval_for_line(
         if !skip {
             match tv.v_type {
                 VAR_LIST => {
-                    // SAFETY: `VAR_LIST` says `v_list` is the live member.
-                    let l = unsafe { tv.vval.v_list };
+                    let l = tv.list_or_null();
                     if l.is_null() {
                         // SAFETY: `tv` is this frame's.
                         clear_local(&mut tv);
@@ -118,15 +117,14 @@ pub unsafe fn eval_for_line(
                 }
                 VAR_BLOB => {
                     fi.fi_bi = 0;
-                    // SAFETY: `VAR_BLOB` says `v_blob` is the live member.
-                    if !unsafe { tv.vval.v_blob }.is_null() {
+                    if !tv.blob_or_null().is_null() {
                         // Copied, so the loop is not affected by later
                         // changes to the Blob it was handed.
                         let mut btv = UNSET_TV;
                         // SAFETY: as above; `btv` is this frame's.
-                        unsafe { tv_blob_copy(tv.vval.v_blob, &raw mut btv) };
+                        unsafe { tv_blob_copy(tv.blob_or_null(), &raw mut btv) };
                         // SAFETY: the copy left a Blob in `btv`.
-                        fi.fi_blob = unsafe { btv.vval.v_blob };
+                        fi.fi_blob = btv.blob_or_null();
                     }
                     // SAFETY: `tv` is this frame's.
                     clear_local(&mut tv);
@@ -136,9 +134,8 @@ pub unsafe fn eval_for_line(
                     // The String is taken over rather than copied; a
                     // null one becomes an owned empty string so that
                     // `free_for_info` has something to free either way.
-                    // SAFETY: `VAR_STRING` says `v_string` is the live
-                    // member, and the ownership moves into `fi`.
-                    fi.fi_string = unsafe { tv.vval.v_string };
+                    // The string's ownership moves into `fi` with it.
+                    fi.fi_string = tv.string_or_null();
                     tv.vval.v_string = null_mut();
                     if fi.fi_string.is_null() {
                         // SAFETY: the literal is NUL-terminated.
@@ -211,7 +208,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         let ok = unsafe { assign(fi, arg, &raw mut tv) };
         // The typval was never handed over, so its String is ours.
         // SAFETY: the string allocated just above.
-        unsafe { xfree(tv.vval.v_string as *mut c_void) };
+        unsafe { xfree(tv.string_or_null() as *mut c_void) };
         return ok;
     }
 

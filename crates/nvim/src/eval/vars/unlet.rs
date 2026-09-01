@@ -266,7 +266,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             } else {
                 // The scope's own dictionary item holds it.
                 let di = unsafe { find_var_in_ht(ht, *name as c_int, c"".as_ptr(), 0, false) };
-                d = unsafe { (*di).di_tv.vval.v_dict };
+                d = unsafe { (*di).di_tv.dict_or_null() };
             }
             if d.is_null() {
                 unsafe { internal_error(c"do_unlet()".as_ptr()) };

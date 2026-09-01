@@ -182,7 +182,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     msg_scroll.set(1);
     unsafe { msg_clr_eos() };
 
-    let list = unsafe { args.get(0).vval.v_list };
+    let list = args.get(0).list_or_null();
     if !list.is_null() {
         let mut li: *const listitem_T = unsafe { (*list).lv_first };
         while !li.is_null() {

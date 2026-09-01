@@ -71,8 +71,8 @@ pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         unsafe { *entry.offset(len) = NUL as c_char };
         let key = unsafe { xstrdup(entry) };
         unsafe { *entry.offset(len) = saved };
-        if unsafe { tv_dict_find(rettv.vval.v_dict, key, len) }.is_null() {
-            let _ = unsafe { tv_dict_add_str(rettv.vval.v_dict, key, len as usize, value) };
+        if unsafe { tv_dict_find(rettv.dict_or_null(), key, len) }.is_null() {
+            let _ = unsafe { tv_dict_add_str(rettv.dict_or_null(), key, len as usize, value) };
         }
         unsafe { xfree(key as *mut c_void) };
     }
@@ -129,7 +129,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         if rettv.v_type == VAR_LIST {
             list_alloc_ret(rettv, isize::from(!result.is_null()));
             if !result.is_null() {
-                unsafe { tv_list_append_string(rettv.vval.v_list, result, -1) };
+                unsafe { tv_list_append_string(rettv.list_or_null(), result, -1) };
             }
             unsafe { xfree(result as *mut c_void) };
         } else {
@@ -163,7 +163,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         unsafe { expand_one(xp, pat, nul, options, WildMode::AllKeep) };
         list_alloc_ret(rettv, xpc.xp_numfiles as isize);
         for i in 0..xpc.xp_numfiles {
-            let list = unsafe { rettv.vval.v_list };
+            let list = rettv.list_or_null();
             let name = unsafe { *xpc.xp_files.offset(i as isize) };
             unsafe { tv_list_append_string(list, name, -1) };
         }
@@ -183,7 +183,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // silence.
     let errmsg = args.ty(1) == VAR_DICT && {
         // SAFETY: the tag says the union holds a Dict pointer.
-        let d = unsafe { args.get(1).vval.v_dict };
+        let d = args.get(1).dict_or_null();
         let no = kBoolVarFalse as c_int;
         unsafe { tv_dict_get_bool(d, c"errmsg".as_ptr(), no) != 0 }
     };
@@ -219,7 +219,7 @@ pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     if check_secure() {
         return;
     }
-    if args.ty(1) == VAR_SPECIAL && unsafe { args.get(1).vval.v_special } == kSpecialVarNull {
+    if args.get(1).as_special() == Some(kSpecialVarNull) {
         unsafe { vim_unsetenv_ext(name) };
     } else {
         unsafe { vim_setenv_ext(name, arg_string(&mut valbuf, args.get(1))) };
@@ -331,7 +331,7 @@ pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY throughout: `recover_names` appends to the list just allocated.
     list_alloc_ret(rettv, kListLenUnknown as isize);
-    let list = unsafe { rettv.vval.v_list };
+    let list = rettv.list_or_null();
     let (fname, dirp) = (ptr::null_mut(), ptr::null_mut());
     unsafe { recover_names(fname, false, list, 0, dirp) };
 }
@@ -343,7 +343,7 @@ pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY throughout: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
     dict_alloc_ret(rettv);
-    unsafe { swapfile_dict(arg_string(&mut numbuf, args.get(0)), rettv.vval.v_dict) };
+    unsafe { swapfile_dict(arg_string(&mut numbuf, args.get(0)), rettv.dict_or_null()) };
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.

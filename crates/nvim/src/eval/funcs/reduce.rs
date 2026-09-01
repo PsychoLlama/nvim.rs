@@ -76,10 +76,10 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
     let tv = unsafe { &*tv };
     match tv.v_type {
         VAR_LIST => {
-            if unsafe { tv_list_len(tv.vval.v_list) } == 0 {
+            if unsafe { tv_list_len(tv.list_or_null()) } == 0 {
                 return;
             }
-            let mut li = unsafe { tv_list_first(tv.vval.v_list) };
+            let mut li = unsafe { tv_list_first(tv.list_or_null()) };
             while !li.is_null() {
                 let i = unsafe { tv_get_number_chk(&raw const (*li).li_tv, &raw mut error) };
                 if error {
@@ -92,10 +92,10 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             }
         }
         VAR_DICT => {
-            if unsafe { tv_dict_len(tv.vval.v_dict) } == 0 {
+            if unsafe { tv_dict_len(tv.dict_or_null()) } == 0 {
                 return;
             }
-            let ht = unsafe { &(*tv.vval.v_dict).dv_hashtab };
+            let ht = unsafe { &(*tv.dict_or_null()).dv_hashtab };
             for hi in ht.items() {
                 let di = unsafe { hi.hi_key.offset(-DI_KEY_OFFSET) } as *mut dictitem_T;
                 let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
@@ -209,7 +209,7 @@ unsafe fn fold_step(
 unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
-    let l = unsafe { args.get(0).vval.v_list };
+    let l = args.get(0).list_or_null();
     let called_emsg_start = called_emsg.get();
     let (initial, mut li) = if args.has(2) {
         (*args.get(2), unsafe { tv_list_first(l) })
@@ -284,7 +284,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
 unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
-    let b: *const blob_T = unsafe { args.get(0).vval.v_blob };
+    let b: *const blob_T = args.get(0).blob_or_null();
     let called_emsg_start = called_emsg.get();
     let (initial, mut i) = if args.has(2) {
         if check_arg(args, 2, tv_check_for_number_arg).is_err() {
@@ -323,8 +323,8 @@ pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     // `eval_expr_typval`, so that an empty name reports E1132 instead of
     // an "unknown function" for the empty string.
     let func_name = match args.ty(1) {
-        VAR_FUNC => unsafe { args.get(1).vval.v_string },
-        VAR_PARTIAL => unsafe { partial_name(args.get(1).vval.v_partial) },
+        VAR_FUNC => args.get(1).func_name_or_null(),
+        VAR_PARTIAL => unsafe { partial_name(args.get(1).partial_or_null()) },
         _ => arg_string(&mut numbuf, args.get(1)),
     };
     if func_name.is_null() || unsafe { *func_name } as c_int == NUL {

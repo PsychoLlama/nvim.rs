@@ -470,7 +470,7 @@ pub unsafe fn f_prevnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_pum_getpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
     unsafe { tv_dict_alloc_ret(rettv) };
-    unsafe { pum_set_event_info((*rettv).vval.v_dict) };
+    unsafe { pum_set_event_info((*rettv).dict_or_null()) };
 }
 
 /// `pumvisible()`
@@ -563,5 +563,5 @@ pub unsafe fn f_windowsversion(_argvars: *mut typval_T, rettv: *mut typval_T, _f
 pub unsafe fn f_wordcount(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
     unsafe { tv_dict_alloc_ret(rettv) };
-    unsafe { cursor_pos_info((*rettv).vval.v_dict) };
+    unsafe { cursor_pos_info((*rettv).dict_or_null()) };
 }

@@ -147,7 +147,7 @@ pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut typval_T {
 /// As [`get_vim_var_tv`].
 pub unsafe fn get_vim_var_nr(idx: Vv) -> varnumber_T {
     // SAFETY: the caller's obligation -- the declared type is the Number arm.
-    unsafe { vimvar_val(idx).vval.v_number }
+    vimvar_val(idx).number_or_zero()
 }
 
 /// `v:` variable `idx` as a List.
@@ -156,7 +156,7 @@ pub unsafe fn get_vim_var_nr(idx: Vv) -> varnumber_T {
 /// As [`get_vim_var_tv`].
 pub unsafe fn get_vim_var_list(idx: Vv) -> *mut list_T {
     // SAFETY: the caller's obligation -- the declared type is the List arm.
-    unsafe { vimvar_val(idx).vval.v_list }
+    vimvar_val(idx).list_or_null()
 }
 
 /// `v:` variable `idx` as a Dict.
@@ -165,7 +165,7 @@ pub unsafe fn get_vim_var_list(idx: Vv) -> *mut list_T {
 /// As [`get_vim_var_tv`].
 pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut dict_T {
     // SAFETY: the caller's obligation -- the declared type is the Dict arm.
-    unsafe { vimvar_val(idx).vval.v_dict }
+    vimvar_val(idx).dict_or_null()
 }
 
 /// `v:` variable `idx` as a string — the variable's own, with an unset one
@@ -181,8 +181,7 @@ pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut dict_T {
 pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
     let tv = vimvar_val(idx);
     debug_assert_eq!(tv.v_type, VAR_STRING, "v: variable {idx:?} is not a String");
-    // SAFETY: the type tag says the union holds the string arm.
-    let s = unsafe { tv.vval.v_string };
+    let s = tv.string_or_null();
     if s.is_null() {
         c"".as_ptr().cast_mut()
     } else {
@@ -196,7 +195,7 @@ pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
 /// As [`get_vim_var_tv`].
 pub unsafe fn get_vim_var_partial(idx: Vv) -> *mut partial_T {
     // SAFETY: the caller's obligation -- the declared type is the Partial arm.
-    unsafe { vimvar_val(idx).vval.v_partial }
+    vimvar_val(idx).partial_or_null()
 }
 
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
@@ -336,7 +335,7 @@ pub unsafe fn set_reg_var(c: c_int) {
     // is against `c`, not against the name that would be stored, so
     // `set_reg_var(0)` always rewrites -- upstream's.
     // SAFETY: `v:register` is declared a String, so the union holds one.
-    let cur = unsafe { vimvar_val(Vv::Register).vval.v_string };
+    let cur = vimvar_val(Vv::Register).string_or_null();
     if cur.is_null() || unsafe { *cur } != c as c_char {
         let buf = [regname, NUL as c_char];
         // SAFETY: a two-byte NUL-terminated local.
@@ -355,7 +354,7 @@ pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Exception);
     if oldval.is_null() {
         // SAFETY: `v:exception` is declared a String.
-        return unsafe { tv.vval.v_string };
+        return tv.string_or_null();
     }
     tv.vval.v_string = oldval;
     ptr::null_mut()
@@ -369,7 +368,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Throwpoint);
     if oldval.is_null() {
         // SAFETY: `v:throwpoint` is declared a String.
-        return unsafe { tv.vval.v_string };
+        return tv.string_or_null();
     }
     tv.vval.v_string = oldval;
     ptr::null_mut()
@@ -392,7 +391,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
     // SAFETY: `v:cmdarg` is declared a String.
-    let oldval = unsafe { tv.vval.v_string };
+    let oldval = tv.string_or_null();
 
     'error: {
         if eap.is_null() {
@@ -503,7 +502,7 @@ pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char 
 pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     if set_prevcount {
         // SAFETY: `v:count` is declared a Number.
-        let old = unsafe { vimvar_val(Vv::Count).vval.v_number };
+        let old = vimvar_val(Vv::Count).number_or_zero();
         let mut prev = vimvar_val(Vv::Prevcount);
         prev.vval.v_number = old;
     }
@@ -551,7 +550,7 @@ pub unsafe fn before_set_vvar(
         }
         // SAFETY: the type tag says the union holds the string arm, which
         // this item owns.
-        unsafe { xfree(stored.vval.v_string.cast()) };
+        unsafe { xfree(stored.string_or_null().cast()) };
         stored.vval.v_string = ptr::null_mut();
 
         if copy || tv.v_type != VAR_STRING {
@@ -561,13 +560,12 @@ pub unsafe fn before_set_vvar(
             // itself raise an error, which sets the variable -- so only
             // store when it is still empty.
             // SAFETY: the string arm, as above.
-            if unsafe { stored.vval.v_string }.is_null() {
+            if stored.string_or_null().is_null() {
                 stored.vval.v_string = unsafe { xstrdup(val) };
             }
         } else {
             // Take the string over, rather than copy and free.
-            // SAFETY: the type tag says the union holds the string arm.
-            stored.vval.v_string = unsafe { tv.vval.v_string };
+            stored.vval.v_string = tv.string_or_null();
             tv.vval.v_string = ptr::null_mut();
         }
         if watched {

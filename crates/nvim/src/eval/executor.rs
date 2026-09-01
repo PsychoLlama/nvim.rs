@@ -60,13 +60,11 @@ unsafe fn tv_op_blob(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result
     if op != b'+' || rhs.v_type != VAR_BLOB {
         return Err(Failed);
     }
-    // SAFETY: `VAR_BLOB` says `v_blob` is the union's live arm.
-    let b2: *mut blob_T = unsafe { rhs.vval.v_blob };
+    let b2: *mut blob_T = rhs.blob_or_null();
     if b2.is_null() {
         return Ok(());
     }
-    // SAFETY: `tv1` reached this helper under `VAR_BLOB` too.
-    let b1: *mut blob_T = unsafe { lhs.vval.v_blob };
+    let b1: *mut blob_T = lhs.blob_or_null();
     if b1.is_null() {
         // Appending to an unallocated blob shares the right-hand one
         // rather than copying it.
@@ -101,13 +99,11 @@ unsafe fn tv_op_list(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Result
     if op != b'+' || rhs.v_type != VAR_LIST {
         return Err(Failed);
     }
-    // SAFETY: `VAR_LIST` says `v_list` is the union's live arm.
-    let l2 = unsafe { rhs.vval.v_list };
+    let l2 = rhs.list_or_null();
     if l2.is_null() {
         return Ok(());
     }
-    // SAFETY: `tv1` reached this helper under `VAR_LIST` too.
-    let l1 = unsafe { lhs.vval.v_list };
+    let l1 = lhs.list_or_null();
     if l1.is_null() {
         // Appending to an unallocated list shares the right-hand one
         // rather than copying it.
@@ -137,7 +133,7 @@ unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Resu
             return Err(Failed);
         }
         // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
-        let f = float_op(n as float_T, op, unsafe { rhs.vval.v_float });
+        let f = float_op(n as float_T, op, rhs.float_or_zero());
         // SAFETY: `tv1` is the caller's initialised typval.
         unsafe { tv_clear(tv1) };
         lhs.v_type = VAR_FLOAT;
@@ -205,16 +201,13 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Resul
         return Err(Failed);
     }
     let f = if rhs_type == VAR_FLOAT {
-        // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
-        unsafe { rhs.vval.v_float }
+        rhs.float_or_zero()
     } else {
         // A string operand goes through the usual "leading number" parse.
         // SAFETY: `tv2` is initialised.
         unsafe { tv_get_number(tv2) as float_T }
     };
-    // SAFETY: `tv1` reached this helper under `VAR_FLOAT`, so `v_float` is
-    // its live arm.
-    lhs.vval.v_float = float_op(unsafe { lhs.vval.v_float }, op, f);
+    lhs.vval.v_float = float_op(lhs.float_or_zero(), op, f);
     Ok(())
 }
 

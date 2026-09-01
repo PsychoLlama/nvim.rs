@@ -142,17 +142,22 @@ impl<'a> Decoder<'a> {
         // The value being stored *is* the container on top: it has just
         // closed, so it belongs to the one below, and the error position
         // to report against is where it opened.
-        if obj.val.v_type == last.container.v_type
-            // vval.v_list and vval.v_dict have the same size and offset.
-            && unsafe { obj.val.vval.v_list } == unsafe { last.container.vval.v_list }
-        {
+        // Upstream reads `vval.v_list` for both cases, the two members
+        // having the same size and offset; the tag has to pick the reader
+        // here, or a Dict container would compare two NULLs and match.
+        let is_the_container = if last.container.v_type == VAR_LIST {
+            obj.val.as_list() == last.container.as_list()
+        } else {
+            obj.val.as_dict() == last.container.as_dict()
+        };
+        if obj.val.v_type == last.container.v_type && is_the_container {
             self.containers.pop();
             val_location = last.at;
             last = self.innermost();
         }
 
         if last.container.v_type == VAR_LIST {
-            if unsafe { tv_list_len(last.container.vval.v_list) } != 0 && !obj.didcomma {
+            if unsafe { tv_list_len(last.container.list_or_null()) } != 0 && !obj.didcomma {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
                 semsg!("E474: Expected comma before list item: {arg0}");
@@ -160,7 +165,7 @@ impl<'a> Decoder<'a> {
                 return false;
             }
             debug_assert!(last.special_val.is_null());
-            unsafe { tv_list_append_owned_tv(last.container.vval.v_list, obj.val) };
+            unsafe { tv_list_append_owned_tv(last.container.list_or_null(), obj.val) };
             return true;
         }
 
@@ -178,12 +183,10 @@ impl<'a> Decoder<'a> {
             if last.special_val.is_null() {
                 // A key that could not be a `dict_T` key has already sent
                 // this container down the special-map path below.
-                debug_assert!(
-                    !(key.is_special_string || unsafe { key.val.vval.v_string }.is_null())
-                );
-                let obj_di = unsafe { tv_dict_item_alloc(key.val.vval.v_string) };
+                debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
+                let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
                 unsafe { tv_clear(&raw mut key.val) };
-                if unsafe { tv_dict_add(last.container.vval.v_dict, obj_di) }.is_err() {
+                if unsafe { tv_dict_add(last.container.dict_or_null(), obj_di) }.is_err() {
                     unsafe { abort() };
                 }
                 unsafe { (*obj_di).di_tv = obj.val };
@@ -206,7 +209,7 @@ impl<'a> Decoder<'a> {
         }
         if !obj.didcomma
             && last.special_val.is_null()
-            && unsafe { (*last.container.vval.v_dict).dv_hashtab.ht_used } != 0
+            && unsafe { (*last.container.dict_or_null()).dv_hashtab.ht_used } != 0
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
@@ -222,9 +225,11 @@ impl<'a> Decoder<'a> {
         // map, which can hold every one of them.
         if last.special_val.is_null()
             && (obj.is_special_string
-                || unsafe { obj.val.vval.v_string }.is_null()
-                || !unsafe { tv_dict_find(last.container.vval.v_dict, obj.val.vval.v_string, -1) }
-                    .is_null())
+                || obj.val.string_or_null().is_null()
+                || !unsafe {
+                    tv_dict_find(last.container.dict_or_null(), obj.val.string_or_null(), -1)
+                }
+                .is_null())
         {
             unsafe { tv_clear(&raw mut obj.val) };
             // Rewind to the `{` and reopen it as a special map.

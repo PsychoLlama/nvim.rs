@@ -229,7 +229,7 @@ pub unsafe fn tv_list_slice_or_index(
     rettv: *mut typval_T,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let len = unsafe { tv_list_len((*rettv).vval.v_list) };
+    let len = unsafe { tv_list_len((*rettv).list_or_null()) };
     let mut n1 = n1_arg;
     let mut n2 = n2_arg;
 
@@ -260,14 +260,14 @@ pub unsafe fn tv_list_slice_or_index(
         if n2 < 0 || n2 + 1 < n1 {
             n2 = -1;
         }
-        let l = unsafe { tv_list_slice((*rettv).vval.v_list, n1, n2) };
+        let l = unsafe { tv_list_slice((*rettv).list_or_null(), n1, n2) };
         unsafe { tv_clear(rettv) };
         unsafe { tv_list_set_ret(rettv, l) };
     } else {
         // copy the item to "var1" to avoid that freeing the list makes it
         // invalid.
         let mut var1 = TV_INITIAL_VALUE;
-        let li = unsafe { tv_list_find((*rettv).vval.v_list, n1 as ::core::ffi::c_int) };
+        let li = unsafe { tv_list_find((*rettv).list_or_null(), n1 as ::core::ffi::c_int) };
         unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut var1) };
         unsafe { tv_clear(rettv) };
         unsafe { *rettv = var1 };
@@ -389,7 +389,7 @@ pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     let mut ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    let _ = unsafe { tv_list_join(&raw mut ga, (*argvars).vval.v_list, sep) };
+    let _ = unsafe { tv_list_join(&raw mut ga, (*argvars).list_or_null(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }

@@ -25,7 +25,7 @@ pub unsafe fn assert_error(gap: *mut garray_T) {
     // SAFETY: `v:errors` is a table row, and `gap` is the caller's live
     // byte garray.
     let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
-    if tv.v_type != VAR_LIST || unsafe { tv.vval.v_list }.is_null() {
+    if tv.v_type != VAR_LIST || tv.list_or_null().is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
         unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
     }

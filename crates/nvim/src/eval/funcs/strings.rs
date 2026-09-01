@@ -115,7 +115,7 @@ pub unsafe fn f_gettext(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     rettv.v_type = VAR_STRING;
     // SAFETY: the check above proved argument 0 is a non-empty String, so
     // the union holds a live NUL-terminated pointer.
-    rettv.vval.v_string = unsafe { xstrdup(gettext_ptr(args.get(0).vval.v_string).as_ptr()) };
+    rettv.vval.v_string = unsafe { xstrdup(gettext_ptr(args.get(0).string_or_null()).as_ptr()) };
 }
 
 /// `keytrans({string})` — the readable spelling of a key sequence.
@@ -125,11 +125,11 @@ pub unsafe fn f_keytrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a String pointer, which may still be null.
     if check_arg(args, 0, tv_check_for_string_arg).is_err()
-        || unsafe { args.get(0).vval.v_string }.is_null()
+        || args.get(0).string_or_null().is_null()
     {
         return;
     }
-    let escaped = unsafe { vim_strsave_escape_ks(args.get(0).vval.v_string) };
+    let escaped = unsafe { vim_strsave_escape_ks(args.get(0).string_or_null()) };
     rettv.vval.v_string = unsafe { str2special_save(escaped, true, true) };
     unsafe { xfree(escaped.cast::<c_void>()) };
 }
@@ -213,7 +213,7 @@ pub unsafe fn f_repeat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// Argument 0 is a live List typval and `rettv` is the cleared return value.
 unsafe fn repeat_list(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     // SAFETY: the caller's obligation.
-    let src = unsafe { args.get(0).vval.v_list };
+    let src = args.get(0).list_or_null();
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
     let hint = varnumber_T::from(n > 0) * n * varnumber_T::from(unsafe { tv_list_len(src) });
@@ -228,7 +228,7 @@ unsafe fn repeat_list(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
 unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     // SAFETY throughout: the caller's obligation.
     blob_alloc_ret(rettv);
-    let src: *mut blob_T = unsafe { args.get(0).vval.v_blob };
+    let src: *mut blob_T = args.get(0).blob_or_null();
     if src.is_null() || n <= 0 {
         return;
     }
@@ -239,7 +239,7 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     if len <= 0 {
         return;
     }
-    let out = unsafe { rettv.vval.v_blob };
+    let out = rettv.blob_or_null();
     unsafe { ga_grow(&raw mut (*out).bv_ga, len) };
     unsafe { (*out).bv_ga.ga_len = len };
     // An all-zero source needs no copying: `ga_grow` already zeroed the
@@ -295,10 +295,7 @@ pub unsafe fn f_sha256(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     let hash = if args.ty(0) == VAR_BLOB {
-        // SAFETY: the tag proves the union holds a blob pointer, which may
-        // be null (an empty literal) or hold a null buffer; both read as no
-        // bytes. Past that, the garray holds `ga_len` initialised bytes.
-        let blob = unsafe { args.get(0).vval.v_blob };
+        let blob = args.get(0).blob_or_null();
         let ga = if blob.is_null() {
             GA_EMPTY_INIT_VALUE
         } else {
@@ -642,7 +639,7 @@ pub unsafe fn f_strptime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         true => unsafe { mktime(&raw mut tmval) as varnumber_T },
         false => -1,
     };
-    if unsafe { rettv.vval.v_number } == -1 {
+    if rettv.number_or_zero() == -1 {
         rettv.vval.v_number = 0;
     }
     if conv.vc_type != CONV_NONE {

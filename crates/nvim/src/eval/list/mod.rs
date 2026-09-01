@@ -143,10 +143,10 @@ impl Container {
     pub(crate) fn of(tv: &typval_T) -> Self {
         match tv.v_type {
             // SAFETY: `v_type` is what says which arm of `vval` is live.
-            VAR_LIST => Self::List(List(unsafe { tv.vval.v_list })),
-            VAR_DICT => Self::Dict(Dict(unsafe { tv.vval.v_dict })),
-            VAR_BLOB => Self::Blob(Blob(unsafe { tv.vval.v_blob })),
-            VAR_STRING => Self::Str(unsafe { tv.vval.v_string }),
+            VAR_LIST => Self::List(List(tv.list_or_null())),
+            VAR_DICT => Self::Dict(Dict(tv.dict_or_null())),
+            VAR_BLOB => Self::Blob(Blob(tv.blob_or_null())),
+            VAR_STRING => Self::Str(tv.string_or_null()),
             _ => Self::Other,
         }
     }
@@ -471,8 +471,7 @@ impl Dict {
     pub(crate) fn alloc_ret(rettv: &mut typval_T) -> Dict {
         // SAFETY: `rettv` is a cleared result slot.
         unsafe { tv_dict_alloc_ret(rettv) };
-        // SAFETY: which just made a dict the live arm.
-        Self(unsafe { rettv.vval.v_dict })
+        Self(rettv.dict_or_null())
     }
 }
 
@@ -644,8 +643,7 @@ impl Blob {
     pub(crate) fn copy_to(self, rettv: &mut typval_T) -> Blob {
         // SAFETY: a live blob and a cleared result slot.
         unsafe { tv_blob_copy(self.0, rettv) };
-        // SAFETY: which just made a blob the live arm.
-        Self(unsafe { rettv.vval.v_blob })
+        Self(rettv.blob_or_null())
     }
 }
 
@@ -675,11 +673,16 @@ pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> varnumber_T {
 }
 
 /// `tv`'s Number, for the arms whose `v_type` has already been checked.
+///
+/// `VAR_BOOL` answers too: upstream reads `v_number` for both, the boolean
+/// living in the same word, and the callers accept either tag.
 #[inline(always)]
 pub(crate) fn number_arm(tv: &typval_T) -> varnumber_T {
-    // SAFETY: only reached where `v_type` is `VAR_NUMBER` or `VAR_BOOL`, both
-    // of which make `v_number` the live arm.
-    unsafe { tv.vval.v_number }
+    match (tv.as_number(), tv.as_bool()) {
+        (Some(n), _) => n,
+        (_, Some(b)) => varnumber_T::from(b),
+        _ => 0,
+    }
 }
 
 /// Whether `a` and `b` are equal, `ic` ignoring case in strings.

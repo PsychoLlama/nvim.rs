@@ -438,7 +438,7 @@ pub unsafe fn tv_dict_add_func(
         unsafe { tv_dict_item_free(item) };
         return Err(Failed);
     }
-    unsafe { func_ref((*item).di_tv.vval.v_string) };
+    unsafe { func_ref((*item).di_tv.func_name_or_null()) };
     Ok(())
 }
 
@@ -719,7 +719,7 @@ pub unsafe fn tv_dict_remove(
         return;
     }
 
-    let d = unsafe { (*argvars).vval.v_dict };
+    let d = unsafe { (*argvars).dict_or_null() };
     if d.is_null() || unsafe { value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
     {
         return;

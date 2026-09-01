@@ -121,9 +121,9 @@ pub unsafe fn json_decode_string(
         if !c.special_val.is_null() {
             unsafe { tv_list_len(c.special_val) == 0 }
         } else if c.container.v_type == VAR_DICT {
-            unsafe { (*c.container.vval.v_dict).dv_hashtab.ht_used == 0 }
+            unsafe { (*c.container.dict_or_null()).dv_hashtab.ht_used == 0 }
         } else {
-            unsafe { tv_list_len(c.container.vval.v_list) == 0 }
+            unsafe { tv_list_len(c.container.list_or_null()) == 0 }
         }
     };
     'done: {

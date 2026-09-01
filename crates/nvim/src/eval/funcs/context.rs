@@ -31,8 +31,7 @@ unsafe fn context_index(tv: *const typval_T, what: &str) -> Option<usize> {
     // SAFETY: the caller's obligation.
     let tv = unsafe { &*tv };
     if tv.v_type == VAR_NUMBER {
-        // SAFETY: the tag says the union holds a Number.
-        Some(unsafe { tv.vval.v_number } as usize)
+        Some(tv.number_or_zero() as usize)
     } else if tv.v_type == VAR_UNKNOWN {
         Some(0)
     } else {
@@ -94,15 +93,15 @@ pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
     let types = match args.ty(0) {
         VAR_LIST => {
             let mut types: c_int = 0;
-            let mut li = unsafe { tv_list_first(args.get(0).vval.v_list) };
+            let mut li = unsafe { tv_list_first(args.get(0).list_or_null()) };
             while !li.is_null() {
                 let tv = unsafe { &(*li).li_tv };
                 // An unrecognised name is silently ignored, as is a
                 // non-String item.
                 // A null `v_string` is the empty string, which matches
                 // no name; `strequal` answered the same for it.
-                if tv.v_type == VAR_STRING && !unsafe { tv.vval.v_string }.is_null() {
-                    types |= match unsafe { CStr::from_ptr(tv.vval.v_string) }.to_bytes() {
+                if tv.v_type == VAR_STRING && !tv.string_or_null().is_null() {
+                    types |= match unsafe { CStr::from_ptr(tv.string_or_null()) }.to_bytes() {
                         b"regs" => kCtxRegs as c_int,
                         b"jumps" => kCtxJumps as c_int,
                         b"bufs" => kCtxBufs as c_int,

@@ -130,8 +130,7 @@ pub unsafe fn var2fpos(
 
     // `[lnum, col]`, `[lnum, col, off]`.
     if tv.v_type == VAR_LIST {
-        // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
-        let l: *mut list_T = unsafe { tv.vval.v_list };
+        let l: *mut list_T = tv.list_or_null();
         if l.is_null() {
             return None;
         }
@@ -161,8 +160,8 @@ pub unsafe fn var2fpos(
         // `v_string` is its live member.
         let dollar = !li.is_null()
             && unsafe { (*li).li_tv.v_type } == VAR_STRING
-            && !unsafe { (*li).li_tv.vval.v_string }.is_null()
-            && unsafe { cstr::bytes_at((*li).li_tv.vval.v_string) == b"$" };
+            && !unsafe { (*li).li_tv.string_or_null() }.is_null()
+            && unsafe { cstr::bytes_at((*li).li_tv.string_or_null()) == b"$" };
         if dollar {
             pos.col = len + 1;
         }
@@ -288,8 +287,7 @@ pub unsafe fn list2fpos(
     if arg.v_type != VAR_LIST {
         return Err(Failed);
     }
-    // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
-    let l: *mut list_T = unsafe { arg.vval.v_list };
+    let l: *mut list_T = arg.list_or_null();
     if l.is_null() {
         return Err(Failed);
     }

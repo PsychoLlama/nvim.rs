@@ -24,10 +24,10 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     // SAFETY: the caller's obligation; under `VAR_STRING` the union's live arm
     // is `v_string`, a NUL-terminated string or NULL.
     match unsafe { (*avar).v_type } {
-        VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).vval.v_number }))
+        VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).number_or_zero() }))
             .map_or(ptr::null_mut(), |mut b| b.raw()),
-        VAR_STRING if !unsafe { (*avar).vval.v_string }.is_null() => {
-            let name = unsafe { (*avar).vval.v_string };
+        VAR_STRING if !unsafe { (*avar).string_or_null() }.is_null() => {
+            let name = unsafe { (*avar).string_or_null() };
             if let Some(mut found) = unsafe { buflist_findname_exp(name) } {
                 return found.raw();
             }

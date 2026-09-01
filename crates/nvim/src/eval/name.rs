@@ -466,7 +466,7 @@ pub unsafe fn is_luafunc(partial: *mut partial_T) -> bool {
 /// # Safety
 /// `tv` must be valid.
 pub(crate) unsafe fn tv_is_luafunc(tv: *mut typval_T) -> bool {
-    unsafe { (*tv).v_type == VAR_PARTIAL && is_luafunc((*tv).vval.v_partial) }
+    unsafe { (*tv).v_type == VAR_PARTIAL && is_luafunc((*tv).partial_or_null()) }
 }
 
 /// The end of a `v:lua.` function name, which may hold `.`, `-` and `'`

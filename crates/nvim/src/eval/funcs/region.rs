@@ -159,7 +159,7 @@ fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
 
     // 'selection' decides the default exclusivity; an option dict may
     // override it and may name the region type.
-    let opts = (args.ty(2) == VAR_DICT).then(|| unsafe { args.get(2).vval.v_dict });
+    let opts = (args.ty(2) == VAR_DICT).then(|| args.get(2).dict_or_null());
     let exclusive_by_default = unsafe { *p_sel.get() } == b'e' as c_char;
     let (is_select_exclusive, spec) = match opts {
         Some(d) => (
@@ -372,7 +372,7 @@ pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
             unsafe { block_def2str(&bd) }
         };
         debug_assert!(!text.data().is_null());
-        unsafe { tv_list_append_allocated_string(rettv.vval.v_list, text.data()) };
+        unsafe { tv_list_append_allocated_string(rettv.list_or_null(), text.data()) };
     }
 }
 
@@ -388,7 +388,7 @@ pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     };
     // Whether a position may sit one past the end of its line.
     let allow_eol = args.ty(2) == VAR_DICT
-        && unsafe { tv_dict_get_bool(args.get(2).vval.v_dict, c"eol".as_ptr(), 0) } != 0;
+        && unsafe { tv_dict_get_bool(args.get(2).dict_or_null(), c"eol".as_ptr(), 0) } != 0;
 
     for lnum in r.p1.lnum..=r.p2.lnum {
         let line = ml_get(lnum);
@@ -487,7 +487,7 @@ fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
     let pair = unsafe { tv_list_alloc(2) };
-    unsafe { tv_list_append_list(rettv.vval.v_list, pair) };
+    unsafe { tv_list_append_list(rettv.list_or_null(), pair) };
     for p in [p1, p2] {
         let l = unsafe { tv_list_alloc(4) };
         unsafe { tv_list_append_list(pair, l) };

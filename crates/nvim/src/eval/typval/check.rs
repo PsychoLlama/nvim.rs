@@ -131,7 +131,7 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_string_arg(args, idx) }?;
-    let s = unsafe { (*args.offset(idx as isize)).vval.v_string };
+    let s = unsafe { (*args.offset(idx as isize)).string_or_null() };
     let nonempty = !s.is_null() && unsafe { *s } as ::core::ffi::c_int != NUL;
     arg_check(
         nonempty,
@@ -224,8 +224,8 @@ pub unsafe fn tv_check_for_bool_arg(
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
-    let numeric_bool = arg.v_type == VAR_NUMBER
-        && (unsafe { arg.vval.v_number } == 0 || unsafe { arg.vval.v_number } == 1);
+    let numeric_bool =
+        arg.v_type == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
     arg_check(
         arg.v_type == VAR_BOOL || numeric_bool,
         e_bool_required_for_argument_nr.as_ptr(),
@@ -319,7 +319,7 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_dict_arg(args, idx) }?;
-    let dict = unsafe { (*args.offset(idx as isize)).vval.v_dict };
+    let dict = unsafe { (*args.offset(idx as isize)).dict_or_null() };
     arg_check(
         !dict.is_null(),
         e_non_null_dict_required_for_argument_nr.as_ptr(),

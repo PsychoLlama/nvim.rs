@@ -134,16 +134,17 @@ pub(crate) fn bv_ga(b: *mut blob_T) -> *mut garray_T {
 ///
 /// So every accessor below tests `v_type` first and the union read is
 /// unreachable when the tag says otherwise. The `as_*` form answers `None`;
-/// the `*_or_null` form answers the NULL that this family already treats as
-/// "empty" everywhere (`tv_list_len(NULL) == 0`, `partial_name(NULL)`, …),
-/// which is what a site whose tag was established by an earlier
-/// `tv_check_for_*_arg` wants to write.
+/// the `*_or_null`/`*_or_zero` form answers the empty value this family
+/// already reads as absent everywhere (`tv_list_len(NULL) == 0`,
+/// `partial_name(NULL)`, `tv_get_number` of a `VAR_SPECIAL`), which is what a
+/// site whose tag was established by an earlier `tv_check_for_*_arg` wants to
+/// write.
 ///
 /// Written as a macro so that the whole family's unchecked surface is the
 /// single read below rather than nine copies of it.
 macro_rules! union_readers {
     ($(
-        $tag:ident, $member:ident, $ty:ty, $as_fn:ident $(, $or_null_fn:ident)?;
+        $tag:ident, $member:ident, $ty:ty, $as_fn:ident $(, $or_fn:ident = $empty:expr)?;
     )*) => {
         impl typval_T {
             $(
@@ -161,10 +162,10 @@ macro_rules! union_readers {
                 }
 
                 $(
-                    #[doc = concat!("`vval.", stringify!($member), "`, or NULL unless the tag is `", stringify!($tag), "`.")]
+                    #[doc = concat!("`vval.", stringify!($member), "`, or the empty value unless the tag is `", stringify!($tag), "`.")]
                     #[inline(always)]
-                    pub(crate) fn $or_null_fn(&self) -> $ty {
-                        self.$as_fn().unwrap_or(::core::ptr::null_mut())
+                    pub(crate) fn $or_fn(&self) -> $ty {
+                        self.$as_fn().unwrap_or($empty)
                     }
                 )?
             )*
@@ -173,16 +174,16 @@ macro_rules! union_readers {
 }
 
 union_readers! {
-    VAR_NUMBER,  v_number,  varnumber_T,               as_number;
+    VAR_NUMBER,  v_number,  varnumber_T,               as_number,    number_or_zero = 0;
     VAR_BOOL,    v_bool,    BoolVarValue,              as_bool;
     VAR_SPECIAL, v_special, SpecialVarValue,           as_special;
-    VAR_FLOAT,   v_float,   float_T,                   as_float;
-    VAR_STRING,  v_string,  *mut ::core::ffi::c_char,  as_string,    string_or_null;
-    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char,  as_func_name, func_name_or_null;
-    VAR_LIST,    v_list,    *mut list_T,               as_list,      list_or_null;
-    VAR_DICT,    v_dict,    *mut dict_T,               as_dict,      dict_or_null;
-    VAR_PARTIAL, v_partial, *mut partial_T,            as_partial,   partial_or_null;
-    VAR_BLOB,    v_blob,    *mut blob_T,               as_blob,      blob_or_null;
+    VAR_FLOAT,   v_float,   float_T,                   as_float,     float_or_zero = 0.0;
+    VAR_STRING,  v_string,  *mut ::core::ffi::c_char,  as_string,    string_or_null = ::core::ptr::null_mut();
+    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char,  as_func_name, func_name_or_null = ::core::ptr::null_mut();
+    VAR_LIST,    v_list,    *mut list_T,               as_list,      list_or_null = ::core::ptr::null_mut();
+    VAR_DICT,    v_dict,    *mut dict_T,               as_dict,      dict_or_null = ::core::ptr::null_mut();
+    VAR_PARTIAL, v_partial, *mut partial_T,            as_partial,   partial_or_null = ::core::ptr::null_mut();
+    VAR_BLOB,    v_blob,    *mut blob_T,               as_blob,      blob_or_null = ::core::ptr::null_mut();
 }
 
 impl typval_T {
@@ -227,7 +228,7 @@ impl Li {
     /// `li_tv.vval.v_number`; see [`typval_T::as_number`].
     #[inline(always)]
     pub(crate) fn number(self) -> varnumber_T {
-        self.tv().as_number().unwrap_or(0)
+        self.tv().number_or_zero()
     }
 
     /// `li_tv.vval.v_list`; see [`typval_T::list_or_null`].

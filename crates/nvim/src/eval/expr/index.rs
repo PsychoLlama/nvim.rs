@@ -291,7 +291,7 @@ pub(crate) unsafe fn eval_index_inner(
         }
         VAR_BLOB => {
             // SAFETY: the tag says the union holds a Blob.
-            let blob = unsafe { rv.vval.v_blob };
+            let blob = rv.blob_or_null();
             let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, rettv) };
         }
         VAR_LIST => {
@@ -302,7 +302,7 @@ pub(crate) unsafe fn eval_index_inner(
                 n2 = VARNUMBER_MAX;
             }
             // SAFETY: the tag says the union holds a List.
-            let list = unsafe { rv.vval.v_list };
+            let list = rv.list_or_null();
             let sliced = unsafe {
                 tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
             };
@@ -319,7 +319,7 @@ pub(crate) unsafe fn eval_index_inner(
             }
             // SAFETY: the tag says the union holds a Dict, and `key` is the
             // caller's own of `keylen` bytes.
-            let dict = unsafe { rv.vval.v_dict };
+            let dict = rv.dict_or_null();
             let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
@@ -545,7 +545,7 @@ pub(crate) unsafe fn handle_subscript(
             unsafe { tv_dict_unref(selfdict) };
             selfdict = if rv.v_type == VAR_DICT {
                 // SAFETY: the tag says the union holds a Dict.
-                let d = unsafe { rv.vval.v_dict };
+                let d = rv.dict_or_null();
                 if !d.is_null() {
                     unsafe { (*d).dv_refcount.retain() };
                 }
@@ -579,7 +579,7 @@ pub(crate) unsafe fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
     // whether the union holds a live partial.
     let rv = unsafe { Tv::new(rettv) };
     if rv.v_type == VAR_PARTIAL {
-        let pt = unsafe { Live::new(rv.vval.v_partial) };
+        let pt = unsafe { Live::new(rv.partial_or_null()) };
         if !pt.pt_auto && !pt.pt_dict.is_null() {
             return;
         }

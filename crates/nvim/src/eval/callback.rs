@@ -53,9 +53,9 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
     let mut r = OK;
     // Every union read below is guarded by the `v_type` that names the live
     // member, which is the promise each SAFETY note restates.
-    if tv.v_type == VAR_PARTIAL && !unsafe { tv.vval.v_partial }.is_null() {
+    if tv.v_type == VAR_PARTIAL && !tv.partial_or_null().is_null() {
         // SAFETY: `VAR_PARTIAL` says `v_partial` is the live member.
-        let partial = unsafe { tv.vval.v_partial };
+        let partial = tv.partial_or_null();
         cb.data.partial = partial;
         // SAFETY: the typval holds a live partial.
         unsafe { (*partial).pt_refcount.retain() };
@@ -63,13 +63,12 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
     } else if tv.v_type == VAR_STRING
         // SAFETY: `VAR_STRING` says `v_string` is the live member, and a
         // non-null one is NUL-terminated, so its first byte is readable.
-        && !unsafe { tv.vval.v_string }.is_null()
-        && ascii_isdigit(unsafe { *tv.vval.v_string } as c_int)
+        && !tv.string_or_null().is_null()
+        && ascii_isdigit(unsafe { *tv.string_or_null() } as c_int)
     {
         r = FAIL;
     } else if tv.v_type == VAR_FUNC || tv.v_type == VAR_STRING {
-        // SAFETY: both types keep their name in `v_string`.
-        let name = unsafe { tv.vval.v_string };
+        let name = tv.string_or_func_name();
         if name.is_null() {
             r = FAIL;
         // SAFETY: a non-null name is NUL-terminated.
@@ -104,10 +103,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
             cb.data.funcref = unsafe { xstrdup(name) };
             cb.type_0 = kCallbackFuncref;
         }
-    } else if tv.v_type == VAR_SPECIAL
-        // SAFETY: `VAR_NUMBER` says `v_number` is the live member.
-        || (tv.v_type == VAR_NUMBER && unsafe { tv.vval.v_number } == 0)
-    {
+    } else if tv.v_type == VAR_SPECIAL || (tv.v_type == VAR_NUMBER && tv.number_or_zero() == 0) {
         cb.type_0 = kCallbackNone;
         cb.data.funcref = null_mut();
     } else {

@@ -120,10 +120,10 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
             // Seeded with the "no match" answer, which the tail of this
             // function trims back to three items for a String subject.
             list_alloc_ret(rettv, 4);
-            unsafe { tv_list_append_string(rettv.vval.v_list, c"".as_ptr(), 0) };
-            unsafe { tv_list_append_number(rettv.vval.v_list, -1) };
-            unsafe { tv_list_append_number(rettv.vval.v_list, -1) };
-            unsafe { tv_list_append_number(rettv.vval.v_list, -1) };
+            unsafe { tv_list_append_string(rettv.list_or_null(), c"".as_ptr(), 0) };
+            unsafe { tv_list_append_number(rettv.list_or_null(), -1) };
+            unsafe { tv_list_append_number(rettv.list_or_null(), -1) };
+            unsafe { tv_list_append_number(rettv.list_or_null(), -1) };
         }
         kSomeMatchStr => {
             rettv.v_type = VAR_STRING;
@@ -150,7 +150,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
     // `goto theend` was.
     'theend: {
         if args.ty(0) == VAR_LIST {
-            l = unsafe { args.get(0).vval.v_list };
+            l = args.get(0).list_or_null();
             if l.is_null() {
                 break 'theend;
             }
@@ -257,12 +257,12 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
         match kind {
             kSomeMatchStrPos => {
                 // The four items seeded above, overwritten in place.
-                let ret_l = unsafe { rettv.vval.v_list };
+                let ret_l = rettv.list_or_null();
                 let li1 = unsafe { tv_list_first(ret_l) };
                 let li2 = unsafe { (*li1).li_next };
                 let li3 = unsafe { (*li2).li_next };
                 let li4 = unsafe { (*li3).li_next };
-                unsafe { xfree((*li1).li_tv.vval.v_string as *mut c_void) };
+                unsafe { xfree((*li1).li_tv.string_or_null() as *mut c_void) };
                 let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
                 let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
                 unsafe { (*li1).li_tv.vval.v_string = text as *mut c_char };
@@ -277,10 +277,10 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
             kSomeMatchList => {
                 for i in 0..NSUBEXP as usize {
                     if regmatch.endp[i].is_null() {
-                        unsafe { tv_list_append_string(rettv.vval.v_list, ptr::null(), 0) };
+                        unsafe { tv_list_append_string(rettv.list_or_null(), ptr::null(), 0) };
                     } else {
                         let (start, end) = (regmatch.startp[i], regmatch.endp[i]);
-                        let list = unsafe { rettv.vval.v_list };
+                        let list = rettv.list_or_null();
                         let len = unsafe { end.offset_from(start) };
                         unsafe { tv_list_append_string(list, start, len) };
                     }
@@ -318,8 +318,8 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
 
     // `matchstrpos()` on a String has no index to report, so the
     // placeholder seeded above comes back out.
-    if kind == kSomeMatchStrPos && l.is_null() && !unsafe { rettv.vval.v_list }.is_null() {
-        let ret_l = unsafe { rettv.vval.v_list };
+    if kind == kSomeMatchStrPos && l.is_null() && !rettv.list_or_null().is_null() {
+        let ret_l = rettv.list_or_null();
         unsafe { tv_list_item_remove(ret_l, (*tv_list_first(ret_l)).li_next) };
     }
 }
@@ -392,7 +392,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // memfile before any line is read.
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
-    let retlist = unsafe { rettv.vval.v_list };
+    let retlist = rettv.list_or_null();
     if check_arg(args, 0, tv_check_for_buffer_arg).is_err()
         || check_arg(args, 1, tv_check_for_string_arg).is_err()
         || check_arg(args, 2, tv_check_for_lnum_arg).is_err()
@@ -466,9 +466,7 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
     if !args.has(i) {
         return Some(false);
     }
-    // SAFETY: the caller's obligation; the type tag was checked by
-    // `tv_check_for_opt_dict_arg` before this runs.
-    let d = unsafe { args.get(i).vval.v_dict };
+    let d = args.get(i).dict_or_null();
     if d.is_null() {
         return Some(false);
     }
@@ -525,14 +523,14 @@ pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // SAFETY throughout: the List and its items outlive the call.
     rettv.vval.v_number = -1;
     list_alloc_ret(rettv, kListLenUnknown as isize);
-    let retlist = unsafe { rettv.vval.v_list };
+    let retlist = rettv.list_or_null();
     if check_arg(args, 0, tv_check_for_list_arg).is_err()
         || check_arg(args, 1, tv_check_for_string_arg).is_err()
         || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
     {
         return;
     }
-    let l = unsafe { args.get(0).vval.v_list };
+    let l = args.get(0).list_or_null();
     if l.is_null() {
         return;
     }
@@ -555,8 +553,8 @@ pub unsafe fn f_matchstrlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     while !li.is_null() {
         let li_tv = unsafe { &(*li).li_tv };
         // A non-String item, and the null String, contribute nothing.
-        if li_tv.v_type == VAR_STRING && !unsafe { li_tv.vval.v_string }.is_null() {
-            let str = unsafe { li_tv.vval.v_string };
+        if li_tv.v_type == VAR_STRING && !li_tv.string_or_null().is_null() {
+            let str = li_tv.string_or_null();
             let rmp = &raw mut prog.0;
             unsafe { get_matches_in_str(str, rmp, retlist, idx, submatches, false) };
         }

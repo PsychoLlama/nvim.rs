@@ -153,7 +153,7 @@ pub(crate) unsafe fn call_func_rettv(
         if functv.v_type == VAR_PARTIAL {
             // SAFETY: the tag says the union holds a partial, which
             // `is_luafunc` and `partial_name` both take null or valid.
-            pt = unsafe { functv.vval.v_partial };
+            pt = functv.partial_or_null();
             is_lua = unsafe { is_luafunc(pt) };
             funcname = if is_lua {
                 lua_funcname
@@ -161,9 +161,10 @@ pub(crate) unsafe fn call_func_rettv(
                 (unsafe { partial_name(pt) }) as *const c_char
             };
         } else {
-            // SAFETY: the tag says the union holds a name, which is null or
-            // NUL-terminated.
-            funcname = unsafe { functv.vval.v_string };
+            // Not a partial, so the union holds a name: `VAR_FUNC`'s or
+            // `VAR_STRING`'s, both `v_string`. Anything else has no name and
+            // reports the empty-name error just below.
+            funcname = functv.string_or_func_name();
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
                 emsg(gettext(e_empty_function_name));
                 unsafe { tv_clear(&raw mut functv) };
@@ -329,16 +330,16 @@ pub(crate) unsafe fn eval_method(
                     semsg!("E488: Trailing characters: {at}");
                 }
                 ret = Err(Failed);
-            } else if callee.v_type == VAR_FUNC && !unsafe { callee.vval.v_string }.is_null() {
+            } else if callee.v_type == VAR_FUNC && !callee.func_name_or_null().is_null() {
                 // Take the name over from the typval so `tv_clear`
                 // below does not free what is about to be called.
-                name = unsafe { callee.vval.v_string };
+                name = callee.func_name_or_null();
                 callee.vval.v_string = null_mut();
                 tofree = name;
                 len = unsafe { cstr::bytes_at(name) }.len() as c_int;
-            } else if callee.v_type == VAR_PARTIAL && !unsafe { callee.vval.v_partial }.is_null() {
+            } else if callee.v_type == VAR_PARTIAL && !callee.partial_or_null().is_null() {
                 // SAFETY: the tag says the union holds a live partial.
-                let pt = unsafe { Live::new(callee.vval.v_partial) };
+                let pt = unsafe { Live::new(callee.partial_or_null()) };
                 if pt.pt_argc > 0 || !pt.pt_dict.is_null() {
                     if verbose {
                         emsg(gettext(e_cannot_use_partial_here));

@@ -173,7 +173,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
     let args: *mut list_T = unsafe { tv_list_alloc(1 as ptrdiff_t) };
     // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
     // -1 asks the callee to measure it.
-    unsafe { tv_list_append_string(args, arg.vval.v_string, -1 as ssize_t) };
+    unsafe { tv_list_append_string(args, arg.string_or_null(), -1 as ssize_t) };
     let method = c"eval".as_ptr() as *mut c_char;
     // SAFETY: `name` and `method` are NUL-terminated and `args` is live.
     *ret = unsafe { eval_call_provider(name, method, args, false) };
@@ -364,7 +364,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
 
     // 2 is the "working" value; 1 means the provider declined.
     // SAFETY: `VAR_NUMBER` says `v_number` is the union's live member.
-    let mut ok = tv.v_type == VAR_NUMBER && unsafe { tv.vval.v_number } == 2 as varnumber_T;
+    let mut ok = tv.v_type == VAR_NUMBER && tv.number_or_zero() == 2 as varnumber_T;
     if ok {
         // SAFETY: as above.
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };

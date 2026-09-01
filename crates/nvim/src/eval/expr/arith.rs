@@ -70,8 +70,8 @@ pub(crate) fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
 pub(crate) unsafe fn eval_addblob(tv1: *mut typval_T, tv2: *mut typval_T) {
     // SAFETY: the caller's promise -- both operands are Blobs, so each
     // union holds a live `blob_T`, and `b` is a Blob of this call's own.
-    let b1: *const blob_T = unsafe { (*tv1).vval.v_blob };
-    let b2: *const blob_T = unsafe { (*tv2).vval.v_blob };
+    let b1: *const blob_T = unsafe { (*tv1).blob_or_null() };
+    let b2: *const blob_T = unsafe { (*tv2).blob_or_null() };
     let b: *mut blob_T = unsafe { tv_blob_alloc() };
     let len1 = unsafe { tv_blob_len(b1) } as i64;
     let len2 = unsafe { tv_blob_len(b2) } as i64;
@@ -116,7 +116,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut typval_T, tv2: *mut typval_T) -> boo
     };
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `list_T`, and `joined` is this frame's own.
-    let (l1, l2) = unsafe { ((*tv1).vval.v_list, (*tv2).vval.v_list) };
+    let (l1, l2) = unsafe { ((*tv1).list_or_null(), (*tv2).list_or_null()) };
     if unsafe { tv_list_concat(l1, l2, &raw mut joined) }.is_err() {
         unsafe { tv_clear(tv1) };
         unsafe { tv_clear(tv2) };
@@ -139,8 +139,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut typval_T, tv2: *mut typval_T) -> boo
 pub(crate) unsafe fn grow_string_tv(tv1: *mut typval_T, s2: *const c_char) -> bool {
     // SAFETY: the caller's promise -- `tv1` is a valid typval.
     let mut one = unsafe { Tv::new(tv1) };
-    // SAFETY: the tag says the union holds a String.
-    let old = unsafe { one.vval.v_string };
+    let old = one.string_or_null();
     if one.v_type != VAR_STRING || old.is_null() {
         return false;
     }
@@ -200,7 +199,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, 
 
     if one.v_type == VAR_FLOAT {
         // SAFETY: the tag says the union holds a Float.
-        f1 = unsafe { one.vval.v_float };
+        f1 = one.float_or_zero();
     } else {
         n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };
         if error {
@@ -217,7 +216,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, 
     }
     if two.v_type == VAR_FLOAT {
         // SAFETY: as above, for the right operand.
-        f2 = unsafe { two.vval.v_float };
+        f2 = two.float_or_zero();
     } else {
         n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
         if error {
@@ -265,7 +264,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
 
     if use_float {
         // SAFETY: the tag says the union holds a Float.
-        f1 = unsafe { one.vval.v_float };
+        f1 = one.float_or_zero();
     } else {
         n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };
     }
@@ -284,7 +283,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
             use_float = true;
         }
         // SAFETY: as above, for the right operand.
-        f2 = unsafe { two.vval.v_float };
+        f2 = two.float_or_zero();
     } else {
         n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
         unsafe { tv_clear(tv2) };

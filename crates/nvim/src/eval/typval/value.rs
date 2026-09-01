@@ -50,18 +50,18 @@ pub unsafe fn tv_free(tv: *mut typval_T) {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
     match val.v_type {
-        VAR_PARTIAL => unsafe { partial_unref((*tv).vval.v_partial) },
+        VAR_PARTIAL => unsafe { partial_unref((*tv).partial_or_null()) },
         // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
         // reference to the function and the name string.
         VAR_FUNC | VAR_STRING => {
             if val.v_type == VAR_FUNC {
-                unsafe { func_unref((*tv).vval.v_string) };
+                unsafe { func_unref((*tv).func_name_or_null()) };
             }
-            unsafe { xfree((*tv).vval.v_string.cast()) };
+            unsafe { xfree((*tv).string_or_func_name().cast()) };
         }
-        VAR_BLOB => unsafe { tv_blob_unref((*tv).vval.v_blob) },
-        VAR_LIST => unsafe { tv_list_unref((*tv).vval.v_list) },
-        VAR_DICT => unsafe { tv_dict_unref((*tv).vval.v_dict) },
+        VAR_BLOB => unsafe { tv_blob_unref((*tv).blob_or_null()) },
+        VAR_LIST => unsafe { tv_list_unref((*tv).list_or_null()) },
+        VAR_DICT => unsafe { tv_dict_unref((*tv).dict_or_null()) },
         _ => {}
     }
     unsafe { xfree(tv.cast()) };
@@ -83,26 +83,26 @@ pub unsafe fn tv_copy(from: *const typval_T, to: *mut typval_T) {
     match src.v_type {
         VAR_STRING | VAR_FUNC => {
             if !src.string_or_func_name().is_null() {
-                unsafe { (*to).vval.v_string = xstrdup((*from).vval.v_string) };
+                unsafe { (*to).vval.v_string = xstrdup((*from).string_or_func_name()) };
                 if src.v_type == VAR_FUNC {
-                    unsafe { func_ref((*to).vval.v_string) };
+                    unsafe { func_ref((*to).string_or_func_name()) };
                 }
             }
         }
         VAR_PARTIAL => {
-            if let Some(pt) = unsafe { (*to).vval.v_partial.as_mut() } {
+            if let Some(pt) = unsafe { (*to).partial_or_null().as_mut() } {
                 pt.pt_refcount.retain();
             }
         }
         VAR_BLOB => {
             if !src.blob_or_null().is_null() {
-                unsafe { (*(*to).vval.v_blob).bv_refcount.retain() };
+                unsafe { (*(*to).blob_or_null()).bv_refcount.retain() };
             }
         }
-        VAR_LIST => unsafe { tv_list_ref((*to).vval.v_list) },
+        VAR_LIST => unsafe { tv_list_ref((*to).list_or_null()) },
         VAR_DICT => {
             if !src.dict_or_null().is_null() {
-                unsafe { (*(*to).vval.v_dict).dv_refcount.retain() };
+                unsafe { (*(*to).dict_or_null()).dv_refcount.retain() };
             }
         }
         VAR_UNKNOWN => {
@@ -193,8 +193,10 @@ pub unsafe fn tv_islocked(tv: *const typval_T) -> bool {
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let (v_lock, v_type) = (val.v_lock, val.v_type);
     let container_lock = match v_type {
-        VAR_LIST => unsafe { tv_list_locked((*tv).vval.v_list) },
-        VAR_DICT => unsafe { (*tv).vval.v_dict.as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock),
+        VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
+        VAR_DICT => {
+            unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
+        }
         _ => VarLock::Unlocked,
     };
     v_lock == VarLock::Locked || container_lock == VarLock::Locked
@@ -214,9 +216,15 @@ pub unsafe extern "C" fn tv_check_lock(
     let lock = match val.v_type {
         // SAFETY: the caller's live typval, read through the union member
         // its own `v_type` selects.
-        VAR_BLOB => unsafe { (*tv).vval.v_blob.as_ref() }.map_or(VarLock::Unlocked, |b| b.bv_lock),
-        VAR_LIST => unsafe { (*tv).vval.v_list.as_ref() }.map_or(VarLock::Unlocked, |l| l.lv_lock),
-        VAR_DICT => unsafe { (*tv).vval.v_dict.as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock),
+        VAR_BLOB => {
+            unsafe { (*tv).blob_or_null().as_ref() }.map_or(VarLock::Unlocked, |b| b.bv_lock)
+        }
+        VAR_LIST => {
+            unsafe { (*tv).list_or_null().as_ref() }.map_or(VarLock::Unlocked, |l| l.lv_lock)
+        }
+        VAR_DICT => {
+            unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
+        }
         _ => VarLock::Unlocked,
     };
     (unsafe { value_check_lock((*tv).v_lock, name, name_len) })
@@ -302,11 +310,11 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
     match a.v_type {
         VAR_LIST => {
             let _recursing = Depth::of(&recursive_cnt);
-            unsafe { tv_list_equal((*tv1).vval.v_list, (*tv2).vval.v_list, ic) }
+            unsafe { tv_list_equal((*tv1).list_or_null(), (*tv2).list_or_null(), ic) }
         }
         VAR_DICT => {
             let _recursing = Depth::of(&recursive_cnt);
-            unsafe { tv_dict_equal((*tv1).vval.v_dict, (*tv2).vval.v_dict, ic) }
+            unsafe { tv_dict_equal((*tv1).dict_or_null(), (*tv2).dict_or_null(), ic) }
         }
         VAR_PARTIAL | VAR_FUNC => {
             if a.as_partial().is_some_and(|p| p.is_null())
@@ -317,7 +325,7 @@ pub unsafe fn tv_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool
             let _recursing = Depth::of(&recursive_cnt);
             unsafe { func_equal(tv1, tv2, ic) }
         }
-        VAR_BLOB => unsafe { tv_blob_equal((*tv1).vval.v_blob, (*tv2).vval.v_blob) },
+        VAR_BLOB => unsafe { tv_blob_equal((*tv1).blob_or_null(), (*tv2).blob_or_null()) },
         VAR_NUMBER => a.as_number() == b.as_number(),
         VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {

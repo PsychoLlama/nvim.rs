@@ -73,7 +73,7 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
     // the union's live arm; the append takes over the dictionary's
     // reference.
-    unsafe { tv_list_append_dict(rettv.vval.v_list, dict) };
+    unsafe { tv_list_append_dict(rettv.list_or_null(), dict) };
 
     for (key, value) in [
         (c"id", timer.timer_id as varnumber_T),

@@ -100,7 +100,7 @@ fn text_garray() -> garray_T {
 /// `li` must be a live list item whose value is a `VAR_STRING`.
 #[inline(always)]
 unsafe fn item_string(li: *const listitem_T) -> *mut c_char {
-    unsafe { (*li).li_tv.vval.v_string }
+    unsafe { (*li).li_tv.string_or_null() }
 }
 
 /// `strlen` of [`item_string`], with a NULL string reading as zero.
@@ -760,7 +760,7 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
         return false;
     }
     // SAFETY: a `VAR_DICT` holds a live dictionary.
-    let spdict = unsafe { tv.vval.v_dict };
+    let spdict = tv.dict_or_null();
     if unsafe { (*spdict).dv_hashtab.ht_used } != 2 {
         return false;
     }
@@ -774,7 +774,7 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
     let type_tv = unsafe { &(*type_di).di_tv };
     if type_tv.v_type != VAR_LIST
         || !core::ptr::eq(
-            unsafe { type_tv.vval.v_list },
+            type_tv.list_or_null(),
             eval_msgpack_type_lists.get()[kMPString as usize],
         )
         || val_di.is_null()
@@ -788,7 +788,7 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
     }
     // SAFETY: a `VAR_LIST` holds a live list or NULL, and nothing runs
     // between the items.
-    for li in unsafe { items(val_tv.vval.v_list) } {
+    for li in unsafe { items(val_tv.list_or_null()) } {
         if unsafe { (*li).li_tv.v_type } != VAR_STRING {
             return false;
         }

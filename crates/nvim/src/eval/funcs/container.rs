@@ -75,19 +75,19 @@ pub unsafe fn f_empty(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     // still be null, which each reader treats as empty.
     let empty = match tv.v_type {
         VAR_STRING | VAR_FUNC => {
-            let s = unsafe { tv.vval.v_string };
+            let s = tv.string_or_func_name();
             s.is_null() || unsafe { *s } == NUL as c_char
         }
         VAR_PARTIAL => false,
-        VAR_NUMBER => (unsafe { tv.vval.v_number }) == 0,
-        VAR_FLOAT => (unsafe { tv.vval.v_float }) == 0.0,
-        VAR_LIST => (unsafe { tv_list_len(tv.vval.v_list) }) == 0,
-        VAR_DICT => (unsafe { tv_dict_len(tv.vval.v_dict) }) == 0,
-        VAR_BLOB => (unsafe { tv_blob_len(tv.vval.v_blob) }) == 0,
-        VAR_SPECIAL => (unsafe { tv.vval.v_special }) == kSpecialVarNull,
+        VAR_NUMBER => (tv.number_or_zero()) == 0,
+        VAR_FLOAT => (tv.float_or_zero()) == 0.0,
+        VAR_LIST => (unsafe { tv_list_len(tv.list_or_null()) }) == 0,
+        VAR_DICT => (unsafe { tv_dict_len(tv.dict_or_null()) }) == 0,
+        VAR_BLOB => (unsafe { tv_blob_len(tv.blob_or_null()) }) == 0,
+        VAR_SPECIAL => tv.as_special() == Some(kSpecialVarNull),
         // A Bool other than the two named values leaves the answer at its
         // "empty" default, as upstream's switch does.
-        VAR_BOOL => (unsafe { tv.vval.v_bool }) != kBoolVarTrue,
+        VAR_BOOL => tv.as_bool() != Some(kBoolVarTrue),
         VAR_UNKNOWN => {
             unsafe { internal_error(c"f_empty(UNKNOWN)".as_ptr()) };
             true
@@ -136,7 +136,7 @@ fn flatten_common(args: Args<'_>, rettv: &mut typval_T, make_copy: bool) {
         depth
     };
 
-    let mut list = unsafe { args.get(0).vval.v_list };
+    let mut list = args.get(0).list_or_null();
     rettv.v_type = VAR_LIST;
     rettv.vval.v_list = list;
     if list.is_null() {
@@ -203,7 +203,7 @@ fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
     if error {
         return ptr::null_mut();
     }
-    let blob = unsafe { args.get(0).vval.v_blob };
+    let blob = args.get(0).blob_or_null();
     rettv.v_type = VAR_NUMBER;
     if idx < 0 {
         idx += unsafe { tv_blob_len(blob) };
@@ -222,7 +222,7 @@ fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
 /// `get()` over a List. The caller has checked the tag.
 fn get_from_list(args: Args<'_>) -> *mut typval_T {
     // SAFETY: the caller's obligation.
-    let l = unsafe { args.get(0).vval.v_list };
+    let l = args.get(0).list_or_null();
     if l.is_null() {
         return ptr::null_mut();
     }
@@ -239,7 +239,7 @@ fn get_from_list(args: Args<'_>) -> *mut typval_T {
 fn get_from_dict(args: Args<'_>) -> *mut typval_T {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation.
-    let d = unsafe { args.get(0).vval.v_dict };
+    let d = args.get(0).dict_or_null();
     if d.is_null() {
         return ptr::null_mut();
     }
@@ -269,9 +269,9 @@ fn get_from_func(args: Args<'_>, rettv: &mut typval_T) -> bool {
         pt_dict: ptr::null_mut(),
     };
     let pt = if args.ty(0) == VAR_PARTIAL {
-        unsafe { args.get(0).vval.v_partial }
+        args.get(0).partial_or_null()
     } else {
-        fref.pt_name = unsafe { args.get(0).vval.v_string };
+        fref.pt_name = args.get(0).func_name_or_null();
         &raw mut fref
     };
     let what = arg_string(&mut numbuf, args.get(1));
@@ -340,7 +340,7 @@ unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     let _ = unsafe { get_func_arity(name, req, opt, var) };
     rettv.v_type = VAR_DICT;
     dict_alloc_ret(rettv);
-    let dict = unsafe { rettv.vval.v_dict };
+    let dict = rettv.dict_or_null();
     // The bound arguments cover the required ones first.
     if unsafe { (*pt).pt_argc } >= required + optional {
         optional = 0;
@@ -382,7 +382,7 @@ fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
             return;
         }
     }
-    let b = unsafe { args.get(0).vval.v_blob };
+    let b = args.get(0).blob_or_null();
     if b.is_null() {
         return;
     }
@@ -406,7 +406,7 @@ fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
 /// `index()` over a List. The caller has checked the tag.
 fn index_list(args: Args<'_>, rettv: &mut typval_T) {
     // SAFETY: the caller's obligation.
-    let l = unsafe { args.get(0).vval.v_list };
+    let l = args.get(0).list_or_null();
     if l.is_null() {
         return;
     }
@@ -456,17 +456,18 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let expr = args.get(1);
     let vacuous = match expr.v_type {
         VAR_STRING => {
-            unsafe { expr.vval.v_string }.is_null()
-                || unsafe { *expr.vval.v_string } == NUL as c_char
+            expr.string_or_null().is_null() || unsafe { *expr.string_or_null() } == NUL as c_char
         }
-        VAR_FUNC => unsafe { expr.vval.v_partial }.is_null(),
+        // Upstream names `v_partial` here; under `VAR_FUNC` that is the
+        // same word as the name, so this asks whether the Funcref has one.
+        VAR_FUNC => expr.func_name_or_null().is_null(),
         _ => false,
     };
     if vacuous {
         return;
     }
     let startidx = if args.ty(2) == VAR_DICT {
-        unsafe { tv_dict_get_number_def(args.get(2).vval.v_dict, c"startidx".as_ptr(), 0) }
+        unsafe { tv_dict_get_number_def(args.get(2).dict_or_null(), c"startidx".as_ptr(), 0) }
     } else {
         0
     };
@@ -477,9 +478,9 @@ pub unsafe fn f_indexof(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
     rettv.vval.v_number = if args.ty(0) == VAR_BLOB {
-        unsafe { indexof_blob(args.get(0).vval.v_blob, startidx, args.ptr(1)) }
+        unsafe { indexof_blob(args.get(0).blob_or_null(), startidx, args.ptr(1)) }
     } else {
-        unsafe { indexof_list(args.get(0).vval.v_list, startidx, args.ptr(1)) }
+        unsafe { indexof_list(args.get(0).list_or_null(), startidx, args.ptr(1)) }
     };
     unsafe { restore_vimvar(Vv::Key, &raw mut save_key) };
     unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
@@ -594,9 +595,9 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
             let s = arg_string(&mut numbuf, args.get(0));
             unsafe { cstr::bytes_at(s).len() as varnumber_T }
         }
-        VAR_BLOB => unsafe { tv_blob_len(tv.vval.v_blob) as varnumber_T },
-        VAR_LIST => unsafe { tv_list_len(tv.vval.v_list) as varnumber_T },
-        VAR_DICT => unsafe { tv_dict_len(tv.vval.v_dict) as varnumber_T },
+        VAR_BLOB => unsafe { tv_blob_len(tv.blob_or_null()) as varnumber_T },
+        VAR_LIST => unsafe { tv_list_len(tv.list_or_null()) as varnumber_T },
+        VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as varnumber_T },
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
         _ => {

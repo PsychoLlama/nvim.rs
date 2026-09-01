@@ -109,7 +109,7 @@ pub unsafe fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 unsafe fn splitmove_options(opts: *mut typval_T) -> (c_int, c_int) {
     // SAFETY: the caller's obligation; `tv_dict_find` hands back a live entry
     // of the same dictionary or NULL.
-    let d = unsafe { (*opts).vval.v_dict };
+    let d = unsafe { (*opts).dict_or_null() };
     let mut flags = 0;
     if unsafe { tv_dict_get_number(d, c"vertical".as_ptr()) } != 0 {
         flags |= WSP_VERT.cast_signed();
@@ -258,7 +258,7 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
     if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
         return;
     }
-    let dict = unsafe { (*argvars).vval.v_dict };
+    let dict = unsafe { (*argvars).dict_or_null() };
     let mut win = cur_win();
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
@@ -330,7 +330,7 @@ pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     // SAFETY: `rettv` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `rettv` owns it.
     unsafe { tv_dict_alloc_ret(rettv) };
-    let dict = unsafe { (*rettv).vval.v_dict };
+    let dict = unsafe { (*rettv).dict_or_null() };
     let win = cur_win();
     let nr = |key: &CStr, value: varnumber_T| {
         // SAFETY: a live dictionary and a NUL-terminated key.

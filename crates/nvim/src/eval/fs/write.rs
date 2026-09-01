@@ -155,9 +155,7 @@ fn items(list: *const list_T) -> impl Iterator<Item = Item> {
 
 /// The List argument 0 holds, which may be NULL.
 fn list_of(tv: &typval_T) -> *const list_T {
-    // SAFETY: only reached under a `VAR_LIST` tag, which is what makes
-    // `v_list` the live arm.
-    unsafe { tv.vval.v_list }
+    tv.list_or_null()
 }
 
 // ---------------------------------------------------------------------
@@ -462,15 +460,11 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// The Blob argument 0 holds, or None when it is the empty one.
 fn blob_of(tv: &typval_T) -> Option<*const blob_T> {
-    // SAFETY: only reached under a `VAR_BLOB` tag, which is what makes
-    // `v_blob` the live arm.
-    let blob = unsafe { tv.vval.v_blob };
+    let blob = tv.blob_or_null();
     (!blob.is_null()).then_some(blob.cast_const())
 }
 
 /// The String argument 0 holds.
 fn string_of(tv: &typval_T) -> *const c_char {
-    // SAFETY: only reached under a `VAR_STRING` tag, which is what makes
-    // `v_string` the live arm.
-    unsafe { tv.vval.v_string }
+    tv.string_or_null()
 }

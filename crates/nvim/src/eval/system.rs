@@ -77,7 +77,7 @@ pub unsafe fn tv_to_argv(
     }
 
     // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
-    let argl: *mut list_T = unsafe { tv.vval.v_list };
+    let argl: *mut list_T = tv.list_or_null();
     // SAFETY: `argl` is a live List or null.
     let argc = unsafe { tv_list_len(argl) };
     if argc == 0 {
@@ -394,7 +394,7 @@ pub unsafe fn save_tv_as_string(
         return unsafe { buffer_as_string(tv, len) };
     }
     // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
-    unsafe { list_as_string(value.vval.v_list, len, endnl, crlf) }
+    unsafe { list_as_string(value.list_or_null(), len, endnl, crlf) }
 }
 
 /// A Number names a buffer; its whole text is the input.
@@ -404,7 +404,7 @@ pub unsafe fn save_tv_as_string(
 unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_char {
     // SAFETY: the caller's promise -- a `VAR_NUMBER`, so `v_number` is the
     // union's live member.
-    let nr = unsafe { Tv::new(tv).vval.v_number };
+    let nr = unsafe { Tv::new(tv).number_or_zero() };
     let Some(buf) = find_buf(nr as c_int) else {
         semsg!("E86: Buffer {} does not exist", nr);
         // SAFETY: the caller's promise about `len`.

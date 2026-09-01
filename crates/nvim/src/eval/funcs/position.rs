@@ -77,7 +77,7 @@ pub unsafe fn f_line2byte(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     };
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
-    if unsafe { rettv.vval.v_number } >= 0 {
+    if rettv.number_or_zero() >= 0 {
         unsafe { rettv.vval.v_number += 1 };
     }
 }
@@ -527,7 +527,7 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
     // readers answer from the process-wide character-search state.
     let csearch = last_csearch();
     unsafe { tv_dict_alloc_ret(rettv) };
-    let dict = unsafe { (*rettv).vval.v_dict };
+    let dict = unsafe { (*rettv).dict_or_null() };
     let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
     let forward = last_csearch_forward() as varnumber_T;
     let _ = unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
@@ -545,7 +545,7 @@ pub unsafe fn f_setcharsearch(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
     if check_arg(args, 0, tv_check_for_dict_arg).is_err() {
         return;
     }
-    let d = unsafe { args.get(0).vval.v_dict };
+    let d = args.get(0).dict_or_null();
     if d.is_null() {
         return;
     }
