@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, api_try, array_add};
+use crate::api::private::helpers::{Reported, api_try, array_add};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::cstr;
 use crate::getchar::PastePhase;
@@ -61,7 +61,7 @@ pub unsafe fn nvim_paste(
         }
         // SAFETY: `data` names its own bytes and `arena` is the caller's.
         let lines = unsafe { string_to_array(data, crlf, arena) };
-        let mut args__items: [Object; 2] = [NIL; 2];
+        let mut args__items: [Object; 2] = [Object::Nil; 2];
         let mut args = Array {
             size: 0 as size_t,
             capacity: 2 as size_t,
@@ -77,8 +77,7 @@ pub unsafe fn nvim_paste(
         // SAFETY: `args` is this frame's own and `arena`/`error` the caller's
         // and this frame's; the handler re-enters the editor through Lua.
         let rv = unsafe { nlua_exec(handler, name, args, kRetNilBool, arena, &mut error) };
-        // SAFETY: the tag says the boolean arm is the live one.
-        let refused = rv.type_0 == kObjectTypeBoolean && !unsafe { rv.data.boolean };
+        let refused = rv.as_boolean() == Some(false);
         if error.is_set() || refused {
             cancelled.set(true);
         }
@@ -148,18 +147,17 @@ pub unsafe fn nvim_put(
     for i in 0..lines.size {
         // SAFETY: `lines` names its own `size` items.
         let item = unsafe { *lines.items.add(i) };
-        if item.type_0 != kObjectTypeString {
-            let (want, got) = (api_typename(kObjectTypeString), api_typename(item.type_0));
+        let Some(line) = item.as_string() else {
+            let (want, got) = (api_typename(kObjectTypeString), api_typename(item.kind()));
             // SAFETY: `err` is this frame's own slot, and both type names are
             // static strings.
             error = err_expected(c"line", want, Some(got));
             return ().reported(error);
-        }
-        // SAFETY: the tag above says the string arm is the live one, and
-        // `reg.y_array` is the `size`-slot block just allocated. A NUL in an
-        // API string stands for a newline, as it does in every buffer line.
+        };
+        // SAFETY: `reg.y_array` is the `size`-slot block just allocated. A NUL
+        // in an API string stands for a newline, as it does in every buffer
+        // line.
         unsafe {
-            let line = item.data.string;
             let copy = copy_string(line, arena);
             *reg.y_array.add(i) = copy;
             let text = copy.data().cast::<::core::ffi::c_void>();

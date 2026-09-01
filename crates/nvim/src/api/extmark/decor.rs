@@ -153,35 +153,30 @@ pub unsafe fn parse_virt_text(
     let mut i: size_t = 0 as size_t;
     '_free_exit: {
         while i < chunks.size {
-            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                != unsafe { (*chunks.items.add(i)).type_0 } as ::core::ffi::c_uint
-            {
+            // SAFETY: `i` is below `chunks.size`.
+            let Object::Array(chunk) = (unsafe { *chunks.items.add(i) }) else {
                 let want = api_typename(kObjectTypeArray);
-                // SAFETY: `i` is below `chunks.size`.
-                let got = unsafe { api_typename((*chunks.items.add(i)).type_0) };
+                // SAFETY: as above.
+                let got = unsafe { api_typename((*chunks.items.add(i)).kind()) };
                 *err = err_expected(c"chunk", want, Some(got));
                 break '_free_exit;
-            }
-            let mut chunk: Array = unsafe { (*chunks.items.add(i)).data.array };
-            if !(chunk.size > 0 as size_t
-                && chunk.size <= 2 as size_t
-                && unsafe { (*chunk.items).type_0 } as ::core::ffi::c_uint
-                    == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint)
-            {
+            };
+            let head = match chunk.size {
+                // SAFETY: a non-empty array names its first item.
+                1..=2 => unsafe { (*chunk.items).as_string() },
+                _ => None,
+            };
+            let Some(str) = head else {
                 let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
                 *err = Error::validation(why);
                 break '_free_exit;
-            }
-            let mut str: String_0 = unsafe { (*chunk.items).data.string };
+            };
             let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
             's_146: {
                 if chunk.size == 2 as size_t {
                     let mut hl: Object =
                         unsafe { *chunk.items.offset(1 as ::core::ffi::c_int as isize) };
-                    if hl.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        let mut arr: Array = unsafe { hl.data.array };
+                    if let Object::Array(arr) = hl {
                         let mut j: size_t = 0 as size_t;
                         loop {
                             if j >= arr.size {

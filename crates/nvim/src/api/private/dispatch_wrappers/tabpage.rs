@@ -35,28 +35,28 @@ pub unsafe fn handle_nvim_open_tabpage(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_open_tabpage", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_boolean(args[1]) else {
         wrong_type(error, 2, c"nvim_open_tabpage", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_3: KeyDict_tabpage_config =
         match read_keydict(Some(key_dict_tabpage_config_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 3, c"nvim_open_tabpage", c"Dict(tabpage_config) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -64,12 +64,7 @@ pub unsafe fn handle_nvim_open_tabpage(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeTabpage,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Tabpage(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_del_var`.
@@ -100,22 +95,22 @@ pub unsafe fn handle_nvim_tabpage_del_var(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_del_var", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_tabpage_del_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_tabpage_del_var(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_number`.
@@ -146,17 +141,17 @@ pub unsafe fn handle_nvim_tabpage_get_number(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_get_number", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_tabpage_get_number(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_var`.
@@ -187,15 +182,15 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_get_var", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_tabpage_get_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -233,22 +228,17 @@ pub unsafe fn handle_nvim_tabpage_get_win(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_get_win", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_tabpage_get_win(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeWindow,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Window(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_is_valid`.
@@ -279,14 +269,14 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_is_valid", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let rv = nvim_tabpage_is_valid(arg_1);
-    obj(kObjectTypeBoolean, object_data { boolean: rv })
+    Object::Boolean(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_list_wins`.
@@ -317,11 +307,11 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_list_wins", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -329,7 +319,7 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_var`.
@@ -360,15 +350,15 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_set_var", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_tabpage_set_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -376,7 +366,7 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     if let Err(e) = unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_win`.
@@ -407,18 +397,18 @@ pub unsafe fn handle_nvim_tabpage_set_win(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
         wrong_type(error, 1, c"nvim_tabpage_set_win", c"Tabpage");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_handle(args[1], kObjectTypeWindow) else {
         wrong_type(error, 2, c"nvim_tabpage_set_win", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     if let Err(e) = nvim_tabpage_set_win(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

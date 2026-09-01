@@ -37,19 +37,18 @@ pub unsafe fn nvim_exec_autocmds(
         return ().reported(error);
     }
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    match opts.group.type_0 as ::core::ffi::c_uint {
-        kObjectTypeNil => {}
-        kObjectTypeString => {
-            au_group = unsafe { augroup_find(opts.group.data.string.data()) };
+    match opts.group {
+        Object::Nil => {}
+        Object::String(group) => {
+            au_group = unsafe { augroup_find(group.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 // SAFETY: the value the keyset carried, live for this call.
-                error = err_bad_value(c"group", unsafe { opts.group.data.string.as_cstr() });
+                error = err_bad_value(c"group", unsafe { group.as_cstr() });
                 return ().reported(error);
             }
         }
-        kObjectTypeInteger => {
-            // SAFETY: the type tag says this arm's union field is the live one.
-            au_group = unsafe { opts.group.data.integer } as ::core::ffi::c_int;
+        Object::Integer(group) => {
+            au_group = group as ::core::ffi::c_int;
             name = if au_group == 0 as ::core::ffi::c_int {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {
@@ -63,7 +62,7 @@ pub unsafe fn nvim_exec_autocmds(
         _ => {
             if true {
                 let want = c"String or Integer";
-                let got = api_typename(opts.group.type_0);
+                let got = api_typename(opts.group.kind());
                 error = err_expected(c"group", want, Some(got));
                 return ().reported(error);
             }
@@ -130,20 +129,25 @@ pub unsafe fn nvim_exec_autocmds(
     let mut did_aucmd: bool = false;
     let mut event_str_index: size_t = 0 as size_t;
     while event_str_index < event_array.size {
-        let mut event_str: Object = unsafe { *event_array.items.add(event_str_index) };
-        let mut event_nr: event_T = unsafe { event_name2nr_str(event_str.data.string) };
+        let event_str: Object = unsafe { *event_array.items.add(event_str_index) };
+        let event_str = event_str
+            .as_string()
+            .expect("`unpack_string_or_array` answers Strings only");
+        let mut event_nr: event_T = unsafe { event_name2nr_str(event_str) };
         if !((event_nr as ::core::ffi::c_uint)
             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
         {
             // SAFETY: the value the keyset carried, live for this call.
-            error = err_bad_value(c"event", unsafe { event_str.data.string.as_cstr() });
+            error = err_bad_value(c"event", unsafe { event_str.as_cstr() });
             return ().reported(error);
         }
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.size {
-            let mut pat: Object = unsafe { *patterns.items.add(pat_index) };
+            let pat: Object = unsafe { *patterns.items.add(pat_index) };
             let mut fname: *mut ::core::ffi::c_char = if !has_buf {
-                unsafe { pat.data.string }.data()
+                pat.as_string()
+                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
+                    .data()
             } else {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             };

@@ -272,10 +272,9 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
                 &mut err,
             )
         };
-        if ret.type_0 == kObjectTypeString as _ {
-            // SAFETY: the object the call handed back, whose string arm the
-            // tag above says is the live one.
-            p = unsafe { string_to_cstr(ret.data.string) };
+        if let Object::String(s) = ret {
+            // SAFETY: the string the call handed back.
+            p = unsafe { string_to_cstr(s) };
         }
         // SAFETY: the object is ours to release once its string is copied.
         unsafe { api_free_object(ret) };

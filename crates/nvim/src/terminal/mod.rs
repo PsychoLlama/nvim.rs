@@ -65,8 +65,8 @@ use crate::types::{
     Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, MarkAdjustMode, Object, OptVal, OptValData,
     OptValType, OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor,
     VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T,
-    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, kObjectTypeNil, kObjectTypeString,
-    linenr_T, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    buf_T, colnr_T, dict_T, exarg_T, handle_T, int16_t, linenr_T, pos_T, save_v_event_T, size_t,
+    uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -927,14 +927,13 @@ unsafe fn dict_lookup(dict: *mut dict_T, key: *const c_char) -> Object {
 unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char {
     // SAFETY: `buf` is a live buffer and `key` is NUL-terminated.
     let mut obj = unsafe { dict_lookup((*buf).b_vars, key) };
-    if obj.type_0 == kObjectTypeNil {
+    if obj.is_nil() {
         // SAFETY: as above, against the global variables.
         obj = unsafe { dict_lookup(get_globvar_dict(), key) };
     }
-    if obj.type_0 == kObjectTypeString {
-        // SAFETY: the object is a string, so this is the live arm — and the
-        // bytes are the variable's, so nothing here owns them.
-        return unsafe { obj.data.string.data() };
+    if let Object::String(s) = obj {
+        // The bytes are the variable's, so nothing here owns them.
+        return s.data();
     }
     // SAFETY: not a string, so there is no borrowed `String` to release.
     unsafe { api_free_object(obj) };

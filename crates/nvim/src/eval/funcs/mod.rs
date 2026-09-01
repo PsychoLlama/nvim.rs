@@ -4,7 +4,7 @@ use crate::global_cell::GlobalCell;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, Callback_data, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode,
-    MotionType, Object, ProcType, String_0, XDGVarType, garray_T, object_data, size_t, uint64_t,
+    MotionType, Object, ProcType, String_0, XDGVarType, garray_T, size_t, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash

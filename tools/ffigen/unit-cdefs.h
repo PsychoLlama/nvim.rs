@@ -121,8 +121,7 @@ typedef struct KeyDict__shada_register KeyDict__shada_register;
 typedef struct KeyDict__shada_search_pat KeyDict__shada_search_pat;
 typedef struct KeyDict_buf_attach KeyDict_buf_attach;
 typedef struct KeyDict_buf_delete KeyDict_buf_delete;
-typedef union object_data object_data;
-typedef struct object object;
+typedef struct Object Object;
 typedef struct KeyDict_clear_autocmds KeyDict_clear_autocmds;
 typedef struct KeyDict_cmd KeyDict_cmd;
 typedef struct KeyDict_cmd_magic KeyDict_cmd_magic;
@@ -289,7 +288,6 @@ typedef struct uv_tty_s uv_tty_s;
 typedef struct uv_write_s uv_write_s;
 typedef struct wordcount_T wordcount_T;
 typedef unsigned int AlignTextPos;
-typedef struct object Object;
 typedef Object (*ApiDispatchWrapper)(uint64_t, Array, Arena *, Error *);
 typedef consumed_blk *ArenaMem;
 typedef struct ufunc_S ufunc_T;
@@ -1027,18 +1025,20 @@ struct KeyDict_buf_delete {
   Boolean force;
   Boolean unload;
 };
-union object_data {
-  Boolean boolean;
-  Integer integer;
-  Float floating;
-  String string;
-  Array array;
-  Dict dict;
-  LuaRef luaref;
-};
-struct object {
-  ObjectType type;
-  object_data data;
+struct Object {
+  unsigned int tag;
+  union {
+    Boolean boolean_;
+    Integer integer_;
+    Float float_;
+    String string_;
+    Array array_;
+    Dict dict_;
+    LuaRef luaref_;
+    Integer buffer_;
+    Integer window_;
+    Integer tabpage_;
+  } payload;
 };
 struct KeyDict_clear_autocmds {
   OptionalKeys is_set__clear_autocmds_;
@@ -3732,6 +3732,9 @@ static const int EXP_PROFDEL = 2;
 static const int EXTMARK_PAYLOAD_LEN = 48;
 static const int EXTRA = 253;
 static const int EXTRA_MARKS = 10;
+static const int EXT_BUFFER = 0;
+static const int EXT_TABPAGE = 2;
+static const int EXT_WINDOW = 1;
 static const int Empty = 1;
 static const int ExArgt_ARGOPT = 131072;
 static const int ExArgt_BANG = 2;
@@ -4785,7 +4788,6 @@ static const int NV_SS = 16;
 static const int NV_SSS = 32;
 static const int NV_STS = 64;
 static const int Normal = 0;
-static const int OBJECT_TYPE_DICT = 6;
 static const int OK = 1;
 static const int ONLCR = 4;
 static const int OPENLINE_COM_LIST = 16;

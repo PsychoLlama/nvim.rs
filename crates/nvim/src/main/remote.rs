@@ -26,8 +26,7 @@ use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
     Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
-    dict_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
-    kObjectTypeString, object_data, size_t, uint64_t,
+    dict_T, size_t, uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -151,38 +150,16 @@ pub(crate) unsafe fn remote_request(
     args.items = unsafe { xrealloc(args.items as *mut c_void, want) } as *mut Object;
     for i in remote_args..argc {
         let word = unsafe { cstr_as_string(*argv.offset(i as isize)) };
-        let arg = Object {
-            type_0: kObjectTypeString,
-            data: object_data { string: word },
-        };
-        unsafe { *args.items.add(args.size) = arg };
+        unsafe { *args.items.add(args.size) = Object::String(word) };
         args.size += 1;
     }
 
     // `vim._cs_remote(channel, address, connect_error, args)`.
     let mut call_args: [Object; 4] = [
-        Object {
-            type_0: kObjectTypeInteger,
-            data: object_data {
-                integer: chan as c_int as Integer,
-            },
-        },
-        Object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: unsafe { cstr_as_string(server_addr) },
-            },
-        },
-        Object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: unsafe { cstr_as_string(connect_error) },
-            },
-        },
-        Object {
-            type_0: kObjectTypeArray,
-            data: object_data { array: args },
-        },
+        Object::Integer(chan as c_int as Integer),
+        Object::String(unsafe { cstr_as_string(server_addr) }),
+        Object::String(unsafe { cstr_as_string(connect_error) }),
+        Object::Array(args),
     ];
     let a = Array {
         size: 4,
@@ -205,12 +182,11 @@ pub(crate) unsafe fn remote_request(
         unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
         unsafe { os_exit(2) };
     }
-    if reply.type_0 != kObjectTypeDict {
+    let Some(dict) = reply.as_dict() else {
         let msg = c"vim._cs_remote returned unexpected value\n".as_ptr();
         unsafe { fprintf(stderr, msg) };
         unsafe { os_exit(2) };
-    }
-    let dict = unsafe { reply.data.dict };
+    };
 
     // `should_exit` and `tabbed` are three-state so that "the server did
     // not say" is distinguishable from "the server said no".
@@ -220,29 +196,29 @@ pub(crate) unsafe fn remote_request(
         let (key, value) = unsafe { field(&dict, i) };
         match key.to_bytes() {
             b"errmsg" => {
-                if value.type_0 != kObjectTypeString {
+                let Some(text) = value.as_string() else {
                     unsafe { bad_reply_type(c"errmsg") };
-                }
-                unsafe { fprintf(stderr, c"%s\n".as_ptr(), value.data.string.data()) };
+                };
+                unsafe { fprintf(stderr, c"%s\n".as_ptr(), text.data()) };
                 unsafe { os_exit(2) };
             }
             b"result" => {
-                if value.type_0 != kObjectTypeString {
+                let Some(text) = value.as_string() else {
                     unsafe { bad_reply_type(c"result") };
-                }
-                unsafe { printf(c"%s".as_ptr(), value.data.string.data()) };
+                };
+                unsafe { printf(c"%s".as_ptr(), text.data()) };
             }
             b"tabbed" => {
-                if value.type_0 != kObjectTypeBoolean {
+                let Some(flag) = value.as_boolean() else {
                     unsafe { bad_reply_type(c"tabbed") };
-                }
-                tabbed = Some(unsafe { value.data.boolean });
+                };
+                tabbed = Some(flag);
             }
             b"should_exit" => {
-                if value.type_0 != kObjectTypeBoolean {
+                let Some(flag) = value.as_boolean() else {
                     unsafe { bad_reply_type(c"should_exit") };
-                }
-                should_exit = Some(unsafe { value.data.boolean });
+                };
+                should_exit = Some(flag);
             }
             _ => {}
         }

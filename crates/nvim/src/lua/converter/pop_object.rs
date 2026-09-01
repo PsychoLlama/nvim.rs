@@ -70,11 +70,12 @@ pub unsafe fn nlua_pop_object(
     arena: *mut Arena,
     err: &mut Error,
 ) -> Object {
+    let mut ret = Object::Nil;
+    let mut stack = ObjPopStack::new();
+    stack.push(ObjPopStackItem::leaf(&raw mut ret));
+    // SAFETY: the caller's promise -- a live state with a value on top.
     unsafe {
-        let mut ret = Object::NIL;
         let initial_size = lua_gettop(lstate);
-        let mut stack = ObjPopStack::new();
-        stack.push(ObjPopStackItem::leaf(&raw mut ret));
         while !err.is_set() && !stack.is_empty() {
             let mut cur = stack.last();
             stack.pop();
@@ -83,49 +84,55 @@ pub unsafe fn nlua_pop_object(
                     *err = Error::exception(c"Lua failed to grow stack");
                     break;
                 }
-                if (*cur.obj).type_0 == kObjectTypeDict {
-                    if (*cur.obj).data.dict.size == (*cur.obj).data.dict.capacity {
-                        // Full: pop the table and the key lua_next left.
-                        lua_pop(lstate, 2);
-                        continue;
-                    }
-                    // Skip any non-string key: those are not part of the
-                    // dictionary being built.
-                    let mut next_key_found = false;
-                    while lua_next(lstate, -2) != 0 {
-                        if lua_type(lstate, -2) == LUA_TSTRING {
-                            next_key_found = true;
-                            break;
+                match &mut *cur.obj {
+                    Object::Dict(dict) => {
+                        if dict.size == dict.capacity {
+                            // Full: pop the table and the key lua_next left.
+                            lua_pop(lstate, 2);
+                            continue;
                         }
-                        lua_pop(lstate, 1);
+                        // Skip any non-string key: those are not part of the
+                        // dictionary being built.
+                        let mut next_key_found = false;
+                        while lua_next(lstate, -2) != 0 {
+                            if lua_type(lstate, -2) == LUA_TSTRING {
+                                next_key_found = true;
+                                break;
+                            }
+                            lua_pop(lstate, 1);
+                        }
+                        if !next_key_found {
+                            lua_pop(lstate, 1);
+                            continue;
+                        }
+                        let mut len: size_t = 0;
+                        let s = lua_tolstring(lstate, -2, &raw mut len);
+                        let idx = dict.size;
+                        dict.size = idx.wrapping_add(1);
+                        (*dict.items.add(idx)).key =
+                            arena_string(arena, String_0::from_raw_parts(s.cast_mut(), len));
+                        let value = &raw mut (*dict.items.add(idx)).value;
+                        stack.push(cur);
+                        cur = ObjPopStackItem::leaf(value);
                     }
-                    if !next_key_found {
-                        lua_pop(lstate, 1);
-                        continue;
+                    Object::Array(array) => {
+                        if array.size == array.capacity {
+                            lua_pop(lstate, 1);
+                            continue;
+                        }
+                        let idx = array.size;
+                        array.size = idx.wrapping_add(1);
+                        lua_rawgeti(lstate, -1, idx as ::core::ffi::c_int + 1);
+                        stack.push(cur);
+                        cur = ObjPopStackItem::leaf(array.items.add(idx));
                     }
-                    let mut len: size_t = 0;
-                    let s = lua_tolstring(lstate, -2, &raw mut len);
-                    let idx = (*cur.obj).data.dict.size;
-                    (*cur.obj).data.dict.size = idx.wrapping_add(1);
-                    (*(*cur.obj).data.dict.items.add(idx)).key =
-                        arena_string(arena, String_0::from_raw_parts(s.cast_mut(), len));
-                    stack.push(cur);
-                    cur = ObjPopStackItem::leaf(
-                        &raw mut (*(*cur.obj).data.dict.items.add(idx)).value,
-                    );
-                } else if (*cur.obj).data.array.size == (*cur.obj).data.array.capacity {
-                    lua_pop(lstate, 1);
-                    continue;
-                } else {
-                    let idx = (*cur.obj).data.array.size;
-                    (*cur.obj).data.array.size = idx.wrapping_add(1);
-                    lua_rawgeti(lstate, -1, idx as ::core::ffi::c_int + 1);
-                    stack.push(cur);
-                    cur = ObjPopStackItem::leaf((*cur.obj).data.array.items.add(idx));
+                    // Only a container is ever suspended back onto the stack,
+                    // and the only containers are dictionaries and arrays.
+                    _ => unreachable!("a suspended frame holds a dict or an array"),
                 }
             }
             debug_assert!(!cur.container);
-            *cur.obj = Object::NIL;
+            *cur.obj = Object::Nil;
             'converted: {
                 match lua_type(lstate, -1) {
                     LUA_TNIL => break 'converted,
@@ -156,20 +163,20 @@ pub unsafe fn nlua_pop_object(
                     }
                     LUA_TTABLE => {
                         let table_props = nlua_traverse_table(lstate);
+                        let (maxidx, keys) = (table_props.maxidx, table_props.string_keys_num);
                         match table_props.type_0 {
                             kObjectTypeArray => {
                                 *cur.obj = Object::array(Array::EMPTY);
-                                if table_props.maxidx != 0 {
-                                    (*cur.obj).data.array = arena_array(arena, table_props.maxidx);
+                                if maxidx != 0 {
+                                    *cur.obj = Object::array(arena_array(arena, maxidx));
                                     cur.container = true;
                                     stack.push(cur);
                                 }
                             }
                             kObjectTypeDict => {
                                 *cur.obj = Object::dict(Dict::EMPTY);
-                                if table_props.string_keys_num != 0 {
-                                    (*cur.obj).data.dict =
-                                        arena_dict(arena, table_props.string_keys_num);
+                                if keys != 0 {
+                                    *cur.obj = Object::dict(arena_dict(arena, keys));
                                     cur.container = true;
                                     stack.push(cur);
                                     lua_pushnil(lstate);
@@ -196,7 +203,7 @@ pub unsafe fn nlua_pop_object(
                         let is_nil = lua_rawequal(lstate, -2, -1) != 0;
                         lua_pop(lstate, 1);
                         if is_nil {
-                            *cur.obj = Object::NIL;
+                            *cur.obj = Object::Nil;
                         } else {
                             *err = Error::validation(c"Cannot convert userdata");
                         }
@@ -214,10 +221,10 @@ pub unsafe fn nlua_pop_object(
             if arena.is_null() {
                 api_free_object(ret);
             }
-            ret = Object::NIL;
+            ret = Object::Nil;
             lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);
         }
         debug_assert!(lua_gettop(lstate) == initial_size - 1);
-        ret
     }
+    ret
 }

@@ -35,10 +35,9 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, Dict, Error, HlMessage, Integer, NUL, Object, String_0, Tabpage, TryState, Window,
-    buf_T, colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException,
-    kObjectTypeNil, linenr_T, msglist_T, object, object_data, pos_T, scid_T, tabpage_T, uint64_t,
-    win_T,
+    Buffer, Dict, Error, HlMessage, Integer, NUL, String_0, Tabpage, TryState, Window, buf_T,
+    colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, linenr_T, msglist_T,
+    pos_T, scid_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -76,12 +75,6 @@ const SID_API_CLIENT: scid_T = -9;
 const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
-
-/// The `Object` that says "no value": upstream's `NIL`.
-pub(crate) const NIL: Object = object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
 
 const EMPTY_DICT: Dict = Dict {
     size: 0,

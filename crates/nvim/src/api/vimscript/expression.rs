@@ -144,7 +144,7 @@ pub unsafe fn nvim_parse_expression(
     // SAFETY: `heap` is null or that block.
     unsafe { xfree(heap) };
 
-    let mut ast = Object::NIL;
+    let mut ast = Object::Nil;
     // SAFETY: `east.root` and `ast` are this frame's, and `arena` the
     // caller's.
     unsafe { convert_ast(arena, &raw mut east.root, &raw mut ast) };
@@ -220,15 +220,18 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
             continue;
         }
         // SAFETY: as above.
-        if unsafe { (*frame.ret_node_p).type_0 } == kObjectTypeNil {
+        if unsafe { (*frame.ret_node_p).is_nil() } {
             // SAFETY: `node` is a live node of the parser's tree.
             let ret_node = arena_dict(arena, unsafe { node_dict_size(&*node) });
             // SAFETY: as above.
             unsafe { *frame.ret_node_p = Object::dict(ret_node) };
         }
-        // SAFETY: the slot now holds a dictionary, so its union arm is the
-        // one this addresses.
-        let ret_node: *mut Dict = unsafe { &raw mut (*frame.ret_node_p).data.dict };
+        // SAFETY: as above -- and the slot now holds a dictionary, which is
+        // what this addresses in place.
+        let ret_node: *mut Dict = match unsafe { &mut *frame.ret_node_p } {
+            Object::Dict(dict) => dict,
+            _ => unreachable!("the slot was given a dictionary just above"),
+        };
         // SAFETY: `node` is live.
         let children = unsafe { (*node).children };
         if !children.is_null() {
@@ -240,7 +243,7 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
             // dictionary for this pair.
             unsafe {
                 for _ in 0..num_children {
-                    array_add(&mut children_array, Object::NIL);
+                    array_add(&mut children_array, Object::Nil);
                 }
                 dict_put(&mut *ret_node, c"children", Object::array(children_array));
             }
@@ -262,8 +265,8 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
             // SAFETY: `node` is live and `ret_node` is its dictionary,
             // sized by `node_dict_size` for exactly what this adds.
             unsafe { finish_node(arena, node, &mut *ret_node) };
-            // SAFETY: the slot holds the dictionary just filled in.
-            let filled = unsafe { (*frame.ret_node_p).data.dict };
+            // SAFETY: `ret_node` still addresses the dictionary just filled in.
+            let filled = unsafe { *ret_node };
             debug_assert!(
                 filled.size == filled.capacity,
                 "cur_item.ret_node_p->data.dict.size == cur_item.ret_node_p->data.dict.capacity"

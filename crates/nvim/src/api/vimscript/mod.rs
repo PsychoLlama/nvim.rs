@@ -23,8 +23,7 @@ use crate::types::{
     KeyDict_exec_opts, KeyValuePair, Object, ParserHighlight, ParserHighlightChunk, ParserLine,
     ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, dict_T,
     dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeDict, kObjectTypeNil, linenr_T, partial_T, ptrdiff_t, size_t,
-    typval_T, uint64_t, uvarnumber_T,
+    kErrorTypeValidation, linenr_T, partial_T, ptrdiff_t, size_t, typval_T, uint64_t, uvarnumber_T,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,

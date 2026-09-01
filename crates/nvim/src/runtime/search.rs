@@ -456,31 +456,19 @@ pub unsafe fn do_in_path(
 }
 
 fn boolean_obj(value: bool) -> Object {
-    Object {
-        type_0: kObjectTypeBoolean,
-        data: object_data { boolean: value },
-    }
+    Object::Boolean(value)
 }
 
 pub(crate) fn integer_obj(value: Integer) -> Object {
-    Object {
-        type_0: kObjectTypeInteger,
-        data: object_data { integer: value },
-    }
+    Object::Integer(value)
 }
 
 fn string_obj(string: String_0) -> Object {
-    Object {
-        type_0: kObjectTypeString,
-        data: object_data { string },
-    }
+    Object::String(string)
 }
 
 fn dict_obj(dict: Dict) -> Object {
-    Object {
-        type_0: kObjectTypeDict,
-        data: object_data { dict },
-    }
+    Object::Dict(dict)
 }
 
 /// `nvim__runtime_inspect()`: the cached search path as it stands.
@@ -611,18 +599,17 @@ unsafe fn runtime_get_named_common(
             continue;
         }
         for pat_item in pats {
-            if pat_item.type_0 != kObjectTypeString as ObjectType {
+            let Object::String(pattern) = pat_item else {
                 continue;
-            }
-            // SAFETY: the object is a string, so its union holds one; `buf`
-            // is NUL-terminated by `snprintf` within its length.
+            };
+            // SAFETY: `buf` is NUL-terminated by `snprintf` within its length.
             let size = unsafe {
                 snprintf(
                     buf.as_mut_ptr(),
                     buf.len(),
                     c"%s/%s".as_ptr(),
                     (*item).path,
-                    pat_item.data.string.data(),
+                    pattern.data(),
                 )
             } as size_t;
             if size >= buf.len() || !unsafe { os_file_is_readable(buf.as_mut_ptr()) } {

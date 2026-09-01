@@ -13,8 +13,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
-    Context, Error, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    kObjectTypeDict, object, object_data, typval_T, varnumber_T,
+    Context, Error, EvalFuncData, Object, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -68,11 +68,7 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut arena = ARENA_EMPTY;
     let ctx_dict = unsafe { ctx_to_dict(ctx, &raw mut arena) };
     let mut err = NO_ERROR;
-    let dict = object {
-        type_0: kObjectTypeDict,
-        data: object_data { dict: ctx_dict },
-    };
-    unsafe { object_to_vim(dict, rettv) };
+    unsafe { object_to_vim(Object::Dict(ctx_dict), rettv) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     err.clear();
 }
@@ -146,7 +142,9 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let save_did_emsg = did_emsg.get();
     did_emsg.set(0);
     let mut arena = ARENA_EMPTY;
-    let dict = unsafe { vim_to_object(args.ptr(0), &raw mut arena, true).data.dict };
+    let dict = unsafe { vim_to_object(args.ptr(0), &raw mut arena, true) }
+        .as_dict()
+        .expect("a VAR_DICT converts to a Dict object");
     let mut tmp = CONTEXT_INIT;
     let mut err = NO_ERROR;
     unsafe { ctx_from_dict(dict, &raw mut tmp, &mut err) };

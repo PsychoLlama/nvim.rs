@@ -19,7 +19,7 @@ use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
-use crate::types::{CursorShape, Dict, HlAttrs, RgbValue, TUIData, cursorentry_T, int32_t};
+use crate::types::{CursorShape, Dict, HlAttrs, Object, RgbValue, TUIData, cursorentry_T, int32_t};
 use core::ffi::{CStr, c_int};
 
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`
@@ -94,11 +94,14 @@ pub unsafe fn decode_cursor_entry(args: Dict) -> cursorentry_T {
             } else {
                 CStr::from_ptr(item.key.data()).to_bytes()
             };
-            match key {
-                b"cursor_shape" => entry.shape = decode_shape(item.value.data.string.data()),
-                b"blinkon" => entry.blinkon = item.value.data.integer as c_int,
-                b"blinkoff" => entry.blinkoff = item.value.data.integer as c_int,
-                b"attr_id" => entry.id = item.value.data.integer as c_int,
+            // A value of the wrong kind keeps the default, the same as a
+            // key nobody recognised; the transpile read the union arm the
+            // *key* named and would have dereferenced whatever was there.
+            match (key, item.value) {
+                (b"cursor_shape", Object::String(name)) => entry.shape = decode_shape(name.data()),
+                (b"blinkon", Object::Integer(ms)) => entry.blinkon = ms as c_int,
+                (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = ms as c_int,
+                (b"attr_id", Object::Integer(id)) => entry.id = id as c_int,
                 _ => {}
             }
         }

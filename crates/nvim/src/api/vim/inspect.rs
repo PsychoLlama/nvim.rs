@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, array_add, dict_put};
+use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api::private::validate::err_bad_number;
 use crate::api_error;
 use crate::cstr;
@@ -95,7 +95,7 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
             };
-            let mut a__items: [Object; 1] = [NIL; 1];
+            let mut a__items: [Object; 1] = [Object::Nil; 1];
             a.capacity = 1 as size_t;
             a.items = &raw mut a__items as *mut Object;
             unsafe { array_add(&mut a, Object::integer(pid)) };
@@ -104,10 +104,8 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             // SAFETY: `a` is the one-slot block above, `arena` is the
             // caller's and `error` this frame's own slot.
             let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
-            if o.type_0 as ::core::ffi::c_uint
-                == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-            {
-                rvobj = unsafe { o.data.array };
+            if let Object::Array(array) = o {
+                rvobj = array;
             } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
             {
                 error = api_error!(
@@ -127,19 +125,19 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
 
 pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = Error::none();
-    let mut rvobj: Object = NIL;
+    let mut rvobj: Object = Object::Nil;
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
         // SAFETY: `error` is this frame's own slot and `name` a literal.
         error = err_bad_number(unsafe { cstr::at(name) }, pid);
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     }
     let mut a: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut a__items: [Object; 1] = [NIL; 1];
+    let mut a__items: [Object; 1] = [Object::Nil; 1];
     a.capacity = 1 as size_t;
     a.items = &raw mut a__items as *mut Object;
     if a.size == a.capacity {
@@ -162,14 +160,9 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
     // `error` this frame's own slot.
     let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
-    if o.type_0 as ::core::ffi::c_uint
-        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-        && unsafe { o.data.array }.size == 0 as size_t
-    {
-        return NIL.reported(error);
-    } else if o.type_0 as ::core::ffi::c_uint
-        == kObjectTypeDict as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if o.as_array().is_some_and(|array| array.size == 0 as size_t) {
+        return Object::Nil.reported(error);
+    } else if matches!(o, Object::Dict(_)) {
         rvobj = o;
     } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         error = api_error!(kErrorTypeException, "Failed to get process info. pid={pid}");

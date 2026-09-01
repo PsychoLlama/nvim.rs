@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, array_add};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_out_of_range;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
@@ -31,7 +31,7 @@ pub unsafe fn nvim_buf_set_text(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut scratch__items: [Object; 1] = [NIL; 1];
+    let mut scratch__items: [Object; 1] = [Object::Nil; 1];
     scratch.capacity = 1 as size_t;
     scratch.items = &raw mut scratch__items as *mut Object;
     if replacement.size == 0 as size_t {
@@ -110,10 +110,17 @@ pub unsafe fn nvim_buf_set_text(
         old_byte += end_col as bcount_t + 1 as bcount_t;
     }
     let last_index = replacement.size.wrapping_sub(1 as size_t);
+    // Every item is a String: `check_string_array` above turned anything else
+    // into an error.
+    let only_strings = "check_string_array accepted only Strings";
     // SAFETY: `replacement` is a non-empty array, so both indices are in it.
-    let first_item: String_0 = unsafe { (*replacement.items).data.string };
+    let first_item: String_0 = unsafe { *replacement.items }
+        .as_string()
+        .expect(only_strings);
     // SAFETY: as above.
-    let last_item: String_0 = unsafe { (*replacement.items.add(last_index)).data.string };
+    let last_item: String_0 = unsafe { *replacement.items.add(last_index) }
+        .as_string()
+        .expect(only_strings);
     let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
     let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
     if replacement.size == 1 as size_t {
@@ -172,7 +179,10 @@ pub unsafe fn nvim_buf_set_text(
     new_byte += first_item.len() as bcount_t;
     let mut i_0: size_t = 1 as size_t;
     while i_0 < new_len.wrapping_sub(1 as size_t) {
-        let l: String_0 = unsafe { (*replacement.items.add(i_0)).data.string };
+        // SAFETY: `i_0` is below `replacement.size`.
+        let l: String_0 = unsafe { *replacement.items.add(i_0) }
+            .as_string()
+            .expect(only_strings);
         unsafe { *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len()) };
         // SAFETY: `i_0` is below `new_len`, so the slot was just written.
         let line = unsafe { *lines.add(i_0) } as *mut ::core::ffi::c_void;

@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported};
+use crate::api::private::helpers::Reported;
 use crate::guard::Suppress;
 use crate::types::Failed;
 
@@ -22,7 +22,7 @@ pub unsafe fn nvim_buf_get_var(
     let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     }
     unsafe { dict_get_value((*b).b_vars, name, arena, &mut error) }.reported(error)
 }
@@ -107,7 +107,7 @@ pub unsafe fn nvim_buf_del_var(buf: Buffer, name: String_0) -> Result<(), Error>
     let vars = unsafe { (*b).b_vars };
     let no_arena = ::core::ptr::null_mut::<Arena>();
     // SAFETY: `vars` is that buffer's variable dict, `error` our own slot.
-    unsafe { dict_set_var(vars, name, NIL, true, false, no_arena, &mut error) };
+    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena, &mut error) };
     ().reported(error)
 }
 

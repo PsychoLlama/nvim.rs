@@ -27,10 +27,8 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, String_0, VAR_DICT, VAR_UNKNOWN, VarLock,
-    event_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeInteger, kObjectTypeString, key_value_pair, object_data, save_v_event_T, typval_T,
-    typval_vval_union, uint64_t,
+    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock, event_T,
+    key_value_pair, save_v_event_T, typval_T, typval_vval_union, uint64_t,
 };
 
 use super::known::*;
@@ -39,61 +37,11 @@ use super::{
     main_loop_events,
 };
 
-// ---------------------------------------------------------------------------
-// Object constructors
-// ---------------------------------------------------------------------------
-//
-// `Object` is a tag plus a union, and writing a union member is safe; these
-// exist so the dict below reads as a list of key/value pairs rather than as
-// nine five-line literals.
-
-fn integer_obj(value: Integer) -> Object {
-    Object {
-        type_0: kObjectTypeInteger,
-        data: object_data { integer: value },
-    }
-}
-
-fn boolean_obj(value: bool) -> Object {
-    Object {
-        type_0: kObjectTypeBoolean,
-        data: object_data { boolean: value },
-    }
-}
-
-fn buffer_obj(handle: Integer) -> Object {
-    Object {
-        type_0: kObjectTypeBuffer,
-        data: object_data { integer: handle },
-    }
-}
-
-fn dict_obj(dict: Dict) -> Object {
-    Object {
-        type_0: kObjectTypeDict,
-        data: object_data { dict },
-    }
-}
-
-fn array_obj(array: Array) -> Object {
-    Object {
-        type_0: kObjectTypeArray,
-        data: object_data { array },
-    }
-}
-
-fn string_obj(string: String_0) -> Object {
-    Object {
-        type_0: kObjectTypeString,
-        data: object_data { string },
-    }
-}
-
 /// A string object borrowing a `'static` C literal.
 fn literal_obj(text: &'static CStr) -> Object {
     // SAFETY: a `CStr` is NUL-terminated and, being `'static`, outlives the
     // borrowed `String_0`.
-    string_obj(unsafe { cstr_as_string(text.as_ptr()) })
+    Object::String(unsafe { cstr_as_string(text.as_ptr()) })
 }
 
 /// A fresh `typval_T` of no type, which is what every consumer here starts
@@ -115,7 +63,7 @@ unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> typval_T {
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.
     let info = unsafe { channel_info(id, arena) };
-    unsafe { object_to_vim(dict_obj(info), &raw mut tv) };
+    unsafe { object_to_vim(Object::Dict(info), &raw mut tv) };
     debug_assert!(tv.v_type == VAR_DICT);
     tv
 }
@@ -256,25 +204,25 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict {
 
     // SAFETY: `chan` is a live channel; the transport reads below are guarded
     // by its `streamtype`.
-    push(c"id", integer_obj(unsafe { (*chan).id } as Integer));
+    push(c"id", Object::Integer(unsafe { (*chan).id } as Integer));
 
     let stream_desc = match unsafe { (*chan).streamtype } {
         kChannelStreamProc => {
             let proc = unsafe { channel_proc(chan) };
             if unsafe { (*proc).type_0 } as c_int == kProcTypePty {
                 let name = unsafe { cstr_as_string(pty_proc_tty_name(channel_pty(chan))) };
-                push(c"pty", string_obj(unsafe { arena_string(arena, name) }));
+                push(c"pty", Object::String(unsafe { arena_string(arena, name) }));
             }
             push(
                 c"argv",
-                array_obj(unsafe { argv_array((*proc).argv, arena) }),
+                Object::Array(unsafe { argv_array((*proc).argv, arena) }),
             );
             c"job"
         }
         kChannelStreamStdio => c"stdio",
         kChannelStreamStderr => c"stderr",
         kChannelStreamInternal => {
-            push(c"internal", boolean_obj(true));
+            push(c"internal", Object::Boolean(true));
             // An internal channel reports itself as a socket, because that
             // is what it stands in for.
             c"socket"
@@ -284,18 +232,18 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict {
     push(c"stream", literal_obj(stream_desc));
 
     let mode_desc = if unsafe { (*chan).is_rpc } {
-        push(c"client", dict_obj(unsafe { (*chan).rpc.info }));
+        push(c"client", Object::Dict(unsafe { (*chan).rpc.info }));
         c"rpc"
     } else if unsafe { (*chan).term }.is_null() {
         c"bytes"
     } else {
-        let buf = buffer_obj(unsafe { terminal_buf((*chan).term) } as Integer);
+        let buf = Object::Buffer(unsafe { terminal_buf((*chan).term) } as Integer);
         // `buf` is the documented key; `buffer` is kept for older plugins.
         push(c"buf", buf);
         push(c"buffer", buf);
         push(
             c"exitcode",
-            integer_obj(unsafe { (*chan).exit_status } as Integer),
+            Object::Integer(unsafe { (*chan).exit_status } as Integer),
         );
         c"terminal"
     };
@@ -323,7 +271,7 @@ unsafe fn argv_array(args: *mut *mut c_char, arena: *mut Arena) -> Array {
     }
     let mut argv = arena_array(arena, n);
     for i in 0..n {
-        unsafe { *argv.items.add(i) = string_obj(cstr_as_string(*args.add(i))) };
+        unsafe { *argv.items.add(i) = Object::String(cstr_as_string(*args.add(i))) };
     }
     argv.size = n;
     argv
@@ -343,7 +291,7 @@ pub unsafe fn channel_all_info(arena: *mut Arena) -> Array {
     // leaves the array where it is.
     let mut ret = arena_array(arena, ids.len());
     for (i, id) in ids.iter().enumerate() {
-        unsafe { *ret.items.add(i) = dict_obj(channel_info(*id, arena)) };
+        unsafe { *ret.items.add(i) = Object::Dict(channel_info(*id, arena)) };
     }
     ret.size = ids.len();
     ret

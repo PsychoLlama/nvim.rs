@@ -295,10 +295,7 @@ unsafe fn extmark_get_index_from_obj(
     mut col: *mut colnr_T,
     err: &mut Error,
 ) -> bool {
-    if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut id: Integer = unsafe { obj.data.integer };
+    if let Object::Integer(id) = obj {
         if id == 0 as Integer {
             unsafe { *row = 0 as ::core::ffi::c_int };
             unsafe { *col = 0 as ::core::ffi::c_int as colnr_T };
@@ -320,22 +317,21 @@ unsafe fn extmark_get_index_from_obj(
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
         unsafe { *col = extmark.start.pos.col as colnr_T };
         return true;
-    } else if obj.type_0 as ::core::ffi::c_uint
-        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        let mut pos: Array = unsafe { obj.data.array };
-        if !(pos.size == 2 as size_t
-            && unsafe { (*pos.items).type_0 } as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-            && unsafe { (*pos.items.add(1)).type_0 } as ::core::ffi::c_uint
-                == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint)
-        {
+    } else if let Object::Array(pos) = obj {
+        let two = match pos.size {
+            // SAFETY: a two-item array names the two items read here.
+            2 => unsafe {
+                (*pos.items)
+                    .as_integer()
+                    .zip((*pos.items.add(1)).as_integer())
+            },
+            _ => None,
+        };
+        let Some((pos_row, pos_col)) = two else {
             let want = c"2 Integer items";
             *err = err_expected(c"mark position", want, None);
             return false;
-        }
-        let mut pos_row: Integer = unsafe { (*pos.items).data.integer };
-        let mut pos_col: Integer = unsafe { (*pos.items.add(1)).data.integer };
+        };
         let r = (if pos_row >= 0 as Integer {
             pos_row
         } else {

@@ -4,7 +4,7 @@
 use super::args::frame;
 use super::{
     Callback_data, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc,
-    kProcTypePty, object_data,
+    kProcTypePty,
 };
 use crate::api::private::helpers::{cstr_as_string, dict_set_var};
 use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -46,9 +46,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, IOSIZE,
-    Integer, MAXPATHL, NUL, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, Vv,
-    buf_T, dict_T, dictitem_T, kObjectTypeInteger, list_T, listitem_T, object, typval_T,
-    typval_vval_union, uint16_t, uint64_t, varnumber_T,
+    Integer, MAXPATHL, NUL, Object, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock,
+    Vv, buf_T, dict_T, dictitem_T, list_T, listitem_T, typval_T, typval_vval_union, uint16_t,
+    uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -675,10 +675,7 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 /// # Safety
 /// `buf` is a live buffer and `err` a live out-parameter.
 unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: &mut Error) {
-    let value = object {
-        type_0: kObjectTypeInteger,
-        data: object_data { integer: value },
-    };
+    let value = Object::Integer(value);
     let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.
     let vars = unsafe { (*buf).b_vars };

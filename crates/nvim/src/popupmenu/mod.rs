@@ -56,9 +56,8 @@ use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, OptValData,
     OptValType, String_0, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T,
-    exarg_T, float_T, handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeString, linenr_T, lpos_T, object_data, pumitem_T, sattr_T,
-    schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
+    exarg_T, float_T, handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, linenr_T, lpos_T, pumitem_T,
+    sattr_T, schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -330,22 +329,10 @@ unsafe fn pum_publish_external(
         let src = unsafe { &*array.offset(i) };
         let mut item = arena_array(&raw mut arena, 4);
         for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
-            unsafe {
-                *item.items.add(item.size) = Object {
-                    type_0: kObjectTypeString,
-                    data: object_data {
-                        string: cstr_as_string(text),
-                    },
-                }
-            };
+            unsafe { *item.items.add(item.size) = Object::String(cstr_as_string(text)) };
             item.size += 1;
         }
-        unsafe {
-            *arr.items.add(arr.size) = Object {
-                type_0: kObjectTypeArray,
-                data: object_data { array: item },
-            }
-        };
+        unsafe { *arr.items.add(arr.size) = Object::Array(item) };
         arr.size += 1;
     }
     ui_call_popupmenu_show(

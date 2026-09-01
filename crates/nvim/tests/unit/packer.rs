@@ -10,11 +10,7 @@ use std::ffi::c_char;
 
 use neovim::memory::xfree;
 use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
-use neovim::types::{
-    Array, Dict, KeyValuePair, Object, PackerBuffer, String_0, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeWindow, object_data,
-};
+use neovim::types::{Array, Dict, KeyValuePair, Object, PackerBuffer, String_0};
 
 #[test]
 fn booleans_are_one_byte() {
@@ -208,77 +204,43 @@ fn pack(object: &mut Object) -> Vec<u8> {
     bytes
 }
 
-fn scalar(type_0: u32, data: object_data) -> Object {
-    Object { type_0, data }
-}
-
 fn string(text: &mut [u8]) -> Object {
-    scalar(
-        kObjectTypeString,
-        object_data {
-            string: String_0::from_raw_parts(text.as_mut_ptr().cast::<c_char>(), text.len()),
-        },
-    )
+    Object::String(String_0::from_raw_parts(
+        text.as_mut_ptr().cast::<c_char>(),
+        text.len(),
+    ))
 }
 
 fn array(items: &mut [Object]) -> Object {
-    scalar(
-        kObjectTypeArray,
-        object_data {
-            array: Array {
-                size: items.len(),
-                capacity: items.len(),
-                items: items.as_mut_ptr(),
-            },
-        },
-    )
+    Object::Array(Array {
+        size: items.len(),
+        capacity: items.len(),
+        items: items.as_mut_ptr(),
+    })
 }
 
 fn dict(items: &mut [KeyValuePair]) -> Object {
-    scalar(
-        kObjectTypeDict,
-        object_data {
-            dict: Dict {
-                size: items.len(),
-                capacity: items.len(),
-                items: items.as_mut_ptr(),
-            },
-        },
-    )
+    Object::Dict(Dict {
+        size: items.len(),
+        capacity: items.len(),
+        items: items.as_mut_ptr(),
+    })
 }
 
 #[test]
 fn packs_scalars() {
+    assert_eq!(pack(&mut Object::Nil), [0xc0]);
+    assert_eq!(pack(&mut Object::Boolean(true)), [0xc3]);
+    assert_eq!(pack(&mut Object::Integer(-3)), [0xfd]);
     assert_eq!(
-        pack(&mut scalar(kObjectTypeNil, object_data { integer: 0 })),
-        [0xc0]
-    );
-    assert_eq!(
-        pack(&mut scalar(
-            kObjectTypeBoolean,
-            object_data { boolean: true }
-        )),
-        [0xc3]
-    );
-    assert_eq!(
-        pack(&mut scalar(kObjectTypeInteger, object_data { integer: -3 })),
-        [0xfd]
-    );
-    assert_eq!(
-        pack(&mut scalar(kObjectTypeFloat, object_data { floating: 1.0 })),
+        pack(&mut Object::Float(1.0)),
         [0xcb, 0x3f, 0xf0, 0, 0, 0, 0, 0, 0]
     );
     let mut hi = *b"hi";
     assert_eq!(pack(&mut string(&mut hi)), [0xa2, b'h', b'i']);
+    assert_eq!(pack(&mut Object::Buffer(3)), [0xd4, 0, 3]);
     assert_eq!(
-        pack(&mut scalar(kObjectTypeBuffer, object_data { integer: 3 })),
-        [0xd4, 0, 3]
-    );
-    assert_eq!(
-        pack(&mut scalar(
-            kObjectTypeWindow,
-            object_data { integer: 1000 }
-        )),
+        pack(&mut Object::Window(1000)),
         [0xc7, 3, 1, 0xcd, 0x03, 0xe8]
     );
 }
@@ -294,9 +256,7 @@ fn packs_empty_containers() {
 #[test]
 fn packs_deeply_nested_single_element_arrays() {
     const DEPTH: usize = 8;
-    let mut levels: Vec<Vec<Object>> = (0..DEPTH)
-        .map(|_| vec![scalar(kObjectTypeInteger, object_data { integer: 7 })])
-        .collect();
+    let mut levels: Vec<Vec<Object>> = (0..DEPTH).map(|_| vec![Object::Integer(7)]).collect();
     for level in 1..DEPTH {
         let (below, above) = levels.split_at_mut(level);
         above[0][0] = array(&mut below[level - 1][..]);
@@ -314,12 +274,9 @@ fn packs_a_nested_object() {
     let mut inner_key = *b"c";
     let mut inner = [KeyValuePair {
         key: String_0::from_raw_parts(inner_key.as_mut_ptr().cast::<c_char>(), 1),
-        value: scalar(kObjectTypeBoolean, object_data { boolean: true }),
+        value: Object::Boolean(true),
     }];
-    let mut list = [
-        scalar(kObjectTypeInteger, object_data { integer: 1 }),
-        scalar(kObjectTypeInteger, object_data { integer: 2 }),
-    ];
+    let mut list = [Object::Integer(1), Object::Integer(2)];
     let mut a = *b"a";
     let mut b = *b"b";
     let mut entries = [
@@ -347,10 +304,7 @@ fn packs_a_nested_object() {
 #[test]
 fn grows_the_buffer_across_a_long_payload() {
     let mut text = vec![b'x'; 300];
-    let mut items = [
-        string(&mut text),
-        scalar(kObjectTypeInteger, object_data { integer: 42 }),
-    ];
+    let mut items = [string(&mut text), Object::Integer(42)];
     let packed = pack(&mut array(&mut items));
     assert_eq!(&packed[..4], &[0x92, 0xda, 0x01, 0x2c]);
     assert!(packed[4..304].iter().all(|&byte| byte == b'x'));

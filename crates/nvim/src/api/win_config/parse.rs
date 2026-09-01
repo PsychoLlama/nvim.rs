@@ -208,14 +208,11 @@ unsafe fn parse_float_bufpos(bufpos: Array, out: &mut lpos_T) -> bool {
     }
     // SAFETY: the caller's promise -- the array holds the two items read here.
     let (lnum, col) = unsafe { (*bufpos.items, *bufpos.items.add(1)) };
-    if lnum.type_0 != kObjectTypeInteger || col.type_0 != kObjectTypeInteger {
+    let (Some(lnum), Some(col)) = (lnum.as_integer(), col.as_integer()) else {
         return false;
-    }
-    // SAFETY: the tags above say the integer arm of each is the live one.
-    unsafe {
-        out.lnum = lnum.data.integer as linenr_T;
-        out.col = col.data.integer as colnr_T;
-    }
+    };
+    out.lnum = lnum as linenr_T;
+    out.col = col as colnr_T;
     true
 }
 
@@ -268,59 +265,54 @@ unsafe fn parse_bordertext(
     fconfig: WinCfg,
     err: ErrSlot,
 ) {
-    if bordertext.type_0 != kObjectTypeString && bordertext.type_0 != kObjectTypeArray {
-        let actual = api_typename(bordertext.type_0);
-        err_exp(err, c"title/footer", c"String or Array", Some(actual));
+    if let Object::Array(array) = bordertext
+        && array.size == 0
+    {
+        err_exp(err, c"title/footer", c"non-empty Array", None);
         return;
     }
-    let chunk_array = if bordertext.type_0 == kObjectTypeArray {
-        // SAFETY: the tag above says the array arm is the live one.
-        let array = unsafe { bordertext.data.array };
-        if array.size == 0 {
-            err_exp(err, c"title/footer", c"non-empty Array", None);
-            return;
-        }
-        Some(array)
-    } else {
-        None
-    };
     let (mut is_present, mut chunks, mut width) = bordertext_fields(fconfig, bordertext_type);
-    let Some(array) = chunk_array else {
-        // SAFETY: the tag says the string arm is the live one.
-        let string = unsafe { bordertext.data.string };
-        if string.is_empty() {
-            *is_present = false;
-            return;
-        }
-        // `kv_init` and then the `kv_push` whose growth step c2rust expanded
-        // inline, on this frame's own vector rather than in place: three
-        // `&mut`s into the config at once is what `Live` cannot give.
-        let mut text = VirtText {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut::<VirtTextChunk>(),
-        };
-        // SAFETY: the caller's promise -- `string` is NUL-terminated -- and
-        // `text` is this frame's own empty vector.
-        unsafe {
-            let hl_id = -1;
-            let chunk = VirtTextChunk {
-                text: xstrdup(string.data()),
-                hl_id,
+    match bordertext {
+        Object::String(string) => {
+            if string.is_empty() {
+                *is_present = false;
+                return;
+            }
+            // `kv_init` and then the `kv_push` whose growth step c2rust expanded
+            // inline, on this frame's own vector rather than in place: three
+            // `&mut`s into the config at once is what `Live` cannot give.
+            let mut text = VirtText {
+                size: 0,
+                capacity: 0,
+                items: ptr::null_mut::<VirtTextChunk>(),
             };
-            Kvec::new(&mut text.size, &mut text.capacity, &mut text.items).push(chunk);
+            // SAFETY: the caller's promise -- `string` is NUL-terminated -- and
+            // `text` is this frame's own empty vector.
+            unsafe {
+                let hl_id = -1;
+                let chunk = VirtTextChunk {
+                    text: xstrdup(string.data()),
+                    hl_id,
+                };
+                Kvec::new(&mut text.size, &mut text.capacity, &mut text.items).push(chunk);
+            }
+            // SAFETY: as above.
+            *width = unsafe { mb_string2cells(string.data()) } as c_int;
+            *chunks = text;
+            *is_present = true;
         }
-        // SAFETY: as above.
-        *width = unsafe { mb_string2cells(string.data()) } as c_int;
-        *chunks = text;
-        *is_present = true;
-        return;
-    };
-    *width = 0;
-    // SAFETY: the caller's promise about the array, and both out-parameters
-    // name fields of the config.
-    *chunks = unsafe { parse_virt_text(array, slot_mut(err), width.raw()) };
-    *is_present = true;
+        Object::Array(array) => {
+            *width = 0;
+            // SAFETY: the caller's promise about the array, and both
+            // out-parameters name fields of the config.
+            *chunks = unsafe { parse_virt_text(array, slot_mut(err), width.raw()) };
+            *is_present = true;
+        }
+        other => {
+            let actual = api_typename(other.kind());
+            err_exp(err, c"title/footer", c"String or Array", Some(actual));
+        }
+    }
 }
 
 /// The `title_pos`/`footer_pos` key: which end of the border the text sits
@@ -634,7 +626,7 @@ pub(crate) unsafe fn parse_win_config(
                 break '_fail;
             }
             let border_style = config.border;
-            if border_style.type_0 != kObjectTypeNil {
+            if !border_style.is_nil() {
                 // SAFETY: the caller's promise about the keyset's strings and
                 // arrays, and `fconfig` and `err` are live.
                 unsafe { parse_border_style(border_style, fconfig.raw(), slot_mut(err)) };

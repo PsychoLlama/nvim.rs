@@ -23,9 +23,7 @@ use crate::lua::ffi::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::os::cshim::gettext;
-use crate::types::{
-    Arena, Error, FAIL, Failed, OK, expand_T, kObjectTypeString, ptrdiff_t, size_t,
-};
+use crate::types::{Arena, Error, FAIL, Failed, OK, expand_T, ptrdiff_t, size_t};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_get_matches`] to take ownership of them. Each entry is an
@@ -87,11 +85,10 @@ pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
                 }
                 matches.reserve(completions.size);
                 for i in 0..completions.size {
-                    let v = *completions.items.add(i);
-                    if v.type_0 != kObjectTypeString {
+                    let Some(text) = (*completions.items.add(i)).as_string() else {
                         break 'cleanup_array;
-                    }
-                    matches.push(string_to_cstr(v.data.string));
+                    };
+                    matches.push(string_to_cstr(text));
                 }
                 (*xp).xp_pattern = (*xp).xp_pattern.offset(prefix_len as isize);
                 status = OK;

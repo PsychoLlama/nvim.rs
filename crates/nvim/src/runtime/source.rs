@@ -612,12 +612,10 @@ unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
     let src = c"return require('vim._core.util').source_is_lua(...)";
     let script = String_0::from_raw_parts(src.as_ptr().cast_mut(), src.count_bytes());
     // SAFETY: `items` and `err` live on this frame and outlive the call,
-    // which retains neither; the result's union is read under its own tag.
+    // which retains neither.
     let nil = ptr::null_mut();
     let result = unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &mut err) };
-    let is_lua = !err.is_set()
-        && result.type_0 == kObjectTypeBoolean as ObjectType
-        && unsafe { result.data.boolean };
+    let is_lua = !err.is_set() && result.as_boolean() == Some(true);
     err.clear();
     is_lua
 }

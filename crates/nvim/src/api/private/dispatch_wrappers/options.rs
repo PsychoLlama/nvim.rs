@@ -35,12 +35,12 @@ pub unsafe fn handle_nvim_get_all_options_info(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim_get_all_options_info(arena) };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_option_info2`.
@@ -71,19 +71,19 @@ pub unsafe fn handle_nvim_get_option_info2(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_get_option_info2", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_option =
         match read_keydict(Some(key_dict_option_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_get_option_info2", c"Dict(option) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -92,7 +92,7 @@ pub unsafe fn handle_nvim_get_option_info2(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_option_value`.
@@ -123,19 +123,19 @@ pub unsafe fn handle_nvim_get_option_value(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_get_option_value", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_option =
         match read_keydict(Some(key_dict_option_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_get_option_value", c"Dict(option) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -174,20 +174,20 @@ pub unsafe fn handle_nvim_set_option_value(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_set_option_value", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     let mut arg_3: KeyDict_option =
         match read_keydict(Some(key_dict_option_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 3, c"nvim_set_option_value", c"Dict(option) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -195,5 +195,5 @@ pub unsafe fn handle_nvim_set_option_value(
     if let Err(e) = unsafe { nvim_set_option_value(channel_id, arg_1, arg_2, &raw mut arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

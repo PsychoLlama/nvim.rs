@@ -17,7 +17,7 @@ use crate::os::cshim::{gettext, snprintf};
 
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 
-use crate::types::{Array, Error, NUL, Object, String_0, exarg_T, kObjectTypeString, size_t};
+use crate::types::{Array, Error, NUL, Object, String_0, exarg_T, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::Ea;
 
@@ -130,12 +130,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let mut err = Error::none();
-    let mut items: [Object; 1] = [Object {
-        type_0: kObjectTypeString,
-        data: crate::types::object_data {
-            string: unsafe { cstr_as_string(eap.arg) },
-        },
-    }];
+    let mut items: [Object; 1] = [Object::String(unsafe { cstr_as_string(eap.arg) })];
     let args = Array {
         size: 1,
         capacity: 1,

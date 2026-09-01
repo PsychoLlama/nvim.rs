@@ -47,7 +47,7 @@ use crate::popupmenu::pum_drawn;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object, kObjectTypeDict, win_T,
+    LuaRetMode, NS, Object, win_T,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -243,12 +243,12 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         // provider's so the next lookup asks again.
         let mut provisional = false;
         let mut attrs = HLATTRS_INIT;
-        if ret.type_0 == kObjectTypeDict {
+        if let Object::Dict(answer) = ret {
             fallback = false;
             let mut dict = KeyDict_highlight::default();
             let field: FieldHashfn = Some(key_dict_highlight_get_field);
             let target = (&raw mut dict).cast();
-            if unsafe { api_dict_to_keydict(target, field, ret.data.dict, &mut err) } {
+            if unsafe { api_dict_to_keydict(target, field, answer, &mut err) } {
                 let link_id = &mut item.link_id;
                 attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &mut err) };
                 let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;

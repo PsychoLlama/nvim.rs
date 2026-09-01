@@ -34,9 +34,8 @@ use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
     Callback, Callback_data, CallbackType, DictWatcher, Object, Refcount, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VarLock, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString,
-    kSpecialVarNull, list_T, listitem_T, partial_T, typval_T, typval_vval_union,
+    VarLock, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, list_T, listitem_T,
+    partial_T, typval_T, typval_vval_union,
 };
 
 use super::cstr;
@@ -709,39 +708,22 @@ impl Obj {
 /// # Safety
 /// `o` points at a live `Object` whose contents are live.
 pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
-    let data = unsafe { (*o).data };
-    let type_0 = unsafe { (*o).type_0 };
-    // The `kObjectType*` constants are `const`s, not variants, so a `match`
-    // arm would bind rather than compare.
-    if type_0 == kObjectTypeNil {
-        Obj::Nil
-    } else if type_0 == kObjectTypeBoolean {
-        Obj::Bool(unsafe { data.boolean })
-    } else if type_0 == kObjectTypeInteger {
-        Obj::Int(unsafe { data.integer })
-    } else if type_0 == kObjectTypeFloat {
-        Obj::Float(unsafe { data.floating })
-    } else if type_0 == kObjectTypeString {
-        {
-            let s = unsafe { data.string };
-            Obj::Str(if s.is_null() {
-                Vec::new()
-            } else {
-                unsafe { std::slice::from_raw_parts(s.data().cast::<u8>(), s.len()) }.to_vec()
-            })
-        }
-    } else if type_0 == kObjectTypeArray {
-        {
-            let a = unsafe { data.array };
-            Obj::Array(
-                (0..a.size)
-                    .map(|i| unsafe { read_object(a.items.add(i)) })
-                    .collect(),
-            )
-        }
-    } else if type_0 == kObjectTypeDict {
-        {
-            let d = unsafe { data.dict };
+    match unsafe { *o } {
+        Object::Nil => Obj::Nil,
+        Object::Boolean(on) => Obj::Bool(on),
+        Object::Integer(n) => Obj::Int(n),
+        Object::Float(f) => Obj::Float(f),
+        Object::String(s) => Obj::Str(if s.is_null() {
+            Vec::new()
+        } else {
+            unsafe { std::slice::from_raw_parts(s.data().cast::<u8>(), s.len()) }.to_vec()
+        }),
+        Object::Array(a) => Obj::Array(
+            (0..a.size)
+                .map(|i| unsafe { read_object(a.items.add(i)) })
+                .collect(),
+        ),
+        Object::Dict(d) => {
             let mut entries: Vec<(Vec<u8>, Obj)> = (0..d.size)
                 .map(|i| {
                     let kv = unsafe { *d.items.add(i) };
@@ -757,7 +739,6 @@ pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
             entries.sort_by(|(a, _), (b, _)| a.cmp(b));
             Obj::Dict(entries)
         }
-    } else {
-        panic!("reading Object type {type_0} is not implemented")
+        other => panic!("reading Object kind {} is not implemented", other.kind()),
     }
 }

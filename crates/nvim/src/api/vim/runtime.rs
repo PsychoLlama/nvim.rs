@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, api_try};
+use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::err_bad_value;
 use crate::kvec::InitVec;
 use crate::types::NUL;
@@ -63,7 +63,7 @@ pub unsafe fn nvim_get_runtime_file(
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
-            init_array: [NIL; 16],
+            init_array: [Object::Nil; 16],
         },
         arena,
     };
@@ -158,12 +158,13 @@ pub unsafe fn nvim__get_runtime(
     if opts.do_source {
         for i in 0..res.size {
             // SAFETY: `res` is the array `runtime_get_named` just built, of
-            // `size` Strings; sourcing one may free nothing it holds.
-            unsafe {
-                let name = (*res.items.add(i)).data.string;
-                let none = DOSO_NONE as ::core::ffi::c_int;
-                do_source(name.data(), false, none, ::core::ptr::null_mut());
-            }
+            // `size` Strings.
+            let name = unsafe { *res.items.add(i) }
+                .as_string()
+                .expect("`runtime_get_named` answers an array of Strings");
+            let none = DOSO_NONE as ::core::ffi::c_int;
+            // SAFETY: sourcing a file frees nothing the array holds.
+            unsafe { do_source(name.data(), false, none, ::core::ptr::null_mut()) };
         }
     }
     res.reported(error)

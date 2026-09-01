@@ -55,7 +55,7 @@ use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, Failed, IOSIZE, LuaRetMode, NUL, Object, OptInt, OptVal,
-    OptValData, OptionSetFlags, exarg_T, file_comparison, kObjectTypeString, linenr_T, size_t,
+    OptValData, OptionSetFlags, exarg_T, file_comparison, linenr_T, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
@@ -299,10 +299,10 @@ unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     // SAFETY: `res` is the chunk's answer and `err` our slot; both are
     // consumed here.
     let tag = if !err.is_set()
-        && res.type_0 == kObjectTypeString
-        && !unsafe { res.data.string }.is_empty()
+        && let Object::String(tag_name) = res
+        && !tag_name.is_empty()
     {
-        unsafe { xstrdup(res.data.string.data()) }
+        unsafe { xstrdup(tag_name.data()) }
     } else {
         ptr::null_mut()
     };
@@ -544,11 +544,10 @@ pub(crate) unsafe fn find_help_tags(
         return Err(Failed);
     }
     err.clear();
-    debug_assert!(
-        res.type_0 == kObjectTypeString,
-        "res.type == kObjectTypeString"
-    );
-    unsafe { xstrlcpy(iobuff, res.data.string.data(), IOSIZE as usize) };
+    let escaped = res
+        .as_string()
+        .expect("`vim._core.help.escape_subject()` answers with a string");
+    unsafe { xstrlcpy(iobuff, escaped.data(), IOSIZE as usize) };
     unsafe { api_free_object(res) };
 
     let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;

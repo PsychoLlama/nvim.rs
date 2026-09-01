@@ -126,10 +126,19 @@ pub unsafe fn msg_ext_ui_flush() {
         // arrays are unwrapped rather than copied: the strings move.
         let mut msg = EMPTY_HL_MESSAGE;
         for i in 0..unsafe { (*tofree).size } {
-            let chunk = unsafe { (*(*tofree).items.add(i)).data.array.items };
+            let chunk = unsafe { *(*tofree).items.add(i) }
+                .as_array()
+                .expect("a chunk this module emitted is an array")
+                .items;
+            // `msg_ext_emit_chunk` pushed [attr, text, hl_id] in that order.
             let moved = HlMessageChunk {
-                text: unsafe { (*chunk.add(1)).data.string },
-                hl_id: unsafe { (*chunk.add(2)).data.integer } as c_int,
+                text: unsafe { *chunk.add(1) }
+                    .as_string()
+                    .expect("a chunk's second element is its text"),
+                hl_id: unsafe { *chunk.add(2) }
+                    .as_integer()
+                    .expect("a chunk's third element is its highlight id")
+                    as c_int,
             };
             unsafe { hl_msg_push(&mut msg, moved) };
             unsafe { xfree(chunk.cast()) };
@@ -143,8 +152,9 @@ pub unsafe fn msg_ext_ui_flush() {
     msg_ext_history.set(false);
     msg_ext_append.set(false);
     msg_ext_kind.set(ptr::null());
-    // Only claim the next id if nothing else took it in the meantime.
-    if msg_ext_id.with(|id| unsafe { id.data.integer }) == msg_id_next.get() {
+    // Only claim the next id if nothing else took it in the meantime. An id
+    // the caller supplied is a `String`, not an `Integer`, and never matches.
+    if msg_ext_id.with(|id| id.as_integer()) == Some(msg_id_next.get()) {
         msg_id_next.set(msg_id_next.get() + 1);
     }
     msg_ext_id.set(Object::integer(msg_id_next.get()));

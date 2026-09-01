@@ -285,14 +285,14 @@ pub unsafe fn nlua_exec(
         };
         if luaL_loadbuffer(lstate, str.data(), str.len(), name) != 0 {
             set_lua_error(err, kErrorTypeValidation, lstate);
-            return Object::NIL;
+            return Object::Nil;
         }
         for i in 0..args.size {
             nlua_push_object(lstate, args.items.add(i), 0);
         }
         if nlua_pcall(lstate, args.size as c_int, 1) != 0 {
             set_lua_error(err, kErrorTypeException, lstate);
-            return Object::NIL;
+            return Object::Nil;
         }
         nlua_call_pop_retval(lstate, mode, arena, top, Some(err))
     }
@@ -383,7 +383,7 @@ pub unsafe fn nlua_call_ref_ctx(
                 if let Some(err) = err.as_deref_mut() {
                     *err = Error::exception(c"fast context failure");
                 }
-                return Object::NIL;
+                return Object::Nil;
             }
         } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {
             match err.as_deref_mut() {
@@ -391,7 +391,7 @@ pub unsafe fn nlua_call_ref_ctx(
                 None => nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr()),
                 Some(err) => set_lua_error(err, kErrorTypeException, lstate),
             }
-            return Object::NIL;
+            return Object::Nil;
         }
         nlua_call_pop_retval(lstate, mode, arena, top, err)
     }
@@ -414,7 +414,7 @@ unsafe fn nlua_call_pop_retval(
     unsafe {
         if mode != kRetMulti && lua_type(lstate, -1) == LUA_TNIL {
             lua_pop(lstate, 1);
-            return Object::NIL;
+            return Object::Nil;
         }
         let mut dummy = Error::none();
         let perr: &mut Error = err.unwrap_or(&mut dummy);
@@ -439,7 +439,7 @@ unsafe fn nlua_call_pop_retval(
                     *res.items.offset((nres - i - 1) as isize) =
                         nlua_pop_object(lstate, false, arena, perr);
                     if (*perr).is_set() {
-                        return Object::NIL;
+                        return Object::Nil;
                     }
                 }
                 res.size = nres as size_t;

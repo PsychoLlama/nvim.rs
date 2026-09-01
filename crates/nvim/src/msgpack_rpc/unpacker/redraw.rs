@@ -333,9 +333,7 @@ mod tests {
     use crate::msgpack_rpc::unpacker::{
         TOKEN_BIN, TOKEN_FLOAT, TOKEN_NIL, scalar_object, unpack_integer_token,
     };
-    use crate::types::{
-        Integer, Object, kObjectTypeBoolean, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil,
-    };
+    use crate::types::{Integer, Object};
 
     /// A cursor over `bytes`. Every caller keeps the slice alive for the whole
     /// test, which is the promise `Cursor::new` asks for.
@@ -347,11 +345,7 @@ mod tests {
     /// The integer a scalar token decoded to, or `None` if it did not decode
     /// to an integer at all.
     fn integer_of(object: Object) -> Option<Integer> {
-        if object.type_0 != kObjectTypeInteger {
-            return None;
-        }
-        // SAFETY: guarded by the type tag.
-        Some(unsafe { object.data.integer })
+        object.as_integer()
     }
 
     #[test]
@@ -437,16 +431,11 @@ mod tests {
     #[test]
     fn scalars_decode_to_the_object_they_stand_for() {
         let mut c = cursor(&[0xc0u8]);
-        assert_eq!(
-            scalar_object(c.next(TOKEN_NIL).unwrap()).unwrap().type_0,
-            kObjectTypeNil
-        );
+        assert!(scalar_object(c.next(TOKEN_NIL).unwrap()).unwrap().is_nil());
 
         let mut c = cursor(&[0xc3u8]);
         let boolean = scalar_object(c.next(TOKEN_BOOLEAN).unwrap()).unwrap();
-        assert_eq!(boolean.type_0, kObjectTypeBoolean);
-        // SAFETY: guarded by the type tag.
-        assert!(unsafe { boolean.data.boolean });
+        assert_eq!(boolean.as_boolean(), Some(true));
 
         // Both signs reach the same `Integer`, which is what `msgpackparse()`
         // and the RPC decoder agree on.
@@ -463,9 +452,7 @@ mod tests {
 
         let mut c = cursor(&[0xcbu8, 0x3f, 0xf0, 0, 0, 0, 0, 0, 0]);
         let float = scalar_object(c.next(TOKEN_FLOAT).unwrap()).unwrap();
-        assert_eq!(float.type_0, kObjectTypeFloat);
-        // SAFETY: guarded by the type tag.
-        assert!((unsafe { float.data.floating } - 1.0).abs() < f64::EPSILON);
+        assert!((float.as_float().unwrap() - 1.0).abs() < f64::EPSILON);
 
         // A container header is not a scalar: the tree parser allocates for
         // it instead.

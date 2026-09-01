@@ -18,9 +18,7 @@ use crate::lua::ffi::{
 use crate::main::nlua_global_refs;
 use crate::types::{
     Array, Boolean, Dict, Float, Integer, LuaRef, Object, ObjectType, String_0, handle_T,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, lua_Number, lua_State, size_t,
+    kObjectTypeFloat, lua_Number, lua_State, size_t,
 };
 
 /// Push the key a special table's type tag is stored under.
@@ -158,31 +156,30 @@ pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: handle_T, _flags: c
 /// `lstate` must be a live Lua state and `obj` a live api object.
 pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: c_int) {
     unsafe {
-        match (*obj).type_0 {
-            kObjectTypeNil => {
+        match *obj {
+            Object::Nil => {
                 if flags & kNluaPushSpecial as c_int != 0 {
                     lua_pushnil(lstate);
                 } else {
                     nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                 }
             }
-            kObjectTypeLuaRef => {
-                nlua_pushref(lstate, (*obj).data.luaref);
+            Object::LuaRef(r) => {
+                nlua_pushref(lstate, r);
                 if flags & kNluaPushFreeRefs as c_int != 0 {
-                    api_free_luaref((*obj).data.luaref);
-                    (*obj).data.luaref = LUA_NOREF as LuaRef;
+                    api_free_luaref(r);
+                    *obj = Object::LuaRef(LUA_NOREF as LuaRef);
                 }
             }
-            kObjectTypeBoolean => nlua_push_boolean(lstate, (*obj).data.boolean, flags),
-            kObjectTypeInteger => nlua_push_integer(lstate, (*obj).data.integer, flags),
-            kObjectTypeFloat => nlua_push_float(lstate, (*obj).data.floating, flags),
-            kObjectTypeString => nlua_push_string(lstate, (*obj).data.string, flags),
-            kObjectTypeArray => nlua_push_array(lstate, (*obj).data.array, flags),
-            kObjectTypeDict => nlua_push_dict(lstate, (*obj).data.dict, flags),
-            kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
-                nlua_push_handle(lstate, (*obj).data.integer as handle_T, flags);
+            Object::Boolean(b) => nlua_push_boolean(lstate, b, flags),
+            Object::Integer(n) => nlua_push_integer(lstate, n, flags),
+            Object::Float(f) => nlua_push_float(lstate, f, flags),
+            Object::String(s) => nlua_push_string(lstate, s, flags),
+            Object::Array(a) => nlua_push_array(lstate, a, flags),
+            Object::Dict(d) => nlua_push_dict(lstate, d, flags),
+            Object::Buffer(h) | Object::Window(h) | Object::Tabpage(h) => {
+                nlua_push_handle(lstate, h as handle_T, flags);
             }
-            _ => {}
         }
     }
 }

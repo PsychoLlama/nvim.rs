@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::types::builders::static_cstring;
 
 use super::*;
-use crate::types::{FAIL, VAR_BLOB, VAR_TYPE_BLOB};
+use crate::types::{FAIL, Object, VAR_BLOB, VAR_TYPE_BLOB};
 
 /// Room the packer keeps free, so that a handful of small tokens can be
 /// written without checking after each one.
@@ -201,10 +201,10 @@ unsafe fn pack_header(header: Dict, sbuf: &mut PackerBuffer) {
     for i in 0..header.size {
         let item = unsafe { *header.items.add(i) };
         unsafe { mpack_str(item.key, sbuf) };
-        match item.value.type_0 {
-            kObjectTypeString => unsafe { mpack_bin(item.value.data.string, sbuf) },
-            kObjectTypeInteger => mpack_integer(&mut sbuf.ptr, unsafe { item.value.data.integer }),
-            other => unreachable!("shada: header holds an object of type {other}"),
+        match item.value {
+            Object::String(s) => unsafe { mpack_bin(s, sbuf) },
+            Object::Integer(n) => mpack_integer(&mut sbuf.ptr, n),
+            other => unreachable!("shada: header holds an object of type {}", other.kind()),
         }
     }
 }

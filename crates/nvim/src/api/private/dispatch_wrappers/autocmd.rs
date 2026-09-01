@@ -35,15 +35,15 @@ pub unsafe fn handle_nvim_clear_autocmds(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let mut arg_1: KeyDict_clear_autocmds =
         match read_keydict(Some(key_dict_clear_autocmds_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 1, c"nvim_clear_autocmds", c"Dict(clear_autocmds) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -51,7 +51,7 @@ pub unsafe fn handle_nvim_clear_autocmds(
     if let Err(e) = unsafe { nvim_clear_autocmds(&raw mut arg_1, arena) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_augroup`.
@@ -82,19 +82,19 @@ pub unsafe fn handle_nvim_create_augroup(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_create_augroup", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_create_augroup =
         match read_keydict(Some(key_dict_create_augroup_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_create_augroup", c"Dict(create_augroup) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -103,7 +103,7 @@ pub unsafe fn handle_nvim_create_augroup(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_autocmd`.
@@ -134,16 +134,16 @@ pub unsafe fn handle_nvim_create_autocmd(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_create_autocmd =
         match read_keydict(Some(key_dict_create_autocmd_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_create_autocmd", c"Dict(create_autocmd) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -152,7 +152,7 @@ pub unsafe fn handle_nvim_create_autocmd(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_id`.
@@ -183,18 +183,18 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_del_augroup_by_id", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_augroup_by_id(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_name`.
@@ -225,18 +225,18 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_del_augroup_by_name", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_augroup_by_name(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_autocmd`.
@@ -267,18 +267,18 @@ pub unsafe fn handle_nvim_del_autocmd(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_del_autocmd", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_autocmd(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_exec_autocmds`.
@@ -309,16 +309,16 @@ pub unsafe fn handle_nvim_exec_autocmds(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_exec_autocmds =
         match read_keydict(Some(key_dict_exec_autocmds_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_exec_autocmds", c"Dict(exec_autocmds) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -326,7 +326,7 @@ pub unsafe fn handle_nvim_exec_autocmds(
     if let Err(e) = unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_autocmds`.
@@ -357,15 +357,15 @@ pub unsafe fn handle_nvim_get_autocmds(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let mut arg_1: KeyDict_get_autocmds =
         match read_keydict(Some(key_dict_get_autocmds_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 1, c"nvim_get_autocmds", c"Dict(get_autocmds) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -374,5 +374,5 @@ pub unsafe fn handle_nvim_get_autocmds(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }

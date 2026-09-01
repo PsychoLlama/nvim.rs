@@ -60,13 +60,11 @@ pub unsafe fn nvim_ui_term_event(
     if !unsafe { strequal(c"termresponse".as_ptr(), event.data()) } {
         return Ok(());
     }
-    if value.type_0 != kObjectTypeString {
-        let (want, got) = (api_typename(kObjectTypeString), api_typename(value.type_0));
+    let Some(termresponse) = value.as_string() else {
+        let (want, got) = (api_typename(kObjectTypeString), api_typename(value.kind()));
         err = err_expected(c"termresponse", want, Some(got));
         return Err(err);
-    }
-    // SAFETY: the tag says the payload is the string, and it is the caller's.
-    let termresponse: String_0 = unsafe { value.data.string };
+    };
     let (text, len) = (termresponse.data(), termresponse.len().cast_signed());
     // SAFETY: `termresponse` is that string, live for `len` bytes.
     unsafe {

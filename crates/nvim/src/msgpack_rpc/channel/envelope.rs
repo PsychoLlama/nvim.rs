@@ -27,7 +27,7 @@ use crate::msgpack_rpc::packer::{
 };
 use crate::types::{
     Arena, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, kErrorTypeNone, kObjectTypeInteger, kObjectTypeString, uint32_t, uint64_t,
+    PackerBuffer, kErrorTypeNone, uint32_t, uint64_t,
 };
 
 use super::known::*;
@@ -139,18 +139,8 @@ unsafe fn report_failed_notification(
     // SAFETY: the caller's error slot. `items` lives until the request has
     // been packed, which `serialize_request` does before returning.
     let mut items = [
-        Object {
-            type_0: kObjectTypeInteger,
-            data: crate::types::object_data {
-                integer: Integer::from(err.kind()),
-            },
-        },
-        Object {
-            type_0: kObjectTypeString,
-            data: crate::types::object_data {
-                string: unsafe { cstr_as_string(err.message_or_empty().as_ptr()) },
-            },
-        },
+        Object::Integer(Integer::from(err.kind())),
+        Object::String(unsafe { cstr_as_string(err.message_or_empty().as_ptr()) }),
     ];
     let args = Array {
         size: 2,

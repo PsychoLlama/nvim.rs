@@ -28,7 +28,7 @@
 use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::message_fmt::msg_cstr;
-use crate::types::{Array, Error, String_0, int64_t, kErrorTypeValidation, kObjectTypeString};
+use crate::types::{Array, Error, int64_t, kErrorTypeValidation, kObjectTypeString};
 use core::ffi::CStr;
 
 /// Whether `name` is a phrase rather than a single name, which is what
@@ -181,17 +181,15 @@ pub(crate) unsafe fn check_string_array(
     };
     let name = msg_cstr(name);
     for item in items {
-        if item.type_0 != kObjectTypeString {
+        let Some(l) = item.as_string() else {
             let want = msg_cstr(api_typename(kObjectTypeString));
-            let got = msg_cstr(api_typename(item.type_0));
+            let got = msg_cstr(api_typename(item.kind()));
             return Err(api_error!(
                 kErrorTypeValidation,
                 "Invalid '{name}' item: expected {want}, got {got}"
             ));
-        }
-        // SAFETY: the tag says the payload is the string, and the string is
-        // the caller's, live for its own length.
-        let l: String_0 = unsafe { item.data.string };
+        };
+        // SAFETY: the string is the caller's, live for its own length.
         if disallow_nl && unsafe { l.as_bytes() }.contains(&b'\n') {
             return Err(api_error!(
                 kErrorTypeValidation,

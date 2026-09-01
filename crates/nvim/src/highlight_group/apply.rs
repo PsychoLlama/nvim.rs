@@ -16,7 +16,7 @@ use crate::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, need_highlight_changed, normal_bg,
     normal_fg, normal_sp, updating_screen,
 };
-use crate::types::{HlAttrs, KeyDict_highlight, Object, kObjectTypeNil, kObjectTypeString};
+use crate::types::{HlAttrs, KeyDict_highlight, Object};
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 
 use super::command::sourcing_lnum;
@@ -105,12 +105,14 @@ pub(crate) unsafe fn set_hl_group(
     ];
     let mut idxs = [KEEP; 3];
     for (slot, &(value, name, linked_idx)) in idxs.iter_mut().zip(&spellings) {
-        *slot = if name.type_0 != kObjectTypeNil {
+        *slot = if !name.is_nil() {
             if value < 0 {
                 kColorIdxNone
-            } else if name.type_0 == kObjectTypeString && !unsafe { name.data.string }.is_empty() {
+            } else if let Object::String(spelling) = name
+                && !spelling.is_empty()
+            {
                 // SAFETY: an API string is NUL-terminated.
-                name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data.string.data()) }).1
+                name_to_color(unsafe { ::core::ffi::CStr::from_ptr(spelling.data()) }).1
             } else {
                 kColorIdxHex
             }

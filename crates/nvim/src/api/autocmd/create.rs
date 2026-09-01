@@ -14,7 +14,7 @@ use crate::api::private::validate::{
     err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
 use crate::cstr;
-use crate::types::{Failed, kObjectTypeLuaRef, kObjectTypeString};
+use crate::types::Failed;
 use crate::winlayer::Live;
 
 pub unsafe fn nvim_create_autocmd(
@@ -64,34 +64,34 @@ pub unsafe fn nvim_create_autocmd(
                     KEYSET_OPTIDX_create_autocmd__callback,
                 ) {
                     let callback: *mut Object = unsafe { &raw mut (*opts.raw()).callback };
-                    match unsafe { (*callback).type_0 } as ::core::ffi::c_uint {
-                        kObjectTypeLuaRef => {
-                            if !(unsafe { (*callback).data.luaref } != -2 as ::core::ffi::c_int) {
-                                // SAFETY: the value the keyset carried, live for this call.
+                    // SAFETY: the pointer the caller handed this call.
+                    match unsafe { *callback } {
+                        Object::LuaRef(luaref) => {
+                            if !(luaref != -2 as ::core::ffi::c_int) {
                                 error = err_bad_value(c"callback", c"<no value>");
                                 break '_cleanup;
-                            } else if !unsafe { nlua_ref_is_function((*callback).data.luaref) } {
-                                // SAFETY: `error` is this call's own error slot.
+                            } else if !unsafe { nlua_ref_is_function(luaref) } {
                                 let bad = c"<not a function>".as_ptr();
                                 // SAFETY: the value the keyset carried, live for this call.
                                 error = err_bad_value(c"callback", unsafe { cstr::at(bad) });
                                 break '_cleanup;
                             } else {
                                 handler_fn.type_0 = kCallbackLua;
-                                handler_fn.data.luaref = unsafe { (*callback).data.luaref };
-                                unsafe { (*callback).data.luaref = LUA_NOREF as LuaRef };
+                                handler_fn.data.luaref = luaref;
+                                // The reference is the handler's now, so the
+                                // keyset must not free it a second time.
+                                // SAFETY: the pointer the caller handed this call.
+                                unsafe { *callback = Object::LuaRef(LUA_NOREF as LuaRef) };
                             }
                         }
-                        kObjectTypeString => {
+                        Object::String(name) => {
                             handler_fn.type_0 = kCallbackFuncref;
-                            handler_fn.data.funcref =
-                                unsafe { string_to_cstr((*callback).data.string) };
+                            handler_fn.data.funcref = unsafe { string_to_cstr(name) };
                         }
-                        _ => {
+                        other => {
                             if true {
                                 let want = c"Lua function or Vim function name";
-                                // SAFETY: the pointer the caller handed this call.
-                                let got = unsafe { api_typename((*callback).type_0) };
+                                let got = api_typename(other.kind());
                                 error = err_expected(c"callback", want, Some(got));
                                 break '_cleanup;
                             }
@@ -161,16 +161,17 @@ pub unsafe fn nvim_create_autocmd(
                                     if event_str_index >= event_array.size {
                                         break '_cleanup;
                                     }
-                                    let mut event_str: Object =
+                                    let event_str: Object =
                                         unsafe { *event_array.items.add(event_str_index) };
+                                    let event_str = event_str
+                                        .as_string()
+                                        .expect("`unpack_string_or_array` answers Strings only");
                                     let mut event_nr: event_T =
-                                        unsafe { event_name2nr_str(event_str.data.string) };
+                                        unsafe { event_name2nr_str(event_str) };
                                     if !((event_nr as ::core::ffi::c_uint)
                                         < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                                     {
-                                        // SAFETY: the type tag said this is
-                                        // the union's string arm.
-                                        let bad = unsafe { event_str.data.string }.data();
+                                        let bad = event_str.data();
                                         // SAFETY: the value the keyset carried, live for this call.
                                         error = err_bad_value(c"event", unsafe { cstr::at(bad) });
                                         break '_cleanup;
@@ -178,15 +179,19 @@ pub unsafe fn nvim_create_autocmd(
                                         let mut retval: Result<(), Failed> = Err(Failed);
                                         let mut pat_index: size_t = 0 as size_t;
                                         while pat_index < patterns.size {
-                                            let mut pat: Object =
+                                            let pat: Object =
                                                 unsafe { *patterns.items.add(pat_index) };
+                                            let pat = pat.as_string().expect(
+                                                "`get_patterns_from_pattern_or_buf` answers \
+                                                 Strings only",
+                                            );
                                             let sctx = api_set_sctx(channel_id);
                                             retval = unsafe {
                                                 autocmd_register(
                                                     autocmd_id,
                                                     event_nr,
-                                                    pat.data.string.data(),
-                                                    pat.data.string.len() as ::core::ffi::c_int,
+                                                    pat.data(),
+                                                    pat.len() as ::core::ffi::c_int,
                                                     au_group,
                                                     opts.once,
                                                     opts.nested,
@@ -306,8 +311,11 @@ pub unsafe fn nvim_clear_autocmds(
         while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
             let mut pat_object_index: size_t = 0 as size_t;
             while pat_object_index < patterns.size {
-                let mut pat_object: Object = unsafe { *patterns.items.add(pat_object_index) };
-                let mut pat: *mut ::core::ffi::c_char = unsafe { pat_object.data.string }.data();
+                let pat_object: Object = unsafe { *patterns.items.add(pat_object_index) };
+                let mut pat: *mut ::core::ffi::c_char = pat_object
+                    .as_string()
+                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
+                    .data();
                 if !unsafe { clear_autocmd(event, pat, au_group, &mut error) } {
                     return ().reported(error);
                 }
@@ -318,20 +326,25 @@ pub unsafe fn nvim_clear_autocmds(
     } else {
         let mut event_str_index: size_t = 0 as size_t;
         while event_str_index < event_array.size {
-            let mut event_str: Object = unsafe { *event_array.items.add(event_str_index) };
-            let mut event_nr: event_T = unsafe { event_name2nr_str(event_str.data.string) };
+            let event_str: Object = unsafe { *event_array.items.add(event_str_index) };
+            let event_str = event_str
+                .as_string()
+                .expect("`unpack_string_or_array` answers Strings only");
+            let mut event_nr: event_T = unsafe { event_name2nr_str(event_str) };
             if !((event_nr as ::core::ffi::c_uint)
                 < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
             {
                 // SAFETY: the value the keyset carried, live for this call.
-                error = err_bad_value(c"event", unsafe { event_str.data.string.as_cstr() });
+                error = err_bad_value(c"event", unsafe { event_str.as_cstr() });
                 return ().reported(error);
             }
             let mut pat_object_index_0: size_t = 0 as size_t;
             while pat_object_index_0 < patterns.size {
-                let mut pat_object_0: Object = unsafe { *patterns.items.add(pat_object_index_0) };
-                let mut pat_0: *mut ::core::ffi::c_char =
-                    unsafe { pat_object_0.data.string }.data();
+                let pat_object_0: Object = unsafe { *patterns.items.add(pat_object_index_0) };
+                let mut pat_0: *mut ::core::ffi::c_char = pat_object_0
+                    .as_string()
+                    .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
+                    .data();
                 if !unsafe { clear_autocmd(event_nr, pat_0, au_group, &mut error) } {
                     return ().reported(error);
                 }

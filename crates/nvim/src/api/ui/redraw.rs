@@ -122,14 +122,18 @@ unsafe fn translate(ui: *mut RemoteUI, name: &'static CStr, args: Array, arena: 
                 return;
             }
             b"cmdline_block_show" => {
-                // SAFETY: the editor built `args` for this event, so its
-                // one element is the block of lines.
-                let block = unsafe { (*args.items).data.array };
+                // The editor built `args` for this event, so its one element
+                // is the block of lines.
+                // SAFETY: a `cmdline_block_show` has that one element.
+                let block = unsafe { *args.items }
+                    .as_array()
+                    .expect("cmdline_block_show carries a block of lines");
                 let mut new_block = arena_array(arena, block.size);
                 for i in 0..block.size {
-                    // SAFETY: `i` is below `size`, and each element is one
-                    // line's chunk list.
-                    let line = unsafe { (*block.items.add(i)).data.array };
+                    // SAFETY: `i` is below `size`.
+                    let line = unsafe { *block.items.add(i) }
+                        .as_array()
+                        .expect("a cmdline block's element is one line's chunks");
                     // SAFETY: `new_block` was sized for every line.
                     unsafe {
                         let translated = translate_contents(ui, line, arena);
@@ -153,24 +157,28 @@ unsafe fn translate(ui: *mut RemoteUI, name: &'static CStr, args: Array, arena: 
     if live.ui_ext[kUIWildmenu as usize] {
         match name.to_bytes() {
             b"popupmenu_show" => {
-                // SAFETY: the editor built `args` for this event, whose
-                // fifth element is the anchor row.
-                let row = unsafe { (*args.items.add(4)).data.integer };
+                // SAFETY: the editor built `args` for this event, which has
+                // five elements.
+                let row = unsafe { *args.items.add(4) }
+                    .as_integer()
+                    .expect("popupmenu_show carries an anchor row");
                 live.wildmenu_active = row == -1 || !live.ui_ext[kUIPopupmenu as usize];
                 if live.wildmenu_active {
                     // The wildmenu shows only the completion word, so
                     // each item's remaining fields are dropped.
-                    // SAFETY: the first element is the item list.
-                    let items = unsafe { (*args.items).data.array };
+                    // SAFETY: the event has a first element.
+                    let items = unsafe { *args.items }
+                        .as_array()
+                        .expect("popupmenu_show carries an item list");
                     let mut new_items = arena_array(arena, items.size);
                     for i in 0..items.size {
                         // SAFETY: `i` is below `size`, each element is one
                         // item's field list, and `new_items` was sized for
                         // every item.
-                        unsafe {
-                            let item = (*items.items.add(i)).data.array;
-                            push(&mut new_items, *item.items);
-                        }
+                        let item = unsafe { *items.items.add(i) }
+                            .as_array()
+                            .expect("a popupmenu item is a field list");
+                        unsafe { push(&mut new_items, *item.items) };
                     }
                     let mut new_args = ArrayBuf::<1>::new();
                     new_args.push(Object::array(new_items));
@@ -181,8 +189,7 @@ unsafe fn translate(ui: *mut RemoteUI, name: &'static CStr, args: Array, arena: 
                     // items; the wildmenu has a separate event for it.
                     // SAFETY: the second element is that index.
                     let selected = unsafe { *args.items.add(1) };
-                    // SAFETY: the tag says the payload is the integer.
-                    if unsafe { selected.data.integer } != -1 {
+                    if selected.as_integer() != Some(-1) {
                         let mut new_args = ArrayBuf::<1>::new();
                         new_args.push(selected);
                         // SAFETY: as above.
@@ -231,8 +238,10 @@ unsafe fn translate_firstarg(ui: *mut RemoteUI, args: Array, arena: *mut Arena) 
     let mut new_args = arena_array(arena, args.size);
     // SAFETY: the caller's promise -- the first element is a chunk list --
     // and `new_args` was sized for every argument.
+    let contents = unsafe { *args.items }
+        .as_array()
+        .expect("the first argument is a chunk list");
     unsafe {
-        let contents = (*args.items).data.array;
         let translated = translate_contents(ui, contents, arena);
         push(&mut new_args, Object::array(translated));
         for i in 1..args.size {
@@ -256,10 +265,13 @@ unsafe fn translate_contents(ui: *mut RemoteUI, contents: Array, arena: *mut Are
     for i in 0..contents.size {
         // SAFETY: `i` is below `size`, and each element is an `[attr, text]`
         // pair, per the caller's promise.
-        let (item, attr) = unsafe {
-            let item = (*contents.items.add(i)).data.array;
-            (item, (*item.items).data.integer as core::ffi::c_int)
-        };
+        let item = unsafe { *contents.items.add(i) }
+            .as_array()
+            .expect("a chunk is an [attr, text] pair");
+        let attr = unsafe { *item.items }
+            .as_integer()
+            .expect("a chunk's first element is its attribute id")
+            as core::ffi::c_int;
         let mut new_item = arena_array(arena, 2);
         let attrs = if attr != 0 {
             let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE);

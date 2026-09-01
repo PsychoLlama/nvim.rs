@@ -31,7 +31,7 @@ use crate::runtime::RuntimeOpts;
 
 use crate::types::{
     Array, CMD_autocmd, Error, Failed, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0,
-    exarg_T, kObjectTypeString, size_t,
+    exarg_T, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -242,18 +242,11 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         debug_assert!(mods_len < size_of::<[c_char; 1024]>());
     }
 
-    items[0] = Object {
-        type_0: kObjectTypeString,
-        data: crate::types::object_data {
-            string: String_0::from_raw_parts(&raw mut mods as *mut c_char, mods_len),
-        },
-    };
-    items[1] = Object {
-        type_0: kObjectTypeString,
-        data: crate::types::object_data {
-            string: cstr_as_string(eap.arg),
-        },
-    };
+    items[0] = Object::String(String_0::from_raw_parts(
+        &raw mut mods as *mut c_char,
+        mods_len,
+    ));
+    items[1] = Object::String(cstr_as_string(eap.arg));
     args.size = 2;
 
     unsafe {

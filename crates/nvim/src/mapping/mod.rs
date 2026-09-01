@@ -66,9 +66,8 @@ use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
     LuaRef, LuaRetMode, Object, RemapValues, String_0, cmdidx_T, dict_T, exarg_T, expand_T,
-    fuzmatch_str_T, garray_T, kObjectTypeLuaRef, kObjectTypeString, key_value_pair, linenr_T,
-    mapblock_T, object_data, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t, typval_T,
-    typval_vval_union, uint64_t, varnumber_T,
+    fuzmatch_str_T, garray_T, key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strpbrk};

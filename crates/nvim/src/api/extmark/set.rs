@@ -147,10 +147,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     KEYSET_OPTIDX_set_extmark__hl_group,
                 ) {
                     's_293: {
-                        if opts.hl_group.type_0 as ::core::ffi::c_uint
-                            == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                        {
-                            let mut arr: Array = unsafe { opts.hl_group.data.array };
+                        if let Object::Array(arr) = opts.hl_group {
                             if arr.size >= 1 as size_t {
                                 hl.hl_id = unsafe {
                                     object_to_hl_id(
@@ -354,20 +351,19 @@ pub unsafe fn nvim_buf_set_extmark(
                             if j >= a.size {
                                 break 's_785;
                             }
-                            if kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                                != unsafe { (*a.items.add(j)).type_0 } as ::core::ffi::c_uint
-                            {
+                            // SAFETY: the pointer the caller handed this call.
+                            let item = unsafe { *a.items.add(j) };
+                            let Object::Array(item) = item else {
                                 let want = api_typename(kObjectTypeArray);
-                                // SAFETY: the pointer the caller handed this call.
-                                let got = unsafe { api_typename((*a.items.add(j)).type_0) };
+                                let got = api_typename(item.kind());
                                 error = err_expected(c"virt_text_line", want, Some(got));
                                 break '_error;
-                            }
+                            };
                             let mut dummig: ::core::ffi::c_int = 0;
                             let (slot, dummy_width) = (&mut error, &raw mut dummig);
-                            let mut jtem: VirtText = unsafe {
-                                parse_virt_text((*a.items.add(j)).data.array, slot, dummy_width)
-                            };
+                            // SAFETY: the array the caller's item names.
+                            let mut jtem: VirtText =
+                                unsafe { parse_virt_text(item, slot, dummy_width) };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             let lines = virt_lines.data.lines_mut();
                             let mut vl =
@@ -632,7 +628,9 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                             }
                             if has_hl_multiple {
-                                let mut arr_0: Array = unsafe { opts.hl_group.data.array };
+                                let Object::Array(arr_0) = opts.hl_group else {
+                                    unreachable!("`has_hl_multiple` is set only under an Array")
+                                };
                                 let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
                                 while i_0 > 0 as size_t {
                                     let mut hl_id_0: ::core::ffi::c_int = unsafe {

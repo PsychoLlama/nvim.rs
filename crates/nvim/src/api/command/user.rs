@@ -223,7 +223,7 @@ pub unsafe fn create_user_command(
         if has_key(is_set, KEYSET_OPTIDX_user_command__addr) {
             let Some(addr) = opts.addr.as_string() else {
                 let expected = api_typename(kObjectTypeString);
-                let actual = api_typename(opts.addr.type_0);
+                let actual = api_typename(opts.addr.kind());
                 *err = err_expected(c"addr", expected, Some(actual));
                 break '_err;
             };
@@ -271,7 +271,7 @@ pub unsafe fn create_user_command(
             compl_luaref = complete;
             // The reference is this call's now, so the keyset must not free
             // it a second time.
-            opts.complete.data.luaref = LUA_NOREF;
+            opts.complete = Object::LuaRef(LUA_NOREF);
         } else if let Some(complete) = opts.complete.as_string() {
             let value = complete.data();
             let vallen = complete.len() as ::core::ffi::c_int;
@@ -294,14 +294,14 @@ pub unsafe fn create_user_command(
         if has_key(is_set, KEYSET_OPTIDX_user_command__preview) {
             let Some(preview) = opts.preview.as_luaref() else {
                 let expected = api_typename(kObjectTypeLuaRef);
-                let actual = api_typename(opts.preview.type_0);
+                let actual = api_typename(opts.preview.kind());
                 *err = err_expected(c"preview", expected, Some(actual));
                 break '_err;
             };
             argt |= ExArgt::PREVIEW;
             preview_luaref = preview;
             // As `complete`: the reference is this call's now.
-            opts.preview.data.luaref = LUA_NOREF;
+            opts.preview = Object::LuaRef(LUA_NOREF);
         }
 
         if let Some(body) = cmd.as_luaref() {

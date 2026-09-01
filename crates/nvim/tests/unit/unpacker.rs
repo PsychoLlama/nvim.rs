@@ -9,11 +9,7 @@ use std::ffi::c_char;
 
 use neovim::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use neovim::msgpack_rpc::unpacker::unpack;
-use neovim::types::{
-    Arena, Error, Object, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow,
-};
+use neovim::types::{Arena, Error, Object};
 
 /// What one decode produced: the object plus whatever error was reported.
 ///
@@ -65,28 +61,24 @@ fn decode(bytes: &[u8]) -> Decoded {
 }
 
 fn text(object: &Object) -> Vec<u8> {
-    assert_eq!(object.type_0, kObjectTypeString);
-    let string = unsafe { object.data.string };
+    let string = object.as_string().expect("decoded a string");
     unsafe { string.as_bytes() }.to_vec()
 }
 
 #[test]
 fn decodes_scalars() {
     let nil = decode(&[0xc0]);
-    assert_eq!(nil.object.type_0, kObjectTypeNil);
+    assert!(nil.object.is_nil());
     assert_eq!(nil.message().as_deref(), None);
 
-    assert_eq!(decode(&[0xc3]).object.type_0, kObjectTypeBoolean);
-    assert!(unsafe { decode(&[0xc3]).object.data.boolean });
-    assert!(!unsafe { decode(&[0xc2]).object.data.boolean });
+    assert_eq!(decode(&[0xc3]).object.as_boolean(), Some(true));
+    assert_eq!(decode(&[0xc2]).object.as_boolean(), Some(false));
 
-    assert_eq!(unsafe { decode(&[0x07]).object.data.integer }, 7);
-    assert_eq!(unsafe { decode(&[0xff]).object.data.integer }, -1);
-    assert_eq!(decode(&[0x07]).object.type_0, kObjectTypeInteger);
+    assert_eq!(decode(&[0x07]).object.as_integer(), Some(7));
+    assert_eq!(decode(&[0xff]).object.as_integer(), Some(-1));
 
     let float = decode(&[0xcb, 0x3f, 0xf0, 0, 0, 0, 0, 0, 0]);
-    assert_eq!(float.object.type_0, kObjectTypeFloat);
-    assert_eq!(unsafe { float.object.data.floating }, 1.0);
+    assert_eq!(float.object.as_float(), Some(1.0));
 }
 
 #[test]
@@ -95,17 +87,15 @@ fn decodes_strings_and_containers() {
     assert_eq!(text(&string.object), b"hi");
 
     let array = decode(&[0x92, 0x01, 0x02]);
-    assert_eq!(array.object.type_0, kObjectTypeArray);
-    let items = unsafe { array.object.data.array };
+    let items = array.object.as_array().expect("decoded an array");
     assert_eq!(items.size, 2);
-    assert_eq!(unsafe { (*items.items.add(1)).data.integer }, 2);
+    assert_eq!(unsafe { *items.items.add(1) }.as_integer(), Some(2));
 
     let dict = decode(&[0x81, 0xa1, b'a', 0x2a]);
-    assert_eq!(dict.object.type_0, kObjectTypeDict);
-    let entries = unsafe { dict.object.data.dict };
+    let entries = dict.object.as_dict().expect("decoded a dict");
     assert_eq!(entries.size, 1);
     assert_eq!(unsafe { (*entries.items).key.len() }, 1);
-    assert_eq!(unsafe { (*entries.items).value.data.integer }, 42);
+    assert_eq!(unsafe { (*entries.items).value }.as_integer(), Some(42));
 }
 
 /// The API hands out NUL-terminated strings even though it carries the length
@@ -113,7 +103,7 @@ fn decodes_strings_and_containers() {
 #[test]
 fn decoded_strings_are_nul_terminated() {
     let string = decode(&[0xa3, b'a', b'b', b'c']);
-    let raw = unsafe { string.object.data.string };
+    let raw = string.object.as_string().expect("decoded a string");
     assert_eq!(raw.len(), 3);
     assert_eq!(unsafe { *raw.data().add(3) }, 0);
 }
@@ -122,16 +112,10 @@ fn decoded_strings_are_nul_terminated() {
 /// distance from `kObjectTypeBuffer`.
 #[test]
 fn decodes_handles() {
-    let buffer = decode(&[0xd4, 0, 3]);
-    assert_eq!(buffer.object.type_0, kObjectTypeBuffer);
-    assert_eq!(unsafe { buffer.object.data.integer }, 3);
-
+    assert!(matches!(decode(&[0xd4, 0, 3]).object, Object::Buffer(3)));
     let window = decode(&[0xc7, 3, 1, 0xcd, 0x03, 0xe8]);
-    assert_eq!(window.object.type_0, kObjectTypeWindow);
-    assert_eq!(unsafe { window.object.data.integer }, 1000);
-
-    let tabpage = decode(&[0xd4, 2, 1]);
-    assert_eq!(tabpage.object.type_0, kObjectTypeTabpage);
+    assert!(matches!(window.object, Object::Window(1000)));
+    assert!(matches!(decode(&[0xd4, 2, 1]).object, Object::Tabpage(1)));
 }
 
 /// An extension the API does not define decodes as nil rather than failing
@@ -139,20 +123,18 @@ fn decodes_handles() {
 #[test]
 fn unknown_extensions_decode_as_nil() {
     let unknown_type = decode(&[0xd4, 9, 1]);
-    assert_eq!(unknown_type.object.type_0, kObjectTypeNil);
+    assert!(unknown_type.object.is_nil());
     assert_eq!(unknown_type.message().as_deref(), None);
 
-    let negative_type = decode(&[0xd4, 0xff, 1]);
-    assert_eq!(negative_type.object.type_0, kObjectTypeNil);
+    assert!(decode(&[0xd4, 0xff, 1]).object.is_nil());
 
     // fixext1 carrying a nil, not an integer.
-    let wrong_payload = decode(&[0xd4, 0, 0xc0]);
-    assert_eq!(wrong_payload.object.type_0, kObjectTypeNil);
+    assert!(decode(&[0xd4, 0, 0xc0]).object.is_nil());
 
     // ext8 with a ten-byte payload: one more than the accumulator holds.
     let mut too_long = vec![0xc7, 10, 0];
     too_long.extend([0xcf, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    assert_eq!(decode(&too_long).object.type_0, kObjectTypeNil);
+    assert!(decode(&too_long).object.is_nil());
 }
 
 #[test]

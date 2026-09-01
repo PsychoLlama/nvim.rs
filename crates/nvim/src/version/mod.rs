@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, Error, OptInt, ShmFlag, exarg_T, kObjectTypeString, tabpage_T};
+use crate::types::{Arena, Array, Error, OptInt, ShmFlag, exarg_T, tabpage_T};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
@@ -313,9 +313,8 @@ pub(crate) unsafe fn list_lua_version() {
     let arena = ptr::null_mut::<Arena>();
     let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, &mut err) };
     debug_assert!(!err.is_set(), "a literal chunk cannot fail");
-    // Not a debug assertion: the union field read below depends on it.
-    assert!(ret.type_0 == kObjectTypeString, "_VERSION is a string");
-    unsafe { msg_puts(ret.data.string.data()) };
+    let version = ret.as_string().expect("_VERSION is a string");
+    unsafe { msg_puts(version.data()) };
     unsafe { api_free_object(ret) };
 }
 

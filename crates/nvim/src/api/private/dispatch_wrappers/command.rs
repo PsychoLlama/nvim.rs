@@ -35,21 +35,21 @@ pub unsafe fn handle_nvim_buf_create_user_command(
     );
     if args.len() != 4 {
         wrong_arity(error, 4, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_create_user_command", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_create_user_command", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_3 = args[2];
     let mut arg_4: KeyDict_user_command =
         match read_keydict(Some(key_dict_user_command_get_field), args[3], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(
                     error,
@@ -57,7 +57,7 @@ pub unsafe fn handle_nvim_buf_create_user_command(
                     c"nvim_buf_create_user_command",
                     c"Dict(user_command) *",
                 );
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -67,7 +67,7 @@ pub unsafe fn handle_nvim_buf_create_user_command(
     {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_del_user_command`.
@@ -98,22 +98,22 @@ pub unsafe fn handle_nvim_buf_del_user_command(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_del_user_command", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_del_user_command", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_buf_del_user_command(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_get_commands`.
@@ -144,19 +144,19 @@ pub unsafe fn handle_nvim_buf_get_commands(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_get_commands", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_get_commands =
         match read_keydict(Some(key_dict_get_commands_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_buf_get_commands", c"Dict(get_commands) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -165,7 +165,7 @@ pub unsafe fn handle_nvim_buf_get_commands(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_cmd`.
@@ -196,23 +196,23 @@ pub unsafe fn handle_nvim_cmd(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let mut arg_1: KeyDict_cmd = match read_keydict(Some(key_dict_cmd_get_field), args[0], error) {
         KeySetArg::Read(v) => v,
-        KeySetArg::Refused => return NIL,
+        KeySetArg::Refused => return Object::Nil,
         KeySetArg::WrongType => {
             wrong_type(error, 1, c"nvim_cmd", c"Dict(cmd) *");
-            return NIL;
+            return Object::Nil;
         }
     };
     let mut arg_2: KeyDict_cmd_opts =
         match read_keydict(Some(key_dict_cmd_opts_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_cmd", c"Dict(cmd_opts) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -221,7 +221,7 @@ pub unsafe fn handle_nvim_cmd(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeString, object_data { string: rv })
+    Object::String(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_user_command`.
@@ -252,17 +252,17 @@ pub unsafe fn handle_nvim_create_user_command(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_create_user_command", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     let mut arg_3: KeyDict_user_command =
         match read_keydict(Some(key_dict_user_command_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(
                     error,
@@ -270,7 +270,7 @@ pub unsafe fn handle_nvim_create_user_command(
                     c"nvim_create_user_command",
                     c"Dict(user_command) *",
                 );
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -278,7 +278,7 @@ pub unsafe fn handle_nvim_create_user_command(
     if let Err(e) = unsafe { nvim_create_user_command(channel_id, arg_1, arg_2, &raw mut arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_user_command`.
@@ -309,18 +309,18 @@ pub unsafe fn handle_nvim_del_user_command(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_del_user_command", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_user_command(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_commands`.
@@ -351,15 +351,15 @@ pub unsafe fn handle_nvim_get_commands(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let mut arg_1: KeyDict_get_commands =
         match read_keydict(Some(key_dict_get_commands_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 1, c"nvim_get_commands", c"Dict(get_commands) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -368,7 +368,7 @@ pub unsafe fn handle_nvim_get_commands(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_parse_cmd`.
@@ -399,19 +399,19 @@ pub unsafe fn handle_nvim_parse_cmd(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_parse_cmd", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_empty =
         match read_keydict(Some(key_dict_empty_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_parse_cmd", c"Dict(empty) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -430,5 +430,5 @@ pub unsafe fn handle_nvim_parse_cmd(
             arena,
         )
     };
-    obj(kObjectTypeDict, object_data { dict })
+    Object::Dict(dict)
 }

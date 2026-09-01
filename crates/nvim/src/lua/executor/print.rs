@@ -70,7 +70,7 @@ unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
 
         let mut needs_clear = false;
         msg_multihl(
-            Object::NIL,
+            Object::Nil,
             msg,
             LUA_PRINT_KIND.as_ptr(),
             true,

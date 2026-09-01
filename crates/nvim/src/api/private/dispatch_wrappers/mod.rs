@@ -160,7 +160,7 @@ use crate::types::{
     KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
     KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
     KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, Object, ObjectType, String_0, handle_T, object_data, size_t, uint64_t,
+    KeyDict_win_text_height, Object, ObjectType, String_0, handle_T, size_t, uint64_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -172,31 +172,13 @@ mod known {
     use core::ffi::c_int;
 
     pub(crate) use crate::types::kErrorTypeException;
-    pub(crate) use crate::types::kObjectTypeArray;
-    pub(crate) use crate::types::kObjectTypeBoolean;
     pub(crate) use crate::types::kObjectTypeBuffer;
-    pub(crate) use crate::types::kObjectTypeDict;
-    pub(crate) use crate::types::kObjectTypeFloat;
-    pub(crate) use crate::types::kObjectTypeInteger;
-    pub(crate) use crate::types::kObjectTypeNil;
-    pub(crate) use crate::types::kObjectTypeString;
     pub(crate) use crate::types::kObjectTypeTabpage;
     pub(crate) use crate::types::kObjectTypeWindow;
     pub(crate) const LOGLVL_DBG: c_int = 1;
 }
 
 use known::*;
-
-/// What a wrapper returns when it refused the call, and what a `void` API
-/// function's result boxes to.
-const NIL: Object = Object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
-
-const fn obj(type_0: ObjectType, data: object_data) -> Object {
-    Object { type_0, data }
-}
 
 /// The arguments a client sent, as a slice. An empty array need not carry a
 /// pointer at all, so that case answers without forming one.
@@ -242,82 +224,59 @@ fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
 /// A nonnegative integer is accepted as a boolean, truncated to C `int`
 /// first as the C dispatcher did.
 fn as_boolean(o: Object) -> Option<Boolean> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeBoolean => Some(unsafe { o.data.boolean }),
-        kObjectTypeInteger => match unsafe { o.data.integer } {
-            n if n >= 0 => Some(n as handle_T != 0),
-            _ => None,
-        },
+    match o {
+        Object::Boolean(b) => Some(b),
+        Object::Integer(n) if n >= 0 => Some(n as handle_T != 0),
         _ => None,
     }
 }
 
 fn as_integer(o: Object) -> Option<Integer> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeInteger => Some(unsafe { o.data.integer }),
-        _ => None,
-    }
+    o.as_integer()
 }
 
 /// Integers widen to floats, as they do in Lua.
 fn as_float(o: Object) -> Option<Float> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeFloat => Some(unsafe { o.data.floating }),
-        kObjectTypeInteger => Some(unsafe { o.data.integer } as Float),
+    match o {
+        Object::Float(f) => Some(f),
+        Object::Integer(n) => Some(n as Float),
         _ => None,
     }
 }
 
 fn as_string(o: Object) -> Option<String_0> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeString => Some(unsafe { o.data.string }),
-        _ => None,
-    }
+    o.as_string()
 }
 
 fn as_array(o: Object) -> Option<Array> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeArray => Some(unsafe { o.data.array }),
-        _ => None,
-    }
+    o.as_array()
 }
 
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
 fn as_dict(o: Object) -> Option<Dict> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeDict => Some(unsafe { o.data.dict }),
-        _ if is_empty_array(o) => Some(Dict {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        }),
+    match o {
+        Object::Dict(d) => Some(d),
+        Object::Array(a) if a.size == 0 => Some(Dict::EMPTY),
         _ => None,
     }
 }
 
-/// Buffer, Window and Tabpage each have a tag of their own but travel in the
-/// integer arm, and a bare nonnegative integer is accepted as any of them.
+/// Buffer, Window and Tabpage each have a variant of their own, and a bare
+/// nonnegative integer is accepted as any of them. `tag` names the one the
+/// parameter declares: a window handle is not a buffer.
 fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
-    if o.type_0 != tag && o.type_0 != kObjectTypeInteger {
-        return None;
-    }
-    // SAFETY: every accepted tag carries an integer.
-    match unsafe { o.data.integer } {
-        n if n >= 0 => Some(n as handle_T),
-        _ => None,
-    }
-}
-
-fn is_empty_array(o: Object) -> bool {
-    // SAFETY: the tag says which union arm is live.
-    o.type_0 == kObjectTypeArray && unsafe { o.data.array }.size == 0
+    let n = match o {
+        Object::Integer(n) => n,
+        Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
+            if o.kind() != tag {
+                return None;
+            }
+            n
+        }
+        _ => return None,
+    };
+    (n >= 0).then_some(n as handle_T)
 }
 
 /// What reading a keyset argument produced.
@@ -337,25 +296,29 @@ enum KeySetArg<K> {
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
 fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
-    if item.type_0 != kObjectTypeDict {
+    let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
         }
         // SAFETY: as below; an empty list sets no field.
         return KeySetArg::Read(unsafe { core::mem::zeroed() });
-    }
-    // SAFETY: as above.
+    };
+    // SAFETY: a keyset is a `repr(C)` struct of scalars, handles, `String`s
+    // and `Object`s, and all-zero is "unset" for every one of them --
+    // `Object`'s zero discriminant is `Object::Nil`.
     let mut out: K = unsafe { core::mem::zeroed() };
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
-    // offsets it hands back are inside `out`; the tag says the dict arm of the
-    // union is the live one.
-    let read =
-        unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, item.data.dict, error) };
+    // offsets it hands back are inside `out`.
+    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict, error) };
     if read {
         KeySetArg::Read(out)
     } else {
         KeySetArg::Refused
     }
+}
+
+fn is_empty_array(o: Object) -> bool {
+    matches!(o, Object::Array(a) if a.size == 0)
 }
 
 /// Refuses a call made while the text is locked.
@@ -374,5 +337,5 @@ fn expr_map_locked_error(error: &mut Error) {
 /// nil, as it is for every other way of refusing.
 fn failure(error: &mut Error, e: Error) -> Object {
     *error = e;
-    NIL
+    Object::Nil
 }

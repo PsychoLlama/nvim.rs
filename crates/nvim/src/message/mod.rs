@@ -88,9 +88,8 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
     KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T,
-    estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, kObjectTypeInteger, kObjectTypeNil,
-    object, object_data, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uint64_t,
+    estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, ptrdiff_t, sattr_T, schar_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -183,12 +182,7 @@ static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
-static msg_ext_id: GlobalCell<Object> = GlobalCell::new(object {
-    type_0: kObjectTypeInteger,
-    data: object_data {
-        integer: 1 as Integer,
-    },
-});
+static msg_ext_id: GlobalCell<Object> = GlobalCell::new(Object::Integer(1 as Integer));
 static msg_ext_chunks: GlobalCell<*mut Array> = GlobalCell::new(::core::ptr::null_mut::<Array>());
 /// The text written under the current highlight, waiting to be closed off
 /// into a `msg_show` chunk by [`ext::msg_ext_emit_chunk`].
@@ -394,12 +388,14 @@ pub unsafe fn msg_multihl(
     // - Nil: generate a new Integer id.
     // - Integer: an existing id.
     // - String: a user-defined id, new or existing.
-    let id = if id.type_0 == kObjectTypeNil {
+    let id = if id.is_nil() {
         let next = msg_id_next.get();
         msg_id_next.set(next + 1);
         Object::integer(next)
     } else {
-        if id.type_0 == kObjectTypeInteger && !msg_id_exists(unsafe { id.data.integer }) {
+        if let Object::Integer(n) = id
+            && !msg_id_exists(n)
+        {
             unsafe { abort() };
         }
         id

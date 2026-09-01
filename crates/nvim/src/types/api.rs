@@ -100,11 +100,11 @@ pub struct KeySetLink {
 pub type KeyValuePair = key_value_pair;
 pub type LuaRef = ::core::ffi::c_int;
 pub type MessageType = ::core::ffi::c_int;
-pub type Object = object;
 pub type ObjectType = ::core::ffi::c_uint;
-/// The tags an [`Object`]'s union is read through. Every module that builds
-/// or inspects an `Object` needs them, which is why c2rust emitted a copy
-/// into each of the sixty-five that do; this is the one definition.
+/// The numbers [`Object`]'s variants carry, which are visible outside the
+/// editor in two places: the Lua binding recognises three of them in a
+/// table's `_TYPE` key, and the generated keyset tables store one per field
+/// as a plain `int`. [`Object::kind`] answers them.
 pub const kObjectTypeNil: ObjectType = 0;
 pub const kObjectTypeBoolean: ObjectType = 1;
 pub const kObjectTypeInteger: ObjectType = 2;
@@ -131,20 +131,122 @@ pub struct key_value_pair {
     pub key: String_0,
     pub value: Object,
 }
+/// An API value: one of eleven kinds, each carrying its own payload.
+///
+/// `#[repr(C, u32)]` is deliberate on three counts. It keeps the C image --
+/// a `u32` tag followed by the union of the payloads -- that the generated
+/// keyset decoder writes fields into by byte offset and that the unit
+/// suite's cdefs describe. It pins the discriminants, which
+/// [`ObjectType`] says are read outside the editor. And it makes
+/// `mem::zeroed()` of an aggregate holding one produce [`Object::Nil`]
+/// rather than an invalid discriminant, which is what lets the keyset
+/// decoder start from a zeroed struct.
+///
+/// `Copy`, as the C struct was: every payload is a scalar or a
+/// pointer/length pair. Copying one copies neither what it points at nor
+/// the obligation to free it -- ownership travels with the value, exactly
+/// once, as it did before.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct object {
-    pub type_0: ObjectType,
-    pub data: object_data,
+#[repr(C, u32)]
+pub enum Object {
+    Nil = 0,
+    Boolean(Boolean) = 1,
+    Integer(Integer) = 2,
+    Float(Float) = 3,
+    String(String_0) = 4,
+    Array(Array) = 5,
+    Dict(Dict) = 6,
+    /// A reference to a Lua value, held in that state's registry. Owned:
+    /// whoever frees the object releases it.
+    LuaRef(LuaRef) = 7,
+    /// A buffer handle. Distinct from [`Object::Integer`] only in the tag:
+    /// the wire encoding gives handles their own msgpack extension type, so
+    /// a handle sent as a plain integer arrives as a plain integer.
+    Buffer(Integer) = 8,
+    /// A window handle. See [`Object::Buffer`].
+    Window(Integer) = 9,
+    /// A tabpage handle. See [`Object::Buffer`].
+    Tabpage(Integer) = 10,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union object_data {
-    pub boolean: Boolean,
-    pub integer: Integer,
-    pub floating: Float,
-    pub string: String_0,
-    pub array: Array,
-    pub dict: Dict,
-    pub luaref: LuaRef,
+
+impl Object {
+    /// The tag, as the number the Lua binding and the keyset tables speak.
+    pub const fn kind(&self) -> ObjectType {
+        match self {
+            Object::Nil => kObjectTypeNil,
+            Object::Boolean(_) => kObjectTypeBoolean,
+            Object::Integer(_) => kObjectTypeInteger,
+            Object::Float(_) => kObjectTypeFloat,
+            Object::String(_) => kObjectTypeString,
+            Object::Array(_) => kObjectTypeArray,
+            Object::Dict(_) => kObjectTypeDict,
+            Object::LuaRef(_) => kObjectTypeLuaRef,
+            Object::Buffer(_) => kObjectTypeBuffer,
+            Object::Window(_) => kObjectTypeWindow,
+            Object::Tabpage(_) => kObjectTypeTabpage,
+        }
+    }
+
+    pub const fn is_nil(&self) -> bool {
+        matches!(self, Object::Nil)
+    }
+
+    pub const fn as_boolean(self) -> Option<Boolean> {
+        match self {
+            Object::Boolean(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// The `Integer` arm only. A handle is [`Object::as_handle`].
+    pub const fn as_integer(self) -> Option<Integer> {
+        match self {
+            Object::Integer(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_float(self) -> Option<Float> {
+        match self {
+            Object::Float(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_string(self) -> Option<String_0> {
+        match self {
+            Object::String(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_array(self) -> Option<Array> {
+        match self {
+            Object::Array(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_dict(self) -> Option<Dict> {
+        match self {
+            Object::Dict(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub const fn as_luaref(self) -> Option<LuaRef> {
+        match self {
+            Object::LuaRef(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// The number a handle carries, whichever of the three tags it wears.
+    /// A plain integer is *not* one: the callers that accept one say so.
+    pub const fn as_handle(self) -> Option<Integer> {
+        match self {
+            Object::Buffer(v) | Object::Window(v) | Object::Tabpage(v) => Some(v),
+            _ => None,
+        }
+    }
 }

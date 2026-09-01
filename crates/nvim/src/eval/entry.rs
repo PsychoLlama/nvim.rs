@@ -49,9 +49,8 @@ use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, Failed, NUL, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, exarg_T, funccal_entry_T,
-    funcexe_T, garray_T, hashtab_T, kObjectTypeString, list_T, object_data, partial_T, ptrdiff_t,
-    save_v_event_T, sctx_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
-    win_T,
+    funcexe_T, garray_T, hashtab_T, list_T, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -745,12 +744,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
     let mut numbuf = NumBuf::new();
     /// The empty String an error answers with.
     fn empty_string() -> Object {
-        Object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: String_0::from_raw_parts(null_mut(), 0 as size_t),
-            },
-        }
+        Object::String(String_0::from_raw_parts(null_mut(), 0 as size_t))
     }
 
     // SAFETY: the caller's promise -- a live window.
@@ -774,12 +768,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
         let obj = if tv.v_type == VAR_LIST {
             unsafe { vim_to_object(&raw mut tv, null_mut::<Arena>(), false) }
         } else {
-            Object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: unsafe { cstr_to_string(numbuf.string(&raw mut tv)) },
-                },
-            }
+            Object::String(unsafe { cstr_to_string(numbuf.string(&raw mut tv)) })
         };
         clear_local(&mut tv);
         obj

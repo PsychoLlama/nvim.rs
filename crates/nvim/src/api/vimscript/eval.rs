@@ -47,7 +47,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     let mut evalarg = EVALARG_EVALUATE;
     let mut error = Error::none();
-    let mut rv = Object::NIL;
+    let mut rv = Object::Nil;
     let _nesting = enter_recursive(&recursive);
     let mut rettv: typval_T = TV_INITIAL_VALUE;
     let ok = api_try(&mut error, |_| {
@@ -98,7 +98,7 @@ unsafe fn call_function_with(
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     if args.size > MAX_FUNC_ARGS as size_t {
         *err = Error::validation(c"Function called with too many arguments");
-        return Object::NIL;
+        return Object::Nil;
     }
     // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
     let mut vim_args: [typval_T; 21] = [TV_INITIAL_VALUE; 21];
@@ -108,7 +108,7 @@ unsafe fn call_function_with(
         unsafe { object_to_vim(*args.items.add(i), slot) };
     }
 
-    let mut rv = Object::NIL;
+    let mut rv = Object::Nil;
     {
         let _nesting = enter_recursive(&recursive);
         let mut rettv: typval_T = TV_INITIAL_VALUE;
@@ -186,7 +186,7 @@ pub unsafe fn nvim_call_dict_function(
         // SAFETY: `tstate` is what the `try_enter` above filled in.
         unsafe { try_leave(&raw mut tstate, &mut error) };
         if error.is_set() {
-            return Object::NIL.reported(error);
+            return Object::Nil.reported(error);
         }
         if eval_ret.is_err() {
             // `eval0` answers `FAIL` only by throwing, which `try_leave`
@@ -195,14 +195,14 @@ pub unsafe fn nvim_call_dict_function(
             unsafe { abort() };
         }
         mustfree = true;
-    } else if dict.type_0 == kObjectTypeDict {
+    } else if matches!(dict, Object::Dict(_)) {
         // SAFETY: `dict` is the caller's and `rettv`/`error` are this frame's.
         unsafe { object_to_vim(dict, &raw mut rettv) };
     } else {
         let want = c"String or Dict";
         // SAFETY: `error` is this frame's slot and both strings are static.
         error = err_expected(c"dict argument", want, None);
-        return Object::NIL.reported(error);
+        return Object::Nil.reported(error);
     }
     // SAFETY: `rettv` is this frame's; a non-dictionary leaves the union's
     // pointer arm holding whatever the value was, which `call_in_dict`
@@ -240,11 +240,11 @@ unsafe fn call_in_dict(
 
     if rettv.v_type != VAR_DICT || self_dict.is_null() {
         refuse(c"dict not found");
-        return Object::NIL;
+        return Object::Nil;
     }
     // A Dict argument was converted whole, so its function member is
     // already `fn_0`; a String argument named a dictionary to look in.
-    if !fn_0.data().is_null() && !fn_0.is_empty() && dict.type_0 != kObjectTypeDict {
+    if !fn_0.data().is_null() && !fn_0.is_empty() && !matches!(dict, Object::Dict(_)) {
         // SAFETY: `self_dict` is live and `fn_0` names its own bytes.
         let di: *mut dictitem_T =
             unsafe { tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t) };
@@ -252,19 +252,19 @@ unsafe fn call_in_dict(
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
             *err = api_error!(kErrorTypeValidation, "Not found: {name}");
-            return Object::NIL;
+            return Object::Nil;
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
         let v_type = unsafe { (*di).di_tv.v_type };
         if v_type == VAR_PARTIAL {
             refuse(c"partial function not supported");
-            return Object::NIL;
+            return Object::Nil;
         }
         if v_type != VAR_FUNC {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
             *err = api_error!(kErrorTypeValidation, "Not a function: {name}");
-            return Object::NIL;
+            return Object::Nil;
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
         let name = unsafe { (*di).di_tv.vval.v_string };
@@ -273,7 +273,7 @@ unsafe fn call_in_dict(
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
         *err = Error::validation(c"Invalid function name: (empty)");
-        return Object::NIL;
+        return Object::Nil;
     }
     // SAFETY: `fn_0` names its own bytes and `self_dict` is the live
     // dictionary the call is a method of.

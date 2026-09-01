@@ -102,8 +102,8 @@ use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     Arena, Array, CmdAddr, CompleteListItemGetter, Direction, Error, EvalFuncData, LuaRetMode,
     Object, OptInt, buf_T, cmdidx_T, colnr_T, dict_T, exarg_T, expand_T, fuzmatch_str_T, garray_T,
-    hashtab_T, hlf_T, kObjectTypeArray, kObjectTypeString, list_T, listitem_T, pos_T, ptrdiff_t,
-    pumitem_T, regmatch_T, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T, xp_prefix_T,
+    hashtab_T, hlf_T, list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t, ssize_t,
+    typval_T, typval_vval_union, varnumber_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{

@@ -35,18 +35,18 @@ pub unsafe fn handle_nvim__chan_set_detach(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_boolean(args[0]) else {
         wrong_type(error, 1, c"nvim__chan_set_detach", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim__chan_set_detach(channel_id, arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__complete_set`.
@@ -77,19 +77,19 @@ pub unsafe fn handle_nvim__complete_set(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim__complete_set", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_complete_set =
         match read_keydict(Some(key_dict_complete_set_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim__complete_set", c"Dict(complete_set) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -98,7 +98,7 @@ pub unsafe fn handle_nvim__complete_set(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__exec_lua_fast`.
@@ -129,15 +129,15 @@ pub unsafe fn handle_nvim__exec_lua_fast(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim__exec_lua_fast", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_array(args[1]) else {
         wrong_type(error, 2, c"nvim__exec_lua_fast", c"Array");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -175,12 +175,12 @@ pub unsafe fn handle_nvim__get_lib_dir(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__get_lib_dir() };
-    obj(kObjectTypeString, object_data { string: rv })
+    Object::String(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__get_runtime`.
@@ -211,23 +211,23 @@ pub unsafe fn handle_nvim__get_runtime(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_array(args[0]) else {
         wrong_type(error, 1, c"nvim__get_runtime", c"ArrayOf(String)");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_boolean(args[1]) else {
         wrong_type(error, 2, c"nvim__get_runtime", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_3: KeyDict_runtime =
         match read_keydict(Some(key_dict_runtime_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 3, c"nvim__get_runtime", c"Dict(runtime) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -236,7 +236,7 @@ pub unsafe fn handle_nvim__get_runtime(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__id`.
@@ -267,7 +267,7 @@ pub unsafe fn handle_nvim__id(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let arg_1 = args[0];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -303,16 +303,16 @@ pub unsafe fn handle_nvim__id_array(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_array(args[0]) else {
         wrong_type(error, 1, c"nvim__id_array", c"Array");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__id_array(arg_1, arena) };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__id_dict`.
@@ -343,16 +343,16 @@ pub unsafe fn handle_nvim__id_dict(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_dict(args[0]) else {
         wrong_type(error, 1, c"nvim__id_dict", c"Dict");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__id_dict(arg_1, arena) };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__id_float`.
@@ -383,16 +383,16 @@ pub unsafe fn handle_nvim__id_float(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_float(args[0]) else {
         wrong_type(error, 1, c"nvim__id_float", c"Float");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__id_float(arg_1) };
-    obj(kObjectTypeFloat, object_data { floating: rv })
+    Object::Float(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__inspect_cell`.
@@ -423,19 +423,19 @@ pub unsafe fn handle_nvim__inspect_cell(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim__inspect_cell", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim__inspect_cell", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_integer(args[2]) else {
         wrong_type(error, 3, c"nvim__inspect_cell", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -443,7 +443,7 @@ pub unsafe fn handle_nvim__inspect_cell(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__invalidate_glyph_cache`.
@@ -474,12 +474,12 @@ pub unsafe fn handle_nvim__invalidate_glyph_cache(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     unsafe { nvim__invalidate_glyph_cache() };
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__redraw`.
@@ -510,15 +510,15 @@ pub unsafe fn handle_nvim__redraw(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let mut arg_1: KeyDict_redraw =
         match read_keydict(Some(key_dict_redraw_get_field), args[0], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 1, c"nvim__redraw", c"Dict(redraw) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -526,7 +526,7 @@ pub unsafe fn handle_nvim__redraw(
     if let Err(e) = unsafe { nvim__redraw(&raw mut arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__runtime_inspect`.
@@ -557,12 +557,12 @@ pub unsafe fn handle_nvim__runtime_inspect(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__runtime_inspect(arena) };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__screenshot`.
@@ -593,16 +593,16 @@ pub unsafe fn handle_nvim__screenshot(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim__screenshot", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     unsafe { nvim__screenshot(arg_1) };
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__stats`.
@@ -633,12 +633,12 @@ pub unsafe fn handle_nvim__stats(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     let rv = unsafe { nvim__stats(arena) };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__unpack`.
@@ -669,11 +669,11 @@ pub unsafe fn handle_nvim__unpack(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim__unpack", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -711,22 +711,22 @@ pub unsafe fn handle_nvim_chan_send(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_chan_send", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_chan_send", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_chan_send(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_buf`.
@@ -757,15 +757,15 @@ pub unsafe fn handle_nvim_create_buf(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_boolean(args[0]) else {
         wrong_type(error, 1, c"nvim_create_buf", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_boolean(args[1]) else {
         wrong_type(error, 2, c"nvim_create_buf", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -773,12 +773,7 @@ pub unsafe fn handle_nvim_create_buf(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeBuffer,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Buffer(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_current_line`.
@@ -809,18 +804,18 @@ pub unsafe fn handle_nvim_del_current_line(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_current_line(arena) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_keymap`.
@@ -851,22 +846,22 @@ pub unsafe fn handle_nvim_del_keymap(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_del_keymap", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_del_keymap", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_keymap(channel_id, arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_mark`.
@@ -897,11 +892,11 @@ pub unsafe fn handle_nvim_del_mark(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_del_mark", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -909,7 +904,7 @@ pub unsafe fn handle_nvim_del_mark(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeBoolean, object_data { boolean: rv })
+    Object::Boolean(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_var`.
@@ -940,16 +935,16 @@ pub unsafe fn handle_nvim_del_var(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_del_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_del_var(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

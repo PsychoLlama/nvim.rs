@@ -27,7 +27,7 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     Arena, Boolean, Dict, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
     KeyDict_highlight_cterm, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException,
-    kErrorTypeValidation, kObjectTypeInteger, kObjectTypeString, size_t,
+    kErrorTypeValidation, size_t,
 };
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
@@ -582,19 +582,16 @@ pub unsafe fn dict2hlattrs(
 /// in the error message for a value that is neither a string nor an integer.
 ///
 /// # Safety
-/// `val` must carry a value matching its tag, and a string value must be
-/// NUL-terminated. `err` points at a live [`Error`].
+/// A string value must be NUL-terminated. `err` points at a live [`Error`].
 unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -> int32_t {
-    // SAFETY: the tag says which union arm is live.
-    if val.type_0 == kObjectTypeInteger {
-        return unsafe { val.data.integer } as int32_t;
+    if let Object::Integer(n) = val {
+        return n as int32_t;
     }
-    if val.type_0 != kObjectTypeString {
+    let Object::String(str) = val else {
         let expected = c"String or Integer";
         *err = err_expected(key, expected, None);
         return 0;
-    }
-    let str = unsafe { val.data.string };
+    };
     if str.is_empty() || unsafe { strcasecmp(str.data(), c"NONE".as_ptr()) } == 0 {
         return -1;
     }

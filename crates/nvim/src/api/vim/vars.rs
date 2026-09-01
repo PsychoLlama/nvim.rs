@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::message_fmt::c_str;
 
@@ -66,7 +66,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
         if !loaded || aborting() {
             // SAFETY: `name` names its own NUL-terminated bytes.
             error = unsafe { key_not_found(name) };
-            return NIL.reported(error);
+            return Object::Nil.reported(error);
         }
         // SAFETY: as above.
         di = unsafe { find_globvar(name) };
@@ -74,7 +74,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
     if di.is_null() {
         // SAFETY: as above.
         error = unsafe { key_not_found(name) };
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     }
     // SAFETY: `di` is the live dictionary item just found, and `arena` is the
     // caller's.
@@ -122,7 +122,7 @@ pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let dict = get_globvar_dict();
     // SAFETY: as [`nvim_set_var`]; `del` says to remove rather than assign.
-    unsafe { dict_set_var(dict, name, NIL, true, false, NO_ARENA, &mut error) };
+    unsafe { dict_set_var(dict, name, Object::Nil, true, false, NO_ARENA, &mut error) };
     ().reported(error)
 }
 

@@ -35,16 +35,16 @@ pub unsafe fn handle_nvim_call_dict_function(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let arg_1 = args[0];
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_call_dict_function", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_array(args[2]) else {
         wrong_type(error, 3, c"nvim_call_dict_function", c"Array");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -82,15 +82,15 @@ pub unsafe fn handle_nvim_call_function(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_call_function", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_array(args[1]) else {
         wrong_type(error, 2, c"nvim_call_function", c"Array");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -128,18 +128,18 @@ pub unsafe fn handle_nvim_command(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_command", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_command(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_eval`.
@@ -170,11 +170,11 @@ pub unsafe fn handle_nvim_eval(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_eval", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -212,19 +212,19 @@ pub unsafe fn handle_nvim_exec2(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_exec2", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_exec_opts =
         match read_keydict(Some(key_dict_exec_opts_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_exec2", c"Dict(exec_opts) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -233,7 +233,7 @@ pub unsafe fn handle_nvim_exec2(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_parse_expression`.
@@ -264,19 +264,19 @@ pub unsafe fn handle_nvim_parse_expression(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_parse_expression", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_parse_expression", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_boolean(args[2]) else {
         wrong_type(error, 3, c"nvim_parse_expression", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -284,5 +284,5 @@ pub unsafe fn handle_nvim_parse_expression(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }

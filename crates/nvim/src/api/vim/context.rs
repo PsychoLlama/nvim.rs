@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, dict_put, has_key};
+use crate::api::private::helpers::{Reported, dict_put, has_key};
 use crate::api::private::validate::err_bad_value;
 use crate::cstr;
 
@@ -50,12 +50,9 @@ pub unsafe fn nvim_get_context(
     if types.size > 0 as size_t {
         let mut i: size_t = 0 as size_t;
         while i < types.size {
-            // SAFETY: `types` names its own `size` items, and the tag says
-            // whether the string arm is the live one.
-            let named = unsafe {
-                let item = *types.items.add(i);
-                (item.type_0 == kObjectTypeString).then(|| item.data.string.data())
-            };
+            // SAFETY: `types` names its own `size` items.
+            let item = unsafe { *types.items.add(i) };
+            let named = item.as_string().map(|s| s.data());
             if let Some(s) = named {
                 // SAFETY: the keyset's strings are NUL-terminated.
                 let which = unsafe { NAMES.iter().position(|n| strequal(s, n.as_ptr())) };
@@ -94,7 +91,7 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     }
     unsafe { ctx_free(&raw mut ctx) };
     did_emsg.set(save_did_emsg);
-    NIL.reported(error)
+    Object::Nil.reported(error)
 }
 
 pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {

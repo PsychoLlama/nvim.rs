@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    NIL, Reported, buffer_by_handle, tabpage_by_handle, window_by_handle,
+    Reported, buffer_by_handle, tabpage_by_handle, window_by_handle,
 };
 
 pub unsafe fn buffer_set_var(
@@ -19,7 +19,7 @@ pub unsafe fn buffer_set_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = buf.b_vars;
     // SAFETY: `vars` is that buffer's own dictionary, `arena` the caller's
@@ -34,11 +34,11 @@ pub unsafe fn buffer_del_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = buf.b_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn window_set_var(
@@ -49,7 +49,7 @@ pub unsafe fn window_set_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`, for that window's dictionary.
@@ -63,11 +63,11 @@ pub unsafe fn window_del_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn tabpage_set_var(
@@ -78,7 +78,7 @@ pub unsafe fn tabpage_set_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`, for that tab page's dictionary.
@@ -92,11 +92,11 @@ pub unsafe fn tabpage_del_var(
 ) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn vim_set_var(
@@ -114,5 +114,5 @@ pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, E
     let mut error = Error::none();
     let vars = get_globvar_dict();
     // SAFETY: as `vim_set_var`.
-    unsafe { dict_set_var(vars, name, NIL, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
 }

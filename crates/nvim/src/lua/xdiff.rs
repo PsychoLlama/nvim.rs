@@ -30,8 +30,8 @@ use crate::lua::ffi::{
 use crate::memory::strequal;
 use crate::types::{
     Arena, Error, KeyDict_xdl_diff, Object, OptionalKeys, String_0, int64_t, kErrorTypeException,
-    kObjectTypeBoolean, kObjectTypeInteger, kObjectTypeNil, linenr_T, lua_Integer, lua_State,
-    luaL_Buffer, mmbuffer_t, mmfile_t, object_data, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t,
+    xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -118,10 +118,7 @@ pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
     algorithm: String_0::NULL,
     ctxlen: 0,
     interhunkctxlen: 0,
-    linematch: Object {
-        type_0: kObjectTypeNil,
-        data: object_data { boolean: false },
-    },
+    linematch: Object::Nil,
     ignore_whitespace: false,
     ignore_whitespace_change: false,
     ignore_whitespace_change_at_eol: false,
@@ -457,18 +454,10 @@ unsafe fn apply_opts(
         cfg.interhunkctxlen = opts.interhunkctxlen as c_long;
     }
     if is_set(opts, KEYSET_OPTIDX_xdl_diff__linematch) {
-        // SAFETY: the union arm is the one `type_0` names.
-        match opts.linematch.type_0 {
-            kObjectTypeBoolean => {
-                *linematch = if unsafe { opts.linematch.data.boolean } {
-                    int64_t::MAX
-                } else {
-                    0
-                };
-            }
-            kObjectTypeInteger => *linematch = unsafe { opts.linematch.data.integer },
+        match opts.linematch {
+            Object::Boolean(on) => *linematch = if on { int64_t::MAX } else { 0 },
+            Object::Integer(n) => *linematch = n,
             _ => {
-                // SAFETY: `err` is the caller's.
                 *err = Error::validation(c"linematch must be a boolean or integer");
                 return Mode::Unified;
             }

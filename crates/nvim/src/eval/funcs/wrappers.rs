@@ -10,7 +10,7 @@ use super::args::{Args, MAX_ARGS};
 use super::table::{BUILTINS, builtin_index};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW,
-    FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL, object_data,
+    FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::api_free_object;
@@ -39,8 +39,8 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, MsgpackRpcRequestHandler, NUL, Object,
     VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
-    float_T, kBoolVarTrue, kObjectTypeNil, linenr_T, list_T, ptrdiff_t, typval_T,
-    typval_vval_union, varnumber_T, win_T,
+    float_T, kBoolVarTrue, linenr_T, list_T, ptrdiff_t, typval_T, typval_vval_union, varnumber_T,
+    win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -455,10 +455,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
     };
     let handler: MsgpackRpcRequestHandler = unsafe { *row };
 
-    let mut items = [Object {
-        type_0: kObjectTypeNil,
-        data: object_data { boolean: false },
-    }; MAX_FUNC_ARGS as usize];
+    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
     let mut args: Array = ARRAY_DICT_INIT;
     args.capacity = MAX_FUNC_ARGS as usize;
     args.items = items.as_mut_ptr();

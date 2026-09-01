@@ -611,7 +611,7 @@ unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<Str
 /// `name` a valid C string.
 fn wrong_type(err: &mut Error, name: &CStr, expected: ObjectType, value: Object) {
     let expected = api_typename(expected);
-    let actual = api_typename(value.type_0);
+    let actual = api_typename(value.kind());
     *err = err_expected(name, expected, Some(actual));
 }
 

@@ -96,20 +96,20 @@ pub(crate) unsafe fn get_augroup_from_object(
 ) -> ::core::ffi::c_int {
     let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    match group.type_0 as ::core::ffi::c_uint {
-        kObjectTypeNil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
-        kObjectTypeString => {
-            au_group = unsafe { augroup_find(group.data.string.data()) };
+    match group {
+        Object::Nil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
+        Object::String(s) => {
+            au_group = unsafe { augroup_find(s.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: the object's tag says it is the string.
-                let name = unsafe { group.data.string.as_cstr() };
+                // SAFETY: the string's bytes outlive this call.
+                let name = unsafe { s.as_cstr() };
                 *err = err_bad_value(c"group", name);
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;
         }
-        kObjectTypeInteger => {
-            au_group = unsafe { group.data.integer } as ::core::ffi::c_int;
+        Object::Integer(n) => {
+            au_group = n as ::core::ffi::c_int;
             name = if au_group == 0 as ::core::ffi::c_int {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {
@@ -124,7 +124,7 @@ pub(crate) unsafe fn get_augroup_from_object(
         _ => {
             if true {
                 let want = c"String or Integer";
-                let got = api_typename(group.type_0);
+                let got = api_typename(group.kind());
                 *err = err_expected(c"group", want, Some(got));
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }

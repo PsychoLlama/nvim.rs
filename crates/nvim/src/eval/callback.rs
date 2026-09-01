@@ -26,7 +26,7 @@ use crate::memory::xstrdup;
 use crate::types::{
     Arena, Callback, CallbackReader, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
     VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, funcexe_T, ht_stack_T,
-    kObjectTypeBoolean, list_stack_T, partial_T, typval_T, typval_vval_union,
+    list_stack_T, partial_T, typval_T, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -182,8 +182,7 @@ pub unsafe fn callback_call(
             // SAFETY: the reference is the one the callback owns, and the
             // call is handed no arguments, no arena and no error sink.
             let rv = unsafe { nlua_call_ref_quiet(luaref, null(), no_args, kRetNilBool, arena) };
-            // SAFETY: a boolean object holds its value inline.
-            return rv.type_0 == kObjectTypeBoolean && unsafe { rv.data.boolean };
+            return rv.as_boolean().unwrap_or(false);
         }
         // kCallbackNone, and anything else.
         _ => return false,

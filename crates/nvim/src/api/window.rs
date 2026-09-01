@@ -10,7 +10,7 @@
 )]
 
 use crate::api::private::helpers::{
-    NIL, Reported, api_try, arena_array, arena_dict, array_add, buffer_by_handle, dict_get_value,
+    Reported, api_try, arena_array, arena_dict, array_add, buffer_by_handle, dict_get_value,
     dict_put, dict_set_var, has_key, normalize_index, window_by_handle,
 };
 use crate::autocmd::is_aucmd_win;
@@ -30,8 +30,8 @@ use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
     Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef, Object,
-    String_0, Tabpage, Window, buf_T, int64_t, kObjectTypeInteger, linenr_T, size_t, switchwin_T,
-    tabpage_T, win_execute_T,
+    String_0, Tabpage, Window, buf_T, int64_t, linenr_T, size_t, switchwin_T, tabpage_T,
+    win_execute_T,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -100,14 +100,10 @@ pub unsafe fn nvim_win_set_cursor(win: Window, pos: Array) -> Result<(), Error> 
         return ().reported(err);
     };
     // SAFETY: `pos` is the caller's array, per this function's contract.
-    let rowcol = unsafe {
-        let items = (pos.size == 2).then(|| (*pos.items, *pos.items.add(1)));
-        items
-            .filter(|(row, col)| {
-                row.type_0 == kObjectTypeInteger && col.type_0 == kObjectTypeInteger
-            })
-            .map(|(row, col)| (row.data.integer as int64_t, col.data.integer as int64_t))
-    };
+    let items = unsafe { (pos.size == 2).then(|| (*pos.items, *pos.items.add(1))) };
+    let rowcol = items
+        .and_then(|(row, col)| row.as_integer().zip(col.as_integer()))
+        .map(|(row, col)| (row as int64_t, col as int64_t));
     let Some((row, col)) = rowcol else {
         err = err_expected(c"pos", c"[row, col] array", None);
         return ().reported(err);
@@ -192,7 +188,7 @@ pub unsafe fn nvim_win_get_var(
 ) -> Result<Object, Error> {
     let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
-        return NIL.reported(err);
+        return Object::Nil.reported(err);
     };
     // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
     // `arena` are the caller's, per this function's contract.
@@ -226,7 +222,7 @@ pub unsafe fn nvim_win_del_var(win: Window, name: String_0) -> Result<(), Error>
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
-    unsafe { dict_set_var(w.w_vars, name, NIL, true, false, no_arena, &mut err) };
+    unsafe { dict_set_var(w.w_vars, name, Object::Nil, true, false, no_arena, &mut err) };
     ().reported(err)
 }
 
@@ -340,12 +336,12 @@ pub fn nvim_win_close(win: Window, force: Boolean) -> Result<(), Error> {
 pub fn nvim_win_call(win: Window, fun: LuaRef) -> Result<Object, Error> {
     let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
-        return NIL.reported(err);
+        return Object::Nil.reported(err);
     };
     let tabpage = win_find_tabpage(w.raw());
     let res = api_try(&mut err, |err| {
         let mut switch_args = win_execute_T::default();
-        let mut res = NIL;
+        let mut res = Object::Nil;
         // SAFETY: `switch_args` is this frame's own and nothing the call runs
         // can reach it.
         let switched = unsafe { win_execute_before(&raw mut switch_args, w.raw(), tabpage) };

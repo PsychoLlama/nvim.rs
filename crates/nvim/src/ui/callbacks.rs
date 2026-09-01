@@ -27,7 +27,7 @@ use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS, kObjectTypeBoolean};
+use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS};
 use core::ffi::{CStr, c_char};
 
 const kRetNilBool: LuaRetMode = 1;
@@ -197,7 +197,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         let res =
             unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, slot) };
         ui_event_ns_id.set(0);
-        if res.type_0 == kObjectTypeBoolean && unsafe { res.data.boolean } {
+        if res.as_boolean() == Some(true) {
             handled = true;
         }
         if err.is_set() {
@@ -241,7 +241,10 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
     }
     // `kind` is `msg_show`'s first argument, and an unkinded message
     // carries it as an empty string with no buffer behind it at all.
-    let kind = unsafe { (*args.items).data.string.data() };
+    let kind = unsafe { *args.items }
+        .as_string()
+        .expect("`msg_show`'s first argument is its kind")
+        .data();
     if kind.is_null() {
         return true;
     }

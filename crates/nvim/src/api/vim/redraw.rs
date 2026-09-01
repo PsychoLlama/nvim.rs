@@ -106,19 +106,13 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             let range = opts.range;
             (range.size == 2).then(|| (*range.items, *range.items.add(1)))
         };
-        // SAFETY: the tags say which arm of each union is the live one.
-        let range = pair.filter(|(begin, end)| unsafe {
-            begin.type_0 == kObjectTypeInteger
-                && end.type_0 == kObjectTypeInteger
-                && begin.data.integer >= 0
-                && end.data.integer >= -1
-        });
-        let Some((begin_obj, end_obj)) = range else {
+        let range = pair
+            .and_then(|(begin, end)| begin.as_integer().zip(end.as_integer()))
+            .filter(|&(begin, end)| begin >= 0 && end >= -1);
+        let Some((begin_raw, end_raw)) = range else {
             report(&mut error, c"Invalid 'range': Expected 2-tuple of Integers");
             return ().reported(error);
         };
-        // SAFETY: as above -- both are Integers.
-        let (begin_raw, end_raw) = unsafe { (begin_obj.data.integer, end_obj.data.integer) };
         let rbuf: *mut buf_T = if !win.is_null() {
             // SAFETY: `win` is the live window the lookup answered.
             unsafe { (*win).w_buffer }

@@ -137,13 +137,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
         // SAFETY: the mapping's own reference, of which this takes a new one
         // for the caller to own.
         let luaref = unsafe { api_new_luaref(mp.m_luaref) };
-        out.put(
-            c"callback",
-            Object {
-                type_0: kObjectTypeLuaRef,
-                data: object_data { luaref },
-            },
-        );
+        out.put(c"callback", Object::LuaRef(luaref));
     } else {
         // SAFETY: `m_orig_str` and `m_str` are the mapping's own
         // NUL-terminated strings, and `arena` is live.
@@ -460,7 +454,7 @@ pub unsafe fn keymap_array(mode: String_0, buf: Option<Buf>, arena: *mut Arena) 
         size: 0,
         capacity: 0,
         items: ptr::null_mut(),
-        init_array: [Object::NIL; 16],
+        init_array: [Object::Nil; 16],
     };
     {
         let mut items = InitVec::new(

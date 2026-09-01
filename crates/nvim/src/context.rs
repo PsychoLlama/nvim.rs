@@ -37,8 +37,7 @@ use crate::shada::{
 use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
     OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock,
-    kErrorTypeNone, kObjectTypeArray, kObjectTypeString, key_value_pair, object, object_data,
-    size_t, typval_T, typval_vval_union, uint8_t,
+    kErrorTypeNone, key_value_pair, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -289,10 +288,7 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         let o = &raw mut opts;
         let func_body = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o, &mut err) };
         if !err.is_set() {
-            let body = object {
-                type_0: kObjectTypeString,
-                data: object_data { string: func_body },
-            };
+            let body = Object::String(func_body);
             unsafe { array_push(&mut ctx.funcs, body) };
         }
         err.clear();
@@ -306,7 +302,13 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
 unsafe fn ctx_restore_funcs(ctx: &Context) {
     // SAFETY: the caller's contract.
     for i in 0..ctx.funcs.size {
-        let _ = unsafe { do_cmdline_cmd((*ctx.funcs.items.add(i)).data.string.data()) };
+        // `funcs` is whatever array `ctx_from_dict` was handed, so an entry
+        // need not be a string. The C read the string arm under any tag;
+        // anything else is skipped here.
+        let Some(cmd) = unsafe { *ctx.funcs.items.add(i) }.as_string() else {
+            continue;
+        };
+        let _ = unsafe { do_cmdline_cmd(cmd.data()) };
     }
 }
 
@@ -323,10 +325,7 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     };
     // SAFETY: the caller's array and error; `list_tv` owns the conversion
     // result until `tv_clear`.
-    let wrapped = object {
-        type_0: kObjectTypeArray,
-        data: object_data { array },
-    };
+    let wrapped = Object::Array(array);
     unsafe { object_to_vim(wrapped, &raw mut list_tv) };
     debug_assert!(
         list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
@@ -348,10 +347,7 @@ unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
     // SAFETY: the caller's contract.
     let entry = key_value_pair {
         key: unsafe { cstr_as_string(key.as_ptr()) },
-        value: object {
-            type_0: kObjectTypeArray,
-            data: object_data { array },
-        },
+        value: Object::Array(array),
     };
     unsafe { *rv.items.add(rv.size) = entry };
     rv.size += 1;
@@ -393,10 +389,9 @@ pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: &mut Error) -> c
             break;
         }
         let item: KeyValuePair = unsafe { *dict.items.add(i) };
-        if item.value.type_0 as ::core::ffi::c_uint != kObjectTypeArray as ::core::ffi::c_uint {
+        let Object::Array(array) = item.value else {
             continue;
-        }
-        let array = unsafe { item.value.data.array };
+        };
         if unsafe { strequal(item.key.data(), c"regs".as_ptr()) } {
             types |= kCtxRegs as c_int;
             ctx.regs = unsafe { array_to_string(array, err) };
@@ -411,11 +406,9 @@ pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: &mut Error) -> c
             ctx.gvars = unsafe { array_to_string(array, err) };
         } else if unsafe { strequal(item.key.data(), c"funcs".as_ptr()) } {
             types |= kCtxFuncs as c_int;
-            ctx.funcs = unsafe {
-                copy_object(item.value, core::ptr::null_mut::<Arena>())
-                    .data
-                    .array
-            };
+            ctx.funcs = unsafe { copy_object(item.value, core::ptr::null_mut::<Arena>()) }
+                .as_array()
+                .expect("a copy of an array is an array");
         }
     }
     types

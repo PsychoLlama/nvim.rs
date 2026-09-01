@@ -97,13 +97,11 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
     EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus,
-    Map_String_int, MapHash, Object, ObjectType, OptVal, OptValData, OptValType, Set_String,
-    String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_arg_T,
-    etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T, list_T,
-    object_data, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T,
-    vimconv_T,
+    Map_String_int, MapHash, Object, OptVal, OptValData, OptValType, Set_String, String_0,
+    UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_arg_T, etype_T, exarg_T,
+    expand_T, funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse, linenr_T, list_T,
+    optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t,
+    typval_T, typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcpy};

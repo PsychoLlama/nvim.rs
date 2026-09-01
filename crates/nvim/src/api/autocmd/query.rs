@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, array_add, dict_put, dict_put_str, has_key};
+use crate::api::private::helpers::{Reported, array_add, dict_put, dict_put_str, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::cstr;
@@ -26,13 +26,13 @@ pub unsafe fn nvim_get_autocmds(
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut id: ::core::ffi::c_int = 0;
     let mut has_buf: bool = false;
-    let mut buf: Object = NIL;
+    let mut buf: Object = Object::Nil;
     let mut pattern_filter_count: ::core::ffi::c_int = 0;
     let mut autocmd_list: ArrayBuilder = ArrayBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
-        init_array: [NIL; 16],
+        init_array: [Object::Nil; 16],
     };
     autocmd_list.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
@@ -53,36 +53,33 @@ pub unsafe fn nvim_get_autocmds(
     let mut check_event: bool = false;
     let mut group: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_cleanup: {
-        match opts.group.type_0 as ::core::ffi::c_uint {
-            kObjectTypeNil => {}
-            kObjectTypeString => {
-                group = unsafe { augroup_find(opts.group.data.string.data()) };
+        match opts.group {
+            Object::Nil => {}
+            Object::String(group_name) => {
+                group = unsafe { augroup_find(group_name.data()) };
                 if !(group >= 0 as ::core::ffi::c_int) {
                     // SAFETY: the value the keyset carried, live for this call.
-                    let name = unsafe { opts.group.data.string.as_cstr() };
+                    let name = unsafe { group_name.as_cstr() };
                     error = err_bad_value(c"group", name);
                     break '_cleanup;
                 }
             }
-            kObjectTypeInteger => {
-                // SAFETY: the type tag says this arm's union field is the live one.
-                group = unsafe { opts.group.data.integer } as ::core::ffi::c_int;
+            Object::Integer(group_id) => {
+                group = group_id as ::core::ffi::c_int;
                 name = if group == 0 as ::core::ffi::c_int {
                     ::core::ptr::null_mut::<::core::ffi::c_char>()
                 } else {
                     augroup_name(group)
                 };
                 if !unsafe { augroup_exists(name) } {
-                    // SAFETY: the tag says the integer arm is live.
-                    let group = unsafe { opts.group.data.integer };
-                    error = err_bad_number(c"group", group);
+                    error = err_bad_number(c"group", group_id);
                     break '_cleanup;
                 }
             }
             _ => {
                 if true {
                     let want = c"String or Integer";
-                    let got = api_typename(opts.group.type_0);
+                    let got = api_typename(opts.group.kind());
                     error = err_expected(c"group", want, Some(got));
                     break '_cleanup;
                 }
@@ -99,43 +96,36 @@ pub unsafe fn nvim_get_autocmds(
                 KEYSET_OPTIDX_get_autocmds__event,
             ) {
                 check_event = true;
-                let mut v: Object = opts.event;
-                if v.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    let mut event_nr: event_T = unsafe { event_name2nr_str(v.data.string) };
+                let v: Object = opts.event;
+                if let Object::String(event_name) = v {
+                    let mut event_nr: event_T = unsafe { event_name2nr_str(event_name) };
                     if !((event_nr as ::core::ffi::c_uint)
                         < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                     {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = err_bad_value(c"event", unsafe { v.data.string.as_cstr() });
+                        error = err_bad_value(c"event", unsafe { event_name.as_cstr() });
                         break '_cleanup;
                     }
                     event_set[event_nr as usize] = true;
-                } else if v.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
+                } else if let Object::Array(events) = v {
                     let mut event_v_index: size_t = 0 as size_t;
                     loop {
-                        if event_v_index >= unsafe { v.data.array }.size {
+                        if event_v_index >= events.size {
                             break 's_299;
                         }
-                        let mut event_v: Object = unsafe { *v.data.array.items.add(event_v_index) };
-                        if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                            != event_v.type_0 as ::core::ffi::c_uint
-                        {
+                        let event_v: Object = unsafe { *events.items.add(event_v_index) };
+                        let Some(event_v) = event_v.as_string() else {
                             let want = api_typename(kObjectTypeString);
-                            let got = api_typename(event_v.type_0);
+                            let got = api_typename(event_v.kind());
                             error = err_expected(c"event item", want, Some(got));
                             break '_cleanup;
-                        }
-                        let mut event_nr_0: event_T =
-                            unsafe { event_name2nr_str(event_v.data.string) };
+                        };
+                        let mut event_nr_0: event_T = unsafe { event_name2nr_str(event_v) };
                         if !((event_nr_0 as ::core::ffi::c_uint)
                             < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
                         {
                             // SAFETY: the value the keyset carried, live for this call.
-                            let name = unsafe { event_v.data.string.as_cstr() };
+                            let name = unsafe { event_v.as_cstr() };
                             error = err_bad_value(c"event", name);
                             break '_cleanup;
                         }
@@ -172,17 +162,12 @@ pub unsafe fn nvim_get_autocmds(
                     opts.is_set__get_autocmds_,
                     KEYSET_OPTIDX_get_autocmds__pattern,
                 ) {
-                    let mut v_0: Object = opts.pattern;
-                    if v_0.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        pattern_filters[pattern_filter_count as usize] =
-                            unsafe { v_0.data.string }.data();
+                    let v_0: Object = opts.pattern;
+                    if let Object::String(pattern) = v_0 {
+                        pattern_filters[pattern_filter_count as usize] = pattern.data();
                         pattern_filter_count += 1 as ::core::ffi::c_int;
-                    } else if v_0.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                    {
-                        if !(unsafe { v_0.data.array }.size <= 256 as size_t) {
+                    } else if let Object::Array(pattern_list) = v_0 {
+                        if !(pattern_list.size <= 256 as size_t) {
                             let max = 256 as ::core::ffi::c_int;
                             error = api_error!(
                                 kErrorTypeValidation,
@@ -192,39 +177,32 @@ pub unsafe fn nvim_get_autocmds(
                         }
                         let mut item_index: size_t = 0 as size_t;
                         loop {
-                            if item_index >= unsafe { v_0.data.array }.size {
+                            if item_index >= pattern_list.size {
                                 break 's_506;
                             }
-                            let mut item: Object = unsafe { *v_0.data.array.items.add(item_index) };
-                            if kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-                                != item.type_0 as ::core::ffi::c_uint
-                            {
+                            let item: Object = unsafe { *pattern_list.items.add(item_index) };
+                            let Some(item) = item.as_string() else {
                                 let want = api_typename(kObjectTypeString);
-                                let got = api_typename(item.type_0);
+                                let got = api_typename(item.kind());
                                 error = err_expected(c"pattern", want, Some(got));
                                 break '_cleanup;
-                            }
-                            pattern_filters[pattern_filter_count as usize] =
-                                unsafe { item.data.string }.data();
+                            };
+                            pattern_filters[pattern_filter_count as usize] = item.data();
                             pattern_filter_count += 1 as ::core::ffi::c_int;
                             item_index = item_index.wrapping_add(1);
                         }
                     } else if true {
                         let want = c"String or Array";
-                        let got = api_typename(v_0.type_0);
+                        let got = api_typename(v_0.kind());
                         error = err_expected(c"pattern", want, Some(got));
                         break '_cleanup;
                     }
                 }
             }
             's_659: {
-                if buf.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                    || buf.type_0 as ::core::ffi::c_uint
-                        == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
+                if let Object::Integer(handle) | Object::Buffer(handle) = buf {
                     let mut b: *mut buf_T =
-                        unsafe { find_buffer_by_handle(buf.data.integer as Buffer, &mut error) };
+                        unsafe { find_buffer_by_handle(handle as Buffer, &mut error) };
                     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_cleanup;
                     }
@@ -232,35 +210,28 @@ pub unsafe fn nvim_get_autocmds(
                         unsafe { arena_printf(arena, c"<buffer=%d>".as_ptr(), (*b).handle) };
                     buffers = arena_array(arena, 1 as size_t);
                     unsafe { array_add(&mut buffers, Object::string(pat)) };
-                } else if buf.type_0 as ::core::ffi::c_uint
-                    == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-                {
-                    if !(unsafe { buf.data.array }.size <= 256 as size_t) {
+                } else if let Object::Array(bufnrs) = buf {
+                    if !(bufnrs.size <= 256 as size_t) {
                         let max = 256 as ::core::ffi::c_int;
                         error =
                             api_error!(kErrorTypeValidation, "Too many buffers (maximum of {max})");
                         break '_cleanup;
                     }
-                    buffers = arena_array(arena, unsafe { buf.data.array }.size);
+                    buffers = arena_array(arena, bufnrs.size);
                     let mut bufnr_index: size_t = 0 as size_t;
                     loop {
-                        if bufnr_index >= unsafe { buf.data.array }.size {
+                        if bufnr_index >= bufnrs.size {
                             break 's_659;
                         }
-                        let mut bufnr: Object = unsafe { *buf.data.array.items.add(bufnr_index) };
-                        if !(bufnr.type_0 as ::core::ffi::c_uint
-                            == kObjectTypeInteger as ::core::ffi::c_int as ::core::ffi::c_uint
-                            || bufnr.type_0 as ::core::ffi::c_uint
-                                == kObjectTypeBuffer as ::core::ffi::c_int as ::core::ffi::c_uint)
-                        {
+                        let bufnr: Object = unsafe { *bufnrs.items.add(bufnr_index) };
+                        let (Object::Integer(handle) | Object::Buffer(handle)) = bufnr else {
                             let want = c"Integer";
-                            let got = api_typename(bufnr.type_0);
+                            let got = api_typename(bufnr.kind());
                             error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
-                        }
-                        let mut b_0: *mut buf_T = unsafe {
-                            find_buffer_by_handle(bufnr.data.integer as Buffer, &mut error)
                         };
+                        let mut b_0: *mut buf_T =
+                            unsafe { find_buffer_by_handle(handle as Buffer, &mut error) };
                         if error.kind() as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -280,15 +251,17 @@ pub unsafe fn nvim_get_autocmds(
                     }
                 } else if has_buf && true {
                     let want = c"Integer or Array";
-                    error = err_expected(c"buffer", want, Some(api_typename(buf.type_0)));
+                    error = err_expected(c"buffer", want, Some(api_typename(buf.kind())));
                     break '_cleanup;
                 }
             }
             let mut bufnr_index_0: size_t = 0 as size_t;
             while bufnr_index_0 < buffers.size {
-                let mut bufnr_0: Object = unsafe { *buffers.items.add(bufnr_index_0) };
-                pattern_filters[pattern_filter_count as usize] =
-                    unsafe { bufnr_0.data.string }.data();
+                let bufnr_0: Object = unsafe { *buffers.items.add(bufnr_index_0) };
+                pattern_filters[pattern_filter_count as usize] = bufnr_0
+                    .as_string()
+                    .expect("`buffers` was filled with `<buffer=N>` Strings just above")
+                    .data();
                 pattern_filter_count += 1 as ::core::ffi::c_int;
                 bufnr_index_0 = bufnr_index_0.wrapping_add(1);
             }

@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, dict_put, has_key};
+use crate::api::private::helpers::{Reported, dict_put, has_key};
 use crate::winlayer::{Buf, Live};
 
 pub unsafe fn api_buf_ensure_loaded(mut buf: Buffer, err: &mut Error) -> *mut buf_T {
@@ -88,9 +88,9 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     }
-    let mut res: Object = NIL;
+    let mut res: Object = Object::Nil;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),

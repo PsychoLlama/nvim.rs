@@ -21,9 +21,9 @@ use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::os::cshim::{ngettext, strstr};
 use crate::strings::vim_snprintf;
-use crate::types::{Vv, kObjectTypeArray, kObjectTypeNil, kObjectTypeString};
+use crate::types::Vv;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
+use core::ffi::{c_char, c_int, c_ulong, c_void};
 use core::ptr;
 
 use super::marker::*;
@@ -88,22 +88,21 @@ pub unsafe fn get_foldtext(
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
             let mut obj: Object = unsafe { eval_foldtext(wp.raw()) };
-            if obj.type_0 as c_uint == kObjectTypeArray as c_uint {
+            if let Object::Array(chunks) = obj {
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
                 let mut err = Error::none();
-                unsafe { *vt = parse_virt_text(obj.data.array, &mut err, ptr::null_mut()) };
+                unsafe { *vt = parse_virt_text(chunks, &mut err, ptr::null_mut()) };
                 if !err.is_set() {
                     unsafe { *buf = NUL as c_char };
                     text = buf;
                 }
                 err.clear();
-            } else if obj.type_0 as c_uint == kObjectTypeString as c_uint {
-                text = unsafe { obj.data.string }.data();
-                obj = object {
-                    type_0: kObjectTypeNil,
-                    data: object_data { boolean: false },
-                };
+            } else if let Object::String(s) = obj {
+                // `text` keeps the bytes; clear the object so the free below
+                // leaves them alone.
+                text = s.data();
+                obj = Object::Nil;
             }
             unsafe { api_free_object(obj) };
             drop(no_emsg);

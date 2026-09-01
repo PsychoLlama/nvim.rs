@@ -90,12 +90,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
             max_width.max(unsafe { win_linetabsize(Win::new(win), 0, curr, MAXCOL as c_int) });
         unsafe { (*win).w_onebuf_opt.wo_wrap = save_wrap };
 
-        lines.push(Object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: unsafe { cstr_to_string(curr) },
-            },
-        });
+        lines.push(Object::String(unsafe { cstr_to_string(curr) }));
 
         if !next.is_null() {
             unsafe { *next = b'\n' as c_char };

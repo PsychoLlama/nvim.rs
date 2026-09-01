@@ -32,8 +32,7 @@ use crate::strings::{arena_printf, vim_snprintf};
 use crate::types::Error;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Array, LuaRef, Object, String_0, VAR_DICT, VAR_LIST, buf_T, kObjectTypeBoolean, size_t,
-    typval_T,
+    Arena, Array, LuaRef, Object, String_0, VAR_DICT, VAR_LIST, buf_T, size_t, typval_T,
 };
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
@@ -234,6 +233,6 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
         );
         xfree(str.cast::<c_void>());
         err.clear();
-        result.type_0 == kObjectTypeBoolean && result.data.boolean
+        result.as_boolean() == Some(true)
     }
 }

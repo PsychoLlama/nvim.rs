@@ -16,7 +16,7 @@
 )]
 
 use crate::api::private::helpers::{
-    NIL, Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key, window_by_handle,
+    Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key, window_by_handle,
 };
 use crate::autocmd::{
     EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
@@ -319,7 +319,7 @@ pub unsafe fn nvim_get_option_value(
     // SAFETY: `name` and `opts` are the caller's, per this function's
     // contract, and `err` is this frame's own.
     let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
-        return NIL.reported(err);
+        return Object::Nil.reported(err);
     };
 
     let mut aco: aco_save_T = aco_save_T::default();
@@ -339,7 +339,7 @@ pub unsafe fn nvim_get_option_value(
     };
     if err.is_set() {
         leave_ft_buf(ftbuf);
-        return NIL.reported(err);
+        return Object::Nil.reported(err);
     }
 
     // A filetype cannot be combined with `buf` or `win`, so `from` is null
@@ -365,7 +365,7 @@ pub unsafe fn nvim_get_option_value(
         err = err_bad_value(c"option", unsafe { name.as_cstr() });
     }
     optval_free(value);
-    NIL.reported(err)
+    Object::Nil.reported(err)
 }
 
 /// Set option `name` to `value`, at whatever scope `opts` names.
@@ -394,7 +394,7 @@ pub unsafe fn nvim_set_option_value(
         opt_flags = OptionSetFlags::LOCAL;
     }
     let Some(optval) = object_as_optval(value) else {
-        let got = api_typename(value.type_0);
+        let got = api_typename(value.kind());
         err = err_expected(c"value", c"valid option type", Some(got));
         return ().reported(err);
     };

@@ -190,9 +190,10 @@ pub(crate) unsafe fn build_cmdline_str(
     let argstart_idx: size_t = cmdline.size;
     let arglens = eap.arglens;
     for i in 0..argc {
-        // SAFETY: `i` is below `size`, so the object is inside `items`, and
-        // the tag says its payload is the string.
-        let s: String_0 = unsafe { (*args.items.add(i)).data.string };
+        // SAFETY: `i` is below `size`, so the object is inside `items`.
+        let s: String_0 = unsafe { *args.items.add(i) }
+            .as_string()
+            .expect("collect_args puts only Strings in the array");
         // SAFETY: `arglens` was allocated with `argc` slots.
         unsafe { *arglens.add(i) = s.len() };
         cmdline_concat_str(&mut cmdline, c" ");

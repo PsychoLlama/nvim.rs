@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, buffer_by_handle, window_by_handle};
+use crate::api::private::helpers::{Reported, buffer_by_handle, window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::option::NIL_OPTVAL;
@@ -45,7 +45,7 @@ pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
 pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let from = buf.raw().cast::<c_void>();
     // SAFETY: `from` is that live buffer, which is what `kOptScopeBuf` says
@@ -72,7 +72,7 @@ pub unsafe fn nvim_buf_set_option(
 pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
-        return NIL.reported(error);
+        return Object::Nil.reported(error);
     };
     let from = win.raw().cast::<c_void>();
     // SAFETY: `from` is that live window, which is what `kOptScopeWin` says
@@ -131,7 +131,7 @@ unsafe fn get_option_from(
 ) -> Object {
     // SAFETY: the caller's promise about `err`.
     let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {
-        return NIL;
+        return Object::Nil;
     };
     let mut value: OptVal = NIL_OPTVAL;
     if option_has_scope(opt_idx, scope) {
@@ -143,7 +143,7 @@ unsafe fn get_option_from(
         // SAFETY: the caller's promise about `from` and `err`.
         value = unsafe { get_option_value_for(opt_idx, flags, scope, from, err) };
         if err.kind() != kErrorTypeNone {
-            return NIL;
+            return Object::Nil;
         }
     }
     // An option the scope does not have reads as the unset value, which is
@@ -151,7 +151,7 @@ unsafe fn get_option_from(
     if value.type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
         // SAFETY: the names and values are NUL-terminated strings.
         *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
-        return NIL;
+        return Object::Nil;
     }
     optval_as_object(value)
 }
@@ -174,7 +174,7 @@ unsafe fn set_option_to(
     };
     let Some(optval) = object_as_optval(value) else {
         let want = c"valid option type";
-        let got = api_typename(value.type_0);
+        let got = api_typename(value.kind());
         // SAFETY: the names and values are NUL-terminated strings.
         *err = err_expected(c"value", want, Some(got));
         return;

@@ -10,7 +10,7 @@
 )]
 
 use crate::api::private::helpers::{
-    NIL, Reported, api_try, arena_array, array_add, buffer_by_handle, dict_get_value, dict_set_var,
+    Reported, api_try, arena_array, array_add, buffer_by_handle, dict_get_value, dict_set_var,
     has_key, tabpage_by_handle, window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
@@ -64,7 +64,7 @@ pub unsafe fn nvim_tabpage_get_var(
 ) -> Result<Object, Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
-        return NIL.reported(err);
+        return Object::Nil.reported(err);
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
     // `name` and `arena` are the caller's, per this function's contract.
@@ -105,7 +105,7 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let no_arena = ptr::null_mut::<Arena>();
     let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, name, NIL, true, false, no_arena, &mut err) };
+    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena, &mut err) };
     ().reported(err)
 }
 

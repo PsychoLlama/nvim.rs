@@ -35,23 +35,23 @@ pub unsafe fn handle_nvim_set_current_win(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_set_current_win", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: a wrapper runs on the main loop.
     if unsafe { text_locked() } {
         text_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_set_current_win(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_hl`.
@@ -82,23 +82,23 @@ pub unsafe fn handle_nvim_set_hl(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_set_hl", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_set_hl", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_3: KeyDict_highlight =
         match read_keydict(Some(key_dict_highlight_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 3, c"nvim_set_hl", c"Dict(highlight) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -106,7 +106,7 @@ pub unsafe fn handle_nvim_set_hl(
     if let Err(e) = unsafe { nvim_set_hl(channel_id, arg_1, arg_2, &raw mut arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_hl_ns`.
@@ -137,18 +137,18 @@ pub unsafe fn handle_nvim_set_hl_ns(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_set_hl_ns", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_set_hl_ns(arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_hl_ns_fast`.
@@ -179,16 +179,16 @@ pub unsafe fn handle_nvim_set_hl_ns_fast(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_set_hl_ns_fast", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     unsafe { nvim_set_hl_ns_fast(arg_1) };
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_keymap`.
@@ -219,27 +219,27 @@ pub unsafe fn handle_nvim_set_keymap(
     );
     if args.len() != 4 {
         wrong_arity(error, 4, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_set_keymap", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_set_keymap", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_string(args[2]) else {
         wrong_type(error, 3, c"nvim_set_keymap", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_4: KeyDict_keymap =
         match read_keydict(Some(key_dict_keymap_get_field), args[3], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 4, c"nvim_set_keymap", c"Dict(keymap) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -247,7 +247,7 @@ pub unsafe fn handle_nvim_set_keymap(
     if let Err(e) = unsafe { nvim_set_keymap(channel_id, arg_1, arg_2, arg_3, &raw mut arg_4) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_var`.
@@ -278,11 +278,11 @@ pub unsafe fn handle_nvim_set_var(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_set_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -290,7 +290,7 @@ pub unsafe fn handle_nvim_set_var(
     if let Err(e) = unsafe { nvim_set_var(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_set_vvar`.
@@ -321,11 +321,11 @@ pub unsafe fn handle_nvim_set_vvar(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_set_vvar", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -333,7 +333,7 @@ pub unsafe fn handle_nvim_set_vvar(
     if let Err(e) = unsafe { nvim_set_vvar(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_strwidth`.
@@ -364,11 +364,11 @@ pub unsafe fn handle_nvim_strwidth(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_strwidth", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -376,5 +376,5 @@ pub unsafe fn handle_nvim_strwidth(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }

@@ -36,10 +36,7 @@ use crate::types::{
     Arena, Array, BoolVarValue, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN,
     VarLock, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, kSpecialVarNull, list_T, object, object_data, ptrdiff_t, size_t, typval_T,
-    typval_vval_union,
+    kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -49,11 +46,6 @@ const FC_LUAREF: c_int = 0x800;
 
 /// `LUA_NOREF`.
 const LUA_NOREF: LuaRef = -2;
-
-const NIL: Object = object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
 
 /// The key a dictionary entry gets when its key did not convert to a string.
 /// Unreachable through the walk, whose dictionary keys are always strings, but
@@ -94,10 +86,7 @@ impl ObjectSink {
         } else {
             unsafe { arena_string(self.arena, String_0::from_raw_parts(data.cast_mut(), len)) }
         };
-        object {
-            type_0: kObjectTypeString,
-            data: object_data { string },
-        }
+        Object::String(string)
     }
 
     /// Take the value on top of the stack, leaving the container it belongs to
@@ -112,16 +101,16 @@ impl ObjectSink {
     /// below it.
     fn close_list_item(&mut self) {
         let item = self.take_top();
-        let list = self.stack.last_mut();
-        debug_assert!(list.type_0 == kObjectTypeArray);
-        // SAFETY: the tag says this is an array, and `conv_list_start` sized
-        // it for every item the walk will hand over.
+        let Object::Array(array) = self.stack.last_mut() else {
+            unreachable!("the walk is inside an array");
+        };
+        debug_assert!(array.size < array.capacity);
+        // SAFETY: `conv_list_start` sized the array for every item the walk
+        // will hand over, so the next slot is inside it.
         unsafe {
-            let array = &mut list.data.array;
-            debug_assert!(array.size < array.capacity);
             *array.items.add(array.size) = item;
-            array.size += 1;
         }
+        array.size += 1;
     }
 
     /// The dictionary the walk is currently filling.
@@ -129,10 +118,9 @@ impl ObjectSink {
     /// # Safety
     /// The caller must be inside a dictionary, which every use here is.
     unsafe fn open_dict(&mut self) -> &mut Dict {
-        let dict = self.stack.last_mut();
-        debug_assert!(dict.type_0 == kObjectTypeDict);
-        // SAFETY: as `close_list_item`.
-        let dict = unsafe { &mut dict.data.dict };
+        let Object::Dict(dict) = self.stack.last_mut() else {
+            unreachable!("the walk is inside a dictionary");
+        };
         debug_assert!(dict.size < dict.capacity);
         dict
     }
@@ -143,41 +131,23 @@ impl TypvalSink for ObjectSink {
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
 
     unsafe fn conv_nil(&mut self, _tv: *mut typval_T) {
-        self.stack.push(NIL);
+        self.stack.push(Object::Nil);
     }
 
     unsafe fn conv_bool(&mut self, _tv: *mut typval_T, num: bool) {
-        self.stack.push(object {
-            type_0: kObjectTypeBoolean,
-            data: object_data { boolean: num },
-        });
+        self.stack.push(Object::Boolean(num));
     }
 
     unsafe fn conv_number(&mut self, _tv: *mut typval_T, num: int64_t) {
-        self.stack.push(object {
-            type_0: kObjectTypeInteger,
-            data: object_data {
-                integer: num as Integer,
-            },
-        });
+        self.stack.push(Object::Integer(num as Integer));
     }
 
     unsafe fn conv_unsigned_number(&mut self, _tv: *mut typval_T, num: u64) {
-        self.stack.push(object {
-            type_0: kObjectTypeInteger,
-            data: object_data {
-                integer: num as Integer,
-            },
-        });
+        self.stack.push(Object::Integer(num as Integer));
     }
 
     unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
-        self.stack.push(object {
-            type_0: kObjectTypeFloat,
-            data: object_data {
-                floating: flt as Float,
-            },
-        });
+        self.stack.push(Object::Float(flt as Float));
         Flow::Go
     }
 
@@ -198,7 +168,7 @@ impl TypvalSink for ObjectSink {
         _len: size_t,
         _ext_type: i8,
     ) -> Flow {
-        self.stack.push(NIL);
+        self.stack.push(Object::Nil);
         Flow::Go
     }
 
@@ -241,49 +211,24 @@ impl TypvalSink for ObjectSink {
             }
         };
         self.stack.push(match luaref {
-            Some(luaref) => object {
-                type_0: kObjectTypeLuaRef,
-                data: object_data { luaref },
-            },
-            None => NIL,
+            Some(luaref) => Object::LuaRef(luaref),
+            None => Object::Nil,
         });
         Flow::Stop
     }
 
     unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
-        self.stack.push(object {
-            type_0: kObjectTypeArray,
-            data: object_data {
-                array: Array {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut(),
-                },
-            },
-        });
+        self.stack.push(Object::Array(Array::EMPTY));
     }
 
     unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
-        self.stack.push(object {
-            type_0: kObjectTypeDict,
-            data: object_data {
-                dict: Dict {
-                    size: 0,
-                    capacity: 0,
-                    items: ::core::ptr::null_mut(),
-                },
-            },
-        });
+        self.stack.push(Object::Dict(Dict::EMPTY));
     }
 
     /// Reserve the whole array now; the items fill it in place.
     unsafe fn conv_list_start(&mut self, _tv: *mut typval_T, len: c_int) -> Flow {
-        self.stack.push(object {
-            type_0: kObjectTypeArray,
-            data: object_data {
-                array: arena_array(self.arena, len as size_t),
-            },
-        });
+        self.stack
+            .push(Object::Array(arena_array(self.arena, len as size_t)));
         Flow::Go
     }
 
@@ -293,21 +238,14 @@ impl TypvalSink for ObjectSink {
 
     unsafe fn conv_list_end(&mut self, _tv: *mut typval_T) {
         self.close_list_item();
-        debug_assert!({
-            let list = self.stack.last();
-            // SAFETY: the tag was checked by `close_list_item`.
-            let array = unsafe { list.data.array };
-            array.size == array.capacity
-        });
+        debug_assert!(matches!(
+            self.stack.last(),
+            Object::Array(a) if a.size == a.capacity
+        ));
     }
 
     unsafe fn conv_dict_start(&mut self, _tv: *mut typval_T, len: size_t) -> Flow {
-        self.stack.push(object {
-            type_0: kObjectTypeDict,
-            data: object_data {
-                dict: arena_dict(self.arena, len),
-            },
-        });
+        self.stack.push(Object::Dict(arena_dict(self.arena, len)));
         Flow::Go
     }
 
@@ -317,12 +255,10 @@ impl TypvalSink for ObjectSink {
         let key = self.take_top();
         // SAFETY: the walk is inside a dictionary; `key` is the object it just
         // converted, and a `String` object owns its bytes.
+        let key = key.as_string().unwrap_or_else(|| {
+            String_0::from_raw_parts(INVALID_KEY.as_ptr().cast_mut(), INVALID_KEY.count_bytes())
+        });
         unsafe {
-            let key = if key.type_0 == kObjectTypeString {
-                key.data.string
-            } else {
-                String_0::from_raw_parts(INVALID_KEY.as_ptr().cast_mut(), INVALID_KEY.count_bytes())
-            };
             let dict = self.open_dict();
             (*dict.items.add(dict.size)).key = key;
         }
@@ -345,12 +281,10 @@ impl TypvalSink for ObjectSink {
     unsafe fn conv_dict_end(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
         // SAFETY: as `conv_dict_between_items`.
         unsafe { self.conv_dict_between_items(tv, dictp) };
-        debug_assert!({
-            let obj = self.stack.last();
-            // SAFETY: the tag was checked by `open_dict`.
-            let dict = unsafe { obj.data.dict };
-            dict.size == dict.capacity
-        });
+        debug_assert!(matches!(
+            self.stack.last(),
+            Object::Dict(d) if d.size == d.capacity
+        ));
     }
 
     /// An `Object` tree is acyclic, so a container that references itself
@@ -361,7 +295,7 @@ impl TypvalSink for ObjectSink {
         _conv_type: ConvType,
         _path: &ConvPath,
     ) -> Flow {
-        self.stack.push(NIL);
+        self.stack.push(Object::Nil);
         Flow::Go
     }
 }
@@ -389,7 +323,7 @@ pub unsafe fn vim_to_object(obj: *mut typval_T, arena: *mut Arena, reuse_strdata
     if sink.stack.is_empty() {
         // Only a `VAR_UNKNOWN` gets here, which upstream calls impossible and
         // then reads its stack's uninitialised first slot for.
-        return NIL;
+        return Object::Nil;
     }
     sink.stack.last()
 }
@@ -417,46 +351,40 @@ pub unsafe fn object_to_vim(obj: Object, tv: *mut typval_T) {
 /// As [`object_to_vim`]; `obj` must point at a live object tree.
 pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, take_luaref: bool) {
     // SAFETY: the caller's promise -- `tv` is writable typval storage and
-    // `obj` a live object, both for the length of the call.
+    // `obj` a live both for the length of the call.
     let mut tv = unsafe { Live::<typval_T>::new(tv) };
     // SAFETY: as above.
     let mut obj = unsafe { Live::<Object>::new(obj) };
     tv.v_type = VAR_UNKNOWN;
     tv.v_lock = VarLock::Unlocked;
     let value = *obj;
-    match value.type_0 {
-        kObjectTypeNil => {
+    match value {
+        Object::Nil => {
             tv.v_type = VAR_SPECIAL;
             tv.vval.v_special = kSpecialVarNull;
         }
-        kObjectTypeBoolean => {
-            // SAFETY: the tag says the payload is the boolean.
-            let on = unsafe { value.data.boolean };
+        Object::Boolean(on) => {
             tv.v_type = VAR_BOOL;
             tv.vval.v_bool = if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
         }
-        kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => {
-            // SAFETY: every one of these tags says the payload is the
-            // integer -- a handle is an integer with its own wire type.
-            let number = unsafe { value.data.integer };
+        // A handle is an integer with a wire type of its own; Vimscript has
+        // no separate notion of one.
+        Object::Buffer(number)
+        | Object::Window(number)
+        | Object::Tabpage(number)
+        | Object::Integer(number) => {
             tv.v_type = VAR_NUMBER;
             tv.vval.v_number = number;
         }
-        kObjectTypeFloat => {
-            // SAFETY: the tag says the payload is the float.
-            let float = unsafe { value.data.floating };
+        Object::Float(float) => {
             tv.v_type = VAR_FLOAT;
             tv.vval.v_float = float as float_T;
         }
-        kObjectTypeString => {
-            // SAFETY: the tag says the payload is the string.
-            let str: String_0 = unsafe { value.data.string };
+        Object::String(str) => {
             // SAFETY: the string names `len` readable bytes.
             *tv = unsafe { decode_string(str.data(), str.len(), false, false) };
         }
-        kObjectTypeArray => {
-            // SAFETY: the tag says the payload is the array.
-            let array = unsafe { value.data.array };
+        Object::Array(array) => {
             // SAFETY: the list is this call's until it is handed to `tv`.
             let list: *mut list_T = unsafe { tv_list_alloc(array.size as ptrdiff_t) };
             for i in 0..array.size {
@@ -477,9 +405,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, tak
             tv.v_type = VAR_LIST;
             tv.vval.v_list = list;
         }
-        kObjectTypeDict => {
-            // SAFETY: the tag says the payload is the dictionary.
-            let pairs = unsafe { value.data.dict };
+        Object::Dict(pairs) => {
             // SAFETY: the dictionary is this call's until it is handed over.
             let dict: *mut dict_T = unsafe { tv_dict_alloc() };
             for i in 0..pairs.size {
@@ -499,12 +425,10 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, tak
             tv.v_type = VAR_DICT;
             tv.vval.v_dict = dict;
         }
-        kObjectTypeLuaRef => {
-            // SAFETY: the tag says the payload is the reference.
-            let mut ref_0: LuaRef = unsafe { value.data.luaref };
+        Object::LuaRef(mut ref_0) => {
             if take_luaref {
                 // The object gives its reference up rather than lending it.
-                obj.data.luaref = LUA_NOREF;
+                *obj = Object::LuaRef(LUA_NOREF);
             } else {
                 // SAFETY: a registry index, not a pointer.
                 ref_0 = unsafe { api_new_luaref(ref_0) };
@@ -516,6 +440,5 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, tak
             // SAFETY: `name` is that name.
             tv.vval.v_string = unsafe { xstrdup(name) };
         }
-        _ => {}
     }
 }

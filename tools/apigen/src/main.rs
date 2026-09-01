@@ -988,7 +988,7 @@ fn emit_fn(
     };
     writeln!(out, "    if {arity_test} {{").unwrap();
     writeln!(out, "        wrong_arity(error, {arity}, args.len());").unwrap();
-    writeln!(out, "        return NIL;").unwrap();
+    writeln!(out, "        return Object::Nil;").unwrap();
     writeln!(out, "    }}").unwrap();
 
     for (index, ty) in &values {
@@ -1016,10 +1016,10 @@ fn emit_fn(
                 )
                 .unwrap();
                 writeln!(out, "            KeySetArg::Read(v) => v,").unwrap();
-                writeln!(out, "            KeySetArg::Refused => return NIL,").unwrap();
+                writeln!(out, "            KeySetArg::Refused => return Object::Nil,").unwrap();
                 writeln!(out, "            KeySetArg::WrongType => {{").unwrap();
                 writeln!(out, "                {bad}").unwrap();
-                writeln!(out, "                return NIL;").unwrap();
+                writeln!(out, "                return Object::Nil;").unwrap();
                 writeln!(out, "            }}").unwrap();
                 writeln!(out, "        }};").unwrap();
             }
@@ -1031,7 +1031,7 @@ fn emit_fn(
                 )
                 .unwrap();
                 writeln!(out, "        {bad}").unwrap();
-                writeln!(out, "        return NIL;").unwrap();
+                writeln!(out, "        return Object::Nil;").unwrap();
                 writeln!(out, "    }};").unwrap();
             }
         }
@@ -1043,12 +1043,12 @@ fn emit_fn(
         writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
         writeln!(out, "    if unsafe {{ text_locked() }} {{").unwrap();
         writeln!(out, "        text_locked_error(error);").unwrap();
-        writeln!(out, "        return NIL;").unwrap();
+        writeln!(out, "        return Object::Nil;").unwrap();
         writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
         writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
         writeln!(out, "        expr_map_locked_error(error);").unwrap();
-        writeln!(out, "        return NIL;").unwrap();
+        writeln!(out, "        return Object::Nil;").unwrap();
         writeln!(out, "    }}").unwrap();
     }
 
@@ -1133,22 +1133,22 @@ fn emit_fn(
         writeln!(out, "    {bind}{call};").unwrap();
         if can_fail {
             writeln!(out, "    if error.is_set() {{").unwrap();
-            writeln!(out, "        return NIL;").unwrap();
+            writeln!(out, "        return Object::Nil;").unwrap();
             writeln!(out, "    }}").unwrap();
         }
     }
 
     let boxed = match &f.ret {
-        RetType::Void => "NIL".into(),
+        RetType::Void => "Object::Nil".into(),
         RetType::Object => "rv".into(),
-        RetType::Boolean => "obj(kObjectTypeBoolean, object_data { boolean: rv })".into(),
-        RetType::Integer => "obj(kObjectTypeInteger, object_data { integer: rv })".into(),
-        RetType::Float => "obj(kObjectTypeFloat, object_data { floating: rv })".into(),
-        RetType::String => "obj(kObjectTypeString, object_data { string: rv })".into(),
-        RetType::Array => "obj(kObjectTypeArray, object_data { array: rv })".into(),
-        RetType::Dict => "obj(kObjectTypeDict, object_data { dict: rv })".into(),
+        RetType::Boolean => "Object::Boolean(rv)".into(),
+        RetType::Integer => "Object::Integer(rv)".into(),
+        RetType::Float => "Object::Float(rv)".into(),
+        RetType::String => "Object::String(rv)".into(),
+        RetType::Array => "Object::Array(rv)".into(),
+        RetType::Dict => "Object::Dict(rv)".into(),
         RetType::Handle(tag) => {
-            format!("obj(kObjectType{tag}, object_data {{ integer: rv as Integer }})")
+            format!("Object::{tag}(rv as Integer)")
         }
         RetType::KeyDict(keyset) => {
             let size = tables
@@ -1167,7 +1167,7 @@ fn emit_fn(
             )
             .unwrap();
             writeln!(out, "    }};").unwrap();
-            "obj(kObjectTypeDict, object_data { dict })".into()
+            "Object::Dict(dict)".into()
         }
     };
     writeln!(out, "    {boxed}").unwrap();
@@ -1231,17 +1231,6 @@ struct Emitted {
 
 /// The fixed part of the support code: every wrapper needs it.
 const SUPPORT: &str = r#"
-/// What a wrapper returns when it refused the call, and what a `void` API
-/// function's result boxes to.
-const NIL: Object = Object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
-
-const fn obj(type_0: ObjectType, data: object_data) -> Object {
-    Object { type_0, data }
-}
-
 /// The arguments a client sent, as a slice. An empty array need not carry a
 /// pointer at all, so that case answers without forming one.
 ///
@@ -1301,13 +1290,9 @@ const READERS: &[(&str, &str)] = &[
 /// A nonnegative integer is accepted as a boolean, truncated to C `int`
 /// first as the C dispatcher did.
 fn as_boolean(o: Object) -> Option<Boolean> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeBoolean => Some(unsafe { o.data.boolean }),
-        kObjectTypeInteger => match unsafe { o.data.integer } {
-            n if n >= 0 => Some(n as handle_T != 0),
-            _ => None,
-        },
+    match o {
+        Object::Boolean(b) => Some(b),
+        Object::Integer(n) if n >= 0 => Some(n as handle_T != 0),
         _ => None,
     }
 }
@@ -1317,11 +1302,7 @@ fn as_boolean(o: Object) -> Option<Boolean> {
         "as_integer",
         r#"
 fn as_integer(o: Object) -> Option<Integer> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeInteger => Some(unsafe { o.data.integer }),
-        _ => None,
-    }
+    o.as_integer()
 }
 "#,
     ),
@@ -1330,10 +1311,9 @@ fn as_integer(o: Object) -> Option<Integer> {
         r#"
 /// Integers widen to floats, as they do in Lua.
 fn as_float(o: Object) -> Option<Float> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeFloat => Some(unsafe { o.data.floating }),
-        kObjectTypeInteger => Some(unsafe { o.data.integer } as Float),
+    match o {
+        Object::Float(f) => Some(f),
+        Object::Integer(n) => Some(n as Float),
         _ => None,
     }
 }
@@ -1343,11 +1323,7 @@ fn as_float(o: Object) -> Option<Float> {
         "as_string",
         r#"
 fn as_string(o: Object) -> Option<String_0> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeString => Some(unsafe { o.data.string }),
-        _ => None,
-    }
+    o.as_string()
 }
 "#,
     ),
@@ -1355,11 +1331,7 @@ fn as_string(o: Object) -> Option<String_0> {
         "as_array",
         r#"
 fn as_array(o: Object) -> Option<Array> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeArray => Some(unsafe { o.data.array }),
-        _ => None,
-    }
+    o.as_array()
 }
 "#,
     ),
@@ -1369,14 +1341,9 @@ fn as_array(o: Object) -> Option<Array> {
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
 fn as_dict(o: Object) -> Option<Dict> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeDict => Some(unsafe { o.data.dict }),
-        _ if is_empty_array(o) => Some(Dict {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        }),
+    match o {
+        Object::Dict(d) => Some(d),
+        Object::Array(a) if a.size == 0 => Some(Dict::EMPTY),
         _ => None,
     }
 }
@@ -1386,28 +1353,28 @@ fn as_dict(o: Object) -> Option<Dict> {
         "as_luaref",
         r#"
 fn as_luaref(o: Object) -> Option<LuaRef> {
-    match o.type_0 {
-        // SAFETY: the tag says which union arm is live.
-        kObjectTypeLuaRef => Some(unsafe { o.data.luaref }),
-        _ => None,
-    }
+    o.as_luaref()
 }
 "#,
     ),
     (
         "as_handle",
         r#"
-/// Buffer, Window and Tabpage each have a tag of their own but travel in the
-/// integer arm, and a bare nonnegative integer is accepted as any of them.
+/// Buffer, Window and Tabpage each have a variant of their own, and a bare
+/// nonnegative integer is accepted as any of them. `tag` names the one the
+/// parameter declares: a window handle is not a buffer.
 fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
-    if o.type_0 != tag && o.type_0 != kObjectTypeInteger {
-        return None;
-    }
-    // SAFETY: every accepted tag carries an integer.
-    match unsafe { o.data.integer } {
-        n if n >= 0 => Some(n as handle_T),
-        _ => None,
-    }
+    let n = match o {
+        Object::Integer(n) => n,
+        Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
+            if o.kind() != tag {
+                return None;
+            }
+            n
+        }
+        _ => return None,
+    };
+    (n >= 0).then_some(n as handle_T)
 }
 "#,
     ),
@@ -1415,8 +1382,7 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
         "is_empty_array",
         r#"
 fn is_empty_array(o: Object) -> bool {
-    // SAFETY: the tag says which union arm is live.
-    o.type_0 == kObjectTypeArray && unsafe { o.data.array }.size == 0
+    matches!(o, Object::Array(a) if a.size == 0)
 }
 "#,
     ),
@@ -1440,19 +1406,20 @@ enum KeySetArg<K> {
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
 fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
-    if item.type_0 != kObjectTypeDict {
+    let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
         }
         // SAFETY: as below; an empty list sets no field.
         return KeySetArg::Read(unsafe { core::mem::zeroed() });
-    }
-    // SAFETY: as above.
+    };
+    // SAFETY: a keyset is a `repr(C)` struct of scalars, handles, `String`s
+    // and `Object`s, and all-zero is "unset" for every one of them --
+    // `Object`'s zero discriminant is `Object::Nil`.
     let mut out: K = unsafe { core::mem::zeroed() };
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
-    // offsets it hands back are inside `out`; the tag says the dict arm of the
-    // union is the live one.
-    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, item.data.dict, error) };
+    // offsets it hands back are inside `out`.
+    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict, error) };
     if read {
         KeySetArg::Read(out)
     } else {
@@ -1488,7 +1455,7 @@ fn expr_map_locked_error(error: &mut Error) {
 /// nil, as it is for every other way of refusing.
 fn failure(error: &mut Error, e: Error) -> Object {
     *error = e;
-    NIL
+    Object::Nil
 }
 "#,
     ),
@@ -1530,7 +1497,6 @@ const TYPE_NAMES: &[&str] = &[
     "ObjectType",
     "String_0",
     "handle_T",
-    "object_data",
     "size_t",
     "uint64_t",
 ];

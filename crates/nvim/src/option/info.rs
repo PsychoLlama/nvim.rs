@@ -14,8 +14,7 @@ use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
     Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0, buf_T,
-    int64_t, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    key_value_pair, object, object_data, sctx_T, size_t, win_T,
+    int64_t, key_value_pair, sctx_T, size_t, win_T,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -49,29 +48,18 @@ unsafe fn push(dict: &mut Dict, key: &'static core::ffi::CStr, value: Object) {
 /// for the whole run — which is the whole of `cstr_as_string`'s promise, and
 /// why it is paid once here rather than at each of the four keys below.
 fn name_value(name: *const c_char) -> Object {
-    object {
-        type_0: kObjectTypeString,
-        // SAFETY: a static NUL-terminated string.
-        data: object_data {
-            string: unsafe { cstr_as_string(name) },
-        },
-    }
+    // SAFETY: a static NUL-terminated string.
+    Object::String(unsafe { cstr_as_string(name) })
 }
 
 /// A `Boolean` value.
 fn bool_value(b: bool) -> Object {
-    object {
-        type_0: kObjectTypeBoolean,
-        data: object_data { boolean: b },
-    }
+    Object::Boolean(b)
 }
 
 /// An `Integer` value.
 fn int_value(n: Integer) -> Object {
-    object {
-        type_0: kObjectTypeInteger,
-        data: object_data { integer: n },
-    }
+    Object::Integer(n)
 }
 
 /// The info dictionary for one option, looked up by name.
@@ -118,10 +106,7 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
         let pair = key_value_pair {
             // SAFETY: the option table's names are static C strings.
             key: unsafe { cstr_as_string(get_option(opt_idx).fullname) },
-            value: object {
-                type_0: kObjectTypeDict,
-                data: object_data { dict: opt_dict },
-            },
+            value: Object::Dict(opt_dict),
         };
         // SAFETY: the dictionary was asked for exactly `kOptCount` pairs.
         unsafe { *retval.items.add(retval.size) = pair };

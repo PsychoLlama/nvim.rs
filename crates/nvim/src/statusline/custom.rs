@@ -758,8 +758,8 @@ fn truncate_at_width(buffer: &mut [c_char], this_ru_col: c_int, width: c_int) {
 
 /// Send the ruler to a UI that has taken the message area over.
 fn show_ext_ruler(buffer: &[c_char], attr: c_int) {
-    let mut content_items = [Object::NIL; 1];
-    let mut chunk_items = [Object::NIL; 3];
+    let mut content_items = [Object::Nil; 1];
+    let mut chunk_items = [Object::Nil; 3];
     let mut content = Array {
         size: 0,
         capacity: 1,

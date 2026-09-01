@@ -2,9 +2,9 @@
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::private::helpers::{
-    NIL, api_free_array, api_free_object, api_typename, arena_array, cstr_as_string,
-    cstr_to_string, cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key,
-    object_to_hl_id, try_enter, try_leave,
+    api_free_array, api_free_object, api_typename, arena_array, cstr_as_string, cstr_to_string,
+    cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key, object_to_hl_id,
+    try_enter, try_leave,
 };
 use crate::autocmd::{
     EVENT_WINNEW, apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds,
@@ -30,8 +30,8 @@ use crate::types::{
     VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, colnr_T, frame_T, kErrorTypeException,
     kErrorTypeNone, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeTabline, kFloatRelativeWindow, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, linenr_T, lpos_T, size_t, switchwin_T, tabpage_T, win_T,
+    kFloatRelativeTabline, kFloatRelativeWindow, linenr_T, lpos_T, size_t, switchwin_T, tabpage_T,
+    win_T,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -108,7 +108,7 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     external: false,
     fixed: false,
     focusable: false,
-    footer: NIL,
+    footer: Object::Nil,
     footer_pos: String_0::NULL,
     hide: false,
     height: 0,
@@ -122,7 +122,7 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     width: 0,
     zindex: 0,
     anchor: String_0::NULL,
-    border: NIL,
+    border: Object::Nil,
     bufpos: Array {
         size: 0,
         capacity: 0,
@@ -130,7 +130,7 @@ pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
     },
     col: 0.,
     split: String_0::NULL,
-    title: NIL,
+    title: Object::Nil,
     title_pos: String_0::NULL,
     _cmdline_offset: 0,
 };

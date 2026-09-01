@@ -119,8 +119,12 @@ pub unsafe fn nvim_buf_set_lines(
     let nl = NL as ::core::ffi::c_char;
     let mut i: size_t = 0 as size_t;
     while i < new_len {
+        // Every item is a String: `check_string_array` above turned anything
+        // else into an error.
         // SAFETY: `i` is below `replacement.size`.
-        let l: String_0 = unsafe { (*replacement.items.add(i)).data.string };
+        let l: String_0 = unsafe { *replacement.items.add(i) }
+            .as_string()
+            .expect("check_string_array accepted only Strings");
         unsafe { *lines.add(i) = arena_memdupz(arena, l.data(), l.len()) };
         // SAFETY: `i` is below `new_len`, so the slot was just written.
         let line = unsafe { *lines.add(i) } as *mut ::core::ffi::c_void;

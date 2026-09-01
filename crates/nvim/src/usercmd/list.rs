@@ -306,7 +306,7 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
     // SAFETY: module contract; the three strings outlive the arena copy.
     let (name, definition) = unsafe { (cstr_as_string(cmd.uc_name), cstr_as_string(cmd.uc_rep)) };
     let complete_arg = if cmd.uc_compl_arg.is_null() {
-        Object::NIL
+        Object::Nil
     } else {
         // SAFETY: as above.
         Object::string(unsafe { cstr_as_string(cmd.uc_compl_arg) })
@@ -317,7 +317,7 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
         Some(callback) => callback,
         None => match command_complete_name(cmd.uc_compl) {
             Some(text) => Object::string(static_cstring(text)),
-            None => Object::NIL,
+            None => Object::Nil,
         },
     };
     let count = (a.has(ExArgt::COUNT)).then(|| {
@@ -363,8 +363,8 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
             (c"nargs", Some(Object::string(nargs))),
             (c"complete", Some(complete)),
             (c"complete_arg", Some(complete_arg)),
-            (c"count", Some(count.unwrap_or(Object::NIL))),
-            (c"range", Some(range.unwrap_or(Object::NIL))),
+            (c"count", Some(count.unwrap_or(Object::Nil))),
+            (c"range", Some(range.unwrap_or(Object::Nil))),
             (c"addr", Some(addr_object(cmd))),
         ],
     )
@@ -375,6 +375,6 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> Dict {
 fn addr_object(cmd: &ucmd_T) -> Object {
     match named_addr_type(cmd.uc_addr_type) {
         Some(row) => Object::string(static_cstring(row.name)),
-        None => Object::NIL,
+        None => Object::Nil,
     }
 }

@@ -35,20 +35,20 @@ pub unsafe fn handle_nvim_error_event(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_error_event", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_error_event", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     unsafe { nvim_error_event(channel_id, arg_1, arg_2) };
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_term_event`.
@@ -79,11 +79,11 @@ pub unsafe fn handle_nvim_ui_term_event(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_term_event", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -91,5 +91,5 @@ pub unsafe fn handle_nvim_ui_term_event(
     if let Err(e) = unsafe { nvim_ui_term_event(channel_id, arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

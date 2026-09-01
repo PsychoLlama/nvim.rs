@@ -31,13 +31,13 @@ use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::types::{
     Arena, Array, Channel, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream, Unpacker,
-    kErrorTypeException, kObjectTypeArray, kObjectTypeNil, size_t, uint32_t, uint64_t,
+    kErrorTypeException, size_t, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_event_raw_line;
 
 use super::envelope::serialize_response;
 use super::known::*;
-use super::{Chan, NIL, RequestEvent, chan_close_on_err, trace};
+use super::{Chan, RequestEvent, chan_close_on_err, trace};
 
 // ---------------------------------------------------------------------------
 // Receiving
@@ -149,12 +149,12 @@ unsafe fn dispatch_redraw(p: &mut Unpacker) {
         // SAFETY: the event the unpacker just filled in.
         unsafe { ui_client_event_raw_line(&raw mut p.grid_line_event) };
         p.has_grid_line_event = false;
-    } else if p.result.type_0 == kObjectTypeArray
+    } else if let Some(args) = p.result.as_array()
         && let Some(handler) = p.ui_handler.fn_0
     {
-        // SAFETY: `result` is an array, so the union read matches, and the
-        // handler was resolved from the event name by the unpacker.
-        unsafe { handler(p.result.data.array) };
+        // SAFETY: the handler was resolved from the event name by the
+        // unpacker.
+        unsafe { handler(args) };
     }
 }
 
@@ -189,7 +189,7 @@ unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
     // SAFETY: the frame is a `rpc_send_call` stack frame that is still on the
     // call stack, so it outlives this write.
     unsafe { (*frame).returned = true };
-    unsafe { (*frame).errored = p.error.type_0 != kObjectTypeNil };
+    unsafe { (*frame).errored = !p.error.is_nil() };
     unsafe { (*frame).result = if (*frame).errored { p.error } else { p.result } };
     unsafe { (*frame).result_mem = arena_finish(&raw mut p.arena) };
     trace::log_response(
@@ -212,16 +212,14 @@ unsafe fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
     // SAFETY: the handler name is either null or a static string.
     unsafe { trace::log_call(trace::RECV, chan.id, req_id, p.handler.name) };
 
-    if p.result.type_0 != kObjectTypeArray {
+    let Some(args) = p.result.as_array() else {
         // SAFETY: a static string, and the channel is live.
         let why = c"msgpack-rpc request args must be an array"
             .as_ptr()
             .cast_mut();
         unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
         return false;
-    }
-    // SAFETY: `result` is an array, so the union read matches.
-    let args = unsafe { p.result.data.array };
+    };
     // SAFETY: the caller's channel and decoder.
     unsafe { handle_request(chan, p, args) };
     true
@@ -365,7 +363,7 @@ unsafe fn send_error(
     err: *mut c_char,
 ) {
     let mut e = Error::none();
-    let mut answer = NIL;
+    let mut answer = Object::Nil;
     // SAFETY: the message the caller handed over, live for this call.
     e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });
     let (to, out) = (chan.as_ptr(), &raw mut answer);

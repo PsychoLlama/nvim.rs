@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{EMPTY_HL_MESSAGE, NIL, cstr_as_string};
+use super::{EMPTY_HL_MESSAGE, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
@@ -23,11 +23,11 @@ use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, ArenaMem, Array, ArrayBuilder, Boolean, Dict, Error, Float, HlMessage, HlMessageChunk,
-    Integer, KeyValuePair, LuaRef, Object, ObjectType, String_0, consumed_blk, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
-    key_value_pair, size_t,
+    Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
+    Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
+    size_t,
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int};
@@ -162,11 +162,11 @@ pub(crate) unsafe fn api_free_string(value: String_0) {
 pub unsafe fn api_free_object(value: Object) {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `value` owns whatever it points at.
-    match value.type_0 {
-        kObjectTypeString => unsafe { api_free_string(value.data.string) },
-        kObjectTypeArray => unsafe { api_free_array(value.data.array) },
-        kObjectTypeDict => unsafe { api_free_dict(value.data.dict) },
-        kObjectTypeLuaRef => unsafe { api_free_luaref(value.data.luaref) },
+    match value {
+        Object::String(s) => unsafe { api_free_string(s) },
+        Object::Array(a) => unsafe { api_free_array(a) },
+        Object::Dict(d) => unsafe { api_free_dict(d) },
+        Object::LuaRef(r) => unsafe { api_free_luaref(r) },
         _ => {}
     }
 }
@@ -199,10 +199,10 @@ pub(crate) unsafe fn api_free_dict(value: Dict) {
 pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `value` owns the references it names.
-    match value.type_0 {
-        kObjectTypeLuaRef => unsafe { api_free_luaref(value.data.luaref) },
-        kObjectTypeArray => unsafe { api_luarefs_free_array(value.data.array) },
-        kObjectTypeDict => unsafe { api_luarefs_free_dict(value.data.dict) },
+    match value {
+        Object::LuaRef(r) => unsafe { api_free_luaref(r) },
+        Object::Array(a) => unsafe { api_luarefs_free_array(a) },
+        Object::Dict(d) => unsafe { api_luarefs_free_dict(d) },
         _ => {}
     }
 }
@@ -270,11 +270,11 @@ pub(crate) unsafe fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict {
 pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `obj` is live for the call.
-    match obj.type_0 {
-        kObjectTypeString => Object::string(unsafe { copy_string(obj.data.string, arena) }),
-        kObjectTypeArray => Object::array(unsafe { copy_array(obj.data.array, arena) }),
-        kObjectTypeDict => Object::dict(unsafe { copy_dict(obj.data.dict, arena) }),
-        kObjectTypeLuaRef => Object::luaref(unsafe { api_new_luaref(obj.data.luaref) }),
+    match obj {
+        Object::String(s) => Object::String(unsafe { copy_string(s, arena) }),
+        Object::Array(a) => Object::Array(unsafe { copy_array(a, arena) }),
+        Object::Dict(d) => Object::Dict(unsafe { copy_dict(d, arena) }),
+        Object::LuaRef(r) => Object::LuaRef(unsafe { api_new_luaref(r) }),
         _ => obj,
     }
 }
@@ -288,8 +288,8 @@ static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<co
 /// The API description, as the `nvim_get_api_info` reply carries it. Unpacked
 /// from the blob on first use and then shared.
 pub(crate) unsafe fn api_metadata() -> Object {
-    static METADATA: GlobalCell<Object> = GlobalCell::new(NIL);
-    if METADATA.with(|m| m.type_0) == kObjectTypeNil {
+    static METADATA: GlobalCell<Object> = GlobalCell::new(Object::Nil);
+    if METADATA.with(Object::is_nil) {
         let mut arena = ARENA_EMPTY;
         let mut err = Error::none();
         let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
@@ -297,7 +297,7 @@ pub(crate) unsafe fn api_metadata() -> Object {
         // SAFETY: the blob is a compile-time constant of `len` bytes and a
         // valid msgpack map; `arena` and `err` are this frame's.
         METADATA.set(unsafe { unpack(blob, len, ar, &mut err) });
-        if err.is_set() || METADATA.with(|m| m.type_0) != kObjectTypeDict {
+        if err.is_set() || METADATA.with(|m| m.as_dict().is_none()) {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };
         }
@@ -315,69 +315,6 @@ pub(crate) fn api_metadata_raw() -> String_0 {
         PACKED_API_METADATA.as_ptr() as *mut c_char,
         PACKED_API_METADATA.len(),
     )
-}
-
-// -- Reading an object -----------------------------------------------------
-//
-// The tag decides which arm of the union carries the value, so a reader that
-// asks the tag first is safe by construction. Every `if o.type_0 ==
-// kObjectTypeX { o.data.x }` in the api/ family was an `unsafe` region
-// spelling out this one line, and the transpile has hundreds of them.
-
-// `then_some` would read the union arm *before* the tag was consulted, which
-// is the whole bug these readers exist to prevent: a `bool` or a pointer built
-// from the bytes of another arm is not merely wrong, it is undefined. The
-// laziness is load-bearing, so clippy's suggestion is refused here.
-#[allow(clippy::unnecessary_lazy_evaluations)]
-impl Object {
-    /// The boolean payload, when the tag says there is one. A `Boolean`
-    /// object only -- an integer that happens to be 0 or 1 is not one, which
-    /// is the distinction every `nvim_*` option check makes.
-    pub(crate) fn as_boolean(self) -> Option<Boolean> {
-        // SAFETY: the tag says the payload is the boolean.
-        (self.type_0 == kObjectTypeBoolean).then(|| unsafe { self.data.boolean })
-    }
-
-    /// The integer payload, when the tag says there is one. Handles carry
-    /// their id in the same arm but under their own tags, so
-    /// [`as_handle`](Self::as_handle) is the reader for those.
-    pub(crate) fn as_integer(self) -> Option<Integer> {
-        // SAFETY: the tag says the payload is the integer.
-        (self.type_0 == kObjectTypeInteger).then(|| unsafe { self.data.integer })
-    }
-
-    /// The float payload, when the tag says there is one.
-    pub(crate) fn as_float(self) -> Option<Float> {
-        // SAFETY: the tag says the payload is the float.
-        (self.type_0 == kObjectTypeFloat).then(|| unsafe { self.data.floating })
-    }
-
-    /// The string payload, when the tag says there is one. Borrowed from
-    /// whoever owns the object; this reads the pair, not the bytes.
-    pub(crate) fn as_string(self) -> Option<String_0> {
-        // SAFETY: the tag says the payload is the string.
-        (self.type_0 == kObjectTypeString).then(|| unsafe { self.data.string })
-    }
-
-    /// The array payload, when the tag says there is one.
-    pub(crate) fn as_array(self) -> Option<Array> {
-        // SAFETY: the tag says the payload is the array.
-        (self.type_0 == kObjectTypeArray).then(|| unsafe { self.data.array })
-    }
-
-    /// The dictionary payload, when the tag says there is one.
-    pub(crate) fn as_dict(self) -> Option<Dict> {
-        // SAFETY: the tag says the payload is the dictionary.
-        (self.type_0 == kObjectTypeDict).then(|| unsafe { self.data.dict })
-    }
-
-    /// The Lua registry reference, when the tag says there is one. Still
-    /// owned by the object -- taking it over means clearing the object's
-    /// copy, as the keyset readers do.
-    pub(crate) fn as_luaref(self) -> Option<LuaRef> {
-        // SAFETY: the tag says the payload is the reference.
-        (self.type_0 == kObjectTypeLuaRef).then(|| unsafe { self.data.luaref })
-    }
 }
 
 // -- Object conversion -----------------------------------------------------
@@ -414,7 +351,7 @@ pub(crate) unsafe fn api_object_to_bool(
     if let Some(number) = obj.as_integer() {
         return number != 0;
     }
-    if obj.type_0 == kObjectTypeNil {
+    if obj.is_nil() {
         return nil_value;
     }
     // SAFETY: the names and values are NUL-terminated strings.
@@ -468,7 +405,7 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) 
         // SAFETY: `i` is below `size`, so the item is inside `items`.
         let item = unsafe { *chunks.items.add(i) };
         let Some(chunk) = item.as_array() else {
-            let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
+            let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
             // SAFETY: the names and values are NUL-terminated strings.
             *err = err_expected(c"chunk", want, Some(got));
             // SAFETY: `hl_msg` is this frame's, and owns its chunks.

@@ -10,8 +10,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    EMPTY_DICT, NIL, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool,
-    api_typename, arena_dict, cstr_as_string, object_to_hl_id,
+    EMPTY_DICT, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool, api_typename,
+    arena_dict, cstr_as_string, object_to_hl_id,
 };
 use crate::api::private::validate::err_expected;
 use crate::api_error;
@@ -132,7 +132,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // A mismatch reports the field's name, not the key's: they are
         // the same string.
         let mut wrong_type = |want: ObjectType| {
-            let (want, got) = (api_typename(want), api_typename(given.type_0));
+            let (want, got) = (api_typename(want), api_typename(given.kind()));
             // SAFETY: a keyset field's name is a static NUL-terminated string.
             let name = unsafe { cstr::at(field.str) };
             *err = err_expected(name, want, Some(got));
@@ -144,7 +144,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
             kObjectTypeNil => unsafe { *mem.cast::<Object>() = given },
             kObjectTypeInteger if field.is_hlgroup => {
                 let mut hl_id = 0;
-                if given.type_0 != kObjectTypeNil {
+                if !given.is_nil() {
                     // SAFETY: `given` is live and `err` the caller's slot.
                     hl_id = unsafe { object_to_hl_id(given, key.data(), err) };
                     if err.kind() != kErrorTypeNone {
@@ -214,14 +214,18 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 unsafe { *mem.cast::<Dict>() = pairs };
             }
             kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
-                // A handle arrives either under its own tag or as a plain
-                // integer, and both carry it in the same arm of the union.
-                if given.type_0 != kObjectTypeInteger && given.type_0 != expected {
-                    wrong_type(expected);
-                    return false;
-                }
-                // SAFETY: as above, and the row says a handle lives at `mem`.
-                unsafe { *mem.cast::<handle_T>() = given.data.integer as handle_T };
+                // A handle arrives either under its own variant or as a plain
+                // integer, and both carry it as an `Integer`.
+                let handle = match given {
+                    Object::Integer(n) => n,
+                    _ if given.kind() == expected => given.as_handle().unwrap_or(0),
+                    _ => {
+                        wrong_type(expected);
+                        return false;
+                    }
+                };
+                // SAFETY: the row says a handle lives at `mem`.
+                unsafe { *mem.cast::<handle_T>() = handle as handle_T };
             }
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
@@ -277,7 +281,7 @@ pub(crate) unsafe fn api_keydict_to_dict(
                 kObjectTypeBuffer => Object::buffer(*mem.cast::<handle_T>()),
                 kObjectTypeWindow => Object::window(*mem.cast::<handle_T>()),
                 kObjectTypeTabpage => Object::tabpage(*mem.cast::<handle_T>()),
-                kObjectTypeLuaRef => NIL,
+                kObjectTypeLuaRef => Object::Nil,
                 _ => abort(),
             }
         };

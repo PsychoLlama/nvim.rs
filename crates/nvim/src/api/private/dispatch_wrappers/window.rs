@@ -35,24 +35,24 @@ pub unsafe fn handle_nvim_win_close(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_close", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_boolean(args[1]) else {
         wrong_type(error, 2, c"nvim_win_close", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     if let Err(e) = nvim_win_close(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_del_var`.
@@ -83,22 +83,22 @@ pub unsafe fn handle_nvim_win_del_var(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_del_var", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_win_del_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_win_del_var(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_buf`.
@@ -129,22 +129,17 @@ pub unsafe fn handle_nvim_win_get_buf(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_buf", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_win_get_buf(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeBuffer,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Buffer(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_cursor`.
@@ -175,11 +170,11 @@ pub unsafe fn handle_nvim_win_get_cursor(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_cursor", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -187,7 +182,7 @@ pub unsafe fn handle_nvim_win_get_cursor(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_height`.
@@ -218,17 +213,17 @@ pub unsafe fn handle_nvim_win_get_height(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_height", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_win_get_height(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_number`.
@@ -259,17 +254,17 @@ pub unsafe fn handle_nvim_win_get_number(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_number", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_win_get_number(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_position`.
@@ -300,11 +295,11 @@ pub unsafe fn handle_nvim_win_get_position(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_position", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -312,7 +307,7 @@ pub unsafe fn handle_nvim_win_get_position(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeArray, object_data { array: rv })
+    Object::Array(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_tabpage`.
@@ -343,22 +338,17 @@ pub unsafe fn handle_nvim_win_get_tabpage(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_tabpage", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_win_get_tabpage(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeTabpage,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Tabpage(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_var`.
@@ -389,15 +379,15 @@ pub unsafe fn handle_nvim_win_get_var(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_var", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_win_get_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -435,17 +425,17 @@ pub unsafe fn handle_nvim_win_get_width(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_width", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = match nvim_win_get_width(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeInteger, object_data { integer: rv })
+    Object::Integer(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_hide`.
@@ -476,20 +466,20 @@ pub unsafe fn handle_nvim_win_hide(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_hide", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     if let Err(e) = nvim_win_hide(arg_1) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_is_valid`.
@@ -520,14 +510,14 @@ pub unsafe fn handle_nvim_win_is_valid(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_is_valid", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let rv = nvim_win_is_valid(arg_1);
-    obj(kObjectTypeBoolean, object_data { boolean: rv })
+    Object::Boolean(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_buf`.
@@ -558,24 +548,24 @@ pub unsafe fn handle_nvim_win_set_buf(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_buf", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_handle(args[1], kObjectTypeBuffer) else {
         wrong_type(error, 2, c"nvim_win_set_buf", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     if let Err(e) = nvim_win_set_buf(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_cursor`.
@@ -606,22 +596,22 @@ pub unsafe fn handle_nvim_win_set_cursor(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_cursor", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_array(args[1]) else {
         wrong_type(error, 2, c"nvim_win_set_cursor", c"ArrayOf(Integer, 2)");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_win_set_cursor(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_height`.
@@ -652,20 +642,20 @@ pub unsafe fn handle_nvim_win_set_height(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_height", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_win_set_height", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     if let Err(e) = nvim_win_set_height(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_hl_ns`.
@@ -696,20 +686,20 @@ pub unsafe fn handle_nvim_win_set_hl_ns(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_hl_ns", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_win_set_hl_ns", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     if let Err(e) = nvim_win_set_hl_ns(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_var`.
@@ -740,15 +730,15 @@ pub unsafe fn handle_nvim_win_set_var(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_var", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_win_set_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -756,7 +746,7 @@ pub unsafe fn handle_nvim_win_set_var(
     if let Err(e) = unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_width`.
@@ -787,20 +777,20 @@ pub unsafe fn handle_nvim_win_set_width(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_width", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_win_set_width", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     if let Err(e) = nvim_win_set_width(arg_1, arg_2) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_text_height`.
@@ -831,16 +821,16 @@ pub unsafe fn handle_nvim_win_text_height(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_text_height", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_win_text_height =
         match read_keydict(Some(key_dict_win_text_height_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(
                     error,
@@ -848,7 +838,7 @@ pub unsafe fn handle_nvim_win_text_height(
                     c"nvim_win_text_height",
                     c"Dict(win_text_height) *",
                 );
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -857,5 +847,5 @@ pub unsafe fn handle_nvim_win_text_height(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeDict, object_data { dict: rv })
+    Object::Dict(rv)
 }

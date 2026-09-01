@@ -240,10 +240,10 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         // SAFETY: `save_v_event` is this frame's own storage, and the
         // dictionary is `v:event`, live until `restore_v_event` below.
         let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-        if !data.is_null() && unsafe { (*data).type_0 } == kObjectTypeDict {
-            // SAFETY: the tag above says the dict arm of the union is live,
-            // and `size` is that dict's own item count.
-            let items = unsafe { (*data).data.dict };
+        // SAFETY: non-null, so it is the object the caller published.
+        if !data.is_null()
+            && let Some(items) = unsafe { *data }.as_dict()
+        {
             for i in 0..items.size {
                 let item = unsafe { *items.items.add(i) };
                 let mut tv = TV_INITIAL_VALUE;

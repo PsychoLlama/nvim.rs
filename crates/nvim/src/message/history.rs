@@ -375,7 +375,7 @@ pub unsafe fn ex_messages(eap: *mut exarg_T) {
                 let kind = unsafe { (*p).kind };
                 let no_id = ptr::null_mut();
                 let clear = &raw mut needs_clear;
-                let nil = Object::NIL;
+                let nil = Object::Nil;
                 unsafe { msg_multihl(nil, text, kind, false, false, no_id, clear) };
                 msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
             }

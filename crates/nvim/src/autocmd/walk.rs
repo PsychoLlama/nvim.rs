@@ -201,8 +201,7 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
             ::core::ptr::null_mut(),
         )
     };
-    // SAFETY: the type tag says which union field the answer carries.
-    result.type_0 == kObjectTypeBoolean && unsafe { result.data.boolean }
+    matches!(result, Object::Boolean(true))
 }
 
 /// The `do_cmdline` getline callback an autocommand body runs through:

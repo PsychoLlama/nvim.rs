@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, array_add};
+use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_expected;
 use crate::kvec::InitVec;
 
@@ -20,19 +20,15 @@ pub(crate) unsafe fn unpack_string_or_array(
     mut arena: *mut Arena,
     err: &mut Error,
 ) -> Array {
-    if v.type_0 as ::core::ffi::c_uint
-        == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    if matches!(v, Object::String(_)) {
         let mut arr: Array = arena_array(arena, 1 as size_t);
         unsafe { array_add(&mut arr, v) };
         return arr;
-    } else if v.type_0 as ::core::ffi::c_uint
-        == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
+    } else if let Object::Array(array) = v {
         // SAFETY: `k` is a NUL-terminated key.
         let key = unsafe { core::ffi::CStr::from_ptr(k) };
         // SAFETY: the array is the caller's.
-        if let Err(e) = unsafe { check_string_array(v.data.array, key, true) } {
+        if let Err(e) = unsafe { check_string_array(array, key, true) } {
             *err = e;
             return Array {
                 size: 0 as size_t,
@@ -40,13 +36,9 @@ pub(crate) unsafe fn unpack_string_or_array(
                 items: ::core::ptr::null_mut::<Object>(),
             };
         }
-        return unsafe { v.data.array };
-    } else if !(!required
-        && v.type_0 as ::core::ffi::c_uint
-            == kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint)
-    {
-        // SAFETY: the caller's error slot.
-        let got = api_typename(v.type_0);
+        return array;
+    } else if !(!required && v.is_nil()) {
+        let got = api_typename(v.kind());
         // SAFETY: `k` is a NUL-terminated key.
         let k = unsafe { core::ffi::CStr::from_ptr(k) };
         *err = err_expected(k, c"Array or String", Some(got));
@@ -75,7 +67,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
-        init_array: [NIL; 16],
+        init_array: [Object::Nil; 16],
     };
     patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
@@ -85,13 +77,9 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         ) as size_t;
     patterns.size = 0 as size_t;
     patterns.items = &raw mut patterns.init_array as *mut Object;
-    if pattern.type_0 as ::core::ffi::c_uint
-        != kObjectTypeNil as ::core::ffi::c_int as ::core::ffi::c_uint
-    {
-        if pattern.type_0 as ::core::ffi::c_uint
-            == kObjectTypeString as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
-            let mut pat: *const ::core::ffi::c_char = unsafe { pattern.data.string }.data();
+    if !pattern.is_nil() {
+        if let Object::String(string) = pattern {
+            let mut pat: *const ::core::ffi::c_char = string.data();
             let mut patlen: size_t = unsafe { aucmd_span_pattern(pat, &raw mut pat) };
             while patlen != 0 {
                 // `kv_push`, whose growth step c2rust expanded inline.
@@ -109,11 +97,9 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                 }));
                 patlen = unsafe { aucmd_span_pattern(pat.add(patlen), &raw mut pat) };
             }
-        } else if pattern.type_0 as ::core::ffi::c_uint
-            == kObjectTypeArray as ::core::ffi::c_int as ::core::ffi::c_uint
-        {
+        } else if let Object::Array(array) = pattern {
             // SAFETY: the array is the caller's.
-            if let Err(e) = unsafe { check_string_array(pattern.data.array, c"pattern", true) } {
+            if let Err(e) = unsafe { check_string_array(array, c"pattern", true) } {
                 *err = e;
                 return Array {
                     size: 0 as size_t,
@@ -121,11 +107,13 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                     items: ::core::ptr::null_mut::<Object>(),
                 };
             }
-            let mut array: Array = unsafe { pattern.data.array };
             let mut entry_index: size_t = 0 as size_t;
             while entry_index < array.size {
-                let mut entry: Object = unsafe { *array.items.add(entry_index) };
-                let mut pat_0: *const ::core::ffi::c_char = unsafe { entry.data.string }.data();
+                let entry: Object = unsafe { *array.items.add(entry_index) };
+                let entry = entry
+                    .as_string()
+                    .expect("`check_string_array` accepted only Strings");
+                let mut pat_0: *const ::core::ffi::c_char = entry.data();
                 let mut patlen_0: size_t = unsafe { aucmd_span_pattern(pat_0, &raw mut pat_0) };
                 while patlen_0 != 0 {
                     // `kv_push`, whose growth step c2rust expanded inline.
@@ -147,7 +135,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             }
         } else if true {
             let want = c"String or Table";
-            let got = api_typename(pattern.type_0);
+            let got = api_typename(pattern.kind());
             *err = err_expected(c"pattern", want, Some(got));
             return Array {
                 size: 0 as size_t,

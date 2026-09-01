@@ -51,8 +51,7 @@ use crate::registry::SlotTable;
 use crate::types::{
     Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
     Dict, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
-    kErrorTypeException, kErrorTypeValidation, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, uint32_t, uint64_t,
+    kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -97,10 +96,6 @@ use known::*;
 
 /// The all-nil `Object`, which is what an API call that produced nothing, or
 /// failed, hands back.
-const NIL: Object = Object {
-    type_0: kObjectTypeNil,
-    data: crate::types::object_data { boolean: false },
-};
 use crate::api_error;
 
 /// A channel this module is working with, plus the promise that the pointer
@@ -340,11 +335,7 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
             unsafe { (*frame).returned = true };
             unsafe { (*frame).errored = true };
             let string = unsafe { arena_string(arena, cstr_as_string(msg)) };
-            let result = Object {
-                type_0: kObjectTypeString,
-                data: crate::types::object_data { string },
-            };
-            unsafe { (*frame).result = result };
+            unsafe { (*frame).result = Object::String(string) };
             let mem = unsafe { arena_finish(arena) };
             unsafe { (*frame).result_mem = mem };
         }
@@ -407,7 +398,7 @@ pub unsafe fn rpc_send_call(
     // SAFETY: the channel table is live whenever the editor is.
     let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
         *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: the channel is live; this reference is dropped below.
     unsafe { channel_incref(chan.as_ptr()) };
@@ -424,7 +415,7 @@ pub unsafe fn rpc_send_call(
         request_id,
         returned: false,
         errored: false,
-        result: NIL,
+        result: Object::Nil,
         result_mem: ptr::null_mut(),
     };
     let frame_ptr = &raw mut frame;
@@ -440,7 +431,7 @@ pub unsafe fn rpc_send_call(
     if !frame.returned {
         *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
         unsafe { channel_decref(chan.as_ptr()) };
-        return NIL;
+        return Object::Nil;
     }
     if frame.errored {
         // SAFETY: the result the decoder placed in the frame, and its arena.
@@ -451,7 +442,11 @@ pub unsafe fn rpc_send_call(
     // SAFETY: the reference taken above, and the caller's out-parameter.
     unsafe { channel_decref(chan.as_ptr()) };
     unsafe { *result_mem = frame.result_mem };
-    if frame.errored { NIL } else { frame.result }
+    if frame.errored {
+        Object::Nil
+    } else {
+        frame.result
+    }
 }
 
 /// Turns a peer's error payload into an `Error`.
@@ -463,31 +458,27 @@ pub unsafe fn rpc_send_call(
 /// # Safety
 /// `err` points at a writable `Error` and `result` is a live decoded object.
 unsafe fn report_call_error(err: &mut Error, result: &Object) {
-    // SAFETY: the caller's error slot and decoded result. Every union read
-    // below is guarded by the `type_0` it belongs to.
-    if result.type_0 == kObjectTypeString {
-        let text = unsafe { result.data.string }.data();
+    if let Object::String(text) = *result {
         // SAFETY: the message is a NUL-terminated string.
-        let text = unsafe { cstr::at(text) };
+        let text = unsafe { cstr::at(text.data()) };
         *err = Error::from_message(kErrorTypeException, text);
         return;
     }
-    if result.type_0 == kObjectTypeArray {
-        let array = unsafe { result.data.array };
-        if array.size == 2 {
-            let kind = unsafe { &*array.items };
-            let message = unsafe { &*array.items.add(1) };
-            if kind.type_0 == kObjectTypeInteger
-                && (unsafe { kind.data.integer } == Integer::from(kErrorTypeException)
-                    || unsafe { kind.data.integer } == Integer::from(kErrorTypeValidation))
-                && message.type_0 == kObjectTypeString
-            {
-                let kind = crate::narrow::number_as_int(unsafe { kind.data.integer });
-                // SAFETY: the message is the string the frame carried.
-                let text = unsafe { message.data.string.as_cstr() };
-                *err = Error::from_message(kind, text);
-                return;
-            }
+    if let Object::Array(array) = *result
+        && array.size == 2
+    {
+        // SAFETY: the caller's decoded result; the array holds its two items.
+        let kind = unsafe { &*array.items };
+        let message = unsafe { &*array.items.add(1) };
+        if let (Some(kind), Some(message)) = (kind.as_integer(), message.as_string())
+            && (kind == Integer::from(kErrorTypeException)
+                || kind == Integer::from(kErrorTypeValidation))
+        {
+            let kind = crate::narrow::number_as_int(kind);
+            // SAFETY: the message is the string the frame carried.
+            let text = unsafe { message.as_cstr() };
+            *err = Error::from_message(kind, text);
+            return;
         }
     }
     *err = Error::exception(c"unknown error");
@@ -662,10 +653,10 @@ pub unsafe fn get_client_info(chan: *mut Channel, key: *const c_char) -> *const 
     let key = unsafe { CStr::from_ptr(key) };
     for i in 0..info.size {
         let item = unsafe { &*info.items.add(i) };
-        if item.value.type_0 == kObjectTypeString
+        if let Some(value) = item.value.as_string()
             && unsafe { CStr::from_ptr(item.key.data()) } == key
         {
-            return unsafe { item.value.data.string }.data();
+            return value.data();
         }
     }
     ptr::null()

@@ -39,7 +39,7 @@ use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
     Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T, garray_T,
-    kListLenMayKnow, kObjectTypeBoolean, typval_T, uint8_t, varnumber_T,
+    kListLenMayKnow, typval_T, uint8_t, varnumber_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -251,8 +251,7 @@ fn has_wsl() -> bool {
         let o: Object =
             unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena, &mut err) };
         debug_assert!(!err.is_set());
-        // SAFETY: the union member is the one the type tag names.
-        let yes = o.type_0 == kObjectTypeBoolean && unsafe { o.data.boolean } as c_int == 1;
+        let yes = o.as_boolean() == Some(true);
         ANSWER.set(Some(yes));
     }
     ANSWER.get() == Some(true)

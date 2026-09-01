@@ -6,7 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO, NIL};
+use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api_error;
 use crate::eval::typval::{
@@ -39,7 +39,7 @@ pub(crate) unsafe fn dict_get_value(
         // SAFETY: `key` borrows the caller's NUL-terminated text.
         let key = unsafe { c_str(key.data()) };
         *err = api_error!(kErrorTypeValidation, "Key not found: {key}");
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: the lookup answered a live item of `dict`.
     unsafe { vim_to_object(&raw mut (*di).di_tv, arena, true) }
@@ -104,7 +104,7 @@ pub(crate) unsafe fn dict_set_var(
     arena: *mut Arena,
     err: &mut Error,
 ) -> Object {
-    let mut rv = NIL;
+    let mut rv = Object::Nil;
     // SAFETY: as `dict_get_value`.
     let mut di = unsafe { dict_check_writable(dict, key, del, err) };
     if err.kind() != kErrorTypeNone {

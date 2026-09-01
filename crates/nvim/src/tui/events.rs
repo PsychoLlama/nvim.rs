@@ -28,8 +28,8 @@ use crate::tui::paint::invalidate;
 use crate::tui::terminfo::caps::{kTerm_from_status_line, kTerm_to_status_line};
 use crate::tui::terminfo::terminfo_info_msg;
 use crate::types::{
-    Array, ArrayBuf, DictBuf, Integer, Object, ObjectType, String_0, TUIData, uv_buf_t,
-    uv_stream_t, uv_tty_mode_t, uv_write_t,
+    Array, ArrayBuf, DictBuf, Integer, Object, String_0, TUIData, uv_buf_t, uv_stream_t,
+    uv_tty_mode_t, uv_write_t,
 };
 
 const UV_TTY_MODE_NORMAL: uv_tty_mode_t = 0;
@@ -95,20 +95,15 @@ pub unsafe fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args
     // SAFETY: the caller guarantees `args`.
     unsafe {
         for i in 0..args.size {
-            let item = &*args.items.add(i);
-            assert!(
-                item.type_0 == OBJECT_TYPE_DICT,
-                "mode_info_set entry is not a dict"
-            );
-            tui.cursor_shapes[i] = decode_cursor_entry(item.data.dict);
+            let entry = (*args.items.add(i))
+                .as_dict()
+                .expect("mode_info_set entry is not a dict");
+            tui.cursor_shapes[i] = decode_cursor_entry(entry);
         }
     }
     let showing = tui.showing_mode;
     cursor_set_mode(tui, showing);
 }
-
-/// The `Object` type tag for a dictionary.
-const OBJECT_TYPE_DICT: ObjectType = 6;
 
 /// The editor changed mode: dress the cursor for it.
 ///
@@ -256,10 +251,13 @@ pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
 /// `name` must be a valid API string and `value` must hold the type that
 /// option's name implies.
 pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
-    // SAFETY: the caller guarantees `name` and `value`'s type.
+    // SAFETY: the caller guarantees `name`.
     let is = |option: &core::ffi::CStr| unsafe { strequal(name.data(), option.as_ptr()) };
-    let boolean = || unsafe { value.data.boolean };
-    let integer = || unsafe { value.data.integer };
+    // The caller also promises the value's kind. A value that arrives as
+    // something else leaves the option alone rather than reinterpreting its
+    // bytes, which is what the transpiled union read did.
+    let boolean = || value.as_boolean().unwrap_or_default();
+    let integer = || value.as_integer().unwrap_or_default();
 
     if is(c"mousemoveevent") {
         let wanted = boolean();

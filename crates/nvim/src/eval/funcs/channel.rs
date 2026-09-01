@@ -7,7 +7,7 @@ use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, Callback_data, GA_EMPTY_INIT_VALUE, MAX_FUNC_ARGS,
     kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
-    kRetObject, object_data,
+    kRetObject,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{arena_array, cstr_as_string};
@@ -44,8 +44,7 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
     String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
-    funccall_T, kObjectTypeArray, kObjectTypeNil, kObjectTypeString, object, sctx_T, typval_T,
-    uint64_t, varnumber_T,
+    funccall_T, sctx_T, typval_T, uint64_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -67,11 +66,6 @@ const NO_READER: CallbackReader = CallbackReader {
 };
 
 /// A cleared `Object`.
-const NIL: Object = Object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
-
 /// The `{stream}` names `chanclose()` accepts.
 const CHANNEL_PARTS: [(&CStr, ChannelPart); 4] = [
     (c"stdin", kChannelPartStdin),
@@ -226,7 +220,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         return;
     }
 
-    let mut items = [NIL; MAX_FUNC_ARGS as usize];
+    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
     let mut arena: Arena = ARENA_EMPTY;
     let event_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
     let id = args.get(0).number_or_zero() as uint64_t;
@@ -337,7 +331,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         return;
     }
 
-    let mut items = [NIL; MAX_FUNC_ARGS as usize];
+    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
     let mut arena: Arena = ARENA_EMPTY;
     let call_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
 
@@ -405,12 +399,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     for i in 0..n {
         unsafe { tv_list_append_allocated_string(list, *addrs.add(i)) };
         let addr = unsafe { *addrs.add(i) };
-        let entry = object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: unsafe { cstr_as_string(addr) },
-            },
-        };
+        let entry = Object::String(unsafe { cstr_as_string(addr) });
         unsafe { *addrs_arr.items.add(addrs_arr.size) = entry };
         addrs_arr.size += 1;
     }
@@ -418,14 +407,11 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     if args.ty(0) == VAR_DICT
         && unsafe { tv_dict_get_bool(args.get(0).dict_or_null(), c"peer".as_ptr(), 0) } != 0
     {
-        let mut items = [NIL; 1];
+        let mut items = [Object::Nil; 1];
         let mut lua_args = ARRAY_DICT_INIT;
         lua_args.capacity = 1;
         lua_args.items = items.as_mut_ptr();
-        let entry = object {
-            type_0: kObjectTypeArray,
-            data: object_data { array: addrs_arr },
-        };
+        let entry = Object::Array(addrs_arr);
         unsafe { *lua_args.items = entry };
         lua_args.size = 1;
 
@@ -447,10 +433,15 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
                 "vim._core.serverlist failed: {why}"
             );
         } else {
-            for i in 0..unsafe { rv.data.array }.size {
-                let item = unsafe { rv.data.array.items.add(i) };
-                let addr = unsafe { (*item).data.string.data() };
-                unsafe { tv_list_append_string(list, addr, -1) };
+            let peers = rv
+                .as_array()
+                .expect("`vim._core.server.serverlist()` answers with a list");
+            for i in 0..peers.size {
+                let item = unsafe { *peers.items.add(i) };
+                let addr = item
+                    .as_string()
+                    .expect("`serverlist()` answers with a list of strings");
+                unsafe { tv_list_append_string(list, addr.data(), -1) };
             }
         }
     }

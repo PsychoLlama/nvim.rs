@@ -183,21 +183,17 @@ unsafe fn style_slots(style: &BorderStyle) -> Slots {
 /// # Safety
 /// `item` must be a live API object and `err` a writable error slot.
 unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, c_int)> {
-    if item.type_0 == kObjectTypeArray {
-        // SAFETY: the tag says the array arm is live.
-        let arr = unsafe { item.data.array };
+    if let Object::Array(arr) = item {
         if arr.size == 0 || arr.size > 2 {
             err_border(err, c"1 or 2-item Array", None);
             return None;
         }
         // SAFETY: a non-empty array has an item at index 0.
         let first = unsafe { *arr.items };
-        if first.type_0 != kObjectTypeString {
+        let Some(string) = first.as_string() else {
             err_border(err, c"Array of Strings", None);
             return None;
-        }
-        // SAFETY: the tag says the string arm is live.
-        let string = unsafe { first.data.string };
+        };
         if arr.size < 2 {
             return Some((string, 0));
         }
@@ -210,11 +206,10 @@ unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, 
         }
         return Some((string, hl_id));
     }
-    if item.type_0 == kObjectTypeString {
-        // SAFETY: the tag says the string arm is live.
-        return Some((unsafe { item.data.string }, 0));
+    if let Object::String(string) = item {
+        return Some((string, 0));
     }
-    err_border(err, c"String or Array", Some(api_typename(item.type_0)));
+    err_border(err, c"String or Array", Some(api_typename(item.kind())));
     None
 }
 
@@ -305,12 +300,10 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
     let mut cfg = unsafe { WinCfg::new(fconfig) };
     cfg.border = true;
 
-    let slots = if style.type_0 == kObjectTypeArray {
-        // SAFETY: the tag says the array arm is live; the caller's error slot.
-        unsafe { parse_border_array(style.data.array, err) }
-    } else if style.type_0 == kObjectTypeString {
-        // SAFETY: the tag says the string arm is live.
-        let str = unsafe { style.data.string };
+    let slots = if let Object::Array(array) = style {
+        // SAFETY: the caller's live array and error slot.
+        unsafe { parse_border_array(array, err) }
+    } else if let Object::String(str) = style {
         // SAFETY: a live API string is NUL-terminated.
         if str.is_empty() || unsafe { strequal(str.data(), BORDER_NONE.as_ptr()) } {
             // Border text does not work without a border.

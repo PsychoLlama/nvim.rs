@@ -272,13 +272,15 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
 ///
 /// The API metadata must be initialised.
 unsafe fn api_version() -> Dict {
-    // SAFETY: the caller's promise; the metadata object is a dict.
-    let metadata = unsafe { api_metadata().data.dict };
+    // SAFETY: the caller's promise.
+    let metadata = unsafe { api_metadata() }
+        .as_dict()
+        .expect("API metadata is a dict");
     assert!(metadata.size > 0, "API metadata is empty");
     for i in 0..metadata.size {
         let entry = unsafe { *metadata.items.add(i) };
         if unsafe { strequal(entry.key.data(), c"version".as_ptr()) } {
-            return unsafe { entry.value.data.dict };
+            return entry.value.as_dict().expect("API `version` is a dict");
         }
     }
     panic!("API metadata has no version");
@@ -432,7 +434,7 @@ pub(crate) unsafe fn handle_ui_client_redraw(
     error: &mut Error,
 ) -> Object {
     *error = Error::validation(c"'redraw' cannot be sent as a request");
-    Object::NIL
+    Object::Nil
 }
 
 /// One event's name and the wrapper that decodes it.
@@ -497,7 +499,7 @@ unsafe fn arg(args: Array, index: usize, want: Option<ObjectType>) -> Option<Obj
     }
     let value = unsafe { *args.items.add(index) };
     match want {
-        Some(ty) if value.type_0 != ty => None,
+        Some(ty) if value.kind() != ty => None,
         _ => Some(value),
     }
 }
@@ -549,22 +551,24 @@ macro_rules! tag {
     };
 }
 
-/// The payload of a checked argument, as the declared type.
+/// The payload of a checked argument, as the declared type. [`arg`] has
+/// already compared the tag against [`tag`], so the variant is the one the
+/// declaration names.
 macro_rules! payload {
     (Boolean, $v:expr) => {
-        $v.data.boolean
+        $v.as_boolean().expect("`arg` checked the tag")
     };
     (Integer, $v:expr) => {
-        $v.data.integer
+        $v.as_integer().expect("`arg` checked the tag")
     };
     (String_0, $v:expr) => {
-        $v.data.string
+        $v.as_string().expect("`arg` checked the tag")
     };
     (Array, $v:expr) => {
-        $v.data.array
+        $v.as_array().expect("`arg` checked the tag")
     };
     (Dict, $v:expr) => {
-        $v.data.dict
+        $v.as_dict().expect("`arg` checked the tag")
     };
     (Object, $v:expr) => {
         $v
@@ -668,10 +672,11 @@ pub(crate) unsafe fn ui_client_event_grid_resize(args: Array) {
     ) else {
         return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
     };
+    let expect = "`arg` checked the tag";
     let (grid, width, height) = (
-        unsafe { grid.data.integer },
-        unsafe { width.data.integer },
-        unsafe { height.data.integer },
+        grid.as_integer().expect(expect),
+        width.as_integer().expect(expect),
+        height.as_integer().expect(expect),
     );
     tui_grid_resize(unsafe { &mut *tui.get() }, grid, width, height);
 
@@ -732,12 +737,19 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
     ) else {
         return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
     };
+    let expect = "`arg` checked the tag";
+    let (id, rgb, cterm, info) = (
+        id.as_integer().expect(expect),
+        rgb.as_dict().expect(expect),
+        cterm.as_dict().expect(expect),
+        info.as_array().expect(expect),
+    );
     tui_hl_attr_define(
         unsafe { &mut *tui.get() },
-        unsafe { id.data.integer },
-        unsafe { dict_to_hlattrs(rgb.data.dict, true) },
-        unsafe { dict_to_hlattrs(cterm.data.dict, false) },
-        unsafe { info.data.array },
+        id,
+        unsafe { dict_to_hlattrs(rgb, true) },
+        unsafe { dict_to_hlattrs(cterm, false) },
+        info,
     );
 }
 
@@ -782,7 +794,8 @@ pub(crate) unsafe fn ui_client_event_error_exit(args: Array) {
     let Some(status) = (unsafe { arg(args, 0, Some(kObjectTypeInteger)) }) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
-    ui_client_error_exit.set(unsafe { status.data.integer } as c_int);
+    let status = status.as_integer().expect("`arg` checked the tag");
+    ui_client_error_exit.set(status as c_int);
 }
 
 /// Moves this client to the server listening at the given address.
@@ -798,7 +811,7 @@ pub(crate) unsafe fn ui_client_event_connect(args: Array) {
     let Some(address) = (unsafe { arg(args, 0, Some(kObjectTypeString)) }) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
-    let address = unsafe { address.data.string };
+    let address = address.as_string().expect("`arg` checked the tag");
     let server_addr = unsafe { xmemdupz(address.data().cast(), address.len()).cast::<c_char>() };
     unsafe {
         multiqueue_put_event(
@@ -935,7 +948,7 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {
-            let listen_addr = unsafe { address.data.string }.data();
+            let listen_addr = address.as_string().expect("`arg` checked the tag").data();
             let mut err = c"".as_ptr();
             let chan_id = unsafe {
                 channel_connect(

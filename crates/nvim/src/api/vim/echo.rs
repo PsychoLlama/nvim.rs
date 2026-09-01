@@ -71,6 +71,7 @@ pub unsafe fn nvim_echo(
         || opts.percent != 0
         || opts.data.size != 0
         || !opts.source.is_empty();
+    let echo_id = opts.id.as_integer();
     // SAFETY: the keyset's strings are NUL-terminated, and `error` is this
     // frame's own slot.
     let rejected = unsafe {
@@ -93,8 +94,7 @@ pub unsafe fn nvim_echo(
         } else if is_progress && opts.source.is_empty() {
             error = err_required(c"opts.source");
             true
-        } else if opts.id.type_0 == kObjectTypeInteger && !msg_id_exists(opts.id.data.integer) {
-            let id = opts.id.data.integer;
+        } else if let Some(id) = echo_id.filter(|&id| !msg_id_exists(id)) {
             error = api_error!(kErrorTypeValidation, "Invalid 'id': {id}");
             true
         } else {

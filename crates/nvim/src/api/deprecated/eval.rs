@@ -65,7 +65,7 @@ pub unsafe fn nvim_call_atomic(
             // SAFETY: `i` is below `size`, so the item is inside `items`.
             let item = unsafe { *calls.items.add(i) };
             let Some(call) = item.as_array() else {
-                let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.type_0));
+                let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
                 // SAFETY: `err` is this frame's slot and the names are
                 // `api_typename`'s own statics.
                 error = err_expected(c"'calls' item", want, Some(got));
@@ -80,13 +80,13 @@ pub unsafe fn nvim_call_atomic(
             // SAFETY: the pair has both of its items.
             let (head, tail) = unsafe { (*call.items, *call.items.add(1)) };
             let Some(name) = head.as_string() else {
-                let (want, got) = (api_typename(kObjectTypeString), api_typename(head.type_0));
+                let (want, got) = (api_typename(kObjectTypeString), api_typename(head.kind()));
                 // SAFETY: as above.
                 error = err_expected(c"name", want, Some(got));
                 break '_theend;
             };
             let Some(args) = tail.as_array() else {
-                let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.type_0));
+                let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.kind()));
                 // SAFETY: as above.
                 error = err_expected(c"call args", want, Some(got));
                 break '_theend;
@@ -134,7 +134,7 @@ pub unsafe fn nvim_call_atomic(
             }
         } else {
             // SAFETY: as above.
-            unsafe { array_add(&mut rv, Object::NIL) };
+            unsafe { array_add(&mut rv, Object::Nil) };
         }
     }
     // SAFETY: `nested_error` is this frame's slot.

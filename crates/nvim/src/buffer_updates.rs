@@ -38,7 +38,7 @@ use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Arena, Array, BufUpdateCallbacks, Integer, LuaRef, LuaRetMode, Object, bcount_t, buf_T,
-    colnr_T, int64_t, kObjectTypeBoolean, linenr_T, size_t, uint64_t,
+    colnr_T, int64_t, linenr_T, size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -217,8 +217,7 @@ fn call_ref(cb: LuaRef, name: &'static CStr, args: Array, mode: LuaRetMode) -> O
 
 /// C's `LUARET_TRUTHY`: a callback asking to be detached.
 fn truthy(res: Object) -> bool {
-    // SAFETY: `boolean` is the live union member when the tag says so.
-    res.type_0 == kObjectTypeBoolean && unsafe { res.data.boolean }
+    res.as_boolean() == Some(true)
 }
 
 /// Release the five Lua references one attachment holds.
@@ -627,7 +626,7 @@ fn tick_obj(buf: Buf, send_tick: bool) -> Object {
     if send_tick {
         Object::integer(changedtick(buf))
     } else {
-        Object::NIL
+        Object::Nil
     }
 }
 

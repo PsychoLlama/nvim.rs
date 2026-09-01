@@ -98,8 +98,7 @@ use crate::types::{
     MotionType, NS, Object, OptScope, OptVal, OptValData, OptValType, RemapValues, SignTextAttrs,
     String_0, StringBuilder, Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T,
     dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString, linenr_T,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, linenr_T,
     mpack_token_type_t, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
     uint64_t, varnumber_T, win_T, yankreg_T,
 };

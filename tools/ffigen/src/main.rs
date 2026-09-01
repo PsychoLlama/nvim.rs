@@ -28,6 +28,10 @@ use std::path::{Path, PathBuf};
 enum Kind {
     Struct(Vec<Field>),
     Union(Vec<Field>),
+    /// A data-carrying `#[repr(C, <int>)]` enum: on the C side a struct
+    /// holding the discriminant and, beside it, the union of the payloads.
+    /// The `Field`s are the variants that carry one, named after the variant.
+    Tagged(Box<syn::Type>, Vec<Field>),
     Alias(Box<syn::Type>),
     Opaque,
 }
@@ -432,6 +436,36 @@ fn flag_set_invocations(ast: &syn::File) -> Vec<FlagSet> {
     out
 }
 
+/// The payload of each variant that carries one, named after the variant, or
+/// `None` when no variant does.
+///
+/// A `#[repr(C, <int>)]` enum with data is laid out as the discriminant
+/// followed by the union of the variants' payloads, which is the tagged
+/// union C spells by hand -- and which is what the API `Object` used to be
+/// before it became an enum. Only single-payload variants render: a variant
+/// holding two values would need a nested struct, and none does.
+fn variant_payloads(e: &syn::ItemEnum) -> Option<Vec<Field>> {
+    let mut out = Vec::new();
+    for v in &e.variants {
+        let fields = match &v.fields {
+            syn::Fields::Unit => continue,
+            syn::Fields::Unnamed(f) if f.unnamed.len() == 1 => &f.unnamed,
+            // Anything wider leaves the type incomplete rather than wrong.
+            _ => return Some(Vec::new()),
+        };
+        // Lowercased with a trailing underscore: a member named exactly
+        // after its own type is legal C and not something every cdef parser
+        // agrees on, and the suffix also keeps `float`/`int` off a keyword.
+        out.push(Field {
+            name: format!("{}_", v.ident.to_string().to_lowercase()),
+            ty: fields[0].ty.clone(),
+            bits: Vec::new(),
+            padding: false,
+        });
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 fn named_fields(fields: &syn::FieldsNamed, bits: Option<&BitfieldAccessors>) -> Vec<Field> {
     fields
         .named
@@ -557,7 +591,12 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
             }
             syn::Item::Enum(e) if e.generics.params.is_empty() => {
                 if let Some(int) = enum_repr(&e.attrs) {
-                    add(world, e.ident.to_string(), Kind::Alias(Box::new(int)), None);
+                    let kind = match variant_payloads(&e) {
+                        // Fieldless: on the C side it *is* the integer.
+                        None => Kind::Alias(Box::new(int)),
+                        Some(payloads) => Kind::Tagged(Box::new(int), payloads),
+                    };
+                    add(world, e.ident.to_string(), kind, None);
                 }
             }
             syn::Item::Type(t) if t.generics.params.is_empty() => {
@@ -1057,6 +1096,15 @@ impl<'w> Emitter<'w> {
                             let _ = self.cty(&deffile, &f.ty);
                         }
                     }
+                    Kind::Tagged(ref tag, ref payloads) => {
+                        let (tag, payloads) = ((**tag).clone(), payloads.clone());
+                        let deffile = def.file.clone();
+                        self.emitted.insert(name, def);
+                        let _ = self.cty(&deffile, &tag);
+                        for f in &payloads {
+                            let _ = self.cty(&deffile, &f.ty);
+                        }
+                    }
                 },
                 None => {
                     self.unknown.insert(name);
@@ -1105,6 +1153,12 @@ fn value_deps(def: &Def, out: &mut BTreeSet<String>) {
                 if f.padding || !f.bits.is_empty() {
                     continue;
                 }
+                walk(&f.ty, out);
+            }
+        }
+        Kind::Tagged(tag, payloads) => {
+            walk(tag, out);
+            for f in payloads {
                 walk(&f.ty, out);
             }
         }
@@ -1383,7 +1437,9 @@ fn main() {
         let def = &emitted[name];
         let c = c_name(name);
         match def.kind {
-            Kind::Struct(_) => writeln!(chunk, "typedef struct {} {};", c, c).unwrap(),
+            Kind::Struct(_) | Kind::Tagged(..) => {
+                writeln!(chunk, "typedef struct {} {};", c, c).unwrap()
+            }
             Kind::Union(_) => writeln!(chunk, "typedef union {} {};", c, c).unwrap(),
             _ => {}
         }
@@ -1537,6 +1593,36 @@ fn main() {
                     .map(|a| format!(" __attribute__((aligned({})))", a))
                     .unwrap_or_default();
                 writeln!(chunk, "{}{} {} {{\n{}\n}};", kw, align, c, body.join("\n")).unwrap();
+            }
+            Kind::Tagged(tag, payloads) => {
+                let tag = emitter.cty(&def.file, tag).map(|t| decl(&t, ""));
+                let mut arms: Vec<String> = Vec::new();
+                let mut ok = tag.is_some() && !payloads.is_empty();
+                for f in payloads {
+                    match emitter.field_lines(&def.file, f) {
+                        Some(lines) => arms.extend(lines.into_iter().map(|l| format!("    {l}"))),
+                        None => {
+                            emitter
+                                .notes
+                                .push(format!("variant skipped: {}::{}", name, f.name));
+                            ok = false;
+                        }
+                    }
+                }
+                if !ok {
+                    emitter
+                        .notes
+                        .push(format!("type left incomplete: {}", name));
+                    continue;
+                }
+                writeln!(
+                    chunk,
+                    "struct {} {{\n  {} tag;\n  union {{\n{}\n  }} payload;\n}};",
+                    c,
+                    tag.unwrap(),
+                    arms.join("\n")
+                )
+                .unwrap();
             }
             Kind::Opaque => {}
         }

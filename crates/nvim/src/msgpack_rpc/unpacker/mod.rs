@@ -29,13 +29,11 @@ use crate::mpack::conv::{
 };
 use crate::mpack::mpack_core::{mpack_read, mpack_rtoken, mpack_tokbuf_init};
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
+use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    Arena, Array, Dict, Error, Integer, KeyValuePair, MessageType, Object, ObjectType, String_0,
-    Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, object_data,
-    size_t,
+    Arena, Array, Dict, Error, Integer, KeyValuePair, MessageType, Object, String_0, Unpacker,
+    mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -141,60 +139,35 @@ pub unsafe extern "C" fn unpack(
 /// The `Object` a scalar token stands for, or `None` when the token opens a
 /// container, a payload or a chunk instead.
 ///
-/// Pure: a token is a value, and building a union is safe — only reading one
-/// back is not.
+/// Pure: a token is a value.
 pub(super) fn scalar_object(tok: mpack_token_t) -> Option<Object> {
-    let (type_0, data) = match tok.type_0 {
-        TOKEN_NIL => return Some(nil_object()),
-        TOKEN_BOOLEAN => (
-            kObjectTypeBoolean,
-            object_data {
-                boolean: mpack_unpack_boolean(tok),
-            },
-        ),
-        TOKEN_SINT | TOKEN_UINT => (
-            kObjectTypeInteger,
-            object_data {
-                integer: unpack_integer_token(tok).expect("token is an integer"),
-            },
-        ),
-        TOKEN_FLOAT => (
-            kObjectTypeFloat,
-            object_data {
-                floating: mpack_unpack_float_fast(tok),
-            },
-        ),
+    Some(match tok.type_0 {
+        TOKEN_NIL => Object::Nil,
+        TOKEN_BOOLEAN => Object::Boolean(mpack_unpack_boolean(tok)),
+        TOKEN_SINT | TOKEN_UINT => {
+            Object::Integer(unpack_integer_token(tok).expect("token is an integer"))
+        }
+        TOKEN_FLOAT => Object::Float(mpack_unpack_float_fast(tok)),
         _ => return None,
-    };
-    Some(Object { type_0, data })
+    })
 }
 
 /// An array `Object` over `capacity` slots that have already been allocated.
 fn array_object(items: *mut Object, capacity: size_t) -> Object {
-    Object {
-        type_0: kObjectTypeArray,
-        data: object_data {
-            array: Array {
-                size: capacity,
-                capacity,
-                items,
-            },
-        },
-    }
+    Object::Array(Array {
+        size: capacity,
+        capacity,
+        items,
+    })
 }
 
 /// A dict `Object` over `capacity` entries that have already been allocated.
 fn dict_object(items: *mut KeyValuePair, capacity: size_t) -> Object {
-    Object {
-        type_0: kObjectTypeDict,
-        data: object_data {
-            dict: Dict {
-                size: capacity,
-                capacity,
-                items,
-            },
-        },
-    }
+    Object::Dict(Dict {
+        size: capacity,
+        capacity,
+        items,
+    })
 }
 
 /// Where a node's value belongs: the slot to write it into, and — for a map
@@ -225,15 +198,17 @@ unsafe fn destination(
     // the token type it belongs to.
     match unsafe { (*parent).tok.type_0 } {
         TOKEN_ARRAY => {
-            let obj: *mut Object = unsafe { (*parent).data[0].p }.cast::<Object>();
+            let obj = unsafe { *(*parent).data[0].p.cast::<Object>() };
+            let items = obj.as_array().expect("an array node fills an array").items;
             Destination {
-                result: unsafe { (*obj).data.array.items.add((*parent).pos) },
+                result: unsafe { items.add((*parent).pos) },
                 key_location: core::ptr::null_mut(),
             }
         }
         TOKEN_MAP => {
-            let obj: *mut Object = unsafe { (*parent).data[0].p }.cast::<Object>();
-            let kv: *mut KeyValuePair = unsafe { (*obj).data.dict.items.add((*parent).pos) };
+            let obj = unsafe { *(*parent).data[0].p.cast::<Object>() };
+            let items = obj.as_dict().expect("a map node fills a dict").items;
+            let kv: *mut KeyValuePair = unsafe { items.add((*parent).pos) };
             let key_location = if unsafe { (*parent).key_visited } == 0 {
                 unsafe { (*kv).key = String_0::NULL };
                 unsafe { &raw mut (*kv).key }
@@ -308,11 +283,7 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             unsafe { *mem.add(len) = 0 };
             let str = String_0::from_raw_parts(mem, len);
             if key_location.is_null() {
-                let obj = Object {
-                    type_0: kObjectTypeString,
-                    data: object_data { string: str },
-                };
-                unsafe { *result = obj };
+                unsafe { *result = Object::String(str) };
             } else {
                 unsafe { *key_location = str };
             }
@@ -333,19 +304,24 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
         }
         TOKEN_ARRAY => {
             let capacity = tok.length as size_t;
-            // SAFETY: the arena hands back `capacity` zeroed `Object` slots.
-            let items =
-                unsafe { arena_alloc(&raw mut (*p).arena, size_of::<Object>() * capacity, true) }
-                    .cast::<Object>();
+            // The array reports its full size before a single element has
+            // landed, and a message that ends early leaves the tail
+            // unwritten -- so the slots are zeroed, which is `Object::Nil`.
+            // SAFETY: the arena hands back that many writable bytes.
+            let bytes = size_of::<Object>() * capacity;
+            let items = unsafe { arena_alloc(&raw mut (*p).arena, bytes, true) }.cast::<Object>();
+            unsafe { items.write_bytes(0, capacity) };
             unsafe { *result = array_object(items, capacity) };
             unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
         TOKEN_MAP => {
             let capacity = tok.length as size_t;
-            // SAFETY: the arena hands back `capacity` zeroed entries.
+            // Zeroed for the reason the array slots above are.
+            // SAFETY: the arena hands back that many writable bytes.
             let bytes = size_of::<KeyValuePair>() * capacity;
             let items =
                 unsafe { arena_alloc(&raw mut (*p).arena, bytes, true) }.cast::<KeyValuePair>();
+            unsafe { items.write_bytes(0, capacity) };
             unsafe { *result = dict_object(items, capacity) };
             unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
@@ -395,10 +371,7 @@ unsafe fn copy_chunk(
 }
 
 fn nil_object() -> Object {
-    Object {
-        type_0: kObjectTypeNil,
-        data: object_data { boolean: false },
-    }
+    Object::Nil
 }
 
 /// Turns a complete extension payload into the handle it stands for.
@@ -423,15 +396,12 @@ unsafe fn ext_object(p: *mut Unpacker, ext_type: c_int, length: mpack_uint32_t) 
     if tok.type_0 != TOKEN_UINT {
         return nil_object();
     }
-    let handles = 0..=kObjectTypeTabpage.cast_signed() - kObjectTypeBuffer.cast_signed();
-    if !handles.contains(&ext_type) {
-        return nil_object();
-    }
-    Object {
-        type_0: (ext_type + kObjectTypeBuffer.cast_signed()).cast_unsigned() as ObjectType,
-        data: object_data {
-            integer: mpack_unpack_uint(tok).cast_signed(),
-        },
+    let handle = mpack_unpack_uint(tok).cast_signed();
+    match i8::try_from(ext_type) {
+        Ok(EXT_BUFFER) => Object::Buffer(handle),
+        Ok(EXT_WINDOW) => Object::Window(handle),
+        Ok(EXT_TABPAGE) => Object::Tabpage(handle),
+        _ => nil_object(),
     }
 }
 

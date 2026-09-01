@@ -156,9 +156,11 @@ unsafe fn prepare_cmd(
     if !range_only {
         // Only the first argument is ever consulted.
         let first = if args.size > 0 {
-            // SAFETY: `args` was built above; item 0 is in bounds and is a
-            // String by construction.
-            unsafe { (*args.items).data.string.data() }
+            // SAFETY: `args` was built above, so item 0 is in bounds.
+            unsafe { *args.items }
+                .as_string()
+                .expect("`collect_args` puts only Strings in the array")
+                .data()
         } else {
             ptr::null_mut()
         };
@@ -309,21 +311,20 @@ unsafe fn collect_args(
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
     if cmd.args.size == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
-        // SAFETY: the size is 1, so item 0 is in bounds; the union arm is
-        // chosen by `type_0`.
-        let count = unsafe {
-            let first = *cmd.args.items;
-            match first.type_0 {
-                kObjectTypeInteger => Some(first.data.integer as int64_t),
-                kObjectTypeString => {
-                    let str = first.data.string;
-                    let mut endptr: *mut c_char = ptr::null_mut();
-                    let val = strtol(str.data(), &raw mut endptr, 10);
-                    // The whole string has to be the number.
-                    (*endptr as c_int == NUL && !str.is_empty()).then_some(val as int64_t)
-                }
-                _ => None,
+        // SAFETY: the size is 1, so item 0 is in bounds.
+        let first = unsafe { *cmd.args.items };
+        let count = match first {
+            Object::Integer(n) => Some(n as int64_t),
+            Object::String(str) => {
+                let mut endptr: *mut c_char = ptr::null_mut();
+                // SAFETY: the argument is NUL-terminated and `endptr` is this
+                // frame's own.
+                let val = unsafe { strtol(str.data(), &raw mut endptr, 10) };
+                // The whole string has to be the number.
+                // SAFETY: `strtol` leaves `endptr` within the string it parsed.
+                (unsafe { *endptr } as c_int == NUL && !str.is_empty()).then_some(val as int64_t)
             }
+            _ => None,
         };
         if let Some(count) = count
             && count >= 0
@@ -338,28 +339,29 @@ unsafe fn collect_args(
 
     *args = arena_array(arena, cmd.args.size);
     for i in 0..cmd.args.size {
-        // SAFETY: `i` is in bounds; the union arm is chosen by `type_0`, and
-        // `arena_alloc` hands back a block of the size asked for.
+        // SAFETY: `i` is in bounds.
         let elem: Object = unsafe { *cmd.args.items.add(i) };
-        match elem.type_0 {
+        match elem {
             // A boolean argument is spelled to the command as "0" or "1".
-            kObjectTypeBoolean => unsafe {
+            // SAFETY: `arena_alloc` hands back a block of the size asked for.
+            Object::Boolean(b) => unsafe {
                 let data_str: *mut c_char = arena_alloc(arena, 2, false).cast();
-                *data_str = if elem.data.boolean { b'1' } else { b'0' } as c_char;
+                *data_str = if b { b'1' } else { b'0' } as c_char;
                 *data_str.add(1) = NUL as c_char;
                 array_add(args, Object::string(cstr_as_string(data_str)));
             },
             // A handle is its id, like any integer.
-            kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage | kObjectTypeInteger => unsafe {
+            // SAFETY: as above.
+            Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) | Object::Integer(n) => unsafe {
                 let data_str: *mut c_char = arena_alloc(arena, NUMBUFLEN as size_t, false).cast();
                 let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
-                snprintf(data_str, room, fmt, elem.data.integer);
+                snprintf(data_str, room, fmt, n);
                 array_add(args, Object::string(cstr_as_string(data_str)));
             },
-            kObjectTypeString => {
+            Object::String(s) => {
                 // An all-whitespace argument would vanish into the separators.
-                // SAFETY: the union arm is a String, per `type_0`.
-                if unsafe { string_iswhite(elem.data.string) } {
+                // SAFETY: the string names its own bytes.
+                if unsafe { string_iswhite(s) } {
                     err_expected_at(err, c"command arg", c"non-whitespace", ptr::null());
                     return None;
                 }
@@ -367,7 +369,7 @@ unsafe fn collect_args(
                 unsafe { array_add(args, elem) };
             }
             _ => {
-                let got = api_typename(elem.type_0);
+                let got = api_typename(elem.kind());
                 *err = err_expected(c"command arg", c"valid type", Some(got));
                 return None;
             }
@@ -407,28 +409,22 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
         for i in 0..range.size {
             // SAFETY: `i` is in bounds.
             let bound = unsafe { *range.items.add(i) };
-            let bound = match bound.type_0 {
-                // SAFETY: the tag says which union arm is live. The read has to
-                // stay inside the arm: `then_some` would perform it eagerly.
-                kObjectTypeInteger => Some(unsafe { bound.data.integer }),
-                _ => None,
-            };
-            if bound.is_none_or(|n| n < 0) {
+            if bound.as_integer().is_none_or(|n| n < 0) {
                 err_expected_at(err, c"range element", c"non-negative Integer", ptr::null());
                 return false;
             }
         }
         // One element gives both bounds.
         if range.size > 0 {
-            // SAFETY: both indices are in bounds and every item is an Integer,
-            // checked above.
+            // SAFETY: both indices are in bounds.
             let last_idx = range.size - 1;
-            let (first, last) = unsafe {
-                (
-                    (*range.items).data.integer,
-                    (*range.items.add(last_idx)).data.integer,
-                )
-            };
+            let (first, last) = unsafe { (*range.items, *range.items.add(last_idx)) };
+            // Every item is an Integer, checked above.
+            let expect = "the loop above rejected everything but Integers";
+            let (first, last) = (
+                first.as_integer().expect(expect),
+                last.as_integer().expect(expect),
+            );
             ea.line1 = first as linenr_T;
             ea.line2 = last as linenr_T;
         }

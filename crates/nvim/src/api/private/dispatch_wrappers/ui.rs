@@ -35,26 +35,26 @@ pub unsafe fn handle_nvim_ui_attach(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_attach", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_ui_attach", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_dict(args[2]) else {
         wrong_type(error, 3, c"nvim_ui_attach", c"Dict");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_ui_attach(channel_id, arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_detach`.
@@ -85,12 +85,12 @@ pub unsafe fn handle_nvim_ui_detach(
     );
     if !args.is_empty() {
         wrong_arity(error, 0, args.len());
-        return NIL;
+        return Object::Nil;
     }
     if let Err(e) = nvim_ui_detach(channel_id) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_pum_set_bounds`.
@@ -121,30 +121,30 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
     );
     if args.len() != 4 {
         wrong_arity(error, 4, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_float(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_pum_set_bounds", c"Float");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_float(args[1]) else {
         wrong_type(error, 2, c"nvim_ui_pum_set_bounds", c"Float");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_float(args[2]) else {
         wrong_type(error, 3, c"nvim_ui_pum_set_bounds", c"Float");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_4) = as_float(args[3]) else {
         wrong_type(error, 4, c"nvim_ui_pum_set_bounds", c"Float");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_pum_set_height`.
@@ -175,18 +175,18 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_pum_set_height", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_ui_pum_set_height(channel_id, arg_1) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_send`.
@@ -217,14 +217,14 @@ pub unsafe fn handle_nvim_ui_send(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_send", c"String");
-        return NIL;
+        return Object::Nil;
     };
     nvim_ui_send(channel_id, arg_1);
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_set_focus`.
@@ -255,16 +255,16 @@ pub unsafe fn handle_nvim_ui_set_focus(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_boolean(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_set_focus", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     if let Err(e) = nvim_ui_set_focus(channel_id, arg_1) {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_set_option`.
@@ -295,11 +295,11 @@ pub unsafe fn handle_nvim_ui_set_option(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_string(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_set_option", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_2 = args[1];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -307,7 +307,7 @@ pub unsafe fn handle_nvim_ui_set_option(
     if let Err(e) = unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_try_resize`.
@@ -338,22 +338,22 @@ pub unsafe fn handle_nvim_ui_try_resize(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_try_resize", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_ui_try_resize", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_ui_try_resize(channel_id, arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_try_resize_grid`.
@@ -384,26 +384,26 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"nvim_ui_try_resize_grid", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_ui_try_resize_grid", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_integer(args[2]) else {
         wrong_type(error, 3, c"nvim_ui_try_resize_grid", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `ui_attach`.
@@ -434,24 +434,24 @@ pub unsafe fn handle_ui_attach(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_integer(args[0]) else {
         wrong_type(error, 1, c"ui_attach", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"ui_attach", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_boolean(args[2]) else {
         wrong_type(error, 3, c"ui_attach", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { ui_attach(channel_id, arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

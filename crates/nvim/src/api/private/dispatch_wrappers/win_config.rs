@@ -35,28 +35,28 @@ pub unsafe fn handle_nvim_open_win(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_open_win", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_boolean(args[1]) else {
         wrong_type(error, 2, c"nvim_open_win", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_3: KeyDict_win_config =
         match read_keydict(Some(key_dict_win_config_get_field), args[2], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 3, c"nvim_open_win", c"Dict(win_config) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -64,12 +64,7 @@ pub unsafe fn handle_nvim_open_win(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(
-        kObjectTypeWindow,
-        object_data {
-            integer: rv as Integer,
-        },
-    )
+    Object::Window(rv as Integer)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_config`.
@@ -100,11 +95,11 @@ pub unsafe fn handle_nvim_win_get_config(
     );
     if args.len() != 1 {
         wrong_arity(error, 1, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_get_config", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -122,7 +117,7 @@ pub unsafe fn handle_nvim_win_get_config(
             arena,
         )
     };
-    obj(kObjectTypeDict, object_data { dict })
+    Object::Dict(dict)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_config`.
@@ -153,19 +148,19 @@ pub unsafe fn handle_nvim_win_set_config(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
         wrong_type(error, 1, c"nvim_win_set_config", c"Window");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_2: KeyDict_win_config =
         match read_keydict(Some(key_dict_win_config_get_field), args[1], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 2, c"nvim_win_set_config", c"Dict(win_config) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -173,5 +168,5 @@ pub unsafe fn handle_nvim_win_set_config(
     if let Err(e) = unsafe { nvim_win_set_config(arg_1, &raw mut arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

@@ -36,10 +36,7 @@ use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
-use crate::types::{
-    Array, Integer, NUL, Object, OptInt, colnr_T, kObjectTypeArray, kObjectTypeInteger,
-    kObjectTypeNil, kObjectTypeString, linenr_T, object,
-};
+use crate::types::{Array, NUL, Object, OptInt, colnr_T, linenr_T};
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int};
@@ -51,7 +48,6 @@ use crate::keycodes::{
     KE_RIGHTDRAG, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE, KE_X2DRAG,
     KE_X2MOUSE, KE_X2RELEASE,
 };
-use crate::types::object_data;
 use crate::types::ui::kUIMessages;
 
 /// The 'showcmd' text: at most `SHOWCMD_BUFLEN - 1` bytes and the
@@ -427,8 +423,8 @@ fn show_through_ui(clear: bool) {
     // needs: `ui_call_msg_showcmd` copies what it keeps.
     let sc = showcmd_buf.get();
     let text = sc.as_cstr();
-    let mut chunk_items: [Object; 3] = [NIL; 3];
-    let mut content_items: [Object; 1] = [NIL; 1];
+    let mut chunk_items: [Object; 3] = [Object::Nil; 3];
+    let mut content_items: [Object; 1] = [Object::Nil; 1];
     let mut chunk: Array = ARRAY_DICT_INIT;
     chunk.capacity = 3;
     chunk.items = chunk_items.as_mut_ptr();
@@ -441,35 +437,14 @@ fn show_through_ui(clear: bool) {
         // three writes below are the only ones.
         // SAFETY: `text` is NUL-terminated.
         let string = unsafe { cstr_as_string(text.as_ptr()) };
-        let shown = object {
-            type_0: kObjectTypeString,
-            data: object_data { string },
-        };
-        unsafe { *chunk.items.add(0) = integer_object(0) };
-        unsafe { *chunk.items.add(1) = shown };
-        unsafe { *chunk.items.add(2) = integer_object(0) };
+        unsafe { *chunk.items.add(0) = Object::Integer(0) };
+        unsafe { *chunk.items.add(1) = Object::String(string) };
+        unsafe { *chunk.items.add(2) = Object::Integer(0) };
         chunk.size = 3;
-        let line = object {
-            type_0: kObjectTypeArray,
-            data: object_data { array: chunk },
-        };
-        unsafe { *content.items.add(0) = line };
+        unsafe { *content.items.add(0) = Object::Array(chunk) };
         content.size = 1;
     }
     ui_call_msg_showcmd(content);
-}
-
-/// A nil `Object`, which is what both arrays start out full of.
-const NIL: Object = Object {
-    type_0: kObjectTypeNil,
-    data: object_data { boolean: false },
-};
-
-fn integer_object(n: Integer) -> Object {
-    object {
-        type_0: kObjectTypeInteger,
-        data: object_data { integer: n },
-    }
 }
 
 /// The built-in form: write the text into the reserved columns of the last

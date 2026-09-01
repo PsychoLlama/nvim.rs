@@ -195,42 +195,22 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
     let mut items: [KeyValuePair; 3] = [
         key_value_pair {
             key: unsafe { cstr_as_string(c"name".as_ptr()) },
-            value: object {
-                type_0: kObjectTypeString,
-                data: object_data {
-                    string: String_0::from_raw_parts(mark_str.as_mut_ptr(), 1),
-                },
-            },
+            value: Object::String(String_0::from_raw_parts(mark_str.as_mut_ptr(), 1)),
         },
         key_value_pair {
             key: unsafe { cstr_as_string(c"line".as_ptr()) },
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: object_data {
-                    integer: Integer::from(pos.lnum),
-                },
-            },
+            value: Object::Integer(Integer::from(pos.lnum)),
         },
         key_value_pair {
             key: unsafe { cstr_as_string(c"col".as_ptr()) },
-            value: object {
-                type_0: kObjectTypeInteger,
-                data: object_data {
-                    integer: Integer::from(pos.col),
-                },
-            },
+            value: Object::Integer(Integer::from(pos.col)),
         },
     ];
-    let mut payload: Object = object {
-        type_0: kObjectTypeDict,
-        data: object_data {
-            dict: Dict {
-                size: items.len(),
-                capacity: items.len(),
-                items: items.as_mut_ptr(),
-            },
-        },
-    };
+    let mut payload: Object = Object::Dict(Dict {
+        size: items.len(),
+        capacity: items.len(),
+        items: items.as_mut_ptr(),
+    });
     unsafe {
         aucmd_defer(
             EVENT_MARKSET,

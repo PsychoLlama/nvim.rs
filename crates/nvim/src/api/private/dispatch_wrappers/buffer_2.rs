@@ -35,31 +35,31 @@ pub unsafe fn handle_nvim_buf_set_lines(
     );
     if args.len() != 5 {
         wrong_arity(error, 5, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_set_lines", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_set_lines", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_integer(args[2]) else {
         wrong_type(error, 3, c"nvim_buf_set_lines", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_4) = as_boolean(args[3]) else {
         wrong_type(error, 4, c"nvim_buf_set_lines", c"Boolean");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_5) = as_array(args[4]) else {
         wrong_type(error, 5, c"nvim_buf_set_lines", c"ArrayOf(String)");
-        return NIL;
+        return Object::Nil;
     };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -68,7 +68,7 @@ pub unsafe fn handle_nvim_buf_set_lines(
     {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_mark`.
@@ -99,31 +99,31 @@ pub unsafe fn handle_nvim_buf_set_mark(
     );
     if args.len() != 5 {
         wrong_arity(error, 5, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_set_mark", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_set_mark", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_integer(args[2]) else {
         wrong_type(error, 3, c"nvim_buf_set_mark", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_4) = as_integer(args[3]) else {
         wrong_type(error, 4, c"nvim_buf_set_mark", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let mut arg_5: KeyDict_empty =
         match read_keydict(Some(key_dict_empty_get_field), args[4], error) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return NIL,
+            KeySetArg::Refused => return Object::Nil,
             KeySetArg::WrongType => {
                 wrong_type(error, 5, c"nvim_buf_set_mark", c"Dict(empty) *");
-                return NIL;
+                return Object::Nil;
             }
         };
     // SAFETY: each argument was checked against the type the signature declares;
@@ -132,7 +132,7 @@ pub unsafe fn handle_nvim_buf_set_mark(
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
-    obj(kObjectTypeBoolean, object_data { boolean: rv })
+    Object::Boolean(rv)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_name`.
@@ -163,22 +163,22 @@ pub unsafe fn handle_nvim_buf_set_name(
     );
     if args.len() != 2 {
         wrong_arity(error, 2, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_set_name", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_set_name", c"String");
-        return NIL;
+        return Object::Nil;
     };
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
     if let Err(e) = unsafe { nvim_buf_set_name(arg_1, arg_2) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_text`.
@@ -209,35 +209,35 @@ pub unsafe fn handle_nvim_buf_set_text(
     );
     if args.len() != 6 {
         wrong_arity(error, 6, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_set_text", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_integer(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_set_text", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_3) = as_integer(args[2]) else {
         wrong_type(error, 3, c"nvim_buf_set_text", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_4) = as_integer(args[3]) else {
         wrong_type(error, 4, c"nvim_buf_set_text", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_5) = as_integer(args[4]) else {
         wrong_type(error, 5, c"nvim_buf_set_text", c"Integer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_6) = as_array(args[5]) else {
         wrong_type(error, 6, c"nvim_buf_set_text", c"ArrayOf(String)");
-        return NIL;
+        return Object::Nil;
     };
     if textlock.get() != 0 || expr_map_locked() {
         expr_map_locked_error(error);
-        return NIL;
+        return Object::Nil;
     }
     // SAFETY: each argument was checked against the type the signature declares;
     // `arena` and `error` are the dispatcher's own.
@@ -246,7 +246,7 @@ pub unsafe fn handle_nvim_buf_set_text(
     {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_var`.
@@ -277,15 +277,15 @@ pub unsafe fn handle_nvim_buf_set_var(
     );
     if args.len() != 3 {
         wrong_arity(error, 3, args.len());
-        return NIL;
+        return Object::Nil;
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
         wrong_type(error, 1, c"nvim_buf_set_var", c"Buffer");
-        return NIL;
+        return Object::Nil;
     };
     let Some(arg_2) = as_string(args[1]) else {
         wrong_type(error, 2, c"nvim_buf_set_var", c"String");
-        return NIL;
+        return Object::Nil;
     };
     let arg_3 = args[2];
     // SAFETY: each argument was checked against the type the signature declares;
@@ -293,5 +293,5 @@ pub unsafe fn handle_nvim_buf_set_var(
     if let Err(e) = unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3) } {
         return failure(error, e);
     }
-    NIL
+    Object::Nil
 }

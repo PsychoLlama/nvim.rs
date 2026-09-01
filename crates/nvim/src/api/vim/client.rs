@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{NIL, Reported, array_add, dict_put};
+use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::cstr;
 
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
@@ -39,7 +39,7 @@ pub unsafe fn nvim_set_client_info(
     };
     let mut info__items: [KeyValuePair; 5] = [KeyValuePair {
         key: String_0::NULL,
-        value: NIL,
+        value: Object::Nil,
     }; 5];
     info.capacity = 5 as size_t;
     info.items = &raw mut info__items as *mut KeyValuePair;

@@ -24,9 +24,6 @@
 
 use super::{
     Array, Buffer, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0, Tabpage, Window,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, object_data,
 };
 use core::ffi::{CStr, c_char};
 
@@ -51,98 +48,56 @@ pub const fn static_cstring(text: &'static CStr) -> String_0 {
 }
 
 impl Object {
-    pub const NIL: Self = Self {
-        type_0: kObjectTypeNil,
-        data: object_data { boolean: false },
-    };
-
     pub const fn boolean(value: bool) -> Self {
-        Self {
-            type_0: kObjectTypeBoolean,
-            data: object_data { boolean: value },
-        }
+        Self::Boolean(value)
     }
 
     pub const fn integer(value: Integer) -> Self {
-        Self {
-            type_0: kObjectTypeInteger,
-            data: object_data { integer: value },
-        }
+        Self::Integer(value)
     }
 
     pub const fn float(value: Float) -> Self {
-        Self {
-            type_0: kObjectTypeFloat,
-            data: object_data { floating: value },
-        }
+        Self::Float(value)
     }
 
     /// An API string, keeping whatever ownership `value` already had.
     pub const fn string(value: String_0) -> Self {
-        Self {
-            type_0: kObjectTypeString,
-            data: object_data { string: value },
-        }
+        Self::String(value)
     }
 
     /// [`Object::string`] for a string literal. See [`static_string`].
     pub const fn literal(text: &'static str) -> Self {
-        Self::string(static_string(text))
+        Self::String(static_string(text))
     }
 
     pub const fn array(value: Array) -> Self {
-        Self {
-            type_0: kObjectTypeArray,
-            data: object_data { array: value },
-        }
+        Self::Array(value)
     }
 
     pub const fn dict(value: Dict) -> Self {
-        Self {
-            type_0: kObjectTypeDict,
-            data: object_data { dict: value },
-        }
+        Self::Dict(value)
     }
 
     /// A reference to a Lua value, held in that state's registry. The
     /// reference is owned: whoever frees the object releases it.
     pub const fn luaref(value: LuaRef) -> Self {
-        Self {
-            type_0: kObjectTypeLuaRef,
-            data: object_data { luaref: value },
-        }
+        Self::LuaRef(value)
     }
 
-    /// A window handle. Distinct from [`Object::integer`] only in the tag:
-    /// the wire encoding gives handles their own msgpack extension type, so
-    /// a handle sent as a plain integer arrives as a plain integer.
+    /// A window handle. Handles are `handle_T`; the variant carries the
+    /// widened [`Integer`] the wire and the union arm always did.
     pub const fn window(value: Window) -> Self {
-        Self {
-            type_0: kObjectTypeWindow,
-            data: object_data {
-                integer: value as Integer,
-            },
-        }
+        Self::Window(value as Integer)
     }
 
     /// A buffer handle. See [`Object::window`].
     pub const fn buffer(value: Buffer) -> Self {
-        Self {
-            type_0: kObjectTypeBuffer,
-            data: object_data {
-                integer: value as Integer,
-            },
-        }
+        Self::Buffer(value as Integer)
     }
 
     /// A tabpage handle. See [`Object::window`].
     pub const fn tabpage(value: Tabpage) -> Self {
-        Self {
-            type_0: kObjectTypeTabpage,
-            data: object_data {
-                integer: value as Integer,
-            },
-        }
+        Self::Tabpage(value as Integer)
     }
 }
 
@@ -179,7 +134,7 @@ pub struct ArrayBuf<const N: usize> {
 impl<const N: usize> ArrayBuf<N> {
     pub const fn new() -> Self {
         Self {
-            items: [Object::NIL; N],
+            items: [Object::Nil; N],
             size: 0,
         }
     }
@@ -226,7 +181,7 @@ impl<const N: usize> DictBuf<N> {
         Self {
             items: [KeyValuePair {
                 key: static_string(""),
-                value: Object::NIL,
+                value: Object::Nil,
             }; N],
             size: 0,
         }
@@ -274,18 +229,18 @@ impl<const N: usize> Default for DictBuf<N> {
 mod tests {
     use super::*;
 
-    // The union payloads can only be read back through `unsafe`, which this
-    // module forbids; what is checkable here is the bookkeeping the C side
-    // reads first — tags, sizes, and that the value points at the buffer.
+    // What is checkable here is the bookkeeping a consumer reads first —
+    // which variant each slot holds, the sizes, and that the value points
+    // at the buffer.
 
     #[test]
     fn array_borrows_the_buffer_and_reports_what_was_pushed() {
         let mut buf = ArrayBuf::<4>::new();
         buf.push(Object::integer(7));
         buf.push(Object::boolean(true));
-        assert_eq!(buf.items[0].type_0, kObjectTypeInteger);
-        assert_eq!(buf.items[1].type_0, kObjectTypeBoolean);
-        assert_eq!(buf.items[2].type_0, kObjectTypeNil);
+        assert_eq!(buf.items[0].as_integer(), Some(7));
+        assert_eq!(buf.items[1].as_boolean(), Some(true));
+        assert!(buf.items[2].is_nil());
         let expected = buf.items.as_mut_ptr();
         let array = buf.array();
         assert_eq!((array.size, array.capacity), (2, 4));
@@ -297,14 +252,14 @@ mod tests {
         let mut opts = DictBuf::<1>::new();
         opts.insert(c"verbose", Object::boolean(true));
         assert_eq!(opts.items[0].key.len(), "verbose".len());
-        assert_eq!(opts.items[0].value.type_0, kObjectTypeBoolean);
+        assert_eq!(opts.items[0].value.as_boolean(), Some(true));
 
         let entry = opts.object();
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::literal("hello"));
         args.push(entry);
-        assert_eq!(args.items[0].type_0, kObjectTypeString);
-        assert_eq!(args.items[1].type_0, kObjectTypeDict);
+        assert_eq!(args.items[0].as_string().map(|s| s.len()), Some(5));
+        assert_eq!(args.items[1].as_dict().map(|d| d.size), Some(1));
         assert_eq!(args.array().size, 2);
     }
 
@@ -312,7 +267,7 @@ mod tests {
     #[should_panic(expected = "ArrayBuf overflow")]
     fn pushing_past_capacity_panics() {
         ArrayBuf::<1>::new()
-            .push(Object::NIL)
+            .push(Object::Nil)
             .push(Object::literal("one too many"));
     }
 }

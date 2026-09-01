@@ -18,10 +18,7 @@ use crate::main::curbuf;
 use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
-use crate::types::{
-    Arena, Object, OptIndex, OptVal, OptValData, OptValType, kObjectTypeBoolean,
-    kObjectTypeInteger, kObjectTypeNil, kObjectTypeString, object, object_data, size_t,
-};
+use crate::types::{Arena, Object, OptIndex, OptVal, OptValData, OptValType, size_t};
 use crate::undo::curbuf_is_changed;
 
 use super::{
@@ -232,34 +229,17 @@ pub(crate) fn optval_to_cstr(value: OptVal) -> *mut c_char {
 /// The value as the API reports it. A tri-state boolean that is neither true
 /// nor false comes back as nil.
 pub(crate) fn optval_as_object(value: OptVal) -> Object {
-    let nil = object {
-        type_0: kObjectTypeNil,
-        data: object_data { boolean: false },
-    };
     // SAFETY: each arm reads the payload its own tag selected.
     match value.type_0 {
-        kOptValTypeNil => nil,
+        kOptValTypeNil => Object::Nil,
         kOptValTypeBoolean => match unsafe { optval_boolean(value.data) } {
-            Some(boolean) => object {
-                type_0: kObjectTypeBoolean,
-                data: object_data { boolean },
-            },
+            Some(boolean) => Object::Boolean(boolean),
             // A global-local option with no local value has no API
             // spelling but nil.
-            None => nil,
+            None => Object::Nil,
         },
-        kOptValTypeNumber => object {
-            type_0: kObjectTypeInteger,
-            data: object_data {
-                integer: unsafe { value.data.number },
-            },
-        },
-        kOptValTypeString => object {
-            type_0: kObjectTypeString,
-            data: object_data {
-                string: unsafe { value.data.string },
-            },
-        },
+        kOptValTypeNumber => Object::Integer(unsafe { value.data.number }),
+        kOptValTypeString => Object::String(unsafe { value.data.string }),
         _ => unreachable!("option value type {}", value.type_0),
     }
 }
@@ -267,21 +247,16 @@ pub(crate) fn optval_as_object(value: OptVal) -> Object {
 /// The API value as an option value, or `None` for an `Object` no option can
 /// hold. The result borrows the object's string rather than copying it.
 pub(crate) fn object_as_optval(o: Object) -> Option<OptVal> {
-    // SAFETY: each arm reads the payload the object's own tag selected.
-    Some(match o.type_0 {
-        kObjectTypeNil => NIL_OPTVAL,
-        kObjectTypeBoolean => boolean_optval(Some(unsafe { o.data.boolean })),
-        kObjectTypeInteger => OptVal {
+    Some(match o {
+        Object::Nil => NIL_OPTVAL,
+        Object::Boolean(on) => boolean_optval(Some(on)),
+        Object::Integer(number) => OptVal {
             type_0: kOptValTypeNumber,
-            data: OptValData {
-                number: unsafe { o.data.integer },
-            },
+            data: OptValData { number },
         },
-        kObjectTypeString => OptVal {
+        Object::String(string) => OptVal {
             type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { o.data.string },
-            },
+            data: OptValData { string },
         },
         _ => return None,
     })

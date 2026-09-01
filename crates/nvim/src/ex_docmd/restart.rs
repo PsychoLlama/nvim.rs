@@ -29,31 +29,22 @@ use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Dict, Error, KeyValuePair, NUL, Object,
-    String_0, Vv, exarg_T, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeString, key_value_pair,
-    listitem_T, object_data, ptrdiff_t, size_t, uint16_t, uint64_t, varnumber_T,
+    String_0, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t, uint16_t, uint64_t,
+    varnumber_T,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
 
 /// An `Object` holding a NUL-terminated string, without copying it.
 fn obj_str(s: *const c_char) -> Object {
-    Object {
-        type_0: kObjectTypeString,
-        data: object_data {
-            // SAFETY: `cstr_as_string` measures the string; it does not
-            // outlive the caller's storage, which every call site keeps
-            // alive across the RPC call.
-            string: cstr_as_string(s),
-        },
-    }
+    // `cstr_as_string` measures the string; it does not outlive the caller's
+    // storage, which every call site keeps alive across the RPC call.
+    Object::String(cstr_as_string(s))
 }
 
 /// An `Object` holding a boolean.
 fn obj_bool(b: bool) -> Object {
-    Object {
-        type_0: kObjectTypeBoolean,
-        data: object_data { boolean: b },
-    }
+    Object::Boolean(b)
 }
 
 /// A borrowed `Array` over `items`, full.
@@ -223,12 +214,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
                 ];
                 let mut autocmd_items = [
                     obj_str(c"UIEnter".as_ptr()),
-                    Object {
-                        type_0: kObjectTypeDict,
-                        data: object_data {
-                            dict: dict_of(&mut opt_items),
-                        },
-                    },
+                    Object::Dict(dict_of(&mut opt_items)),
                 ];
                 rpc_send_call(
                     id,
@@ -256,19 +242,17 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
             if err.is_set() {
                 break 'fail_2;
             }
-            if result.type_0 as c_int != kObjectTypeString as c_int
-                || unsafe { result.data.string }.is_empty()
-            {
-                emsg(c"restart failed: could not get listen address from new server".as_ptr());
-                break 'fail_2;
-            }
+            let servername = match result {
+                Object::String(s) if !s.is_empty() => s,
+                _ => {
+                    emsg(c"restart failed: could not get listen address from new server".as_ptr());
+                    break 'fail_2;
+                }
+            };
             // Copied out before the arena it lives in is freed.
-            let listen_addr = unsafe {
-                xmemdupz(
-                    result.data.string.data() as *const c_void,
-                    result.data.string.len(),
-                )
-            } as *mut c_char;
+            let listen_addr =
+                unsafe { xmemdupz(servername.data() as *const c_void, servername.len()) }
+                    as *mut c_char;
             arena_mem_free(result_mem);
             result_mem = ptr::null_mut();
 

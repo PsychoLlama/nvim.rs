@@ -36,7 +36,7 @@ use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
-    buf_T, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeInteger, linenr_T, win_T,
+    buf_T, linenr_T, win_T,
 };
 use crate::winlayer::Win;
 
@@ -147,8 +147,9 @@ unsafe fn decor_provider_invoke(
     if !err.is_set() {
         with_provider(idx, |p| p.error_count = 0);
         if let Some(res) = res {
-            debug_assert!(ret.type_0 == kObjectTypeArray);
-            *res = unsafe { ret.data.array };
+            // `kRetMulti` is what asked for an array, so this is the shape
+            // `nlua_call_ref` promises back.
+            *res = ret.as_array().unwrap_or(Array::EMPTY);
             return true;
         }
         let what = c"provider %s retval".as_ptr();
@@ -413,24 +414,22 @@ pub(crate) unsafe fn decor_providers_invoke_range(
             // errored: skip the rest of this window
             set_state(idx, kDecorProviderWinDisabled);
         } else if res.size >= 1 {
-            let first = unsafe { *res.items };
-            if first.type_0 == kObjectTypeBoolean {
-                if !unsafe { first.data.boolean } {
-                    set_state(idx, kDecorProviderWinDisabled);
-                }
-            } else if first.type_0 == kObjectTypeInteger {
-                let row = unsafe { first.data.integer };
-                let mut col = 0;
-                if res.size >= 2 {
-                    let second = unsafe { *res.items.add(1) };
-                    if second.type_0 == kObjectTypeInteger {
-                        col = unsafe { second.data.integer };
+            match unsafe { *res.items } {
+                Object::Boolean(false) => set_state(idx, kDecorProviderWinDisabled),
+                Object::Boolean(true) => {}
+                Object::Integer(row) => {
+                    let mut col = 0;
+                    if res.size >= 2
+                        && let Some(n) = unsafe { *res.items.add(1) }.as_integer()
+                    {
+                        col = n;
                     }
+                    with_provider(idx, |p| {
+                        p.win_skip_row = row as c_int;
+                        p.win_skip_col = col as c_int;
+                    });
                 }
-                with_provider(idx, |p| {
-                    p.win_skip_row = row as c_int;
-                    p.win_skip_col = col as c_int;
-                });
+                _ => {}
             }
         }
 

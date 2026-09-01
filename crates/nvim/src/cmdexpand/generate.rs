@@ -191,15 +191,18 @@ pub(crate) fn get_mapclear_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// Both Lua-backed generators cache one [`Object`] across the whole
 /// completion and index into it per call; this is the indexing half.
 unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
-    names.with(|names| unsafe {
-        if names.type_0 != kObjectTypeArray || idx < 0 || idx >= names.data.array.size as c_int {
+    names.with(|names| {
+        let Some(array) = names.as_array() else {
+            return ptr::null_mut();
+        };
+        if idx < 0 || idx >= array.size as c_int {
             return ptr::null_mut();
         }
-        let item = &*names.data.array.items.add(idx as usize);
-        if item.type_0 != kObjectTypeString {
+        // SAFETY: `idx` is in range of the cached array.
+        let Object::String(name) = (unsafe { *array.items.add(idx as usize) }) else {
             return ptr::null_mut();
-        }
-        item.data.string.data()
+        };
+        name.data()
     })
 }
 
@@ -227,7 +230,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
 pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
+    static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
         unsafe { cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT) };
@@ -244,7 +247,7 @@ pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
-    static names: GlobalCell<Object> = GlobalCell::new(Object::NIL);
+    static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_xp_line.get().is_null()
