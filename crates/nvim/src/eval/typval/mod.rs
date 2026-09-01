@@ -32,12 +32,12 @@ use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
-    MPConvPartialStage, MPConvStackValType, QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, dict_T, dictitem_T, float_T, funcexe_T,
-    garray_T, hashitem_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
-    linenr_T, list_T, listitem_T, listwatch_T, partial_T, ptrdiff_t, size_t, ssize_t,
-    staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t, varnumber_T, vimconv_T,
+    QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
+    buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t,
+    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T,
+    partial_T, ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T,
+    uint8_t, varnumber_T, vimconv_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
@@ -80,14 +80,6 @@ pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const STR2NR_ALL: ::core::ffi::c_uint = 15;
-pub const kMPConvPartialEnd: MPConvPartialStage = 2;
-pub const kMPConvPartialSelf: MPConvPartialStage = 1;
-pub const kMPConvPartialArgs: MPConvPartialStage = 0;
-pub const kMPConvPartialList: MPConvStackValType = 4;
-pub const kMPConvPartial: MPConvStackValType = 3;
-pub const kMPConvPairs: MPConvStackValType = 2;
-pub const kMPConvList: MPConvStackValType = 1;
-pub const kMPConvDict: MPConvStackValType = 0;
 #[derive(Copy, Clone)]
 pub struct Join {
     pub s: String_0,

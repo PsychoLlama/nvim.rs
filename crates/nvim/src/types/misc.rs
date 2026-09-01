@@ -18,13 +18,6 @@ pub struct AutoCmdVec {
     pub items: *mut AutoCmd,
 }
 pub type CMD_index = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
-pub struct MPConvStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut MPConvStackVal,
-    pub init_array: [MPConvStackVal; 8],
-}
 /// The khash-derived maps and sets, one monomorphisation per key/value pair.
 ///
 /// None of them is `Copy`. Each owns its [`MapHash`]'s bucket table and the
