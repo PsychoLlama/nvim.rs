@@ -61,7 +61,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
         } else if first_char != '#' as c_int || !unsafe { preprocs_left() } {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
-            let left = oap.op_type == OP_LSHIFT;
+            let left = oap.op_type == OpType::Lshift;
             unsafe { shift_line(left, p_sr.get() != 0, amount, false) };
         }
         cur_win().w_cursor.lnum += 1;
@@ -84,7 +84,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
         // Two plural forms, nested: "line"/"lines" on the line count and
         // "time"/"times" on the shift count, which is why the outer
         // `ngettext` chooses between two already-translated formats.
-        let op = if oap.op_type == OP_RSHIFT {
+        let op = if oap.op_type == OpType::Rshift {
             c">".as_ptr()
         } else {
             c"<".as_ptr()
@@ -316,7 +316,7 @@ struct ShiftedLine {
 fn shift_block(oap: Op, amount: c_int) {
     // SAFETY: the cursor line is a line of the current buffer, and `bd`
     // describes it once `block_prep` has run.
-    let left = oap.op_type == OP_LSHIFT;
+    let left = oap.op_type == OpType::Lshift;
     let old_state = State.get();
     let old_col = cur_win().w_cursor.col;
     let sw_val = unsafe { get_sw_value_indent(curbuf.get(), left) };

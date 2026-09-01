@@ -53,9 +53,8 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
-    FoFlag, NUL, OP_DELETE, OP_NOP, OP_NR_ADD, OP_NR_SUB, OP_TILDE, PUT_BLOCK_INNER, PUT_CURSEND,
-    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t,
-    yankreg_T,
+    FoFlag, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
+    PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -78,16 +77,16 @@ pub(crate) unsafe fn nv_addsub(cap: *mut cmdarg_T) {
     if unsafe { prompt_refuses(cap) } {
         return;
     }
-    if !visual_active() && ca.op().op_type == OP_NOP {
+    if !visual_active() && ca.op().op_type == OpType::Nop {
         // Not an operator: run it here and then put the operator back.
         unsafe { prep_redo_cmd(cap) };
         ca.op().op_type = if ca.cmdchar == Ctrl_A {
-            OP_NR_ADD
+            OpType::NrAdd
         } else {
-            OP_NR_SUB
+            OpType::NrSub
         };
         unsafe { op_addsub(ca.oap, ca.count1 as linenr_T, ca.arg != 0) };
-        ca.op().op_type = OP_NOP;
+        ca.op().op_type = OpType::Nop;
     } else if visual_active() {
         unsafe { nv_operator(cap) };
     } else {
@@ -464,7 +463,7 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_tilde(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if p_to.get() == 0 && !visual_active() && ca.op().op_type != OP_TILDE {
+    if p_to.get() == 0 && !visual_active() && ca.op().op_type != OpType::Tilde {
         if unsafe { prompt_refuses(cap) } {
             return;
         }
@@ -505,7 +504,7 @@ pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
         return;
     }
     if (ca.cmdchar == 'a' as c_int || ca.cmdchar == 'i' as c_int)
-        && (ca.op().op_type != OP_NOP || visual_active())
+        && (ca.op().op_type != OpType::Nop || visual_active())
     {
         unsafe { nv_object(cap) };
         return;
@@ -625,9 +624,9 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
     let mut ca = unsafe { CmdArg::new(cap) };
     let mut win = cur_win();
     let save_fen = win.w_onebuf_opt.wo_fen;
-    if ca.op().op_type != OP_NOP {
+    if ca.op().op_type != OpType::Nop {
         // `dp` is not "delete, then put": it is the diff command.
-        if ca.op().op_type == OP_DELETE && ca.cmdchar == 'p' as c_int {
+        if ca.op().op_type == OpType::Delete && ca.cmdchar == 'p' as c_int {
             clear_op(ca.op());
             debug_assert!(ca.opcount >= 0);
             unsafe { nv_diffgetput(true, ca.opcount as size_t) };
@@ -764,7 +763,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut cmdarg_T, fix_indent: bool) {
 pub(crate) unsafe fn nv_open(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.op().op_type == OP_DELETE && ca.cmdchar == 'o' as c_int {
+    if ca.op().op_type == OpType::Delete && ca.cmdchar == 'o' as c_int {
         // `do` is `:diffget`, not "delete, then open".
         clear_op(ca.op());
         debug_assert!(ca.opcount >= 0);

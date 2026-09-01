@@ -68,9 +68,8 @@ use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
     CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
     CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag,
-    Failed, NUL, OP_DELETE, OP_LSHIFT, OP_RSHIFT, OP_YANK, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
-    colnr_T, exarg_T, handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T,
-    size_t, ssize_t,
+    Failed, NUL, OpType, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T, exarg_T, handle_T,
+    int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -244,12 +243,12 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
 
     match eap.cmdidx as c_int {
         c if c == CMD_delete as c_int => {
-            oa.op_type = OP_DELETE;
+            oa.op_type = OpType::Delete;
             // `:delete` reports its own refusals; nothing more to do.
             let _ = unsafe { op_delete(&raw mut oa) };
         }
         c if c == CMD_yank as c_int => {
-            oa.op_type = OP_YANK;
+            oa.op_type = OpType::Yank;
             unsafe { op_yank(&raw mut oa, true) };
         }
         _ => {
@@ -258,9 +257,9 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
                 ^ cur_win().w_onebuf_opt.wo_rl
                 != 0
             {
-                OP_RSHIFT
+                OpType::Rshift
             } else {
-                OP_LSHIFT
+                OpType::Lshift
             };
             unsafe { op_shift(&raw mut oa, false, eap.amount) };
         }

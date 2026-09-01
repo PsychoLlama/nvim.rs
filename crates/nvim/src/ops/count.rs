@@ -196,7 +196,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
 
         oparg.is_VIsual = true;
         oparg.motion_type = kMTBlockWise;
-        oparg.op_type = OP_NOP;
+        oparg.op_type = OpType::Nop;
         // SAFETY: a live window and two live positions in its buffer.
         let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
         unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, sv, ev) };

@@ -150,21 +150,21 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
     let c = unsafe { gchar_pos(pos) };
 
     // Only rot13 ASCII.
-    if c >= 0x80 && op_type == OP_ROT13 {
+    if c >= 0x80 && op_type == OpType::Rot13 {
         return false;
     }
 
     let mut nc = c;
     if mb_islower(c) {
-        if op_type == OP_ROT13 {
+        if op_type == OpType::Rot13 {
             nc = rot13(c, 'a' as c_int);
-        } else if op_type != OP_LOWER {
+        } else if op_type != OpType::Lower {
             nc = mb_toupper(c);
         }
     } else if mb_isupper(c) {
-        if op_type == OP_ROT13 {
+        if op_type == OpType::Rot13 {
             nc = rot13(c, 'A' as c_int);
-        } else if op_type != OP_UPPER {
+        } else if op_type != OpType::Upper {
             nc = mb_tolower(c);
         }
     }

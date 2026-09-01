@@ -29,10 +29,7 @@ use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
-use crate::types::{
-    NUL, OP_DELETE, OP_FORMAT, OP_LOWER, OP_LSHIFT, OP_NOP, OP_RSHIFT, OP_UPPER, OP_YANK, Vv,
-    cmdarg_T,
-};
+use crate::types::{NUL, OpType, Vv, cmdarg_T};
 use crate::undo::{u_redo, u_undo, u_undoline};
 use core::ffi::{c_char, c_int};
 
@@ -89,7 +86,7 @@ pub(crate) unsafe fn nv_at(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_undo(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.op().op_type == OP_LOWER || visual_active() {
+    if ca.op().op_type == OpType::Lower || visual_active() {
         unsafe { as_g_operator(cap, b'u') };
     } else {
         unsafe { nv_kundo(cap) };
@@ -111,7 +108,7 @@ pub(crate) unsafe fn nv_kundo(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_undo_line(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.op().op_type == OP_UPPER || visual_active() {
+    if ca.op().op_type == OpType::Upper || visual_active() {
         unsafe { as_g_operator(cap, b'U') };
         return;
     }
@@ -210,8 +207,8 @@ pub(crate) unsafe fn nv_operator(cap: *mut cmdarg_T) {
 }
 
 /// Publish the pending operator as `v:operator`.
-pub(crate) fn set_op_var(optype: c_int) {
-    if optype == OP_NOP {
+pub(crate) fn set_op_var(optype: OpType) {
+    if optype == OpType::Nop {
         // SAFETY: a null string with length 0 clears the variable.
         unsafe { set_vim_var_string(Vv::Operator, ptr::null(), 0) };
         return;
@@ -235,18 +232,18 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     ca.op().motion_type = kMTLineWise;
     let mut op = ca.op();
-    if unsafe { cursor_down(ca.count1 - 1, op.op_type == OP_NOP) }.is_err() {
+    if unsafe { cursor_down(ca.count1 - 1, op.op_type == OpType::Nop) }.is_err() {
         clear_op_beep(op);
-    } else if (op.op_type == OP_DELETE
+    } else if (op.op_type == OpType::Delete
         && op.motion_force != 'v' as c_int
         && op.motion_force != Ctrl_V)
-        || op.op_type == OP_LSHIFT
-        || op.op_type == OP_RSHIFT
+        || op.op_type == OpType::Lshift
+        || op.op_type == OpType::Rshift
     {
         // A delete or a shift leaves the cursor at the start of the line,
         // on the first non-blank only if 'startofline' says so.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    } else if op.op_type != OP_YANK {
+    } else if op.op_type != OpType::Yank {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
@@ -256,7 +253,7 @@ pub(crate) unsafe fn nv_lineop(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_record(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.op().op_type == OP_FORMAT {
+    if ca.op().op_type == OpType::Format {
         unsafe { as_g_operator(cap, b'q') };
         return;
     }

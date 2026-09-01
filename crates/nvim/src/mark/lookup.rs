@@ -262,7 +262,7 @@ pub unsafe fn mark_get_motion(
 /// An `oparg_T` with every field zeroed, which is what the motion lookups need
 /// (only `inclusive` is read back).
 const OPARG_EMPTY: oparg_T = oparg_T {
-    op_type: 0,
+    op_type: OpType::Nop,
     regname: 0,
     motion_type: 0,
     motion_force: 0,

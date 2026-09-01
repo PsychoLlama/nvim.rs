@@ -78,7 +78,7 @@ pub(crate) unsafe fn op_insert(oap: *mut oparg_T, count1: c_int) {
         }
     }
 
-    if oap.op_type == OP_APPEND && !move_cursor_for_append(oap, &mut bd) {
+    if oap.op_type == OpType::Append && !move_cursor_for_append(oap, &mut bd) {
         return;
     }
 
@@ -123,13 +123,13 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
             return None;
         }
         cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
-        let wcol = if oap.op_type == OP_APPEND {
+        let wcol = if oap.op_type == OpType::Append {
             oap.end_vcol + 1
         } else {
             unsafe { getviscol() }
         };
         unsafe { coladvance_force(wcol) };
-        if oap.op_type == OP_APPEND {
+        if oap.op_type == OpType::Append {
             cur_win().w_cursor.col -= 1;
         }
         cur_win().w_onebuf_opt.wo_ve_flags = old_ve_flags;
@@ -137,7 +137,7 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
 
     unsafe { block_prep(oap.raw(), &raw mut *bd, oap.start.lnum, true) };
     let mut pre_textlen = ml_get_len(oap.start.lnum) - bd.textcol;
-    if oap.op_type == OP_APPEND {
+    if oap.op_type == OpType::Append {
         pre_textlen -= bd.textlen;
     }
     Some(BlockInsertPre {
@@ -215,17 +215,17 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         let orig_at = cur_buf().b_op_start_orig.col + cur_buf().b_op_start_orig.coladd;
         let block_at = oap.start.col + oap.start.coladd;
 
-        if oap.op_type == OP_INSERT && block_at != orig_at {
+        if oap.op_type == OpType::Insert && block_at != orig_at {
             oap.start.col = cur_buf().b_op_start_orig.col;
             pre.pre_textlen -= t - oap.start_vcol;
             oap.start_vcol = t;
-        } else if oap.op_type == OP_APPEND && block_at >= orig_at {
+        } else if oap.op_type == OpType::Append && block_at >= orig_at {
             oap.start.col = cur_buf().b_op_start_orig.col;
             // Back to what `pre_textlen` would have been for an insert.
             pre.pre_textlen += bd.textlen;
             pre.pre_textlen -= t - oap.start_vcol;
             oap.start_vcol = t;
-            oap.op_type = OP_INSERT;
+            oap.op_type = OpType::Insert;
         }
     }
 
@@ -249,7 +249,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         oap.end_vcol -= ind_post_vcol - pre.ind_pre_vcol;
     }
     if bd.is_MAX == 0 || bd2.textlen < bd.textlen {
-        if oap.op_type == OP_APPEND {
+        if oap.op_type == OpType::Append {
             pre.pre_textlen += bd2.textlen - bd.textlen;
             if bd2.endspaces != 0 {
                 bd2.textlen -= 1;
@@ -266,7 +266,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
     let mut add = bd.textcol;
     // How far the cursor was moved during the insert.
     let mut offset: colnr_T = 0;
-    if oap.op_type == OP_APPEND {
+    if oap.op_type == OpType::Append {
         add += bd.textlen;
         // The cursor may have been moved during the insert when `$` was
         // used, and then the block has no right edge to measure from.
@@ -294,7 +294,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         let ins_text = unsafe { xmemdupz(firstline as *const c_void, n) } as *mut c_char;
         let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
         if u_save(first, last).is_ok() {
-            let insert = oap.op_type == OP_INSERT;
+            let insert = oap.op_type == OpType::Insert;
             unsafe { block_insert(oap.raw(), ins_text, n, insert, &raw mut *bd) };
         }
         cur_win().w_cursor.col = oap.start.col;

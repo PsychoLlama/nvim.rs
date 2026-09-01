@@ -31,7 +31,7 @@ use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{NUL, OP_NOP, cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::types::{NUL, OpType, cmdarg_T, colnr_T, int64_t, linenr_T};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
@@ -120,7 +120,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     win.w_curswant = MAXCOL as colnr_T;
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) }.is_err() {
+    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
         return;
     }
@@ -230,7 +230,7 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
     let mut op = ca.op();
     let moved = if cur_win().w_onebuf_opt.wo_wrap == 0 {
         op.motion_type = kMTLineWise;
-        let stop_at_end = op.op_type == OP_NOP;
+        let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
             unsafe { cursor_down(ca.count1, stop_at_end).is_ok() }
         } else {

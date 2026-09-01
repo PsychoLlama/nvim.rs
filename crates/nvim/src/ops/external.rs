@@ -67,13 +67,13 @@ pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
             }
         }
     }
-    if oap.op_type != OP_COLON {
+    if oap.op_type != OpType::Colon {
         unsafe { stuff_readbuf(c"!".as_ptr()) };
     }
-    if oap.op_type == OP_INDENT {
+    if oap.op_type == OpType::Indent {
         unsafe { stuff_readbuf(get_equalprg()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
-    } else if oap.op_type == OP_FORMAT {
+    } else if oap.op_type == OpType::Format {
         if unsafe { *cur_buf().b_p_fp } as c_int != NUL {
             unsafe { stuff_readbuf(cur_buf().b_p_fp) };
         } else if unsafe { *p_fp.get() } as c_int != NUL {

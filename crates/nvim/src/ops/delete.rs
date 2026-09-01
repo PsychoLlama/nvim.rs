@@ -101,7 +101,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
         && !oap.is_VIsual
         && oap.line_count > 1
         && oap.motion_force == NUL
-        && oap.op_type == OP_DELETE
+        && oap.op_type == OpType::Delete
     {
         let blank = unsafe {
             let mut ptr = ml_get(oap.end.lnum).offset(oap.end.col as isize);
@@ -118,7 +118,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
     // Trying to delete (e.g. `D`) in an empty line. For `c` that is fine.
     let empty_region = oap.motion_type != kMTLineWise
         && oap.line_count == 1
-        && oap.op_type == OP_DELETE
+        && oap.op_type == OpType::Delete
         && unsafe { *ml_get(oap.start.lnum) } as c_int == NUL;
 
     if !empty_region {
@@ -289,7 +289,7 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
 fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
     // SAFETY: the region is the current buffer's, and the cursor stays on a
     // line of it throughout.
-    if oap.op_type != OP_CHANGE {
+    if oap.op_type != OpType::Change {
         unsafe { del_lines(oap.line_count, true) };
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         // `U` is not possible after `dd`.
@@ -338,7 +338,7 @@ fn delete_chars(oap: Op) -> Result<(), UndoFailed> {
         delete_chars_across_lines(oap)?;
     }
 
-    if oap.op_type == OP_DELETE {
+    if oap.op_type == OpType::Delete {
         // SAFETY: formats the current buffer around the cursor.
         unsafe { auto_format(false, true) };
     }
@@ -404,7 +404,7 @@ fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
     // 'cpoptions' `$`: show a `$` at the end of the change rather than
     // removing the text now.
     if cpo_has(CpoFlag::DOLLAR)
-        && oap.op_type == OP_CHANGE
+        && oap.op_type == OpType::Change
         && oap.end.lnum == cur_win().w_cursor.lnum
         && !oap.is_VIsual
     {
@@ -431,7 +431,7 @@ fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
         }
     }
 
-    let fixpos = oap.op_type == OP_DELETE && !oap.is_VIsual;
+    let fixpos = oap.op_type == OpType::Delete && !oap.is_VIsual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
     Ok(())
 }
@@ -469,7 +469,7 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     // From the start of the last line up to the region's end.
     let n = oap.end.col + 1 - c_int::from(!oap.inclusive);
     cur_win().w_cursor.col = 0;
-    let fixpos = oap.op_type == OP_DELETE && !oap.is_VIsual;
+    let fixpos = oap.op_type == OpType::Delete && !oap.is_VIsual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
 
     cur_win().w_cursor = curpos;

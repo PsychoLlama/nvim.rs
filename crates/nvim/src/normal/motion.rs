@@ -42,9 +42,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{
-    CpoFlag, Direction, NUL, OP_CHANGE, OP_DELETE, OP_NOP, cmdarg_T, colnr_T, linenr_T, oparg_T,
-};
+use crate::types::{CpoFlag, Direction, NUL, OpType, cmdarg_T, colnr_T, linenr_T, oparg_T};
 use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{
@@ -282,7 +280,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
         }
         win.w_cursor.lnum = (win.w_topline + n as linenr_T).min(cur_buf().b_ml.ml_line_count);
     }
-    if op.op_type == OP_NOP {
+    if op.op_type == OpType::Nop {
         // SAFETY: `wp` is the live window.
         cursor_correct(wp);
     }
@@ -342,7 +340,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
                 // becoming inclusive instead of moving.
                 // SAFETY: `oap` is live and the cursor line is terminated.
                 let eat = unsafe {
-                    op.op_type != OP_NOP
+                    op.op_type != OpType::Nop
                         && !op.inclusive
                         && *ml_get(win.w_cursor.lnum) as c_int != NUL
                 };
@@ -358,7 +356,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
             } else {
                 // Only the *first* step failing is worth a beep; running
                 // out part-way through a count is not.
-                if op.op_type == OP_NOP {
+                if op.op_type == OpType::Nop {
                     if n == count1 {
                         beep_flush();
                     }
@@ -427,7 +425,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                 // break must take the break with it, so put the cursor
                 // one past the last character and tell the caller not to
                 // pull it back.
-                if (ca.op().op_type == OP_DELETE || ca.op().op_type == OP_CHANGE)
+                if (ca.op().op_type == OpType::Delete || ca.op().op_type == OpType::Change)
                     && unsafe { *ml_get(win.w_cursor.lnum) } as c_int != NUL
                 {
                     let cp = get_cursor_pos_ptr();
@@ -437,7 +435,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
                     ca.retval |= CA_NO_ADJ_OP_END as c_int;
                 }
             } else {
-                if ca.op().op_type == OP_NOP && n == ca.count1 {
+                if ca.op().op_type == OpType::Nop && n == ca.count1 {
                     beep_flush();
                 }
                 break;
@@ -460,7 +458,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
         return;
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_up(ca.count1 as linenr_T, ca.op().op_type == OP_NOP) }.is_err() {
+    if unsafe { cursor_up(ca.count1 as linenr_T, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -497,7 +495,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
         }
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_down(ca.count1, ca.op().op_type == OP_NOP) }.is_err() {
+    if unsafe { cursor_down(ca.count1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
@@ -528,10 +526,10 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     ca.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
-    if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OP_NOP {
+    if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OpType::Nop {
         cur_win().w_curswant = MAXCOL as colnr_T;
     }
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OP_NOP) }.is_err() {
+    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
     } else {
         unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
@@ -569,7 +567,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     if gchar_cursor() == TAB
         && virtual_active(cur_win())
         && ca.arg == FORWARD as c_int
-        && (t_cmd || ca.op().op_type != OP_NOP)
+        && (t_cmd || ca.op().op_type != OpType::Nop)
     {
         let win = cur_win();
         let (scol, ecol) = win.vcol_span(win.cursor());
@@ -722,7 +720,7 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     // `cw` on a non-blank is `ce`: it changes the word, not up to the next
     // one. 'cpoptions' with `_` extends that to trailing white space.
     let mut cw_on_word = false;
-    if !word_end && ca.op().op_type == OP_CHANGE {
+    if !word_end && ca.op().op_type == OpType::Change {
         let c = gchar_cursor();
         if c != NUL && !ascii_iswhite(c) {
             if cpo_has(CpoFlag::CHANGEW) {
@@ -738,12 +736,12 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     let moved = if word_end {
         unsafe { end_word(ca.count1, ca.arg != 0, cw_on_word, false) }
     } else {
-        unsafe { fwd_word(ca.count1, ca.arg != 0, ca.op().op_type != OP_NOP) }
+        unsafe { fwd_word(ca.count1, ca.arg != 0, ca.op().op_type != OpType::Nop) }
     };
     if lt(startpos, cur_win().w_cursor) {
         unsafe { adjust_cursor(ca.oap) };
     }
-    if moved.is_err() && ca.op().op_type == OP_NOP {
+    if moved.is_err() && ca.op().op_type == OpType::Nop {
         clear_op_beep(ca.op());
     } else {
         unsafe { adjust_for_sel(cap) };

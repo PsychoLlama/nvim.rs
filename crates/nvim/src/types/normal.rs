@@ -32,7 +32,7 @@ pub struct cmdarg_T {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct oparg_T {
-    pub op_type: ::core::ffi::c_int,
+    pub op_type: OpType,
     pub regname: ::core::ffi::c_int,
     pub motion_type: MotionType,
     pub motion_force: ::core::ffi::c_int,
@@ -59,7 +59,7 @@ impl oparg_T {
     /// `block_prep`'s geometry (`cursor_pos_info`, the register API) starts
     /// from before filling in the two vcols.
     pub const ZERO: Self = oparg_T {
-        op_type: 0,
+        op_type: OpType::Nop,
         regname: 0,
         motion_type: 0,
         motion_force: 0,

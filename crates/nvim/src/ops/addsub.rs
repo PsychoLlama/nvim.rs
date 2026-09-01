@@ -456,7 +456,7 @@ unsafe fn bump_alpha_char(
     // SAFETY: the C library's own locale table, indexed by a byte value.
     let class = unsafe { *(*__ctype_b_loc()).offset(firstdigit as isize) } as c_int;
     let upper = class & _ISupper as ::core::ffi::c_ushort as c_int != 0;
-    if op_type == OP_NR_SUB {
+    if op_type == OpType::NrSub {
         if ord < prenum1 {
             firstdigit = if upper { 'A' as c_int } else { 'a' as c_int };
         } else {
@@ -568,7 +568,7 @@ unsafe fn replace_number(
         negative = false;
     }
 
-    let subtract = (op_type == OP_NR_SUB) ^ negative;
+    let subtract = (op_type == OpType::NrSub) ^ negative;
     (n, negative) = add_or_subtract(n, prenum1, subtract, negative, overflow, pre != 0);
 
     if (fmt.unsigned || blank_unsigned) && negative {

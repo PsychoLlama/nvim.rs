@@ -33,7 +33,7 @@ use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Failed, OP_FOLD, OP_NOP, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
+    Failed, OpType, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
 };
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
@@ -100,7 +100,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
             break;
         }
     }
-    ca.op().op_type = OP_NOP;
+    ca.op().op_type = OpType::Nop;
     false
 }
 
@@ -245,7 +245,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
                 ca.nchar = 'f' as c_int;
                 unsafe { nv_operator(cap) };
                 win.w_onebuf_opt.wo_fen = 1;
-                if nchar == 'F' as c_int && ca.op().op_type == OP_FOLD {
+                if nchar == 'F' as c_int && ca.op().op_type == OpType::Fold {
                     unsafe { nv_operator(cap) };
                     finish_op.set(true);
                 }

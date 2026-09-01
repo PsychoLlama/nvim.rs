@@ -31,9 +31,7 @@ use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{
-    MarkMove, MarkMoveRes, OP_NOP, OP_ROT13, cmdarg_T, fmark_T, searchit_arg_T, size_t,
-};
+use crate::types::{MarkMove, MarkMoveRes, OpType, cmdarg_T, fmark_T, searchit_arg_T, size_t};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -57,7 +55,7 @@ pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
     let mut op = ca.op();
     let save_cursor = cur_win().w_cursor;
     // `g?` is rot13; `?` after it is the operator, not a search.
-    if ca.cmdchar == '?' as c_int && op.op_type == OP_ROT13 {
+    if ca.cmdchar == '?' as c_int && op.op_type == OpType::Rot13 {
         ca.cmdchar = 'g' as c_int;
         ca.nchar = '?' as c_int;
         unsafe { nv_operator(cap) };
@@ -145,7 +143,7 @@ pub(crate) unsafe fn normal_search(
             op.motion_type = kMTLineWise;
         }
         cur_win().w_cursor.coladd = 0;
-        if op.op_type == OP_NOP
+        if op.op_type == OpType::Nop
             && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
             && KeyTyped.get()
         {
@@ -217,7 +215,7 @@ fn view_flag() -> MarkMove {
 unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.op().op_type == OP_NOP
+    if ca.op().op_type == OpType::Nop
         && moved
         && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
         && old_key_typed
@@ -231,7 +229,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
     // A mark used as an operator's motion must not restore the view.
-    let mut flags = if ca.op().op_type != OP_NOP {
+    let mut flags = if ca.op().op_type != OpType::Nop {
         0
     } else {
         view_flag()

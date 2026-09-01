@@ -28,7 +28,7 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, MotionType, NUL, OP_NOP, String_0, VAR_DICT, block_def, buf_T, colnr_T,
+    EvalFuncData, MotionType, NUL, OpType, String_0, VAR_DICT, block_def, buf_T, colnr_T,
     kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -63,7 +63,7 @@ const NO_BLOCK: block_def = block_def {
 
 /// A cleared operator argument, which only the blockwise path fills in.
 const NO_OPARG: oparg_T = oparg_T {
-    op_type: 0,
+    op_type: OpType::Nop,
     regname: 0,
     motion_type: kMTCharWise,
     motion_force: 0,
@@ -302,7 +302,7 @@ fn block_oparg(p1: pos_T, p2: pos_T, is_select_exclusive: bool, block_width: c_i
     oparg_T {
         motion_type: kMTBlockWise,
         inclusive: true,
-        op_type: OP_NOP,
+        op_type: OpType::Nop,
         start: p1,
         end: p2,
         start_vcol,

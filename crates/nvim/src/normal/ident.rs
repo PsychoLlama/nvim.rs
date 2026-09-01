@@ -48,7 +48,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    NUL, OP_NOP, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
+    NUL, OpType, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -288,7 +288,7 @@ pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
     if fdo_flags.get() & kOptFdoFlagSearch as c_uint != 0
         && KeyTyped.get()
         // SAFETY: `oap` is the caller's live operator.
-        && unsafe { (*oap).op_type } == OP_NOP
+        && unsafe { (*oap).op_type } == OpType::Nop
     {
         // SAFETY: the editor's fold state is live.
         unsafe { fold_open_cursor() };

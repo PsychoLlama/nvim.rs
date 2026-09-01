@@ -53,8 +53,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::{
-    CpoFlag, GraphemeState, NUL, OP_COLON, OP_NOP, OptInt, VimState, cmdarg_T, int16_t, int64_t,
-    oparg_T,
+    CpoFlag, GraphemeState, NUL, OpType, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
@@ -454,7 +453,7 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
 
     // CTRL-W takes the count read so far as its own, then a second count
     // for the window command after it.
-    if ns.c == Ctrl_W && !ns.ctrl_w && ns.oa.op_type == OP_NOP {
+    if ns.c == Ctrl_W && !ns.ctrl_w && ns.oa.op_type == OpType::Nop {
         ns.ctrl_w = true;
         ns.ca.opcount = ns.ca.count0;
         ns.ca.count0 = 0;
@@ -479,7 +478,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         // A command that is not itself an operator, and does not claim
         // NV_KEEPREG, releases the register it was given.
         if !finish_op.get()
-            && ns.oa.op_type == 0
+            && ns.oa.op_type == OpType::Nop
             && (ns.idx < 0 || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
         {
             unsafe { clearop(&raw mut ns.oa) };
@@ -489,7 +488,8 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             ns.old_mapped_len = typeahead().maplen();
         }
         if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Mousemove.code() {
-            did_visual_op = visual_active() && ns.oa.op_type != OP_NOP && ns.oa.op_type != OP_COLON;
+            did_visual_op =
+                visual_active() && ns.oa.op_type != OpType::Nop && ns.oa.op_type != OpType::Colon;
             unsafe { do_pending_operator(&raw mut ns.ca, ns.old_col, false) };
         }
         if unsafe { normal_need_redraw_mode_message(ns.raw()) } {
@@ -502,7 +502,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         unsafe { set_reg_var(get_default_register_name()) };
     }
     let prev_finish_op = finish_op.get();
-    if ns.oa.op_type == OP_NOP {
+    if ns.oa.op_type == OpType::Nop {
         finish_op.set(false);
         unsafe { may_trigger_modechanged() };
     }
@@ -514,7 +514,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     {
         unsafe { ui_cursor_shape() };
     }
-    if ns.oa.op_type == OP_NOP && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
+    if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
         clear_showcmd();
     }
     unsafe { checkpcmark() };
@@ -533,7 +533,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     // A command may have asked for insert mode or for Select mode to be
     // resumed; neither happens until the command is completely done.
     let want_insert = restart_edit.get() != 0 && !visual_active() && ns.old_mapped_len == 0;
-    if ns.oa.op_type == OP_NOP
+    if ns.oa.op_type == OpType::Nop
         && (want_insert || restart_VIsual_select.get() == 1)
         && ns.ca.retval & CA_COMMAND_BUSY as c_int == 0
         && stuff_empty()
@@ -777,7 +777,7 @@ pub(crate) fn prep_redo_num2(
 
 /// Beep and clear the operator if one is pending. Answers whether it was.
 pub(crate) fn check_clear_op(op: Op) -> bool {
-    if op.op_type == OP_NOP {
+    if op.op_type == OpType::Nop {
         return false;
     }
     clear_op_beep(op);
@@ -787,7 +787,7 @@ pub(crate) fn check_clear_op(op: Op) -> bool {
 /// As [`check_clear_op`], and also refuse while a Visual selection is up --
 /// for commands that make no sense applied to one.
 pub(crate) fn check_clear_op_quit(op: Op) -> bool {
-    if op.op_type == OP_NOP && !visual_active() {
+    if op.op_type == OpType::Nop && !visual_active() {
         return false;
     }
     clear_op_beep(op);
@@ -796,7 +796,7 @@ pub(crate) fn check_clear_op_quit(op: Op) -> bool {
 
 /// Forget the pending operator, its register and its forced motion kind.
 pub(crate) fn clear_op(mut op: Op) {
-    op.op_type = OP_NOP;
+    op.op_type = OpType::Nop;
     op.regname = 0;
     op.motion_force = NUL;
     op.use_reg_one = false;
@@ -850,7 +850,7 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OP_NOP {
+    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
         unsafe { fold_open_cursor() };
     }
 }

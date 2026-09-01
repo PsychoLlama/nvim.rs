@@ -33,7 +33,7 @@ use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::syn_stack_free_all;
-use crate::types::{LineGetter, NUL, OP_NOP, cmdarg_T, linenr_T};
+use crate::types::{LineGetter, NUL, OpType, cmdarg_T, linenr_T};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -81,7 +81,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         return;
     }
     let mut op = ca.op();
-    if op.op_type != OP_NOP {
+    if op.op_type != OpType::Nop {
         op.motion_type = kMTCharWise;
         op.inclusive = false;
     } else if ca.count0 != 0 && !is_cmdkey && !is_lua {
@@ -106,7 +106,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
         } else {
             Some(getexline)
         };
-        let opts = if op.op_type != OP_NOP {
+        let opts = if op.op_type != OpType::Nop {
             DoCmdOpts::KEEPLINE
         } else {
             DoCmdOpts::NONE
@@ -116,7 +116,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
     unsafe { msg_ext_set_trigger(c"".as_ptr()) };
     if !cmd_result {
         clear_op(op);
-    } else if op.op_type != OP_NOP
+    } else if op.op_type != OpType::Nop
         && (op.start.lnum > cur_buf().b_ml.ml_line_count
             || op.start.col > ml_get_len(op.start.lnum)
             || did_emsg.get() != 0)
@@ -258,7 +258,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
     // Nothing was pending, so the key had no work to do and is worth a
     // beep or a hint.
     let no_reason =
-        ca.op().op_type == OP_NOP && ca.opcount == 0 && ca.count0 == 0 && ca.op().regname == 0;
+        ca.op().op_type == OpType::Nop && ca.opcount == 0 && ca.count0 == 0 && ca.op().regname == 0;
     if ca.arg != 0 {
         if restart_edit.get() == 0 && cmdwin_type.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {

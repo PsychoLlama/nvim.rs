@@ -56,7 +56,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OP_NOP, PUT_CURSEND, PUT_FIXINDENT, oparg_T, yankreg_T};
+use crate::types::{NUL, OpType, PUT_CURSEND, PUT_FIXINDENT, oparg_T, yankreg_T};
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 
@@ -93,7 +93,7 @@ impl DerefMut for Oap {
 impl Oap {
     /// Whether an operator is pending on it.
     fn pending(self) -> bool {
-        self.op_type != OP_NOP
+        self.op_type != OpType::Nop
     }
 
     /// Clear the operator, and beep.

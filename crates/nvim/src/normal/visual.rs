@@ -45,7 +45,7 @@ use crate::strings::vim_strchr;
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{NUL, OP_NOP, cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
+use crate::types::{NUL, OpType, cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
@@ -534,7 +534,7 @@ pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
     }
     // After an operator these are not commands but a forced motion kind:
     // `dv`, `dV`, `d CTRL-V`.
-    if ca.op().op_type != OP_NOP {
+    if ca.op().op_type != OpType::Nop {
         ca.op().motion_force = ca.cmdchar;
         motion_force.set(ca.op().motion_force);
         finish_op.set(false);

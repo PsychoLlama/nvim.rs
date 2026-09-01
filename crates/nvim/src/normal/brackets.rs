@@ -28,7 +28,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{MarkMove, OP_NOP, PUT_FIXINDENT, cmdarg_T, fmark_T, linenr_T, pos_T, smt_T};
+use crate::types::{MarkMove, OpType, PUT_FIXINDENT, cmdarg_T, fmark_T, linenr_T, pos_T, smt_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -324,12 +324,12 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
         };
         cur_win().w_set_curswant = true;
         let both_ways =
-            ca.op().op_type != OP_NOP && ca.arg == FORWARD as c_int && flag == '{' as c_int;
+            ca.op().op_type != OpType::Nop && ca.arg == FORWARD as c_int && flag == '{' as c_int;
         let (incl, dir, n) = (&raw mut ca.op().inclusive, ca.arg, ca.count1);
         if !unsafe { findpar(incl, dir, n, flag, both_ways) } {
             clear_op_beep(ca.op());
         } else {
-            if ca.op().op_type == OP_NOP {
+            if ca.op().op_type == OpType::Nop {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };

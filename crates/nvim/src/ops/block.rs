@@ -301,7 +301,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         // The line ends before the block starts.
         bdp.end_vcol = bdp.start_vcol;
         bdp.is_short = 1;
-        if !is_del || oap.op_type == OP_APPEND {
+        if !is_del || oap.op_type == OpType::Append {
             bdp.endspaces = oap.end_vcol - oap.start_vcol + 1;
         }
     } else {
@@ -315,14 +315,14 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         if bdp.end_vcol > oap.end_vcol {
             // The whole block is inside one character -- a wide TAB.
             bdp.is_oneChar = 1;
-            if oap.op_type == OP_INSERT {
+            if oap.op_type == OpType::Insert {
                 bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
-            } else if oap.op_type == OP_APPEND {
+            } else if oap.op_type == OpType::Append {
                 bdp.startspaces += oap.end_vcol - oap.start_vcol + 1;
                 bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
             } else {
                 bdp.startspaces = oap.end_vcol - oap.start_vcol + 1;
-                if is_del && oap.op_type != OP_LSHIFT {
+                if is_del && oap.op_type != OpType::Lshift {
                     // Summing the two into `startspaces` does not work for
                     // a Visual replace, so the TAB is split in two.
                     bdp.startspaces = bdp.start_char_vcols - (bdp.start_vcol - oap.start_vcol);
@@ -346,13 +346,13 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
             pend = ci.ptr;
 
             if bdp.end_vcol <= oap.end_vcol
-                && (!is_del || oap.op_type == OP_APPEND || oap.op_type == OP_REPLACE)
+                && (!is_del || oap.op_type == OpType::Append || oap.op_type == OpType::Replace)
             {
                 // The line ends inside the block. Filling it out to the
                 // block's width is the alternative, and it is deliberately
                 // not done: it leaves trailing white space behind.
                 bdp.is_short = 1;
-                if oap.op_type == OP_APPEND || op_virtual() {
+                if oap.op_type == OpType::Append || op_virtual() {
                     bdp.endspaces = oap.end_vcol - bdp.end_vcol + c_int::from(oap.inclusive);
                 }
             } else if bdp.end_vcol > oap.end_vcol {

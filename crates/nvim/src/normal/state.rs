@@ -60,7 +60,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{NUL, OP_NOP, ShmFlag, VimState, cmdarg_T, event_T, int64_t, oparg_T};
+use crate::types::{NUL, OpType, ShmFlag, VimState, cmdarg_T, event_T, int64_t, oparg_T};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use ::libc::time;
@@ -207,7 +207,7 @@ pub(crate) fn op_pending() -> bool {
         && !finish_op.get()
         && unsafe { (*oap).prev_opcount } == 0
         && unsafe { (*oap).prev_count0 } == 0
-        && unsafe { (*oap).op_type } == OP_NOP
+        && unsafe { (*oap).op_type } == OpType::Nop
         && unsafe { (*oap).regname } == NUL)
 }
 
@@ -241,7 +241,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 
     // 'finish_op' drives the cursor shape, so a change to it is a redraw.
     let was_finishing = finish_op.get();
-    finish_op.set(ns.oa.op_type != OP_NOP);
+    finish_op.set(ns.oa.op_type != OpType::Nop);
     if finish_op.get() != was_finishing {
         unsafe { ui_cursor_shape() };
     }
@@ -310,7 +310,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     let mut ns = unsafe { NormalStateRef::new(s) };
     let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
-    let pending_op = ns.oa.op_type != OP_NOP;
+    let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
     flags & NV_NCH != 0
         && (flags & NV_NCH_NOP == NV_NCH_NOP && !pending_op
@@ -353,7 +353,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
         && emsg_silent.get() == 0
         && !in_assert_fails.get()
         && !did_wait_return.get()
-        && ns.oa.op_type == OP_NOP
+        && ns.oa.op_type == OpType::Nop
 }
 
 /// Redraw the screen the message was scrolled off, show the message again,
