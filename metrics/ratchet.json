@@ -12,6 +12,7 @@
   "raw_cstr": 5590,
   "libc_strings": 190,
   "const_c_int": 511,
+  "const_int_alias": 3045,
   "unions": 32,
   "repr_c_outside_perimeter": 266,
   "derive_copy": 620,

@@ -335,6 +335,20 @@ plus these whole-tree metrics, which are not per-file:
                         them, and counting them would penalise the interim.
                       const_c_int     `pub const NAME: c_int`/`c_uint` — the
                         integer constant families that want to be enums.
+                      const_int_alias the same debt worn under a different
+                        name: `pub const NAME: Alias`, where `Alias` is one of
+                        the tree's *own* integer type aliases. c2rust rendered
+                        every C `enum` as a `typedef`ed integer plus a run of
+                        `pub const`s, so `auto_event`, `CMD_index`, `StlFlag`
+                        and their kin hide families `const_c_int` cannot see.
+                        The alias set is derived from the tree rather than
+                        listed here — every `type X = Y` chain that bottoms
+                        out in a primitive integer — so a family leaves the
+                        count only by becoming an enum, and a *new* alias is
+                        counted the day it lands. The constant's name may be
+                        any case, unlike `const_c_int`'s: c2rust kept the C
+                        enumerator's spelling, and the largest families left
+                        (`CMD_append`, `kOptIdx…`) are not SCREAMING_CASE.
                       unions          `union` declarations.
                       repr_c_outside_perimeter  `#[repr(C)]` in files off the
                         PERIMETER list. Inside it the layout is a foreign
@@ -730,6 +744,48 @@ VOCABULARY_OUTSIDE = {
     "repr_c_outside_perimeter": (re.compile(r"#\[repr\(\s*C\s*[,)]"), PERIMETER),
     "curwin_raw": (re.compile(r"\bcur(?:win|buf|tab)\s*\.\s*get\(\)"), WINLAYER),
 }
+# The two halves of `const_int_alias`, which needs a pass over the whole tree
+# before it can count anything: first every `type X = Y;` in the tree, then
+# every `pub const NAME: T`. An alias counts when its chain bottoms out in one
+# of the primitives below; a constant counts when its type is such an alias.
+# Written as two needles rather than a list of alias names so that the set
+# prunes and extends itself — see the doc block.
+INT_ALIAS_DECL = re.compile(
+    r"\btype\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:::)?(?:[A-Za-z0-9_]+::)*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*;"
+)
+INT_PRIMITIVES = frozenset(
+    (
+        "c_char",
+        "c_schar",
+        "c_uchar",
+        "c_short",
+        "c_ushort",
+        "c_int",
+        "c_uint",
+        "c_long",
+        "c_ulong",
+        "c_longlong",
+        "c_ulonglong",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "i128",
+        "isize",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "u128",
+        "usize",
+    )
+)
+PUB_CONST_DECL = re.compile(
+    r"\bpub const ([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:::)?(?:[A-Za-z0-9_]+::)*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*="
+)
+
 # Declarations of a `_T` type, counted as a *set* of names over the whole
 # tree: `type` aliases included, because `linenr_T` and its kin are aliases.
 T_SUFFIX_DECL = re.compile(
@@ -1531,12 +1587,48 @@ def vocabulary(tree):
                 counts[name] += len(needle.findall(masked))
     names = set()
     signatures = 0
+    aliases = {}
+    constants = []
     for masked in tree.values():
         names.update(T_SUFFIX_DECL.findall(masked))
+        for alias, target in INT_ALIAS_DECL.findall(masked):
+            aliases.setdefault(alias, set()).add(target)
+        constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
         signatures += sum(
             len(RAW_WIN_BUF.findall(sig)) for _, sig, _ in fn_signatures(masked)
         )
-    return {**counts, "t_suffix_types": len(names), "raw_win_buf_sigs": signatures}
+    integral = int_aliases(aliases)
+    return {
+        **counts,
+        "const_int_alias": sum(type_ in integral for type_ in constants),
+        "t_suffix_types": len(names),
+        "raw_win_buf_sigs": signatures,
+    }
+
+
+def int_aliases(aliases):
+    """The names in `aliases` whose chain bottoms out in a primitive integer.
+
+    `aliases` maps a name to the set of things the tree aliases it to — a set
+    because the same name is declared in more than one module and because a
+    `cfg` can give one two spellings. A name is integral when *any* of its
+    targets is, which is the reading that keeps the count from depending on
+    which declaration a scan happened to see first. Cycles cannot happen in
+    Rust, but the walk guards against one anyway rather than recursing off the
+    stack if a sweep ever writes `type A = A;`.
+    """
+
+    def integral(name, seen):
+        if name in INT_PRIMITIVES:
+            return True
+        if name in seen:
+            return False
+        seen.add(name)
+        return any(integral(target, seen) for target in aliases.get(name, ()))
+
+    return {
+        name for name in aliases if name not in INT_PRIMITIVES and integral(name, set())
+    }
 
 
 def whole_tree(stats, tree):
@@ -1661,6 +1753,7 @@ WHOLE_TREE_LABEL = {
     "raw_cstr": "raw `c_char` pointer types",
     "libc_strings": "libc str*/mem* calls",
     "const_c_int": "`pub const NAME: c_int` constants",
+    "const_int_alias": "`pub const NAME: <integer alias>` constants",
     "unions": "union declarations",
     "repr_c_outside_perimeter": "`#[repr(C)]` outside the unsafe perimeter",
     "derive_copy": "Copy derives on braced aggregates",
@@ -1675,6 +1768,7 @@ WHOLE_TREE_LABEL = {
 VOCABULARY_KEYS = (
     *VOCABULARY,
     *VOCABULARY_OUTSIDE,
+    "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
 )
@@ -2183,6 +2277,27 @@ SELF_TEST_VOCABULARY = [
             "pub const E: usize = 4;\n"
         },
         {"const_c_int": 2},
+    ),
+    (
+        # The alias set is whole-tree: `auto_event` is declared in one file
+        # and spent in another. `Handle` reaches an integer through a second
+        # alias; `Opaque` never does; `usize` is a primitive, not an alias,
+        # so a size constant is not a family. A private `const` is out for
+        # the same reason it is out of `const_c_int` — the debt is a family
+        # other modules can name.
+        {
+            "crates/nvim/src/a.rs": "pub type auto_event = ::core::ffi::c_uint;\n"
+            "type Handle = linenr_T;\n"
+            "pub type linenr_T = c_long;\n"
+            "pub type Opaque = SomeStruct;\n",
+            "crates/nvim/src/b.rs": "pub const EVENT_BUF_NEW: auto_event = 0;\n"
+            "pub const CMD_append: auto_event = 1;\n"
+            "pub const FIRST: Handle = 2;\n"
+            "pub const HIDDEN: Opaque = Opaque::X;\n"
+            "pub const SIZE: usize = 4;\n"
+            "const PRIVATE: auto_event = 5;\n",
+        },
+        {"const_int_alias": 3},
     ),
     (
         {"crates/nvim/src/a.rs": "pub union U {\n}\nunion V {\n}\nstruct W;\n"},
