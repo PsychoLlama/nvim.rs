@@ -8,11 +8,8 @@ use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::{
-    CLASS_ALNUM, CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE,
-    CLASS_FNAME, CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT,
-    CLASS_PUNCT, CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, MAGIC_ALL,
-    RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
-    reg_cpo_lit, reg_magic,
+    MAGIC_ALL, RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER,
+    RI_WHITE, RI_WORD, reg_cpo_lit, reg_magic,
 };
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
@@ -87,30 +84,59 @@ const fn build_ri_flags() -> [i16; 256] {
     tab
 }
 
+/// One of the POSIX `[:name:]` classes a `[]` collection can name.
+///
+/// The discriminants are upstream's `CLASS_*` numbers, which both engines
+/// index tables by; upstream's `CLASS_NONE` sentinel is [`Option::None`]
+/// here.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub(crate) enum CharClass {
+    Alnum = 0,
+    Alpha = 1,
+    Blank = 2,
+    Cntrl = 3,
+    Digit = 4,
+    Graph = 5,
+    Lower = 6,
+    Print = 7,
+    Punct = 8,
+    Space = 9,
+    Upper = 10,
+    Xdigit = 11,
+    Tab = 12,
+    Return = 13,
+    Backspace = 14,
+    Escape = 15,
+    Ident = 16,
+    Keyword = 17,
+    Fname = 18,
+}
+
 /// The `[:name:]` classes a collection may contain, sorted by name so the
 /// lookup below can binary-search them. The trailing `:]` is part of the
 /// name: the `[` is already consumed when we get here, and matching the
 /// close is what proves the item was a class and not literal text.
-static CHAR_CLASS_TAB: [(&CStr, c_int); 19] = [
-    (c"alnum:]", CLASS_ALNUM as c_int),
-    (c"alpha:]", CLASS_ALPHA as c_int),
-    (c"backspace:]", CLASS_BACKSPACE as c_int),
-    (c"blank:]", CLASS_BLANK as c_int),
-    (c"cntrl:]", CLASS_CNTRL as c_int),
-    (c"digit:]", CLASS_DIGIT as c_int),
-    (c"escape:]", CLASS_ESCAPE as c_int),
-    (c"fname:]", CLASS_FNAME as c_int),
-    (c"graph:]", CLASS_GRAPH as c_int),
-    (c"ident:]", CLASS_IDENT as c_int),
-    (c"keyword:]", CLASS_KEYWORD as c_int),
-    (c"lower:]", CLASS_LOWER as c_int),
-    (c"print:]", CLASS_PRINT as c_int),
-    (c"punct:]", CLASS_PUNCT as c_int),
-    (c"return:]", CLASS_RETURN as c_int),
-    (c"space:]", CLASS_SPACE as c_int),
-    (c"tab:]", CLASS_TAB as c_int),
-    (c"upper:]", CLASS_UPPER as c_int),
-    (c"xdigit:]", CLASS_XDIGIT as c_int),
+static CHAR_CLASS_TAB: [(&CStr, CharClass); 19] = [
+    (c"alnum:]", CharClass::Alnum),
+    (c"alpha:]", CharClass::Alpha),
+    (c"backspace:]", CharClass::Backspace),
+    (c"blank:]", CharClass::Blank),
+    (c"cntrl:]", CharClass::Cntrl),
+    (c"digit:]", CharClass::Digit),
+    (c"escape:]", CharClass::Escape),
+    (c"fname:]", CharClass::Fname),
+    (c"graph:]", CharClass::Graph),
+    (c"ident:]", CharClass::Ident),
+    (c"keyword:]", CharClass::Keyword),
+    (c"lower:]", CharClass::Lower),
+    (c"print:]", CharClass::Print),
+    (c"punct:]", CharClass::Punct),
+    (c"return:]", CharClass::Return),
+    (c"space:]", CharClass::Space),
+    (c"tab:]", CharClass::Tab),
+    (c"upper:]", CharClass::Upper),
+    (c"xdigit:]", CharClass::Xdigit),
 ];
 
 /// The entry [`take_char_class`] matched last. Collections repeat a class
@@ -119,13 +145,13 @@ static LAST_CLASS: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Recognise a `[:alpha:]`-style class at `*pp`, which points at the `[`.
 /// On a hit `*pp` advances past the name — the caller has already consumed
-/// the `[`, and the name carries its own `:]` — and the `CLASS_*` code is
-/// returned. Otherwise `CLASS_NONE`, with `*pp` untouched.
+/// the `[`, and the name carries its own `:]` — and the class is returned.
+/// Otherwise `None`, with `*pp` untouched.
 ///
 /// # Safety
 ///
 /// `*pp` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
+pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> Option<CharClass> {
     let p = *pp;
     // Only `[:` followed by at least three lowercase letters is a
     // candidate. That is load-bearing, not just a guard against reading
@@ -133,7 +159,7 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
     if unsafe { *p.add(1) } as u8 != b':'
         || !(2..5).all(|off| (unsafe { *p.add(off) } as u8).is_ascii_lowercase())
     {
-        return CLASS_NONE as c_int;
+        return None;
     }
     let name = unsafe { p.add(2) };
     // Order the pattern text against a class name the way the C
@@ -159,14 +185,10 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> c_int {
             .binary_search_by(|(entry, _)| cmp(entry).reverse())
             .ok()
     };
-    match hit {
-        Some(i) => {
-            LAST_CLASS.set(i);
-            *pp = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
-            CHAR_CLASS_TAB[i].1
-        }
-        None => CLASS_NONE as c_int,
-    }
+    let i = hit?;
+    LAST_CLASS.set(i);
+    *pp = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
+    Some(CHAR_CLASS_TAB[i].1)
 }
 
 pub unsafe fn re_multiline(prog: *const regprog_T) -> c_int {

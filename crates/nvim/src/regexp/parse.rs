@@ -18,11 +18,10 @@ use crate::semsg;
 use core::ffi::{c_char, c_int};
 
 use super::{
-    CLASS_NONE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE,
-    NOT_MULTI, REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, magic_T, nextchr,
-    parse_state_T, prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags,
-    reg_cpo_lit, reg_magic, regnpar, regparse, take_bracketed, take_char_class, toggle_magic,
-    unmagic,
+    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, NOT_MULTI,
+    REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, magic_T, nextchr, parse_state_T,
+    prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
+    regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int, hex2nr};
@@ -88,7 +87,7 @@ pub(crate) unsafe fn skip_anyof(mut p: *mut c_char) -> *mut c_char {
         } else if unsafe { *p } as u8 == b'[' {
             // A `[:class:]`, `[=equi=]` or `[.coll.]` advances `p`
             // itself; a bare `[` is literal.
-            if unsafe { take_char_class(&mut p) } == CLASS_NONE as c_int
+            if unsafe { take_char_class(&mut p) }.is_none()
                 && unsafe { take_bracketed(&mut p, b'=') } == 0
                 && unsafe { take_bracketed(&mut p, b'.') } == 0
                 && unsafe { *p } as u8 != 0

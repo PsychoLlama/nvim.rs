@@ -16,7 +16,7 @@ use super::{cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
 use crate::regexp::{
-    CLASS_NONE, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, coll_get_char,
+    CharClass, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, coll_get_char,
     pat_byte, pat_char, pat_charlen, reg_cpo_lit, reg_magic, reg_strict, reg_string, wants_nfa,
 };
 use crate::semsg;
@@ -50,12 +50,6 @@ const CLASS_OPCODES: [c_int; 19] = [
     NfaOp::ClassKeyword.code(),
     NfaOp::ClassFname.code(),
 ];
-
-/// `[[:lower:]]` and `[[:upper:]]` follow the locale, which the backtracking
-/// engine expands at compile time and so gets wrong; asking for this engine
-/// keeps the test at match time.
-const CLASS_LOWER: c_int = 6;
-const CLASS_UPPER: c_int = 10;
 
 /// What a `[` at the cursor turned out to be.
 pub(crate) enum Collection {
@@ -257,9 +251,11 @@ enum Bracketed {
 }
 
 fn bracketed_item() -> Bracketed {
-    let class = take_cursor_char_class();
-    if class != CLASS_NONE as c_int {
-        if matches!(class, CLASS_LOWER | CLASS_UPPER) {
+    if let Some(class) = take_cursor_char_class() {
+        // `[[:lower:]]` and `[[:upper:]]` follow the locale, which the
+        // backtracking engine expands at compile time and so gets wrong;
+        // asking for this engine keeps the test at match time.
+        if matches!(class, CharClass::Lower | CharClass::Upper) {
             wants_nfa.set(true);
         }
         if let Some(&op) = CLASS_OPCODES.get(class as usize) {

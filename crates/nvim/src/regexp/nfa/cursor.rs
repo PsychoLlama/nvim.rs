@@ -13,7 +13,9 @@ use core::ffi::{c_char, c_int};
 
 use super::compile::nfa_recognize_char_class;
 use crate::mbyte::{utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utfc_ptr2len};
-use crate::regexp::{NfaOp, pat_seek, regparse, skip_anyof, take_bracketed, take_char_class};
+use crate::regexp::{
+    CharClass, NfaOp, pat_seek, regparse, skip_anyof, take_bracketed, take_char_class,
+};
 
 /// The cursor, to hand back to the functions here as a saved position.
 pub(crate) fn here() -> *mut c_char {
@@ -78,7 +80,7 @@ pub(crate) fn advance_grapheme() {
 }
 
 /// [`take_char_class`] against the cursor: a `[:alpha:]` at it, consumed.
-pub(crate) fn take_cursor_char_class() -> c_int {
+pub(crate) fn take_cursor_char_class() -> Option<CharClass> {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
     // `take_char_class` only ever advances it -- it walks bytes and calls
     // nothing, so it cannot re-enter the cell it is handed.

@@ -19,13 +19,11 @@ use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
 use crate::os::cshim::__ctype_b_loc;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ADD_NL, ANYBUT, ANYOF, CLASS_ALNUM,
-    CLASS_ALPHA, CLASS_BACKSPACE, CLASS_BLANK, CLASS_CNTRL, CLASS_DIGIT, CLASS_ESCAPE, CLASS_FNAME,
-    CLASS_GRAPH, CLASS_IDENT, CLASS_KEYWORD, CLASS_LOWER, CLASS_NONE, CLASS_PRINT, CLASS_PUNCT,
-    CLASS_RETURN, CLASS_SPACE, CLASS_TAB, CLASS_UPPER, CLASS_XDIGIT, ESC, HASNL, HASWIDTH, INT_MAX,
-    JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr, pat_byte,
-    pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic, reg_strict,
-    regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ADD_NL, ANYBUT, ANYOF, CharClass, ESC, HASNL,
+    HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE,
+    backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit,
+    reg_iswordc, reg_magic, reg_strict, regparse, skip_anyof, skipchr, take_bracketed,
+    take_char_class,
 };
 use crate::semsg;
 use crate::types::{NUL, uint8_t};
@@ -240,7 +238,7 @@ fn escaped(
 fn bracketed_item(rex: Rex, startc: &mut c_int) {
     let class = take_cursor_char_class();
     *startc = -1;
-    if class != CLASS_NONE as c_int {
+    if let Some(class) = class {
         emit_char_class(rex, class);
         return;
     }
@@ -260,7 +258,7 @@ fn bracketed_item(rex: Rex, startc: &mut c_int) {
 }
 
 /// [`take_char_class`] against the parse cursor.
-fn take_cursor_char_class() -> c_int {
+fn take_cursor_char_class() -> Option<CharClass> {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
     // `take_char_class` only ever advances it -- it walks bytes and calls
     // nothing, so it cannot re-enter the cell it is handed.
@@ -277,47 +275,45 @@ fn take_cursor_bracketed(delim: u8) -> c_int {
 ///
 /// The ceilings the classes walk to are upstream's and are not uniform: the
 /// ASCII-only ones stop at 127, the rest run the whole Latin-1 range.
-fn class_ceiling(class: c_uint) -> Option<c_int> {
+fn class_ceiling(class: CharClass) -> Option<c_int> {
+    use CharClass::*;
     match class {
-        CLASS_ALNUM | CLASS_ALPHA | CLASS_CNTRL | CLASS_DIGIT | CLASS_GRAPH | CLASS_PUNCT => {
-            Some(127)
-        }
-        CLASS_LOWER | CLASS_PRINT | CLASS_UPPER | CLASS_XDIGIT | CLASS_IDENT | CLASS_KEYWORD
-        | CLASS_FNAME => Some(255),
+        Alnum | Alpha | Cntrl | Digit | Graph | Punct => Some(127),
+        Lower | Print | Upper | Xdigit | Ident | Keyword | Fname => Some(255),
         _ => None,
     }
 }
 
 /// Is `c` a member of `class`?
-fn in_class(rex: Rex, class: c_uint, c: c_int) -> bool {
+fn in_class(rex: Rex, class: CharClass, c: c_int) -> bool {
     // SAFETY: every predicate here is a pure test on a code point, reading
     // only locale or option state; the ctype table is indexable over the
     // range `class_ceiling` allows.
     let ctype =
         |mask: c_uint| unsafe { *(*__ctype_b_loc()).offset(c as isize) } as c_uint & mask != 0;
+    use CharClass::*;
     match class {
-        CLASS_ALNUM => ctype(_ISalnum),
-        CLASS_ALPHA => ctype(_ISalpha),
-        CLASS_CNTRL => ctype(_IScntrl),
-        CLASS_DIGIT => ascii_isdigit(c),
-        CLASS_GRAPH => ctype(_ISgraph),
-        CLASS_PUNCT => ctype(_ISpunct),
+        Alnum => ctype(_ISalnum),
+        Alpha => ctype(_ISalpha),
+        Cntrl => ctype(_IScntrl),
+        Digit => ascii_isdigit(c),
+        Graph => ctype(_ISgraph),
+        Punct => ctype(_ISpunct),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
-        CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
-        CLASS_PRINT => unsafe { vim_isprintc(c) },
-        CLASS_UPPER => mb_isupper(c),
-        CLASS_XDIGIT => ascii_isxdigit(c),
-        CLASS_IDENT => unsafe { vim_is_ident_char(c) },
-        CLASS_KEYWORD => reg_iswordc(rex, c),
-        CLASS_FNAME => unsafe { vim_isfilec(c) },
+        Lower => mb_islower(c) && c != 170 && c != 186,
+        Print => unsafe { vim_isprintc(c) },
+        Upper => mb_isupper(c),
+        Xdigit => ascii_isxdigit(c),
+        Ident => unsafe { vim_is_ident_char(c) },
+        Keyword => reg_iswordc(rex, c),
+        Fname => unsafe { vim_isfilec(c) },
         _ => false,
     }
 }
 
 /// Write out every character of a `[:name:]` class.
-fn emit_char_class(rex: Rex, class: c_int) {
-    let class = class as c_uint;
+fn emit_char_class(rex: Rex, class: CharClass) {
     if let Some(hi) = class_ceiling(class) {
         for c in 1..=hi {
             if in_class(rex, class, c) {
@@ -328,20 +324,20 @@ fn emit_char_class(rex: Rex, class: c_int) {
     }
     // The rest are short literal sets.
     match class {
-        CLASS_BLANK => {
+        CharClass::Blank => {
             regc(b' ' as c_int);
             regc(b'\t' as c_int);
         }
-        CLASS_SPACE => {
+        CharClass::Space => {
             for c in 9..=13 {
                 regc(c);
             }
             regc(b' ' as c_int);
         }
-        CLASS_TAB => regc(b'\t' as c_int),
-        CLASS_RETURN => regc(b'\r' as c_int),
-        CLASS_BACKSPACE => regc(0x08),
-        CLASS_ESCAPE => regc(ESC),
+        CharClass::Tab => regc(b'\t' as c_int),
+        CharClass::Return => regc(b'\r' as c_int),
+        CharClass::Backspace => regc(0x08),
+        CharClass::Escape => regc(ESC),
         _ => {}
     }
 }

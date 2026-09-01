@@ -71,26 +71,6 @@ pub const REGSUB_BACKSLASH: c_uint = 4;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const CLASS_NONE: c_uint = 99;
-pub const CLASS_XDIGIT: c_uint = 11;
-pub const CLASS_UPPER: c_uint = 10;
-pub const CLASS_TAB: c_uint = 12;
-pub const CLASS_SPACE: c_uint = 9;
-pub const CLASS_RETURN: c_uint = 13;
-pub const CLASS_PUNCT: c_uint = 8;
-pub const CLASS_PRINT: c_uint = 7;
-pub const CLASS_LOWER: c_uint = 6;
-pub const CLASS_KEYWORD: c_uint = 17;
-pub const CLASS_IDENT: c_uint = 16;
-pub const CLASS_GRAPH: c_uint = 5;
-pub const CLASS_FNAME: c_uint = 18;
-pub const CLASS_ESCAPE: c_uint = 15;
-pub const CLASS_DIGIT: c_uint = 4;
-pub const CLASS_CNTRL: c_uint = 3;
-pub const CLASS_BLANK: c_uint = 2;
-pub const CLASS_BACKSPACE: c_uint = 14;
-pub const CLASS_ALPHA: c_uint = 1;
-pub const CLASS_ALNUM: c_uint = 0;
 #[derive(Copy, Clone)]
 pub struct regexec_T {
     pub reg_match: *mut regmatch_T,
