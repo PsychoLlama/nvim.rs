@@ -11,11 +11,10 @@ use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::getchar::typeahead;
 use crate::guard::Keys;
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
-    Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, is_special,
+    Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, Key, NotAKey,
+    is_special,
 };
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
 

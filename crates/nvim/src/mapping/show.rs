@@ -8,8 +8,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::keycodes::Key;
-use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
+use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
 use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};

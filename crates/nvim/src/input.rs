@@ -13,8 +13,7 @@ use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
-use crate::keycodes::Key;
-use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, key_unescape};
+use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
 use crate::main::{
     State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
     need_wait_return,

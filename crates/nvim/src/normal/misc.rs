@@ -3,7 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, Key};
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -17,7 +17,6 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N};
 use crate::main::{
     KeyTyped, clear_cmdline, cmdwin_result, cmdwin_type, curwin, did_emsg, ex_normal_busy,
     finish_op, got_int, may_garbage_collect, mode_displayed, redraw_mode, restart_VIsual_select,

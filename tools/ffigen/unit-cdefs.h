@@ -5322,6 +5322,7 @@ static const int SOCK_STREAM = 1;
 static const int SOS = 10;
 static const int SOUND_VOWEL = 42;
 static const int SPACE = 32;
+static const int SPAN = 202;
 static const int SPARSE_RATIO = 2;
 static const int SPARSE_SAFE = 10;
 static const int SPECIAL_HL = 1;

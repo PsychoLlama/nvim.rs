@@ -475,10 +475,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             // A bracket: an opening state, the operand, and the closing
             // state that pairs with it.
             Ok(open)
-                if open == NfaOp::Composing
-                    || open == NfaOp::Nopen
-                    || NfaOp::MOPEN.contains(&open)
-                    || NfaOp::ZOPEN.contains(&open) =>
+                if open == NfaOp::Composing || open == NfaOp::Nopen || open.opens_capture() =>
             {
                 let mclose = closing_bracket(open);
                 // An empty stack means an empty group, `\(\)`.
@@ -596,9 +593,7 @@ fn count_for(item: c_int, operand: c_int) -> c_int {
             | NfaOp::Composing
             | NfaOp::Nopen,
         ) => 2,
-        Ok(op) if NfaOp::MOPEN.contains(&op) || NfaOp::ZOPEN.contains(&op) || op.is_reference() => {
-            2
-        }
+        Ok(op) if op.opens_capture() || op.is_reference() => 2,
         _ => 1,
     }
 }

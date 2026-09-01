@@ -13,7 +13,16 @@
 
 use crate::edit::BeginlineOpts;
 use crate::global_cell::GlobalCell;
-use crate::keycodes::Key;
+use crate::keycodes::{
+    Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
+    Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
+    Ctrl_U, Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, Ctrl_Z, KE_C_END, KE_C_HOME, KE_C_LEFT, KE_C_RIGHT,
+    KE_COMMAND, KE_EVENT, KE_IGNORE, KE_KDEL, KE_KINS, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTMOUSE_NM,
+    KE_LEFTRELEASE, KE_LEFTRELEASE_NM, KE_LUA, KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE,
+    KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_NOP, KE_RIGHTDRAG,
+    KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_S_DOWN, KE_S_UP, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE,
+    KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, KE_XF1, Key,
+};
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, SpellAddType,
@@ -45,16 +54,6 @@ mod operator;
 pub(crate) use self::operator::*;
 mod gcmd;
 pub(crate) use self::gcmd::*;
-use crate::keycodes::{
-    Ctrl__, Ctrl_A, Ctrl_B, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT,
-    Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T,
-    Ctrl_U, Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, Ctrl_Z, KE_C_END, KE_C_HOME, KE_C_LEFT, KE_C_RIGHT,
-    KE_COMMAND, KE_EVENT, KE_IGNORE, KE_KDEL, KE_KINS, KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTMOUSE_NM,
-    KE_LEFTRELEASE, KE_LEFTRELEASE_NM, KE_LUA, KE_MIDDLEDRAG, KE_MIDDLEMOUSE, KE_MIDDLERELEASE,
-    KE_MOUSEDOWN, KE_MOUSELEFT, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_NOP, KE_RIGHTDRAG,
-    KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_S_DOWN, KE_S_UP, KE_X1DRAG, KE_X1MOUSE, KE_X1RELEASE,
-    KE_X2DRAG, KE_X2MOUSE, KE_X2RELEASE, KE_XF1,
-};
 use crate::search::{BACKWARD, FORWARD, SEARCH_REV};
 mod misc;
 pub(crate) use self::misc::*;

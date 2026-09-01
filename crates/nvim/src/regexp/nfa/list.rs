@@ -24,6 +24,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::regexp::NfaOp;
+use crate::regexp::NotAnOpcode;
 use core::ffi::c_int;
 
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
@@ -390,7 +391,7 @@ fn walk(
         }
     }
 
-    follow(l, state, subs, pim, off, off_arg, depth)
+    follow(l, c, state, subs, pim, off, off_arg, depth)
 }
 
 /// What [`place`] decided about a state.
@@ -464,8 +465,13 @@ fn past_line_start(rex: Rex) -> bool {
 
 /// Follow everything that consumes no input from `state`, recording what the
 /// capture brackets on the way say.
+///
+/// `c` is `state`'s opcode, which [`walk`] has already read: converting it
+/// twice per state is measurable in this loop.
+#[allow(clippy::too_many_arguments)]
 fn follow(
     l: &mut ThreadList,
+    c: Result<NfaOp, NotAnOpcode>,
     state: *mut nfa_state_T,
     subs: &mut regsubs_T,
     pim: Option<&nfa_pim_T>,
@@ -474,7 +480,7 @@ fn follow(
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
-    let (c, out, out1) = (NfaOp::try_from(op(state)), out_of(state), out1_of(state));
+    let (out, out1) = (out_of(state), out1_of(state));
     match c {
         Ok(NfaOp::Split) => {
             walk(l, out, subs, pim, off_arg, depth + 1)
@@ -485,18 +491,18 @@ fn follow(
         }
 
         // A capture opens here.
-        Ok(NfaOp::Zstart) => open(l, state, subs, pim, off, off_arg, depth),
-        Ok(marker) if NfaOp::MOPEN.contains(&marker) || NfaOp::ZOPEN.contains(&marker) => {
-            open(l, state, subs, pim, off, off_arg, depth)
+        Ok(NfaOp::Zstart) => open(l, NfaOp::Zstart, state, subs, pim, off, off_arg, depth),
+        Ok(marker) if marker.opens_capture() => {
+            open(l, marker, state, subs, pim, off, off_arg, depth)
         }
 
         // The whole match's close, which a `\ze` may already have placed.
         Ok(NfaOp::Mclose) if has_zend_set(rex, subs) => walk(l, out, subs, pim, off_arg, depth + 1),
 
         // A capture closes here.
-        Ok(NfaOp::Zend) => close(l, state, subs, pim, off, off_arg, depth),
-        Ok(marker) if NfaOp::MCLOSE.contains(&marker) || NfaOp::ZCLOSE.contains(&marker) => {
-            close(l, state, subs, pim, off, off_arg, depth)
+        Ok(NfaOp::Zend) => close(l, NfaOp::Zend, state, subs, pim, off, off_arg, depth),
+        Ok(marker) if marker.closes_capture() => {
+            close(l, marker, state, subs, pim, off, off_arg, depth)
         }
 
         // Anything else — including `NfaOp::Match` — ends the walk.
@@ -579,8 +585,10 @@ enum Saved {
 
 /// `\(`, `\%(` and `\zs`: record where the group starts, walk on, and put
 /// back what the slot held.
+#[allow(clippy::too_many_arguments)]
 fn open(
     l: &mut ThreadList,
+    c: NfaOp,
     state: *mut nfa_state_T,
     subs: &mut regsubs_T,
     pim: Option<&nfa_pim_T>,
@@ -590,10 +598,7 @@ fn open(
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let (c, out) = (
-        NfaOp::try_from(op(state)).expect("a capture bracket"),
-        out_of(state),
-    );
+    let out = out_of(state);
     let (subidx, synt) = slot_of(c, true);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
@@ -632,8 +637,10 @@ fn open(
 
 /// `\)` and `\ze`: as [`open`], for the other end of a group. The end is
 /// always recorded, whether or not the slot was in use.
+#[allow(clippy::too_many_arguments)]
 fn close(
     l: &mut ThreadList,
+    c: NfaOp,
     state: *mut nfa_state_T,
     subs: &mut regsubs_T,
     pim: Option<&nfa_pim_T>,
@@ -643,10 +650,7 @@ fn close(
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let (c, out) = (
-        NfaOp::try_from(op(state)).expect("a capture bracket"),
-        out_of(state),
-    );
+    let out = out_of(state);
     let (subidx, synt) = slot_of(c, false);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };

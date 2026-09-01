@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
-use crate::keycodes::Ctrl_Z;
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_Z, Key};
 use crate::options::OptWimFlags;
 use crate::types::{ExpandContext, Failed, NUL, OK};
 

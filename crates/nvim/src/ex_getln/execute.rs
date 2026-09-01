@@ -12,10 +12,9 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Keys, Lock, Suppress};
-use crate::keycodes::Key;
 use crate::keycodes::{
     Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_L, Ctrl_N, Ctrl_P, Ctrl_U, Ctrl_W,
-    Ctrl_Y, Ctrl_Z,
+    Ctrl_Y, Ctrl_Z, Key,
 };
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, ExpandContext, NUL, OK};

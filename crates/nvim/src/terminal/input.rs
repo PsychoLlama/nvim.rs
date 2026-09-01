@@ -21,9 +21,7 @@
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
-use crate::keycodes::{Ctrl_AT, Ctrl_M};
+use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
 use crate::main::{KeyTyped, curbuf, curwin, mod_mask, tpf_flags, vgetc_char, vgetc_mod_mask};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};

@@ -10,8 +10,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Allow;
-use crate::keycodes::Key;
-use crate::keycodes::{Ctrl_N, Ctrl_P};
+use crate::keycodes::{Ctrl_N, Ctrl_P, Key};
 use crate::types::ExpandContext;
 use core::ffi::{c_char, c_int};
 

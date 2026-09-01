@@ -35,7 +35,7 @@ use crate::drawscreen::{
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
 use crate::main::{
     State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline,
     redraw_mode, restart_edit, stop_insert_mode,
@@ -58,7 +58,6 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
-use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O};
 use crate::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;

@@ -9,11 +9,9 @@
 
 use super::*;
 use crate::guard::Suppress;
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
-    Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
+    Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key, NotAKey,
 };
 use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;

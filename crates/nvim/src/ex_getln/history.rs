@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::keycodes::Ctrl_N;
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_N, Key};
 use crate::types::{ExpandContext, Failed, NUL};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through

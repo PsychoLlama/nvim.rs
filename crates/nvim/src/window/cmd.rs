@@ -11,8 +11,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
+use crate::keycodes::{
+    Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
+    Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
+    Ctrl_X, Ctrl_Z, Key, NotAKey,
+};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -26,11 +29,6 @@ use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
-use crate::keycodes::{
-    Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
-    Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
-    Ctrl_X, Ctrl_Z,
-};
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin,
     e_buffer_nr_not_found, e_cmdwin, e_noalt, firstwin, g_do_tagpreview, langmap_mapchar, lastwin,

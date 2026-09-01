@@ -2,7 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_H, Key};
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -36,7 +36,6 @@ use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
 
-use crate::keycodes::Ctrl_H;
 use crate::r#move::{
     WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
     validate_virtcol, win_col_off, win_col_off2,

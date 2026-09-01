@@ -17,8 +17,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
 use crate::guard::Allow;
-use crate::keycodes::Key;
-use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
+use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
     FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
 };

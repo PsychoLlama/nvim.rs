@@ -3,7 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_H, Key};
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
 
@@ -47,7 +47,6 @@ use crate::types::{
 };
 use core::ffi::{c_int, c_uint};
 
-use crate::keycodes::Ctrl_H;
 use crate::r#move::{
     adjust_skipcol, cursor_correct, validate_botline_win, validate_virtcol, win_col_off,
     win_col_off2,

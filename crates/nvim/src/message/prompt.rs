@@ -15,9 +15,7 @@
 
 use super::*;
 use crate::guard::Keys;
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
-use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F};
+use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;
 use crate::message_fmt::c_str;
 use crate::types::NUL;

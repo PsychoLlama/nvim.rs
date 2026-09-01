@@ -9,8 +9,7 @@
 
 use super::*;
 use crate::guard::{Allow, Keys};
-use crate::keycodes::Key;
-use crate::keycodes::key_unescape;
+use crate::keycodes::{Key, key_unescape};
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
 use core::ptr;

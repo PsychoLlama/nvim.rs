@@ -44,9 +44,7 @@ const MAX_DEPTH: c_int = 4;
 /// The capture brackets and `\zs`/`\ze` markers: they consume no input, so a
 /// walk looking for the first *character* steps straight through them.
 fn is_bracket(c: NfaOp) -> bool {
-    matches!(c, NfaOp::Zstart | NfaOp::Zend | NfaOp::Nopen)
-        || NfaOp::MOPEN.contains(&c)
-        || NfaOp::ZOPEN.contains(&c)
+    matches!(c, NfaOp::Zstart | NfaOp::Zend | NfaOp::Nopen) || c.opens_capture()
 }
 
 /// Must every match start at the beginning of a line?

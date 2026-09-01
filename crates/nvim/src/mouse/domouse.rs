@@ -18,7 +18,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
+use crate::keycodes::{
+    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key, get_mouse_button,
+};
 use core::ops::{Deref, DerefMut};
 
 use super::*;
@@ -35,7 +37,6 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, get_mouse_button};
 use crate::main::{
     Columns, KeyStuffed, State, VIsual_reselect, cmdwin_type, mod_mask, mode_displayed, mouse_col,
     mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd,

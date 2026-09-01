@@ -16,13 +16,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_C, Key};
 use core::ptr;
 use std::ffi::CString;
 
 use super::*;
 use crate::grid::default_grid_ref;
-use crate::keycodes::Ctrl_C;
 use crate::menu::{Menu, is_separator};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::winlayer::Win;

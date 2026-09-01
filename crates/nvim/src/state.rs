@@ -9,7 +9,7 @@
 //! loop is what makes `K_EVENT` (an event-queue wakeup rather than a key)
 //! look like input to all of them.
 
-use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -26,7 +26,6 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
-use crate::keycodes::{Ctrl_V, get_special_key_name};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
     State, curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, mod_mask,

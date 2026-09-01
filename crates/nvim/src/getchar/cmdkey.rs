@@ -8,8 +8,7 @@
 
 use super::*;
 use crate::guard::Keys;
-use crate::keycodes::Key;
-use crate::keycodes::{key_escape, key_unescape};
+use crate::keycodes::{Key, key_escape, key_unescape};
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
 use crate::types::NUL;

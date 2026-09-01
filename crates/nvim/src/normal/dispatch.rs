@@ -25,8 +25,7 @@ use crate::getchar::{
     typeahead, ungetchars, vpeekc, vungetc,
 };
 use crate::guard::{Allow, Keys, Suppress};
-use crate::keycodes::Key;
-use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, simplify_mod_mask};
+use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
     fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,

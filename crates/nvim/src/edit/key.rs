@@ -21,8 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::keycodes::Key;
-use crate::keycodes::NotAKey;
+use crate::keycodes::{Key, NotAKey};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 

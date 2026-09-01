@@ -9,9 +9,7 @@
 use super::*;
 use crate::charset::CharDisplay;
 use crate::cstr;
-use crate::keycodes::Key;
-use crate::keycodes::{MAX_KEY_NAME_LEN, SpecialKeyName};
-use crate::keycodes::{termcap_key, termcap_name};
+use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
 use core::ptr;

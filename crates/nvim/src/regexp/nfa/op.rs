@@ -308,25 +308,76 @@ impl NfaOp {
     }
 
     /// The number this opcode is stored as.
+    #[inline(always)]
     pub(crate) const fn code(self) -> c_int {
         self as c_int
     }
 
+    /// The runs the predicates below test against, as `const`s.
+    ///
+    /// `NfaOp::Mopen.code()` is a *call* in a runtime expression, and at
+    /// opt-level 0 -- which is what the test suites run -- nothing folds it
+    /// away. These are on the match loop's hottest path, so the bounds are
+    /// worked out at compile time instead.
+    const MOPEN_RUN: (c_int, c_int) = (NfaOp::Mopen.code(), NfaOp::Mopen9.code());
+    const ZOPEN_RUN: (c_int, c_int) = (NfaOp::Zopen.code(), NfaOp::Zopen9.code());
+    const MCLOSE_RUN: (c_int, c_int) = (NfaOp::Mclose.code(), NfaOp::Mclose9.code());
+    const ZCLOSE_RUN: (c_int, c_int) = (NfaOp::Zclose.code(), NfaOp::Zclose9.code());
+    const CAPTURE_RUN: (c_int, c_int) = (NfaOp::Mopen.code(), NfaOp::Zclose9.code());
+    const REFERENCE_RUN: (c_int, c_int) = (NfaOp::Backref1.code(), NfaOp::Zref9.code());
+    const CLASS_RUN: (c_int, c_int) = (NfaOp::Ident.code(), NfaOp::NupperIc.code());
+    const POSITION_RUN: (c_int, c_int) = (NfaOp::Lnum.code(), NfaOp::MarkLt.code());
+
     /// Where a group's open or close marker stands in `run`, which is the
     /// group number for the capture runs and one less for the reference runs.
+    ///
+    /// Every run is nine or ten consecutive codes, so this is a subtraction
+    /// rather than a search: it runs inside `addstate`, which is the match
+    /// loop's hottest function and is built at opt-level 0 for the suites.
+    #[inline(always)]
     pub(crate) fn index_in(self, run: &[NfaOp]) -> Option<usize> {
-        run.iter().position(|op| *op == self)
+        let Ok(offset) = usize::try_from(self.code() - run[0].code()) else {
+            return None;
+        };
+        if offset < run.len() {
+            Some(offset)
+        } else {
+            None
+        }
+    }
+
+    /// One of the twenty markers that open a capture, `\(` or `\z(`.
+    #[inline(always)]
+    pub(crate) fn opens_capture(self) -> bool {
+        self.in_run(NfaOp::MOPEN_RUN) || self.in_run(NfaOp::ZOPEN_RUN)
+    }
+
+    /// One of the twenty markers that close a capture.
+    #[inline(always)]
+    pub(crate) fn closes_capture(self) -> bool {
+        self.in_run(NfaOp::MCLOSE_RUN) || self.in_run(NfaOp::ZCLOSE_RUN)
+    }
+
+    /// Is this opcode inside `run`?
+    ///
+    /// Two comparisons rather than `RangeInclusive::contains`, which is a
+    /// call per range at opt-level 0.
+    #[inline(always)]
+    fn in_run(self, run: (c_int, c_int)) -> bool {
+        run.0 <= self.code() && self.code() <= run.1
     }
 
     /// One of the forty markers that open or close a capture: `MOPEN` through
     /// `ZCLOSE9`, which upstream matches as one range.
+    #[inline(always)]
     pub(crate) fn is_capture_marker(self) -> bool {
-        (NfaOp::Mopen.code()..=NfaOp::Zclose9.code()).contains(&self.code())
+        self.in_run(NfaOp::CAPTURE_RUN)
     }
 
     /// One of the eighteen `\1`-style references, back or external.
+    #[inline(always)]
     pub(crate) fn is_reference(self) -> bool {
-        (NfaOp::Backref1.code()..=NfaOp::Zref9.code()).contains(&self.code())
+        self.in_run(NfaOp::REFERENCE_RUN)
     }
 
     /// Does this opcode take an inline operand -- the number that follows it
@@ -334,11 +385,12 @@ impl NfaOp {
     ///
     /// `\\%[abc]` counts its members, `\\@123<=` its width, and the position
     /// assertions carry the line, column or mark they are about.
+    #[inline(always)]
     pub(crate) fn has_inline_operand(self) -> bool {
         matches!(
             self,
             NfaOp::OptChars | NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
-        ) || (NfaOp::Lnum.code()..=NfaOp::MarkLt.code()).contains(&self.code())
+        ) || self.in_run(NfaOp::POSITION_RUN)
     }
 
     /// One of the thirty character classes `\i` through `[^A-Z]`, the ones
@@ -346,8 +398,9 @@ impl NfaOp {
     ///
     /// `Any` sits just below the run and is deliberately outside it: it is
     /// not a class test, it accepts anything.
+    #[inline(always)]
     pub(crate) fn is_class(self) -> bool {
-        (NfaOp::Ident.code()..=NfaOp::NupperIc.code()).contains(&self.code())
+        self.in_run(NfaOp::CLASS_RUN)
     }
 }
 
@@ -356,184 +409,226 @@ impl NfaOp {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct NotAnOpcode;
 
+/// How many numbers the opcodes span, the reserved hole included.
+const SPAN: usize = 202;
+
+/// The opcode each number in the span stands for, `None` for the hole.
+///
+/// [`NfaOp::try_from`] runs once per state per character in the match loop,
+/// which is the tree's hottest code and is built at opt-level 0 for the test
+/// suites. A two-hundred-way `switch` there costs real time; this makes it a
+/// bounds check and a load, and leaves the switch to compile time.
+const BY_CODE: [Option<NfaOp>; SPAN] = {
+    let mut table = [None; SPAN];
+    let (mut i, mut code) = (0, NfaOp::Split.code());
+    while i < SPAN {
+        table[i] = from_code(code);
+        i += 1;
+        code += 1;
+    }
+    table
+};
+
+/// The opcode a number stands for. Only [`BY_CODE`] calls it, at compile
+/// time; nothing evaluates this switch while the editor is running.
+const fn from_code(code: c_int) -> Option<NfaOp> {
+    Some(match code {
+        -1024 => NfaOp::Split,
+        -1023 => NfaOp::Match,
+        -1022 => NfaOp::Empty,
+        -1021 => NfaOp::StartColl,
+        -1020 => NfaOp::EndColl,
+        -1019 => NfaOp::StartNegColl,
+        -1018 => NfaOp::EndNegColl,
+        -1017 => NfaOp::Range,
+        -1016 => NfaOp::RangeMin,
+        -1015 => NfaOp::RangeMax,
+        -1014 => NfaOp::Concat,
+        -1013 => NfaOp::Or,
+        -1012 => NfaOp::Star,
+        -1011 => NfaOp::StarNongreedy,
+        -1010 => NfaOp::Quest,
+        -1009 => NfaOp::QuestNongreedy,
+        -1008 => NfaOp::Bol,
+        -1007 => NfaOp::Eol,
+        -1006 => NfaOp::Bow,
+        -1005 => NfaOp::Eow,
+        -1004 => NfaOp::Bof,
+        -1003 => NfaOp::Eof,
+        -1002 => NfaOp::Newl,
+        -1001 => NfaOp::Zstart,
+        -1000 => NfaOp::Zend,
+        -999 => NfaOp::Nopen,
+        -998 => NfaOp::Nclose,
+        -997 => NfaOp::StartInvisible,
+        -996 => NfaOp::StartInvisibleFirst,
+        -995 => NfaOp::StartInvisibleNeg,
+        -994 => NfaOp::StartInvisibleNegFirst,
+        -993 => NfaOp::StartInvisibleBefore,
+        -992 => NfaOp::StartInvisibleBeforeFirst,
+        -991 => NfaOp::StartInvisibleBeforeNeg,
+        -990 => NfaOp::StartInvisibleBeforeNegFirst,
+        -989 => NfaOp::StartPattern,
+        -988 => NfaOp::EndInvisible,
+        -987 => NfaOp::EndInvisibleNeg,
+        -986 => NfaOp::EndPattern,
+        -985 => NfaOp::Composing,
+        -984 => NfaOp::EndComposing,
+        -983 => NfaOp::AnyComposing,
+        -982 => NfaOp::OptChars,
+        -981 => NfaOp::PrevAtomNoWidth,
+        -980 => NfaOp::PrevAtomNoWidthNeg,
+        -979 => NfaOp::PrevAtomJustBefore,
+        -978 => NfaOp::PrevAtomJustBeforeNeg,
+        -977 => NfaOp::PrevAtomLikePattern,
+        -976 => NfaOp::Backref1,
+        -975 => NfaOp::Backref2,
+        -974 => NfaOp::Backref3,
+        -973 => NfaOp::Backref4,
+        -972 => NfaOp::Backref5,
+        -971 => NfaOp::Backref6,
+        -970 => NfaOp::Backref7,
+        -969 => NfaOp::Backref8,
+        -968 => NfaOp::Backref9,
+        -967 => NfaOp::Zref1,
+        -966 => NfaOp::Zref2,
+        -965 => NfaOp::Zref3,
+        -964 => NfaOp::Zref4,
+        -963 => NfaOp::Zref5,
+        -962 => NfaOp::Zref6,
+        -961 => NfaOp::Zref7,
+        -960 => NfaOp::Zref8,
+        -959 => NfaOp::Zref9,
+        -958 => NfaOp::Skip,
+        -957 => NfaOp::Mopen,
+        -956 => NfaOp::Mopen1,
+        -955 => NfaOp::Mopen2,
+        -954 => NfaOp::Mopen3,
+        -953 => NfaOp::Mopen4,
+        -952 => NfaOp::Mopen5,
+        -951 => NfaOp::Mopen6,
+        -950 => NfaOp::Mopen7,
+        -949 => NfaOp::Mopen8,
+        -948 => NfaOp::Mopen9,
+        -947 => NfaOp::Mclose,
+        -946 => NfaOp::Mclose1,
+        -945 => NfaOp::Mclose2,
+        -944 => NfaOp::Mclose3,
+        -943 => NfaOp::Mclose4,
+        -942 => NfaOp::Mclose5,
+        -941 => NfaOp::Mclose6,
+        -940 => NfaOp::Mclose7,
+        -939 => NfaOp::Mclose8,
+        -938 => NfaOp::Mclose9,
+        -937 => NfaOp::Zopen,
+        -936 => NfaOp::Zopen1,
+        -935 => NfaOp::Zopen2,
+        -934 => NfaOp::Zopen3,
+        -933 => NfaOp::Zopen4,
+        -932 => NfaOp::Zopen5,
+        -931 => NfaOp::Zopen6,
+        -930 => NfaOp::Zopen7,
+        -929 => NfaOp::Zopen8,
+        -928 => NfaOp::Zopen9,
+        -927 => NfaOp::Zclose,
+        -926 => NfaOp::Zclose1,
+        -925 => NfaOp::Zclose2,
+        -924 => NfaOp::Zclose3,
+        -923 => NfaOp::Zclose4,
+        -922 => NfaOp::Zclose5,
+        -921 => NfaOp::Zclose6,
+        -920 => NfaOp::Zclose7,
+        -919 => NfaOp::Zclose8,
+        -918 => NfaOp::Zclose9,
+        -917 => NfaOp::Any,
+        -916 => NfaOp::Ident,
+        -915 => NfaOp::Sident,
+        -914 => NfaOp::Kword,
+        -913 => NfaOp::Skword,
+        -912 => NfaOp::Fname,
+        -911 => NfaOp::Sfname,
+        -910 => NfaOp::Print,
+        -909 => NfaOp::Sprint,
+        -908 => NfaOp::White,
+        -907 => NfaOp::Nwhite,
+        -906 => NfaOp::Digit,
+        -905 => NfaOp::Ndigit,
+        -904 => NfaOp::Hex,
+        -903 => NfaOp::Nhex,
+        -902 => NfaOp::Octal,
+        -901 => NfaOp::Noctal,
+        -900 => NfaOp::Word,
+        -899 => NfaOp::Nword,
+        -898 => NfaOp::Head,
+        -897 => NfaOp::Nhead,
+        -896 => NfaOp::Alpha,
+        -895 => NfaOp::Nalpha,
+        -894 => NfaOp::Lower,
+        -893 => NfaOp::Nlower,
+        -892 => NfaOp::Upper,
+        -891 => NfaOp::Nupper,
+        -890 => NfaOp::LowerIc,
+        -889 => NfaOp::NlowerIc,
+        -888 => NfaOp::UpperIc,
+        -887 => NfaOp::NupperIc,
+        -855 => NfaOp::Cursor,
+        -854 => NfaOp::Lnum,
+        -853 => NfaOp::LnumGt,
+        -852 => NfaOp::LnumLt,
+        -851 => NfaOp::Col,
+        -850 => NfaOp::ColGt,
+        -849 => NfaOp::ColLt,
+        -848 => NfaOp::Vcol,
+        -847 => NfaOp::VcolGt,
+        -846 => NfaOp::VcolLt,
+        -845 => NfaOp::Mark,
+        -844 => NfaOp::MarkGt,
+        -843 => NfaOp::MarkLt,
+        -842 => NfaOp::Visual,
+        -841 => NfaOp::ClassAlnum,
+        -840 => NfaOp::ClassAlpha,
+        -839 => NfaOp::ClassBlank,
+        -838 => NfaOp::ClassCntrl,
+        -837 => NfaOp::ClassDigit,
+        -836 => NfaOp::ClassGraph,
+        -835 => NfaOp::ClassLower,
+        -834 => NfaOp::ClassPrint,
+        -833 => NfaOp::ClassPunct,
+        -832 => NfaOp::ClassSpace,
+        -831 => NfaOp::ClassUpper,
+        -830 => NfaOp::ClassXdigit,
+        -829 => NfaOp::ClassTab,
+        -828 => NfaOp::ClassReturn,
+        -827 => NfaOp::ClassBackspace,
+        -826 => NfaOp::ClassEscape,
+        -825 => NfaOp::ClassIdent,
+        -824 => NfaOp::ClassKeyword,
+        -823 => NfaOp::ClassFname,
+        _ => return None,
+    })
+}
+
 impl TryFrom<c_int> for NfaOp {
     type Error = NotAnOpcode;
 
+    #[inline(always)]
     fn try_from(code: c_int) -> Result<NfaOp, NotAnOpcode> {
-        Ok(match code {
-            -1024 => NfaOp::Split,
-            -1023 => NfaOp::Match,
-            -1022 => NfaOp::Empty,
-            -1021 => NfaOp::StartColl,
-            -1020 => NfaOp::EndColl,
-            -1019 => NfaOp::StartNegColl,
-            -1018 => NfaOp::EndNegColl,
-            -1017 => NfaOp::Range,
-            -1016 => NfaOp::RangeMin,
-            -1015 => NfaOp::RangeMax,
-            -1014 => NfaOp::Concat,
-            -1013 => NfaOp::Or,
-            -1012 => NfaOp::Star,
-            -1011 => NfaOp::StarNongreedy,
-            -1010 => NfaOp::Quest,
-            -1009 => NfaOp::QuestNongreedy,
-            -1008 => NfaOp::Bol,
-            -1007 => NfaOp::Eol,
-            -1006 => NfaOp::Bow,
-            -1005 => NfaOp::Eow,
-            -1004 => NfaOp::Bof,
-            -1003 => NfaOp::Eof,
-            -1002 => NfaOp::Newl,
-            -1001 => NfaOp::Zstart,
-            -1000 => NfaOp::Zend,
-            -999 => NfaOp::Nopen,
-            -998 => NfaOp::Nclose,
-            -997 => NfaOp::StartInvisible,
-            -996 => NfaOp::StartInvisibleFirst,
-            -995 => NfaOp::StartInvisibleNeg,
-            -994 => NfaOp::StartInvisibleNegFirst,
-            -993 => NfaOp::StartInvisibleBefore,
-            -992 => NfaOp::StartInvisibleBeforeFirst,
-            -991 => NfaOp::StartInvisibleBeforeNeg,
-            -990 => NfaOp::StartInvisibleBeforeNegFirst,
-            -989 => NfaOp::StartPattern,
-            -988 => NfaOp::EndInvisible,
-            -987 => NfaOp::EndInvisibleNeg,
-            -986 => NfaOp::EndPattern,
-            -985 => NfaOp::Composing,
-            -984 => NfaOp::EndComposing,
-            -983 => NfaOp::AnyComposing,
-            -982 => NfaOp::OptChars,
-            -981 => NfaOp::PrevAtomNoWidth,
-            -980 => NfaOp::PrevAtomNoWidthNeg,
-            -979 => NfaOp::PrevAtomJustBefore,
-            -978 => NfaOp::PrevAtomJustBeforeNeg,
-            -977 => NfaOp::PrevAtomLikePattern,
-            -976 => NfaOp::Backref1,
-            -975 => NfaOp::Backref2,
-            -974 => NfaOp::Backref3,
-            -973 => NfaOp::Backref4,
-            -972 => NfaOp::Backref5,
-            -971 => NfaOp::Backref6,
-            -970 => NfaOp::Backref7,
-            -969 => NfaOp::Backref8,
-            -968 => NfaOp::Backref9,
-            -967 => NfaOp::Zref1,
-            -966 => NfaOp::Zref2,
-            -965 => NfaOp::Zref3,
-            -964 => NfaOp::Zref4,
-            -963 => NfaOp::Zref5,
-            -962 => NfaOp::Zref6,
-            -961 => NfaOp::Zref7,
-            -960 => NfaOp::Zref8,
-            -959 => NfaOp::Zref9,
-            -958 => NfaOp::Skip,
-            -957 => NfaOp::Mopen,
-            -956 => NfaOp::Mopen1,
-            -955 => NfaOp::Mopen2,
-            -954 => NfaOp::Mopen3,
-            -953 => NfaOp::Mopen4,
-            -952 => NfaOp::Mopen5,
-            -951 => NfaOp::Mopen6,
-            -950 => NfaOp::Mopen7,
-            -949 => NfaOp::Mopen8,
-            -948 => NfaOp::Mopen9,
-            -947 => NfaOp::Mclose,
-            -946 => NfaOp::Mclose1,
-            -945 => NfaOp::Mclose2,
-            -944 => NfaOp::Mclose3,
-            -943 => NfaOp::Mclose4,
-            -942 => NfaOp::Mclose5,
-            -941 => NfaOp::Mclose6,
-            -940 => NfaOp::Mclose7,
-            -939 => NfaOp::Mclose8,
-            -938 => NfaOp::Mclose9,
-            -937 => NfaOp::Zopen,
-            -936 => NfaOp::Zopen1,
-            -935 => NfaOp::Zopen2,
-            -934 => NfaOp::Zopen3,
-            -933 => NfaOp::Zopen4,
-            -932 => NfaOp::Zopen5,
-            -931 => NfaOp::Zopen6,
-            -930 => NfaOp::Zopen7,
-            -929 => NfaOp::Zopen8,
-            -928 => NfaOp::Zopen9,
-            -927 => NfaOp::Zclose,
-            -926 => NfaOp::Zclose1,
-            -925 => NfaOp::Zclose2,
-            -924 => NfaOp::Zclose3,
-            -923 => NfaOp::Zclose4,
-            -922 => NfaOp::Zclose5,
-            -921 => NfaOp::Zclose6,
-            -920 => NfaOp::Zclose7,
-            -919 => NfaOp::Zclose8,
-            -918 => NfaOp::Zclose9,
-            -917 => NfaOp::Any,
-            -916 => NfaOp::Ident,
-            -915 => NfaOp::Sident,
-            -914 => NfaOp::Kword,
-            -913 => NfaOp::Skword,
-            -912 => NfaOp::Fname,
-            -911 => NfaOp::Sfname,
-            -910 => NfaOp::Print,
-            -909 => NfaOp::Sprint,
-            -908 => NfaOp::White,
-            -907 => NfaOp::Nwhite,
-            -906 => NfaOp::Digit,
-            -905 => NfaOp::Ndigit,
-            -904 => NfaOp::Hex,
-            -903 => NfaOp::Nhex,
-            -902 => NfaOp::Octal,
-            -901 => NfaOp::Noctal,
-            -900 => NfaOp::Word,
-            -899 => NfaOp::Nword,
-            -898 => NfaOp::Head,
-            -897 => NfaOp::Nhead,
-            -896 => NfaOp::Alpha,
-            -895 => NfaOp::Nalpha,
-            -894 => NfaOp::Lower,
-            -893 => NfaOp::Nlower,
-            -892 => NfaOp::Upper,
-            -891 => NfaOp::Nupper,
-            -890 => NfaOp::LowerIc,
-            -889 => NfaOp::NlowerIc,
-            -888 => NfaOp::UpperIc,
-            -887 => NfaOp::NupperIc,
-            -855 => NfaOp::Cursor,
-            -854 => NfaOp::Lnum,
-            -853 => NfaOp::LnumGt,
-            -852 => NfaOp::LnumLt,
-            -851 => NfaOp::Col,
-            -850 => NfaOp::ColGt,
-            -849 => NfaOp::ColLt,
-            -848 => NfaOp::Vcol,
-            -847 => NfaOp::VcolGt,
-            -846 => NfaOp::VcolLt,
-            -845 => NfaOp::Mark,
-            -844 => NfaOp::MarkGt,
-            -843 => NfaOp::MarkLt,
-            -842 => NfaOp::Visual,
-            -841 => NfaOp::ClassAlnum,
-            -840 => NfaOp::ClassAlpha,
-            -839 => NfaOp::ClassBlank,
-            -838 => NfaOp::ClassCntrl,
-            -837 => NfaOp::ClassDigit,
-            -836 => NfaOp::ClassGraph,
-            -835 => NfaOp::ClassLower,
-            -834 => NfaOp::ClassPrint,
-            -833 => NfaOp::ClassPunct,
-            -832 => NfaOp::ClassSpace,
-            -831 => NfaOp::ClassUpper,
-            -830 => NfaOp::ClassXdigit,
-            -829 => NfaOp::ClassTab,
-            -828 => NfaOp::ClassReturn,
-            -827 => NfaOp::ClassBackspace,
-            -826 => NfaOp::ClassEscape,
-            -825 => NfaOp::ClassIdent,
-            -824 => NfaOp::ClassKeyword,
-            -823 => NfaOp::ClassFname,
-            _ => return Err(NotAnOpcode),
-        })
+        const FIRST: c_int = NfaOp::Split.code();
+        const LAST: c_int = NfaOp::ClassFname.code();
+        // Most numbers reaching here are literal characters, and the two
+        // comparisons reject every one of them before the table is touched.
+        // `RangeInclusive::contains` would be a call at opt-level 0, which is
+        // what the test suites run and where this loop is measurable.
+        #[allow(clippy::manual_range_contains)]
+        if code < FIRST || code > LAST {
+            return Err(NotAnOpcode);
+        }
+        // The check above puts `code - FIRST` in `0..SPAN`.
+        let offset = (code - FIRST).cast_unsigned() as usize;
+        match BY_CODE[offset] {
+            Some(op) => Ok(op),
+            None => Err(NotAnOpcode),
+        }
     }
 }
 

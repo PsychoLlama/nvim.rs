@@ -305,9 +305,7 @@ pub(crate) unsafe fn step(
         // `NfaOp::Mopen` itself is deliberately absent: upstream leaves it
         // to the literal-character arm below, which never matches it.
         Ok(NfaOp::Nopen | NfaOp::Zstart) => Step::Dead,
-        Ok(marker) if NfaOp::MOPEN[1..].contains(&marker) || NfaOp::ZOPEN.contains(&marker) => {
-            Step::Dead
-        }
+        Ok(marker) if marker != NfaOp::Mopen && marker.opens_capture() => Step::Dead,
 
         // A literal character, and every opcode upstream leaves to it.
         _ => {
