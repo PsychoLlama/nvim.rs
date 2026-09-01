@@ -35,6 +35,7 @@ use crate::drawscreen::{
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
+use crate::keycodes::Key;
 use crate::main::{
     State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline,
     redraw_mode, restart_edit, stop_insert_mode,
@@ -57,9 +58,7 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
-use crate::keycodes::{
-    Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, K_COMMAND, K_EVENT, K_IGNORE, K_LUA, K_NOP, K_PASTE_START,
-};
+use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O};
 use crate::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;
@@ -598,13 +597,13 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
         }
         return 1;
     }
-    match mod_key {
-        K_PASTE_START => {
+    match Key::try_from(mod_key) {
+        Ok(Key::PasteStart) => {
             // SAFETY: replays the paste the editor has buffered.
             unsafe { paste_repeat(1) };
             return 1;
         }
-        K_EVENT => {
+        Ok(Key::Event) => {
             // An event handler can close the terminal.
             s.term.refcount.retain();
             // SAFETY: runs whatever the main loop had queued.
@@ -615,31 +614,30 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
             }
             return 1;
         }
-        K_COMMAND => {
+        Ok(Key::Command) => {
             let (none, data) = (::core::ptr::null_mut(), ::core::ptr::null_mut::<c_void>());
             // SAFETY: runs the command the key carries, which is read back
             // by `getcmdkeycmd` rather than passed here.
             let _ = unsafe { do_cmdline(none, Some(getcmdkeycmd), data, DoCmdOpts::NONE) };
             return 1;
         }
-        K_LUA => {
+        Ok(Key::Lua) => {
             // SAFETY: runs the Lua callback the key carries.
             unsafe { map_execute_lua(false, false) };
             return 1;
         }
-        K_IGNORE | K_NOP => return 1,
-        Ctrl_N | Ctrl_O
-            // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves
-            // for one command and comes back.
-            if s.got_bsl => {
-                if mod_key == Ctrl_N {
-                    return 0;
-                }
-                s.got_bsl_o = true;
-                restart_edit.set(b'I' as c_int);
-                return 0;
-            }
+        Ok(Key::Ignore | Key::Nop) => return 1,
         _ => {}
+    }
+    // CTRL-\ CTRL-N leaves for normal mode; CTRL-\ CTRL-O leaves for one
+    // command and comes back.
+    if s.got_bsl && matches!(mod_key, Ctrl_N | Ctrl_O) {
+        if mod_key == Ctrl_N {
+            return 0;
+        }
+        s.got_bsl_o = true;
+        restart_edit.set(b'I' as c_int);
+        return 0;
     }
 
     // CTRL-C in terminal mode belongs to the child, so the interrupt the

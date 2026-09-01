@@ -18,11 +18,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::keycodes::{K_C_END, K_C_HOME};
 use crate::types::{NUL, OK};
 
 /// If 'keymodel' contains `startsel`, turn `c` into the start of a
@@ -35,11 +35,11 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
     if !km_startsel.get() {
         return false;
     }
-    let starts = match c {
-        K_KHOME | K_KEND | K_PAGEUP | K_KPAGEUP | K_PAGEDOWN | K_KPAGEDOWN => {
-            mod_mask.get() & MOD_MASK_SHIFT != 0
-        }
-        K_S_LEFT | K_S_RIGHT | K_S_UP | K_S_DOWN | K_S_END | K_S_HOME => true,
+    let starts = match Key::try_from(c) {
+        Ok(
+            Key::Khome | Key::Kend | Key::Pageup | Key::Kpageup | Key::Pagedown | Key::Kpagedown,
+        ) => mod_mask.get() & MOD_MASK_SHIFT != 0,
+        Ok(Key::SLeft | Key::SRight | Key::SUp | Key::SDown | Key::SEnd | Key::SHome) => true,
         _ => false,
     };
     if !starts {
@@ -93,7 +93,7 @@ pub(crate) fn ins_left() {
     if unsafe { oneleft() }.is_ok() {
         start_arrow_changing(&mut tpos, end_change);
         if !end_change {
-            append_to_redobuff_char(K_LEFT);
+            append_to_redobuff_char(Key::Left.code());
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
@@ -121,7 +121,7 @@ pub(crate) fn ins_home(c: c_int) {
     hide_dollar();
 
     let mut tpos = cur_win().w_cursor;
-    if c == K_C_HOME {
+    if c == Key::CHome.code() {
         cur_win().w_cursor.lnum = 1;
     }
     cur_win().w_cursor.col = 0;
@@ -136,7 +136,7 @@ pub(crate) fn ins_end(c: c_int) {
     hide_dollar();
 
     let mut tpos = cur_win().w_cursor;
-    if c == K_C_END {
+    if c == Key::CEnd.code() {
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL as c_int);
@@ -155,7 +155,7 @@ pub(crate) fn ins_s_left() {
     if cur_win().w_cursor.lnum > 1 || cur_win().w_cursor.col > 0 {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
-            append_to_redobuff_char(K_S_LEFT);
+            append_to_redobuff_char(Key::SLeft.code());
         }
         let _ = unsafe { bck_word(1, false, false) };
         cur_win().w_set_curswant = true;
@@ -174,7 +174,7 @@ pub(crate) fn ins_right() {
     if gchar_cursor() != NUL || virtual_active(cur_win()) {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
-            append_to_redobuff_char(K_RIGHT);
+            append_to_redobuff_char(Key::Right.code());
         }
         cur_win().w_set_curswant = true;
         if virtual_active(cur_win()) {
@@ -216,7 +216,7 @@ pub(crate) fn ins_s_right() {
     if cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count || gchar_cursor() != NUL {
         start_arrow_changing(&mut cur_win().w_cursor, end_change);
         if !end_change {
-            append_to_redobuff_char(K_S_RIGHT);
+            append_to_redobuff_char(Key::SRight.code());
         }
         let _ = unsafe { fwd_word(1, false, false) };
         cur_win().w_set_curswant = true;

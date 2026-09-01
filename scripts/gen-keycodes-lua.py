@@ -22,9 +22,11 @@ binary search needs it to be. Consumers that care about which spelling is
 preferred want the `is_alt` column, which upstream expressed only as
 position and which this file therefore cannot carry.
 
-Column 1 is recovered verbatim from the Rust expression, which is upstream's
-C spelling in every row: a bare macro name (`K_BS`), a C character literal
-with its quotes (`' '`), or `extra(KE_FOO)` for `K_FOO`.
+Column 1 is upstream's C spelling in every row, recovered from the Rust
+expression: a bare macro name (`K_BS`), a C character literal with its quotes
+(`' '`), `extra(KE_FOO)` for `K_FOO`, or a `Key` variant, whose name is the C
+one with each underscore-separated word capitalised (`K_S_F1` is `Key::SF1`)
+and so inverts by splitting on the capitals again.
 
 Usage: gen-keycodes-lua.py [--check]
   --check   regenerate and diff against the committed file; exit 1 on drift
@@ -60,9 +62,11 @@ HEADER = """\
 
 def key_to_lua(key: str) -> str:
     """The Lua spelling of a `key_name` first argument."""
-    key = key.removesuffix(" as c_int")
+    key = key.removesuffix(" as c_int").removesuffix(".code()")
     if key.startswith("extra(KE_") and key.endswith(")"):
         return "K_" + key[len("extra(KE_") : -1]
+    if key.startswith("Key::"):
+        return "K_" + "_".join(w.upper() for w in re.findall(r"[A-Z][^A-Z]*", key[5:]))
     return key
 
 

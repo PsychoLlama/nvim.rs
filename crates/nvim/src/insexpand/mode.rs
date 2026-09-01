@@ -9,6 +9,8 @@
 
 use super::*;
 use crate::guard::Suppress;
+use crate::keycodes::Key;
+use crate::keycodes::NotAKey;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
@@ -475,9 +477,9 @@ pub(crate) fn get_compl_len() -> c_int {
 pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
     let mut retval = false;
     'chord: {
-        match c {
+        match Key::try_from(c) {
             // Scroll the window one line up or down.
-            Ctrl_E | Ctrl_Y => {
+            Err(NotAKey(Ctrl_E | Ctrl_Y)) => {
                 ctrl_x_mode.set(CTRL_X_SCROLL);
                 let scroll = if State.get() & REPLACE_FLAG == 0 {
                     c" (insert) Scroll (^E/^Y)".as_ptr()
@@ -492,21 +494,21 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
                 break 'chord;
             }
             // Complete whole lines.
-            Ctrl_L => {
+            Err(NotAKey(Ctrl_L)) => {
                 ctrl_x_mode.set(CTRL_X_WHOLE_LINE);
                 break 'chord;
             }
             // Complete file names.
-            Ctrl_F => {
+            Err(NotAKey(Ctrl_F)) => {
                 ctrl_x_mode.set(CTRL_X_FILES);
                 break 'chord;
             }
             // Complete words from a dictionary.
-            Ctrl_K => {
+            Err(NotAKey(Ctrl_K)) => {
                 ctrl_x_mode.set(CTRL_X_DICTIONARY);
                 break 'chord;
             }
-            Ctrl_R => {
+            Err(NotAKey(Ctrl_R)) => {
                 // CTRL-R followed by '=' is an expression register, not
                 // register completion: leave the mode alone.
                 if vpeekc() != '=' as c_int {
@@ -515,22 +517,22 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
                 break 'chord;
             }
             // Complete words from a thesaurus.
-            Ctrl_T => {
+            Err(NotAKey(Ctrl_T)) => {
                 ctrl_x_mode.set(CTRL_X_THESAURUS);
                 break 'chord;
             }
             // User defined completion.
-            Ctrl_U => {
+            Err(NotAKey(Ctrl_U)) => {
                 ctrl_x_mode.set(CTRL_X_FUNCTION);
                 break 'chord;
             }
             // Omni completion.
-            Ctrl_O => {
+            Err(NotAKey(Ctrl_O)) => {
                 ctrl_x_mode.set(CTRL_X_OMNI);
                 break 'chord;
             }
             // Complete spelling suggestions.
-            LOWER_S | Ctrl_S => {
+            Err(NotAKey(LOWER_S | Ctrl_S)) => {
                 ctrl_x_mode.set(CTRL_X_SPELL);
                 let no_emsg = Suppress::emsg(); // avoid E756 twice
                 // SAFETY: the editor exists and the cursor is in a buffer,
@@ -540,27 +542,27 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
                 break 'chord;
             }
             // Complete tag names.
-            Ctrl_RSB => {
+            Err(NotAKey(Ctrl_RSB)) => {
                 ctrl_x_mode.set(CTRL_X_TAGS);
                 break 'chord;
             }
             // Complete keywords from included files.
-            Ctrl_I | K_S_TAB => {
+            Ok(Key::STab) | Err(NotAKey(Ctrl_I)) => {
                 ctrl_x_mode.set(CTRL_X_PATH_PATTERNS);
                 break 'chord;
             }
             // Complete definitions from included files.
-            Ctrl_D => {
+            Err(NotAKey(Ctrl_D)) => {
                 ctrl_x_mode.set(CTRL_X_PATH_DEFINES);
                 break 'chord;
             }
             // Complete Vim commands.
-            Ctrl_V | Ctrl_Q => {
+            Err(NotAKey(Ctrl_V | Ctrl_Q)) => {
                 ctrl_x_mode.set(CTRL_X_CMDLINE);
                 break 'chord;
             }
             // Stop completion.
-            Ctrl_Z => {
+            Err(NotAKey(Ctrl_Z)) => {
                 ctrl_x_mode.set(CTRL_X_NORMAL);
                 edit_submode.set(ptr::null_mut());
                 redraw_mode.set(true);
@@ -573,7 +575,7 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
             // expansion when interrupting a different mode (^X^F^X^P or
             // ^P^X^X^P).  Nothing changes when interrupting mode 0 — the flag
             // does not change when going to ADDING mode.  -- Acevedo
-            Ctrl_P | Ctrl_N => {
+            Err(NotAKey(Ctrl_P | Ctrl_N)) => {
                 if compl_cont_status.get() & CONT_INTRPT == 0 {
                     compl_cont_status.set(compl_cont_status.get() | CONT_LOCAL);
                 } else if compl_cont_mode.get() != 0 {
@@ -622,14 +624,20 @@ pub(crate) fn ins_compl_mode() -> *mut c_char {
 
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.
 pub(crate) unsafe fn ins_compl_key2dir(c: c_int) -> Direction {
-    if c == K_EVENT || c == K_COMMAND || c == K_LUA {
+    if c == Key::Event.code() || c == Key::Command.code() || c == Key::Lua.code() {
         return if pum_want.get().item < compl_selected_item.get() {
             BACKWARD
         } else {
             FORWARD
         };
     }
-    if c == Ctrl_P || c == Ctrl_L || c == K_PAGEUP || c == K_KPAGEUP || c == K_S_UP || c == K_UP {
+    if c == Ctrl_P
+        || c == Ctrl_L
+        || c == Key::Pageup.code()
+        || c == Key::Kpageup.code()
+        || c == Key::SUp.code()
+        || c == Key::Up.code()
+    {
         return BACKWARD;
     }
     FORWARD
@@ -638,23 +646,23 @@ pub(crate) unsafe fn ins_compl_key2dir(c: c_int) -> Direction {
 /// `c` is a completion key only while the popup menu is shown.
 pub(crate) fn ins_compl_pum_key(c: c_int) -> bool {
     pum_visible()
-        && (c == K_PAGEUP
-            || c == K_KPAGEUP
-            || c == K_S_UP
-            || c == K_PAGEDOWN
-            || c == K_KPAGEDOWN
-            || c == K_S_DOWN
-            || c == K_UP
-            || c == K_DOWN)
+        && (c == Key::Pageup.code()
+            || c == Key::Kpageup.code()
+            || c == Key::SUp.code()
+            || c == Key::Pagedown.code()
+            || c == Key::Kpagedown.code()
+            || c == Key::SDown.code()
+            || c == Key::Up.code()
+            || c == Key::Down.code())
 }
 
 /// How many matches the key typed moves: one for most keys, a menu's height
 /// for the page keys.
 pub(crate) fn ins_compl_key2count(c: c_int) -> c_int {
-    if c == K_EVENT || c == K_COMMAND || c == K_LUA {
+    if c == Key::Event.code() || c == Key::Command.code() || c == Key::Lua.code() {
         return (pum_want.get().item - compl_selected_item.get()).abs();
     }
-    if ins_compl_pum_key(c) && c != K_UP && c != K_DOWN {
+    if ins_compl_pum_key(c) && c != Key::Up.code() && c != Key::Down.code() {
         let h = pum_get_height();
         return if h > 3 { h - 2 } else { h }; // keep some context
     }
@@ -664,11 +672,18 @@ pub(crate) fn ins_compl_key2count(c: c_int) -> c_int {
 /// True when completing with `c` should insert the match, false when it only
 /// changes which match is selected.
 pub(crate) fn ins_compl_use_match(c: c_int) -> bool {
-    match c {
-        K_UP | K_DOWN | K_PAGEDOWN | K_KPAGEDOWN | K_S_DOWN | K_PAGEUP | K_KPAGEUP | K_S_UP => {
-            false
-        }
-        K_EVENT | K_COMMAND | K_LUA => {
+    match Key::try_from(c) {
+        Ok(
+            Key::Up
+            | Key::Down
+            | Key::Pagedown
+            | Key::Kpagedown
+            | Key::SDown
+            | Key::Pageup
+            | Key::Kpageup
+            | Key::SUp,
+        ) => false,
+        Ok(Key::Event | Key::Command | Key::Lua) => {
             let want = pum_want.get();
             want.active && want.insert
         }

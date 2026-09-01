@@ -28,12 +28,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
 use super::*;
-use crate::keycodes::{K_COMMAND, K_LUA};
 use crate::r#move::WinValid;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, set_visual_select,
@@ -102,7 +102,7 @@ pub unsafe fn clear_oparg(oap: *mut oparg_T) {
 ///
 /// `:` and `<Cmd>` both arrive here as an operator over the Visual area.
 fn is_ex_cmdchar(cap: Cmd) -> bool {
-    cap.cmdchar == ':' as c_int || cap.cmdchar == K_COMMAND
+    cap.cmdchar == ':' as c_int || cap.cmdchar == Key::Command.code()
 }
 
 /// Run the operator that a motion (or a Visual selection) has just completed.
@@ -262,7 +262,7 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
         && (!visual_active()
             || oap.motion_force != 0
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cap) || cap.cmdchar == K_LUA) && oap.op_type != OP_COLON))
+            || ((is_ex_cmdchar(cap) || cap.cmdchar == Key::Lua.code()) && oap.op_type != OP_COLON))
         && cap.cmdchar != 'D' as c_int
         && !is_fold_op;
     if !replayable {
@@ -305,7 +305,7 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
             unsafe { xfree(line as *mut c_void) };
             repeat_cmdline.set(::core::ptr::null_mut());
         }
-    } else if cap.cmdchar == K_LUA {
+    } else if cap.cmdchar == Key::Lua.code() {
         append_to_redobuff_number(repeat_luaref.get() as c_int);
         unsafe { append_to_redobuff(c"\n".as_ptr()) };
     }
@@ -485,7 +485,7 @@ fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
             cap.cmdchar,
             cap.nchar,
         );
-    } else if !is_ex_cmdchar(cap) && cap.cmdchar != K_LUA {
+    } else if !is_ex_cmdchar(cap) && cap.cmdchar != Key::Lua.code() {
         let opchar = get_op_char(oap.op_type);
         let extra_opchar = get_extra_op_char(oap.op_type);
         // Only `r` uses `nchar`; for anything else it would be the

@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::guard::Keys;
+use crate::keycodes::Key;
 use crate::keycodes::key_unescape;
 use crate::types::NUL;
 use core::ffi::{c_char, c_int};
@@ -47,9 +48,9 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
 
     if phase != PastePhase::Chunk {
         let c = if phase == PastePhase::Start {
-            K_PASTE_START
+            Key::PasteStart.code()
         } else {
-            K_PASTE_END
+            Key::PasteEnd.code()
         };
         if need_redo {
             if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
@@ -137,10 +138,11 @@ pub unsafe fn paste_repeat(count: c_int) {
             // bytes of a real key code go back in as they came out.
             let second = unsafe { vgetorpeek(true) } as u8;
             let third = unsafe { vgetorpeek(true) } as u8;
-            match key_unescape(second, third) {
-                K_PASTE_END => break,
-                K_ZERO => unsafe { ga_append(&raw mut ga, NUL as u8) },
-                K_SPECIAL => unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) },
+            let key = key_unescape(second, third);
+            match Key::try_from(key) {
+                Ok(Key::PasteEnd) => break,
+                Ok(Key::Zero) => unsafe { ga_append(&raw mut ga, NUL as u8) },
+                _ if key == K_SPECIAL => unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) },
                 _ => {
                     unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) };
                     unsafe { ga_append(&raw mut ga, second) };

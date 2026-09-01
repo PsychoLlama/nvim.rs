@@ -35,8 +35,7 @@ use crate::getchar::{ins_typebuf, noremap_keys};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_8;
 use crate::keycodes::{
-    K_SPECIAL, K_ZERO, get_special_key_name, replace_termcodes, vim_strsave_escape_ks,
-    vim_unescape_ks,
+    K_SPECIAL, get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
 };
 use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,

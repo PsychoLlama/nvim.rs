@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::Key;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -27,7 +28,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, K_DEL, K_INS, K_KDEL, K_KINS};
+use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y};
 use crate::main::{
     State, cb_flags, curbuf, curwin, e_modifiable, got_int, p_sel, p_sta, p_to, p_ww, restart_edit,
 };
@@ -371,7 +372,7 @@ pub(crate) unsafe fn nv_subst(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_abbrev(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.cmdchar == K_DEL || ca.cmdchar == K_KDEL {
+    if ca.cmdchar == Key::Del.code() || ca.cmdchar == Key::Kdel.code() {
         ca.cmdchar = 'x' as c_int;
     }
     if visual_active() {
@@ -495,7 +496,7 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
 pub(crate) unsafe fn nv_edit(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.cmdchar == K_INS || ca.cmdchar == K_KINS {
+    if ca.cmdchar == Key::Ins.code() || ca.cmdchar == Key::Kins.code() {
         ca.cmdchar = 'i' as c_int;
     }
     // With a selection up, `A` and `I` insert at every line's end or

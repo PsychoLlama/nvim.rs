@@ -17,6 +17,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
 use crate::guard::Allow;
+use crate::keycodes::Key;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y};
 use crate::types::{
     FAIL, NUL, OK, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow,
@@ -294,9 +295,9 @@ pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
     compl_curr_match.set(compl_first_match.get());
     let no_select = compl_no_select || compl_longest;
     if compl_no_insert || no_select {
-        let _ = unsafe { ins_complete(K_DOWN, false) };
+        let _ = unsafe { ins_complete(Key::Down.code(), false) };
         if no_select {
-            let _ = unsafe { ins_complete(K_UP, false) };
+            let _ = unsafe { ins_complete(Key::Up.code(), false) };
         }
     } else {
         let _ = unsafe { ins_complete(Ctrl_N, false) };

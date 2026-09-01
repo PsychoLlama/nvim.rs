@@ -104,14 +104,7 @@ use crate::insexpand::{
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_BSL, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_J,
     Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
-    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_BS, K_COMMAND, K_DEL, K_DOWN, K_END, K_F1, K_HELP, K_HOME,
-    K_INS, K_KDEL, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KPAGEDOWN, K_KPAGEUP, K_LEFT, K_LEFTDRAG,
-    K_LEFTMOUSE, K_LEFTMOUSE_NM, K_LEFTRELEASE, K_LEFTRELEASE_NM, K_LUA, K_MIDDLEDRAG,
-    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
-    K_PAGEDOWN, K_PAGEUP, K_PASTE_START, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE,
-    K_S_DOWN, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP,
-    K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_ZERO,
-    add_char2buf, get_special_key_name,
+    Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, ai_col, arrow_used,

@@ -10,6 +10,7 @@
 use super::*;
 use crate::cstr;
 use crate::keycodes::Ctrl_N;
+use crate::keycodes::Key;
 use crate::types::{ExpandContext, Failed, NUL};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
@@ -49,7 +50,7 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
             unsafe { (*s).hiscnt = (*s).save_hiscnt };
             break;
         };
-        if (unsafe { (*s).c } != K_UP && unsafe { (*s).c } != K_DOWN)
+        if (unsafe { (*s).c } != Key::Up.code() && unsafe { (*s).c } != Key::Down.code())
             || unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt }
             || unsafe { cstr::prefix_eq(entry.text, (*s).lookfor, (*s).lookforlen as size_t) }
         {
@@ -75,11 +76,11 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
         unsafe { (*s).lookforlen = cc.cmdpos };
     }
 
-    let next_match = unsafe { (*s).c } == K_DOWN
-        || unsafe { (*s).c } == K_S_DOWN
+    let next_match = unsafe { (*s).c } == Key::Down.code()
+        || unsafe { (*s).c } == Key::SDown.code()
         || unsafe { (*s).c } == Ctrl_N
-        || unsafe { (*s).c } == K_PAGEDOWN
-        || unsafe { (*s).c } == K_KPAGEDOWN;
+        || unsafe { (*s).c } == Key::Pagedown.code()
+        || unsafe { (*s).c } == Key::Kpagedown.code();
     unsafe { command_line_next_histidx(s, next_match) };
 
     if unsafe { (*s).hiscnt } == unsafe { (*s).save_hiscnt } {

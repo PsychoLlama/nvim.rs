@@ -15,11 +15,9 @@
 
 use super::*;
 use crate::guard::Keys;
-use crate::keycodes::{
-    Ctrl_B, Ctrl_C, Ctrl_F, K_IGNORE, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG,
-    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
-    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_X1MOUSE, K_X2MOUSE,
-};
+use crate::keycodes::Key;
+use crate::keycodes::NotAKey;
+use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F};
 use crate::log::logmsg;
 use crate::message_fmt::c_str;
 use crate::types::NUL;
@@ -160,44 +158,52 @@ pub unsafe fn wait_return(redraw: c_int) {
                     // Allow scrolling back in the messages. Also accept
                     // scroll-down commands when messages fill the screen,
                     // so one 'j' too many does not make them disappear.
-                    if matches!(c, KEY_B | Ctrl_B | KEY_K | KEY_U | KEY_G | K_UP | K_PAGEUP) {
+                    if matches!(
+                        Key::try_from(c),
+                        Ok(Key::Up | Key::Pageup)
+                            | Err(NotAKey(KEY_B | Ctrl_B | KEY_K | KEY_U | KEY_G))
+                    ) {
                         if msg_scrolled.get() > Rows.get() {
                             // scroll back to show older messages
                             unsafe { do_more_prompt(c) };
                         } else {
                             msg_didout.set(false);
-                            c = K_IGNORE;
+                            c = Key::Ignore.code();
                             msg_col.set(0);
                         }
                         if quit_more.get() {
                             c = CAR; // just pretend CR was hit
                             quit_more.set(false);
                             got_int.set(false);
-                        } else if c != K_IGNORE {
-                            c = K_IGNORE;
+                        } else if c != Key::Ignore.code() {
+                            c = Key::Ignore.code();
                             unsafe { hit_return_msg(false) };
                         }
                     } else if msg_scrolled.get() > Rows.get() - 2
-                        && matches!(c, KEY_J | KEY_D | KEY_F | Ctrl_F | K_DOWN | K_PAGEDOWN)
+                        && matches!(
+                            Key::try_from(c),
+                            Ok(Key::Down | Key::Pagedown)
+                                | Err(NotAKey(KEY_J | KEY_D | KEY_F | Ctrl_F))
+                        )
                     {
-                        c = K_IGNORE;
+                        c = Key::Ignore.code();
                     }
                 }
 
                 let ignored = matches!(
-                    c,
-                    K_IGNORE
-                        | K_LEFTDRAG
-                        | K_LEFTRELEASE
-                        | K_MIDDLEDRAG
-                        | K_MIDDLERELEASE
-                        | K_RIGHTDRAG
-                        | K_RIGHTRELEASE
-                        | K_MOUSELEFT
-                        | K_MOUSERIGHT
-                        | K_MOUSEDOWN
-                        | K_MOUSEUP
-                        | K_MOUSEMOVE
+                    Key::try_from(c),
+                    Ok(Key::Ignore
+                        | Key::Leftdrag
+                        | Key::Leftrelease
+                        | Key::Middledrag
+                        | Key::Middlerelease
+                        | Key::Rightdrag
+                        | Key::Rightrelease
+                        | Key::Mouseleft
+                        | Key::Mouseright
+                        | Key::Mousedown
+                        | Key::Mouseup
+                        | Key::Mousemove)
                 );
                 if !((had_got_int && c == Ctrl_C) || ignored) {
                     break;
@@ -207,8 +213,12 @@ pub unsafe fn wait_return(redraw: c_int) {
 
             // Avoid that the mouse-up event causes Visual mode to start.
             if matches!(
-                c,
-                K_LEFTMOUSE | K_MIDDLEMOUSE | K_RIGHTMOUSE | K_X1MOUSE | K_X2MOUSE
+                Key::try_from(c),
+                Ok(Key::Leftmouse
+                    | Key::Middlemouse
+                    | Key::Rightmouse
+                    | Key::X1mouse
+                    | Key::X2mouse)
             ) {
                 unsafe { jump_to_mouse(MOUSE_SETPOS as c_int, ptr::null_mut(), 0) };
             } else if unsafe { vim_strchr(c"\r\n ".as_ptr(), c) }.is_null()
@@ -347,41 +357,41 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
 
         let mut toscroll = 0;
         'scroll: {
-            match c {
-                BS | K_BS | KEY_K | K_UP => {
+            match Key::try_from(c) {
+                Ok(Key::Bs | Key::Up) | Err(NotAKey(BS | KEY_K)) => {
                     toscroll = -1;
                     break 'scroll;
                 }
-                CAR | NL | KEY_J | K_DOWN => {
+                Ok(Key::Down) | Err(NotAKey(CAR | NL | KEY_J)) => {
                     toscroll = 1;
                     break 'scroll;
                 }
-                KEY_U => {
+                Err(NotAKey(KEY_U)) => {
                     toscroll = -(Rows.get() / 2);
                     break 'scroll;
                 }
-                KEY_D => {
+                Err(NotAKey(KEY_D)) => {
                     toscroll = Rows.get() / 2;
                     break 'scroll;
                 }
-                KEY_B | Ctrl_B | K_PAGEUP => {
+                Ok(Key::Pageup) | Err(NotAKey(KEY_B | Ctrl_B)) => {
                     toscroll = -(Rows.get() - 1);
                     break 'scroll;
                 }
-                KEY_SPACE | KEY_F | Ctrl_F | K_PAGEDOWN | K_LEFTMOUSE => {
+                Ok(Key::Pagedown | Key::Leftmouse) | Err(NotAKey(KEY_SPACE | KEY_F | Ctrl_F)) => {
                     toscroll = Rows.get() - 1;
                     break 'scroll;
                 }
-                KEY_G => {
+                Err(NotAKey(KEY_G)) => {
                     toscroll = -999999;
                     break 'scroll;
                 }
-                KEY_UPPER_G => {
+                Err(NotAKey(KEY_UPPER_G)) => {
                     toscroll = 999999;
                     lines_left.set(999999);
                     break 'scroll;
                 }
-                KEY_COLON => {
+                Err(NotAKey(KEY_COLON)) => {
                     // Start an Ex command on the next line.
                     if confirm_msg_used.get() == 0 {
                         typeahead_noflush(KEY_COLON);
@@ -391,10 +401,10 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                     }
                     // falls through to the quit tail
                 }
-                KEY_Q | Ctrl_C | ESC => {
+                Err(NotAKey(KEY_Q | Ctrl_C | ESC)) => {
                     // falls through to the quit tail
                 }
-                K_EVENT => {
+                Ok(Key::Event) => {
                     // Process the event on the main loop's queue.
                     unsafe { multiqueue_process_events(resize_events.get()) };
                     to_redraw = true;

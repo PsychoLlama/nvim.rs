@@ -9,7 +9,8 @@
 
 use super::*;
 use crate::guard::{Allow, Keys};
-use crate::keycodes::{K_C_END, K_C_HOME, K_COMMAND, K_IGNORE, K_LUA, K_MOUSEMOVE, key_unescape};
+use crate::keycodes::Key;
+use crate::keycodes::key_unescape;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
 use core::ptr;
@@ -24,7 +25,7 @@ pub fn merge_modifiers(c_arg: c_int, modifiers: &mut c_int) -> c_int {
         if c >= '@' as c_int && c <= 0x7f {
             c &= 0x1f;
             if c == NUL {
-                c = K_ZERO;
+                c = Key::Zero.code();
             }
         } else if c == '6' as c_int {
             // CTRL-6 is equivalent to CTRL-^.
@@ -92,23 +93,23 @@ pub fn vgetc() -> c_int {
     if discarded {
         // Keys following K_COMMAND/K_LUA/K_PASTE_START are not normally
         // seen by vim.on_key() callbacks, so drop them with this one.
-        if c == K_COMMAND {
+        if c == Key::Command.code() {
             // SAFETY: `getcmdkeycmd` is callable at any time and answers
             // either null or a fresh allocation, which is ours to free.
             unsafe { xfree(getcmdkeycmd(NUL, ptr::null_mut(), 0, false).cast()) };
-        } else if c == K_LUA {
+        } else if c == Key::Lua.code() {
             // SAFETY: callable at any time; it only reads the typeahead.
             unsafe { map_execute_lua(false, true) };
-        } else if c == K_PASTE_START {
+        } else if c == Key::PasteStart.code() {
             // SAFETY: callable at any time; it only reads the typeahead.
             unsafe { paste_repeat(0) };
         }
-        c = K_IGNORE;
+        c = Key::Ignore.code();
     }
     on_key_buf.with_mut(Vec::clear);
 
     // The character has to be processed before anything else is safe.
-    if c != K_IGNORE {
+    if c != Key::Ignore.code() {
         // SAFETY: a NUL-terminated string literal.
         unsafe { state_no_longer_safe(c"key typed".as_ptr()) };
     }
@@ -234,31 +235,35 @@ fn vgetc_from_typeahead() -> c_int {
 ///
 /// Safe: it only reads and writes the editor's own `mod_mask`.
 fn keypad_equivalent(c: c_int) -> c_int {
-    match c {
-        K_KPLUS => '+' as c_int,
-        K_KMINUS => '-' as c_int,
-        K_KDIVIDE => '/' as c_int,
-        K_KMULTIPLY => '*' as c_int,
-        K_KENTER => CAR,
-        K_KPOINT => '.' as c_int,
-        K_KCOMMA => ',' as c_int,
-        K_KEQUAL => '=' as c_int,
-        K_K0 => '0' as c_int,
-        K_K1 => '1' as c_int,
-        K_K2 => '2' as c_int,
-        K_K3 => '3' as c_int,
-        K_K4 => '4' as c_int,
-        K_K5 => '5' as c_int,
-        K_K6 => '6' as c_int,
-        K_K7 => '7' as c_int,
-        K_K8 => '8' as c_int,
-        K_K9 => '9' as c_int,
-        K_XHOME | K_ZHOME => modified_key(K_S_HOME, K_C_HOME, K_HOME),
-        K_XEND | K_ZEND => modified_key(K_S_END, K_C_END, K_END),
-        K_KUP | K_XUP => K_UP,
-        K_KDOWN | K_XDOWN => K_DOWN,
-        K_KLEFT | K_XLEFT => K_LEFT,
-        K_KRIGHT | K_XRIGHT => K_RIGHT,
+    match Key::try_from(c) {
+        Ok(Key::Kplus) => '+' as c_int,
+        Ok(Key::Kminus) => '-' as c_int,
+        Ok(Key::Kdivide) => '/' as c_int,
+        Ok(Key::Kmultiply) => '*' as c_int,
+        Ok(Key::Kenter) => CAR,
+        Ok(Key::Kpoint) => '.' as c_int,
+        Ok(Key::Kcomma) => ',' as c_int,
+        Ok(Key::Kequal) => '=' as c_int,
+        Ok(Key::K0) => '0' as c_int,
+        Ok(Key::K1) => '1' as c_int,
+        Ok(Key::K2) => '2' as c_int,
+        Ok(Key::K3) => '3' as c_int,
+        Ok(Key::K4) => '4' as c_int,
+        Ok(Key::K5) => '5' as c_int,
+        Ok(Key::K6) => '6' as c_int,
+        Ok(Key::K7) => '7' as c_int,
+        Ok(Key::K8) => '8' as c_int,
+        Ok(Key::K9) => '9' as c_int,
+        Ok(Key::Xhome | Key::Zhome) => {
+            modified_key(Key::SHome.code(), Key::CHome.code(), Key::Home.code())
+        }
+        Ok(Key::Xend | Key::Zend) => {
+            modified_key(Key::SEnd.code(), Key::CEnd.code(), Key::End.code())
+        }
+        Ok(Key::Kup | Key::Xup) => Key::Up.code(),
+        Ok(Key::Kdown | Key::Xdown) => Key::Down.code(),
+        Ok(Key::Kleft | Key::Xleft) => Key::Left.code(),
+        Ok(Key::Kright | Key::Xright) => Key::Right.code(),
         _ => c,
     }
 }
@@ -302,7 +307,11 @@ pub fn safe_vgetc() -> c_int {
 pub fn plain_vgetc() -> c_int {
     loop {
         let c = safe_vgetc();
-        if c != K_IGNORE && c != K_VER_SCROLLBAR && c != K_HOR_SCROLLBAR && c != K_MOUSEMOVE {
+        if c != Key::Ignore.code()
+            && c != Key::VerScrollbar.code()
+            && c != Key::HorScrollbar.code()
+            && c != Key::Mousemove.code()
+        {
             return c;
         }
     }

@@ -8,7 +8,8 @@
 
 use super::*;
 use crate::guard::Keys;
-use crate::keycodes::{K_COMMAND, K_SNR, key_escape, key_unescape};
+use crate::keycodes::Key;
+use crate::keycodes::{key_escape, key_unescape};
 use crate::message_fmt::c_str;
 use crate::semsg_multiline;
 use crate::types::NUL;
@@ -79,11 +80,11 @@ pub unsafe fn getcmdkeycmd(
             c1 = NUL; // end of the line
         } else if c1 == ESC {
             aborted = true;
-        } else if c1 == K_COMMAND {
+        } else if c1 == Key::Command.code() {
             // A nicer error message for this special case.
             emsg(gettext(e_cmd_mapping_must_end_with_cr_before_second_cmd));
             aborted = true;
-        } else if c1 == K_SNR {
+        } else if c1 == Key::Snr.code() {
             unsafe { ga_concat_len(&raw mut line_ga, c"<SNR>".as_ptr(), 5) };
         } else {
             if cmod != 0 {

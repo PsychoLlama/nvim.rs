@@ -25,11 +25,8 @@ use crate::getchar::{
     typeahead, ungetchars, vpeekc, vungetc,
 };
 use crate::guard::{Allow, Keys, Suppress};
-use crate::keycodes::{
-    Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, K_DEL, K_DOWN, K_END, K_HOME, K_KENTER, K_LEFT,
-    K_RIGHT, K_S_END, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_UP, K_ZERO, KE_C_LEFT, KE_C_RIGHT, KE_EVENT,
-    KE_IGNORE, KE_KDEL, KE_MOUSEMOVE, simplify_mod_mask,
-};
+use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, simplify_mod_mask};
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
     fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,
@@ -397,20 +394,20 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
 pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
-    const K_C_LEFT: c_int = -(253 + ((KE_C_LEFT as c_int) << 8));
-    const K_C_RIGHT: c_int = -(253 + ((KE_C_RIGHT as c_int) << 8));
-    ns.ca.cmdchar = match ns.ca.cmdchar {
-        c if c == 'l' as c_int => 'h' as c_int,
-        K_RIGHT => K_LEFT,
-        K_S_RIGHT => K_S_LEFT,
-        K_C_RIGHT => K_C_LEFT,
-        c if c == 'h' as c_int => 'l' as c_int,
-        K_LEFT => K_RIGHT,
-        K_S_LEFT => K_S_RIGHT,
-        K_C_LEFT => K_C_RIGHT,
-        c if c == '>' as c_int => '<' as c_int,
-        c if c == '<' as c_int => '>' as c_int,
-        other => other,
+    ns.ca.cmdchar = match Key::try_from(ns.ca.cmdchar) {
+        Ok(Key::Right) => Key::Left.code(),
+        Ok(Key::SRight) => Key::SLeft.code(),
+        Ok(Key::CRight) => Key::CLeft.code(),
+        Ok(Key::Left) => Key::Right.code(),
+        Ok(Key::SLeft) => Key::SRight.code(),
+        Ok(Key::CLeft) => Key::CRight.code(),
+        _ => match ns.ca.cmdchar {
+            c if c == 'l' as c_int => 'h' as c_int,
+            c if c == 'h' as c_int => 'l' as c_int,
+            c if c == '>' as c_int => '<' as c_int,
+            c if c == '<' as c_int => '>' as c_int,
+            other => other,
+        },
     };
     ns.idx = find_command(ns.ca.cmdchar);
 }
@@ -427,11 +424,11 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
         return false;
     }
     // SAFETY: `s` is the caller's live state.
-    const K_KDEL: c_int = -(253 + ((KE_KDEL as c_int) << 8));
     while (ns.c >= '1' as c_int && ns.c <= '9' as c_int)
-        || (ns.ca.count0 != 0 && (ns.c == K_DEL || ns.c == K_KDEL || ns.c == '0' as c_int))
+        || (ns.ca.count0 != 0
+            && (ns.c == Key::Del.code() || ns.c == Key::Kdel.code() || ns.c == '0' as c_int))
     {
-        if ns.c == K_DEL || ns.c == K_KDEL {
+        if ns.c == Key::Del.code() || ns.c == Key::Kdel.code() {
             ns.ca.count0 /= 10;
             // Four columns: <Del> is echoed as its key name.
             del_from_showcmd(4);
@@ -476,9 +473,6 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
 pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     // SAFETY: `s` is the caller's live normal-mode state.
     let mut ns = unsafe { NormalStateRef::new(s) };
-    const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
-    const K_MOUSEMOVE: c_int = -(253 + ((KE_MOUSEMOVE as c_int) << 8));
-    const K_EVENT: c_int = -(253 + ((KE_EVENT as c_int) << 8));
 
     // SAFETY: `s` is the caller's live state.
     let mut did_visual_op = false;
@@ -495,7 +489,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         if ns.old_mapped_len > 0 {
             ns.old_mapped_len = typeahead().maplen();
         }
-        if ns.ca.cmdchar != K_IGNORE && ns.ca.cmdchar != K_MOUSEMOVE {
+        if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Mousemove.code() {
             did_visual_op = visual_active() && ns.oa.op_type != OP_NOP && ns.oa.op_type != OP_COLON;
             unsafe { do_pending_operator(&raw mut ns.ca, ns.old_col, false) };
         }
@@ -521,7 +515,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     {
         unsafe { ui_cursor_shape() };
     }
-    if ns.oa.op_type == OP_NOP && ns.oa.regname == 0 && ns.ca.cmdchar != K_EVENT {
+    if ns.oa.op_type == OP_NOP && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
         clear_showcmd();
     }
     unsafe { checkpcmark() };
@@ -569,9 +563,6 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 /// Keeps the raw signature: it is installed as a `state_execute_callback` and
 /// `state_enter` calls it through that pointer.
 pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
-    const K_IGNORE: c_int = -(253 + ((KE_IGNORE as c_int) << 8));
-    const K_EVENT: c_int = -(253 + ((KE_EVENT as c_int) << 8));
-
     // SAFETY: `state` is the `VimState` at the head of the `NormalState` the
     // caller handed to `state_enter`.
     let s = state as *mut NormalState;
@@ -592,14 +583,17 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     }
 
     if ns.c == NUL {
-        ns.c = K_ZERO;
+        ns.c = Key::Zero.code();
     }
 
     // In Select mode a printable key replaces the selection: the key is
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (unsafe { vim_isprintc(ns.c) } || ns.c == NL || ns.c == CAR || ns.c == K_KENTER)
+        && (unsafe { vim_isprintc(ns.c) }
+            || ns.c == NL
+            || ns.c == CAR
+            || ns.c == Key::Kenter.code())
     {
         let len = unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };
         if KeyTyped.get() {
@@ -617,7 +611,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     ns.need_flushbuf = add_to_showcmd(ns.c);
     while unsafe { normal_get_command_count(ns.raw()) } {}
 
-    if ns.c == K_EVENT {
+    if ns.c == Key::Event.code() {
         // An event is not a command: the count it interrupted is stashed
         // for the real command that follows.
         ns.oa.prev_opcount = ns.ca.opcount;
@@ -671,7 +665,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if ns.need_flushbuf {
             unsafe { ui_flush() };
         }
-        if ns.ca.cmdchar != K_IGNORE && ns.ca.cmdchar != K_EVENT {
+        if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Event.code() {
             did_cursorhold.set(false);
         }
         State.set(MODE_NORMAL);
@@ -680,7 +674,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             unsafe { clearop(&raw mut ns.oa) };
             ns.command_finished = true;
         } else {
-            if ns.ca.cmdchar != K_IGNORE {
+            if ns.ca.cmdchar != Key::Ignore.code() {
                 msg_didout.set(false);
                 msg_col.set(0);
             }
@@ -866,17 +860,15 @@ pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
 pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    const K_S_UP: c_int = -1277;
-    const K_S_DOWN: c_int = -1533;
     // SAFETY: `cap` is the caller's live command argument.
-    ca.cmdchar = match ca.cmdchar {
-        K_S_RIGHT => K_RIGHT,
-        K_S_LEFT => K_LEFT,
-        K_S_UP => K_UP,
-        K_S_DOWN => K_DOWN,
-        K_S_HOME => K_HOME,
-        K_S_END => K_END,
-        other => other,
+    ca.cmdchar = match Key::try_from(ca.cmdchar) {
+        Ok(Key::SRight) => Key::Right.code(),
+        Ok(Key::SLeft) => Key::Left.code(),
+        Ok(Key::SUp) => Key::Up.code(),
+        Ok(Key::SDown) => Key::Down.code(),
+        Ok(Key::SHome) => Key::Home.code(),
+        Ok(Key::SEnd) => Key::End.code(),
+        _ => ca.cmdchar,
     };
     ca.cmdchar = simplify_mod_mask(ca.cmdchar);
 }

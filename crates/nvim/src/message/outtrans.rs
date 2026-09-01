@@ -9,6 +9,7 @@
 use super::*;
 use crate::charset::CharDisplay;
 use crate::cstr;
+use crate::keycodes::Key;
 use crate::keycodes::{MAX_KEY_NAME_LEN, SpecialKeyName};
 use crate::keycodes::{termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;
@@ -393,7 +394,7 @@ pub(crate) unsafe fn str2special(
 fn to_special(second: u8, third: u8) -> c_int {
     match second as c_int {
         KS_SPECIAL => K_SPECIAL,
-        KS_ZERO => K_ZERO,
+        KS_ZERO => Key::Zero.code(),
         _ => termcap_key([second, third]),
     }
 }

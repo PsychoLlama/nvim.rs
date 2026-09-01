@@ -20,6 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -157,7 +158,11 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
     if i == 0 {
         // No number was entered: the key itself is the answer.  NUL is
         // stored as NL.
-        cc = if nc == K_ZERO { '\n' as c_int } else { nc };
+        cc = if nc == Key::Zero.code() {
+            '\n' as c_int
+        } else {
+            nc
+        };
         nc = 0;
     }
     if cc == 0 {

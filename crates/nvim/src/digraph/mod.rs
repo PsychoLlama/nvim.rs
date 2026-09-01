@@ -25,7 +25,7 @@ use crate::getchar::plain_vgetc;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
-use crate::keycodes::K_BS;
+use crate::keycodes::Key;
 use crate::main::{Columns, cmdline_star, curbuf, curwin, got_int, msg_col, p_cpo, p_dg, p_enc};
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
@@ -133,7 +133,7 @@ pub fn do_digraph(c: c_int) -> c_int {
             c = digraph_get(BACKSPACED.get(), c, false);
         }
         BACKSPACED.set(-1);
-        if (c == K_BS || c == CTRL_H) && LASTCHAR.get() >= 0 {
+        if (c == Key::Bs.code() || c == CTRL_H) && LASTCHAR.get() >= 0 {
             BACKSPACED.set(LASTCHAR.get());
         }
     }

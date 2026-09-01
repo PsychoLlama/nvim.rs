@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use core::ops::{Deref, DerefMut};
 
 use super::*;
@@ -34,10 +35,7 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::keycodes::{
-    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, K_MIDDLEMOUSE, K_MOUSEMOVE,
-    get_mouse_button,
-};
+use crate::keycodes::{Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, get_mouse_button};
 use crate::main::{
     Columns, KeyStuffed, State, VIsual_reselect, cmdwin_type, mod_mask, mode_displayed, mouse_col,
     mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd,
@@ -180,7 +178,7 @@ pub(crate) unsafe fn do_mouse(
     let oap = (!oap.is_null()).then_some(Oap(oap));
     let (mut which_button, is_click, is_drag) = coalesce_drags(c);
 
-    if c == K_MOUSEMOVE {
+    if c == Key::Mousemove.code() {
         return false; // Mouse moved without a button pressed.
     }
     if let Some(answer) = ignore_stray_event(is_click, is_drag) {
@@ -503,7 +501,7 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
                 unsafe { stuff_readbuf(c"\"+p".as_ptr()) };
             } else {
                 stuff_char('y' as c_int);
-                stuff_char(K_MIDDLEMOUSE);
+                stuff_char(Key::Middlemouse.code());
             }
             return Some(false);
         }

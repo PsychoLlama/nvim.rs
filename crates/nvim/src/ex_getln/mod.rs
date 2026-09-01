@@ -59,16 +59,7 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
-use crate::keycodes::{
-    K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_CMDWIN, K_COMMAND, K_DEL, K_DOWN, K_END,
-    K_EVENT, K_HOME, K_IGNORE, K_INS, K_KDEL, K_KEND, K_KENTER, K_KHOME, K_KINS, K_KPAGEDOWN,
-    K_KPAGEUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_LUA, K_MIDDLEDRAG, K_MIDDLEMOUSE,
-    K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_NOP,
-    K_PAGEDOWN, K_PAGEUP, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END,
-    K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_SELECT, K_SPECIAL, K_UP, K_WILD, K_X1DRAG,
-    K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_XF1, K_XF2, K_ZERO,
-    get_special_key_name,
-};
+use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, allbuf_lock, cmd_silent, cmdline_row, cmdline_star,
     cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl, cmdpreview, cmdwin_buf, cmdwin_level,

@@ -20,13 +20,7 @@ use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_grow};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
-use crate::keycodes::{
-    K_DOWN, K_END, K_HOME, K_HOR_SCROLLBAR, K_K0, K_K1, K_K2, K_K3, K_K4, K_K5, K_K6, K_K7, K_K8,
-    K_K9, K_KCOMMA, K_KDIVIDE, K_KDOWN, K_KENTER, K_KEQUAL, K_KLEFT, K_KMINUS, K_KMULTIPLY,
-    K_KPLUS, K_KPOINT, K_KRIGHT, K_KUP, K_LEFT, K_PASTE_END, K_PASTE_START, K_RIGHT, K_S_END,
-    K_S_HOME, K_SPECIAL, K_UP, K_VER_SCROLLBAR, K_XDOWN, K_XEND, K_XHOME, K_XLEFT, K_XRIGHT, K_XUP,
-    K_ZEND, K_ZERO, K_ZHOME, special_to_buf,
-};
+use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_reselect, allow_keys, arrow_used, called_emsg, cmd_silent,

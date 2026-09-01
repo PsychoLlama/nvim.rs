@@ -188,7 +188,7 @@ pub fn simplify_key(key: c_int, modifiers: &mut c_int) -> c_int {
     // TAB is the one key with a shifted code but no unshifted termcap row.
     if key == TAB && *modifiers & MOD_MASK_SHIFT != 0 {
         *modifiers &= !MOD_MASK_SHIFT;
-        return K_S_TAB;
+        return Key::STab.code();
     }
     match simplify(key, *modifiers) {
         Some((simplified, left)) => {
@@ -210,21 +210,21 @@ pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
 /// `<xKey>` to `<Key>`: the DEC and vt100 spellings of keys that also have an
 /// ordinary termcap name.
 fn handle_x_keys(key: c_int) -> c_int {
-    match key {
-        K_XUP => K_UP,
-        K_XDOWN => K_DOWN,
-        K_XLEFT => K_LEFT,
-        K_XRIGHT => K_RIGHT,
-        K_XHOME | K_ZHOME => K_HOME,
-        K_XEND | K_ZEND => K_END,
-        K_XF1 => K_F1,
-        K_XF2 => K_F2,
-        K_XF3 => K_F3,
-        K_XF4 => K_F4,
-        K_S_XF1 => K_S_F1,
-        K_S_XF2 => K_S_F2,
-        K_S_XF3 => K_S_F3,
-        K_S_XF4 => K_S_F4,
+    match Key::try_from(key) {
+        Ok(Key::Xup) => Key::Up.code(),
+        Ok(Key::Xdown) => Key::Down.code(),
+        Ok(Key::Xleft) => Key::Left.code(),
+        Ok(Key::Xright) => Key::Right.code(),
+        Ok(Key::Xhome | Key::Zhome) => Key::Home.code(),
+        Ok(Key::Xend | Key::Zend) => Key::End.code(),
+        Ok(Key::Xf1) => Key::F1.code(),
+        Ok(Key::Xf2) => Key::F2.code(),
+        Ok(Key::Xf3) => Key::F3.code(),
+        Ok(Key::Xf4) => Key::F4.code(),
+        Ok(Key::SXf1) => Key::SF1.code(),
+        Ok(Key::SXf2) => Key::SF2.code(),
+        Ok(Key::SXf3) => Key::SF3.code(),
+        Ok(Key::SXf4) => Key::SF4.code(),
         _ => key,
     }
 }
@@ -534,9 +534,9 @@ pub unsafe fn find_special_key(
     key = simplify_key(key, &mut modifiers);
     if flags & FSK_KEYCODE == 0 {
         // No key code wanted: answer with the single-byte code.
-        if key == K_BS {
+        if key == Key::Bs.code() {
             key = BS;
-        } else if key == K_DEL || key == K_KDEL {
+        } else if key == Key::Del.code() || key == Key::Kdel.code() {
             key = DEL;
         }
     }
@@ -592,7 +592,7 @@ unsafe fn extract_modifiers(
         key = to_upper_ascii(key) ^ 0x40;
         modifiers &= !MOD_MASK_CTRL;
         if key == NUL {
-            key = K_ZERO; // <C-@> is <Nul>
+            key = Key::Zero.code(); // <C-@> is <Nul>
         }
         if !did_simplify.is_null() {
             unsafe { *did_simplify = true };

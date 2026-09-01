@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -180,9 +181,11 @@ pub(crate) fn ins_ctrl_g() {
 
     match c {
         // CTRL-G k and CTRL-G <Up>: cursor up to Insstart.col.
-        K_UP | Ctrl_K | CTRL_G_UP => ins_updown(true, true),
+        _ if c == Key::Up.code() => ins_updown(true, true),
+        Ctrl_K | CTRL_G_UP => ins_updown(true, true),
         // CTRL-G j and CTRL-G <Down>: cursor down to Insstart.col.
-        K_DOWN | Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
+        _ if c == Key::Down.code() => ins_updown(false, true),
+        Ctrl_J | CTRL_G_DOWN => ins_updown(false, true),
         // CTRL-G u: start a new undoable edit.
         CTRL_G_UNDO => {
             u_sync(true);
@@ -405,7 +408,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
         State.set(replace_state | State.get() & MODE_LANGMAP);
     }
     unsafe { may_trigger_modechanged() };
-    append_to_redobuff_char(K_INS);
+    append_to_redobuff_char(Key::Ins.code());
     show_mode();
     unsafe { ui_cursor_shape() };
 }

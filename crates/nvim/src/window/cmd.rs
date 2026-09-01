@@ -11,6 +11,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
+use crate::keycodes::NotAKey;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -27,7 +29,7 @@ use crate::guard::Keys;
 use crate::keycodes::{
     Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
-    Ctrl_X, Ctrl_Z, K_BS, K_DOWN, K_KENTER, K_LEFT, K_RIGHT, K_UP,
+    Ctrl_X, Ctrl_Z,
 };
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin,
@@ -120,9 +122,9 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         locked
     };
-    match nchar {
+    match Key::try_from(nchar) {
         // split the current window in two parts, horizontally
-        SPLIT | SPLIT_ALT | Ctrl_S => {
+        Err(NotAKey(SPLIT | SPLIT_ALT | Ctrl_S)) => {
             if in_cmdwin() {
                 return;
             }
@@ -130,7 +132,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_or_new(nchar, prenum, 0);
         }
         // split the current window in two parts, vertically
-        VSPLIT | Ctrl_V => {
+        Err(NotAKey(VSPLIT | Ctrl_V)) => {
             if in_cmdwin() {
                 return;
             }
@@ -138,7 +140,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_or_new(nchar, prenum, WSP_VERT as c_int);
         }
         // split the current window and edit the alternate file
-        ALTFILE | Ctrl_HAT => {
+        Err(NotAKey(ALTFILE | Ctrl_HAT)) => {
             if in_cmdwin() {
                 return;
             }
@@ -146,7 +148,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             split_alternate(prenum);
         }
         // open a new window
-        NEW | Ctrl_N => {
+        Err(NotAKey(NEW | Ctrl_N)) => {
             if in_cmdwin() {
                 return;
             }
@@ -154,17 +156,17 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             new_window(nchar, prenum);
         }
         // quit the current window
-        QUIT | Ctrl_Q => {
+        Err(NotAKey(QUIT | Ctrl_Q)) => {
             reset_VIsual_and_resel();
             run_with_count(c"quit", prenum);
         }
         // close the current window
-        CLOSE | Ctrl_C => {
+        Err(NotAKey(CLOSE | Ctrl_C)) => {
             reset_VIsual_and_resel();
             run_with_count(c"close", prenum);
         }
         // close the preview window
-        PCLOSE | Ctrl_Z => {
+        Err(NotAKey(PCLOSE | Ctrl_Z)) => {
             if in_cmdwin() {
                 return;
             }
@@ -172,12 +174,12 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             run_cmd(c"pclose".as_ptr());
         }
         // cursor to the preview window
-        PREVIEW => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
+        Err(NotAKey(PREVIEW)) => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
             None => err(c"E441: There is no preview window".as_ptr()),
             Some(wp) => goto_win(wp),
         },
         // close all but the current window
-        ONLY | Ctrl_O => {
+        Err(NotAKey(ONLY | Ctrl_O)) => {
             if in_cmdwin() {
                 return;
             }
@@ -185,46 +187,46 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             run_with_count(c"only", prenum);
         }
         // cursor to the next ('w') or previous ('W') window, wrapping around
-        NEXT | Ctrl_W | PREV => {
+        Err(NotAKey(NEXT | Ctrl_W | PREV)) => {
             if !in_cmdwin() {
                 cycle_windows(nchar, prenum);
             }
         }
         // cursor to the window below, above, left or right
-        DOWN | K_DOWN | Ctrl_J => {
+        Ok(Key::Down) | Err(NotAKey(DOWN | Ctrl_J)) => {
             if !in_cmdwin() {
                 goto_ver(false, prenum1);
             }
         }
-        UP | K_UP | Ctrl_K => {
+        Ok(Key::Up) | Err(NotAKey(UP | Ctrl_K)) => {
             if !in_cmdwin() {
                 goto_ver(true, prenum1);
             }
         }
-        LEFT | K_LEFT | Ctrl_H | K_BS => {
+        Ok(Key::Left | Key::Bs) | Err(NotAKey(LEFT | Ctrl_H)) => {
             if !in_cmdwin() {
                 goto_hor(true, prenum1);
             }
         }
-        RIGHT | K_RIGHT | Ctrl_L => {
+        Ok(Key::Right) | Err(NotAKey(RIGHT | Ctrl_L)) => {
             if !in_cmdwin() {
                 goto_hor(false, prenum1);
             }
         }
         // move the window to a new tab page
-        TO_NEW_TAB => {
+        Err(NotAKey(TO_NEW_TAB)) => {
             if !in_cmdwin() {
                 move_to_new_tabpage(prenum);
             }
         }
         // cursor to the top-left window
-        TOP | Ctrl_T => goto_win(first_win()),
+        Err(NotAKey(TOP | Ctrl_T)) => goto_win(first_win()),
         // cursor to the bottom-right window
-        BOTTOM | Ctrl_B => goto_win(last_nonfloating(None)),
+        Err(NotAKey(BOTTOM | Ctrl_B)) => goto_win(last_nonfloating(None)),
         // cursor to the last accessed (previous) window. Upstream tests the
         // configuration without asking whether the window floats, unlike
         // [`focusable`] below.
-        LAST_USED | Ctrl_P => {
+        Err(NotAKey(LAST_USED | Ctrl_P)) => {
             let prev =
                 valid_win(prevwin.get()).filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
             match prev {
@@ -233,20 +235,20 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             }
         }
         // exchange the current and the next window
-        EXCHANGE | Ctrl_X => {
+        Err(NotAKey(EXCHANGE | Ctrl_X)) => {
             if !in_cmdwin() {
                 exchange(prenum);
             }
         }
         // rotate the windows downwards ('r') or upwards ('R')
-        ROTATE_DOWN | Ctrl_R => {
+        Err(NotAKey(ROTATE_DOWN | Ctrl_R)) => {
             if in_cmdwin() {
                 return;
             }
             reset_VIsual_and_resel();
             rotate(false, prenum1);
         }
-        ROTATE_UP => {
+        Err(NotAKey(ROTATE_UP)) => {
             if in_cmdwin() {
                 return;
             }
@@ -254,13 +256,13 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             rotate(true, prenum1);
         }
         // move the window to the very top, bottom, left or right
-        MOVE_TOP | MOVE_BOT | MOVE_LEFT | MOVE_RIGHT => {
+        Err(NotAKey(MOVE_TOP | MOVE_BOT | MOVE_LEFT | MOVE_RIGHT)) => {
             if !in_cmdwin() {
                 move_to_edge(nchar, prenum);
             }
         }
         // make all windows the same width and/or height
-        EQUALISE => {
+        Err(NotAKey(EQUALISE)) => {
             let split = cmdmod.with(|m| m.cmod_split) & (WSP_VERT as c_int | WSP_HOR as c_int);
             let dir = if split == WSP_VERT as c_int {
                 b'v'
@@ -272,9 +274,9 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             equal(None, false, dir as c_int);
         }
         // increase, decrease or set the current window's height
-        TALLER => setheight_win(cur_win().w_height + prenum1, cur_win()),
-        SHORTER => setheight_win(cur_win().w_height - prenum1, cur_win()),
-        SET_HEIGHT | Ctrl__ => {
+        Err(NotAKey(TALLER)) => setheight_win(cur_win().w_height + prenum1, cur_win()),
+        Err(NotAKey(SHORTER)) => setheight_win(cur_win().w_height - prenum1, cur_win()),
+        Err(NotAKey(SET_HEIGHT | Ctrl__)) => {
             let height = if prenum != 0 {
                 prenum
             } else {
@@ -283,52 +285,52 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             setheight_win(height, cur_win());
         }
         // increase, decrease or set the current window's width
-        WIDER => setwidth_win(cur_win().w_width + prenum1, cur_win()),
-        NARROWER => setwidth_win(cur_win().w_width - prenum1, cur_win()),
-        SET_WIDTH => {
+        Err(NotAKey(WIDER)) => setwidth_win(cur_win().w_width + prenum1, cur_win()),
+        Err(NotAKey(NARROWER)) => setwidth_win(cur_win().w_width - prenum1, cur_win()),
+        Err(NotAKey(SET_WIDTH)) => {
             let width = if prenum != 0 { prenum } else { Columns.get() };
             setwidth_win(width, cur_win());
         }
         // jump to the tag under the cursor in a new window, '}' putting it in
         // the preview window
-        TAG_PREVIEW => {
+        Err(NotAKey(TAG_PREVIEW)) => {
             if in_cmdwin() {
                 return;
             }
             g_do_tagpreview.set(tagpreview_height(prenum));
             jump_to_tag(nchar, prenum);
         }
-        TAG_SPLIT | Ctrl_RSB => {
+        Err(NotAKey(TAG_SPLIT | Ctrl_RSB)) => {
             if !in_cmdwin() {
                 jump_to_tag(nchar, prenum);
             }
         }
         // edit the file name under the cursor in a new window
-        FILE | FILE_LINE | Ctrl_F => {
+        Err(NotAKey(FILE | FILE_LINE | Ctrl_F)) => {
             if !in_cmdwin() {
                 goto_file(nchar, prenum1);
             }
         }
         // go to the first occurrence of the identifier under the cursor along
         // 'path', in a new window: any match, or the definition
-        IDENT_ANY | Ctrl_I => {
+        Err(NotAKey(IDENT_ANY | Ctrl_I)) => {
             if !in_cmdwin() {
                 find_in_path(FIND_ANY as c_int, prenum, prenum1);
             }
         }
-        IDENT_DEFINE | Ctrl_D => {
+        Err(NotAKey(IDENT_DEFINE | Ctrl_D)) => {
             if !in_cmdwin() {
                 find_in_path(FIND_DEFINE as c_int, prenum, prenum1);
             }
         }
         // quickfix window only: view the result under the cursor in a new split
-        K_KENTER | CAR => {
+        Ok(Key::Kenter) | Err(NotAKey(CAR)) => {
             if buf_is_quickfix(Some(cur_buf())) {
                 view_quickfix_result();
             }
         }
         // CTRL-W g: the extended commands
-        EXTENDED | Ctrl_G => {
+        Err(NotAKey(EXTENDED | Ctrl_G)) => {
             if !in_cmdwin() {
                 window_g_command(prenum, prenum1, xchar);
             }

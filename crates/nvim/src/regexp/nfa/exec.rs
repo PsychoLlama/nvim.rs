@@ -349,7 +349,7 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut re
             unsafe { (*prog).has_backref = rex.nfa_has_backref() };
             unsafe { (*prog).nsubexp = regnpar.get() };
             nfa_postprocess(prog);
-            unsafe { (*prog).reganch = nfa_get_reganch((*prog).start, 0) };
+            unsafe { (*prog).reganch = c_int::from(nfa_get_reganch((*prog).start, 0)) };
             unsafe { (*prog).regstart = nfa_get_regstart((*prog).start, 0) };
             unsafe { (*prog).match_text = nfa_get_match_text((*prog).start) };
             unsafe { (*prog).reghasz = re_has_z.get() };

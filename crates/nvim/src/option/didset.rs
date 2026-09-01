@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::Key;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -75,7 +76,7 @@ use super::{
     set_options_bin,
 };
 use crate::highlight_group::HLF_W;
-use crate::keycodes::{Ctrl_C, K_KENTER};
+use crate::keycodes::Ctrl_C;
 use crate::winlayer::{self, Buf, Win};
 
 use super::field_ptr;
@@ -673,7 +674,7 @@ pub(crate) unsafe fn did_set_wildchar(args: *mut optset_T) -> *const c_char {
     if c == Ctrl_C as OptInt
         || c == '\n' as OptInt
         || c == '\r' as OptInt
-        || c == K_KENTER as OptInt
+        || c == Key::Kenter.code() as OptInt
     {
         return e_invarg.as_ptr();
     }

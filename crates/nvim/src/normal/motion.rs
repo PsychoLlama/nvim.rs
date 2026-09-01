@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
 
@@ -46,7 +47,7 @@ use crate::types::{
 };
 use core::ffi::{c_int, c_uint};
 
-use crate::keycodes::{Ctrl_H, K_BS, K_LEFT, K_RIGHT};
+use crate::keycodes::Ctrl_H;
 use crate::r#move::{
     adjust_skipcol, cursor_correct, validate_botline_win, validate_virtcol, win_col_off,
     win_col_off2,
@@ -319,7 +320,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
         's' as c_int
     } else if cmdchar == 'l' as c_int {
         'l' as c_int
-    } else if cmdchar == K_RIGHT {
+    } else if cmdchar == Key::Right.code() {
         '>' as c_int
     } else {
         NUL
@@ -403,11 +404,11 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
     ca.op().inclusive = false;
 
     // Which 'whichwrap' flag lets this key wrap to the previous line.
-    let wrap_flag = if ca.cmdchar == K_BS || ca.cmdchar == Ctrl_H {
+    let wrap_flag = if ca.cmdchar == Key::Bs.code() || ca.cmdchar == Ctrl_H {
         'b' as c_int
     } else if ca.cmdchar == 'h' as c_int {
         'h' as c_int
-    } else if ca.cmdchar == K_LEFT {
+    } else if ca.cmdchar == Key::Left.code() {
         '<' as c_int
     } else {
         NUL

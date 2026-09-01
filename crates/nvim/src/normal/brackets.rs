@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::Win;
 use core::ptr;
 
@@ -10,7 +11,6 @@ use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::fold_move_to;
-use crate::keycodes::{K_LEFTMOUSE, K_RIGHTRELEASE};
 use crate::main::{curbuf, curwin};
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::memory::{xfree, xmemdupz};
@@ -339,7 +339,7 @@ pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
         unsafe { nv_put_opt(cap, true) };
     } else if nchar == '\'' as c_int || nchar == '`' as c_int {
         unsafe { nv_bracket_mark(cap) };
-    } else if (K_RIGHTRELEASE..=K_LEFTMOUSE).contains(&nchar) {
+    } else if (Key::Rightrelease.code()..=Key::Leftmouse.code()).contains(&nchar) {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
         let (dir, n) = (unsafe { direction(cap) }, ca.count1);
         unsafe { do_mouse(ca.oap, nchar, dir, n, PUT_FIXINDENT as c_int != 0) };

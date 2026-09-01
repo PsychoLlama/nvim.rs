@@ -10,18 +10,13 @@
 
 #![forbid(unsafe_code)]
 
+use crate::keycodes::Key;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::{
     MOD_MASK_2CLICK, MOD_MASK_3CLICK, MOD_MASK_4CLICK, MOD_MASK_ALT, MOD_MASK_CTRL, MOD_MASK_META,
     MOD_MASK_MULTI_CLICK, MOD_MASK_SHIFT, MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1,
     MOUSE_X2, MSCR_RIGHT,
-};
-use crate::keycodes::{
-    K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM, K_LEFTRELEASE, K_LEFTRELEASE_NM, K_MIDDLEDRAG,
-    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
-    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG,
-    K_X2MOUSE, K_X2RELEASE,
 };
 use crate::main::{mouse_col, mouse_grid, mouse_row};
 use crate::types::{colnr_T, varnumber_T};
@@ -54,29 +49,29 @@ impl MousePos {
 /// Whether `c` is a mouse key.
 pub(crate) fn is_mouse_key(c: c_int) -> bool {
     matches!(
-        c,
-        K_LEFTMOUSE
-            | K_LEFTMOUSE_NM
-            | K_LEFTDRAG
-            | K_LEFTRELEASE
-            | K_LEFTRELEASE_NM
-            | K_MOUSEMOVE
-            | K_MIDDLEMOUSE
-            | K_MIDDLEDRAG
-            | K_MIDDLERELEASE
-            | K_RIGHTMOUSE
-            | K_RIGHTDRAG
-            | K_RIGHTRELEASE
-            | K_MOUSEDOWN
-            | K_MOUSEUP
-            | K_MOUSELEFT
-            | K_MOUSERIGHT
-            | K_X1MOUSE
-            | K_X1DRAG
-            | K_X1RELEASE
-            | K_X2MOUSE
-            | K_X2DRAG
-            | K_X2RELEASE
+        Key::try_from(c),
+        Ok(Key::Leftmouse
+            | Key::LeftmouseNm
+            | Key::Leftdrag
+            | Key::Leftrelease
+            | Key::LeftreleaseNm
+            | Key::Mousemove
+            | Key::Middlemouse
+            | Key::Middledrag
+            | Key::Middlerelease
+            | Key::Rightmouse
+            | Key::Rightdrag
+            | Key::Rightrelease
+            | Key::Mousedown
+            | Key::Mouseup
+            | Key::Mouseleft
+            | Key::Mouseright
+            | Key::X1mouse
+            | Key::X1drag
+            | Key::X1release
+            | Key::X2mouse
+            | Key::X2drag
+            | Key::X2release)
     )
 }
 

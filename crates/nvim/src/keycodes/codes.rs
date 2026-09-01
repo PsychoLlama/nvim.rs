@@ -115,7 +115,7 @@ pub fn key_unescape(second: u8, third: u8) -> c_int {
     if c_int::from(second) == KS_SPECIAL {
         K_SPECIAL
     } else if second == KS_ZERO {
-        K_ZERO
+        Key::Zero.code()
     } else {
         super::tables::termcap_key([second, third])
     }
@@ -217,194 +217,441 @@ pub const KE_LUA: key_extra = 103;
 pub const KE_COMMAND: key_extra = 104;
 pub const KE_WILD: key_extra = 108;
 
-/// Key codes for the "extra" keys: everything with no termcap name of its
-/// own, which is most of what a modern terminal sends.
-pub const K_COMMAND: c_int = extra(KE_COMMAND);
-pub const K_CMDWIN: c_int = extra(KE_CMDWIN);
-pub const K_C_END: c_int = extra(KE_C_END);
-pub const K_C_HOME: c_int = extra(KE_C_HOME);
-pub const K_C_LEFT: c_int = extra(KE_C_LEFT);
-pub const K_C_RIGHT: c_int = extra(KE_C_RIGHT);
-pub const K_EVENT: c_int = extra(KE_EVENT);
-pub const K_IGNORE: c_int = extra(KE_IGNORE);
-pub const K_KDEL: c_int = extra(KE_KDEL);
-pub const K_KINS: c_int = extra(KE_KINS);
-pub const K_LEFTDRAG: c_int = extra(KE_LEFTDRAG);
-pub const K_LEFTMOUSE: c_int = extra(KE_LEFTMOUSE);
-pub const K_LEFTMOUSE_NM: c_int = extra(KE_LEFTMOUSE_NM);
-pub const K_LEFTRELEASE: c_int = extra(KE_LEFTRELEASE);
-pub const K_LEFTRELEASE_NM: c_int = extra(KE_LEFTRELEASE_NM);
-pub const K_LUA: c_int = extra(KE_LUA);
-pub const K_MIDDLEDRAG: c_int = extra(KE_MIDDLEDRAG);
-pub const K_MIDDLEMOUSE: c_int = extra(KE_MIDDLEMOUSE);
-pub const K_MIDDLERELEASE: c_int = extra(KE_MIDDLERELEASE);
-pub const K_MOUSEDOWN: c_int = extra(KE_MOUSEDOWN);
-pub const K_MOUSELEFT: c_int = extra(KE_MOUSELEFT);
-pub const K_MOUSEMOVE: c_int = extra(KE_MOUSEMOVE);
-pub const K_MOUSERIGHT: c_int = extra(KE_MOUSERIGHT);
-pub const K_MOUSEUP: c_int = extra(KE_MOUSEUP);
-pub const K_NOP: c_int = extra(KE_NOP);
-pub const K_RIGHTDRAG: c_int = extra(KE_RIGHTDRAG);
-pub const K_RIGHTMOUSE: c_int = extra(KE_RIGHTMOUSE);
-pub const K_RIGHTRELEASE: c_int = extra(KE_RIGHTRELEASE);
-pub const K_PLUG: c_int = extra(KE_PLUG);
-pub const K_SNR: c_int = extra(KE_SNR);
-pub const K_S_DOWN: c_int = extra(KE_S_DOWN);
-pub const K_S_F1: c_int = extra(KE_S_F1);
-pub const K_S_F2: c_int = extra(KE_S_F2);
-pub const K_S_F3: c_int = extra(KE_S_F3);
-pub const K_S_F4: c_int = extra(KE_S_F4);
-pub const K_S_F5: c_int = extra(KE_S_F5);
-pub const K_S_F6: c_int = extra(KE_S_F6);
-pub const K_S_F7: c_int = extra(KE_S_F7);
-pub const K_S_F8: c_int = extra(KE_S_F8);
-pub const K_S_F9: c_int = extra(KE_S_F9);
-pub const K_S_F10: c_int = extra(KE_S_F10);
-pub const K_S_F11: c_int = extra(KE_S_F11);
-pub const K_S_F12: c_int = extra(KE_S_F12);
-pub const K_S_UP: c_int = extra(KE_S_UP);
-pub const K_S_XF1: c_int = extra(KE_S_XF1);
-pub const K_S_XF2: c_int = extra(KE_S_XF2);
-pub const K_S_XF3: c_int = extra(KE_S_XF3);
-pub const K_S_XF4: c_int = extra(KE_S_XF4);
-pub const K_X1DRAG: c_int = extra(KE_X1DRAG);
-pub const K_X1MOUSE: c_int = extra(KE_X1MOUSE);
-pub const K_X1RELEASE: c_int = extra(KE_X1RELEASE);
-pub const K_X2DRAG: c_int = extra(KE_X2DRAG);
-pub const K_X2MOUSE: c_int = extra(KE_X2MOUSE);
-pub const K_X2RELEASE: c_int = extra(KE_X2RELEASE);
-pub const K_XDOWN: c_int = extra(KE_XDOWN);
-pub const K_XEND: c_int = extra(KE_XEND);
-pub const K_XF1: c_int = extra(KE_XF1);
-pub const K_XF2: c_int = extra(KE_XF2);
-pub const K_XF3: c_int = extra(KE_XF3);
-pub const K_XF4: c_int = extra(KE_XF4);
-pub const K_XHOME: c_int = extra(KE_XHOME);
-pub const K_XLEFT: c_int = extra(KE_XLEFT);
-pub const K_XRIGHT: c_int = extra(KE_XRIGHT);
-pub const K_XUP: c_int = extra(KE_XUP);
-pub const K_WILD: c_int = extra(KE_WILD);
-pub const K_ZEND: c_int = extra(KE_ZEND);
-pub const K_ZHOME: c_int = extra(KE_ZHOME);
+/// A key that is not a character: everything the `<>` notation has a name
+/// for and no code point stands for.
+///
+/// The discriminants are the key codes themselves, written the way
+/// upstream writes them -- a `KS_EXTRA` byte plus a [`key_extra`] code, or a
+/// two-character termcap name -- so the enum *is* the definition and not a
+/// second copy of it. They are all negative, which is what [`is_special`]
+/// tests and what lets a key and a character share one `c_int`: `vgetc` and
+/// the typeahead carry either, and [`Key::try_from`] is the seam between
+/// them. Raw bytes stay bytes; only the *named* codes are in here.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum Key {
+    /// The "extra" keys: everything with no termcap name of its own, which
+    /// is most of what a modern terminal sends.
+    Command = extra(KE_COMMAND),
+    Cmdwin = extra(KE_CMDWIN),
+    CEnd = extra(KE_C_END),
+    CHome = extra(KE_C_HOME),
+    CLeft = extra(KE_C_LEFT),
+    CRight = extra(KE_C_RIGHT),
+    Event = extra(KE_EVENT),
+    Ignore = extra(KE_IGNORE),
+    Kdel = extra(KE_KDEL),
+    Kins = extra(KE_KINS),
+    Leftdrag = extra(KE_LEFTDRAG),
+    Leftmouse = extra(KE_LEFTMOUSE),
+    LeftmouseNm = extra(KE_LEFTMOUSE_NM),
+    Leftrelease = extra(KE_LEFTRELEASE),
+    LeftreleaseNm = extra(KE_LEFTRELEASE_NM),
+    Lua = extra(KE_LUA),
+    Middledrag = extra(KE_MIDDLEDRAG),
+    Middlemouse = extra(KE_MIDDLEMOUSE),
+    Middlerelease = extra(KE_MIDDLERELEASE),
+    Mousedown = extra(KE_MOUSEDOWN),
+    Mouseleft = extra(KE_MOUSELEFT),
+    Mousemove = extra(KE_MOUSEMOVE),
+    Mouseright = extra(KE_MOUSERIGHT),
+    Mouseup = extra(KE_MOUSEUP),
+    Nop = extra(KE_NOP),
+    Rightdrag = extra(KE_RIGHTDRAG),
+    Rightmouse = extra(KE_RIGHTMOUSE),
+    Rightrelease = extra(KE_RIGHTRELEASE),
+    Plug = extra(KE_PLUG),
+    Snr = extra(KE_SNR),
+    SDown = extra(KE_S_DOWN),
+    SF1 = extra(KE_S_F1),
+    SF2 = extra(KE_S_F2),
+    SF3 = extra(KE_S_F3),
+    SF4 = extra(KE_S_F4),
+    SF5 = extra(KE_S_F5),
+    SF6 = extra(KE_S_F6),
+    SF7 = extra(KE_S_F7),
+    SF8 = extra(KE_S_F8),
+    SF9 = extra(KE_S_F9),
+    SF10 = extra(KE_S_F10),
+    SF11 = extra(KE_S_F11),
+    SF12 = extra(KE_S_F12),
+    SUp = extra(KE_S_UP),
+    SXf1 = extra(KE_S_XF1),
+    SXf2 = extra(KE_S_XF2),
+    SXf3 = extra(KE_S_XF3),
+    SXf4 = extra(KE_S_XF4),
+    X1drag = extra(KE_X1DRAG),
+    X1mouse = extra(KE_X1MOUSE),
+    X1release = extra(KE_X1RELEASE),
+    X2drag = extra(KE_X2DRAG),
+    X2mouse = extra(KE_X2MOUSE),
+    X2release = extra(KE_X2RELEASE),
+    Xdown = extra(KE_XDOWN),
+    Xend = extra(KE_XEND),
+    Xf1 = extra(KE_XF1),
+    Xf2 = extra(KE_XF2),
+    Xf3 = extra(KE_XF3),
+    Xf4 = extra(KE_XF4),
+    Xhome = extra(KE_XHOME),
+    Xleft = extra(KE_XLEFT),
+    Xright = extra(KE_XRIGHT),
+    Xup = extra(KE_XUP),
+    Wild = extra(KE_WILD),
+    Zend = extra(KE_ZEND),
+    Zhome = extra(KE_ZHOME),
 
-/// Key codes named by a two-character termcap entry.
-pub const K_BS: c_int = termcap(b'k', b'b');
-pub const K_DEL: c_int = termcap(b'k', b'D');
-pub const K_DOWN: c_int = termcap(b'k', b'd');
-pub const K_END: c_int = termcap(b'@', b'7');
-pub const K_F1: c_int = termcap(b'k', b'1');
-pub const K_F2: c_int = termcap(b'k', b'2');
-pub const K_F3: c_int = termcap(b'k', b'3');
-pub const K_F4: c_int = termcap(b'k', b'4');
-pub const K_F5: c_int = termcap(b'k', b'5');
-pub const K_F6: c_int = termcap(b'k', b'6');
-pub const K_F7: c_int = termcap(b'k', b'7');
-pub const K_F8: c_int = termcap(b'k', b'8');
-pub const K_F9: c_int = termcap(b'k', b'9');
-pub const K_F10: c_int = termcap(b'k', b';');
-pub const K_F11: c_int = termcap(b'F', b'1');
-pub const K_F12: c_int = termcap(b'F', b'2');
-pub const K_F13: c_int = termcap(b'F', b'3');
-pub const K_F14: c_int = termcap(b'F', b'4');
-pub const K_F15: c_int = termcap(b'F', b'5');
-pub const K_F16: c_int = termcap(b'F', b'6');
-pub const K_F17: c_int = termcap(b'F', b'7');
-pub const K_F18: c_int = termcap(b'F', b'8');
-pub const K_F19: c_int = termcap(b'F', b'9');
-pub const K_F20: c_int = termcap(b'F', b'A');
-pub const K_F21: c_int = termcap(b'F', b'B');
-pub const K_F22: c_int = termcap(b'F', b'C');
-pub const K_F23: c_int = termcap(b'F', b'D');
-pub const K_F24: c_int = termcap(b'F', b'E');
-pub const K_F25: c_int = termcap(b'F', b'F');
-pub const K_F26: c_int = termcap(b'F', b'G');
-pub const K_F27: c_int = termcap(b'F', b'H');
-pub const K_F28: c_int = termcap(b'F', b'I');
-pub const K_F29: c_int = termcap(b'F', b'J');
-pub const K_F30: c_int = termcap(b'F', b'K');
-pub const K_F31: c_int = termcap(b'F', b'L');
-pub const K_F32: c_int = termcap(b'F', b'M');
-pub const K_F33: c_int = termcap(b'F', b'N');
-pub const K_F34: c_int = termcap(b'F', b'O');
-pub const K_F35: c_int = termcap(b'F', b'P');
-pub const K_F36: c_int = termcap(b'F', b'Q');
-pub const K_F37: c_int = termcap(b'F', b'R');
-pub const K_F38: c_int = termcap(b'F', b'S');
-pub const K_F39: c_int = termcap(b'F', b'T');
-pub const K_F40: c_int = termcap(b'F', b'U');
-pub const K_F41: c_int = termcap(b'F', b'V');
-pub const K_F42: c_int = termcap(b'F', b'W');
-pub const K_F43: c_int = termcap(b'F', b'X');
-pub const K_F44: c_int = termcap(b'F', b'Y');
-pub const K_F45: c_int = termcap(b'F', b'Z');
-pub const K_F46: c_int = termcap(b'F', b'a');
-pub const K_F47: c_int = termcap(b'F', b'b');
-pub const K_F48: c_int = termcap(b'F', b'c');
-pub const K_F49: c_int = termcap(b'F', b'd');
-pub const K_F50: c_int = termcap(b'F', b'e');
-pub const K_F51: c_int = termcap(b'F', b'f');
-pub const K_F52: c_int = termcap(b'F', b'g');
-pub const K_F53: c_int = termcap(b'F', b'h');
-pub const K_F54: c_int = termcap(b'F', b'i');
-pub const K_F55: c_int = termcap(b'F', b'j');
-pub const K_F56: c_int = termcap(b'F', b'k');
-pub const K_F57: c_int = termcap(b'F', b'l');
-pub const K_F58: c_int = termcap(b'F', b'm');
-pub const K_F59: c_int = termcap(b'F', b'n');
-pub const K_F60: c_int = termcap(b'F', b'o');
-pub const K_F61: c_int = termcap(b'F', b'p');
-pub const K_F62: c_int = termcap(b'F', b'q');
-pub const K_F63: c_int = termcap(b'F', b'r');
-pub const K_FIND: c_int = termcap(b'@', b'0');
-pub const K_HELP: c_int = termcap(b'%', b'1');
-pub const K_HOME: c_int = termcap(b'k', b'h');
-pub const K_HOR_SCROLLBAR: c_int = termcap(KS_HOR_SCROLLBAR, KE_FILLER as u8);
-pub const K_INS: c_int = termcap(b'k', b'I');
-pub const K_K0: c_int = termcap(b'K', b'C');
-pub const K_K1: c_int = termcap(b'K', b'D');
-pub const K_K2: c_int = termcap(b'K', b'E');
-pub const K_K3: c_int = termcap(b'K', b'F');
-pub const K_K4: c_int = termcap(b'K', b'G');
-pub const K_K5: c_int = termcap(b'K', b'H');
-pub const K_K6: c_int = termcap(b'K', b'I');
-pub const K_K7: c_int = termcap(b'K', b'J');
-pub const K_K8: c_int = termcap(b'K', b'K');
-pub const K_K9: c_int = termcap(b'K', b'L');
-pub const K_KCOMMA: c_int = termcap(b'K', b'M');
-pub const K_KDIVIDE: c_int = termcap(b'K', b'8');
-pub const K_KDOWN: c_int = termcap(b'K', b'd');
-pub const K_KEND: c_int = termcap(b'K', b'4');
-pub const K_KENTER: c_int = termcap(b'K', b'A');
-pub const K_KEQUAL: c_int = termcap(b'K', b'N');
-pub const K_KHOME: c_int = termcap(b'K', b'1');
-pub const K_KLEFT: c_int = termcap(b'K', b'l');
-pub const K_KMINUS: c_int = termcap(b'K', b'7');
-pub const K_KMULTIPLY: c_int = termcap(b'K', b'9');
-pub const K_KORIGIN: c_int = termcap(b'K', b'2');
-pub const K_KPAGEDOWN: c_int = termcap(b'K', b'5');
-pub const K_KPAGEUP: c_int = termcap(b'K', b'3');
-pub const K_KPLUS: c_int = termcap(b'K', b'6');
-pub const K_KPOINT: c_int = termcap(b'K', b'B');
-pub const K_KRIGHT: c_int = termcap(b'K', b'r');
-pub const K_KSELECT: c_int = termcap(b'*', b'6');
-pub const K_KUP: c_int = termcap(b'K', b'u');
-pub const K_LEFT: c_int = termcap(b'k', b'l');
-pub const K_MOUSE: c_int = termcap(KS_MOUSE, KE_FILLER as u8);
-pub const K_PAGEDOWN: c_int = termcap(b'k', b'N');
-pub const K_PAGEUP: c_int = termcap(b'k', b'P');
-pub const K_PASTE_END: c_int = termcap(b'P', b'E');
-pub const K_PASTE_START: c_int = termcap(b'P', b'S');
-pub const K_RIGHT: c_int = termcap(b'k', b'r');
-pub const K_SELECT: c_int = termcap(KS_SELECT, KE_FILLER as u8);
-pub const K_S_END: c_int = termcap(b'*', b'7');
-pub const K_S_HOME: c_int = termcap(b'#', b'2');
-pub const K_S_LEFT: c_int = termcap(b'#', b'4');
-pub const K_S_RIGHT: c_int = termcap(b'%', b'i');
-pub const K_S_TAB: c_int = termcap(b'k', b'B');
-pub const K_UNDO: c_int = termcap(b'&', b'8');
-pub const K_UP: c_int = termcap(b'k', b'u');
-pub const K_VER_SCROLLBAR: c_int = termcap(KS_VER_SCROLLBAR, KE_FILLER as u8);
-pub const K_ZERO: c_int = termcap(KS_ZERO, KE_FILLER as u8);
+    /// The keys named by a two-character termcap entry.
+    Bs = termcap(b'k', b'b'),
+    Del = termcap(b'k', b'D'),
+    Down = termcap(b'k', b'd'),
+    End = termcap(b'@', b'7'),
+    F1 = termcap(b'k', b'1'),
+    F2 = termcap(b'k', b'2'),
+    F3 = termcap(b'k', b'3'),
+    F4 = termcap(b'k', b'4'),
+    F5 = termcap(b'k', b'5'),
+    F6 = termcap(b'k', b'6'),
+    F7 = termcap(b'k', b'7'),
+    F8 = termcap(b'k', b'8'),
+    F9 = termcap(b'k', b'9'),
+    F10 = termcap(b'k', b';'),
+    F11 = termcap(b'F', b'1'),
+    F12 = termcap(b'F', b'2'),
+    F13 = termcap(b'F', b'3'),
+    F14 = termcap(b'F', b'4'),
+    F15 = termcap(b'F', b'5'),
+    F16 = termcap(b'F', b'6'),
+    F17 = termcap(b'F', b'7'),
+    F18 = termcap(b'F', b'8'),
+    F19 = termcap(b'F', b'9'),
+    F20 = termcap(b'F', b'A'),
+    F21 = termcap(b'F', b'B'),
+    F22 = termcap(b'F', b'C'),
+    F23 = termcap(b'F', b'D'),
+    F24 = termcap(b'F', b'E'),
+    F25 = termcap(b'F', b'F'),
+    F26 = termcap(b'F', b'G'),
+    F27 = termcap(b'F', b'H'),
+    F28 = termcap(b'F', b'I'),
+    F29 = termcap(b'F', b'J'),
+    F30 = termcap(b'F', b'K'),
+    F31 = termcap(b'F', b'L'),
+    F32 = termcap(b'F', b'M'),
+    F33 = termcap(b'F', b'N'),
+    F34 = termcap(b'F', b'O'),
+    F35 = termcap(b'F', b'P'),
+    F36 = termcap(b'F', b'Q'),
+    F37 = termcap(b'F', b'R'),
+    F38 = termcap(b'F', b'S'),
+    F39 = termcap(b'F', b'T'),
+    F40 = termcap(b'F', b'U'),
+    F41 = termcap(b'F', b'V'),
+    F42 = termcap(b'F', b'W'),
+    F43 = termcap(b'F', b'X'),
+    F44 = termcap(b'F', b'Y'),
+    F45 = termcap(b'F', b'Z'),
+    F46 = termcap(b'F', b'a'),
+    F47 = termcap(b'F', b'b'),
+    F48 = termcap(b'F', b'c'),
+    F49 = termcap(b'F', b'd'),
+    F50 = termcap(b'F', b'e'),
+    F51 = termcap(b'F', b'f'),
+    F52 = termcap(b'F', b'g'),
+    F53 = termcap(b'F', b'h'),
+    F54 = termcap(b'F', b'i'),
+    F55 = termcap(b'F', b'j'),
+    F56 = termcap(b'F', b'k'),
+    F57 = termcap(b'F', b'l'),
+    F58 = termcap(b'F', b'm'),
+    F59 = termcap(b'F', b'n'),
+    F60 = termcap(b'F', b'o'),
+    F61 = termcap(b'F', b'p'),
+    F62 = termcap(b'F', b'q'),
+    F63 = termcap(b'F', b'r'),
+    Find = termcap(b'@', b'0'),
+    Help = termcap(b'%', b'1'),
+    Home = termcap(b'k', b'h'),
+    HorScrollbar = termcap(KS_HOR_SCROLLBAR, KE_FILLER as u8),
+    Ins = termcap(b'k', b'I'),
+    K0 = termcap(b'K', b'C'),
+    K1 = termcap(b'K', b'D'),
+    K2 = termcap(b'K', b'E'),
+    K3 = termcap(b'K', b'F'),
+    K4 = termcap(b'K', b'G'),
+    K5 = termcap(b'K', b'H'),
+    K6 = termcap(b'K', b'I'),
+    K7 = termcap(b'K', b'J'),
+    K8 = termcap(b'K', b'K'),
+    K9 = termcap(b'K', b'L'),
+    Kcomma = termcap(b'K', b'M'),
+    Kdivide = termcap(b'K', b'8'),
+    Kdown = termcap(b'K', b'd'),
+    Kend = termcap(b'K', b'4'),
+    Kenter = termcap(b'K', b'A'),
+    Kequal = termcap(b'K', b'N'),
+    Khome = termcap(b'K', b'1'),
+    Kleft = termcap(b'K', b'l'),
+    Kminus = termcap(b'K', b'7'),
+    Kmultiply = termcap(b'K', b'9'),
+    Korigin = termcap(b'K', b'2'),
+    Kpagedown = termcap(b'K', b'5'),
+    Kpageup = termcap(b'K', b'3'),
+    Kplus = termcap(b'K', b'6'),
+    Kpoint = termcap(b'K', b'B'),
+    Kright = termcap(b'K', b'r'),
+    Kselect = termcap(b'*', b'6'),
+    Kup = termcap(b'K', b'u'),
+    Left = termcap(b'k', b'l'),
+    Mouse = termcap(KS_MOUSE, KE_FILLER as u8),
+    Pagedown = termcap(b'k', b'N'),
+    Pageup = termcap(b'k', b'P'),
+    PasteEnd = termcap(b'P', b'E'),
+    PasteStart = termcap(b'P', b'S'),
+    Right = termcap(b'k', b'r'),
+    Select = termcap(KS_SELECT, KE_FILLER as u8),
+    SEnd = termcap(b'*', b'7'),
+    SHome = termcap(b'#', b'2'),
+    SLeft = termcap(b'#', b'4'),
+    SRight = termcap(b'%', b'i'),
+    STab = termcap(b'k', b'B'),
+    Undo = termcap(b'&', b'8'),
+    Up = termcap(b'k', b'u'),
+    VerScrollbar = termcap(KS_VER_SCROLLBAR, KE_FILLER as u8),
+    Zero = termcap(KS_ZERO, KE_FILLER as u8),
+}
+
+impl Key {
+    /// Every key, in *code* order, which is why the list reads as though it
+    /// were shuffled: the codes run from `Up`'s termcap name down to the
+    /// highest `KE_*` byte, and nothing else about the order means anything.
+    /// It is the table [`Key::try_from`] binary searches, and the `const`
+    /// block below fails the build if it ever stops being sorted.
+    const ALL: [Key; 184] = [
+        Key::Up,
+        Key::Kup,
+        Key::Right,
+        Key::Kright,
+        Key::F63,
+        Key::F62,
+        Key::F61,
+        Key::F60,
+        Key::F59,
+        Key::F58,
+        Key::Wild,
+        Key::Left,
+        Key::Kleft,
+        Key::F57,
+        Key::F56,
+        Key::F55,
+        Key::F54,
+        Key::SRight,
+        Key::Command,
+        Key::Home,
+        Key::F53,
+        Key::Lua,
+        Key::F52,
+        Key::Event,
+        Key::F51,
+        Key::F50,
+        Key::Mousemove,
+        Key::Down,
+        Key::Kdown,
+        Key::F49,
+        Key::F48,
+        Key::Bs,
+        Key::F47,
+        Key::Nop,
+        Key::F46,
+        Key::X2release,
+        Key::X2drag,
+        Key::X2mouse,
+        Key::X1release,
+        Key::X1drag,
+        Key::F45,
+        Key::X1mouse,
+        Key::F44,
+        Key::Zero,
+        Key::CEnd,
+        Key::Mouse,
+        Key::VerScrollbar,
+        Key::HorScrollbar,
+        Key::Select,
+        Key::F43,
+        Key::CHome,
+        Key::F42,
+        Key::CRight,
+        Key::F41,
+        Key::CLeft,
+        Key::F40,
+        Key::Cmdwin,
+        Key::F39,
+        Key::Plug,
+        Key::PasteStart,
+        Key::F38,
+        Key::Snr,
+        Key::F37,
+        Key::F36,
+        Key::Kdel,
+        Key::Pageup,
+        Key::F35,
+        Key::Kins,
+        Key::F34,
+        Key::Mouseright,
+        Key::Pagedown,
+        Key::Kequal,
+        Key::F33,
+        Key::Mouseleft,
+        Key::Kcomma,
+        Key::F32,
+        Key::Mouseup,
+        Key::K9,
+        Key::F31,
+        Key::Mousedown,
+        Key::K8,
+        Key::F30,
+        Key::SXf4,
+        Key::K7,
+        Key::F29,
+        Key::SXf3,
+        Key::Ins,
+        Key::K6,
+        Key::F28,
+        Key::SXf2,
+        Key::K5,
+        Key::F27,
+        Key::SXf1,
+        Key::K4,
+        Key::F26,
+        Key::LeftreleaseNm,
+        Key::K3,
+        Key::F25,
+        Key::LeftmouseNm,
+        Key::PasteEnd,
+        Key::K2,
+        Key::F24,
+        Key::Xright,
+        Key::Del,
+        Key::K1,
+        Key::F23,
+        Key::Xleft,
+        Key::K0,
+        Key::F22,
+        Key::Xdown,
+        Key::STab,
+        Key::Kpoint,
+        Key::F21,
+        Key::Xup,
+        Key::Kenter,
+        Key::F20,
+        Key::Zhome,
+        Key::Xhome,
+        Key::Zend,
+        Key::Xend,
+        Key::Xf4,
+        Key::Xf3,
+        Key::F10,
+        Key::Xf2,
+        Key::Xf1,
+        Key::F9,
+        Key::Kmultiply,
+        Key::F19,
+        Key::F8,
+        Key::Kdivide,
+        Key::F18,
+        Key::Undo,
+        Key::F7,
+        Key::Kminus,
+        Key::F17,
+        Key::End,
+        Key::SEnd,
+        Key::F6,
+        Key::Kplus,
+        Key::F16,
+        Key::Kselect,
+        Key::Ignore,
+        Key::F5,
+        Key::Kpagedown,
+        Key::F15,
+        Key::Rightrelease,
+        Key::F4,
+        Key::Kend,
+        Key::F14,
+        Key::SLeft,
+        Key::Rightdrag,
+        Key::F3,
+        Key::Kpageup,
+        Key::F13,
+        Key::Rightmouse,
+        Key::F2,
+        Key::Korigin,
+        Key::F12,
+        Key::SHome,
+        Key::Middlerelease,
+        Key::F1,
+        Key::Khome,
+        Key::F11,
+        Key::Help,
+        Key::Middledrag,
+        Key::Find,
+        Key::Middlemouse,
+        Key::Leftrelease,
+        Key::Leftdrag,
+        Key::Leftmouse,
+        Key::SF12,
+        Key::SF11,
+        Key::SF10,
+        Key::SF9,
+        Key::SF8,
+        Key::SF7,
+        Key::SF6,
+        Key::SF5,
+        Key::SF4,
+        Key::SF3,
+        Key::SF2,
+        Key::SF1,
+        Key::SDown,
+        Key::SUp,
+    ];
+
+    /// The key code itself, for the many places that still carry one as a
+    /// `c_int` beside the characters.
+    pub const fn code(self) -> c_int {
+        self as c_int
+    }
+}
+
+/// [`Key::ALL`] has to stay sorted for the binary search below, and the
+/// assertion is here rather than in a test because a `const` can check it.
+const _: () = {
+    let mut i = 1;
+    while i < Key::ALL.len() {
+        assert!(
+            Key::ALL[i - 1].code() < Key::ALL[i].code(),
+            "Key::ALL is out of order"
+        );
+        i += 1;
+    }
+};
+
+/// The number is not one of the named keys -- most often because it is a
+/// character, which shares the space.
+///
+/// It carries the number so that a dispatch over both halves can name a
+/// character in the same `match`: `Err(NotAKey(Ctrl_B))` is the arm for a
+/// literal CTRL-B beside `Ok(Key::Home)` for the key.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct NotAKey(pub c_int);
+
+impl TryFrom<c_int> for Key {
+    type Error = NotAKey;
+
+    fn try_from(code: c_int) -> Result<Key, NotAKey> {
+        match Key::ALL.binary_search_by_key(&code, |key| key.code()) {
+            Ok(i) => Ok(Key::ALL[i]),
+            Err(_) => Err(NotAKey(code)),
+        }
+    }
+}
 
 /// Modifier bits, as they travel in a `K_SPECIAL KS_MODIFIER <bits>` sequence
 /// and in `mod_mask`.

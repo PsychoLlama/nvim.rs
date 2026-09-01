@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -37,7 +38,6 @@ use crate::types::{
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 
-use crate::keycodes::{K_DEL, K_KDEL, K_KENTER, K_LEFT, K_RIGHT};
 use crate::r#move::{
     changed_window_setting, scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top,
     validate_botline_win, win_col_off,
@@ -71,7 +71,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
     let mut n = unsafe { *nchar_arg } - '0' as c_int;
     loop {
         let nchar = unsafe { read_command_char() };
-        if nchar == K_DEL || nchar == K_KDEL {
+        if nchar == Key::Del.code() || nchar == Key::Kdel.code() {
             // Rubbing out a digit.
             n /= 10;
         } else if ascii_isdigit(nchar) {
@@ -85,8 +85,8 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
             break;
         } else if nchar == 'l' as c_int
             || nchar == 'h' as c_int
-            || nchar == K_LEFT
-            || nchar == K_RIGHT
+            || nchar == Key::Left.code()
+            || nchar == Key::Right.code()
         {
             // Both counts came from the user, so this can overflow -- the
             // C wraps, and `set_leftcol` clamps whatever comes out.
@@ -425,14 +425,14 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
 
     // Where the cursor line ends up, and whether the cursor also moves to
     // the first non-blank of it. `None` means the key did its own work.
-    let place: Option<(Place, bool)> = match nchar {
+    let place: Option<(Place, bool)> = match Key::try_from(nchar) {
         // The three keys that are not bytes.
-        K_KENTER => Some((Place::Top, true)),
-        K_LEFT => {
+        Ok(Key::Kenter) => Some((Place::Top, true)),
+        Ok(Key::Left) => {
             unsafe { scroll_sideways(cap, false) };
             None
         }
-        K_RIGHT => {
+        Ok(Key::Right) => {
             unsafe { scroll_sideways(cap, true) };
             None
         }

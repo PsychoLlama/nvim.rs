@@ -10,6 +10,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::Ctrl_Z;
+use crate::keycodes::Key;
 use crate::options::OptWimFlags;
 use crate::types::{ExpandContext, Failed, NUL, OK};
 
@@ -28,7 +29,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
     let res;
     let mut options = WildOpts::NO_BEEP;
     let escape = unsafe { (*s).firstc } != '@' as ::core::ffi::c_int;
-    let redraw_if_menu_empty = unsafe { (*s).c } == K_WILD;
+    let redraw_if_menu_empty = unsafe { (*s).c } == Key::Wild.code();
     let wim_noselect = p_wmnu.get() != 0 && wim_has(0, kOptWimFlagNoselect);
 
     if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLastused) {
@@ -62,11 +63,11 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         unsafe { (*s).wim_index = 0 };
         if unsafe { (*s).c } as OptInt == p_wc.get()
             || unsafe { (*s).c } as OptInt == p_wcm.get()
-            || unsafe { (*s).c } == K_WILD
+            || unsafe { (*s).c } == Key::Wild.code()
             || unsafe { (*s).c } == Ctrl_Z
         {
             options |= WildOpts::MAY_EXPAND_PATTERN;
-            if unsafe { (*s).c } == K_WILD {
+            if unsafe { (*s).c } == Key::Wild.code() {
                 options |= WildOpts::FUNC_TRIGGER;
             }
             unsafe { (*s).xpc.xp_pre_incsearch_pos = (*s).is_state.search_start };

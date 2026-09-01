@@ -10,6 +10,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Allow;
+use crate::keycodes::Key;
 use crate::keycodes::{Ctrl_N, Ctrl_P};
 use crate::types::ExpandContext;
 use core::ffi::{c_char, c_int};
@@ -41,9 +42,9 @@ pub(crate) unsafe fn wildmenu_translate_key(
     let mut xp = unsafe { Xp::new(xp) };
     let mut c = key;
     if cmdline_pum_active() || did_wild_list || wild_menu_showing.get() != 0 {
-        if c == K_LEFT {
+        if c == Key::Left.code() {
             c = Ctrl_P;
-        } else if c == K_RIGHT {
+        } else if c == Key::Right.code() {
             c = Ctrl_N;
         }
     }
@@ -53,9 +54,9 @@ pub(crate) unsafe fn wildmenu_translate_key(
         && cclp.cmdpos > 1
         && unsafe { *cclp.at(cclp.cmdpos - 1) } == b'.' as c_char
         && unsafe { *cclp.at(cclp.cmdpos - 2) } != b'\\' as c_char
-        && (c == '\n' as c_int || c == '\r' as c_int || c == K_KENTER)
+        && (c == '\n' as c_int || c == '\r' as c_int || c == Key::Kenter.code())
     {
-        c = K_DOWN;
+        c = Key::Down.code();
     }
     c
 }
@@ -90,14 +91,14 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
     let buf = cclp.text();
-    if key == K_DOWN
+    if key == Key::Down.code()
         && cclp.cmdpos > 0
         && unsafe { *buf.offset((cclp.cmdpos - 1) as isize) } == b'.' as c_char
     {
         // Hitting <Down> after "emenu Name.": complete the submenu.
         return recomplete();
     }
-    if key != K_UP {
+    if key != Key::Up.code() {
         return key;
     }
 
@@ -147,7 +148,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
     // Where the pattern being completed starts.
     let start = unsafe { xp.xp_pattern.offset_from(buf) } as c_int;
 
-    if key == K_DOWN
+    if key == Key::Down.code()
         && cclp.cmdpos > 0
         && at(cclp.cmdpos - 1) == PATHSEP as c_char
         && (cclp.cmdpos < 3
@@ -158,7 +159,8 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
         return recomplete();
     }
 
-    if key == K_DOWN && unsafe { cstr::prefix_eq(xp.xp_pattern, UPSEG_TAIL.as_ptr(), 3) } {
+    if key == Key::Down.code() && unsafe { cstr::prefix_eq(xp.xp_pattern, UPSEG_TAIL.as_ptr(), 3) }
+    {
         // In a direct ancestor: strip off one "../" to go down.  Walk
         // back to the separator that ends the "..".
         let mut found = false;
@@ -185,7 +187,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
         return key;
     }
 
-    if key != K_UP {
+    if key != Key::Up.code() {
         return key;
     }
 

@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::keycodes::Key;
 use crate::keycodes::{
     Ctrl_C, Ctrl_E, Ctrl_N, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z,
 };
@@ -39,7 +40,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
         || ctrl_x_mode_eval()
         || (!can_bs(BsFlag::START) && from_start - compl_length.get() < 0)
     {
-        return K_BS;
+        return Key::Bs.code();
     }
 
     // Deleted more than what was used to find matches, or didn't finish
@@ -308,7 +309,8 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
     // selection without inserting anything.  When compl_enter_selects is
     // set the Enter key does the same.
     let mut word: *mut c_char = ptr::null_mut();
-    if (c == Ctrl_Y || (compl_enter_selects.get() && (c == CAR || c == K_KENTER || c == NL)))
+    if (c == Ctrl_Y
+        || (compl_enter_selects.get() && (c == CAR || c == Key::Kenter.code() || c == NL)))
         && pum_visible()
     {
         word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
@@ -421,16 +423,16 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
     if matches!(
-        c,
-        K_SELECT
-            | K_MOUSEDOWN
-            | K_MOUSEUP
-            | K_MOUSELEFT
-            | K_MOUSERIGHT
-            | K_MOUSEMOVE
-            | K_EVENT
-            | K_COMMAND
-            | K_LUA
+        Key::try_from(c),
+        Ok(Key::Select
+            | Key::Mousedown
+            | Key::Mouseup
+            | Key::Mouseleft
+            | Key::Mouseright
+            | Key::Mousemove
+            | Key::Event
+            | Key::Command
+            | Key::Lua)
     ) {
         return retval;
     }
@@ -541,7 +543,7 @@ pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
         // A backspace for each remaining character of the original text.
         p = unsafe { p.offset(len as isize) };
         while unsafe { *p } as c_int != NUL {
-            append_to_redobuff_char(K_BS);
+            append_to_redobuff_char(Key::Bs.code());
             p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
         }
     }
@@ -579,12 +581,16 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
         if unsafe { vim_is_ctrl_x_key(c) } && c != Ctrl_X && c != Ctrl_R {
             c = safe_vgetc(); // Eat the character
             compl_shows_dir.set(unsafe { ins_compl_key2dir(c) });
-            unsafe { ins_compl_next(false, ins_compl_key2count(c), c != K_UP && c != K_DOWN) };
+            let (repeat, allow_get) = (
+                ins_compl_key2count(c),
+                !matches!(Key::try_from(c), Ok(Key::Up | Key::Down)),
+            );
+            unsafe { ins_compl_next(false, repeat, allow_get) };
         } else {
             // Need to get the character to have KeyTyped set.  We'll put it
             // back with vungetc() below.  But skip K_IGNORE.
             c = safe_vgetc();
-            if c != K_IGNORE {
+            if c != Key::Ignore.code() {
                 // Don't interrupt completion when the character wasn't
                 // typed, e.g. when doing @q to replay keys.
                 if c != Ctrl_R && KeyTyped.get() {

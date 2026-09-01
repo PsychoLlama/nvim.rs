@@ -9,6 +9,7 @@
 //! loop is what makes `K_EVENT` (an event-queue wakeup rather than a key)
 //! look like input to all of them.
 
+use crate::keycodes::Key;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -25,7 +26,7 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
-use crate::keycodes::{Ctrl_V, K_EVENT, get_special_key_name};
+use crate::keycodes::{Ctrl_V, get_special_key_name};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
     State, curbuf, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, mod_mask,
@@ -91,14 +92,14 @@ pub unsafe fn state_enter(s: *mut VimState) {
         }
         loop {
             let key = unsafe { next_key() };
-            if key == K_EVENT {
+            if key == Key::Event.code() {
                 // The queue is about to run arbitrary code, so anything the
                 // key-reading side was in the middle of has to be settled.
                 check_end_reg_executing(true);
                 may_sync_undo();
             }
             let mut keyname_buf;
-            let keyname = if key == K_EVENT {
+            let keyname = if key == Key::Event.code() {
                 c"K_EVENT".as_ptr()
             } else {
                 keyname_buf = get_special_key_name(key, mod_mask.get());
@@ -135,7 +136,7 @@ unsafe fn next_key() -> c_int {
         }
         if !unsafe { multiqueue_empty(main_loop_events()) } {
             unsafe { ui_flush() };
-            return K_EVENT;
+            return Key::Event.code();
         }
         // Nothing to do but wait, so show what has been decided first.
         if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
@@ -150,7 +151,7 @@ unsafe fn next_key() -> c_int {
         if input_available() != 0 || unsafe { multiqueue_empty(main_loop_events()) } {
             continue;
         }
-        return K_EVENT;
+        return Key::Event.code();
     }
 }
 

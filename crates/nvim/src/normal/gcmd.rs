@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -35,12 +36,7 @@ use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
 
-use crate::keycodes::{
-    Ctrl_H, K_BS, K_DOWN, K_END, K_HOME, K_IGNORE, K_KEND, K_KHOME, K_LEFTDRAG, K_LEFTMOUSE,
-    K_LEFTRELEASE, K_MIDDLEDRAG, K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEMOVE, K_RIGHTDRAG,
-    K_RIGHTMOUSE, K_RIGHTRELEASE, K_UP, K_X1DRAG, K_X1MOUSE, K_X1RELEASE, K_X2DRAG, K_X2MOUSE,
-    K_X2RELEASE,
-};
+use crate::keycodes::Ctrl_H;
 use crate::r#move::{
     WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
     validate_virtcol, win_col_off, win_col_off2,
@@ -151,7 +147,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
     let mut op = ca.op();
     let col_off = unsafe { win_col_off(win.raw()) };
     // `<End>` also skips back over trailing white space.
-    let to_last_non_blank = ca.nchar == K_END || ca.nchar == K_KEND;
+    let to_last_non_blank = ca.nchar == Key::End.code() || ca.nchar == Key::Kend.code();
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
@@ -256,24 +252,39 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
 unsafe fn nv_g_key(cap: *mut cmdarg_T, nchar: c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    match nchar {
+    match Key::try_from(nchar) {
         // `g<BS>` is `g CTRL-H`.
-        K_BS => {
+        Ok(Key::Bs) => {
             ca.nchar = Ctrl_H;
             unsafe { nv_g_select(cap) };
         }
-        K_DOWN => unsafe { nv_g_screen_line(cap, FORWARD as c_int) },
-        K_UP => unsafe { nv_g_screen_line(cap, BACKWARD as c_int) },
-        K_HOME | K_KHOME => unsafe { nv_g_home_m_cmd(cap) },
-        K_END | K_KEND => unsafe { nv_g_dollar_cmd(cap) },
+        Ok(Key::Down) => unsafe { nv_g_screen_line(cap, FORWARD as c_int) },
+        Ok(Key::Up) => unsafe { nv_g_screen_line(cap, BACKWARD as c_int) },
+        Ok(Key::Home | Key::Khome) => unsafe { nv_g_home_m_cmd(cap) },
+        Ok(Key::End | Key::Kend) => unsafe { nv_g_dollar_cmd(cap) },
         // A mouse click after `g` acts as the CTRL-modified click.
-        K_MIDDLEMOUSE | K_MIDDLEDRAG | K_MIDDLERELEASE | K_LEFTMOUSE | K_LEFTDRAG
-        | K_LEFTRELEASE | K_MOUSEMOVE | K_RIGHTMOUSE | K_RIGHTDRAG | K_RIGHTRELEASE | K_X1MOUSE
-        | K_X1DRAG | K_X1RELEASE | K_X2MOUSE | K_X2DRAG | K_X2RELEASE => {
+        Ok(
+            Key::Middlemouse
+            | Key::Middledrag
+            | Key::Middlerelease
+            | Key::Leftmouse
+            | Key::Leftdrag
+            | Key::Leftrelease
+            | Key::Mousemove
+            | Key::Rightmouse
+            | Key::Rightdrag
+            | Key::Rightrelease
+            | Key::X1mouse
+            | Key::X1drag
+            | Key::X1release
+            | Key::X2mouse
+            | Key::X2drag
+            | Key::X2release,
+        ) => {
             mod_mask.set(MOD_MASK_CTRL);
             unsafe { do_mouse(ca.oap, nchar, BACKWARD as c_int, ca.count1, false) };
         }
-        K_IGNORE => {}
+        Ok(Key::Ignore) => {}
         _ => return false,
     }
     true

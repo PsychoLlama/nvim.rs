@@ -21,22 +21,9 @@
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::{ins_char_typebuf, ungetchars};
-use crate::keycodes::{
-    Ctrl_AT, Ctrl_M, K_BS, K_C_END, K_C_HOME, K_C_LEFT, K_C_RIGHT, K_DEL, K_DOWN, K_END, K_F1,
-    K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12, K_F13, K_F14, K_F15,
-    K_F16, K_F17, K_F18, K_F19, K_F20, K_F21, K_F22, K_F23, K_F24, K_F25, K_F26, K_F27, K_F28,
-    K_F29, K_F30, K_F31, K_F32, K_F33, K_F34, K_F35, K_F36, K_F37, K_F38, K_F39, K_F40, K_F41,
-    K_F42, K_F43, K_F44, K_F45, K_F46, K_F47, K_F48, K_F49, K_F50, K_F51, K_F52, K_F53, K_F54,
-    K_F55, K_F56, K_F57, K_F58, K_F59, K_F60, K_F61, K_F62, K_F63, K_HOME, K_INS, K_K0, K_K1, K_K2,
-    K_K3, K_K4, K_K5, K_K6, K_K7, K_K8, K_K9, K_KDEL, K_KDIVIDE, K_KDOWN, K_KEND, K_KENTER,
-    K_KHOME, K_KINS, K_KLEFT, K_KMINUS, K_KMULTIPLY, K_KORIGIN, K_KPAGEDOWN, K_KPAGEUP, K_KPLUS,
-    K_KPOINT, K_KRIGHT, K_KUP, K_LEFT, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTRELEASE, K_MIDDLEDRAG,
-    K_MIDDLEMOUSE, K_MIDDLERELEASE, K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP,
-    K_PAGEDOWN, K_PAGEUP, K_RIGHT, K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_S_DOWN, K_S_END,
-    K_S_F1, K_S_F2, K_S_F3, K_S_F4, K_S_F5, K_S_F6, K_S_F7, K_S_F8, K_S_F9, K_S_F10, K_S_F11,
-    K_S_F12, K_S_HOME, K_S_LEFT, K_S_RIGHT, K_S_TAB, K_S_UP, K_UP, K_X1DRAG, K_X1MOUSE,
-    K_X1RELEASE, K_X2DRAG, K_X2MOUSE, K_X2RELEASE, K_ZERO,
-};
+use crate::keycodes::Key;
+use crate::keycodes::NotAKey;
+use crate::keycodes::{Ctrl_AT, Ctrl_M};
 use crate::main::{KeyTyped, curbuf, curwin, mod_mask, tpf_flags, vgetc_char, vgetc_mod_mask};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
@@ -119,11 +106,29 @@ fn convert_modifiers(key: &mut c_int, state: &mut VTermModifier) {
     if mods & MOD_MASK_ALT != 0 {
         *state |= VTERM_MOD_ALT;
     }
-    match *key {
-        K_S_TAB | K_S_UP | K_S_DOWN | K_S_LEFT | K_S_RIGHT | K_S_HOME | K_S_END | K_S_F1
-        | K_S_F2 | K_S_F3 | K_S_F4 | K_S_F5 | K_S_F6 | K_S_F7 | K_S_F8 | K_S_F9 | K_S_F10
-        | K_S_F11 | K_S_F12 => *state |= VTERM_MOD_SHIFT,
-        K_C_LEFT | K_C_RIGHT | K_C_HOME | K_C_END => *state |= VTERM_MOD_CTRL,
+    match Key::try_from(*key) {
+        Ok(
+            Key::STab
+            | Key::SUp
+            | Key::SDown
+            | Key::SLeft
+            | Key::SRight
+            | Key::SHome
+            | Key::SEnd
+            | Key::SF1
+            | Key::SF2
+            | Key::SF3
+            | Key::SF4
+            | Key::SF5
+            | Key::SF6
+            | Key::SF7
+            | Key::SF8
+            | Key::SF9
+            | Key::SF10
+            | Key::SF11
+            | Key::SF12,
+        ) => *state |= VTERM_MOD_SHIFT,
+        Ok(Key::CLeft | Key::CRight | Key::CHome | Key::CEnd) => *state |= VTERM_MOD_CTRL,
         _ => {}
     }
 }
@@ -133,104 +138,104 @@ fn convert_modifiers(key: &mut c_int, state: &mut VTermModifier) {
 /// named key.
 fn convert_key(key: &mut c_int, state: &mut VTermModifier) -> VTermKey {
     convert_modifiers(key, state);
-    match *key {
-        K_BS => VTERM_KEY_BACKSPACE,
-        K_S_TAB | TAB => VTERM_KEY_TAB,
-        Ctrl_M => VTERM_KEY_ENTER,
-        ESC => VTERM_KEY_ESCAPE,
-        K_S_UP | K_UP => VTERM_KEY_UP,
-        K_S_DOWN | K_DOWN => VTERM_KEY_DOWN,
-        K_S_LEFT | K_C_LEFT | K_LEFT => VTERM_KEY_LEFT,
-        K_S_RIGHT | K_C_RIGHT | K_RIGHT => VTERM_KEY_RIGHT,
-        K_INS => VTERM_KEY_INS,
-        K_DEL => VTERM_KEY_DEL,
-        K_S_HOME | K_C_HOME | K_HOME => VTERM_KEY_HOME,
-        K_S_END | K_C_END | K_END => VTERM_KEY_END,
-        K_PAGEUP => VTERM_KEY_PAGEUP,
-        K_PAGEDOWN => VTERM_KEY_PAGEDOWN,
+    match Key::try_from(*key) {
+        Ok(Key::Bs) => VTERM_KEY_BACKSPACE,
+        Ok(Key::STab) | Err(NotAKey(TAB)) => VTERM_KEY_TAB,
+        Err(NotAKey(Ctrl_M)) => VTERM_KEY_ENTER,
+        Err(NotAKey(ESC)) => VTERM_KEY_ESCAPE,
+        Ok(Key::SUp | Key::Up) => VTERM_KEY_UP,
+        Ok(Key::SDown | Key::Down) => VTERM_KEY_DOWN,
+        Ok(Key::SLeft | Key::CLeft | Key::Left) => VTERM_KEY_LEFT,
+        Ok(Key::SRight | Key::CRight | Key::Right) => VTERM_KEY_RIGHT,
+        Ok(Key::Ins) => VTERM_KEY_INS,
+        Ok(Key::Del) => VTERM_KEY_DEL,
+        Ok(Key::SHome | Key::CHome | Key::Home) => VTERM_KEY_HOME,
+        Ok(Key::SEnd | Key::CEnd | Key::End) => VTERM_KEY_END,
+        Ok(Key::Pageup) => VTERM_KEY_PAGEUP,
+        Ok(Key::Pagedown) => VTERM_KEY_PAGEDOWN,
         // The keypad's keys double as cursor keys when NumLock is off, and
         // the editor reports which face was used; vterm wants the keypad.
-        K_K0 | K_KINS => VTERM_KEY_KP_0,
-        K_K1 | K_KEND => VTERM_KEY_KP_1,
-        K_K2 | K_KDOWN => VTERM_KEY_KP_2,
-        K_K3 | K_KPAGEDOWN => VTERM_KEY_KP_3,
-        K_K4 | K_KLEFT => VTERM_KEY_KP_4,
-        K_K5 | K_KORIGIN => VTERM_KEY_KP_5,
-        K_K6 | K_KRIGHT => VTERM_KEY_KP_6,
-        K_K7 | K_KHOME => VTERM_KEY_KP_7,
-        K_K8 | K_KUP => VTERM_KEY_KP_8,
-        K_K9 | K_KPAGEUP => VTERM_KEY_KP_9,
-        K_KDEL | K_KPOINT => VTERM_KEY_KP_PERIOD,
-        K_KENTER => VTERM_KEY_KP_ENTER,
-        K_KPLUS => VTERM_KEY_KP_PLUS,
-        K_KMINUS => VTERM_KEY_KP_MINUS,
-        K_KMULTIPLY => VTERM_KEY_KP_MULT,
-        K_KDIVIDE => VTERM_KEY_KP_DIVIDE,
+        Ok(Key::K0 | Key::Kins) => VTERM_KEY_KP_0,
+        Ok(Key::K1 | Key::Kend) => VTERM_KEY_KP_1,
+        Ok(Key::K2 | Key::Kdown) => VTERM_KEY_KP_2,
+        Ok(Key::K3 | Key::Kpagedown) => VTERM_KEY_KP_3,
+        Ok(Key::K4 | Key::Kleft) => VTERM_KEY_KP_4,
+        Ok(Key::K5 | Key::Korigin) => VTERM_KEY_KP_5,
+        Ok(Key::K6 | Key::Kright) => VTERM_KEY_KP_6,
+        Ok(Key::K7 | Key::Khome) => VTERM_KEY_KP_7,
+        Ok(Key::K8 | Key::Kup) => VTERM_KEY_KP_8,
+        Ok(Key::K9 | Key::Kpageup) => VTERM_KEY_KP_9,
+        Ok(Key::Kdel | Key::Kpoint) => VTERM_KEY_KP_PERIOD,
+        Ok(Key::Kenter) => VTERM_KEY_KP_ENTER,
+        Ok(Key::Kplus) => VTERM_KEY_KP_PLUS,
+        Ok(Key::Kminus) => VTERM_KEY_KP_MINUS,
+        Ok(Key::Kmultiply) => VTERM_KEY_KP_MULT,
+        Ok(Key::Kdivide) => VTERM_KEY_KP_DIVIDE,
         // Shift-F1..F12 are their own keycodes but the same vterm key; the
         // shift went into the modifier set above.
-        K_S_F1 | K_F1 => function_key(1),
-        K_S_F2 | K_F2 => function_key(2),
-        K_S_F3 | K_F3 => function_key(3),
-        K_S_F4 | K_F4 => function_key(4),
-        K_S_F5 | K_F5 => function_key(5),
-        K_S_F6 | K_F6 => function_key(6),
-        K_S_F7 | K_F7 => function_key(7),
-        K_S_F8 | K_F8 => function_key(8),
-        K_S_F9 | K_F9 => function_key(9),
-        K_S_F10 | K_F10 => function_key(10),
-        K_S_F11 | K_F11 => function_key(11),
-        K_S_F12 | K_F12 => function_key(12),
-        K_F13 => function_key(13),
-        K_F14 => function_key(14),
-        K_F15 => function_key(15),
-        K_F16 => function_key(16),
-        K_F17 => function_key(17),
-        K_F18 => function_key(18),
-        K_F19 => function_key(19),
-        K_F20 => function_key(20),
-        K_F21 => function_key(21),
-        K_F22 => function_key(22),
-        K_F23 => function_key(23),
-        K_F24 => function_key(24),
-        K_F25 => function_key(25),
-        K_F26 => function_key(26),
-        K_F27 => function_key(27),
-        K_F28 => function_key(28),
-        K_F29 => function_key(29),
-        K_F30 => function_key(30),
-        K_F31 => function_key(31),
-        K_F32 => function_key(32),
-        K_F33 => function_key(33),
-        K_F34 => function_key(34),
-        K_F35 => function_key(35),
-        K_F36 => function_key(36),
-        K_F37 => function_key(37),
-        K_F38 => function_key(38),
-        K_F39 => function_key(39),
-        K_F40 => function_key(40),
-        K_F41 => function_key(41),
-        K_F42 => function_key(42),
-        K_F43 => function_key(43),
-        K_F44 => function_key(44),
-        K_F45 => function_key(45),
-        K_F46 => function_key(46),
-        K_F47 => function_key(47),
-        K_F48 => function_key(48),
-        K_F49 => function_key(49),
-        K_F50 => function_key(50),
-        K_F51 => function_key(51),
-        K_F52 => function_key(52),
-        K_F53 => function_key(53),
-        K_F54 => function_key(54),
-        K_F55 => function_key(55),
-        K_F56 => function_key(56),
-        K_F57 => function_key(57),
-        K_F58 => function_key(58),
-        K_F59 => function_key(59),
-        K_F60 => function_key(60),
-        K_F61 => function_key(61),
-        K_F62 => function_key(62),
-        K_F63 => function_key(63),
+        Ok(Key::SF1 | Key::F1) => function_key(1),
+        Ok(Key::SF2 | Key::F2) => function_key(2),
+        Ok(Key::SF3 | Key::F3) => function_key(3),
+        Ok(Key::SF4 | Key::F4) => function_key(4),
+        Ok(Key::SF5 | Key::F5) => function_key(5),
+        Ok(Key::SF6 | Key::F6) => function_key(6),
+        Ok(Key::SF7 | Key::F7) => function_key(7),
+        Ok(Key::SF8 | Key::F8) => function_key(8),
+        Ok(Key::SF9 | Key::F9) => function_key(9),
+        Ok(Key::SF10 | Key::F10) => function_key(10),
+        Ok(Key::SF11 | Key::F11) => function_key(11),
+        Ok(Key::SF12 | Key::F12) => function_key(12),
+        Ok(Key::F13) => function_key(13),
+        Ok(Key::F14) => function_key(14),
+        Ok(Key::F15) => function_key(15),
+        Ok(Key::F16) => function_key(16),
+        Ok(Key::F17) => function_key(17),
+        Ok(Key::F18) => function_key(18),
+        Ok(Key::F19) => function_key(19),
+        Ok(Key::F20) => function_key(20),
+        Ok(Key::F21) => function_key(21),
+        Ok(Key::F22) => function_key(22),
+        Ok(Key::F23) => function_key(23),
+        Ok(Key::F24) => function_key(24),
+        Ok(Key::F25) => function_key(25),
+        Ok(Key::F26) => function_key(26),
+        Ok(Key::F27) => function_key(27),
+        Ok(Key::F28) => function_key(28),
+        Ok(Key::F29) => function_key(29),
+        Ok(Key::F30) => function_key(30),
+        Ok(Key::F31) => function_key(31),
+        Ok(Key::F32) => function_key(32),
+        Ok(Key::F33) => function_key(33),
+        Ok(Key::F34) => function_key(34),
+        Ok(Key::F35) => function_key(35),
+        Ok(Key::F36) => function_key(36),
+        Ok(Key::F37) => function_key(37),
+        Ok(Key::F38) => function_key(38),
+        Ok(Key::F39) => function_key(39),
+        Ok(Key::F40) => function_key(40),
+        Ok(Key::F41) => function_key(41),
+        Ok(Key::F42) => function_key(42),
+        Ok(Key::F43) => function_key(43),
+        Ok(Key::F44) => function_key(44),
+        Ok(Key::F45) => function_key(45),
+        Ok(Key::F46) => function_key(46),
+        Ok(Key::F47) => function_key(47),
+        Ok(Key::F48) => function_key(48),
+        Ok(Key::F49) => function_key(49),
+        Ok(Key::F50) => function_key(50),
+        Ok(Key::F51) => function_key(51),
+        Ok(Key::F52) => function_key(52),
+        Ok(Key::F53) => function_key(53),
+        Ok(Key::F54) => function_key(54),
+        Ok(Key::F55) => function_key(55),
+        Ok(Key::F56) => function_key(56),
+        Ok(Key::F57) => function_key(57),
+        Ok(Key::F58) => function_key(58),
+        Ok(Key::F59) => function_key(59),
+        Ok(Key::F60) => function_key(60),
+        Ok(Key::F61) => function_key(61),
+        Ok(Key::F62) => function_key(62),
+        Ok(Key::F63) => function_key(63),
         _ => VTERM_KEY_NONE,
     }
 }
@@ -243,7 +248,7 @@ pub(super) fn terminal_send_key(term: Term, c: c_int) {
     let mut state = VTERM_MOD_NONE;
     // The editor spells NUL as an extra so it survives being a C string;
     // vterm wants the control character back.
-    let mut key = if c == K_ZERO { Ctrl_AT } else { c };
+    let mut key = if c == Key::Zero.code() { Ctrl_AT } else { c };
     let named = convert_key(&mut key, &mut state);
     let vt = term.vt;
     if named != VTERM_KEY_NONE {
@@ -347,23 +352,23 @@ pub(crate) unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size
 /// Drags count as presses: vterm tracks the button down and turns a move
 /// with a button held into a drag report itself.
 fn mouse_button(c: c_int) -> Option<(c_int, bool)> {
-    match c {
-        K_LEFTMOUSE | K_LEFTDRAG => Some((BUTTON_LEFT, true)),
-        K_LEFTRELEASE => Some((BUTTON_LEFT, false)),
-        K_MIDDLEMOUSE | K_MIDDLEDRAG => Some((BUTTON_MIDDLE, true)),
-        K_MIDDLERELEASE => Some((BUTTON_MIDDLE, false)),
-        K_RIGHTMOUSE | K_RIGHTDRAG => Some((BUTTON_RIGHT, true)),
-        K_RIGHTRELEASE => Some((BUTTON_RIGHT, false)),
-        K_X1MOUSE | K_X1DRAG => Some((BUTTON_X1, true)),
-        K_X1RELEASE => Some((BUTTON_X1, false)),
-        K_X2MOUSE | K_X2DRAG => Some((BUTTON_X2, true)),
-        K_X2RELEASE => Some((BUTTON_X2, false)),
-        K_MOUSEDOWN => Some((BUTTON_WHEEL_UP, true)),
-        K_MOUSEUP => Some((BUTTON_WHEEL_DOWN, true)),
-        K_MOUSELEFT => Some((BUTTON_WHEEL_LEFT, true)),
-        K_MOUSERIGHT => Some((BUTTON_WHEEL_RIGHT, true)),
+    match Key::try_from(c) {
+        Ok(Key::Leftmouse | Key::Leftdrag) => Some((BUTTON_LEFT, true)),
+        Ok(Key::Leftrelease) => Some((BUTTON_LEFT, false)),
+        Ok(Key::Middlemouse | Key::Middledrag) => Some((BUTTON_MIDDLE, true)),
+        Ok(Key::Middlerelease) => Some((BUTTON_MIDDLE, false)),
+        Ok(Key::Rightmouse | Key::Rightdrag) => Some((BUTTON_RIGHT, true)),
+        Ok(Key::Rightrelease) => Some((BUTTON_RIGHT, false)),
+        Ok(Key::X1mouse | Key::X1drag) => Some((BUTTON_X1, true)),
+        Ok(Key::X1release) => Some((BUTTON_X1, false)),
+        Ok(Key::X2mouse | Key::X2drag) => Some((BUTTON_X2, true)),
+        Ok(Key::X2release) => Some((BUTTON_X2, false)),
+        Ok(Key::Mousedown) => Some((BUTTON_WHEEL_UP, true)),
+        Ok(Key::Mouseup) => Some((BUTTON_WHEEL_DOWN, true)),
+        Ok(Key::Mouseleft) => Some((BUTTON_WHEEL_LEFT, true)),
+        Ok(Key::Mouseright) => Some((BUTTON_WHEEL_RIGHT, true)),
         // A bare move: position only, no button.
-        K_MOUSEMOVE => Some((0, false)),
+        Ok(Key::Mousemove) => Some((0, false)),
         _ => None,
     }
 }
@@ -377,11 +382,11 @@ pub(super) fn is_mouse_key(c: c_int) -> bool {
 /// The scroll direction a wheel keycode asks for, for the editor's own
 /// scrolling when the child is not taking mouse events.
 fn scroll_direction(c: c_int) -> Option<c_int> {
-    match c {
-        K_MOUSEUP => Some(MSCR_UP),
-        K_MOUSEDOWN => Some(MSCR_DOWN),
-        K_MOUSELEFT => Some(MSCR_LEFT),
-        K_MOUSERIGHT => Some(MSCR_RIGHT),
+    match Key::try_from(c) {
+        Ok(Key::Mouseup) => Some(MSCR_UP),
+        Ok(Key::Mousedown) => Some(MSCR_DOWN),
+        Ok(Key::Mouseleft) => Some(MSCR_LEFT),
+        Ok(Key::Mouseright) => Some(MSCR_RIGHT),
         _ => None,
     }
 }
@@ -468,13 +473,13 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
 
         // A release inside the terminal's own window is dropped: it means
         // nothing to the editor here.
-        if c == K_LEFTRELEASE && showing_term {
+        if c == Key::Leftrelease.code() && showing_term {
             return false;
         }
     }
 
     // A bare move is dropped for the same reason.
-    if c == K_MOUSEMOVE {
+    if c == Key::Mousemove.code() {
         return false;
     }
 

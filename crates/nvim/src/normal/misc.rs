@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -16,7 +17,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, K_COMMAND, K_IGNORE, K_LUA};
+use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N};
 use crate::main::{
     KeyTyped, clear_cmdline, cmdwin_result, cmdwin_type, curwin, did_emsg, ex_normal_busy,
     finish_op, got_int, may_garbage_collect, mode_displayed, redraw_mode, restart_VIsual_select,
@@ -72,8 +73,8 @@ pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    let is_cmdkey = ca.cmdchar == K_COMMAND;
-    let is_lua = ca.cmdchar == K_LUA;
+    let is_cmdkey = ca.cmdchar == Key::Command.code();
+    let is_lua = ca.cmdchar == Key::Lua.code();
     // A plain `:` during a selection is the `:` *operator*, which puts the
     // selection's range on the command line. The synthetic keys are not.
     if visual_active() && !is_cmdkey && !is_lua {
@@ -273,14 +274,14 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
         }
         restart_edit.set(0);
         if cmdwin_type.get() != 0 {
-            cmdwin_result.set(K_IGNORE);
+            cmdwin_result.set(Key::Ignore.code());
             got_int.set(false);
             return;
         }
     } else if cmdwin_type.get() != 0 && ex_normal_busy.get() != 0 && typebuf_was_empty.get() {
         // `:normal` in the command-line window ran out of keys: leave the
         // window open rather than acting on the <Esc> it synthesised.
-        cmdwin_result.set(K_IGNORE);
+        cmdwin_result.set(Key::Ignore.code());
         return;
     }
     if visual_active() {

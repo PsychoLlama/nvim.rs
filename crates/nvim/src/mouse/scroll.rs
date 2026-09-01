@@ -10,13 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use core::ffi::CStr;
 
 use super::*;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
-use crate::keycodes::{K_MOUSEDOWN, K_MOUSELEFT, K_MOUSERIGHT, K_MOUSEUP};
 use crate::main::{
     State, curbuf, curwin, mod_mask, mouse_col, mouse_row, p_mousem, p_mousescroll_hor,
     p_mousescroll_vert,
@@ -144,10 +144,10 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     cap.oap = &raw mut oa;
     cap.arg = dir;
     cap.cmdchar = match dir {
-        MSCR_UP => K_MOUSEUP,
-        MSCR_DOWN => K_MOUSEDOWN,
-        MSCR_LEFT => K_MOUSELEFT,
-        MSCR_RIGHT => K_MOUSERIGHT,
+        MSCR_UP => Key::Mouseup.code(),
+        MSCR_DOWN => Key::Mousedown.code(),
+        MSCR_LEFT => Key::Mouseleft.code(),
+        MSCR_RIGHT => Key::Mouseright.code(),
         _ => {
             siemsg!("Invalid ins_mousescroll() argument: {}", dir);
             0

@@ -52,11 +52,6 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
-use crate::keycodes::{
-    K_BS, K_COMMAND, K_DOWN, K_EVENT, K_IGNORE, K_KENTER, K_KPAGEDOWN, K_KPAGEUP, K_LUA,
-    K_MOUSEDOWN, K_MOUSELEFT, K_MOUSEMOVE, K_MOUSERIGHT, K_MOUSEUP, K_PAGEDOWN, K_PAGEUP, K_S_DOWN,
-    K_S_TAB, K_S_UP, K_SELECT, K_UP,
-};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
     KeyTyped, State, arrow_used, can_si, can_si_back, cmdwin_type, cot_flags, curbuf, curwin,

@@ -31,10 +31,6 @@ use crate::highlight_group::{
 use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
-use crate::keycodes::{
-    K_DOWN, K_LEFTDRAG, K_LEFTMOUSE, K_LEFTMOUSE_NM, K_MOUSEDOWN, K_MOUSEMOVE, K_MOUSEUP,
-    K_RIGHTDRAG, K_RIGHTMOUSE, K_RIGHTRELEASE, K_UP,
-};
 use crate::main::{
     Columns, PumWant, RedrawingDisabled, Rows, State, cia_flags, cmdline_row, cmdline_win,
     cmdwin_type, curbuf, curtab, curwin, e_menu_only_exists_in_another_mode, g_do_tagpreview,

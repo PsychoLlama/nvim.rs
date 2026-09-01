@@ -22,6 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -94,7 +95,7 @@ pub(crate) fn ins_del() {
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    append_to_redobuff_char(K_DEL);
+    append_to_redobuff_char(Key::Del.code());
 }
 
 /// Everything a backspace is not allowed to delete.

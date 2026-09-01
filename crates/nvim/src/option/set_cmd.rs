@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -31,7 +32,7 @@ use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
-use crate::keycodes::{K_ZERO, find_special_key};
+use crate::keycodes::find_special_key;
 use crate::main::{
     curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox, silent_mode,
 };
@@ -739,7 +740,7 @@ pub(crate) unsafe fn string_to_key(arg: *mut c_char) -> c_int {
     if unsafe { *arg } as c_int == '^' as c_int && unsafe { *arg.add(1) } != 0 {
         // CTRL-x, where NUL would be ambiguous with "no key".
         let key = ((unsafe { *arg.add(1) } as u8).to_ascii_uppercase() as c_int) ^ 0x40;
-        return if key == 0 { K_ZERO } else { key };
+        return if key == 0 { Key::Zero.code() } else { key };
     }
     unsafe { *arg as uint8_t as c_int }
 }

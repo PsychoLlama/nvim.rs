@@ -13,7 +13,8 @@ use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
-use crate::keycodes::{Ctrl_C, K_IGNORE, K_LEFTMOUSE, K_SPECIAL, KS_MODIFIER, key_unescape};
+use crate::keycodes::Key;
+use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, key_unescape};
 use crate::main::{
     State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
     need_wait_return,
@@ -95,8 +96,8 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
 unsafe fn is_swallowed_key(first: u8, key: c_int) -> bool {
     // SAFETY: the caller's contract.
     c_int::from(first) == KS_MODIFIER
-        || key == K_IGNORE
-        || (is_mouse_key(key) && key != K_LEFTMOUSE)
+        || key == Key::Ignore.code()
+        || (is_mouse_key(key) && key != Key::Leftmouse.code())
 }
 
 /// Read one keystroke straight from the user, ignoring mouse clicks and

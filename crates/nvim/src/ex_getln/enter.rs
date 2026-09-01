@@ -13,6 +13,7 @@ use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::drawscreen::windows_in_curtab;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
+use crate::keycodes::Key;
 use crate::message::emsg_ptr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
@@ -583,7 +584,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
     }
 
     // Defer the screen update to avoid pum flicker during wildtrigger().
-    if s.c == K_WILD && s.firstc != '@' as ::core::ffi::c_int {
+    if s.c == Key::Wild.code() && s.firstc != '@' as ::core::ffi::c_int {
         s.skip_pum_redraw = true;
     }
 

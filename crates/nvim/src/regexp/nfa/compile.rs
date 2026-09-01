@@ -54,15 +54,15 @@ fn is_bracket(c: NfaOp) -> bool {
 /// # Safety
 ///
 /// `start` must be null or a state of a live program.
-pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> c_int {
+pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> bool {
     if depth > MAX_DEPTH {
-        return 0;
+        return false;
     }
     // SAFETY: the caller's program; `out`/`out1` stay inside it.
     let mut p = start;
     while !p.is_null() {
         match NfaOp::try_from(unsafe { (*p).c }) {
-            Ok(NfaOp::Bol | NfaOp::Bof) => return 1,
+            Ok(NfaOp::Bol | NfaOp::Bof) => return true,
             // Zero-width, so the anchor is whatever follows. Note that
             // `\%23l` and its neighbours are *not* here: unlike
             // `nfa_get_regstart` below, a position assertion stops this
@@ -71,14 +71,13 @@ pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> c
             Ok(c) if is_bracket(c) => p = unsafe { (*p).out },
             // Anchored only if both alternatives are.
             Ok(NfaOp::Split) => {
-                return (unsafe { nfa_get_reganch((*p).out, depth + 1) } != 0
-                    && unsafe { nfa_get_reganch((*p).out1, depth + 1) } != 0)
-                    as c_int;
+                return unsafe { nfa_get_reganch((*p).out, depth + 1) }
+                    && unsafe { nfa_get_reganch((*p).out1, depth + 1) };
             }
-            _ => return 0,
+            _ => return false,
         }
     }
-    0
+    false
 }
 
 /// The character every match must start with, or 0 if there is no single

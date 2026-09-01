@@ -10,7 +10,8 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::{Keys, Suppress};
-use crate::keycodes::{K_IGNORE, K_MOUSEMOVE, key_escape};
+use crate::keycodes::Key;
+use crate::keycodes::key_escape;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
@@ -155,7 +156,11 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
         };
 
         let n = n as c_int;
-        if n != K_IGNORE && n != K_MOUSEMOVE && n != K_VER_SCROLLBAR && n != K_HOR_SCROLLBAR {
+        if n != Key::Ignore.code()
+            && n != Key::Mousemove.code()
+            && n != Key::VerScrollbar.code()
+            && n != Key::HorScrollbar.code()
+        {
             return n as varnumber_T;
         }
     }

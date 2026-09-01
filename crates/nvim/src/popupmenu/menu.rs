@@ -16,6 +16,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use core::ptr;
 use std::ffi::CString;
 
@@ -150,7 +151,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
     match c {
         ESC | Ctrl_C => MenuStep::Close,
         CAR | NL => MenuStep::Execute,
-        _ if c == 'k' as c_int || c == K_UP || c == K_MOUSEUP => {
+        _ if c == 'k' as c_int || c == Key::Up.code() || c == Key::Mouseup.code() => {
             // Previous selectable item; separators are skipped over.
             while pum_selected.get() > 0 {
                 pum_selected.set(pum_selected.get() - 1);
@@ -160,7 +161,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             }
             MenuStep::Continue
         }
-        _ if c == 'j' as c_int || c == K_DOWN || c == K_MOUSEDOWN => {
+        _ if c == 'j' as c_int || c == Key::Down.code() || c == Key::Mousedown.code() => {
             while pum_selected.get() < pum_size.get() - 1 {
                 pum_selected.set(pum_selected.get() + 1);
                 if !items[pum_selected.get() as usize].as_bytes().is_empty() {
@@ -169,24 +170,30 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             }
             MenuStep::Continue
         }
-        _ if c == K_RIGHTMOUSE => {
+        _ if c == Key::Rightmouse.code() => {
             // Reposition the menu: hand the click back to the caller.
             vungetc(c);
             MenuStep::Close
         }
-        _ if c == K_LEFTDRAG || c == K_RIGHTDRAG || c == K_MOUSEMOVE => {
+        _ if c == Key::Leftdrag.code()
+            || c == Key::Rightdrag.code()
+            || c == Key::Mousemove.code() =>
+        {
             // SAFETY: the caller's promise -- the placement is settled.
             unsafe { pum_select_mouse_pos() };
             MenuStep::Continue
         }
-        _ if c == K_LEFTMOUSE || c == K_LEFTMOUSE_NM || c == K_RIGHTRELEASE => {
+        _ if c == Key::Leftmouse.code()
+            || c == Key::LeftmouseNm.code()
+            || c == Key::Rightrelease.code() =>
+        {
             // A left click always closes; a right release only closes when
             // it landed on an item.
             // SAFETY: as above.
             unsafe { pum_select_mouse_pos() };
             if pum_selected.get() >= 0 {
                 MenuStep::Execute
-            } else if c == K_RIGHTRELEASE {
+            } else if c == Key::Rightrelease.code() {
                 MenuStep::Continue
             } else {
                 MenuStep::Close

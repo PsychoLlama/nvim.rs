@@ -22,12 +22,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::guard::{Keys, Suppress};
-use crate::keycodes::{K_C_LEFT, K_C_RIGHT, K_EVENT, K_IGNORE, K_NOP};
 use crate::r#move::WinValid;
 use crate::types::NUL;
 
@@ -305,7 +305,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         // the loop wakes up and sees `stop_insert_mode`.
         stop_insert_mode.set(true);
         restart_edit.set('I' as c_int);
-        stuff_readbuf_char(K_NOP);
+        stuff_readbuf_char(Key::Nop.code());
     }
     if stop_insert_mode.get() && !ins_compl_active() {
         // `:stopinsert` was used, or a terminal buffer was entered.
@@ -363,7 +363,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     s.old_topfill = cur_win().w_topfill;
 
     // `lastc` is the previous *real* key: a K_EVENT is not one.
-    if s.c != K_EVENT {
+    if s.c != Key::Event.code() {
         s.lastc = s.c;
     }
 
@@ -454,7 +454,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
         // Normal mode sees it.
-        if key != K_IGNORE && key != K_NOP {
+        if key != Key::Ignore.code() && key != Key::Nop.code() {
             vungetc(key);
         }
         s.count = 0;
@@ -464,13 +464,13 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         unsafe { ins_compl_prep(ESC) };
         return 0;
     }
-    if key == K_IGNORE || key == K_NOP {
+    if key == Key::Ignore.code() || key == Key::Nop.code() {
         return -1; // get another key
     }
     s.c = key;
 
     // Any key but a K_EVENT resets the CursorHold timer.
-    if key != K_EVENT {
+    if key != Key::Event.code() {
         did_cursorhold.set(true);
     }
 
@@ -506,7 +506,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         }
     }
 
-    if s.c != K_EVENT {
+    if s.c != Key::Event.code() {
         s.c = do_digraph(s.c);
     }
 
@@ -547,14 +547,22 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
 
 /// In a 'rightleft' window, left and right swap over.
 const fn mirror_arrow_key(c: c_int) -> c_int {
-    match c {
-        K_LEFT => K_RIGHT,
-        K_S_LEFT => K_S_RIGHT,
-        K_C_LEFT => K_C_RIGHT,
-        K_RIGHT => K_LEFT,
-        K_S_RIGHT => K_S_LEFT,
-        K_C_RIGHT => K_C_LEFT,
-        other => other,
+    // An `if` chain rather than a `match Key::try_from(c)`: this is a `const
+    // fn`, where a trait call is not available.
+    if c == Key::Left.code() {
+        Key::Right.code()
+    } else if c == Key::SLeft.code() {
+        Key::SRight.code()
+    } else if c == Key::CLeft.code() {
+        Key::CRight.code()
+    } else if c == Key::Right.code() {
+        Key::Left.code()
+    } else if c == Key::SRight.code() {
+        Key::SLeft.code()
+    } else if c == Key::CRight.code() {
+        Key::CLeft.code()
+    } else {
+        c
     }
 }
 
@@ -577,7 +585,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // Backspace inside the leader: shrink it rather than deleting text.
-    if (s.c == K_BS || s.c == Ctrl_H) && cur_win().w_cursor.col > ins_compl_col() {
+    if (s.c == Key::Bs.code() || s.c == Ctrl_H) && cur_win().w_cursor.col > ins_compl_col() {
         s.c = unsafe { ins_compl_bs() };
         if s.c == NUL {
             return true;
@@ -617,7 +625,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // CTRL-Y accepts the match; so does <CR> under 'completeopt'
     // `noinsert`.
     if (s.c == Ctrl_Y
-        || (ins_compl_enter_selects() && (s.c == CAR || s.c == K_KENTER || s.c == NL)))
+        || (ins_compl_enter_selects() && (s.c == CAR || s.c == Key::Kenter.code() || s.c == NL)))
         && stop_arrow_ok()
     {
         unsafe { ins_compl_delete(false) };
@@ -652,7 +660,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
 pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
-    if s.c != K_EVENT && ctrl_x_mode_normal() {
+    if s.c != Key::Event.code() && ctrl_x_mode_normal() {
         did_cursorhold.set(false);
     }
     // The completion popup belongs to the window it was started in.

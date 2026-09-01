@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::keycodes::Key;
 use crate::keycodes::{Ctrl_J, Ctrl_V, key_unescape};
 use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
@@ -169,7 +170,7 @@ pub(crate) unsafe fn translate_mapping(
                 if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
                     // SAFETY: as above.
                     c = unsafe { key_unescape(*str.add(1), *str.add(2)) };
-                    if c == K_ZERO {
+                    if c == Key::Zero.code() {
                         c = NUL; // display <Nul> as ^@
                     }
                     // SAFETY: as above.

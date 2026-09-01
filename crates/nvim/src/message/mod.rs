@@ -41,9 +41,7 @@ use crate::highlight_group::{
 };
 use crate::indent::tabstop_padding;
 use crate::input::{get_keystroke, prompt_for_input};
-use crate::keycodes::{
-    K_BS, K_DOWN, K_EVENT, K_PAGEDOWN, K_PAGEUP, K_SPECIAL, K_UP, K_ZERO, get_special_key_name,
-};
+use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
     Columns, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
