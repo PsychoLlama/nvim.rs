@@ -396,9 +396,9 @@ unsafe fn decor_free_inner(mut vt: *mut DecorVirtText, first_idx: uint32_t) {
     // SAFETY: the caller's chains.
     while !vt.is_null() {
         if unsafe { (*vt).flags } as c_int & kVTIsLines as c_int != 0 {
-            unsafe { clear_virtlines(&raw mut (*vt).data.virt_lines) };
+            unsafe { clear_virtlines(&raw mut *(*vt).data.lines_mut()) };
         } else {
-            unsafe { clear_virttext(&raw mut (*vt).data.virt_text) };
+            unsafe { clear_virttext(&raw mut *(*vt).data.text_mut()) };
         }
         let tofree = vt;
         vt = unsafe { (*vt).next };

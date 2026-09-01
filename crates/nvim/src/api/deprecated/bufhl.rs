@@ -175,8 +175,8 @@ pub unsafe fn nvim_buf_set_virtual_text(
         // stacking a second decoration on it.
         // SAFETY: `existing` is that decoration, which owns its text.
         unsafe {
-            clear_virttext(&raw mut (*existing).data.virt_text);
-            (*existing).data.virt_text = virt_text;
+            clear_virttext(&raw mut *(*existing).data.text_mut());
+            *(*existing).data.text_mut() = virt_text;
             (*existing).width = width;
         }
         return src_id.reported(error);
@@ -194,7 +194,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
             width,
             col: 0 as ::core::ffi::c_int,
             pos: kVPosEndOfLine,
-            data: DecorVirtText_data { virt_text },
+            data: DecorVirtText_data::Text(virt_text),
             next: ::core::ptr::null_mut::<DecorVirtText>(),
         };
     }

@@ -283,13 +283,11 @@ unsafe fn add_suspended_terminal_note(buf: *mut buf_T, state: DecorStateRef) {
         width: 0,
         col: 0,
         pos: kVPosWinCol,
-        data: DecorVirtText_data {
-            virt_text: VirtText {
-                size: 1,
-                capacity: 0,
-                items: CHUNK.as_raw().cast::<VirtTextChunk>(),
-            },
-        },
+        data: DecorVirtText_data::Text(VirtText {
+            size: 1,
+            capacity: 0,
+            items: CHUNK.as_raw().cast::<VirtTextChunk>(),
+        }),
         next: ::core::ptr::null_mut(),
     });
 

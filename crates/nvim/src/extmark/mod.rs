@@ -439,11 +439,10 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
     // SAFETY: `size - 1` is the last slot pushed, and the vector's element
     // type is what was pushed into it.
     let item = unsafe { &mut *uvp.items.add(uvp.size - 1) };
-    if item.type_0 != kExtmarkSplice {
-        return None;
+    match item {
+        ExtmarkUndoObject::Splice(splice) => Some(splice),
+        _ => None,
     }
-    // SAFETY: the tag just read says the `splice` arm is the live one.
-    Some(unsafe { &mut item.data.splice })
 }
 
 // ---------------------------------------------------------------------------

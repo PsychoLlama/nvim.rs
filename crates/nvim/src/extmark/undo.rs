@@ -19,8 +19,7 @@ use super::set::extmark_setraw;
 use super::splice::{move_region, splice_impl};
 use super::{
     Buf, Extent, current_buf, decor_remove, itr_current, itr_get, itr_next, itr_rawkey,
-    kExtmarkMove, kExtmarkNoUndo, kExtmarkSavePos, kExtmarkSplice, kExtmarkUndo, push_undo,
-    tree_get_altpos, tree_revise_meta,
+    kExtmarkNoUndo, kExtmarkUndo, push_undo, tree_get_altpos, tree_revise_meta,
 };
 use crate::marktree::key::{
     MT_FLAG_INVALID, mt_decor, mt_end, mt_invalid, mt_invalidate, mt_lookup_key, mt_no_undo,
@@ -28,7 +27,7 @@ use crate::marktree::key::{
 };
 use crate::types::{
     ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, buf_T, colnr_T,
-    extmark_undo_vec_t, uint16_t, undo_object_data,
+    extmark_undo_vec_t, uint16_t,
 };
 
 /// Invalidate the marks inside a range being deleted, and copy the ones the
@@ -132,13 +131,7 @@ pub(crate) fn splice_delete(
                 old_col: mark.pos.col,
                 invalidated,
             };
-            push_undo(
-                uvp,
-                ExtmarkUndoObject {
-                    type_0: kExtmarkSavePos,
-                    data: undo_object_data { savepos: pos },
-                },
-            );
+            push_undo(uvp, ExtmarkUndoObject::SavePos(pos));
         }
 
         itr_next(buf.marktree(), &mut itr);
@@ -148,10 +141,8 @@ pub(crate) fn splice_delete(
 /// Undo or redo one recorded extmark operation.
 pub unsafe fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
     let buf = current_buf();
-    if undo_info.type_0 == kExtmarkSplice {
+    if let ExtmarkUndoObject::Splice(splice) = undo_info {
         // A splice: any text operation that changes position except `:move`.
-        // SAFETY of the union read: the tag says which arm is live.
-        let splice = unsafe { undo_info.data.splice };
         let start = Extent {
             row: splice.start_row,
             col: splice.start_col,
@@ -172,16 +163,12 @@ pub unsafe fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
         } else {
             splice_impl(buf, start, old, new, kExtmarkNoUndo);
         }
-    } else if undo_info.type_0 == kExtmarkSavePos {
-        // SAFETY: as above.
-        let pos = unsafe { undo_info.data.savepos };
+    } else if let ExtmarkUndoObject::SavePos(pos) = undo_info {
         if undo && pos.old_row >= 0 {
             extmark_setraw(buf, pos.mark, pos.old_row, pos.old_col, pos.invalidated);
         }
         // No redo: the `kExtmarkSplice` entry moves the marks back.
-    } else if undo_info.type_0 == kExtmarkMove {
-        // SAFETY: as above.
-        let move_0 = unsafe { undo_info.data.move_0 };
+    } else if let ExtmarkUndoObject::Move(move_0) = undo_info {
         let start = Extent {
             row: move_0.start_row,
             col: move_0.start_col,

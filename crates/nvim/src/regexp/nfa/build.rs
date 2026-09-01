@@ -39,14 +39,33 @@ use crate::types::MB_MAXBYTES;
 /// How far the width walk follows a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;
 
-/// A list of `out` pointers waiting to be patched, threaded through the
-/// slots themselves: each unset `out`/`out1` field holds the address of the
-/// next one in the list rather than a state. That is why this is a union and
-/// not a `Vec` — the storage is the machine's own half-built edges.
-#[repr(C)]
-union Ptrlist {
-    next: *mut Ptrlist,
-    state: *mut nfa_state_T,
+/// One unset edge slot of a half-built machine, seen as a link in the list
+/// of slots still waiting to be patched.
+///
+/// The list has no storage of its own: each unset `out`/`out1` field holds
+/// the address of the *next* unset slot until [`patch`] overwrites it with
+/// the state the edge goes to. So a `Ptrlist` is an edge slot, and the two
+/// things it can hold are the two things a `*mut nfa_state_T` can be made
+/// to hold — which is why it is a newtype over that field's own type rather
+/// than a `Vec`.
+#[repr(transparent)]
+struct Ptrlist(*mut nfa_state_T);
+
+impl Ptrlist {
+    /// The next slot in the list, or null at its end.
+    fn next(&self) -> *mut Ptrlist {
+        self.0.cast::<Ptrlist>()
+    }
+
+    /// Link this slot to `next`, keeping it unpatched.
+    fn set_next(&mut self, next: *mut Ptrlist) {
+        self.0 = next.cast::<nfa_state_T>();
+    }
+
+    /// Patch this slot: the edge goes to `state` from now on.
+    fn set_state(&mut self, state: *mut nfa_state_T) {
+        self.0 = state;
+    }
 }
 
 /// A partly built machine: where it starts, and every edge out of it that
@@ -81,10 +100,10 @@ fn state(c: c_int, out: *mut nfa_state_T, out1: *mut nfa_state_T) -> Option<*mut
 /// A one-element patch list over the edge slot `slot`.
 fn list1(slot: *mut *mut nfa_state_T) -> *mut Ptrlist {
     // SAFETY: `slot` is an `out`/`out1` field of a live state; writing a
-    // list link into it is what the union is for, and `patch` overwrites it
+    // list link into it is what the list is for, and `patch` overwrites it
     // with a state before the machine runs.
     let list = slot.cast::<Ptrlist>();
-    unsafe { (*list).next = core::ptr::null_mut() };
+    unsafe { (*list).set_next(core::ptr::null_mut()) };
     list
 }
 
@@ -93,8 +112,8 @@ fn patch(list: *mut Ptrlist, state: *mut nfa_state_T) {
     // SAFETY: every node in the chain is an edge slot of a live state.
     let mut node = list;
     while !node.is_null() {
-        let next = unsafe { (*node).next };
-        unsafe { (*node).state = state };
+        let next = unsafe { (*node).next() };
+        unsafe { (*node).set_state(state) };
         node = next;
     }
 }
@@ -103,10 +122,10 @@ fn patch(list: *mut Ptrlist, state: *mut nfa_state_T) {
 fn append(first: *mut Ptrlist, second: *mut Ptrlist) -> *mut Ptrlist {
     // SAFETY: as `patch`; `first` is never empty where this is called.
     let mut last = first;
-    while !unsafe { (*last).next.is_null() } {
-        last = unsafe { (*last).next };
+    while !unsafe { (*last).next() }.is_null() {
+        last = unsafe { (*last).next() };
     }
-    unsafe { (*last).next = second };
+    unsafe { (*last).set_next(second) };
     first
 }
 

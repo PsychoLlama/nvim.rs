@@ -3,8 +3,10 @@
 typedef struct lua_State lua_State;
 typedef struct Arena Arena;
 typedef struct AutoPatCmd_S AutoPatCmd_S;
+typedef struct DecorRange_data DecorRange_data;
 typedef struct DecorVirtText DecorVirtText;
 typedef struct Error Error;
+typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct KeySetLink KeySetLink;
 typedef struct MsgpackRpcRequestHandler MsgpackRpcRequestHandler;
 typedef struct ParserLine ParserLine;
@@ -104,21 +106,14 @@ typedef struct CharInfo CharInfo;
 typedef struct DecorExt DecorExt;
 typedef struct DecorHighlightInline DecorHighlightInline;
 typedef union DecorInlineData DecorInlineData;
+typedef struct DecorRange DecorRange;
 typedef struct DecorRange_data_ui DecorRange_data_ui;
 typedef struct DecorSignHighlight DecorSignHighlight;
-typedef union DecorRange_data DecorRange_data;
-typedef struct DecorRange DecorRange;
-typedef union DecorRangeSlot DecorRangeSlot;
-typedef struct VirtLines VirtLines;
-typedef struct VirtText VirtText;
-typedef union DecorVirtText_data DecorVirtText_data;
 typedef struct Dict Dict;
 typedef union EvalFuncData EvalFuncData;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
-typedef union undo_object_data undo_object_data;
-typedef struct undo_object undo_object;
 typedef struct Intersection Intersection;
 typedef struct String String;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
@@ -180,8 +175,6 @@ typedef struct MapHash MapHash;
 typedef struct Set_cstr_t Set_cstr_t;
 typedef struct Map_cstr_t_ptr_t Map_cstr_t_ptr_t;
 typedef union OptValData OptValData;
-typedef struct ParserStateItem_data_expr ParserStateItem_data_expr;
-typedef union ParserStateItem_data ParserStateItem_data;
 typedef struct ScopeDictDictItem ScopeDictDictItem;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
@@ -237,12 +230,12 @@ typedef struct VTermStateFields VTermStateFields;
 typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
 typedef struct vim_state vim_state;
+typedef struct VirtLines VirtLines;
+typedef struct VirtText VirtText;
 typedef struct addrinfo addrinfo;
 typedef struct bufstate_T bufstate_T;
 typedef struct cmdarg_T cmdarg_T;
-typedef union cstack_T_cs_pend cstack_T_cs_pend;
 typedef struct dictitem_T dictitem_T;
-typedef union estack_T_es_info estack_T_es_info;
 typedef struct pos_T pos_T;
 typedef struct sctx_T sctx_T;
 typedef struct expand_T expand_T;
@@ -354,7 +347,6 @@ typedef unsigned int ExprParserFlags;
 typedef unsigned int ExprVarScope;
 typedef unsigned int ExtmarkOp;
 typedef unsigned int ExtmarkType;
-typedef struct undo_object ExtmarkUndoObject;
 typedef const KeySetLink *(*FieldHashfn)(const char *, size_t);
 typedef unsigned int file_comparison;
 typedef file_comparison FileComparison;
@@ -947,42 +939,6 @@ struct DecorSignHighlight {
   uint32_t next;
   const char *url;
 };
-union DecorRange_data {
-  DecorSignHighlight sh;
-  DecorVirtText *vt;
-  DecorRange_data_ui ui;
-};
-struct DecorRange {
-  int start_row;
-  int start_col;
-  int end_row;
-  int end_col;
-  int ordering;
-  DecorPriorityInternal priority_internal;
-  bool owned;
-  DecorRangeKind kind;
-  DecorRange_data data;
-  int attr_id;
-  int draw_col;
-};
-union DecorRangeSlot {
-  DecorRange range;
-  int next_free_i;
-};
-struct VirtLines {
-  size_t size;
-  size_t capacity;
-  virt_line *items;
-};
-struct VirtText {
-  size_t size;
-  size_t capacity;
-  VirtTextChunk *items;
-};
-union DecorVirtText_data {
-  VirtText virt_text;
-  VirtLines virt_lines;
-};
 struct Dict {
   size_t size;
   size_t capacity;
@@ -1020,15 +976,6 @@ struct ExtmarkSplice {
   bcount_t start_byte;
   bcount_t old_byte;
   bcount_t new_byte;
-};
-union undo_object_data {
-  ExtmarkSplice splice;
-  ExtmarkMove move;
-  ExtmarkSavePos savepos;
-};
-struct undo_object {
-  UndoObjectType type;
-  undo_object_data data;
 };
 struct Intersection {
   size_t size;
@@ -1558,12 +1505,6 @@ union OptValData {
   OptInt number;
   String string;
 };
-struct ParserStateItem_data_expr {
-  ParserStateItem_data_expr_type_0 type;
-};
-union ParserStateItem_data {
-  ParserStateItem_data_expr expr;
-};
 struct ScopeDictDictItem {
   typval_T di_tv;
   uint8_t di_flags;
@@ -2010,6 +1951,16 @@ struct vim_state {
   state_check_callback check;
   state_execute_callback execute;
 };
+struct VirtLines {
+  size_t size;
+  size_t capacity;
+  virt_line *items;
+};
+struct VirtText {
+  size_t size;
+  size_t capacity;
+  VirtTextChunk *items;
+};
 struct addrinfo {
   int ai_flags;
   int ai_family;
@@ -2042,20 +1993,10 @@ struct cmdarg_T {
   int retval;
   char *searchbuf;
 };
-union cstack_T_cs_pend {
-  void *csp_rv[50];
-  void *csp_ex[50];
-};
 struct dictitem_T {
   typval_T di_tv;
   uint8_t di_flags;
   char di_key[0];
-};
-union estack_T_es_info {
-  sctx_T *sctx;
-  ufunc_T *ufunc;
-  AutoPatCmd *aucmd;
-  except_T *except;
 };
 struct pos_T {
   linenr_T lnum;

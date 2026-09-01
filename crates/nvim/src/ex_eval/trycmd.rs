@@ -67,7 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{NUL, cleanup_T, cstack_T, eslist_T, exarg_T, except_T, regmatch_T};
+use crate::types::{NUL, cleanup_T, cstack_T, eslist_T, exarg_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -129,7 +129,7 @@ pub(crate) unsafe fn do_throw(cstack: *mut cstack_T) {
             }
         }
         unsafe { *flags &= !CSF_ACTIVE };
-        unsafe { (*cstack).cs_pend.csp_ex[idx as usize] = current_exception.get().cast() };
+        unsafe { (*cstack).set_pending_exception(idx as usize, current_exception.get()) };
     }
     did_throw.set(true);
 }
@@ -274,13 +274,13 @@ pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
             did_emsg.set(0);
             got_int.set(false);
             did_throw.set(false);
-            unsafe { catch_exception((*cstack).cs_pend.csp_ex[idx as usize].cast::<except_T>()) };
+            unsafe { catch_exception((*cstack).pending_exception(idx as usize)) };
             // The current exception must be the one in the cstack, so
             // that it can be discarded at the next ":catch", ":finally"
             // or ":endtry", or when the catch clause is left by a
             // ":continue", ":break", ":return", ":finish", error,
             // interrupt or another exception.
-            if unsafe { (*cstack).cs_pend.csp_ex[(*cstack).cs_idx as usize] }.cast::<except_T>()
+            if unsafe { (*cstack).pending_exception((*cstack).cs_idx as usize) }
                 != current_exception.get()
             {
                 unsafe { internal_error(c"ex_catch()".as_ptr()) };
@@ -420,8 +420,8 @@ pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
     if pending == CSTP_ERROR || did_emsg.get() != 0 || got_int.get() || did_throw.get() {
         let top = unsafe { (*cstack).cs_idx } as usize;
         if unsafe { (*cstack).cs_pending[top] } == CSTP_RETURN as c_char {
-            unsafe { report_discard_pending(CSTP_RETURN, (*cstack).cs_pend.csp_rv[top]) };
-            unsafe { discard_pending_return((*cstack).cs_pend.csp_rv[top]) };
+            unsafe { report_discard_pending(CSTP_RETURN, (*cstack).pending_return(top)) };
+            unsafe { discard_pending_return((*cstack).pending_return(top)) };
         }
         if pending == CSTP_ERROR && did_emsg.get() == 0 {
             pending |= if THROW_ON_ERROR { CSTP_THROW } else { 0 };
@@ -442,9 +442,7 @@ pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
         // ":finish", error, interrupt or another exception. When `emsg`
         // was called for a missing ":endif"/":endwhile"/":endfor"
         // detected here, the exception will be discarded.
-        if did_throw.get()
-            && unsafe { (*cstack).cs_pend.csp_ex[top] }.cast::<except_T>()
-                != current_exception.get()
+        if did_throw.get() && unsafe { (*cstack).pending_exception(top) } != current_exception.get()
         {
             unsafe { internal_error(c"ex_finally()".as_ptr()) };
         }
@@ -550,9 +548,9 @@ pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
         pending = unsafe { (*cstack).cs_pending[idx as usize] };
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         if pending == CSTP_RETURN as c_char {
-            rettv = unsafe { (*cstack).cs_pend.csp_rv[idx as usize] };
+            rettv = unsafe { (*cstack).pending_return(idx as usize) };
         } else if pending as c_int & CSTP_THROW != 0 {
-            current_exception.set(unsafe { (*cstack).cs_pend.csp_ex[idx as usize] }.cast());
+            current_exception.set(unsafe { (*cstack).pending_exception(idx as usize) });
         }
     }
 

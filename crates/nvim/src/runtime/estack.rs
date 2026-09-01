@@ -37,9 +37,7 @@ fn entry_for(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> estack_T {
         es_lnum: lnum,
         es_name: name,
         es_type,
-        es_info: estack_T_es_info {
-            ufunc: ptr::null_mut(),
-        },
+        es_info: EstackInfo::None,
     }
 }
 
@@ -77,7 +75,7 @@ pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
         }
     };
     push_entry(entry_for(ETYPE_UFUNC, name, lnum));
-    with_innermost(|entry| entry.es_info.ufunc = ufunc);
+    with_innermost(|entry| entry.es_info = EstackInfo::UserFunction(ufunc));
 }
 
 /// Take an item off of the execution stack. The bottom frame stays.
@@ -205,14 +203,12 @@ unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
     for entry in stack.iter().rev() {
         match entry.es_type {
             ETYPE_UFUNC | ETYPE_AUCMD => {
-                // SAFETY: `es_info`'s live union member is keyed by `es_type`,
-                // and both payloads outlive the frame that names them.
-                let def_ctx = unsafe {
-                    if entry.es_type == ETYPE_UFUNC {
-                        (*entry.es_info.ufunc).uf_script_ctx
-                    } else {
-                        (*entry.es_info.aucmd).script_ctx
-                    }
+                // SAFETY: both payloads outlive the frame that names them.
+                let def_ctx = match entry.es_info {
+                    EstackInfo::UserFunction(ufunc) => unsafe { (*ufunc).uf_script_ctx },
+                    EstackInfo::Autocommand(aucmd) => unsafe { (*aucmd).script_ctx },
+                    // An autocommand frame whose walk has finished.
+                    EstackInfo::None => continue,
                 };
                 if def_ctx.sc_sid <= 0 {
                     return ptr::null_mut();
@@ -363,7 +359,9 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                 );
             },
             ETYPE_UFUNC => {
-                let fp = unsafe { entry.es_info.ufunc };
+                let Some(fp) = entry.es_info.user_function() else {
+                    continue;
+                };
                 // SAFETY: the frame's function outlives the frame.
                 let sctx = unsafe { (*fp).uf_script_ctx };
                 // SAFETY: `l` and the path below are ours.
@@ -378,8 +376,12 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
                 };
             }
             ETYPE_AUCMD => {
+                // An autocommand frame whose walk has finished names nothing.
+                let Some(aucmd) = entry.es_info.autocommand() else {
+                    continue;
+                };
                 // SAFETY: the frame's `AutoPatCmd` outlives the frame.
-                let sctx = unsafe { (*entry.es_info.aucmd).script_ctx };
+                let sctx = unsafe { (*aucmd).script_ctx };
                 // SAFETY: `l` and the path below are ours.
                 unsafe {
                     stacktrace_push_item(

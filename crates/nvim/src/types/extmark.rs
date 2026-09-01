@@ -47,7 +47,6 @@ pub struct ExtmarkSplice {
     pub new_byte: bcount_t,
 }
 pub type ExtmarkType = ::core::ffi::c_uint;
-pub type ExtmarkUndoObject = undo_object;
 pub type UndoObjectType = ::core::ffi::c_uint;
 pub type bcount_t = ptrdiff_t;
 #[derive(Copy, Clone)]
@@ -57,16 +56,32 @@ pub struct extmark_undo_vec_t {
     pub capacity: size_t,
     pub items: *mut ExtmarkUndoObject,
 }
+/// One recorded extmark operation, as a buffer's undo list holds it.
+///
+/// Upstream is a `type` tag beside an untagged union. The tag's numbers are
+/// what the undo *file* writes, so they stay reachable as
+/// [`ExtmarkUndoObject::wire_type`]; nothing else needs them.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub struct undo_object {
-    pub type_0: UndoObjectType,
-    pub data: undo_object_data,
+pub enum ExtmarkUndoObject {
+    /// A text change: every operation that moves marks except `:move`.
+    Splice(ExtmarkSplice),
+    /// A `:move`.
+    Move(ExtmarkMove),
+    /// Where one mark was before the change deleted it outright. Not
+    /// written to an undo file: it names marks of a live buffer.
+    SavePos(ExtmarkSavePos),
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union undo_object_data {
-    pub splice: ExtmarkSplice,
-    pub move_0: ExtmarkMove,
-    pub savepos: ExtmarkSavePos,
+
+impl ExtmarkUndoObject {
+    /// The number the undo file writes for this kind of record --
+    /// upstream's `kExtmarkSplice`, `kExtmarkMove` and `kExtmarkSavePos`.
+    /// These are a file format, so they are literals here rather than a
+    /// name that could be renumbered.
+    pub fn wire_type(&self) -> UndoObjectType {
+        match self {
+            ExtmarkUndoObject::Splice(_) => 0,
+            ExtmarkUndoObject::Move(_) => 1,
+            ExtmarkUndoObject::SavePos(_) => 3,
+        }
+    }
 }

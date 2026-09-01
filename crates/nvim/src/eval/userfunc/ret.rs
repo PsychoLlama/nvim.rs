@@ -468,23 +468,19 @@ pub unsafe fn do_return(
         if !is_cmd && !reanimate {
             // A pending return again gets pending: `rettv` points to an
             // allocated variable with the value of the original return.
-            unsafe { (*cstack).cs_pend.csp_rv[idx as usize] = rettv };
+            unsafe { (*cstack).set_pending_return(idx as usize, rettv) };
         } else {
             if reanimate {
                 debug_assert!(!unsafe { (*current_funccal.get()).fc_rettv }.is_null());
                 rettv = unsafe { (*current_funccal.get()).fc_rettv } as *mut c_void;
             }
             if rettv.is_null() {
-                unsafe { (*cstack).cs_pend.csp_rv[idx as usize] = ptr::null_mut() };
+                unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
             } else {
                 // Store the value of the pending return.
-                unsafe {
-                    (*cstack).cs_pend.csp_rv[idx as usize] = xcalloc(1, size_of::<typval_T>())
-                };
-                unsafe {
-                    *((*cstack).cs_pend.csp_rv[idx as usize] as *mut typval_T) =
-                        *(rettv as *mut typval_T)
-                };
+                let saved = unsafe { xcalloc(1, size_of::<typval_T>()) };
+                unsafe { (*cstack).set_pending_return(idx as usize, saved) };
+                unsafe { *saved.cast::<typval_T>() = *rettv.cast::<typval_T>() };
             }
             if reanimate {
                 // The return value is not available yet.

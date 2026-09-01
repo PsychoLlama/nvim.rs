@@ -123,23 +123,14 @@ impl Virt {
     /// The block of virtual lines this link carries.
     #[inline(always)]
     pub fn lines(self) -> VirtLines {
-        // SAFETY: `is_lines` says the union holds the `virt_lines` branch,
-        // and both branches are the same plain vector type anyway.
-        unsafe { self.data.virt_lines }
-    }
-
-    /// The chunks of inline virtual text this link carries.
-    #[inline(always)]
-    pub fn text(self) -> VirtText {
-        // SAFETY: as `lines` — the two branches are the same layout.
-        unsafe { self.data.virt_text }
+        self.data.lines()
     }
 
     /// The chunk vector itself, for the code that frees it.
     #[inline(always)]
     pub fn text_ptr(self) -> *mut VirtText {
-        // The union's branches share an address.
-        unsafe { &raw mut (*self.0).data.virt_text }
+        // SAFETY: the caller's link, and the chunks are its own.
+        unsafe { &raw mut *(*self.0).data.text_mut() }
     }
 }
 
@@ -332,19 +323,20 @@ impl Range {
     /// The virtual text this range draws, for the kinds that have one.
     #[inline(always)]
     pub fn virt(self) -> Virt {
-        // SAFETY: the caller checked `kind`; a range's `vt` is live for as
-        // long as the range is.
-        Virt(unsafe { self.data.vt })
+        // The caller checked `kind`; a range's link is live for as long as
+        // the range is.
+        Virt(self.data.virt())
     }
 }
 
-/// The range half of a slab slot.
+/// The range in a slab slot.
 ///
-/// The union's other branch is the freelist link, which overwrites only the
-/// first field; every caller here has an index out of one of the two sorted
-/// lists, which name occupied slots.
+/// Every caller has an index out of one of the two sorted lists, and those
+/// name occupied slots; a freed slot holds a freelist link instead.
 #[inline(always)]
 pub fn slot_range(slot: &mut DecorRangeSlot) -> &mut DecorRange {
-    // SAFETY: a slot reached through `ranges_i` holds a range.
-    unsafe { &mut slot.range }
+    match slot {
+        DecorRangeSlot::Range(range) => range,
+        DecorRangeSlot::Free(_) => unreachable!("decor: a sorted index names a freed slot"),
+    }
 }

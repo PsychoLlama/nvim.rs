@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::types::EstackInfo;
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating
 /// the execution-stack entry when the pattern changes.
@@ -107,7 +108,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             unsafe {
                 xfree(crate::runtime::replace_sourcing_name(namep).cast::<::core::ffi::c_void>());
             };
-            crate::runtime::with_innermost(|entry| entry.es_info.aucmd = apc);
+            crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::Autocommand(apc));
         }
 
         // SAFETY: `apc` is the caller's live cursor.
@@ -127,7 +128,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
                 .cast::<::core::ffi::c_void>(),
         );
     };
-    crate::runtime::with_innermost(|entry| entry.es_info.aucmd = ::core::ptr::null_mut());
+    crate::runtime::with_innermost(|entry| entry.es_info = EstackInfo::None);
 
     // SAFETY: `apc` is the caller's live cursor.
     unsafe { (*apc).lastpat = ::core::ptr::null_mut() };

@@ -8,7 +8,7 @@
 //! # The two lists
 //!
 //! Ranges live in `slots`, a slab that is never compacted: a freed slot goes
-//! on a freelist threaded through the union's `next_free_i`, so an index
+//! on a freelist threaded through the slots themselves, so an index
 //! stays valid for as long as the drawing code holds it. `ranges_i` indexes
 //! into that slab twice over:
 //!
@@ -127,7 +127,8 @@ impl DecorStateRef {
         // later write through the state itself; what invalidates it is a
         // range being *added*, which is why every caller re-derives after
         // one.
-        unsafe { Range::new(&raw mut (*(*state).slots.as_mut_ptr().add(slot)).range) }
+        let slot = unsafe { &mut *(*state).slots.as_mut_ptr().add(slot) };
+        unsafe { Range::new(&raw mut *slot_range(slot)) }
     }
 
     /// The indices of every live entry of `ranges_i` — the active list and
@@ -141,26 +142,22 @@ impl DecorStateRef {
 impl Range {
     /// The highlight item this range draws, for a `kDecorKindHighlight`.
     fn sh(self) -> DecorSignHighlight {
-        // SAFETY: the caller checked `kind`, which says the union holds the
-        // `sh` branch.
-        unsafe { self.data.sh }
+        self.data.highlight()
     }
 
     /// The virtual text this range draws, if it is one at all — `data.vt` is
     /// the union's own branch and may itself be null.
     fn virt_opt(self) -> Option<Virt> {
-        // SAFETY: `kind` says the union holds the `vt` branch, and a range's
-        // virtual text is live for as long as the range is.
+        // SAFETY: a range's virtual text is live for as long as the range is.
         (self.kind == kDecorKindVirtText)
-            .then(|| unsafe { Virt::from_raw(self.data.vt) })
+            .then(|| unsafe { Virt::from_raw(self.data.virt()) })
             .flatten()
     }
 
     /// The UI-watched position this range reports, for a
     /// `kDecorKindUIWatched`.
     fn ui(self) -> DecorRange_data_ui {
-        // SAFETY: the caller checked `kind`.
-        unsafe { self.data.ui }
+        self.data.ui_watched()
     }
 
     /// Whether this range occupies a position of its own rather than
@@ -438,13 +435,14 @@ fn decor_range_insert(mut state: DecorStateRef, range: &mut DecorRange) {
     // the slots themselves.
     let index = if state.free_slot_i >= 0 {
         let index = state.free_slot_i as usize;
-        // SAFETY: a freelist index is one this slab handed out; the union's
-        // other branch is what the freelist wrote there.
-        state.free_slot_i = unsafe { state.slots[index].next_free_i };
-        state.slots[index].range = *range;
+        let DecorRangeSlot::Free(next) = state.slots[index] else {
+            unreachable!("decor: the freelist names an occupied slot")
+        };
+        state.free_slot_i = next;
+        state.slots[index] = DecorRangeSlot::Range(*range);
         index
     } else {
-        state.slots.push(DecorRangeSlot { range: *range });
+        state.slots.push(DecorRangeSlot::Range(*range));
         state.slots.len() - 1
     };
 
@@ -516,7 +514,7 @@ fn decor_range_add_virt_h(
         } else {
             kDecorKindVirtText
         },
-        data: DecorRange_data { vt: vt.raw() },
+        data: DecorRange_data::Virt(vt.raw()),
         attr_id: 0,
         draw_col: DRAW_COL_NEW,
     };
@@ -589,7 +587,7 @@ fn add_sh(
             + DecorPriorityInternal::from(subpriority),
         owned,
         kind: kDecorKindHighlight,
-        data: DecorRange_data { sh: *sh },
+        data: DecorRange_data::Highlight(*sh),
         attr_id: 0,
         draw_col: DRAW_COL_NEW,
     };
@@ -607,7 +605,7 @@ fn add_sh(
 
     if flags & kSHUIWatched as c_int != 0 {
         range.kind = kDecorKindUIWatched;
-        range.data.ui = DecorRange_data_ui {
+        range.data = DecorRange_data::UIWatched(DecorRange_data_ui {
             ns_id: ns,
             mark_id,
             pos: if flags & kSHUIWatchedOverlay as c_int != 0 {
@@ -615,7 +613,7 @@ fn add_sh(
             } else {
                 kVPosEndOfLine
             },
-        };
+        });
         decor_range_insert(state, &mut range);
     }
 }
@@ -834,9 +832,8 @@ pub unsafe fn decor_redraw_col_impl(
             new_cur_end += 1;
         } else {
             r.free_owned();
-            // Writing the union's *other* branch, which is what puts the
-            // slot on the freelist.
-            slots[index as usize].next_free_i = state.free_slot_i;
+            // The slot becomes the head of the freelist.
+            slots[index as usize] = DecorRangeSlot::Free(state.free_slot_i);
             state.free_slot_i = index;
         }
     }

@@ -129,8 +129,8 @@ pub(crate) unsafe fn draw_virt_text(
         }
 
         let vt = if unsafe { (*item).kind } == kDecorKindVirtText {
-            debug_assert!(!unsafe { (*item).data.vt }.is_null());
-            unsafe { (*item).data.vt }
+            debug_assert!(!unsafe { (*item).data.virt() }.is_null());
+            unsafe { (*item).data.virt() }
         } else {
             ::core::ptr::null_mut::<DecorVirtText>()
         };
@@ -156,7 +156,8 @@ pub(crate) unsafe fn draw_virt_text(
                                 // dereferences unconditionally here.
                                 debug_assert!(unsafe { (*ahead).kind } == kDecorKindVirtText);
                                 // One space between neighbours.
-                                total_eol_right_width += unsafe { (*(*ahead).data.vt).width } + 1;
+                                total_eol_right_width +=
+                                    unsafe { (*(*ahead).data.virt()).width } + 1;
                             }
                         }
                         // ...but none after the last one.
@@ -195,8 +196,8 @@ pub(crate) unsafe fn draw_virt_text(
 
         if unsafe { (*item).kind } == kDecorKindUIWatched {
             push_win_extmark(WinExtmark {
-                ns_id: unsafe { (*item).data.ui.ns_id } as NS,
-                mark_id: unsafe { (*item).data.ui.mark_id } as uint64_t,
+                ns_id: unsafe { (*item).data.ui_watched() }.ns_id as NS,
+                mark_id: unsafe { (*item).data.ui_watched() }.mark_id as uint64_t,
                 win_row,
                 win_col: unsafe { (*item).draw_col },
             });
@@ -207,7 +208,7 @@ pub(crate) unsafe fn draw_virt_text(
                 draw_virt_text_item(
                     buf,
                     (*item).draw_col,
-                    (*vt).data.virt_text,
+                    (*vt).data.text(),
                     (*vt).hl_mode as HlMode,
                     max_col,
                     (*item).draw_col - col_off,
@@ -359,8 +360,8 @@ unsafe fn inline_virt_at(item: *const DecorRange, row: ::core::ffi::c_int) -> bo
     unsafe {
         (*item).start_row == row
             && (*item).kind == kDecorKindVirtText
-            && (*(*item).data.vt).pos == kVPosInline
-            && (*(*item).data.vt).width != 0
+            && (*(*item).data.virt()).pos == kVPosInline
+            && (*(*item).data.virt()).width != 0
             && (*item).draw_col >= -1
     }
 }
@@ -431,8 +432,9 @@ impl WinLineVars {
                     if unsafe { inline_virt_at(item, row) }
                         && unsafe { (*item).start_col } as ptrdiff_t == v
                     {
-                        self.virt_inline = unsafe { (*(*item).data.vt).data.virt_text };
-                        self.virt_inline_hl_mode = unsafe { (*(*item).data.vt).hl_mode } as HlMode;
+                        self.virt_inline = unsafe { &*(*item).data.virt() }.data.text();
+                        self.virt_inline_hl_mode =
+                            unsafe { (*(*item).data.virt()).hl_mode } as HlMode;
                         unsafe { (*item).draw_col = INT_MIN };
                         break;
                     }

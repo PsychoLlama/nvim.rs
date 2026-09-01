@@ -28,15 +28,42 @@ pub struct estack_T {
     pub es_lnum: linenr_T,
     pub es_name: *mut ::core::ffi::c_char,
     pub es_type: etype_T,
-    pub es_info: estack_T_es_info,
+    pub es_info: EstackInfo,
 }
+
+/// What an execution-stack frame is running, for the two kinds of frame
+/// that name something beyond `es_name`.
+///
+/// Upstream is a four-armed union keyed by `es_type`; only these two arms
+/// were ever read, and an autocommand frame whose walk has run out holds
+/// [`EstackInfo::None`] rather than a null pointer under an `aucmd` tag.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union estack_T_es_info {
-    pub sctx: *mut sctx_T,
-    pub ufunc: *mut ufunc_T,
-    pub aucmd: *mut AutoPatCmd,
-    pub except: *mut except_T,
+pub enum EstackInfo {
+    /// Nothing beyond the frame's name: the bottom frame, a script, a
+    /// modeline, an exception, `--cmd` arguments, and so on.
+    None,
+    /// A user function -- the frame's `es_name` is its name.
+    UserFunction(*mut ufunc_T),
+    /// The autocommand walk this frame is running.
+    Autocommand(*mut AutoPatCmd),
+}
+
+impl EstackInfo {
+    /// The user function this frame is running, if it is running one.
+    pub fn user_function(self) -> Option<*mut ufunc_T> {
+        match self {
+            EstackInfo::UserFunction(ufunc) => Some(ufunc),
+            _ => None,
+        }
+    }
+
+    /// The autocommand walk this frame is running, if it is running one.
+    pub fn autocommand(self) -> Option<*mut AutoPatCmd> {
+        match self {
+            EstackInfo::Autocommand(aucmd) => Some(aucmd),
+            _ => None,
+        }
+    }
 }
 pub type estack_arg_T = ::core::ffi::c_uint;
 pub type etype_T = ::core::ffi::c_uint;

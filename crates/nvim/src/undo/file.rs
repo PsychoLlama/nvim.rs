@@ -573,20 +573,17 @@ unsafe fn push_extmark(list: *mut extmark_undo_vec_t, extup: ExtmarkUndoObject) 
 ///
 /// # Safety
 ///
-/// `bi` is open for writing, and `extup`'s tag says which union arm is live.
+/// `bi` is open for writing.
 pub(crate) unsafe fn serialize_extmark(bi: *mut bufinfo_T, extup: ExtmarkUndoObject) -> bool {
-    // SAFETY: the tag says which union arm is live, by the contract above.
-    let mut image = if extup.type_0 == kExtmarkSplice {
-        encode_splice(unsafe { &extup.data.splice })
-    } else if extup.type_0 == kExtmarkMove {
-        encode_move(unsafe { &extup.data.move_0 })
-    } else {
-        return true;
+    let mut image = match &extup {
+        ExtmarkUndoObject::Splice(splice) => encode_splice(splice),
+        ExtmarkUndoObject::Move(move_0) => encode_move(move_0),
+        ExtmarkUndoObject::SavePos(_) => return true,
     };
     // SAFETY: an open file, by the contract above, and `image.len()` readable
     // bytes of our own array.
     unsafe { undo_write_bytes(bi, UF_ENTRY_MAGIC as uintmax_t, 2) };
-    unsafe { undo_write_bytes(bi, extup.type_0 as uintmax_t, 4) };
+    unsafe { undo_write_bytes(bi, extup.wire_type() as uintmax_t, 4) };
     unsafe { undo_write(bi, image.as_mut_ptr(), image.len()) }
 }
 
@@ -613,26 +610,25 @@ pub(crate) unsafe fn unserialize_extmark(
     let mut image = [0u8; EXTMARK_PAYLOAD_LEN];
     // SAFETY (each region below): an open file and a NUL-terminated name, by
     // the contract above; `image` is that many writable bytes of our own.
-    let data = if type_0 == kExtmarkSplice {
+    if type_0 == kExtmarkSplice {
         if !unsafe { undo_read(bi, image.as_mut_ptr(), image.len()) } {
             return unsafe { refuse_extmark(c"extmark truncated", file_name) };
         }
         match decode_splice(&image) {
-            Some(splice) => undo_object_data { splice },
-            None => return unsafe { refuse_extmark(c"extmark splice", file_name) },
+            Some(splice) => Some(ExtmarkUndoObject::Splice(splice)),
+            None => unsafe { refuse_extmark(c"extmark splice", file_name) },
         }
     } else if type_0 == kExtmarkMove {
         if !unsafe { undo_read(bi, image.as_mut_ptr(), image.len()) } {
             return unsafe { refuse_extmark(c"extmark truncated", file_name) };
         }
         match decode_move(&image) {
-            Some(move_0) => undo_object_data { move_0 },
-            None => return unsafe { refuse_extmark(c"extmark move", file_name) },
+            Some(move_0) => Some(ExtmarkUndoObject::Move(move_0)),
+            None => unsafe { refuse_extmark(c"extmark move", file_name) },
         }
     } else {
-        return unsafe { refuse_extmark(c"extmark type", file_name) };
-    };
-    Some(ExtmarkUndoObject { type_0, data })
+        unsafe { refuse_extmark(c"extmark type", file_name) }
+    }
 }
 
 /// Reports a bad extmark record and answers `None`, so that the caller reads

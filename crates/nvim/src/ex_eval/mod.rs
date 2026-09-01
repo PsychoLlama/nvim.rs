@@ -651,7 +651,7 @@ pub(crate) unsafe fn cleanup_conditionals(
                     && unsafe { (*cstack).cs_flags[idx as usize] } & CSF_FINISHED == 0
                 {
                     unsafe {
-                        exception::finish_exception((*cstack).cs_pend.csp_ex[idx as usize].cast())
+                        exception::finish_exception((*cstack).pending_exception(idx as usize))
                     };
                     unsafe { (*cstack).cs_flags[idx as usize] |= CSF_FINISHED };
                 }
@@ -726,10 +726,10 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
             unsafe {
                 exception::report_discard_pending(
                     CSTP_RETURN,
-                    (*cstack).cs_pend.csp_rv[idx as usize],
+                    (*cstack).pending_return(idx as usize),
                 )
             };
-            unsafe { discard_pending_return((*cstack).cs_pend.csp_rv[idx as usize]) };
+            unsafe { discard_pending_return((*cstack).pending_return(idx as usize)) };
             unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         }
         _ => {
@@ -737,15 +737,12 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
                 return;
             }
             if pending & CSTP_THROW != 0
-                && !unsafe { (*cstack).cs_pend.csp_ex[idx as usize] }.is_null()
+                && !unsafe { (*cstack).pending_exception(idx as usize) }.is_null()
             {
                 // Cancel the pending exception. This is in the finally
                 // clause, so the caught-exception stack is not involved.
                 unsafe {
-                    exception::discard_exception(
-                        (*cstack).cs_pend.csp_ex[idx as usize].cast(),
-                        false,
-                    )
+                    exception::discard_exception((*cstack).pending_exception(idx as usize), false)
                 };
             } else {
                 unsafe { exception::report_discard_pending(pending, ptr::null_mut()) };

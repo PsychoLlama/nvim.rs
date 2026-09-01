@@ -21,7 +21,12 @@ pub struct cleanup_stuff {
 pub struct cstack_T {
     pub cs_flags: [::core::ffi::c_int; 50],
     pub cs_pending: [::core::ffi::c_char; 50],
-    pub cs_pend: cstack_T_cs_pend,
+    /// What the `:finally` clause at each level postponed: the pending
+    /// `:return`'s value, or the pending exception. Which of the two is
+    /// meaningful is what `cs_pending` says, and the two accessors below
+    /// are the only way in. Upstream is a union of two arrays of the same
+    /// pointer type -- two names for one array, not a pun.
+    cs_pend: [*mut ::core::ffi::c_void; 50],
     pub cs_forinfo: [*mut ::core::ffi::c_void; 50],
     pub cs_line: [::core::ffi::c_int; 50],
     pub cs_idx: ::core::ffi::c_int,
@@ -30,11 +35,30 @@ pub struct cstack_T {
     pub cs_emsg_silent_list: *mut eslist_T,
     pub cs_lflags: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union cstack_T_cs_pend {
-    pub csp_rv: [*mut ::core::ffi::c_void; 50],
-    pub csp_ex: [*mut ::core::ffi::c_void; 50],
+
+impl cstack_T {
+    /// The value a `:return` postponed at level `idx`. Meaningful when
+    /// `cs_pending[idx]` is `CSTP_RETURN`.
+    pub fn pending_return(&self, idx: usize) -> *mut ::core::ffi::c_void {
+        self.cs_pend[idx]
+    }
+
+    /// Postpone a `:return`'s value at level `idx`.
+    pub fn set_pending_return(&mut self, idx: usize, rettv: *mut ::core::ffi::c_void) {
+        self.cs_pend[idx] = rettv;
+    }
+
+    /// The exception postponed at level `idx`. Meaningful when
+    /// `cs_pending[idx]` carries `CSTP_THROW`, and when the level is in an
+    /// active catch clause.
+    pub fn pending_exception(&self, idx: usize) -> *mut except_T {
+        self.cs_pend[idx].cast::<except_T>()
+    }
+
+    /// Postpone an exception at level `idx`.
+    pub fn set_pending_exception(&mut self, idx: usize, exception: *mut except_T) {
+        self.cs_pend[idx] = exception.cast::<::core::ffi::c_void>();
+    }
 }
 pub type eslist_T = eslist_elem;
 #[derive(Copy, Clone)]

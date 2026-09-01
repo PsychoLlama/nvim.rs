@@ -57,17 +57,10 @@ pub struct ParserState {
 #[derive(Copy, Clone)]
 pub struct ParserStateItem {
     pub type_0: ParserStateItem_type_0,
-    pub data: ParserStateItem_data,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union ParserStateItem_data {
-    pub expr: ParserStateItem_data_expr,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct ParserStateItem_data_expr {
-    pub type_0: ParserStateItem_data_expr_type_0,
+    /// Which kind of expression an expression frame is parsing. Upstream
+    /// wraps this in a one-armed union of a one-field struct; nothing in
+    /// the tree reads either, because the stack is only pushed and popped.
+    pub expr_type: ParserStateItem_data_expr_type_0,
 }
 pub type ParserStateItem_data_expr_type_0 = ::core::ffi::c_uint;
 pub type ParserStateItem_type_0 = ::core::ffi::c_uint;

@@ -85,18 +85,51 @@ pub struct DecorRange {
 pub type DecorRangeKind = uint8_t;
 /// How a virtual text's highlight combines with what is under it.
 pub type HlMode = ::core::ffi::c_uint;
+/// One slot of the `DecorRange` slab: either a range, or a link in the
+/// freelist threaded through the slab itself.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union DecorRangeSlot {
-    pub range: DecorRange,
-    pub next_free_i: ::core::ffi::c_int,
+pub enum DecorRangeSlot {
+    /// An occupied slot; one of the two sorted index lists names it.
+    Range(DecorRange),
+    /// A free slot, holding the index of the next free one, or −1.
+    Free(::core::ffi::c_int),
 }
+/// What a `DecorRange` draws. Its `kind` says the same thing and more --
+/// it tells inline virtual text from virtual lines, which share a link.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union DecorRange_data {
-    pub sh: DecorSignHighlight,
-    pub vt: *mut DecorVirtText,
-    pub ui: DecorRange_data_ui,
+pub enum DecorRange_data {
+    /// A highlight, a conceal, a spell override or a URL.
+    Highlight(DecorSignHighlight),
+    /// A virtual-text link, inline or lines by its own flags. May be null.
+    Virt(*mut DecorVirtText),
+    /// A position reported to the UI rather than drawn.
+    UIWatched(DecorRange_data_ui),
+}
+
+impl DecorRange_data {
+    /// The highlight item, for a highlight range.
+    pub fn highlight(&self) -> DecorSignHighlight {
+        match self {
+            DecorRange_data::Highlight(sh) => *sh,
+            _ => unreachable!("decor: this range draws no highlight"),
+        }
+    }
+
+    /// The virtual-text link, for a virtual-text or virtual-lines range.
+    pub fn virt(&self) -> *mut DecorVirtText {
+        match self {
+            DecorRange_data::Virt(vt) => *vt,
+            _ => unreachable!("decor: this range draws no virtual text"),
+        }
+    }
+
+    /// The reported position, for a UI-watched range.
+    pub fn ui_watched(&self) -> DecorRange_data_ui {
+        match self {
+            DecorRange_data::UIWatched(ui) => *ui,
+            _ => unreachable!("decor: this range is not UI-watched"),
+        }
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -157,11 +190,64 @@ pub struct DecorVirtText {
     pub data: DecorVirtText_data,
     pub next: *mut DecorVirtText,
 }
+/// What one link of a virtual-text chain carries: inline chunks, or whole
+/// virtual lines. `kVTIsLines` in the link's `flags` says which, and the
+/// two are always set together.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union DecorVirtText_data {
-    pub virt_text: VirtText,
-    pub virt_lines: VirtLines,
+pub enum DecorVirtText_data {
+    Text(VirtText),
+    Lines(VirtLines),
+}
+
+impl DecorVirtText_data {
+    /// The inline chunks, for a link that carries them.
+    pub fn text(&self) -> VirtText {
+        *self.text_ref()
+    }
+
+    fn text_ref(&self) -> &VirtText {
+        match self {
+            DecorVirtText_data::Text(text) => text,
+            DecorVirtText_data::Lines(_) => {
+                unreachable!("decor: a virtual-lines link has no inline text")
+            }
+        }
+    }
+
+    /// [`Self::text`], to write to -- the code that fills a link in and the
+    /// code that frees one.
+    pub fn text_mut(&mut self) -> &mut VirtText {
+        match self {
+            DecorVirtText_data::Text(text) => text,
+            DecorVirtText_data::Lines(_) => {
+                unreachable!("decor: a virtual-lines link has no inline text")
+            }
+        }
+    }
+
+    /// The block of virtual lines, for a link that carries one.
+    pub fn lines(&self) -> VirtLines {
+        *self.lines_ref()
+    }
+
+    fn lines_ref(&self) -> &VirtLines {
+        match self {
+            DecorVirtText_data::Lines(lines) => lines,
+            DecorVirtText_data::Text(_) => {
+                unreachable!("decor: an inline virtual-text link has no lines")
+            }
+        }
+    }
+
+    /// [`Self::lines`], to write to.
+    pub fn lines_mut(&mut self) -> &mut VirtLines {
+        match self {
+            DecorVirtText_data::Lines(lines) => lines,
+            DecorVirtText_data::Text(_) => {
+                unreachable!("decor: an inline virtual-text link has no lines")
+            }
+        }
+    }
 }
 #[derive(Copy, Clone)]
 pub struct VirtTextChunk {

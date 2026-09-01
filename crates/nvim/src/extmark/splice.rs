@@ -22,14 +22,14 @@ use core::ffi::c_int;
 
 use super::undo::splice_delete;
 use super::{
-    Buf, Extent, kExtmarkMove, kExtmarkSplice, kExtmarkUndo, last_splice, line_offset, push_undo,
-    send_splice, signcols_count_range, splice_pending, tree_move_region, tree_splice, undo_marks,
+    Buf, Extent, kExtmarkUndo, last_splice, line_offset, push_undo, send_splice,
+    signcols_count_range, splice_pending, tree_move_region, tree_splice, undo_marks,
 };
 use crate::decoration::SignCountHalf;
 use crate::pos::MAXLNUM;
 use crate::types::{
     ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, MTPos, bcount_t, colnr_T,
-    extmark_undo_vec_t, linenr_T, undo_object_data,
+    extmark_undo_vec_t, linenr_T,
 };
 
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
@@ -188,13 +188,7 @@ pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent,
                 old_byte: old.byte,
                 new_byte: new.byte,
             };
-            push_undo(
-                uvp,
-                ExtmarkUndoObject {
-                    type_0: kExtmarkSplice,
-                    data: undo_object_data { splice },
-                },
-            );
+            push_undo(uvp, ExtmarkUndoObject::Splice(splice));
         }
     }
 }
@@ -275,12 +269,6 @@ pub(crate) fn move_region(
             extent_byte: extent.byte,
             new_byte: new.byte,
         };
-        push_undo(
-            uvp,
-            ExtmarkUndoObject {
-                type_0: kExtmarkMove,
-                data: undo_object_data { move_0 },
-            },
-        );
+        push_undo(uvp, ExtmarkUndoObject::Move(move_0));
     }
 }

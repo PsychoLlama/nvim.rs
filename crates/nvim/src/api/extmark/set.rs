@@ -50,13 +50,11 @@ pub unsafe fn nvim_buf_set_extmark(
         width: 0 as ::core::ffi::c_int,
         col: 0 as ::core::ffi::c_int,
         pos: kVPosEndOfLine,
-        data: DecorVirtText_data {
-            virt_text: VirtText {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<VirtTextChunk>(),
-            },
-        },
+        data: DecorVirtText_data::Text(VirtText {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<VirtTextChunk>(),
+        }),
         next: ::core::ptr::null_mut::<DecorVirtText>(),
     };
     let mut virt_lines: DecorVirtText = DecorVirtText {
@@ -66,13 +64,11 @@ pub unsafe fn nvim_buf_set_extmark(
         width: 0 as ::core::ffi::c_int,
         col: 0 as ::core::ffi::c_int,
         pos: kVPosEndOfLine,
-        data: DecorVirtText_data {
-            virt_lines: VirtLines {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<virt_line>(),
-            },
-        },
+        data: DecorVirtText_data::Lines(VirtLines {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<virt_line>(),
+        }),
         next: ::core::ptr::null_mut::<DecorVirtText>(),
     };
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -254,7 +250,7 @@ pub unsafe fn nvim_buf_set_extmark(
                 ) {
                     let slot = &mut error;
                     let width = &raw mut virt_text.width;
-                    virt_text.data.virt_text =
+                    *virt_text.data.text_mut() =
                         unsafe { parse_virt_text(opts.virt_text, slot, width) };
                     if error.is_set() {
                         break '_error;
@@ -373,8 +369,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 parse_virt_text((*a.items.add(j)).data.array, slot, dummy_width)
                             };
                             // `kv_push`, whose growth step c2rust expanded inline.
-                            // SAFETY: `virt_lines` was built with the lines arm.
-                            let lines = unsafe { &mut virt_lines.data.virt_lines };
+                            let lines = virt_lines.data.lines_mut();
                             let mut vl =
                                 Kvec::new(&mut lines.size, &mut lines.capacity, &mut lines.items);
                             let line = virt_line {
@@ -547,7 +542,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                                 subpriority = opts._subpriority as DecorPriority;
                             }
-                            if unsafe { virt_text.data.virt_text.size } != 0 {
+                            if virt_text.data.text().size != 0 {
                                 // SAFETY: inside a decoration provider, so the
                                 // redraw's decor state is set.
                                 let state = unsafe { DecorStateRef::current() };
@@ -556,7 +551,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 // SAFETY: `state` is the redraw's own decor state.
                                 unsafe { decor_range_add_virt(state, r, c, line2, c2, vt, true) };
                             }
-                            if unsafe { virt_lines.data.virt_lines.size } != 0 {
+                            if virt_lines.data.lines().size != 0 {
                                 // SAFETY: inside a decoration provider, so the
                                 // redraw's decor state is set.
                                 let state = unsafe { DecorStateRef::current() };
@@ -600,7 +595,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             let mut decor_flags: uint16_t = 0 as uint16_t;
                             let mut decor_alloc: *mut DecorVirtText =
                                 ::core::ptr::null_mut::<DecorVirtText>();
-                            if unsafe { virt_text.data.virt_text.size } != 0 {
+                            if virt_text.data.text().size != 0 {
                                 decor_alloc = decor_put_vt(virt_text, decor_alloc);
                                 if virt_text.pos as ::core::ffi::c_uint
                                     == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -610,7 +605,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         as uint16_t;
                                 }
                             }
-                            if unsafe { virt_lines.data.virt_lines.size } != 0 {
+                            if virt_lines.data.lines().size != 0 {
                                 decor_alloc = decor_put_vt(virt_lines, decor_alloc);
                                 decor_flags = (decor_flags as ::core::ffi::c_int
                                     | MT_FLAG_DECOR_VIRT_LINES)
@@ -733,8 +728,8 @@ pub unsafe fn nvim_buf_set_extmark(
             }
         }
     }
-    unsafe { clear_virttext(&raw mut virt_text.data.virt_text) };
-    unsafe { clear_virtlines(&raw mut virt_lines.data.virt_lines) };
+    unsafe { clear_virttext(&raw mut *virt_text.data.text_mut()) };
+    unsafe { clear_virtlines(&raw mut *virt_lines.data.lines_mut()) };
     if !url.is_null() {
         unsafe { xfree(url as *mut ::core::ffi::c_void) };
     }
