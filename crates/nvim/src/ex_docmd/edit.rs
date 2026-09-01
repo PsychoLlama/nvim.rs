@@ -8,6 +8,7 @@ use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -66,10 +67,8 @@ use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
-    CMD_delete, CMD_earlier, CMD_folddoclosed, CMD_foldopen, CMD_list, CMD_move, CMD_number,
-    CMD_pound, CMD_rshift, CMD_smagic, CMD_startinsert, CMD_startreplace, CMD_yank, CpoFlag,
-    Failed, NUL, OpType, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T, exarg_T, handle_T,
-    int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t, ssize_t,
+    CpoFlag, Failed, NUL, OpType, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T, exarg_T,
+    handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -84,10 +83,9 @@ pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         emsg(gettext(e_empty_buffer.as_ptr()));
     } else {
-        let idx = eap.cmdidx as c_int;
-        let numbered =
-            idx == CMD_number as c_int || idx == CMD_pound as c_int || eap.flags & EXFLAG_NR != 0;
-        let listed = idx == CMD_list as c_int || eap.flags & EXFLAG_LIST != 0;
+        let idx = eap.cmdidx;
+        let numbered = idx == CmdIdx::number || idx == CmdIdx::pound || eap.flags & EXFLAG_NR != 0;
+        let listed = idx == CmdIdx::list || eap.flags & EXFLAG_LIST != 0;
         let mut line = eap.line1;
         while line <= eap.line2 && !got_int.get() {
             print_line(line, numbered, listed, line == eap.line1);
@@ -232,7 +230,7 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
 
     // `:yank` does not move the cursor, so it does not set the previous
     // context mark either.
-    if eap.cmdidx as c_int != CMD_yank as c_int {
+    if eap.cmdidx != CmdIdx::yank {
         setpcmark();
         cur_win().w_cursor.lnum = eap.line1;
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
@@ -241,26 +239,24 @@ pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
         end_visual_mode();
     }
 
-    match eap.cmdidx as c_int {
-        c if c == CMD_delete as c_int => {
+    match eap.cmdidx {
+        CmdIdx::delete => {
             oa.op_type = OpType::Delete;
             // `:delete` reports its own refusals; nothing more to do.
             let _ = unsafe { op_delete(&raw mut oa) };
         }
-        c if c == CMD_yank as c_int => {
+        CmdIdx::yank => {
             oa.op_type = OpType::Yank;
             unsafe { op_yank(&raw mut oa, true) };
         }
         _ => {
             // In a 'rightleft' window the two shift commands swap.
-            oa.op_type = if (eap.cmdidx as c_int == CMD_rshift as c_int) as c_int
-                ^ cur_win().w_onebuf_opt.wo_rl
-                != 0
-            {
-                OpType::Rshift
-            } else {
-                OpType::Lshift
-            };
+            oa.op_type =
+                if (eap.cmdidx == CmdIdx::rshift) as c_int ^ cur_win().w_onebuf_opt.wo_rl != 0 {
+                    OpType::Rshift
+                } else {
+                    OpType::Lshift
+                };
             unsafe { op_shift(&raw mut oa, false, eap.amount) };
         }
     }
@@ -338,7 +334,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
         return;
     }
 
-    if eap.cmdidx as c_int == CMD_move as c_int {
+    if eap.cmdidx == CmdIdx::r#move {
         if unsafe { do_move(eap.line1, eap.line2, n) }.is_err() {
             return;
         }
@@ -387,7 +383,7 @@ pub(crate) unsafe fn ex_submagic_preview(
 /// Override 'magic' for this command, answering what it was.
 fn force_magic(eap: Ea) -> optmagic_T {
     let saved = magic_overruled.get();
-    magic_overruled.set(if eap.cmdidx as c_int == CMD_smagic as c_int {
+    magic_overruled.set(if eap.cmdidx == CmdIdx::smagic {
         OPTION_MAGIC_ON
     } else {
         OPTION_MAGIC_OFF
@@ -565,7 +561,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
         return;
     }
     undo_time(
-        if eap.cmdidx as c_int == CMD_earlier as c_int {
+        if eap.cmdidx == CmdIdx::earlier {
             count.wrapping_neg()
         } else {
             count
@@ -774,18 +770,18 @@ pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
     if State.get() & MODE_INSERT != 0 {
         return;
     }
-    let idx = eap.cmdidx as c_int;
+    let idx = eap.cmdidx;
     // The upper-case forms are what `edit()` reads as "started from
     // here" rather than "restarted".
-    restart_edit.set(if idx == CMD_startinsert as c_int {
+    restart_edit.set(if idx == CmdIdx::startinsert {
         'a' as c_int
-    } else if idx == CMD_startreplace as c_int {
+    } else if idx == CmdIdx::startreplace {
         'R' as c_int
     } else {
         'V' as c_int
     });
     if eap.forceit == 0 {
-        if idx == CMD_startinsert as c_int {
+        if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
         cur_win().w_curswant = 0 as colnr_T;
@@ -844,7 +840,7 @@ pub(crate) unsafe fn ex_foldopen(eap: *mut exarg_T) {
         op_fold_range(
             range_start(eap),
             range_end(eap),
-            (eap.cmdidx as c_int == CMD_foldopen as c_int) as c_int,
+            (eap.cmdidx == CmdIdx::foldopen) as c_int,
             eap.forceit,
             false,
         )
@@ -873,7 +869,7 @@ fn range_end(eap: Ea) -> pos_T {
 /// (or is not) inside a closed fold.
 pub(crate) unsafe fn ex_folddo(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
-    let want_closed = (eap.cmdidx as c_int == CMD_folddoclosed as c_int) as c_int;
+    let want_closed = (eap.cmdidx == CmdIdx::folddoclosed) as c_int;
     let mut lnum = eap.line1;
     while lnum <= eap.line2 {
         if has_folding(cur_win(), lnum, None, None) as c_int == want_closed {

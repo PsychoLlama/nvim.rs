@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::cstr;
 use crate::strings::vim_snprintf;
+use crate::types::CmdIdx;
 
 use std::ffi::CString;
 
@@ -41,8 +42,8 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::regmatch_T;
 use crate::types::{
-    CMD_tabmove, CMD_tabnext, CmdModFlags, CompleteListItemGetter, FAIL, FILE, Failed, NUL, OK,
-    exarg_T, expand_T, int32_t, intmax_t, size_t,
+    CmdModFlags, CompleteListItemGetter, FAIL, FILE, Failed, NUL, OK, exarg_T, expand_T, int32_t,
+    intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
 
@@ -266,11 +267,7 @@ pub unsafe fn expand_argopt(
 /// command (`:2tabnext`), or absent.
 pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
     let mut tab_number: c_int = 0;
-    let unaccept_arg0 = if ea.cmdidx as c_int == CMD_tabmove as c_int {
-        0
-    } else {
-        1
-    };
+    let unaccept_arg0 = if ea.cmdidx == CmdIdx::tabmove { 0 } else { 1 };
     let last_tab = || current_tab_nr(ptr::null_mut());
     let invarg2 = |mut ea: Ea| {
         ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
@@ -371,10 +368,10 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
             }
         } else {
             // No argument at all.
-            tab_number = if ea.cmdidx as c_int == CMD_tabnext as c_int {
+            tab_number = if ea.cmdidx == CmdIdx::tabnext {
                 let next = tabpage_index(curtab.get()) + 1;
                 if next > last_tab() { 1 } else { next }
-            } else if ea.cmdidx as c_int == CMD_tabmove as c_int {
+            } else if ea.cmdidx == CmdIdx::tabmove {
                 last_tab()
             } else {
                 tabpage_index(curtab.get())

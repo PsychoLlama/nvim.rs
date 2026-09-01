@@ -36,9 +36,8 @@ use crate::main::{cmdmod, curtab};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::strings::vim_strchr;
-use crate::types::{
-    CMD_USER, CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T,
-};
+use crate::types::CmdIdx;
+use crate::types::{CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int};
@@ -660,7 +659,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     let (cmdidx, useridx) = unsafe { ((*eap).cmdidx, (*eap).useridx as usize) };
-    let scope = if cmdidx == CMD_USER {
+    let scope = if cmdidx == CmdIdx::USER {
         Scope::Global
     } else {
         Scope::Buffer

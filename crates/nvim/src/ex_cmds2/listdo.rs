@@ -38,10 +38,8 @@ use crate::normal::do_check_scrollbind;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
-use crate::types::{
-    CMD_argdo, CMD_bufdo, CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo, CMD_tabdo, CMD_windo, aco_save_T,
-    cmdidx_T, exarg_T, linenr_T, size_t,
-};
+use crate::types::CmdIdx;
+use crate::types::{aco_save_T, exarg_T, linenr_T, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
@@ -66,14 +64,14 @@ enum ListDo {
 impl ListDo {
     /// The eight commands the ex command table routes to [`ex_listdo`].
     /// Nothing else reaches it, so anything else is `None`.
-    fn from_cmdidx(cmdidx: cmdidx_T) -> Option<Self> {
+    fn from_cmdidx(cmdidx: CmdIdx) -> Option<Self> {
         Some(match cmdidx {
-            CMD_argdo => Self::Args,
-            CMD_windo => Self::Windows,
-            CMD_tabdo => Self::Tabs,
-            CMD_bufdo => Self::Buffers,
-            CMD_cdo | CMD_cfdo => Self::Quickfix { location: false },
-            CMD_ldo | CMD_lfdo => Self::Quickfix { location: true },
+            CmdIdx::argdo => Self::Args,
+            CmdIdx::windo => Self::Windows,
+            CmdIdx::tabdo => Self::Tabs,
+            CmdIdx::bufdo => Self::Buffers,
+            CmdIdx::cdo | CmdIdx::cfdo => Self::Quickfix { location: false },
+            CmdIdx::ldo | CmdIdx::lfdo => Self::Quickfix { location: true },
             _ => return None,
         })
     }

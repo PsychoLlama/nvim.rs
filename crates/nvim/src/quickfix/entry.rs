@@ -16,7 +16,8 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::cstr;
 use crate::file_search::Name;
-use crate::types::{CMD_cdo, CMD_cfdo, CMD_ldo, CMD_lfdo};
+use crate::types::CmdIdx;
+
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -448,8 +449,8 @@ pub unsafe fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
     if qi.is_null() {
         return 0;
     }
-    let per_entry = unsafe { (*eap).cmdidx } as c_int == CMD_cdo as c_int
-        || unsafe { (*eap).cmdidx } as c_int == CMD_ldo as c_int;
+    let per_entry =
+        unsafe { (*eap).cmdidx } == CmdIdx::cdo || unsafe { (*eap).cmdidx } == CmdIdx::ldo;
     let qfl = unsafe { qf_get_curlist(qi) };
     let mut prev_fnum = 0;
     let mut size: size_t = 0;
@@ -500,8 +501,8 @@ pub unsafe fn qf_get_cur_valid_idx(eap: *mut exarg_T) -> c_int {
     if !unsafe { qf_list_has_valid_entries(qfl) } {
         return 1;
     }
-    let per_file = unsafe { (*eap).cmdidx } as c_int == CMD_cfdo as c_int
-        || unsafe { (*eap).cmdidx } as c_int == CMD_lfdo as c_int;
+    let per_file =
+        unsafe { (*eap).cmdidx } == CmdIdx::cfdo || unsafe { (*eap).cmdidx } == CmdIdx::lfdo;
     let mut prev_fnum = 0;
     let mut eidx = 0;
     let mut i = 1;

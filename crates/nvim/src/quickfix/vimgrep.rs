@@ -23,26 +23,24 @@ use crate::message_fmt::c_str;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;
-use crate::types::{
-    CMD_grep, CMD_grepadd, CMD_lcd, CMD_lgrep, CMD_lgrepadd, CMD_lvimgrep, CMD_lvimgrepadd,
-    CMD_vimgrep, CMD_vimgrepadd, CmdModFlags, MAXPATHL, NUL, OptionSetFlags,
-};
+use crate::types::CmdIdx;
+use crate::types::{CmdModFlags, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 /// The autocommand name of a `:vimgrep`-family command. `:grep` is here
 /// too, because `'grepprg'` set to `internal` sends it this way.
-fn vgr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+fn vgr_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
     Some(match cmdidx {
-        CMD_vimgrep => c"vimgrep",
-        CMD_lvimgrep => c"lvimgrep",
-        CMD_vimgrepadd => c"vimgrepadd",
-        CMD_lvimgrepadd => c"lvimgrepadd",
-        CMD_grep => c"grep",
-        CMD_lgrep => c"lgrep",
-        CMD_grepadd => c"grepadd",
-        CMD_lgrepadd => c"lgrepadd",
+        CmdIdx::vimgrep => c"vimgrep",
+        CmdIdx::lvimgrep => c"lvimgrep",
+        CmdIdx::vimgrepadd => c"vimgrepadd",
+        CmdIdx::lvimgrepadd => c"lvimgrepadd",
+        CmdIdx::grep => c"grep",
+        CmdIdx::lgrep => c"lgrep",
+        CmdIdx::grepadd => c"grepadd",
+        CmdIdx::lgrepadd => c"lgrepadd",
         _ => return None,
     })
 }
@@ -607,7 +605,7 @@ unsafe fn jump_to_match(qi: *mut qf_info_T, forceit: c_int, out: &mut Outcome) {
     {
         let mut ea = exarg_T {
             arg: target_dir.as_ptr().cast_mut(),
-            cmdidx: CMD_lcd,
+            cmdidx: CmdIdx::lcd,
             ..Default::default()
         };
         unsafe { ex_cd(&raw mut ea) };
@@ -645,7 +643,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
 
     let adding = matches!(
         eap.cmdidx,
-        CMD_grepadd | CMD_lgrepadd | CMD_vimgrepadd | CMD_lvimgrepadd
+        CmdIdx::grepadd | CmdIdx::lgrepadd | CmdIdx::vimgrepadd | CmdIdx::lvimgrepadd
     );
     if !adding || qf_is_empty(qi) {
         // Make a new list.

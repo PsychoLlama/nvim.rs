@@ -71,9 +71,10 @@ use crate::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_mksession, CMD_mkview, CMD_mkvimrc, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL,
-    OptionSetFlags, Vv, aentry_T, buf_T, exarg_T, garray_T, size_t, win_T,
+    CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, aentry_T, buf_T, exarg_T,
+    garray_T, size_t, win_T,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy};
@@ -481,7 +482,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
     let cmdidx = unsafe { (*eap).cmdidx };
     // `:mkview` and `:mksession` write a *state*; the other two write only
     // mappings and options.
-    let view_session = cmdidx == CMD_mksession || cmdidx == CMD_mkview;
+    let view_session = cmdidx == CmdIdx::mksession || cmdidx == CmdIdx::mkview;
 
     // Short file names are usable until a ":lcd" is written. They are also
     // not used when 'acd' is set, which is checked separately.
@@ -492,7 +493,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
     // SAFETY: caller contract; `eap.arg` is NUL-terminated.
     let fname = unsafe {
         let arg = (*eap).arg;
-        if cmdidx == CMD_mkview
+        if cmdidx == CmdIdx::mkview
             && (*arg == NUL as c_char
                 || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))
         {
@@ -508,9 +509,9 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
             view_file
         } else if *arg != NUL as c_char {
             arg
-        } else if cmdidx == CMD_mkvimrc {
+        } else if cmdidx == CmdIdx::mkvimrc {
             VIMRC_FILE.as_ptr().cast_mut()
-        } else if cmdidx == CMD_mksession {
+        } else if cmdidx == CmdIdx::mksession {
             SESSION_FILE.as_ptr().cast_mut()
         } else {
             EXRC_FILE.as_ptr().cast_mut()
@@ -528,7 +529,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
         let close_failed = unsafe { fclose(fd) } != 0;
         if failed || close_failed {
             emsg(gettext(e_write));
-        } else if cmdidx == CMD_mksession {
+        } else if cmdidx == CmdIdx::mksession {
             // A successful session write sets v:this_session.
             let full = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
             if unsafe { vim_full_name(fname, full, MAXPATHL as size_t, false) }.is_ok() {
@@ -564,26 +565,26 @@ unsafe fn write_rc(
 ) -> bool {
     // SAFETY: caller contract.
     let cmdidx = unsafe { (*eap).cmdidx };
-    let opts = if cmdidx == CMD_mkview {
+    let opts = if cmdidx == CmdIdx::mkview {
         SessionOpts::View
     } else {
         SessionOpts::Session
     };
     let mut failed = false;
 
-    if cmdidx == CMD_mkvimrc {
+    if cmdidx == CmdIdx::mkvimrc {
         // Upstream ignores this one write's result.
         let _ = out.line(c"version 6.0");
     }
-    if cmdidx == CMD_mksession && !out.line(c"let SessionLoad = 1") {
+    if cmdidx == CmdIdx::mksession && !out.line(c"let SessionLoad = 1") {
         failed = true;
     }
 
     // Mappings and options: everything for the two rc commands, and for
     // `:mksession` only when "options" is in 'sessionoptions'.
-    if !view_session || (cmdidx == CMD_mksession && opts.has(kOptSsopFlagOptions)) {
+    if !view_session || (cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagOptions)) {
         let mut flags = OptionSetFlags::GLOBAL;
-        if cmdidx == CMD_mksession && opts.has(kOptSsopFlagSkiprtp) {
+        if cmdidx == CmdIdx::mksession && opts.has(kOptSsopFlagSkiprtp) {
             flags |= OptionSetFlags::SKIPRTP;
         }
         // SAFETY: both writers take the open handle and nothing else.
@@ -597,7 +598,7 @@ unsafe fn write_rc(
         ) {
             failed = true;
         }
-        if cmdidx == CMD_mksession {
+        if cmdidx == CmdIdx::mksession {
             // SAFETY: `fname` is NUL-terminated.
             failed |= unsafe { !write_session(out, fname) };
         } else {
@@ -616,7 +617,7 @@ unsafe fn write_rc(
         if !out.line(c"doautoall SessionLoadPost") {
             failed = true;
         }
-        if cmdidx == CMD_mksession && !out.line(c"unlet SessionLoad") {
+        if cmdidx == CmdIdx::mksession && !out.line(c"unlet SessionLoad") {
             failed = true;
         }
     }

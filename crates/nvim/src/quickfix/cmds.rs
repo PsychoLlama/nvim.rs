@@ -15,24 +15,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{
-    CMD_caddbuffer, CMD_caddexpr, CMD_caddfile, CMD_cbuffer, CMD_cexpr, CMD_cfile, CMD_cgetbuffer,
-    CMD_cgetexpr, CMD_cgetfile, CMD_laddbuffer, CMD_laddexpr, CMD_laddfile, CMD_lbuffer, CMD_lexpr,
-    CMD_lfile, CMD_lgetbuffer, CMD_lgetexpr, CMD_lgetfile, Failed, IOSIZE, NUL, OptionSetFlags,
-    VAR_LIST, VAR_STRING,
-};
+use crate::types::CmdIdx;
+use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST, VAR_STRING};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 /// The autocommand name of a `:cfile`-family command.
-fn cfile_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+fn cfile_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
     Some(match cmdidx {
-        CMD_cfile => c"cfile",
-        CMD_cgetfile => c"cgetfile",
-        CMD_caddfile => c"caddfile",
-        CMD_lfile => c"lfile",
-        CMD_lgetfile => c"lgetfile",
-        CMD_laddfile => c"laddfile",
+        CmdIdx::cfile => c"cfile",
+        CmdIdx::cgetfile => c"cgetfile",
+        CmdIdx::caddfile => c"caddfile",
+        CmdIdx::lfile => c"lfile",
+        CmdIdx::lgetfile => c"lgetfile",
+        CmdIdx::laddfile => c"laddfile",
         _ => return None,
     })
 }
@@ -73,11 +69,11 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
     };
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(eap.cmdidx as c_int) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(eap.cmdidx) }.then(cur_win);
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CMD_caddfile | CMD_laddfile);
+    let newlist = !matches!(eap.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
     let efile = p_ef.get();
     let errorformat2 = p_efm.get();
     let newlist2 = newlist as c_int;
@@ -102,7 +98,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
         fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, false);
     }
 
-    let jumps = matches!(eap.cmdidx, CMD_cfile | CMD_lfile);
+    let jumps = matches!(eap.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
         unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
     }
@@ -110,14 +106,14 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
 }
 
 /// The autocommand name of a `:cbuffer`-family command.
-fn cbuffer_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
     Some(match cmdidx {
-        CMD_cbuffer => c"cbuffer",
-        CMD_cgetbuffer => c"cgetbuffer",
-        CMD_caddbuffer => c"caddbuffer",
-        CMD_lbuffer => c"lbuffer",
-        CMD_lgetbuffer => c"lgetbuffer",
-        CMD_laddbuffer => c"laddbuffer",
+        CmdIdx::cbuffer => c"cbuffer",
+        CmdIdx::cgetbuffer => c"cgetbuffer",
+        CmdIdx::caddbuffer => c"caddbuffer",
+        CmdIdx::lbuffer => c"lbuffer",
+        CmdIdx::lgetbuffer => c"lgetbuffer",
+        CmdIdx::laddbuffer => c"laddbuffer",
         _ => return None,
     })
 }
@@ -205,7 +201,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CMD_caddbuffer | CMD_laddbuffer);
+    let newlist = !matches!(eap.cmdidx, CmdIdx::caddbuffer | CmdIdx::laddbuffer);
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
@@ -248,7 +244,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
         }
     }
 
-    let jumps = matches!(eap.cmdidx, CMD_cbuffer | CMD_lbuffer);
+    let jumps = matches!(eap.cmdidx, CmdIdx::cbuffer | CmdIdx::lbuffer);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
         unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
     }
@@ -256,14 +252,14 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
 }
 
 /// The autocommand name of a `:cexpr`-family command.
-fn cexpr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+fn cexpr_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
     Some(match cmdidx {
-        CMD_cexpr => c"cexpr",
-        CMD_cgetexpr => c"cgetexpr",
-        CMD_caddexpr => c"caddexpr",
-        CMD_lexpr => c"lexpr",
-        CMD_lgetexpr => c"lgetexpr",
-        CMD_laddexpr => c"laddexpr",
+        CmdIdx::cexpr => c"cexpr",
+        CmdIdx::cgetexpr => c"cgetexpr",
+        CmdIdx::caddexpr => c"caddexpr",
+        CmdIdx::lexpr => c"lexpr",
+        CmdIdx::lgetexpr => c"lgetexpr",
+        CmdIdx::laddexpr => c"laddexpr",
         _ => return None,
     })
 }
@@ -276,7 +272,7 @@ fn cexpr_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// There must be a current buffer.
-unsafe fn trigger_cexpr_autocmd(cmdidx: cmdidx_T) -> bool {
+unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
     // SAFETY: the caller's promise.
     if let Some(name) = cexpr_get_auname(cmdidx) {
         let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
@@ -312,7 +308,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> Result<(), Faile
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CMD_caddexpr | CMD_laddexpr);
+    let newlist = !matches!(eap.cmdidx, CmdIdx::caddexpr | CmdIdx::laddexpr);
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
@@ -348,7 +344,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> Result<(), Faile
         fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
     }
 
-    let jumps = matches!(eap.cmdidx, CMD_cexpr | CMD_lexpr);
+    let jumps = matches!(eap.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
         unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
     }

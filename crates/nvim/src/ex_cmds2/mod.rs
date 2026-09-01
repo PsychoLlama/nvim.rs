@@ -78,9 +78,10 @@ use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_first, CMD_sfirst, CmdModFlags, Failed, MAXPATHL, NUL, Vv, aentry_T, buf_T, exarg_T,
-    linenr_T, ptrdiff_t, size_t, ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
+    CmdModFlags, Failed, MAXPATHL, NUL, Vv, aentry_T, buf_T, exarg_T, linenr_T, ptrdiff_t, size_t,
+    ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -871,10 +872,10 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
 
     // Fake a ":sfirst" or ":first" to edit the first argument.
     if split {
-        unsafe { (*eap).cmdidx = CMD_sfirst };
+        unsafe { (*eap).cmdidx = CmdIdx::sfirst };
         unsafe { *(*eap).cmd = b's' as c_char };
     } else {
-        unsafe { (*eap).cmdidx = CMD_first };
+        unsafe { (*eap).cmdidx = CmdIdx::first };
     }
     unsafe { ex_rewind(eap) };
 }

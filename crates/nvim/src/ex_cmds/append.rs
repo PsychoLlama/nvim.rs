@@ -11,7 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::lines::set_op_range;
-use super::{B_IMODE_LMAP, CMD_append, CMD_change, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
+use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cstr;
 use crate::cursor::check_cursor_lnum;
@@ -29,6 +29,7 @@ use crate::message::{emsg, msg_putchar};
 use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
+use crate::types::CmdIdx;
 use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
@@ -62,12 +63,12 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
     // First autoindent comes from the line we start on.
     // SAFETY: as above.
-    if cmdidx != CMD_change && cur_buf().b_p_ai != 0 && lnum > 0 {
+    if cmdidx != CmdIdx::change && cur_buf().b_p_ai != 0 && lnum > 0 {
         // SAFETY: `lnum` is a line of the current buffer.
         append_indent.set(unsafe { get_indent_lnum(lnum) });
     }
 
-    if cmdidx != CMD_append {
+    if cmdidx != CmdIdx::append {
         lnum -= 1;
     }
     // When the buffer is empty we need to delete the dummy line.
@@ -170,7 +171,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
     if line2 < start {
         start = line2 + 1;
     }
-    if cmdidx != CMD_append {
+    if cmdidx != CmdIdx::append {
         start -= 1;
     }
     // SAFETY: `curbuf` is live.

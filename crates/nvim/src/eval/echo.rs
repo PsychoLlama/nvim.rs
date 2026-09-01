@@ -5,6 +5,7 @@
 use crate::cstr;
 use crate::guard::Suppress;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::winlayer::Ea;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -36,10 +37,9 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, NUL, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T, exarg_T,
-    funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T, typval_vval_union,
-    var_flavour_T,
+    NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN,
+    VarLock, evalarg_T, exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t,
+    typval_T, typval_vval_union, var_flavour_T,
 };
 use crate::ui::ui_has;
 
@@ -118,16 +118,16 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
         if eap.skip == 0 {
             if atstart {
                 atstart = false;
-                unsafe { msg_ext_set_append(eap.cmdidx == CMD_echon) };
+                unsafe { msg_ext_set_append(eap.cmdidx == CmdIdx::echon) };
                 // SAFETY: the kind is a NUL-terminated literal.
                 unsafe { msg_ext_set_kind(c"echo".as_ptr()) };
-                if eap.cmdidx == CMD_echo {
+                if eap.cmdidx == CmdIdx::echo {
                     if !msg_didout.get() {
                         unsafe { msg_sb_eol() };
                     }
                     unsafe { msg_start() };
                 }
-            } else if eap.cmdidx == CMD_echo {
+            } else if eap.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
                 // SAFETY: the separator is a NUL-terminated literal.
                 unsafe { msg_puts_hl(c" ".as_ptr(), echo_hl_id.get(), false) };
@@ -164,7 +164,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
     } else if need_clear {
         unsafe { msg_clr_eos() };
     }
-    if eap.cmdidx == CMD_echo {
+    if eap.cmdidx == CmdIdx::echo {
         unsafe { msg_end() };
     }
 }
@@ -211,7 +211,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
         if eap.skip == 0 {
             // `:execute` coerces; the two message commands render, and
             // so own what they produce.
-            let owned = eap.cmdidx != CMD_execute;
+            let owned = eap.cmdidx != CmdIdx::execute;
             // SAFETY: `rettv` is this frame's, holding the value just
             // evaluated; each of the three renderings is NUL-terminated.
             let argstr: *const c_char = if !owned {
@@ -250,13 +250,13 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
     }
 
     if ret.is_ok() && !ga.ga_data.is_null() {
-        if eap.cmdidx == CMD_echomsg {
+        if eap.cmdidx == CmdIdx::echomsg {
             // SAFETY: the kind is a NUL-terminated literal.
             unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };
             let text = ga.ga_data as *const c_char;
             // SAFETY: the array holds the NUL-terminated message built above.
             unsafe { msg_ptr(text, echo_hl_id.get()) };
-        } else if eap.cmdidx == CMD_echoerr {
+        } else if eap.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
             let save_did_emsg = did_emsg.get();
@@ -267,7 +267,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             if !force_abort.get() {
                 did_emsg.set(save_did_emsg);
             }
-        } else if eap.cmdidx == CMD_execute {
+        } else if eap.cmdidx == CmdIdx::execute {
             let (line, getline, cookie) = (ga.ga_data as *mut c_char, eap.ea_getline, eap.cookie);
             let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
             // SAFETY: `line` is the NUL-terminated command built above, and

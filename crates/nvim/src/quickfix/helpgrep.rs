@@ -14,7 +14,8 @@ use crate::optionstr::{empty_option, is_empty_option};
 use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg;
-use crate::types::{CMD_helpgrep, CMD_lhelpgrep, IOSIZE, MAXPATHL, NUL, OptionSetFlags};
+use crate::types::CmdIdx;
+use crate::types::{IOSIZE, MAXPATHL, NUL, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -199,8 +200,8 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     let mut qi = qf_global();
 
     let au_name = match eap.cmdidx {
-        CMD_helpgrep => Some(c"helpgrep"),
-        CMD_lhelpgrep => Some(c"lhelpgrep"),
+        CmdIdx::helpgrep => Some(c"helpgrep"),
+        CmdIdx::lhelpgrep => Some(c"lhelpgrep"),
         _ => None,
     };
     if let Some(name) = au_name {
@@ -215,7 +216,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     p_cpo.set(empty_option());
 
     let mut new_qi = false;
-    if unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
+    if unsafe { is_loclist_cmd(eap.cmdidx) } {
         qi = unsafe { hgr_get_ll(&mut new_qi) };
     }
 
@@ -289,7 +290,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
 
     qf_busy_end();
 
-    if eap.cmdidx == CMD_lhelpgrep && new_qi {
+    if eap.cmdidx == CmdIdx::lhelpgrep && new_qi {
         if !buf_is_help(cur_win().buffer_or_none()) || cur_win().w_llist == qi.raw() {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.

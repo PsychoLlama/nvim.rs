@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CmdIdx;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -26,9 +27,7 @@ use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{
-    CMD_sunhide, CMD_unhide, FAIL, Failed, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T,
-};
+use crate::types::{FAIL, Failed, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -205,7 +204,7 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     };
 
     // Whether to load inactive buffers too.
-    let all = eap.cmdidx != CMD_unhide && eap.cmdidx != CMD_sunhide;
+    let all = eap.cmdidx != CmdIdx::unhide && eap.cmdidx != CmdIdx::sunhide;
 
     // Stop Visual mode: the cursor and "VIsual" may very well be invalid
     // after switching to another buffer.

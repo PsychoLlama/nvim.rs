@@ -7,6 +7,7 @@ use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
 use crate::semsg;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -50,9 +51,8 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CMD_badd, CMD_balt, CMD_edit, CMD_enew, CMD_new, CMD_rshada, CMD_rviminfo, CMD_split,
-    CMD_sview, CMD_tabedit, CMD_tabnew, CMD_view, CMD_visual, CMD_vnew, CMD_vsplit, CmdModFlags,
-    CpoFlag, Failed, NUL, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t, uint8_t, win_T,
+    CmdModFlags, CpoFlag, Failed, NUL, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t,
+    uint8_t, win_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -271,24 +271,21 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
 pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    let ffname = if eap.cmdidx as c_int == CMD_enew as c_int {
+    let ffname = if eap.cmdidx == CmdIdx::enew {
         ptr::null_mut()
     } else {
         eap.arg
     };
     // `:badd` and `:balt` only add to the buffer list; they never leave
     // the current buffer, so they are not asked about it.
-    if eap.cmdidx as c_int != CMD_badd as c_int
-        && eap.cmdidx as c_int != CMD_balt as c_int
+    if eap.cmdidx != CmdIdx::badd
+        && eap.cmdidx != CmdIdx::balt
         && unsafe { is_other_file(0, ffname) }
         && !check_can_set_curbuf_forceit(eap.forceit)
     {
         return;
     }
-    if buf_is_prompt(current_buf())
-        && eap.cmdidx as c_int == CMD_edit as c_int
-        && byte(eap.arg) == NUL
-    {
+    if buf_is_prompt(current_buf()) && eap.cmdidx == CmdIdx::edit && byte(eap.arg) == NUL {
         emsg(c"cannot :edit a prompt buffer");
         return;
     }
@@ -304,9 +301,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
 pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
     let mut ea = unsafe { Ea::new(eap) };
     // `:visual` and `:view` with no argument leave Ex mode.
-    if exmode_active.get()
-        && (ea.cmdidx as c_int == CMD_visual as c_int || ea.cmdidx as c_int == CMD_view as c_int)
-    {
+    if exmode_active.get() && (ea.cmdidx == CmdIdx::visual || ea.cmdidx == CmdIdx::view) {
         exmode_active.set(false);
         ex_pressedreturn.set(false);
         if ui_has(kUICmdline) {
@@ -335,11 +330,11 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
         }
     }
 
-    let idx = ea.cmdidx as c_int;
-    if (idx == CMD_new as c_int
-        || idx == CMD_tabnew as c_int
-        || idx == CMD_tabedit as c_int
-        || idx == CMD_vnew as c_int)
+    let idx = ea.cmdidx;
+    if (idx == CmdIdx::new
+        || idx == CmdIdx::tabnew
+        || idx == CmdIdx::tabedit
+        || idx == CmdIdx::vnew)
         && byte(ea.arg) == NUL
     {
         // A new, empty buffer.
@@ -362,23 +357,23 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                 ptr::null_mut()
             },
         );
-    } else if idx != CMD_split as c_int && idx != CMD_vsplit as c_int || byte(ea.arg) != NUL {
+    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(ea.arg) != NUL {
         if byte(ea.arg) != NUL && unsafe { text_or_buf_locked() } {
             return;
         }
         let saved_readonly = readonlymode.get();
-        if idx == CMD_view as c_int || idx == CMD_sview as c_int {
+        if idx == CmdIdx::view || idx == CmdIdx::sview {
             readonlymode.set(true);
-        } else if idx == CMD_enew as c_int {
+        } else if idx == CmdIdx::enew {
             readonlymode.set(false);
         }
-        if idx != CMD_balt as c_int && idx != CMD_badd as c_int {
+        if idx != CmdIdx::balt && idx != CmdIdx::badd {
             setpcmark();
         }
 
         let opened = do_ecmd(
             0,
-            if idx == CMD_enew as c_int {
+            if idx == CmdIdx::enew {
                 ptr::null_mut()
             } else {
                 ea.arg
@@ -398,11 +393,11 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
                 0
             } else {
                 ECMD_OLDBUF as c_int
-            }) + (if idx == CMD_badd as c_int {
+            }) + (if idx == CmdIdx::badd {
                 ECMD_ADDBUF as c_int
             } else {
                 0
-            }) + (if idx == CMD_balt as c_int {
+            }) + (if idx == CmdIdx::balt {
                 ECMD_ALTBUF as c_int
             } else {
                 0
@@ -599,7 +594,7 @@ pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
     if byte(p_shada.get()) == NUL {
         p_shada.set(c"'100".as_ptr() as *mut c_char);
     }
-    if eap.cmdidx as c_int == CMD_rviminfo as c_int || eap.cmdidx as c_int == CMD_rshada as c_int {
+    if eap.cmdidx == CmdIdx::rviminfo || eap.cmdidx == CmdIdx::rshada {
         let _ = unsafe { shada_read_everything(eap.arg, eap.forceit != 0, false) };
     } else {
         unsafe { shada_write_file(eap.arg, eap.forceit != 0) };

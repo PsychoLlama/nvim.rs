@@ -64,9 +64,10 @@ use crate::main::{
 use crate::memory::xfree;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_else, CMD_elseif, CMD_endwhile, CMD_while, FAIL, Failed, OK, VAR_UNKNOWN, VarLock,
-    cstack_T, eslist_T, evalarg_T, exarg_T, typval_T, typval_vval_union,
+    FAIL, Failed, OK, VAR_UNKNOWN, VarLock, cstack_T, eslist_T, evalarg_T, exarg_T, typval_T,
+    typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -333,14 +334,14 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
             & (CSF_WHILE | CSF_FOR | CSF_TRY)
             != 0
     {
-        if unsafe { (*eap).cmdidx } == CMD_else {
+        if unsafe { (*eap).cmdidx } == CmdIdx::r#else {
             unsafe { (*eap).errmsg = Some(c"E581: :else without :if".to_owned()) };
             return;
         }
         unsafe { (*eap).errmsg = Some(c"E582: :elseif without :if".to_owned()) };
         skip = true;
     } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] } & CSF_ELSE != 0 {
-        if unsafe { (*eap).cmdidx } == CMD_else {
+        if unsafe { (*eap).cmdidx } == CmdIdx::r#else {
             unsafe { (*eap).errmsg = Some(E_MULTIPLE_ELSE.to_owned()) };
             return;
         }
@@ -371,7 +372,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
         skip = true;
     }
 
-    if unsafe { (*eap).cmdidx } != CMD_elseif {
+    if unsafe { (*eap).cmdidx } != CmdIdx::elseif {
         unsafe { (*cstack).cs_flags[idx] |= CSF_ELSE };
         return;
     }
@@ -426,7 +427,7 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
         unsafe { (*cstack).cs_line[(*cstack).cs_idx as usize] = -1 };
     }
     let idx = unsafe { (*cstack).cs_idx } as usize;
-    let is_while = unsafe { (*eap).cmdidx } == CMD_while;
+    let is_while = unsafe { (*eap).cmdidx } == CmdIdx::r#while;
     unsafe { (*cstack).cs_flags[idx] = if is_while { CSF_WHILE } else { CSF_FOR } };
 
     let skip = unsafe { check_skip(cstack) };
@@ -549,7 +550,7 @@ pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
-    let ending_while = unsafe { (*eap).cmdidx } == CMD_endwhile;
+    let ending_while = unsafe { (*eap).cmdidx } == CmdIdx::endwhile;
     let err = if ending_while {
         err_msg(e_while)
     } else {

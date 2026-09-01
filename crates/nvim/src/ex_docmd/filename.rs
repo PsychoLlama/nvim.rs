@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::cstr;
 use crate::os::cshim::snprintf;
+use crate::types::CmdIdx;
 
 use crate::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -51,7 +52,6 @@ use crate::runtime::estack_sfile;
 use crate::strings::strrep;
 
 use crate::types::{
-    CMD_bang, CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, CMD_terminal,
     ExArgt, ExpandContext, Failed, MAXPATHL, NUL, Vv, exarg_T, expand_T, linenr_T, size_t, ssize_t,
     uint8_t,
 };
@@ -70,12 +70,12 @@ pub unsafe fn replace_makeprg(
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
     let mut eap = unsafe { Ea::new(eap) };
-    let idx = eap.cmdidx as c_int;
-    let is_grep = idx == CMD_grep as c_int
-        || idx == CMD_lgrep as c_int
-        || idx == CMD_grepadd as c_int
-        || idx == CMD_lgrepadd as c_int;
-    let is_make = idx == CMD_make as c_int || idx == CMD_lmake as c_int;
+    let idx = eap.cmdidx;
+    let is_grep = idx == CmdIdx::grep
+        || idx == CmdIdx::lgrep
+        || idx == CmdIdx::grepadd
+        || idx == CmdIdx::lgrepadd;
+    let is_make = idx == CmdIdx::make || idx == CmdIdx::lmake;
     // `grep_internal` means 'grepprg' is `internal`, which is not a
     // program at all.
     if !(is_make || is_grep) || unsafe { grep_internal(eap.cmdidx) } {
@@ -178,17 +178,17 @@ pub(crate) unsafe fn expand_filename(
         // shell-special characters escaped — but not for the commands
         // that hand the whole argument to a shell themselves, and not
         // for a name that came back already escaped (`##`).
-        let idx = ea.cmdidx as c_int;
+        let idx = ea.cmdidx;
         if ea.usefilter == 0
             && escaped == 0
-            && idx != CMD_bang as c_int
-            && idx != CMD_grep as c_int
-            && idx != CMD_grepadd as c_int
-            && idx != CMD_lgrep as c_int
-            && idx != CMD_lgrepadd as c_int
-            && idx != CMD_lmake as c_int
-            && idx != CMD_make as c_int
-            && idx != CMD_terminal as c_int
+            && idx != CmdIdx::bang
+            && idx != CmdIdx::grep
+            && idx != CmdIdx::grepadd
+            && idx != CmdIdx::lgrep
+            && idx != CmdIdx::lgrepadd
+            && idx != CmdIdx::lmake
+            && idx != CmdIdx::make
+            && idx != CmdIdx::terminal
             && !ea.argt.has(ExArgt::NOSPC)
         {
             let mut l = repl;
@@ -204,7 +204,7 @@ pub(crate) unsafe fn expand_filename(
         }
         // A `!` in the replacement would be read as "the previous
         // command" by the shell-command line parser.
-        if (ea.usefilter != 0 || idx == CMD_bang as c_int || idx == CMD_terminal as c_int)
+        if (ea.usefilter != 0 || idx == CmdIdx::bang || idx == CmdIdx::terminal)
             && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
         {
             let escaped_repl = vim_strsave_escaped(repl, c"!".as_ptr());

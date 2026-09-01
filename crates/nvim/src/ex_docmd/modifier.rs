@@ -8,7 +8,9 @@
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::cstr;
+use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::scan::ends_excmd;
+use crate::types::CmdIdx;
 
 use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -46,8 +48,8 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdAddr, CmdModFlags,
-    Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
+    CmdAddr, CmdModFlags, Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0, cmdmod_T, exarg_T,
+    size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::atoi;
@@ -93,13 +95,11 @@ pub(crate) static CMDMODS: [CmdMod; 24] = [
 
 /// Commands whose argument is an expression, so a `|` inside it belongs to
 /// the expression rather than separating commands.
-pub fn cmd_has_expr_args(cmdidx: cmdidx_T) -> bool {
-    let i = cmdidx as c_int;
-    i == CMD_execute as c_int
-        || i == CMD_echo as c_int
-        || i == CMD_echon as c_int
-        || i == CMD_echomsg as c_int
-        || i == CMD_echoerr as c_int
+pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
+    matches!(
+        cmdidx,
+        CmdIdx::execute | CmdIdx::echo | CmdIdx::echon | CmdIdx::echomsg | CmdIdx::echoerr
+    )
 }
 
 /// Read the run of modifiers at the head of the command line into `cmod`,
@@ -749,20 +749,20 @@ pub fn expr_map_locked() -> bool {
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells
 /// them apart by the leading `l` of the name and nothing else.
-pub unsafe fn is_loclist_cmd(cmdidx: c_int) -> bool {
-    if cmdidx < 0 || cmdidx >= CMD_SIZE as c_int {
+pub unsafe fn is_loclist_cmd(cmdidx: CmdIdx) -> bool {
+    if is_user_cmd(cmdidx) || cmdidx == CmdIdx::SIZE {
         return false;
     }
-    unsafe { *cmdnames[cmdidx as usize].cmd_name as c_int == 'l' as c_int }
+    unsafe { *cmdnames[cmdidx.index()].cmd_name as c_int == 'l' as c_int }
 }
 
 /// Is this one of the mapping commands? Asked by the argument scan, which
 /// must not treat a `<expr>` mapping's right-hand side as an expression.
-pub unsafe fn is_map_cmd(cmdidx: cmdidx_T) -> bool {
-    if (cmdidx as c_int) < 0 {
+pub unsafe fn is_map_cmd(cmdidx: CmdIdx) -> bool {
+    if is_user_cmd(cmdidx) {
         return false;
     }
-    let func: ex_func_T = cmdnames[cmdidx as usize].cmd_func;
+    let func: ex_func_T = cmdnames[cmdidx.index()].cmd_func;
     ex_func_is(func, ex_map)
         || ex_func_is(func, ex_unmap)
         || ex_func_is(func, ex_mapclear)

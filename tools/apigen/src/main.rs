@@ -4210,7 +4210,7 @@ fn run() -> Result<(), String> {
             "metadata",
         ),
         (cmdtable_file, cmdtable, "Ex command table"),
-        (cmdidx_file, cmdidx, "cmdidx_T"),
+        (cmdidx_file, cmdidx, "CmdIdx"),
     ];
     for (path, text, what) in singles {
         let text = rustfmt(&config, &text)?;

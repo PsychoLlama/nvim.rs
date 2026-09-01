@@ -11,12 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::types::{
-    CMD_cNext, CMD_cNfile, CMD_cabove, CMD_cafter, CMD_cbefore, CMD_cbelow, CMD_cc, CMD_cdo,
-    CMD_cfdo, CMD_cfirst, CMD_cnfile, CMD_cpfile, CMD_cprevious, CMD_crewind, CMD_lNext,
-    CMD_lNfile, CMD_labove, CMD_lafter, CMD_lbelow, CMD_ldo, CMD_lfdo, CMD_lfirst, CMD_ll,
-    CMD_lnfile, CMD_lpfile, CMD_lprevious, CMD_lrewind,
-};
+use crate::types::CmdIdx;
 use core::cmp::Ordering;
 use core::ffi::c_int;
 
@@ -47,8 +42,8 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
     } else {
         match eap.cmdidx {
             // The current entry.
-            CMD_cc | CMD_ll => 0,
-            CMD_crewind | CMD_lrewind | CMD_cfirst | CMD_lfirst => 1,
+            CmdIdx::cc | CmdIdx::ll => 0,
+            CmdIdx::crewind | CmdIdx::lrewind | CmdIdx::cfirst | CmdIdx::lfirst => 1,
             // :clast/:llast: past the end, which qf_jump clamps.
             _ => 32767,
         }
@@ -56,7 +51,10 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
 
     // :cdo/:ldo jump to the nth valid entry, :cfdo/:lfdo to the first
     // valid entry of the nth file.
-    let is_do = matches!(eap.cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
+    let is_do = matches!(
+        eap.cmdidx,
+        CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
+    );
     if is_do {
         let n = if eap.addr_count > 0 {
             debug_assert!(eap.line1 >= 0);
@@ -64,7 +62,7 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
         } else {
             1
         };
-        let per_file = matches!(eap.cmdidx, CMD_cfdo | CMD_lfdo);
+        let per_file = matches!(eap.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
         let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
         debug_assert!(valid_entry <= c_int::MAX as size_t);
         errornr = valid_entry as c_int;
@@ -88,7 +86,10 @@ pub unsafe fn ex_cnext(eap: *mut exarg_T) {
 
     // A count says how many entries to move — except for the :cdo
     // family, whose count is the entry it started at.
-    let is_do = matches!(eap.cmdidx, CMD_cdo | CMD_ldo | CMD_cfdo | CMD_lfdo);
+    let is_do = matches!(
+        eap.cmdidx,
+        CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
+    );
     let errornr = if eap.addr_count > 0 && !is_do {
         eap.line2 as c_int
     } else {
@@ -98,10 +99,10 @@ pub unsafe fn ex_cnext(eap: *mut exarg_T) {
     // Depending on the command, jump to either the next or the previous
     // entry, or to one in the next or previous file.
     let dir = match eap.cmdidx {
-        CMD_cprevious | CMD_lprevious | CMD_cNext | CMD_lNext => BACKWARD,
-        CMD_cnfile | CMD_lnfile | CMD_cfdo | CMD_lfdo => FORWARD_FILE,
-        CMD_cpfile | CMD_lpfile | CMD_cNfile | CMD_lNfile => BACKWARD_FILE,
-        // CMD_cnext, CMD_lnext, CMD_cdo, CMD_ldo and anything else.
+        CmdIdx::cprevious | CmdIdx::lprevious | CmdIdx::cNext | CmdIdx::lNext => BACKWARD,
+        CmdIdx::cnfile | CmdIdx::lnfile | CmdIdx::cfdo | CmdIdx::lfdo => FORWARD_FILE,
+        CmdIdx::cpfile | CmdIdx::lpfile | CmdIdx::cNfile | CmdIdx::lNfile => BACKWARD_FILE,
+        // CmdIdx::cnext, CmdIdx::lnext, CmdIdx::cdo, CmdIdx::ldo and anything else.
         _ => FORWARD,
     };
 
@@ -392,7 +393,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     // Does the current buffer have any entry of the right kind?
     let quickfix = matches!(
         eap.cmdidx,
-        CMD_cabove | CMD_cbelow | CMD_cbefore | CMD_cafter
+        CmdIdx::cabove | CmdIdx::cbelow | CmdIdx::cbefore | CmdIdx::cafter
     );
     let buf_has_flag = if quickfix {
         BUF_HAS_QF_ENTRY
@@ -415,7 +416,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
 
     let dir = if matches!(
         eap.cmdidx,
-        CMD_cbelow | CMD_lbelow | CMD_cafter | CMD_lafter
+        CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cafter | CmdIdx::lafter
     ) {
         FORWARD
     } else {
@@ -423,7 +424,7 @@ pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
     };
     let linewise = matches!(
         eap.cmdidx,
-        CMD_cbelow | CMD_lbelow | CMD_cabove | CMD_labove
+        CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cabove | CmdIdx::labove
     );
 
     let mut pos = cur_win().w_cursor;

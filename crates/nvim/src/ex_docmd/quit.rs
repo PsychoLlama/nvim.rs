@@ -10,6 +10,7 @@
 //! any of them refuses, because the checks themselves look at it.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -41,9 +42,8 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    CMD_SIZE, CMD_bdelete, CMD_bwipeout, CMD_close, CMD_hide, CMD_only, CMD_tabclose, CMD_tabonly,
-    CMD_wq, CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T,
-    ptrdiff_t, tabpage_T, win_T,
+    CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T, ptrdiff_t,
+    tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
@@ -64,10 +64,10 @@ const fn special_key(code: c_int) -> c_int {
 /// `:bdelete`, `:bwipeout` and `:bunload`.
 pub(crate) unsafe fn ex_bunload(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    let idx = eap.cmdidx as c_int;
-    let action = if idx == CMD_bdelete as c_int {
+    let idx = eap.cmdidx;
+    let action = if idx == CmdIdx::bdelete {
         DOBUF_DEL
-    } else if idx == CMD_bwipeout as c_int {
+    } else if idx == CmdIdx::bwipeout {
         DOBUF_WIPE
     } else {
         DOBUF_UNLOAD
@@ -346,7 +346,7 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) 
     }
     // A floating window is not part of the layout, so a locked layout
     // does not protect it.
-    if !unsafe { (*win).w_floating } && window_layout_locked(CMD_close) {
+    if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::close) {
         return;
     }
 
@@ -394,7 +394,7 @@ pub(crate) unsafe fn ex_tabclose(eap: *mut exarg_T) {
         emsg(gettext(c"E784: Cannot close last tab page".as_ptr()));
         return;
     }
-    if window_layout_locked(CMD_tabclose) {
+    if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
     let tab_number = get_tabpage_arg(eap);
@@ -424,7 +424,7 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
         unsafe { msg_ptr(gettext(c"Already only one tab page".as_ptr()), 0) };
         return;
     }
-    if window_layout_locked(CMD_tabonly) {
+    if window_layout_locked(CmdIdx::tabonly) {
         return;
     }
     let tab_number = get_tabpage_arg(eap);
@@ -458,7 +458,7 @@ pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
 
 /// Close the current tab page, by closing every window in it.
 pub unsafe fn tabpage_close(forceit: c_int) {
-    if window_layout_locked(CMD_tabclose) {
+    if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
     trigger_tabclosedpre(curtab.get());
@@ -487,7 +487,7 @@ pub unsafe fn tabpage_close(forceit: c_int) {
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
 pub unsafe fn tabpage_close_other(tp: *mut tabpage_T, forceit: c_int) {
-    if window_layout_locked(CMD_SIZE) {
+    if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
     trigger_tabclosedpre(tp);
@@ -535,7 +535,7 @@ pub unsafe fn tabpage_close_other(tp: *mut tabpage_T, forceit: c_int) {
 /// `:only`.
 pub(crate) unsafe fn ex_only(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    if window_layout_locked(CMD_only) {
+    if window_layout_locked(CmdIdx::only) {
         return;
     }
     if eap.addr_count > 0 {
@@ -575,7 +575,7 @@ pub(crate) unsafe fn ex_hide(eap: *mut exarg_T) {
     } else {
         numbered_window(eap.line2)
     };
-    if !unsafe { (*win).w_floating } && window_layout_locked(CMD_hide) {
+    if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::hide) {
         return;
     }
     win_close(win, false, eap.forceit != 0);
@@ -608,7 +608,7 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
         exiting.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
-    if (eap.cmdidx as c_int == CMD_wq as c_int || curbuf_is_changed())
+    if (eap.cmdidx == CmdIdx::wq || curbuf_is_changed())
         && unsafe { do_write(eap.raw()) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
         || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }

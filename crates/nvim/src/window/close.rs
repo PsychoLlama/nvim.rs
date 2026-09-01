@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CmdIdx;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -31,7 +32,7 @@ use crate::main::{
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
-use crate::types::{CMD_SIZE, CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
+use crate::types::{CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: *mut win_T) {
@@ -134,7 +135,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
                 break;
             }
             if wp.w_buffer == buf.raw() && (!keep_curwin || !wp.is_current()) && !locked(wp) {
-                if layout_locked(CMD_SIZE) {
+                if layout_locked(CmdIdx::SIZE) {
                     break 'theend; // Only give one error message.
                 }
                 if close(wp, false, false) == FAIL {
@@ -157,7 +158,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
                 let mut cur = tp.tp_lastwin.and_then(WinId::get);
                 while let Some(wp) = cur {
                     if wp.w_buffer == buf.raw() && !locked(wp) {
-                        if layout_locked(CMD_SIZE) {
+                        if layout_locked(CmdIdx::SIZE) {
                             break 'theend; // Only give one error message.
                         }
                         if !close_othertab(wp, false, tp, false) {

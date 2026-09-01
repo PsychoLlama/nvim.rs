@@ -129,9 +129,10 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::types::CmdIdx;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, CmdAddr, CmdBuff, CmdParseInfo,
+    Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
     Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
@@ -569,7 +570,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
     cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmdidx: CMD_append,
+    cmdidx: CmdIdx::append,
     argt: ExArgt::NONE,
     skip: 0,
     forceit: 0,

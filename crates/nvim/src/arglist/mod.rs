@@ -52,7 +52,7 @@ use crate::path::{
     path_full_compare,
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{CMD_argdo, CMD_argglobal, CMD_arglocal, CMD_args, CMD_snext, Failed, *};
+use crate::types::{Failed, *};
 use crate::undo::buf_is_changed;
 use crate::version::list_in_columns;
 use crate::window::{

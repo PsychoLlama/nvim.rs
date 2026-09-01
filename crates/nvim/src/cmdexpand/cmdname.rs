@@ -11,41 +11,10 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::ex_docmd::is_user_cmd;
 use crate::keycodes::Ctrl_V;
-use crate::types::{
-    CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_abbreviate, CMD_aboveleft, CMD_amenu, CMD_and,
-    CMD_anoremenu, CMD_append, CMD_argdelete, CMD_argdo, CMD_augroup, CMD_aunmenu, CMD_autocmd,
-    CMD_bdelete, CMD_belowright, CMD_botright, CMD_breakadd, CMD_breakdel, CMD_browse, CMD_bufdo,
-    CMD_buffer, CMD_bunload, CMD_bwipeout, CMD_cabbrev, CMD_caddexpr, CMD_call, CMD_cd, CMD_cdo,
-    CMD_cexpr, CMD_cfdo, CMD_cgetexpr, CMD_chdir, CMD_checkhealth, CMD_checktime, CMD_cmap,
-    CMD_cmapclear, CMD_cmenu, CMD_cnoreabbrev, CMD_cnoremap, CMD_cnoremenu, CMD_colorscheme,
-    CMD_command, CMD_compiler, CMD_confirm, CMD_const, CMD_cunabbrev, CMD_cunmap, CMD_cunmenu,
-    CMD_debug, CMD_delcommand, CMD_delfunction, CMD_diffget, CMD_diffput, CMD_djump, CMD_dlist,
-    CMD_doautoall, CMD_doautocmd, CMD_dsearch, CMD_dsplit, CMD_echo, CMD_echoerr, CMD_echohl,
-    CMD_echomsg, CMD_echon, CMD_elseif, CMD_emenu, CMD_equal, CMD_execute, CMD_filetype,
-    CMD_filter, CMD_find, CMD_folddoclosed, CMD_folddoopen, CMD_for, CMD_function, CMD_global,
-    CMD_help, CMD_hide, CMD_highlight, CMD_history, CMD_horizontal, CMD_iabbrev, CMD_if, CMD_ijump,
-    CMD_ilist, CMD_imap, CMD_imapclear, CMD_imenu, CMD_inoreabbrev, CMD_inoremap, CMD_inoremenu,
-    CMD_isearch, CMD_isplit, CMD_iunabbrev, CMD_iunmap, CMD_iunmenu, CMD_keepalt, CMD_keepjumps,
-    CMD_keepmarks, CMD_keeppatterns, CMD_laddexpr, CMD_language, CMD_lcd, CMD_lchdir, CMD_ldo,
-    CMD_leftabove, CMD_let, CMD_lexpr, CMD_lfdo, CMD_lgetexpr, CMD_lmap, CMD_lmapclear,
-    CMD_lnoremap, CMD_lockmarks, CMD_lshift, CMD_lsp, CMD_ltag, CMD_lua, CMD_lunmap, CMD_map,
-    CMD_mapclear, CMD_match, CMD_menu, CMD_messages, CMD_nmap, CMD_nmapclear, CMD_nmenu,
-    CMD_nnoremap, CMD_nnoremenu, CMD_noautocmd, CMD_noreabbrev, CMD_noremap, CMD_noremenu,
-    CMD_noswapfile, CMD_nunmap, CMD_nunmenu, CMD_omap, CMD_omapclear, CMD_omenu, CMD_onoremap,
-    CMD_onoremenu, CMD_ounmap, CMD_ounmenu, CMD_ownsyntax, CMD_packadd, CMD_pbuffer, CMD_popup,
-    CMD_profdel, CMD_profile, CMD_psearch, CMD_ptag, CMD_ptjump, CMD_ptselect, CMD_read, CMD_redir,
-    CMD_restart, CMD_retab, CMD_return, CMD_rightbelow, CMD_rshift, CMD_runtime, CMD_sandbox,
-    CMD_sbuffer, CMD_scriptnames, CMD_set, CMD_setfiletype, CMD_setglobal, CMD_setlocal, CMD_sfind,
-    CMD_sign, CMD_silent, CMD_smap, CMD_smapclear, CMD_snoremap, CMD_stag, CMD_stjump,
-    CMD_stselect, CMD_substitute, CMD_sunmap, CMD_syntax, CMD_syntime, CMD_tab, CMD_tabdo,
-    CMD_tabfind, CMD_tag, CMD_tcd, CMD_tchdir, CMD_tjump, CMD_tlmenu, CMD_tlnoremenu, CMD_tlunmenu,
-    CMD_tmenu, CMD_topleft, CMD_tselect, CMD_tunmenu, CMD_unabbreviate, CMD_unlet, CMD_unmap,
-    CMD_unmenu, CMD_unsilent, CMD_update, CMD_verbose, CMD_vertical, CMD_vglobal, CMD_vmap,
-    CMD_vmapclear, CMD_vmenu, CMD_vnoremap, CMD_vnoremenu, CMD_vunmap, CMD_vunmenu, CMD_while,
-    CMD_windo, CMD_write, CMD_xmap, CMD_xmapclear, CMD_xnoremap, CMD_xunmap, ExArgt, ExpandContext,
-    NUL, OptionSetFlags,
-};
+use crate::types::CmdIdx;
+use crate::types::{ExArgt, ExpandContext, NUL, OptionSetFlags};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -58,7 +27,7 @@ use core::ptr;
 /// Returns a pointer to the next command, or NULL if there is no next command.
 pub(crate) unsafe fn set_context_by_cmdname(
     cmd: *const c_char,
-    cmdidx: cmdidx_T,
+    cmdidx: CmdIdx,
     xp: *mut expand_T,
     mut arg: *const c_char,
     argt: ExArgt,
@@ -69,7 +38,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
     match cmdidx {
-        CMD_find | CMD_sfind | CMD_tabfind => {
+        CmdIdx::find | CmdIdx::sfind | CmdIdx::tabfind => {
             if xp.xp_context == ExpandContext::Files {
                 xp.xp_context = if unsafe { *get_findfunc() } as c_int != NUL {
                     ExpandContext::Findfunc
@@ -78,40 +47,74 @@ pub(crate) unsafe fn set_context_by_cmdname(
                 };
             }
         }
-        CMD_cd | CMD_chdir | CMD_lcd | CMD_lchdir | CMD_tcd | CMD_tchdir => {
+        CmdIdx::cd
+        | CmdIdx::chdir
+        | CmdIdx::lcd
+        | CmdIdx::lchdir
+        | CmdIdx::tcd
+        | CmdIdx::tchdir => {
             if xp.xp_context == ExpandContext::Files {
                 xp.xp_context = ExpandContext::DirsInCdpath;
             }
         }
-        CMD_help => {
+        CmdIdx::help => {
             xp.xp_context = ExpandContext::Help;
             xp.xp_pattern = arg as *mut c_char;
         }
 
         // Command modifiers: return the argument.  Also for commands with
         // an argument that is a command.
-        CMD_aboveleft | CMD_argdo | CMD_belowright | CMD_botright | CMD_browse | CMD_bufdo
-        | CMD_cdo | CMD_cfdo | CMD_confirm | CMD_debug | CMD_folddoclosed | CMD_folddoopen
-        | CMD_hide | CMD_horizontal | CMD_keepalt | CMD_keepjumps | CMD_keepmarks
-        | CMD_keeppatterns | CMD_ldo | CMD_leftabove | CMD_lfdo | CMD_lockmarks | CMD_noautocmd
-        | CMD_noswapfile | CMD_restart | CMD_rightbelow | CMD_sandbox | CMD_silent | CMD_tab
-        | CMD_tabdo | CMD_topleft | CMD_unsilent | CMD_verbose | CMD_vertical | CMD_windo => {
+        CmdIdx::aboveleft
+        | CmdIdx::argdo
+        | CmdIdx::belowright
+        | CmdIdx::botright
+        | CmdIdx::browse
+        | CmdIdx::bufdo
+        | CmdIdx::cdo
+        | CmdIdx::cfdo
+        | CmdIdx::confirm
+        | CmdIdx::debug
+        | CmdIdx::folddoclosed
+        | CmdIdx::folddoopen
+        | CmdIdx::hide
+        | CmdIdx::horizontal
+        | CmdIdx::keepalt
+        | CmdIdx::keepjumps
+        | CmdIdx::keepmarks
+        | CmdIdx::keeppatterns
+        | CmdIdx::ldo
+        | CmdIdx::leftabove
+        | CmdIdx::lfdo
+        | CmdIdx::lockmarks
+        | CmdIdx::noautocmd
+        | CmdIdx::noswapfile
+        | CmdIdx::restart
+        | CmdIdx::rightbelow
+        | CmdIdx::sandbox
+        | CmdIdx::silent
+        | CmdIdx::tab
+        | CmdIdx::tabdo
+        | CmdIdx::topleft
+        | CmdIdx::unsilent
+        | CmdIdx::verbose
+        | CmdIdx::vertical
+        | CmdIdx::windo => {
             return arg;
         }
 
-        CMD_filter => return unsafe { set_context_in_filter_cmd(xp.raw(), arg) },
+        CmdIdx::filter => return unsafe { set_context_in_filter_cmd(xp.raw(), arg) },
 
-        CMD_match => return unsafe { set_context_in_match_cmd(xp.raw(), arg) },
+        CmdIdx::r#match => return unsafe { set_context_in_match_cmd(xp.raw(), arg) },
 
         // All completion for the +cmdline_compl feature goes here.
-        CMD_command => return unsafe { set_context_in_user_cmd(xp.raw(), arg) },
+        CmdIdx::command => return unsafe { set_context_in_user_cmd(xp.raw(), arg) },
 
-        CMD_delcommand => {
+        CmdIdx::delcommand => {
             xp.xp_context = ExpandContext::UserCommands;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_global | CMD_vglobal => {
+        CmdIdx::global | CmdIdx::vglobal => {
             let nextcmd = unsafe { find_cmd_after_global_cmd(arg) };
             if nextcmd.is_null() && may_expand_pattern.get() {
                 unsafe { set_context_with_pattern(xp.raw()) };
@@ -119,7 +122,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             return nextcmd;
         }
 
-        CMD_and | CMD_substitute => {
+        CmdIdx::and | CmdIdx::substitute => {
             let nextcmd = unsafe { find_cmd_after_substitute_cmd(arg) };
             if nextcmd.is_null() && may_expand_pattern.get() {
                 unsafe { set_context_with_pattern(xp.raw()) };
@@ -127,31 +130,46 @@ pub(crate) unsafe fn set_context_by_cmdname(
             return nextcmd;
         }
 
-        CMD_isearch | CMD_dsearch | CMD_ilist | CMD_dlist | CMD_ijump | CMD_psearch | CMD_djump
-        | CMD_isplit | CMD_dsplit => {
+        CmdIdx::isearch
+        | CmdIdx::dsearch
+        | CmdIdx::ilist
+        | CmdIdx::dlist
+        | CmdIdx::ijump
+        | CmdIdx::psearch
+        | CmdIdx::djump
+        | CmdIdx::isplit
+        | CmdIdx::dsplit => {
             return unsafe { find_cmd_after_isearch_cmd(xp.raw(), arg) };
         }
 
-        CMD_autocmd => {
+        CmdIdx::autocmd => {
             return unsafe { set_context_in_autocmd(xp.raw(), arg as *mut c_char, false) };
         }
 
-        CMD_doautocmd | CMD_doautoall => {
+        CmdIdx::doautocmd | CmdIdx::doautoall => {
             return unsafe { set_context_in_autocmd(xp.raw(), arg as *mut c_char, true) };
         }
 
-        CMD_set => unsafe {
+        CmdIdx::set => unsafe {
             set_context_in_set_cmd(xp.raw(), arg as *mut c_char, OptionSetFlags::NONE)
         },
-        CMD_setglobal => unsafe {
+        CmdIdx::setglobal => unsafe {
             set_context_in_set_cmd(xp.raw(), arg as *mut c_char, OptionSetFlags::GLOBAL)
         },
-        CMD_setlocal => unsafe {
+        CmdIdx::setlocal => unsafe {
             set_context_in_set_cmd(xp.raw(), arg as *mut c_char, OptionSetFlags::LOCAL)
         },
 
-        CMD_tag | CMD_stag | CMD_ptag | CMD_ltag | CMD_tselect | CMD_stselect | CMD_ptselect
-        | CMD_tjump | CMD_stjump | CMD_ptjump => {
+        CmdIdx::tag
+        | CmdIdx::stag
+        | CmdIdx::ptag
+        | CmdIdx::ltag
+        | CmdIdx::tselect
+        | CmdIdx::stselect
+        | CmdIdx::ptselect
+        | CmdIdx::tjump
+        | CmdIdx::stjump
+        | CmdIdx::ptjump => {
             xp.xp_context = if wop_flags.get() & kOptWopFlagTagfile as c_uint != 0 {
                 ExpandContext::TagsListFiles
             } else {
@@ -160,31 +178,47 @@ pub(crate) unsafe fn set_context_by_cmdname(
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_augroup => {
+        CmdIdx::augroup => {
             xp.xp_context = ExpandContext::Augroup;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_syntax => unsafe { set_context_in_syntax_cmd(xp.raw(), arg) },
+        CmdIdx::syntax => unsafe { set_context_in_syntax_cmd(xp.raw(), arg) },
 
-        CMD_const | CMD_let | CMD_if | CMD_elseif | CMD_while | CMD_for | CMD_echo | CMD_echon
-        | CMD_execute | CMD_echomsg | CMD_echoerr | CMD_call | CMD_return | CMD_cexpr
-        | CMD_caddexpr | CMD_cgetexpr | CMD_lexpr | CMD_laddexpr | CMD_lgetexpr => {
+        CmdIdx::r#const
+        | CmdIdx::r#let
+        | CmdIdx::r#if
+        | CmdIdx::elseif
+        | CmdIdx::r#while
+        | CmdIdx::r#for
+        | CmdIdx::echo
+        | CmdIdx::echon
+        | CmdIdx::execute
+        | CmdIdx::echomsg
+        | CmdIdx::echoerr
+        | CmdIdx::call
+        | CmdIdx::r#return
+        | CmdIdx::cexpr
+        | CmdIdx::caddexpr
+        | CmdIdx::cgetexpr
+        | CmdIdx::lexpr
+        | CmdIdx::laddexpr
+        | CmdIdx::lgetexpr => {
             unsafe { set_context_for_expression(xp.raw(), arg as *mut c_char, cmdidx) };
         }
 
-        CMD_unlet => return unsafe { set_context_in_unlet_cmd(xp.raw(), arg) },
+        CmdIdx::unlet => return unsafe { set_context_in_unlet_cmd(xp.raw(), arg) },
 
-        CMD_function | CMD_delfunction => {
+        CmdIdx::function | CmdIdx::delfunction => {
             xp.xp_context = ExpandContext::UserFunc;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_echohl => unsafe { set_context_in_echohl_cmd(xp.raw(), arg) },
-        CMD_highlight => unsafe { set_context_in_highlight_cmd(xp.raw(), arg) },
-        CMD_sign => unsafe { set_context_in_sign_cmd(xp.raw(), arg as *mut c_char) },
+        CmdIdx::echohl => unsafe { set_context_in_echohl_cmd(xp.raw(), arg) },
+        CmdIdx::highlight => unsafe { set_context_in_highlight_cmd(xp.raw(), arg) },
+        CmdIdx::sign => unsafe { set_context_in_sign_cmd(xp.raw(), arg as *mut c_char) },
 
-        CMD_bdelete | CMD_bwipeout | CMD_bunload => {
+        CmdIdx::bdelete | CmdIdx::bwipeout | CmdIdx::bunload => {
             // Only the argument the cursor is in is completed.  Upstream
             // falls through into the buffer-name arm below.
             loop {
@@ -197,27 +231,42 @@ pub(crate) unsafe fn set_context_by_cmdname(
             xp.xp_context = ExpandContext::Buffers;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_buffer | CMD_sbuffer | CMD_pbuffer | CMD_checktime => {
+        CmdIdx::buffer | CmdIdx::sbuffer | CmdIdx::pbuffer | CmdIdx::checktime => {
             xp.xp_context = ExpandContext::Buffers;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_diffget | CMD_diffput => {
+        CmdIdx::diffget | CmdIdx::diffput => {
             // If current buffer is in diff mode, complete buffer names
             // which are in diff mode, and different than current buffer.
             xp.xp_context = ExpandContext::DiffBuffers;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_USER | CMD_USER_BUF => {
+        CmdIdx::USER | CmdIdx::USER_BUF => {
             return unsafe {
                 set_context_in_user_cmdarg(cmd, arg, argt, context, xp.raw(), forceit)
             };
         }
 
-        CMD_map | CMD_noremap | CMD_nmap | CMD_nnoremap | CMD_vmap | CMD_vnoremap | CMD_omap
-        | CMD_onoremap | CMD_imap | CMD_inoremap | CMD_cmap | CMD_cnoremap | CMD_lmap
-        | CMD_lnoremap | CMD_smap | CMD_snoremap | CMD_xmap | CMD_xnoremap => {
+        CmdIdx::map
+        | CmdIdx::noremap
+        | CmdIdx::nmap
+        | CmdIdx::nnoremap
+        | CmdIdx::vmap
+        | CmdIdx::vnoremap
+        | CmdIdx::omap
+        | CmdIdx::onoremap
+        | CmdIdx::imap
+        | CmdIdx::inoremap
+        | CmdIdx::cmap
+        | CmdIdx::cnoremap
+        | CmdIdx::lmap
+        | CmdIdx::lnoremap
+        | CmdIdx::smap
+        | CmdIdx::snoremap
+        | CmdIdx::xmap
+        | CmdIdx::xnoremap => {
             return unsafe {
                 set_context_in_map_cmd(
                     xp.raw(),
@@ -230,8 +279,15 @@ pub(crate) unsafe fn set_context_by_cmdname(
                 )
             };
         }
-        CMD_unmap | CMD_nunmap | CMD_vunmap | CMD_ounmap | CMD_iunmap | CMD_cunmap | CMD_lunmap
-        | CMD_sunmap | CMD_xunmap => {
+        CmdIdx::unmap
+        | CmdIdx::nunmap
+        | CmdIdx::vunmap
+        | CmdIdx::ounmap
+        | CmdIdx::iunmap
+        | CmdIdx::cunmap
+        | CmdIdx::lunmap
+        | CmdIdx::sunmap
+        | CmdIdx::xunmap => {
             return unsafe {
                 set_context_in_map_cmd(
                     xp.raw(),
@@ -244,14 +300,25 @@ pub(crate) unsafe fn set_context_by_cmdname(
                 )
             };
         }
-        CMD_mapclear | CMD_nmapclear | CMD_vmapclear | CMD_omapclear | CMD_imapclear
-        | CMD_cmapclear | CMD_lmapclear | CMD_smapclear | CMD_xmapclear => {
+        CmdIdx::mapclear
+        | CmdIdx::nmapclear
+        | CmdIdx::vmapclear
+        | CmdIdx::omapclear
+        | CmdIdx::imapclear
+        | CmdIdx::cmapclear
+        | CmdIdx::lmapclear
+        | CmdIdx::smapclear
+        | CmdIdx::xmapclear => {
             xp.xp_context = ExpandContext::Mapclear;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_abbreviate | CMD_noreabbrev | CMD_cabbrev | CMD_cnoreabbrev | CMD_iabbrev
-        | CMD_inoreabbrev => {
+        CmdIdx::abbreviate
+        | CmdIdx::noreabbrev
+        | CmdIdx::cabbrev
+        | CmdIdx::cnoreabbrev
+        | CmdIdx::iabbrev
+        | CmdIdx::inoreabbrev => {
             return unsafe {
                 set_context_in_map_cmd(
                     xp.raw(),
@@ -264,7 +331,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
                 )
             };
         }
-        CMD_unabbreviate | CMD_cunabbrev | CMD_iunabbrev => {
+        CmdIdx::unabbreviate | CmdIdx::cunabbrev | CmdIdx::iunabbrev => {
             return unsafe {
                 set_context_in_map_cmd(
                     xp.raw(),
@@ -278,62 +345,85 @@ pub(crate) unsafe fn set_context_by_cmdname(
             };
         }
 
-        CMD_menu | CMD_noremenu | CMD_unmenu | CMD_amenu | CMD_anoremenu | CMD_aunmenu
-        | CMD_nmenu | CMD_nnoremenu | CMD_nunmenu | CMD_vmenu | CMD_vnoremenu | CMD_vunmenu
-        | CMD_omenu | CMD_onoremenu | CMD_ounmenu | CMD_imenu | CMD_inoremenu | CMD_iunmenu
-        | CMD_cmenu | CMD_cnoremenu | CMD_cunmenu | CMD_tlmenu | CMD_tlnoremenu | CMD_tlunmenu
-        | CMD_tmenu | CMD_tunmenu | CMD_popup | CMD_emenu => {
+        CmdIdx::menu
+        | CmdIdx::noremenu
+        | CmdIdx::unmenu
+        | CmdIdx::amenu
+        | CmdIdx::anoremenu
+        | CmdIdx::aunmenu
+        | CmdIdx::nmenu
+        | CmdIdx::nnoremenu
+        | CmdIdx::nunmenu
+        | CmdIdx::vmenu
+        | CmdIdx::vnoremenu
+        | CmdIdx::vunmenu
+        | CmdIdx::omenu
+        | CmdIdx::onoremenu
+        | CmdIdx::ounmenu
+        | CmdIdx::imenu
+        | CmdIdx::inoremenu
+        | CmdIdx::iunmenu
+        | CmdIdx::cmenu
+        | CmdIdx::cnoremenu
+        | CmdIdx::cunmenu
+        | CmdIdx::tlmenu
+        | CmdIdx::tlnoremenu
+        | CmdIdx::tlunmenu
+        | CmdIdx::tmenu
+        | CmdIdx::tunmenu
+        | CmdIdx::popup
+        | CmdIdx::emenu => {
             return unsafe { set_context_in_menu_cmd(xp.raw(), cmd, arg as *mut c_char, forceit) };
         }
 
-        CMD_colorscheme => {
+        CmdIdx::colorscheme => {
             xp.xp_context = ExpandContext::Colors;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_compiler => {
+        CmdIdx::compiler => {
             xp.xp_context = ExpandContext::Compiler;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_ownsyntax => {
+        CmdIdx::ownsyntax => {
             xp.xp_context = ExpandContext::Ownsyntax;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_setfiletype => {
+        CmdIdx::setfiletype => {
             xp.xp_context = ExpandContext::Filetype;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_packadd => {
+        CmdIdx::packadd => {
             xp.xp_context = ExpandContext::Packadd;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_runtime => unsafe { set_context_in_runtime_cmd(xp.raw(), arg) },
+        CmdIdx::runtime => unsafe { set_context_in_runtime_cmd(xp.raw(), arg) },
 
-        CMD_language => return unsafe { set_context_in_lang_cmd(xp.raw(), arg) },
+        CmdIdx::language => return unsafe { set_context_in_lang_cmd(xp.raw(), arg) },
 
-        CMD_profile => unsafe { set_context_in_profile_cmd(xp.raw(), arg) },
+        CmdIdx::profile => unsafe { set_context_in_profile_cmd(xp.raw(), arg) },
 
-        CMD_checkhealth => xp.xp_context = ExpandContext::Checkhealth,
-        CMD_lsp => xp.xp_context = ExpandContext::Lsp,
+        CmdIdx::checkhealth => xp.xp_context = ExpandContext::Checkhealth,
+        CmdIdx::lsp => xp.xp_context = ExpandContext::Lsp,
 
-        CMD_retab => {
+        CmdIdx::retab => {
             xp.xp_context = ExpandContext::Retab;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_messages => {
+        CmdIdx::messages => {
             xp.xp_context = ExpandContext::Messages;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_history => {
+        CmdIdx::history => {
             xp.xp_context = ExpandContext::History;
             xp.xp_pattern = arg as *mut c_char;
         }
-        CMD_syntime => {
+        CmdIdx::syntime => {
             xp.xp_context = ExpandContext::Syntime;
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_argdelete => {
+        CmdIdx::argdelete => {
             loop {
                 xp.xp_pattern = unsafe { vim_strchr(arg, ' ' as c_int) };
                 if xp.xp_pattern.is_null() {
@@ -345,15 +435,15 @@ pub(crate) unsafe fn set_context_by_cmdname(
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CMD_breakadd | CMD_profdel | CMD_breakdel => {
+        CmdIdx::breakadd | CmdIdx::profdel | CmdIdx::breakdel => {
             return unsafe { set_context_in_breakadd_cmd(xp.raw(), arg, cmdidx) };
         }
 
-        CMD_scriptnames => return unsafe { set_context_in_scriptnames_cmd(xp.raw(), arg) },
+        CmdIdx::scriptnames => return unsafe { set_context_in_scriptnames_cmd(xp.raw(), arg) },
 
-        CMD_filetype => return unsafe { set_context_in_filetype_cmd(xp.raw(), arg) },
+        CmdIdx::filetype => return unsafe { set_context_in_filetype_cmd(xp.raw(), arg) },
 
-        CMD_lua | CMD_equal => xp.xp_context = ExpandContext::Lua,
+        CmdIdx::lua | CmdIdx::equal => xp.xp_context = ExpandContext::Lua,
 
         _ => {}
     }
@@ -375,7 +465,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
     let mut ea = exarg_T {
-        cmdidx: CMD_append,
+        cmdidx: CmdIdx::append,
         addr_type: CmdAddr::Lines,
         ..unsafe { core::mem::zeroed() }
     };
@@ -441,7 +531,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     }
 
     // 6. parse arguments
-    if ea.cmdidx >= 0 {
+    if !is_user_cmd(ea.cmdidx) {
         ea.argt = unsafe { excmd_get_argt(ea.cmdidx) };
     }
 
@@ -464,7 +554,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         }
     }
 
-    if ea.cmdidx == CMD_write || ea.cmdidx == CMD_update {
+    if ea.cmdidx == CmdIdx::write || ea.cmdidx == CmdIdx::update {
         if unsafe { *arg } as c_int == '>' as c_int {
             // Append.
             arg = unsafe { arg.add(1) };
@@ -472,14 +562,14 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
                 arg = unsafe { arg.add(1) };
             }
             arg = unsafe { skipwhite(arg) };
-        } else if unsafe { *arg } as c_int == '!' as c_int && ea.cmdidx == CMD_write {
+        } else if unsafe { *arg } as c_int == '!' as c_int && ea.cmdidx == CmdIdx::write {
             // :w !filter
             arg = unsafe { arg.add(1) };
             usefilter = true;
         }
     }
 
-    if ea.cmdidx == CMD_read {
+    if ea.cmdidx == CmdIdx::read {
         usefilter = forceit; // :r! filter if forced
         if unsafe { *arg } as c_int == '!' as c_int {
             // :r !filter
@@ -488,7 +578,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
         }
     }
 
-    if ea.cmdidx == CMD_lshift || ea.cmdidx == CMD_rshift {
+    if ea.cmdidx == CmdIdx::lshift || ea.cmdidx == CmdIdx::rshift {
         // Allow any number of '>' or '<'.
         while unsafe { *arg } as c_int == unsafe { *cmd } as c_int {
             arg = unsafe { arg.add(1) };
@@ -516,7 +606,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     if ea.argt.has(ExArgt::TRLBAR) && !usefilter {
         p = arg;
         // ":redir @" is not the start of a comment.
-        if ea.cmdidx == CMD_redir
+        if ea.cmdidx == CmdIdx::redir
             && unsafe { *p } as c_int == '@' as c_int
             && unsafe { *p.add(1) } as c_int == '"' as c_int
         {
@@ -602,8 +692,8 @@ pub unsafe fn set_cmd_context(
     unsafe { *str.offset(col as isize) = NUL as c_char };
 
     if use_ccline && ccline.cmdfirstc == '=' as c_int {
-        // Pass CMD_SIZE because there is no real command.
-        unsafe { set_context_for_expression(xp.raw(), str, CMD_SIZE) };
+        // Pass CmdIdx::SIZE because there is no real command.
+        unsafe { set_context_for_expression(xp.raw(), str, CmdIdx::SIZE) };
     } else if use_ccline && ccline.input_fn != 0 {
         xp.xp_context = ccline.xp_context;
         xp.xp_pattern = ccline.text();

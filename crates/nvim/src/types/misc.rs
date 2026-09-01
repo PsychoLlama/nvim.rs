@@ -17,7 +17,6 @@ pub struct AutoCmdVec {
     pub capacity: size_t,
     pub items: *mut AutoCmd,
 }
-pub type CMD_index = ::core::ffi::c_int;
 /// The khash-derived maps and sets, one monomorphisation per key/value pair.
 ///
 /// None of them is `Copy`. Each owns its [`MapHash`]'s bucket table and the
@@ -181,7 +180,6 @@ pub struct caller_scope {
     pub autocmd_bufnr: ::core::ffi::c_int,
     pub funccalp: *mut ::core::ffi::c_void,
 }
-pub type cmdidx_T = CMD_index;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct dictitem_T {

@@ -11,7 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{CAR, CMD_center, CMD_left, CMD_right, EOL_MAC, NL, TAB};
+use super::{CAR, EOL_MAC, NL, TAB};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -29,7 +29,8 @@ use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
-use crate::types::{IOSIZE, NUL, cmdidx_T, exarg_T};
+use crate::types::CmdIdx;
+use crate::types::{IOSIZE, NUL, exarg_T};
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
 use ::libc::atoi;
@@ -251,8 +252,8 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
         // Switch left and right aligning.  Upstream rewrites the command
         // itself, and that outlives the call.
         cmdidx = match cmdidx {
-            CMD_right => CMD_left,
-            CMD_left => CMD_right,
+            CmdIdx::right => CmdIdx::left,
+            CmdIdx::left => CmdIdx::right,
             other => other,
         };
         // SAFETY: caller's contract.
@@ -263,7 +264,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
     let arg_width = unsafe { atoi(arg) };
     let mut indent = 0;
     let mut width = 0;
-    if cmdidx == CMD_left {
+    if cmdidx == CmdIdx::left {
         // The argument is the new indent.
         indent = arg_width.max(0);
     } else {
@@ -312,8 +313,8 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// The cursor must be on the line to measure.
-unsafe fn aligned_indent(cmdidx: cmdidx_T, indent: c_int, width: c_int) -> Option<c_int> {
-    if cmdidx == CMD_left {
+unsafe fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> {
+    if cmdidx == CmdIdx::left {
         return Some(indent);
     }
     // SAFETY: caller's contract.
@@ -324,7 +325,7 @@ unsafe fn aligned_indent(cmdidx: cmdidx_T, indent: c_int, width: c_int) -> Optio
         // Skip blank lines.
         return None;
     }
-    if cmdidx == CMD_center {
+    if cmdidx == CmdIdx::center {
         return Some((width - len) / 2);
     }
     if has_tab {

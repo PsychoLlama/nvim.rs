@@ -71,9 +71,10 @@ use crate::runtime::sourcing_lnum;
 use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::tr_c;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_USER, CMD_USER_BUF, CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, buf_T,
-    exarg_T, expand_T, int64_t, size_t, ucmd_T,
+    CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, buf_T, exarg_T, expand_T, int64_t,
+    size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
 use core::cmp::Ordering;
@@ -256,9 +257,9 @@ pub(crate) unsafe fn find_ucmd(
                 possible = true;
             }
             eap.cmdidx = if scope == Scope::Global {
-                CMD_USER
+                CmdIdx::USER
             } else {
-                CMD_USER_BUF
+                CmdIdx::USER_BUF
             };
             eap.argt = uc.uc_argt;
             eap.useridx = j as c_int;

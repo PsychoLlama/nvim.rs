@@ -10,6 +10,7 @@ use crate::cstr;
 use crate::guard::Lock;
 use crate::semsg;
 use crate::smsg;
+use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -41,10 +42,10 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, CMD_lcd, CMD_lchdir, CMD_tcd, CMD_tchdir, Callback, CdCause, CdScope, CpoFlag,
-    Failed, MAXPATHL, NUL, OK, OptInt, OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow, list_T, listitem_T, optset_T, sctx_T, size_t, typval_T,
+    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, Failed, MAXPATHL, NUL, OK, OptInt,
+    OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, exarg_T,
+    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T,
+    listitem_T, optset_T, sctx_T, size_t, typval_T,
 };
 
 /// The parsed `'findfunc'`.
@@ -341,10 +342,10 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
         unsafe { ex_pwd(ptr::null_mut()) };
         return;
     }
-    let idx = eap.cmdidx as c_int;
-    let scope = if idx == CMD_tcd as c_int || idx == CMD_tchdir as c_int {
+    let idx = eap.cmdidx;
+    let scope = if idx == CmdIdx::tcd || idx == CmdIdx::tchdir {
         kCdScopeTabpage
-    } else if idx == CMD_lcd as c_int || idx == CMD_lchdir as c_int {
+    } else if idx == CmdIdx::lcd || idx == CmdIdx::lchdir {
         kCdScopeWindow
     } else {
         kCdScopeGlobal

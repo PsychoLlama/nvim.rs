@@ -18,7 +18,8 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::buffer::BufRef;
 use crate::cstr;
-use crate::types::{CMD_cd, CMD_lcd, MAXPATHL, OK};
+use crate::types::CmdIdx;
+use crate::types::{MAXPATHL, OK};
 use crate::winlayer::{Buf, windows};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -41,9 +42,9 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     let mut ea = exarg_T {
         arg: dirname_start.cast_mut(),
         cmdidx: if cur_win().w_localdir.is_null() {
-            CMD_cd
+            CmdIdx::cd
         } else {
-            CMD_lcd
+            CmdIdx::lcd
         },
         ..Default::default()
     };

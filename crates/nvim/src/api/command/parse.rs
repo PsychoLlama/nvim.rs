@@ -13,6 +13,7 @@ use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
+use crate::types::CmdIdx;
 use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
 use core::ffi::{CStr, c_char, c_int};
@@ -61,10 +62,10 @@ unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
     let (length, empty) = unsafe { (cstr::bytes_at(ea.arg).len(), *ea.arg == NUL as c_char) };
 
-    // `is_map_cmd` indexes the command table by `cmdidx`, so the `CMD_SIZE`
+    // `is_map_cmd` indexes the command table by `cmdidx`, so the `CmdIdx::SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
-    if ea.cmdidx != CMD_SIZE && unsafe { is_map_cmd(ea.cmdidx) } && !empty {
+    if ea.cmdidx != CmdIdx::SIZE && unsafe { is_map_cmd(ea.cmdidx) } && !empty {
         // SAFETY: caller contract.
         return unsafe { parse_map_cmd(ea.arg, arena) };
     }
@@ -114,15 +115,15 @@ unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
 /// # Safety
 /// `cmd` must be null or point at a live `ucmd_T`.
 unsafe fn command_name(ea: &exarg_T, cmd: *const ucmd_T) -> *const c_char {
-    if ea.cmdidx == CMD_SIZE {
+    if ea.cmdidx == CmdIdx::SIZE {
         return c"".as_ptr();
     }
     if !cmd.is_null() {
         // SAFETY: caller contract.
         return unsafe { (*cmd).uc_name };
     }
-    // SAFETY: `cmdidx` is a built-in index, checked against `CMD_SIZE` above.
-    unsafe { get_command_name(ptr::null_mut::<expand_T>(), ea.cmdidx as c_int) }
+    // SAFETY: `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
+    unsafe { get_command_name(ptr::null_mut::<expand_T>(), ea.cmdidx.code()) }
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -265,8 +266,8 @@ pub unsafe fn nvim_parse_cmd(
     // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `ea`.
     let args = unsafe { parse_args(&ea, arena) };
     let cmd: *mut ucmd_T = match ea.cmdidx {
-        CMD_USER => nth(Table::Global),
-        CMD_USER_BUF => nth(Table::Buffer(curbuf.get())),
+        CmdIdx::USER => nth(Table::Global),
+        CmdIdx::USER_BUF => nth(Table::Buffer(curbuf.get())),
         _ => ptr::null_mut(),
     };
     // A user command carries its own default count.

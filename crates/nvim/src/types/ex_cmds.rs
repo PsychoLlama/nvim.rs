@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::types::CmdIdx;
 
 #[derive(Clone)]
 pub struct CmdParseInfo {
@@ -247,7 +248,7 @@ pub struct exarg {
     pub cmd: *mut ::core::ffi::c_char,
     pub cmdlinep: *mut *mut ::core::ffi::c_char,
     pub cmdline_tofree: *mut ::core::ffi::c_char,
-    pub cmdidx: cmdidx_T,
+    pub cmdidx: CmdIdx,
     pub argt: ExArgt,
     pub skip: ::core::ffi::c_int,
     pub forceit: ::core::ffi::c_int,
@@ -294,7 +295,7 @@ impl Default for exarg {
             cmd: ::core::ptr::null_mut(),
             cmdlinep: ::core::ptr::null_mut(),
             cmdline_tofree: ::core::ptr::null_mut(),
-            cmdidx: 0,
+            cmdidx: CmdIdx::append,
             argt: ExArgt::NONE,
             skip: 0,
             forceit: 0,

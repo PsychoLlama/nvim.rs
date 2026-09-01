@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -29,8 +30,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CMD_equal, FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t,
-    typval_T,
+    FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t, typval_T,
 };
 use crate::undo::u_save;
 
@@ -67,9 +67,9 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
             return;
         }
 
-        if (*eap).cmdidx == CMD_equal || *code == b'=' as c_char {
+        if (*eap).cmdidx == CmdIdx::equal || *code == b'=' as c_char {
             // `:=expr` has no `=` to skip; `:lua =expr` does.
-            let off: size_t = if (*eap).cmdidx == CMD_equal { 0 } else { 1 };
+            let off: size_t = if (*eap).cmdidx == CmdIdx::equal { 0 } else { 1 };
             len += PRINT_WRAPPER.count_bytes() - 2 - off;
             let code_buf = xmallocz(len).cast::<c_char>();
             vim_snprintf(code_buf, len + 1, PRINT_WRAPPER.as_ptr(), code.add(off));

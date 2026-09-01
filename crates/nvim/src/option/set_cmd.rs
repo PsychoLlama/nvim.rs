@@ -16,6 +16,7 @@
 
 use crate::cstr;
 use crate::keycodes::{Key, find_special_key};
+use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -40,8 +41,8 @@ use crate::options::{
 use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
-    OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
+    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, exarg_T, scid_T, size_t,
+    uint8_t, uint32_t, uvarnumber_T, win_T,
 };
 
 use super::{
@@ -77,9 +78,9 @@ enum Prefix {
 /// `eap` must be the command's own argument block.
 pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
     // SAFETY: the caller's argument block.
-    let mut flags = match unsafe { (*eap).cmdidx } as CMD_index {
-        CMD_setlocal => OptionSetFlags::LOCAL,
-        CMD_setglobal => OptionSetFlags::GLOBAL,
+    let mut flags = match unsafe { (*eap).cmdidx } {
+        CmdIdx::setlocal => OptionSetFlags::LOCAL,
+        CmdIdx::setglobal => OptionSetFlags::GLOBAL,
         _ => OptionSetFlags::NONE,
     };
     // `:set!` lists one option per line.

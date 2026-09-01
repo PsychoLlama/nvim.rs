@@ -14,6 +14,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
+use crate::ex_docmd::is_user_cmd;
+use crate::types::CmdIdx;
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -46,9 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CMD_SIZE, CMD_cc, CMD_diffget, CMD_diffput, CMD_ll, CMD_wincmd, CmdAddr, Direction, ExArgt,
-    ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T, exarg_T, fmark_T, linenr_T,
-    pos_T, size_t,
+    CmdAddr, Direction, ExArgt, ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T,
+    exarg_T, fmark_T, linenr_T, pos_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -139,21 +140,19 @@ pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut eap: Ea) {
 /// the table cannot express.
 pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
     let mut ea = unsafe { Ea::new(eap) };
-    if (ea.cmdidx as c_int) < 0 {
+    if is_user_cmd(ea.cmdidx) {
         return;
     }
-    ea.addr_type = if ea.cmdidx as c_int != CMD_SIZE as c_int {
-        cmdnames[ea.cmdidx as usize].cmd_addr_type
+    ea.addr_type = if ea.cmdidx != CmdIdx::SIZE {
+        cmdnames[ea.cmdidx.index()].cmd_addr_type
     } else {
         CmdAddr::Lines
     };
-    if ea.cmdidx as c_int == CMD_wincmd as c_int && !p.is_null() {
+    if ea.cmdidx == CmdIdx::wincmd && !p.is_null() {
         unsafe { get_wincmd_addr_type(skipwhite(p), ea) };
     }
     // `:cc`/`:ll` in a quickfix window address the window's entries.
-    if (ea.cmdidx as c_int == CMD_cc as c_int || ea.cmdidx as c_int == CMD_ll as c_int)
-        && buf_is_quickfix(current_buf())
-    {
+    if (ea.cmdidx == CmdIdx::cc || ea.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf()) {
         ea.addr_type = CmdAddr::Other;
     }
 }
@@ -393,7 +392,7 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
-            if (eap.cmdidx as c_int) >= 0 {
+            if !is_user_cmd(eap.cmdidx) {
                 *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 return false;
             }
@@ -846,8 +845,7 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
         CmdAddr::Lines => {
             // `:diffget`/`:diffput` accept one line past the end: they
             // may add a line there.
-            let extra = (ea.cmdidx as c_int == CMD_diffget as c_int
-                || ea.cmdidx as c_int == CMD_diffput as c_int) as c_int;
+            let extra = (ea.cmdidx == CmdIdx::diffget || ea.cmdidx == CmdIdx::diffput) as c_int;
             if ea.line2 > cur_buf().b_ml.ml_line_count + extra {
                 return invrange();
             }

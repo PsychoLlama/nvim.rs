@@ -13,6 +13,7 @@ use super::*;
 use crate::api::private::helpers::Reported;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
+use crate::types::CmdIdx;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::Buf;
 use crate::winlayer::{TabPage, Win};
@@ -359,7 +360,7 @@ pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: &m
         return false;
     }
     // SAFETY: the caller's error slot.
-    if unsafe { window_layout_locked_err(CMD_SIZE, err) } {
+    if unsafe { window_layout_locked_err(CmdIdx::SIZE, err) } {
         return false;
     }
     if textlock.get() != 0 || expr_map_locked() {

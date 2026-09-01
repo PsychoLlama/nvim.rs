@@ -15,7 +15,8 @@ use super::*;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{CMD_colder, CMD_lolder, IOSIZE};
+use crate::types::CmdIdx;
+use crate::types::IOSIZE;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
@@ -384,7 +385,7 @@ pub unsafe fn qf_age(eap: *mut exarg_T) {
     } else {
         1
     };
-    let older = eap.cmdidx == CMD_colder || eap.cmdidx == CMD_lolder;
+    let older = eap.cmdidx == CmdIdx::colder || eap.cmdidx == CmdIdx::lolder;
     for _ in 0..count {
         if older {
             if qi.qf_curlist == 0 {

@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -41,8 +42,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    CMD_tabnew, Failed, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, handle_T, int64_t,
-    switchwin_T, tabpage_T,
+    Failed, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, handle_T, int64_t, switchwin_T,
+    tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
@@ -169,7 +170,7 @@ pub(crate) fn new_tabpage(
         err(e_cmdwin.as_ptr());
         return None;
     }
-    if layout_locked(CMD_tabnew) {
+    if layout_locked(CmdIdx::tabnew) {
         return None;
     }
     let mut newtp = alloc_tabpage();

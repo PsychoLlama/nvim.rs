@@ -20,6 +20,7 @@
 
 use crate::semsg;
 use crate::tr_plural;
+use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 use std::ffi::CString;
@@ -46,8 +47,8 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    CMD_bNext, CMD_bnext, CMD_bprevious, CMD_sbNext, CMD_sbnext, CMD_sbprevious, CmdModFlags, FAIL,
-    Failed, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T, win_T,
+    CmdModFlags, FAIL, Failed, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T,
+    win_T,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -210,7 +211,12 @@ pub unsafe fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_
 
     let skip_help_buf = matches!(
         cmdidx,
-        CMD_bnext | CMD_sbnext | CMD_bNext | CMD_bprevious | CMD_sbNext | CMD_sbprevious
+        CmdIdx::bnext
+            | CmdIdx::sbnext
+            | CmdIdx::bNext
+            | CmdIdx::bprevious
+            | CmdIdx::sbNext
+            | CmdIdx::sbprevious
     );
 
     let old_curbuf = BufRef::of(cur_buf());

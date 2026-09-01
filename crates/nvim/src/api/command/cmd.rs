@@ -39,8 +39,10 @@ use crate::api::private::helpers::{Reported, array_add, has_key};
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::cstr;
+use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
+use crate::types::CmdIdx;
 use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -227,7 +229,7 @@ unsafe fn resolve_command(
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
     // defined user command: fire the event, then look again.
     if !p.is_null()
-        && ea.cmdidx as c_int == CMD_SIZE as c_int
+        && ea.cmdidx == CmdIdx::SIZE
         && unsafe { *ea.cmd as u8 }.is_ascii_uppercase()
         && has_event(EVENT_CMDUNDEFINED)
     {
@@ -243,7 +245,7 @@ unsafe fn resolve_command(
         }
     }
 
-    let unnamed_unknown = ea.cmdidx as c_int == CMD_SIZE as c_int && !named;
+    let unnamed_unknown = ea.cmdidx == CmdIdx::SIZE && !named;
     let range_only = unnamed_unknown && has_range;
 
     // Modifiers and nothing else: upstream falls straight through to the
@@ -252,7 +254,7 @@ unsafe fn resolve_command(
         return None;
     }
 
-    if !(!p.is_null() && ea.cmdidx as c_int != CMD_SIZE as c_int) && !range_only {
+    if !(!p.is_null() && ea.cmdidx != CmdIdx::SIZE) && !range_only {
         // SAFETY: `cmdname` is the caller's NUL-terminated name.
         let name = unsafe { c_str(cmdname) };
         *err = api_error!(kErrorTypeValidation, "Command not found: {name}");
@@ -271,10 +273,10 @@ unsafe fn resolve_command(
         // The Dict may abbreviate the name; it still has to be a prefix.
         // SAFETY: both names are NUL-terminated.
         let matched = unsafe {
-            let fullname = if (ea.cmdidx as c_int) < 0 {
-                get_user_command_name(ea.useridx, ea.cmdidx as c_int)
+            let fullname = if is_user_cmd(ea.cmdidx) {
+                get_user_command_name(ea.useridx, ea.cmdidx)
             } else {
-                get_command_name(ptr::null_mut(), ea.cmdidx as c_int)
+                get_command_name(ptr::null_mut(), ea.cmdidx.code())
             };
             cstr::starts_with(fullname, cstr::bytes_at(cmdname))
         };
@@ -288,7 +290,7 @@ unsafe fn resolve_command(
 
     if range_only {
         ea.argt = ExArgt::RANGE | ExArgt::SBOXOK;
-    } else if (ea.cmdidx as c_int) >= 0 {
+    } else if !is_user_cmd(ea.cmdidx) {
         // A user command's flags already came out of `find_ex_command`.
         // SAFETY: `ea.cmdidx` is a valid index, checked just above.
         ea.argt = unsafe { excmd_get_argt(ea.cmdidx) };
@@ -502,9 +504,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
         return false;
     }
     // `:put`/`:iput` read the register, everything else writes it.
-    let writing = (ea.cmdidx as c_int) >= 0
-        && ea.cmdidx as c_int != CMD_put as c_int
-        && ea.cmdidx as c_int != CMD_iput as c_int;
+    let writing = !is_user_cmd(ea.cmdidx) && ea.cmdidx != CmdIdx::put && ea.cmdidx != CmdIdx::iput;
     // SAFETY: `valid_yank_reg` reads only the register tables.
     if !unsafe { valid_yank_reg(regname as c_int, writing) } {
         // `%c` wrote the one byte, whatever it was.

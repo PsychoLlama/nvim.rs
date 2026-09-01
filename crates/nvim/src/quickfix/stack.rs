@@ -166,7 +166,7 @@ pub(crate) fn qf_cmd_stack(eap: Ea, print_emsg: bool) -> Option<Qi> {
 /// quickfix command works on the global one and answers `None`.
 pub(crate) fn qf_cmd_stack_or_alloc(eap: Ea) -> (Qi, Option<Win>) {
     // SAFETY: a command's `cmdidx` is one of the table's.
-    if !unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
+    if !unsafe { is_loclist_cmd(eap.cmdidx) } {
         return (QfStack::Global.qi(), None);
     }
     let wp = cur_win();
@@ -625,7 +625,7 @@ pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut exarg_T, print_emsg: bool) -> *m
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
-    if !unsafe { is_loclist_cmd(eap.cmdidx as c_int) } {
+    if !unsafe { is_loclist_cmd(eap.cmdidx) } {
         return QfStack::Global.raw();
     }
     let qi = win_loclist(cur_win());

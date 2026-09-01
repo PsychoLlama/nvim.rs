@@ -10,6 +10,7 @@
 
 use crate::cstr;
 use crate::semsg;
+use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -49,9 +50,7 @@ use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CMD_new, CMD_sfind, CMD_split, CMD_tabNext, CMD_tabedit, CMD_tabfind, CMD_tabfirst,
-    CMD_tablast, CMD_tabnew, CMD_tabprevious, CMD_tabrewind, CMD_vnew, CMD_vsplit, CmdModFlags,
-    IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
+    CmdModFlags, IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -97,9 +96,9 @@ impl Ex {
         self.0
     }
 
-    /// The command's `cmdidx`, as the C compares it.
-    fn is(self, cmd: crate::types::cmdidx_T) -> bool {
-        self.cmdidx as c_int == cmd as c_int
+    /// Is this the command `cmd`?
+    fn is(self, cmd: CmdIdx) -> bool {
+        self.cmdidx == cmd
     }
 
     /// The count a range in front of the command asked for, or `def`.
@@ -226,23 +225,23 @@ pub unsafe fn ex_splitview(eap: *mut exarg_T) {
 
 fn splitview(mut ea: Ex) {
     let old_curwin = curwin.get();
-    let use_tab = ea.is(CMD_tabedit) || ea.is(CMD_tabfind) || ea.is(CMD_tabnew);
+    let use_tab = ea.is(CmdIdx::tabedit) || ea.is(CmdIdx::tabfind) || ea.is(CmdIdx::tabnew);
 
     // Splitting a quickfix window gives a plain window, not a second
     // quickfix one — unless `:tab` asked for a tab page.
     if buf_is_quickfix(Some(cur_buf())) && cmdmod.with(|m| m.cmod_tab) == 0 {
-        if ea.is(CMD_split) {
-            ea.cmdidx = CMD_new;
+        if ea.is(CmdIdx::split) {
+            ea.cmdidx = CmdIdx::new;
         }
-        if ea.is(CMD_vsplit) {
-            ea.cmdidx = CMD_vnew;
+        if ea.is(CmdIdx::vsplit) {
+            ea.cmdidx = CmdIdx::vnew;
         }
     }
 
     // `:sfind`/`:tabfind` resolve the name through 'findfunc' or 'path'
     // before anything is opened.
     let mut fname = ptr::null_mut();
-    if ea.is(CMD_sfind) || ea.is(CMD_tabfind) {
+    if ea.is(CmdIdx::sfind) || ea.is(CmdIdx::tabfind) {
         fname = find_file(ea.arg, ea.count(1));
         if fname.is_null() {
             return;
@@ -341,7 +340,7 @@ pub fn tabpage_new() {
     // `ex_splitview` reads the first byte of `cmd` to tell a vertical split
     // from a horizontal one.
     ea.cmd = c"tabn".as_ptr() as *mut c_char;
-    ea.cmdidx = CMD_tabnew;
+    ea.cmdidx = CmdIdx::tabnew;
     splitview(Ex(&raw mut ea));
 }
 
@@ -359,16 +358,16 @@ pub(crate) unsafe fn ex_tabnext(eap: *mut exarg_T) {
 }
 
 fn tabnext(mut ea: Ex) {
-    if ea.is(CMD_tabfirst) || ea.is(CMD_tabrewind) {
+    if ea.is(CmdIdx::tabfirst) || ea.is(CmdIdx::tabrewind) {
         goto_tab_number(1);
         return;
     }
-    if ea.is(CMD_tablast) {
+    if ea.is(CmdIdx::tablast) {
         // Larger than any tab count.
         goto_tab_number(9999);
         return;
     }
-    if !ea.is(CMD_tabprevious) && !ea.is(CMD_tabNext) {
+    if !ea.is(CmdIdx::tabprevious) && !ea.is(CmdIdx::tabNext) {
         let tab_number = tabpage_arg(ea);
         if ea.errmsg.is_none() {
             goto_tab_number(tab_number);

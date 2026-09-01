@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -66,7 +67,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     // SAFETY: the caller's obligation -- a live `:let`, which the
     // `do_cmdline` frame that owns the `exarg_T` outlives.
     let mut ea = unsafe { Ea::new(eap) };
-    let is_const = ea.cmdidx as c_int == CMD_const as c_int;
+    let is_const = ea.cmdidx == CmdIdx::r#const;
     let mut arg = ea.arg;
     let mut var_count = 0;
     let mut semicolon = 0;

@@ -33,8 +33,9 @@ use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde, skip_regexp_ex};
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::semsg;
 use crate::strings::vim_strchr;
+use crate::types::CmdIdx;
 use crate::types::{
-    AdditionalData, CMD_tilde, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
+    AdditionalData, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -106,7 +107,7 @@ unsafe fn read_pattern(
 ) -> Option<Parsed> {
     // SAFETY: caller's contract.
     let mut cmd = unsafe { (*eap).arg };
-    let mut which_pat = if unsafe { (*eap).cmdidx } as c_int == CMD_tilde as c_int {
+    let mut which_pat = if unsafe { (*eap).cmdidx } == CmdIdx::tilde {
         RE_LAST as c_int // use last used regexp
     } else {
         RE_SUBST as c_int // use last substitute regexp

@@ -7,6 +7,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::smsg;
+use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -30,8 +31,7 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
 use crate::types::{
-    Array, CMD_autocmd, Error, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, exarg_T,
-    size_t,
+    Array, Error, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, exarg_T, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -46,7 +46,7 @@ pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
         // 2 means "an error was already reported for this".
         secure.set(2);
         eap.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
-    } else if eap.cmdidx as c_int == CMD_autocmd as c_int {
+    } else if eap.cmdidx == CmdIdx::autocmd {
         unsafe { do_autocmd(eap.raw(), eap.arg, eap.forceit) };
     } else {
         unsafe { do_augroup(eap.arg, eap.forceit != 0) };

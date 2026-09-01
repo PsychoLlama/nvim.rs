@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
@@ -12,7 +13,7 @@ use crate::winlayer::Live;
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
 use crate::strings::vim_strchr;
-use crate::types::{CMD_call, CMD_const, CMD_let, ExpandContext, NUL, cmdidx_T, expand_T};
+use crate::types::{ExpandContext, NUL, expand_T};
 use ::libc::strpbrk;
 
 /// The characters that end the plain-name part of an expression: whatever
@@ -27,14 +28,14 @@ const BREAKS: &core::ffi::CStr = c"\"'+-*/%.=!?~|&$([<>,#";
 pub(crate) unsafe fn set_context_for_expression(
     xp: *mut expand_T,
     mut arg: *mut c_char,
-    cmdidx: cmdidx_T,
+    cmdidx: CmdIdx,
 ) {
     // SAFETY: the caller's promise -- `xp` is the live completion context
     // and `arg` outlives it.
     let mut xpand = unsafe { Live::new(xp) };
     let mut got_eq = false;
 
-    if cmdidx == CMD_let || cmdidx == CMD_const {
+    if cmdidx == CmdIdx::r#let || cmdidx == CmdIdx::r#const {
         xpand.xp_context = ExpandContext::UserVars;
         if unsafe { strpbrk(arg, BREAKS.as_ptr()) }.is_null() {
             // ":let var1 var2 ...": find the last space.
@@ -55,7 +56,7 @@ pub(crate) unsafe fn set_context_for_expression(
             return;
         }
     } else {
-        xpand.xp_context = if cmdidx == CMD_call {
+        xpand.xp_context = if cmdidx == CmdIdx::call {
             ExpandContext::Functions
         } else {
             ExpandContext::Expression
@@ -72,7 +73,7 @@ pub(crate) unsafe fn set_context_for_expression(
             c = unsafe { *xpand.xp_pattern.add(1) } as u8 as c_int;
             if c == '&' as c_int {
                 xpand.xp_pattern = unsafe { xpand.xp_pattern.add(1) };
-                xpand.xp_context = if cmdidx != CMD_let || got_eq {
+                xpand.xp_context = if cmdidx != CmdIdx::r#let || got_eq {
                     ExpandContext::Expression
                 } else {
                     ExpandContext::Nothing
@@ -100,7 +101,7 @@ pub(crate) unsafe fn set_context_for_expression(
         {
             // A function name can start with "<SNR>" and contain '#'.
             break;
-        } else if cmdidx != CMD_let || got_eq {
+        } else if cmdidx != CmdIdx::r#let || got_eq {
             if c == '"' as c_int {
                 // a string
                 loop {

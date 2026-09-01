@@ -9,7 +9,8 @@
 use super::*;
 use crate::cstr;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
-use crate::types::{CMD_map, CMD_unmap, CpoFlag, ExpandContext, Failed, NUL};
+use crate::types::CmdIdx;
+use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -237,11 +238,11 @@ pub unsafe fn set_context_in_map_cmd(
     forceit: bool,
     isabbrev: bool,
     isunmap: bool,
-    cmdidx: cmdidx_T,
+    cmdidx: CmdIdx,
 ) -> *mut c_char {
     // SAFETY: the caller's promise — `xp` is a live `expand_T`.
     let mut xp = unsafe { Live::new(xp) };
-    if forceit && cmdidx != CMD_map && cmdidx != CMD_unmap {
+    if forceit && cmdidx != CmdIdx::map && cmdidx != CmdIdx::unmap {
         xp.xp_context = ExpandContext::Nothing;
         return ptr::null_mut();
     }

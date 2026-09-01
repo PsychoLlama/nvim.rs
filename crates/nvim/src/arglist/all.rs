@@ -13,7 +13,8 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::guard::{Allow, Lock, Suppress};
 use crate::memory::xstrdup;
-use crate::types::CMD_drop;
+use crate::types::CmdIdx;
+
 use crate::types::Failed;
 use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
 use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, windows};
@@ -556,7 +557,7 @@ pub unsafe fn ex_all(eap: *mut exarg_T) {
     }
     let count = eap.line2 as c_int;
     let forceit = eap.forceit != 0;
-    let drop = eap.cmdidx as c_int == CMD_drop as c_int;
+    let drop = eap.cmdidx == CmdIdx::drop;
     // SAFETY: no reference into the command block is held across this.
     unsafe { do_arg_all(count, forceit, drop) };
 }

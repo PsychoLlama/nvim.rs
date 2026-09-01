@@ -9,6 +9,7 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -338,7 +339,7 @@ unsafe fn do_lock_var(
     // command, both of which outlive this call.
     let mut lp = unsafe { Lv::new(lp) };
     let ea = unsafe { Ea::new(eap) };
-    let lock = ea.cmdidx as c_int == CMD_lockvar as c_int;
+    let lock = ea.cmdidx == CmdIdx::lockvar;
     let name = lp.ll_name;
 
     if lp.ll_tv.is_null() {

@@ -13,6 +13,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -398,7 +399,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
         let arg = unsafe { c_str(ea.arg) };
         semsg!("E107: Missing parentheses: {arg}");
     } else {
-        let failed = if ea.cmdidx == CMD_defer {
+        let failed = if ea.cmdidx == CmdIdx::defer {
             arg = startarg;
             unsafe { ex_defer_inner(name, &raw mut arg, partial, &raw mut evalarg).is_err() }
         } else {

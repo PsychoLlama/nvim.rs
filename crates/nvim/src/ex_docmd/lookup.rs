@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -23,8 +24,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 
 use crate::types::{
-    CMD_Next, CMD_SIZE, CMD_append, CMD_bang, CMD_k, CMD_match, CMD_substitute, CmdAddr,
-    EvalFuncData, ExArgt, NUL, VAR_STRING, cmdidx_T, exarg_T, expand_T, size_t, typval_T,
+    CmdAddr, EvalFuncData, ExArgt, NUL, VAR_STRING, exarg_T, expand_T, size_t, typval_T,
 };
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 use crate::winlayer::Ea;
@@ -34,9 +34,16 @@ use crate::winlayer::Ea;
 /// `find_ucmd` answers a negative index, whose magnitude has nothing to do
 /// with `cmdnames` — `eap->useridx` says which user command it is. So a
 /// negative `cmdidx` is the signal that the table must not be indexed.
-pub fn is_user_cmd(cmdidx: cmdidx_T) -> bool {
-    (cmdidx as c_int) < 0
+pub fn is_user_cmd(cmdidx: CmdIdx) -> bool {
+    matches!(cmdidx, CmdIdx::USER | CmdIdx::USER_BUF)
 }
+
+/// How many rows `cmdnames` has, as an index bound.
+///
+/// A `const` item rather than `CmdIdx::SIZE.code()` at each use: an
+/// enum-to-integer conversion is a call at `-O0`, and this one bounds a
+/// scan that runs per Ex command.
+const ROWS: usize = command_count as usize;
 
 /// Does `pp` start with at least `len` characters of `cmd`, and end there?
 ///
@@ -66,13 +73,13 @@ pub unsafe fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) 
 /// `:scriptencoding`, `:sign`, `:simalt`, `:sil…`, `:sre…` and the rest —
 /// which is what the nest of tests below spells out. It is upstream's, byte
 /// for byte, including the `p[3]`/`p[4]` asymmetry in the `:sc…` arm.
-pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut cmdidx_T) -> c_int {
+pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
     let at = |n: usize| byte_at(p, n as isize);
     if at(0) == 'k' as c_int
         && (at(1) != 'e' as c_int || (at(1) == 'e' as c_int && at(2) != 'e' as c_int))
     {
-        unsafe { *idx = CMD_k };
-        return 1;
+        unsafe { *idx = CmdIdx::k };
+        return true;
     }
     if at(0) == 's' as c_int
         && (at(1) == 'c' as c_int
@@ -88,21 +95,21 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut cmdidx_T) -> c_int {
             || at(1) == 'I' as c_int
             || at(1) == 'r' as c_int && at(2) != 'e' as c_int)
     {
-        unsafe { *idx = CMD_substitute };
-        return 1;
+        unsafe { *idx = CmdIdx::substitute };
+        return true;
     }
-    0
+    false
 }
 
 /// Resolve `eap->cmd` to a command index, and answer where the name ends.
 ///
-/// `eap->cmdidx` comes back as `CMD_SIZE` for a name nothing matched, and
+/// `eap->cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
 /// when the name was spelled out in full rather than abbreviated.
 pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_char {
     let mut ea = unsafe { Ea::new(eap) };
     let mut p = ea.cmd;
-    if one_letter_cmd(p, ea.cmdidx_ptr()) != 0 {
+    if one_letter_cmd(p, ea.cmdidx_ptr()) {
         if !full.is_null() {
             unsafe { *full = 1 };
         }
@@ -150,35 +157,36 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
         }
     }
 
-    ea.cmdidx = unsafe { start_index(ea.cmd, len) };
-    debug_assert!(ea.cmdidx as c_int >= 0);
+    ea.cmdidx = CmdIdx::SIZE;
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if len == 3 && prefix_eq(ea.cmd, c"def".as_ptr(), 3) {
-        ea.cmdidx = CMD_SIZE;
-    }
-
-    while (ea.cmdidx as c_int) < CMD_SIZE as c_int {
-        let name = cmdnames[ea.cmdidx as usize].cmd_name;
-        if prefix_eq(name, ea.cmd, len as size_t) {
-            if !full.is_null() && byte_at(name, len as isize) == NUL {
-                unsafe { *full = 1 };
+    if !(len == 3 && prefix_eq(ea.cmd, c"def".as_ptr(), 3)) {
+        // The scan walks rows rather than `CmdIdx`es and names what it
+        // stopped at once: stepping an enum would be a conversion per row.
+        let mut row = unsafe { start_index(ea.cmd, len) };
+        while row < ROWS {
+            let name = cmdnames[row].cmd_name;
+            if prefix_eq(name, ea.cmd, len as size_t) {
+                if !full.is_null() && byte_at(name, len as isize) == NUL {
+                    unsafe { *full = 1 };
+                }
+                ea.cmdidx = CmdIdx::at_row(row);
+                break;
             }
-            break;
+            row += 1;
         }
-        ea.cmdidx = (ea.cmdidx as c_int + 1) as cmdidx_T;
     }
 
     // Nothing in the table, and it starts with an upper-case letter:
     // it may be a user command, whose name may hold digits too.
-    if ea.cmdidx as c_int == CMD_SIZE as c_int && (ubyte(ea.cmd)).is_ascii_uppercase() {
+    if ea.cmdidx == CmdIdx::SIZE && (ubyte(ea.cmd)).is_ascii_uppercase() {
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
         p = unsafe { find_ucmd(eap, p, full, ptr::null_mut(), ptr::null_mut()) };
     }
     if p == ea.cmd {
-        ea.cmdidx = CMD_SIZE;
+        ea.cmdidx = CmdIdx::SIZE;
     }
     p
 }
@@ -191,16 +199,16 @@ pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_cha
 /// has been reordered without regenerating them sends the scan to the wrong
 /// place — hence the `command_count` check, which is upstream's own guard
 /// against a stale generated header.
-unsafe fn start_index(cmd: *const c_char, len: c_int) -> cmdidx_T {
+unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
     let c1 = ubyte(cmd);
     if !c1.is_ascii_lowercase() {
         return if c1.is_ascii_uppercase() {
-            CMD_Next
+            CmdIdx::Next.index()
         } else {
-            CMD_bang
+            CmdIdx::bang.index()
         };
     }
-    if command_count != CMD_SIZE as c_int {
+    if command_count != CmdIdx::SIZE.code() {
         iemsg(gettext(
             c"E943: Command table needs to be updated, run 'make'",
         ));
@@ -211,11 +219,11 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> cmdidx_T {
     } else {
         unsafe { *cmd.add(1) as u8 }
     };
-    let mut idx = cmdidxs1[(c1 - b'a') as usize] as c_int;
+    let mut idx = cmdidxs1[(c1 - b'a') as usize] as usize;
     if c2.is_ascii_lowercase() {
-        idx += cmdidxs2[(c1 - b'a') as usize][(c2 - b'a') as usize] as c_int;
+        idx += cmdidxs2[(c1 - b'a') as usize][(c2 - b'a') as usize] as usize;
     }
-    idx as cmdidx_T
+    idx
 }
 
 /// `exists(":cmd")`: 0 for no, 1 for an abbreviation, 2 for a full name,
@@ -241,13 +249,13 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
         return 3;
     }
     // A leading digit is a range for every command but `:match`.
-    if ascii_isdigit(byte(name)) && ea.cmdidx as c_int != CMD_match as c_int {
+    if ascii_isdigit(byte(name)) && ea.cmdidx != CmdIdx::r#match {
         return 0;
     }
     if byte(skipwhite(p)) != NUL {
         return 0;
     }
-    if ea.cmdidx as c_int == CMD_SIZE as c_int {
+    if ea.cmdidx == CmdIdx::SIZE {
         0
     } else if full != 0 {
         2
@@ -277,24 +285,24 @@ pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         name
     };
     let p = unsafe { find_ex_command(&raw mut ea, ptr::null_mut()) };
-    if p.is_null() || ea.cmdidx as c_int == CMD_SIZE as c_int {
+    if p.is_null() || ea.cmdidx == CmdIdx::SIZE {
         return;
     }
     unsafe {
-        (*rettv).vval.v_string = xstrdup(if (ea.cmdidx as c_int) < 0 {
-            get_user_command_name(ea.useridx, ea.cmdidx as c_int)
+        (*rettv).vval.v_string = xstrdup(if is_user_cmd(ea.cmdidx) {
+            get_user_command_name(ea.useridx, ea.cmdidx)
         } else {
-            cmdnames[ea.cmdidx as usize].cmd_name
+            cmdnames[ea.cmdidx.index()].cmd_name
         })
     };
 }
 
 /// A zeroed `exarg_T` with the two fields a lookup needs set the way
-/// `find_ex_command` expects: `CMD_append` is index 0, the head of the
+/// `find_ex_command` expects: `CmdIdx::append` is index 0, the head of the
 /// table, and no flags have been collected yet.
 fn blank_exarg() -> exarg_T {
     let mut ea: exarg_T = unsafe { core::mem::zeroed() };
-    ea.cmdidx = CMD_append;
+    ea.cmdidx = CmdIdx::append;
     ea.addr_type = CmdAddr::Lines;
     ea.flags = 0;
     ea
@@ -302,29 +310,29 @@ fn blank_exarg() -> exarg_T {
 
 /// The command index for a name of a known length, without the rest of
 /// `find_ex_command`'s bookkeeping. Used by the API's command parser.
-pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> cmdidx_T {
+pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
     if len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3) {
-        return CMD_SIZE;
+        return CmdIdx::SIZE;
     }
-    let mut idx: cmdidx_T = CMD_append;
-    if one_letter_cmd(cmd, &raw mut idx) != 0 {
+    let mut idx: CmdIdx = CmdIdx::append;
+    if one_letter_cmd(cmd, &raw mut idx) {
         return idx;
     }
     // A linear scan from the head of the table, not the `cmdidxs`
     // shortcut: this entry point is not on the hot path.
-    let mut idx = CMD_append;
-    while (idx as c_int) < CMD_SIZE as c_int {
-        if prefix_eq(cmdnames[idx as usize].cmd_name, cmd, len) {
+    let mut row = 0;
+    while row < ROWS {
+        if prefix_eq(cmdnames[row].cmd_name, cmd, len) {
             break;
         }
-        idx = (idx as c_int + 1) as cmdidx_T;
+        row += 1;
     }
-    idx
+    CmdIdx::at_row(row)
 }
 
 /// The `EX_*` flag set of a command.
-pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> ExArgt {
-    cmdnames[idx as usize].cmd_argt
+pub unsafe fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
+    cmdnames[idx.index()].cmd_argt
 }
 
 /// The `idx`'th command name, for command-line completion. Indices past
@@ -333,7 +341,7 @@ pub unsafe fn excmd_get_argt(idx: cmdidx_T) -> ExArgt {
 /// Keeps the raw signature: cmdexpand's generator table holds it as an
 /// `ItemGetter`.
 pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
-    if idx >= CMD_SIZE as c_int {
+    if idx >= CmdIdx::SIZE.code() {
         return unsafe { expand_user_command_name(idx) };
     }
     cmdnames[idx as usize].cmd_name

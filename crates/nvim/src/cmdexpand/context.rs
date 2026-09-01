@@ -10,10 +10,8 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
-use crate::types::{
-    CMD_SIZE, CMD_bang, CMD_breakadd, CMD_breakdel, CMD_k, CMD_substitute, CMD_terminal,
-    ExpandContext, NUL,
-};
+use crate::types::CmdIdx;
+use crate::types::{ExpandContext, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -118,7 +116,7 @@ pub(crate) unsafe fn set_cmd_index(
         && unsafe { *cmd } as c_int == 'k' as c_int
         && unsafe { *cmd.add(1) } as c_int != 'e' as c_int
     {
-        unsafe { (*eap).cmdidx = CMD_k };
+        unsafe { (*eap).cmdidx = CmdIdx::k };
         p = unsafe { cmd.add(1) };
     } else {
         p = skip_alpha(cmd);
@@ -150,7 +148,7 @@ pub(crate) unsafe fn set_cmd_index(
         // User defined commands support alphanumeric characters.  Also
         // when doing fuzzy expansion for non-shell commands.
         if (unsafe { *cmd } as u8).is_ascii_uppercase()
-            || (fuzzy && unsafe { (*eap).cmdidx } != CMD_bang && unsafe { *p } as c_int != NUL)
+            || (fuzzy && unsafe { (*eap).cmdidx } != CmdIdx::bang && unsafe { *p } as c_int != NUL)
         {
             p = skip_alnum(p);
         }
@@ -162,21 +160,21 @@ pub(crate) unsafe fn set_cmd_index(
         return ptr::null();
     }
 
-    if unsafe { (*eap).cmdidx } == CMD_SIZE {
+    if unsafe { (*eap).cmdidx } == CmdIdx::SIZE {
         if unsafe { *cmd } as c_int == 's' as c_int
             && !unsafe { vim_strchr(c"cgriI".as_ptr(), *cmd.add(1) as u8 as c_int) }.is_null()
         {
-            unsafe { (*eap).cmdidx = CMD_substitute };
+            unsafe { (*eap).cmdidx = CmdIdx::substitute };
             p = unsafe { cmd.add(1) };
         } else if (unsafe { *cmd } as u8).is_ascii_uppercase() {
             unsafe { (*eap).cmd = cmd as *mut c_char };
             p = unsafe { find_ucmd(eap, p as *mut c_char, ptr::null_mut(), xp.raw(), complp) };
             if p.is_null() {
-                unsafe { (*eap).cmdidx = CMD_SIZE }; // Ambiguous user command.
+                unsafe { (*eap).cmdidx = CmdIdx::SIZE }; // Ambiguous user command.
             }
         }
     }
-    if unsafe { (*eap).cmdidx } == CMD_SIZE {
+    if unsafe { (*eap).cmdidx } == CmdIdx::SIZE {
         // Not still touching the command and it was an illegal one.
         xp.xp_context = ExpandContext::Unsuccessful;
         return ptr::null();
@@ -244,12 +242,12 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
     }
     xp.xp_context = ExpandContext::Files;
 
-    // For a shell command more chars need to be escaped.
-    if usefilter
-        || (!eap.is_null()
-            && (unsafe { (*eap).cmdidx } == CMD_bang || unsafe { (*eap).cmdidx } == CMD_terminal))
-        || unsafe { *complp } == ExpandContext::ShellCmdLine
-    {
+    // For a shell command more chars need to be escaped. `:!` and
+    // `:terminal` run one; so does an explicitly shell-flavoured context.
+    // SAFETY: the caller's argument block, when there is one.
+    let runs_a_shell =
+        !eap.is_null() && matches!(unsafe { (*eap).cmdidx }, CmdIdx::bang | CmdIdx::terminal);
+    if usefilter || runs_a_shell || unsafe { *complp } == ExpandContext::ShellCmdLine {
         xp.xp_shell = true;
         // When still after the command name expand executables.
         if xp.xp_pattern == unsafe { skipwhite(arg) } {
@@ -517,7 +515,7 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
 pub(crate) unsafe fn set_context_in_breakadd_cmd(
     xp: *mut expand_T,
     arg: *const c_char,
-    cmdidx: cmdidx_T,
+    cmdidx: CmdIdx,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
@@ -525,9 +523,9 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
     xp.xp_context = ExpandContext::Breakpoint;
     xp.xp_pattern = arg as *mut c_char;
 
-    breakpt_expand_what.set(if cmdidx == CMD_breakadd {
+    breakpt_expand_what.set(if cmdidx == CmdIdx::breakadd {
         EXP_BREAKPT_ADD
-    } else if cmdidx == CMD_breakdel {
+    } else if cmdidx == CmdIdx::breakdel {
         EXP_BREAKPT_DEL
     } else {
         EXP_PROFDEL

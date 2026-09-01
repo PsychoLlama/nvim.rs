@@ -10,7 +10,8 @@
 use super::*;
 use crate::cstr;
 use crate::os::shell::ShellOpts;
-use crate::types::{CMD_grep, CMD_grepadd, CMD_lgrep, CMD_lgrepadd, CMD_lmake, CMD_make, NUL};
+use crate::types::CmdIdx;
+use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
 
 /// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
@@ -20,8 +21,11 @@ use core::ffi::{CStr, c_char, c_int};
 /// # Safety
 ///
 /// Reads the current buffer's options, so there must be one.
-pub unsafe fn grep_internal(cmdidx: cmdidx_T) -> bool {
-    if !matches!(cmdidx, CMD_grep | CMD_lgrep | CMD_grepadd | CMD_lgrepadd) {
+pub unsafe fn grep_internal(cmdidx: CmdIdx) -> bool {
+    if !matches!(
+        cmdidx,
+        CmdIdx::grep | CmdIdx::lgrep | CmdIdx::grepadd | CmdIdx::lgrepadd
+    ) {
         return false;
     }
     // SAFETY: the option strings of a live buffer are NUL-terminated.
@@ -36,14 +40,14 @@ pub unsafe fn grep_internal(cmdidx: cmdidx_T) -> bool {
 
 /// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
 /// against, which is the command without its leading colon.
-fn make_get_auname(cmdidx: cmdidx_T) -> Option<&'static CStr> {
+fn make_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
     Some(match cmdidx {
-        CMD_make => c"make",
-        CMD_lmake => c"lmake",
-        CMD_grep => c"grep",
-        CMD_lgrep => c"lgrep",
-        CMD_grepadd => c"grepadd",
-        CMD_lgrepadd => c"lgrepadd",
+        CmdIdx::make => c"make",
+        CmdIdx::lmake => c"lmake",
+        CmdIdx::grep => c"grep",
+        CmdIdx::lgrep => c"lgrep",
+        CmdIdx::grepadd => c"grepadd",
+        CmdIdx::lgrepadd => c"lgrepadd",
         _ => return None,
     })
 }
@@ -120,7 +124,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
     }
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(eap.cmdidx as c_int) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(eap.cmdidx) }.then(cur_win);
 
     unsafe { autowrite_all() };
     let fname = unsafe { get_mef_name() };
@@ -135,7 +139,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
 
     incr_quickfix_busy();
 
-    let is_make = matches!(eap.cmdidx, CMD_make | CMD_lmake);
+    let is_make = matches!(eap.cmdidx, CmdIdx::make | CmdIdx::lmake);
     let errorformat = if is_make {
         p_efm.get()
     } else {
@@ -146,7 +150,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
             p_gefm.get()
         }
     };
-    let newlist = !matches!(eap.cmdidx, CMD_grepadd | CMD_lgrepadd);
+    let newlist = !matches!(eap.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 
     let newlist2 = newlist as c_int;
     let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };

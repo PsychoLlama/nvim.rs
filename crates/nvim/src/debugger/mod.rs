@@ -57,10 +57,10 @@ use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T,
-    estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T,
-    typval_T, uint8_t,
+    Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t,
+    int64_t, linenr_T, regprog_T, size_t, tasave_T, typval_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -139,8 +139,7 @@ impl BreakList {
     /// `:profdel` spellings drive the profiling list, everything else the
     /// debugger's.
     fn of(eap: &exarg_T) -> Self {
-        let profiling = eap.cmdidx as c_int == CMD_profile as c_int
-            || eap.cmdidx as c_int == CMD_profdel as c_int;
+        let profiling = eap.cmdidx == CmdIdx::profile || eap.cmdidx == CmdIdx::profdel;
         if profiling {
             Self::Profiling
         } else {
@@ -589,7 +588,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
         }
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
-        if cmdidx as c_int == CMD_breakdel as c_int {
+        if cmdidx == CmdIdx::breakdel {
             debug_tick.set(debug_tick.get() + 1);
         }
         if !del_all {

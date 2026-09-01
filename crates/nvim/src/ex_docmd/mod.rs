@@ -68,11 +68,11 @@ use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
+use crate::types::CmdIdx;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LuaRetMode, MarkGet,
-    MotionType, OptValType, RemapValues, cmdidx_T, dobuf_action_values, dobuf_start_values,
-    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T, optmagic_T, uint8_t,
-    uint16_t,
+    MotionType, OptValType, RemapValues, dobuf_action_values, dobuf_start_values, estack_arg_T,
+    etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T, optmagic_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -103,7 +103,7 @@ impl Ea {
     }
 
     /// `&eap->cmdidx` — written by the one-letter command lookup.
-    pub(crate) fn cmdidx_ptr(self) -> *mut cmdidx_T {
+    pub(crate) fn cmdidx_ptr(self) -> *mut CmdIdx {
         self.field_ptr(offset_of!(exarg_T, cmdidx))
     }
 

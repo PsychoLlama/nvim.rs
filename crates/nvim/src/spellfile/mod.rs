@@ -18,11 +18,11 @@ use crate::path::{free_wild, path_tail};
 use crate::semsg;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_spellrare, CMD_spellundo, CMD_spellwrong, CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK,
-    OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, etype_T, exarg_T,
-    file_comparison, fromto_T, garray_T, hashtab_T, regprog_T, size_t, spelltab_T, time_t,
-    vimconv_T,
+    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType,
+    XDGVarType, buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashtab_T, regprog_T,
+    size_t, spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -797,9 +797,9 @@ pub unsafe fn ex_spell(eap: *mut exarg_T) {
     let (cmdidx, forceit, line2, arg) =
         unsafe { ((*eap).cmdidx, (*eap).forceit, (*eap).line2, (*eap).arg) };
 
-    let kind = if cmdidx == CMD_spellwrong {
+    let kind = if cmdidx == CmdIdx::spellwrong {
         SPELL_ADD_BAD
-    } else if cmdidx == CMD_spellrare {
+    } else if cmdidx == CmdIdx::spellrare {
         SPELL_ADD_RARE
     } else {
         SPELL_ADD_GOOD
@@ -814,7 +814,7 @@ pub unsafe fn ex_spell(eap: *mut exarg_T) {
 
     // SAFETY: `arg` is the excommand's NUL-terminated argument.
     let len = unsafe { cstr::bytes_at(arg) }.len() as ::core::ffi::c_int;
-    let undo = cmdidx == CMD_spellundo;
+    let undo = cmdidx == CmdIdx::spellundo;
     unsafe { spell_add_word(arg, len, kind as SpellAddType, which, undo) };
 }
 

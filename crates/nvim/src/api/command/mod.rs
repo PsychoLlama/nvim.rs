@@ -26,13 +26,12 @@ use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::strings::kv_do_printf;
 use crate::types::{
-    Arena, Array, Buffer, CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_iput, CMD_put, CmdAddr,
-    CmdModFlags, CmdParseInfo, Dict, Direction, Error, Integer, KeyDict_cmd, KeyDict_cmd_magic,
-    KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
-    KeyDict_get_commands, KeyDict_user_command, LuaRef, Object, String_0, StringBuilder, TryState,
-    buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, linenr_T, size_t, ucmd_T, uint8_t,
-    uint64_t,
+    Arena, Array, Buffer, CmdAddr, CmdModFlags, CmdParseInfo, Dict, Direction, Error, Integer,
+    KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
+    KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, LuaRef, Object, String_0,
+    StringBuilder, TryState, buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeLuaRef,
+    kObjectTypeString, linenr_T, size_t, ucmd_T, uint8_t, uint64_t,
 };
 use crate::usercmd::{
     Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,

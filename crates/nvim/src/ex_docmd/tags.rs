@@ -38,7 +38,7 @@ use crate::winlayer::Ea;
 /// occurrence.
 pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
     let mut ea = unsafe { Ea::new(eap) };
-    let name = cmdnames[ea.cmdidx as usize].cmd_name;
+    let name = cmdnames[ea.cmdidx.index()].cmd_name;
     let action = match ubyte_at(name, 2) {
         // `:isearch`/`:dsearch` show the first match; `:psearch` goes
         // to it in the preview window.
@@ -107,7 +107,7 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_ptag(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     g_do_tagpreview.set(p_pvh.get() as c_int);
-    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx as usize].cmd_name.add(1)) };
+    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name.add(1)) };
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
@@ -117,7 +117,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
     postponed_split.set(-1);
     postponed_split_flags.set(cmdmod_split());
     postponed_split_tab.set(cmdmod_tab());
-    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx as usize].cmd_name.add(1)) };
+    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name.add(1)) };
     postponed_split_flags.set(0);
     postponed_split_tab.set(0);
 }
@@ -125,7 +125,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
 pub(crate) unsafe fn ex_tag(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx as usize].cmd_name) };
+    unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name) };
 }
 
 /// Run a tag command named by `name`, whose *second* letter says which one

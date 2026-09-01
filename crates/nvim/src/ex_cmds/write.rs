@@ -51,9 +51,10 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_saveas, CMD_wqall, CMD_xall, CmdModFlags, CpoFlag, Failed, MAXPATHL, NUL, OptionSetFlags,
-    ShmFlag, exarg_T, int32_t, int64_t, linenr_T,
+    CmdModFlags, CpoFlag, Failed, MAXPATHL, NUL, OptionSetFlags, ShmFlag, exarg_T, int32_t,
+    int64_t, linenr_T,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
@@ -194,7 +195,7 @@ pub unsafe fn ex_update(eap: *mut exarg_T) {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn ex_write(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    if unsafe { (*eap).cmdidx } == CMD_saveas {
+    if unsafe { (*eap).cmdidx } == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
         unsafe { (*eap).line1 = 1 };
         unsafe { (*eap).line2 = cur_buf().b_ml.ml_line_count };
@@ -258,7 +259,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
 
     // SAFETY: `ffname` is the command's NUL-terminated argument.
     let other = if unsafe { *ffname } as c_int == NUL {
-        if unsafe { (*eap).cmdidx } == CMD_saveas {
+        if unsafe { (*eap).cmdidx } == CmdIdx::saveas {
             emsg(gettext(e_argreq));
             return Err(Failed);
         }
@@ -280,7 +281,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
         // SAFETY: the names are live, 'cpoptions' is a live option string, and
         // both lookups hand back a live buffer or NULL.
         alt_buf = unsafe {
-            if cpo_has(CpoFlag::ALTWRITE) || (*eap).cmdidx == CMD_saveas {
+            if cpo_has(CpoFlag::ALTWRITE) || (*eap).cmdidx == CmdIdx::saveas {
                 setaltfname(ffname, fname, 1)
             } else {
                 buflist_findname(ffname)
@@ -312,7 +313,7 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
     // SAFETY: the names are live and `eap` is the caller's.
     unsafe { check_overwrite(eap, cur_buf(), fname, ffname, other) }?;
 
-    if unsafe { (*eap).cmdidx } == CMD_saveas
+    if unsafe { (*eap).cmdidx } == CmdIdx::saveas
         && let Some(alt_buf) = alt_buf
     {
         match saveas_exchange_names(alt_buf) {
@@ -346,13 +347,13 @@ pub unsafe fn do_write(eap: *mut exarg_T) -> Result<(), Failed> {
 
     // After ":saveas fname" reset 'readonly'.
     // SAFETY: `eap` and `curbuf` are live.
-    if unsafe { (*eap).cmdidx } == CMD_saveas && retval.is_ok() {
+    if unsafe { (*eap).cmdidx } == CmdIdx::saveas && retval.is_ok() {
         cur_buf().b_p_ro = 0;
         redraw_tabline.set(true);
     }
     // Change directories when the 'acd' option is set and the file name
     // got changed or set.
-    if unsafe { (*eap).cmdidx } == CMD_saveas || name_was_missing {
+    if unsafe { (*eap).cmdidx } == CmdIdx::saveas || name_was_missing {
         do_autochdir();
     }
     retval
@@ -616,7 +617,7 @@ pub unsafe fn do_wqall(eap: *mut exarg_T) {
     let save_exiting = exiting.get();
 
     // SAFETY: as above.
-    if unsafe { (*eap).cmdidx } == CMD_xall || unsafe { (*eap).cmdidx } == CMD_wqall {
+    if unsafe { (*eap).cmdidx } == CmdIdx::xall || unsafe { (*eap).cmdidx } == CmdIdx::wqall {
         if unsafe { before_quit_all(eap) }.is_err() {
             return;
         }

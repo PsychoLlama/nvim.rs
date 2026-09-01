@@ -35,7 +35,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use core::ffi::c_int;
+use crate::types::CmdIdx;
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
@@ -57,10 +57,9 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CMD_tabnew, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType,
-    Set_uint32_t, WinSplit, WinStyle, bln_values, buf_T, cmdidx_T, dobuf_action_values,
-    dobuf_start_values, event_T, getf_values, handle_T, kErrorTypeException, size_t, tabpage_T,
-    uint32_t, win_T,
+    AlignTextPos, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType, Set_uint32_t,
+    WinSplit, WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, event_T,
+    getf_values, handle_T, kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -231,13 +230,13 @@ pub fn frames_locked() -> bool {
     frame_locked.get() != 0
 }
 
-pub fn window_layout_locked(cmd: cmdidx_T) -> bool {
+pub fn window_layout_locked(cmd: CmdIdx) -> bool {
     layout_locked(cmd)
 }
 
 /// Whether an autocommand has forbidden this change to the window layout,
 /// reporting the reason itself.
-fn layout_locked(cmd: cmdidx_T) -> bool {
+fn layout_locked(cmd: CmdIdx) -> bool {
     let mut e = Error::none();
     let locked = locked_err(cmd, &mut e);
     if e.is_set() {
@@ -248,16 +247,16 @@ fn layout_locked(cmd: cmdidx_T) -> bool {
     locked
 }
 
-pub unsafe fn window_layout_locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
+pub unsafe fn window_layout_locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
     locked_err(cmd, &mut *err)
 }
 
 /// [`layout_locked`], reporting through `err` instead of the message area.
-fn locked_err(cmd: cmdidx_T, err: &mut Error) -> bool {
+fn locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
     if split_disallowed.get() <= 0 && close_disallowed.get() <= 0 {
         return false;
     }
-    let msg = if close_disallowed.get() == 0 && cmd as ::core::ffi::c_int == CMD_tabnew as c_int {
+    let msg = if close_disallowed.get() == 0 && cmd == CmdIdx::tabnew {
         e_cannot_split_window_when_closing_buffer.as_ptr()
     } else {
         e_not_allowed_to_change_window_layout_in_this_autocmd.as_ptr()

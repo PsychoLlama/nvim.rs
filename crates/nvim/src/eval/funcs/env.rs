@@ -34,10 +34,11 @@ use crate::os::fs::os_setperm;
 use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_USER, CmdAddr, EvalFuncData, ExArgt, ExpandContext, NUL, OK, OptInt, VAR_DICT, VAR_LIST,
-    VAR_SPECIAL, VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
-    kListLenUnknown, kSpecialVarNull, list_T, typval_T, varnumber_T,
+    CmdAddr, EvalFuncData, ExArgt, ExpandContext, NUL, OK, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL,
+    VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown,
+    kSpecialVarNull, list_T, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -192,7 +193,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let mut eap: exarg_T = unsafe { core::mem::zeroed() };
     eap.arg = cmdstr;
     eap.cmd = cmdstr;
-    eap.cmdidx = CMD_USER;
+    eap.cmdidx = CmdIdx::USER;
     eap.addr_type = CmdAddr::Lines;
     eap.argt = ExArgt::NOSPC;
     let mut errormsg = None;

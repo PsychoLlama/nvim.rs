@@ -13,6 +13,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
+use crate::types::CmdIdx;
 use crate::types::{ExArgt, NUL};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_uint};
@@ -25,8 +26,8 @@ fn emsg_gettext(msg: *const c_char) {
 
 /// Whether `:diffput` may write into `buf` -- or the command is not
 /// `:diffput` at all, in which case nothing has to be modifiable.
-fn writable_target(buf: Buf, cmdidx: c_int) -> bool {
-    cmdidx != CMD_diffput as c_int || buf.b_p_ma != 0
+fn writable_target(buf: Buf, cmdidx: CmdIdx) -> bool {
+    cmdidx != CmdIdx::diffput || buf.b_p_ma != 0
 }
 
 /// `do` and `dp`: get or put the diff block under the cursor.
@@ -48,7 +49,11 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
         cmd: ::core::ptr::null_mut::<c_char>(),
         cmdlinep: ::core::ptr::null_mut::<*mut c_char>(),
         cmdline_tofree: ::core::ptr::null_mut::<c_char>(),
-        cmdidx: if put { CMD_diffput } else { CMD_diffget },
+        cmdidx: if put {
+            CmdIdx::diffput
+        } else {
+            CmdIdx::diffget
+        },
         argt: ExArgt::NONE,
         skip: 0,
         forceit: 0,
@@ -108,7 +113,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         emsg_gettext(c"E99: Current buffer is not in diff mode".as_ptr());
         return;
     }
-    let cmdidx = eap.cmdidx as c_int;
+    let cmdidx = eap.cmdidx;
     let mut idx_other = 0;
     // SAFETY: the command's own NUL-terminated argument.
     if unsafe { *eap.arg } as c_int == NUL {
@@ -212,7 +217,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     // `:diffput` writes into the *other* buffer, so the autocommand context
     // moves there for the copy.
     let mut aco = aco_save_T::default();
-    let put = cmdidx != CMD_diffget as c_int;
+    let put = cmdidx != CmdIdx::diffget;
     if put {
         let other = tp.tp_diffbuf[idx_other as usize];
         // SAFETY: `aco` is a local, and `other` a live buffer of the diff.

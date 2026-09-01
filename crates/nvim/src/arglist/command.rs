@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::memline::MlFlags;
+use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 
 // ---------------------------------------------------------------------------
@@ -21,15 +22,15 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract.
-    let cmdidx = eap.cmdidx as c_int;
-    if cmdidx != CMD_args as c_int {
+    let cmdidx = eap.cmdidx;
+    if cmdidx != CmdIdx::args {
         if arglist_is_locked() {
             return;
         }
         // SAFETY: curwin always has an argument list, and dropping the
         // reference to it is what makes room for the new one.
         unsafe { alist_unlink(win_alist(cur_win())) };
-        if cmdidx == CMD_argglobal as c_int {
+        if cmdidx == CmdIdx::argglobal {
             cur_win().w_alist = global_arglist();
         } else {
             alist_new();
@@ -46,10 +47,10 @@ pub unsafe fn ex_args(eap: *mut exarg_T) {
         unsafe { ex_next(eap.raw()) };
         return;
     }
-    if cmdidx == CMD_args as c_int {
+    if cmdidx == CmdIdx::args {
         // SAFETY: every entry of the current list has a name.
         list_args();
-    } else if cmdidx == CMD_arglocal as c_int {
+    } else if cmdidx == CmdIdx::arglocal {
         // SAFETY: both lists are valid.
         copy_global_arglist();
     }
@@ -186,7 +187,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     // SAFETY: `cmd` points at the command's own text, which is not empty.
     let is_split_cmd = unsafe { *eap.cmd } as c_int == 's' as c_int;
     let forceit = eap.forceit != 0;
-    let cmdidx = eap.cmdidx as c_int;
+    let cmdidx = eap.cmdidx;
     let old_arg_idx = cur_arg_idx();
     if argn < 0 || argn >= argcount() {
         report_no_such_arg(argn);
@@ -241,7 +242,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
         // It failed (Abort for an already-edited file, say): restore the
         // argument index of whichever window is current now.
         set_cur_arg_idx(old_arg_idx);
-    } else if cmdidx != CMD_argdo as c_int {
+    } else if cmdidx != CmdIdx::argdo {
         // Like Vi: set the mark where the cursor is in the file.
         // SAFETY: sets the `'` mark at the cursor.
         let _ = unsafe { setmark('\'' as c_int) };
@@ -254,7 +255,7 @@ pub unsafe fn ex_next(eap: *mut exarg_T) {
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: caller contract; the argument is NUL-terminated.
     let forceit = eap.forceit != 0;
-    let is_snext = eap.cmdidx as c_int == CMD_snext as c_int;
+    let is_snext = eap.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
     let has_arg = unsafe { *eap.arg } as c_int != NUL;
     // Check for a changed buffer now: if this fails the argument list is not

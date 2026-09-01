@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -33,7 +34,7 @@ use crate::message::internal_error;
 use crate::normal::reset_VIsual_and_resel;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{CMD_SIZE, CMD_close, FAIL, Integer, OK, frame_T, size_t};
+use crate::types::{FAIL, Integer, OK, frame_T, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::{WinId, tabs};
@@ -61,7 +62,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         err(e_cannot_close_last_window.as_ptr());
         return FAIL;
     }
-    if !win.w_floating && layout_locked(CMD_close) {
+    if !win.w_floating && layout_locked(CmdIdx::close) {
         return FAIL;
     }
     if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
@@ -471,7 +472,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
 
     // Commands that may call this already check the lock, but check again just
     // in case.
-    if layout_locked(CMD_SIZE) {
+    if layout_locked(CmdIdx::SIZE) {
         return false;
     }
     // Get here with `win->w_buffer == NULL` when `close()` detects that the tab

@@ -78,9 +78,9 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CMD_defer, Callback, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, Vv,
-    dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T, expand_T, funccal_entry_T,
+    Callback, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T,
+    dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T, expand_T, funccal_entry_T,
     funccall_S_fc_fixvar, funccall_T, funcdict_T, funcexe_T, garray_T, hashitem_T, hashtab_T,
     linenr_T, listitem_T, lval_T, partial_T, regmatch_T, save_redo_T, size_t, typval_T, ufunc_T,
     varnumber_T,

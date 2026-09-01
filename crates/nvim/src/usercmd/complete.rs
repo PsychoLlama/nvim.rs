@@ -30,9 +30,8 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::os::cshim::snprintf;
-use crate::types::{
-    CMD_SIZE, CMD_USER, CMD_USER_BUF, CMD_map, ExArgt, ExpandContext, NUL, expand_T,
-};
+use crate::types::CmdIdx;
+use crate::types::{ExArgt, ExpandContext, NUL, expand_T};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -176,7 +175,7 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
     if context == ExpandContext::Mappings {
         let (cmd, pat) = (c"map".as_ptr().cast_mut(), arg.cast_mut());
         // SAFETY: caller contract; `xp` is writable and `arg` outlives it.
-        return unsafe { set_context_in_map_cmd(xp, cmd, pat, forceit, false, false, CMD_map) };
+        return unsafe { set_context_in_map_cmd(xp, cmd, pat, forceit, false, false, CmdIdx::map) };
     }
     // The pattern is the last argument: walk to it, honouring escapes
     // and multibyte characters.
@@ -195,13 +194,13 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
 }
 
 /// The `idx`th user command name, for the built-in command table's own
-/// completion -- where user commands come after the `CMD_SIZE` built-ins.
+/// completion -- where user commands come after the `CmdIdx::SIZE` built-ins.
 ///
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
     // SAFETY: caller contract.
-    unsafe { get_user_commands(ptr::null_mut(), idx - CMD_SIZE as c_int) }
+    unsafe { get_user_commands(ptr::null_mut(), idx - CmdIdx::SIZE.code()) }
 }
 
 /// The `idx`th user command name: buffer-local ones first, then global.
@@ -235,10 +234,10 @@ pub(crate) unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c_char {
     let scope = match cmdidx {
-        c if c == CMD_USER as c_int => Scope::Global,
-        c if c == CMD_USER_BUF as c_int => Scope::Buffer,
+        CmdIdx::USER => Scope::Global,
+        CmdIdx::USER_BUF => Scope::Buffer,
         _ => return ptr::null_mut(),
     };
     // SAFETY: module contract.

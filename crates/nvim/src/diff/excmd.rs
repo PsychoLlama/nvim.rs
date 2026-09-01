@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
+use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_void};
@@ -148,7 +149,7 @@ pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
             let flags = if vertical { WSP_VERT as c_int } else { 0 };
             if win_split(0, flags).is_ok() {
-                eap.cmdidx = CMD_split;
+                eap.cmdidx = CmdIdx::split;
                 eap.arg = tmp_new;
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
@@ -236,7 +237,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     if win_split(0, flags).is_err() {
         return;
     }
-    eap.cmdidx = CMD_split;
+    eap.cmdidx = CmdIdx::split;
     cur_win().w_onebuf_opt.wo_diff = 1;
     // SAFETY: the caller's command, and a window that was live when read.
     unsafe { do_exedit(eap.raw(), old_curwin) };

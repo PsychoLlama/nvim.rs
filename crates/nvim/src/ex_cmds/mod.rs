@@ -49,11 +49,11 @@ use crate::os::env::expand_env_save;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
+use crate::types::CmdIdx;
 use crate::types::{
-    CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp, NUL,
-    OptVal, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t, bfa_values,
-    bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues, linenr_T, list_T,
-    listitem_T, lpos_T, size_t, uint8_t, win_T,
+    CmdModFlags, ExtmarkOp, NUL, OptVal, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
+    bcount_t, bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues,
+    linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -364,7 +364,7 @@ pub unsafe fn ex_oldfiles(mut eap: *mut exarg_T) {
             let s: *mut ::core::ffi::c_char =
                 unsafe { expand_env_save(p as *mut ::core::ffi::c_char) };
             unsafe { (*eap).arg = s };
-            unsafe { (*eap).cmdidx = CMD_edit };
+            unsafe { (*eap).cmdidx = CmdIdx::edit };
             cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
             unsafe { do_exedit(eap, ::core::ptr::null_mut::<win_T>()) };
             unsafe { xfree(s as *mut ::core::ffi::c_void) };

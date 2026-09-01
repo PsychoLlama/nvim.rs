@@ -9,6 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::ex_docmd::is_user_cmd;
+use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -30,11 +32,7 @@ use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::del_trailing_spaces;
 use crate::types::ex_cmds::exarg_T;
 use crate::types::pos::linenr_T;
-use crate::types::{
-    CMD_append, CMD_at, CMD_change, CMD_insert, CMD_iput, CMD_lvimgrep, CMD_lvimgrepadd, CMD_put,
-    CMD_redir, CMD_smagic, CMD_snomagic, CMD_substitute, CMD_vimgrep, CMD_vimgrepadd, CmdAddr,
-    CpoFlag, ExArgt, Failed, NUL, size_t,
-};
+use crate::types::{CmdAddr, CpoFlag, ExArgt, Failed, NUL, size_t};
 use crate::winlayer::{Buf, Ea};
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
@@ -59,7 +57,7 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 /// the command takes both.
 pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
     let mut ea = unsafe { Ea::new(eap) };
-    let is_user_command = (ea.cmdidx as c_int) < 0;
+    let is_user_command = is_user_cmd(ea.cmdidx);
     if !ea.argt.has(ExArgt::REGSTR)
         || byte(ea.arg) == NUL
         || (is_user_command && byte(ea.arg) == '=' as c_int)
@@ -69,9 +67,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
     }
     // `:put` and `:iput` are the two commands that may name a write-only
     // register; every other one is writing to whichever it names.
-    let writing = !is_user_command
-        && ea.cmdidx as c_int != CMD_put as c_int
-        && ea.cmdidx as c_int != CMD_iput as c_int;
+    let writing = !is_user_command && ea.cmdidx != CmdIdx::put && ea.cmdidx != CmdIdx::iput;
     if !unsafe { valid_yank_reg(*ea.arg as c_int, writing) } {
         return;
     }
@@ -162,11 +158,11 @@ pub(crate) unsafe fn parse_count(
 /// Take the `!` a command may carry. `:substitute` and its two magic
 /// spellings are the exception: there a `!` belongs to the pattern.
 pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
-    let cmdidx = eap.cmdidx as c_int;
+    let cmdidx = eap.cmdidx;
     if byte(unsafe { *p }) == '!' as c_int
-        && cmdidx != CMD_substitute as c_int
-        && cmdidx != CMD_smagic as c_int
-        && cmdidx != CMD_snomagic as c_int
+        && cmdidx != CmdIdx::substitute
+        && cmdidx != CmdIdx::smagic
+        && cmdidx != CmdIdx::snomagic
     {
         unsafe { *p = (*p).add(1) };
         return true;
@@ -191,11 +187,11 @@ pub(crate) fn get_flags(mut ea: Ea) {
 /// Step over a `:vimgrep` pattern, whose delimiters are not the ones the
 /// rest of the argument scan knows about.
 pub(crate) fn skip_grep_pat(mut ea: Ea) -> *mut c_char {
-    let cmdidx = ea.cmdidx as c_int;
-    let is_grep = cmdidx == CMD_vimgrep as c_int
-        || cmdidx == CMD_lvimgrep as c_int
-        || cmdidx == CMD_vimgrepadd as c_int
-        || cmdidx == CMD_lvimgrepadd as c_int
+    let cmdidx = ea.cmdidx;
+    let is_grep = cmdidx == CmdIdx::vimgrep
+        || cmdidx == CmdIdx::lvimgrep
+        || cmdidx == CmdIdx::vimgrepadd
+        || cmdidx == CmdIdx::lvimgrepadd
         || unsafe { grep_internal(ea.cmdidx) };
     if byte(ea.arg) == NUL || !is_grep {
         return ea.arg;
@@ -269,17 +265,17 @@ pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
 /// depends on where the walk has got to and cannot be hoisted.
 unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
     let c = byte(p);
-    let cmdidx = ea.cmdidx as c_int;
+    let cmdidx = ea.cmdidx;
     let comment = c == '"' as c_int
         && !ea.argt.has(ExArgt::NOTRLCOM)
-        && (cmdidx != CMD_at as c_int || p != ea.arg)
-        && (cmdidx != CMD_redir as c_int
+        && (cmdidx != CmdIdx::at || p != ea.arg)
+        && (cmdidx != CmdIdx::redir
             || p != unsafe { ea.arg.add(1) }
             || byte_at(p, -1) != '@' as c_int);
     let bar = c == '|' as c_int
-        && cmdidx != CMD_append as c_int
-        && cmdidx != CMD_change as c_int
-        && cmdidx != CMD_insert as c_int;
+        && cmdidx != CmdIdx::append
+        && cmdidx != CmdIdx::change
+        && cmdidx != CmdIdx::insert;
     comment || bar || c == '\n' as c_int
 }
 
