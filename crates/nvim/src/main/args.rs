@@ -37,10 +37,10 @@ use crate::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, SESSION_FILE,
     SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode, err_arg_missing,
     err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args, exmode_active,
-    headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptValTypeNumber,
-    kOptValTypeString, kOptVerbosefile, kOptWindow, mparm_T, nlua_disable_preload, p_lpl,
-    p_shadafile, p_uc, p_verbose, p_write, readonlymode, recoverymode, silent_mode, stderr_isatty,
-    stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
+    headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptVerbosefile,
+    kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write,
+    readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
+    time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
@@ -54,8 +54,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, Vv,
-    aentry_T, linenr_T, ptrdiff_t, scid_T, size_t,
+    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, aentry_T,
+    linenr_T, ptrdiff_t, scid_T, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::{atoi, fprintf, strcasecmp};
@@ -78,20 +78,12 @@ const READONLY_UPDATECOUNT: OptInt = 10000;
 /// A string option value naming a string the option layer will copy.
 unsafe fn string_opt(value: *const c_char) -> OptVal {
     // SAFETY: `value` is NUL-terminated and outlives the call.
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: unsafe { cstr_as_string(value as *mut c_char) },
-        },
-    }
+    OptVal::String(unsafe { cstr_as_string(value as *mut c_char) })
 }
 
 /// A number option value.
 fn number_opt(value: OptInt) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeNumber,
-        data: OptValData { number: value },
-    }
+    OptVal::Number(value)
 }
 
 /// Set an option from a command-line switch. A switch names no scope, so it

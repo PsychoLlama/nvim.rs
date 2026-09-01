@@ -31,8 +31,8 @@ use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
 
 use super::{
     INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option,
-    get_option_unset_value, kOptValTypeNil, kOptValTypeNumber, option_has_type,
-    option_is_global_local, optval_copy, optval_equal, optval_to_cstr, optval_type_name,
+    get_option_unset_value, option_has_type, option_is_global_local, optval_copy, optval_equal,
+    optval_to_cstr, optval_type_name,
 };
 
 /// The two messages the quickfix-stack bounds report.
@@ -243,25 +243,26 @@ pub(crate) unsafe fn validate_option_value(
         return ptr::null();
     }
     let opt = get_option(opt_idx);
-    if newval.type_0 == kOptValTypeNil {
+    if newval.is_nil() {
         // A global value has no "unset" state to fall back to.
         if opt_flags == OptionSetFlags::GLOBAL {
             return gettext(c"Cannot unset global option value").as_ptr();
         }
         *newval = optval_copy(get_option_unset_value(opt_idx));
         ptr::null()
-    } else if !option_has_type(opt_idx, newval.type_0) {
+    } else if !option_has_type(opt_idx, newval.kind()) {
         let rep = optval_to_cstr(*newval);
         let fmt = c"Invalid value for option '%s': expected %s, got %s %s";
         let fmt = gettext(fmt);
         let want = optval_type_name(opt.type_0).as_ptr();
-        let got = optval_type_name(newval.type_0).as_ptr();
+        let got = optval_type_name(newval.kind()).as_ptr();
         let (name, size) = (opt.fullname, IOSIZE as size_t);
         unsafe { snprintf(errbuf, size, fmt.as_ptr(), name, want, got, rep) };
         unsafe { xfree(rep.cast::<c_void>()) };
         errbuf
-    } else if newval.type_0 == kOptValTypeNumber {
-        unsafe { validate_num_option(opt_idx, &mut newval.data.number, errbuf, errbuflen) }
+    } else if let OptVal::Number(number) = newval {
+        // The check clamps in place, so it is handed the value's own word.
+        unsafe { validate_num_option(opt_idx, number, errbuf, errbuflen) }
     } else {
         ptr::null()
     }

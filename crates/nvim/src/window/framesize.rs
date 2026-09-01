@@ -16,7 +16,7 @@ use super::*;
 use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
-use crate::types::{OptInt, OptVal, OptValData, OptionSetFlags, frame_T};
+use crate::types::{OptInt, OptVal, OptionSetFlags, frame_T};
 use crate::winlayer::{Frame, Win};
 
 // ---------------------------------------------------------------------------
@@ -79,14 +79,7 @@ pub(crate) fn new_height(
         let new_ch = min_set_ch.get().max(want_ch);
         if new_ch != p_ch.get() {
             let save_ch = min_set_ch.get();
-            set_option_value(
-                kOptCmdheight,
-                OptVal {
-                    type_0: kOptValTypeNumber,
-                    data: OptValData { number: new_ch },
-                },
-                OptionSetFlags::NONE,
-            );
+            set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
             min_set_ch.set(save_ch);
         }
         let room = Rows.get() as OptInt

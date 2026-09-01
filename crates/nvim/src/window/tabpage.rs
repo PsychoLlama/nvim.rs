@@ -41,8 +41,8 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    CMD_tabnew, Failed, OptInt, OptVal, OptValData, OptionSetFlags, VAR_SCOPE, buf_T, handle_T,
-    int64_t, switchwin_T, tabpage_T,
+    CMD_tabnew, Failed, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, handle_T, int64_t,
+    switchwin_T, tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
@@ -539,11 +539,7 @@ fn enter_tab(
 
 /// `:set cmdheight=n`, without the frame resizing.
 fn set_cmdheight(n: OptInt) {
-    let value = OptVal {
-        type_0: kOptValTypeNumber,
-        data: OptValData { number: n },
-    };
-    set_option_value(kOptCmdheight, value, OptionSetFlags::NONE);
+    set_option_value(kOptCmdheight, OptVal::Number(n), OptionSetFlags::NONE);
 }
 
 /// Tell an external UI that the windows and inline floats of `old_curtab` are

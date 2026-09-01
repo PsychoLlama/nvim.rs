@@ -16,7 +16,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::option::{NIL_OPTVAL, boolean_optval, optval_boolean};
+use crate::option::boolean_optval;
 use crate::types::{NUL, OptionSetFlags};
 use crate::winlayer::{TabPage, Win, WinId, first_window};
 
@@ -143,7 +143,7 @@ unsafe fn getwinvar(argvars: *mut typval_T, rettv: *mut typval_T, off: c_int) {
     unsafe { get_var_from(varname, rettv, deftv, b'w' as c_int, tp, win, nil) };
 }
 
-/// `tv` as the value of option `opt_idx`, or `NIL_OPTVAL` with `error` set.
+/// `tv` as the value of option `opt_idx`, or [`OptVal::Nil`] with `error` set.
 ///
 /// The option's declared types decide the conversion; a Funcref is accepted
 /// (as its name) only by an option that takes one.
@@ -175,12 +175,7 @@ pub(crate) unsafe fn tv_to_optval(
         // the name of one.
         let strval = unsafe { encode_tv2string(tv, ptr::null_mut()) };
         err = strval.is_null();
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { cstr_as_string(strval) },
-            },
-        }
+        OptVal::String(unsafe { cstr_as_string(strval) })
     } else if option_has_bool || option_has_num {
         let n = if option_has_num {
             unsafe { tv_get_number_chk(tv, &raw mut err) }
@@ -210,10 +205,7 @@ pub(crate) unsafe fn tv_to_optval(
             }
         }
         if option_has_num {
-            OptVal {
-                type_0: kOptValTypeNumber,
-                data: OptValData { number: n },
-            }
+            OptVal::Number(n)
         } else {
             boolean_optval(tristate_from_int(n))
         }
@@ -222,18 +214,13 @@ pub(crate) unsafe fn tv_to_optval(
         if tvh.v_type != VAR_BOOL && tvh.v_type != VAR_SPECIAL {
             let strval = unsafe { tv_get_string_buf_chk(tv, nbuf.as_mut_ptr()) };
             err = strval.is_null();
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_to_string(strval) },
-                },
-            }
+            OptVal::String(unsafe { cstr_to_string(strval) })
         } else {
             if !is_tty_opt {
                 err = true;
                 emsg_static(e_string_required);
             }
-            NIL_OPTVAL
+            OptVal::Nil
         }
     } else {
         // Every option has at least one type.
@@ -259,28 +246,27 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
             v_special: kSpecialVarNull,
         },
     };
-    match value.type_0 {
-        kOptValTypeBoolean => {
+    match value {
+        OptVal::Boolean(word) => {
             if numbool {
                 rettv.v_type = VAR_NUMBER;
-                rettv.vval.v_number = unsafe { value.data.boolean } as varnumber_T;
-            } else if let Some(boolean) = unsafe { optval_boolean(value.data) } {
+                rettv.vval.v_number = word as varnumber_T;
+            } else if let Some(boolean) = value.as_boolean() {
                 // An unset global-local boolean has no Vimscript
                 // spelling and stays the `v:null` this started as.
                 rettv.v_type = VAR_BOOL;
                 rettv.vval.v_bool = c_int::from(boolean) as BoolVarValue;
             }
         }
-        kOptValTypeNumber => {
+        OptVal::Number(number) => {
             rettv.v_type = VAR_NUMBER;
-            rettv.vval.v_number = unsafe { value.data.number } as varnumber_T;
+            rettv.vval.v_number = number as varnumber_T;
         }
-        kOptValTypeString => {
+        OptVal::String(string) => {
             rettv.v_type = VAR_STRING;
-            rettv.vval.v_string = unsafe { value.data.string }.data();
+            rettv.vval.v_string = string.data();
         }
-        // `kOptValTypeNil` is the remaining arm.
-        _ => {}
+        OptVal::Nil => {}
     }
     rettv
 }

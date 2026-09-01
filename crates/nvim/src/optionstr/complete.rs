@@ -306,9 +306,12 @@ pub unsafe fn did_set_spelllang(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_spelloptions(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame, window and new value.
-    let (wp, opt_flags, value) =
-        unsafe { (win(args), (*args).os_flags, (*args).os_newval.string.data()) };
+    // SAFETY: the caller's frame and window.
+    let (wp, opt_flags, new) = unsafe { (win(args), (*args).os_flags, (*args).os_newval) };
+    let value = new
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+        .data();
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     if global || local {

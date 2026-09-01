@@ -496,12 +496,7 @@ pub(crate) unsafe fn command_line_enter(
 
         set_option_direct(
             kOptInccommand,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(s.save_p_icm) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(s.save_p_icm) }),
             OptionSetFlags::NONE,
             SID_NONE,
         );

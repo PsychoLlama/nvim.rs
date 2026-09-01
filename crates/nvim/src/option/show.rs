@@ -47,9 +47,9 @@ use ::libc::{fprintf, fputs};
 use super::{
     OptSlot, copy_option_part, get_option, get_option_unset_value, get_varp, get_varp_scope,
     kOptFlagComma, kOptFlagExpand, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagPriMkrc,
-    kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_has_type,
+    kOptFlagUIOption, kOptValTypeBoolean, kOptValTypeNumber, option_has_type,
     option_is_global_local, option_is_global_only, option_is_window_local, option_var,
-    optval_as_object, optval_boolean, optval_equal, optval_from_varp, optval_is_default,
+    optval_as_object, optval_equal, optval_from_varp, optval_is_default,
 };
 
 /// The column width one option gets in the multi-column listing, and the
@@ -397,10 +397,10 @@ pub(crate) unsafe fn put_set(
         return Ok(());
     }
 
-    match value.type_0 {
-        kOptValTypeBoolean => {
-            debug_assert!(unsafe { optval_boolean(value.data) }.is_some());
-            let prefix = if unsafe { optval_boolean(value.data) } == Some(true) {
+    match value {
+        OptVal::Boolean(_) => {
+            debug_assert!(value.as_boolean().is_some());
+            let prefix = if value.as_boolean() == Some(true) {
                 c"".as_ptr()
             } else {
                 c"no".as_ptr()
@@ -409,7 +409,7 @@ pub(crate) unsafe fn put_set(
                 return Err(Failed);
             }
         }
-        kOptValTypeNumber => {
+        OptVal::Number(number) => {
             if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
                 return Err(Failed);
             }
@@ -420,15 +420,15 @@ pub(crate) unsafe fn put_set(
                 if unsafe { fputs(get_special_key_name(wc as c_int, 0).as_ptr(), fd) } < 0 {
                     return Err(Failed);
                 }
-            } else if unsafe { fprintf(fd, c"%ld".as_ptr(), value.data.number) } < 0 {
+            } else if unsafe { fprintf(fd, c"%ld".as_ptr(), number) } < 0 {
                 return Err(Failed);
             }
         }
-        kOptValTypeString => {
+        OptVal::String(string) => {
             if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
                 return Err(Failed);
             }
-            let value_str = unsafe { value.data.string }.data();
+            let value_str = string.data();
             if !value_str.is_null() {
                 match unsafe { put_string_value(fd, cmd, name, value_str, flags) } {
                     Written::Failed => return Err(Failed),
@@ -438,7 +438,7 @@ pub(crate) unsafe fn put_set(
                 }
             }
         }
-        _ => unreachable!("an option with no type has no value to write"),
+        OptVal::Nil => unreachable!("an option with no type has no value to write"),
     }
 
     // The newline's write error is dropped, as upstream drops it.

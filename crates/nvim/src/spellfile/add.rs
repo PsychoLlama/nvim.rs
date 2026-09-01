@@ -50,8 +50,8 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    FILE, MAXPATHL, NUL, OptVal, OptValData, OptionSetFlags, SpellAddType, buf_T, int32_t, langp_T,
-    size_t, uint8_t,
+    FILE, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, buf_T, int32_t, langp_T, size_t,
+    uint8_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
@@ -59,8 +59,8 @@ use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror};
 
 use super::wordtree::valid_spell_word;
 use super::{
-    MAXWLEN, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE, e_illegal_character_in_word,
-    kOptValTypeString, kXDGDataHome, mkspell,
+    MAXWLEN, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE, e_illegal_character_in_word, kXDGDataHome,
+    mkspell,
 };
 
 /// Add `word[..len]` to a spell file, or take it back out again.
@@ -351,12 +351,7 @@ unsafe fn init_spellfile() {
 
     set_option_value_give_err(
         kOptSpellfile,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { cstr_as_string(buf) },
-            },
-        },
+        OptVal::String(unsafe { cstr_as_string(buf) }),
         OptionSetFlags::LOCAL,
     );
     unsafe { xfree(buf as *mut c_void) };

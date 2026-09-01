@@ -51,8 +51,7 @@ use crate::runtime::runtimepath_default;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, PATHSEPSTR, String_0, garray_T,
-    size_t, uint32_t,
+    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, garray_T, size_t, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
@@ -62,10 +61,9 @@ use super::{
     NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, check_options,
     check_win_options, default_fileformat, didset_options, didset_options2, get_option,
     get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagNoDefExp,
-    kOptFlagNoDefault, kOptValTypeNumber, kOptValTypeString, option_default, option_expand,
-    option_has_type, option_is_global_local, option_var, option_was_set, optval_copy, optval_free,
-    set_fileformat, set_option_direct, set_option_value_give_err, set_option_varp,
-    store_option_default,
+    kOptFlagNoDefault, option_default, option_expand, option_is_global_local, option_var,
+    option_was_set, optval_copy, optval_free, set_fileformat, set_option_direct,
+    set_option_value_give_err, set_option_varp, store_option_default,
 };
 
 /// Every option, in table order.
@@ -75,15 +73,10 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 
 /// A borrowed string default. Only for a literal: nothing frees it.
 fn borrowed(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(
-                value.as_ptr() as *mut c_char,
-                value.count_bytes() as size_t,
-            ),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        value.as_ptr() as *mut c_char,
+        value.count_bytes() as size_t,
+    ))
 }
 
 /// An owned string value, taking ownership of `value`.
@@ -92,13 +85,8 @@ fn borrowed(value: &'static CStr) -> OptVal {
 ///
 /// `value` must be a NUL-terminated allocation the option module may free.
 unsafe fn owned(value: *mut c_char) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        // SAFETY: the caller's `value` is NUL-terminated.
-        data: OptValData {
-            string: unsafe { cstr_as_string(value) },
-        },
-    }
+    // SAFETY: the caller's `value` is NUL-terminated.
+    OptVal::String(unsafe { cstr_as_string(value) })
 }
 
 /// The two boolean option values this module installs.
@@ -108,8 +96,11 @@ const ON: OptVal = boolean_optval(Some(true));
 /// A new tab page starts with the global 'cmdheight', not with whatever the
 /// tab page it was opened from had.
 pub(crate) fn set_init_tablocal() {
-    // SAFETY: 'cmdheight' is numeric, so the union holds its number.
-    p_ch.set(unsafe { option_default(kOptCmdheight).data.number });
+    p_ch.set(
+        option_default(kOptCmdheight)
+            .as_number()
+            .expect("'cmdheight' is a number option"),
+    );
 }
 
 /// 'shell' defaults to `$SHELL`. A path with a space in it is quoted, since
@@ -247,22 +238,10 @@ fn set_init_expand_env() {
             Some(Some(expanded)) => expanded.as_ptr(),
             Some(None) => continue,
         };
-        let value = OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { cstr_to_string(expanded) },
-            },
-        };
+        let value = OptVal::String(unsafe { cstr_to_string(expanded) });
         unsafe { set_option_varp(opt_idx, option_var(opt_idx), value, true) };
-        change_option_default(
-            opt_idx,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_to_string(expanded) },
-                },
-            },
-        );
+        let default = OptVal::String(unsafe { cstr_to_string(expanded) });
+        change_option_default(opt_idx, default);
     }
 }
 
@@ -379,13 +358,14 @@ pub(crate) fn get_option_default(
         return get_option_unset_value(opt_idx);
     }
     let default = option_default(opt_idx);
-    // SAFETY: the string arm is only read once the type has been tested.
-    if !option_has_type(opt_idx, kOptValTypeString)
-        || get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0
-    {
+    let Some(string) = default.as_string() else {
+        return default;
+    };
+    if get_option(opt_idx).flags & kOptFlagNoDefExp as uint32_t != 0 {
         return default;
     }
-    match unsafe { option_expand(opt_idx, default.data.string.data()) } {
+    // SAFETY: a string default names its own NUL-terminated bytes.
+    match unsafe { option_expand(opt_idx, string.data()) } {
         None => default,
         // Borrowed: the bytes are `expansion`'s, and nothing frees this.
         Some(e) => unsafe { owned(expansion.insert(e).as_ptr().cast_mut()) },
@@ -528,15 +508,7 @@ pub(crate) fn set_init_2(_headless: bool) {
     if !option_was_set(kOptWindow) {
         p_window.set((Rows.get() - 1) as OptInt);
     }
-    change_option_default(
-        kOptWindow,
-        OptVal {
-            type_0: kOptValTypeNumber,
-            data: OptValData {
-                number: (Rows.get() - 1) as OptInt,
-            },
-        },
-    );
+    change_option_default(kOptWindow, OptVal::Number((Rows.get() - 1) as OptInt));
 }
 
 /// The third startup pass: the defaults that depend on which shell 'shell'

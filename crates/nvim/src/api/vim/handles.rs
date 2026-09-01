@@ -38,12 +38,7 @@ fn cur_tab() -> TabPage {
 
 /// One `String` option's value, borrowing the literal's bytes.
 fn string_optval(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_cstr(value),
-        },
-    }
+    OptVal::String(String_0::from_cstr(value))
 }
 
 /// Every listed and unlisted buffer's handle.

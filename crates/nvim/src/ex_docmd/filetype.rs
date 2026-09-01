@@ -17,7 +17,7 @@ use crate::buffer::do_modelines;
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
     cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent, filetype_plugin,
-    kOptValTypeString, kRetNilBool,
+    kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
 use crate::main::{cmdmod, e_curdir, p_rtp, secure};
@@ -30,8 +30,8 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
 use crate::types::{
-    Array, CMD_autocmd, Error, Failed, NUL, Object, OptVal, OptValData, OptionSetFlags, String_0,
-    exarg_T, size_t,
+    Array, CMD_autocmd, Error, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, exarg_T,
+    size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -203,12 +203,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
     }
     set_option_value_give_err(
         kOptFiletype,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: cstr_as_string(arg),
-            },
-        },
+        OptVal::String(cstr_as_string(arg)),
         OptionSetFlags::LOCAL,
     );
     if arg != eap.arg {

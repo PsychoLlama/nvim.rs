@@ -166,7 +166,6 @@ typedef struct mtnode_s mtnode_s;
 typedef struct MapHash MapHash;
 typedef struct Set_cstr_t Set_cstr_t;
 typedef struct Map_cstr_t_ptr_t Map_cstr_t_ptr_t;
-typedef union OptValData OptValData;
 typedef struct ScopeDictDictItem ScopeDictDictItem;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
@@ -1462,11 +1461,6 @@ struct Set_cstr_t {
 struct Map_cstr_t_ptr_t {
   Set_cstr_t set;
   ptr_t *values;
-};
-union OptValData {
-  int boolean;
-  OptInt number;
-  String string;
 };
 struct ScopeDictDictItem {
   typval_T di_tv;

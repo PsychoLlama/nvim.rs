@@ -201,10 +201,7 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
     let string = unsafe { cstr_as_string(value) };
     set_option_direct(
         kOptEventignore,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData { string },
-        },
+        OptVal::String(string),
         OptionSetFlags::NONE,
         SID_NONE,
     );

@@ -904,12 +904,7 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
         // 'vartabstop' is in use, or more than one stop was given.
         set_option_direct(
             kOptVartabstop,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(tabs.ts_str) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(tabs.ts_str) }),
             OptionSetFlags::LOCAL,
             0,
         );

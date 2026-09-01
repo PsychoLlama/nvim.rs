@@ -41,10 +41,10 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptValData,
-    OptValType, OptionSetFlags, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T,
-    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeWindow, linenr_T, lpos_T, pos_T, schar_T, tabpage_T, win_T,
+    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptionSetFlags,
+    String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T, kErrorTypeException,
+    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
+    kFloatRelativeWindow, linenr_T, lpos_T, pos_T, schar_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -64,7 +64,6 @@ const kAlignLeft: AlignTextPos = 0;
 const kWinSplitLeft: WinSplit = 0;
 const kWinStyleUnused: WinStyle = 0;
 const kWinStyleMinimal: WinStyle = 1;
-const kOptValTypeString: OptValType = 2;
 const kOptScopeBuf: OptScope = 2;
 const STATUS_HEIGHT: c_int = 1;
 
@@ -362,10 +361,7 @@ fn create_scratch_buffer(err: &mut Error) -> Buffer {
 }
 fn set_bufhidden_wipe(buf: Buf) {
     let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
-    let wipe = OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData { string: s },
-    };
+    let wipe = OptVal::String(s);
     let (opt, from) = (kOptBufhidden, buf.raw().cast::<c_void>());
     // SAFETY: `buf` is the live buffer `kOptScopeBuf` names.
     unsafe { set_option_direct_for(opt, wipe, OptionSetFlags::LOCAL, 0, kOptScopeBuf, from) };

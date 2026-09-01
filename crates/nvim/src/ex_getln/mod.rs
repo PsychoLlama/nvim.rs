@@ -135,14 +135,14 @@ use crate::types::{
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
     Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
-    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData, OptValType,
-    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues,
-    Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T,
-    colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T,
-    exarg_T, except_T, expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T,
-    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
-    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
-    uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValType, ParserHighlight,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues, Set_ptr_t,
+    String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T,
+    cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T,
+    except_T, expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T,
+    msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T,
+    sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t,
+    uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -553,15 +553,10 @@ pub(crate) const TRY_STATE_INIT: TryState = TryState {
 /// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
 /// Nothing frees it.
 pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(
-                value.as_ptr() as *mut ::core::ffi::c_char,
-                value.count_bytes() as size_t,
-            ),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        value.as_ptr() as *mut ::core::ffi::c_char,
+        value.count_bytes() as size_t,
+    ))
 }
 
 /// An all-zero [`exarg_T`]; `parse_cmdline` fills it.

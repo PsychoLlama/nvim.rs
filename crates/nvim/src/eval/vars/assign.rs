@@ -17,7 +17,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::NumBuf;
-use crate::option::{NIL_OPTVAL, boolean_optval};
+use crate::option::boolean_optval;
 use crate::os::cshim::gettext_owned;
 use crate::types::{Failed, NUL, OptionSetFlags};
 
@@ -490,18 +490,18 @@ unsafe fn ex_let_option(
     } else {
         get_option_value(opt_idx, opt_flags)
     };
-    let mut newval = NIL_OPTVAL;
+    let mut newval = OptVal::Nil;
     let mut arg_end: *mut c_char = ptr::null_mut();
 
     'theend: {
-        if curval.type_0 == kOptValTypeNil {
+        if curval.is_nil() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(arg) };
             semsg!("E355: Unknown option: {arg}");
             break 'theend;
         }
         let compound = opch.is_some_and(|c| c != b'=');
-        let is_string = curval.type_0 == kOptValTypeString;
+        let is_string = matches!(curval, OptVal::String(_));
         if compound && opch.is_some_and(|c| (c == b'.') != is_string) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let op = unsafe { c_str(op) };
@@ -515,19 +515,25 @@ unsafe fn ex_let_option(
             break 'theend;
         }
         // The current and the new value must have the same type.
-        debug_assert!(curval.type_0 == newval.type_0);
+        debug_assert!(curval.kind() == newval.kind());
 
         if compound && !hidden {
             // A Number or Boolean `OptVal` as a number; a closure, so that
-            // the two union reads are written once.
+            // the two reads are written once. Only those two variants get
+            // this far: the `if` just below is the guard that keeps a
+            // String or a Nil out, and both calls are inside it.
             let as_int = |v: OptVal| -> OptInt {
-                // SAFETY: the type tag says which arm the union holds.
-                match v.type_0 == kOptValTypeNumber {
-                    true => unsafe { v.data.number },
-                    false => unsafe { v.data.boolean as OptInt },
+                match v {
+                    OptVal::Number(number) => number,
+                    // The tri-state word itself, as upstream's union read
+                    // of the `boolean` arm answered.
+                    OptVal::Boolean(word) => OptInt::from(word),
+                    OptVal::Nil | OptVal::String(_) => {
+                        unreachable!("guarded to a Number or a Boolean")
+                    }
                 }
             };
-            if curval.type_0 == kOptValTypeNumber || curval.type_0 == kOptValTypeBoolean {
+            if matches!(curval, OptVal::Number(_) | OptVal::Boolean(_)) {
                 let cur_n = as_int(curval);
                 let new_n = as_int(newval);
                 let new_n = match opch.unwrap_or(b'=') {
@@ -540,25 +546,20 @@ unsafe fn ex_let_option(
                     // above for a non-String option.
                     _ => new_n,
                 };
-                newval = if curval.type_0 == kOptValTypeNumber {
-                    OptVal {
-                        type_0: kOptValTypeNumber,
-                        data: OptValData { number: new_n },
-                    }
+                newval = if matches!(curval, OptVal::Number(_)) {
+                    OptVal::Number(new_n)
                 } else {
                     boolean_optval(tristate_from_int(new_n))
                 };
-            } else if curval.type_0 == kOptValTypeString {
-                let curval_data = unsafe { curval.data.string }.data();
-                let newval_data = unsafe { newval.data.string }.data();
+            } else if let (OptVal::String(cur), OptVal::String(new)) = (curval, newval) {
+                // The two are Strings together, the assertion above having
+                // given `newval` `curval`'s type.
+                let (curval_data, newval_data) = (cur.data(), new.data());
                 if !curval_data.is_null() && !newval_data.is_null() {
                     let newval_old = newval;
-                    newval = OptVal {
-                        type_0: kOptValTypeString,
-                        data: OptValData {
-                            string: unsafe { cstr_as_string(concat_str(curval_data, newval_data)) },
-                        },
-                    };
+                    newval = OptVal::String(unsafe {
+                        cstr_as_string(concat_str(curval_data, newval_data))
+                    });
                     optval_free(newval_old);
                 }
             }

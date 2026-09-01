@@ -28,15 +28,15 @@ use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::types::ui::kUILinegrid;
-use crate::types::{OptVal, OptValData, OptionSetFlags, estack_T};
+use crate::types::{OptVal, OptionSetFlags, estack_T};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
     ATTR_NAMES, SG_CTERM, SG_GUI, SG_LINK, cterm_color_index,
     e_group_has_settings_highlight_link_ignored, group, highlight_attr_set_all, highlight_clear,
     highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, kColorIdxNone,
-    kOptValTypeString, lookup_color, name_to_color, restore_cterm_colors, set_hl_attr,
-    syn_check_group, syn_name2id_len, with_group,
+    lookup_color, name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group,
+    syn_name2id_len, with_group,
 };
 use crate::highlight_group::highlight_changed;
 
@@ -631,18 +631,13 @@ impl KeyLoop {
         }
         set_option_value_give_err(
             kOptBackground,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe {
-                        cstr_as_string(if dark {
-                            c"dark".as_ptr()
-                        } else {
-                            c"light".as_ptr()
-                        })
-                    },
-                },
-            },
+            OptVal::String(unsafe {
+                cstr_as_string(if dark {
+                    c"dark".as_ptr()
+                } else {
+                    c"light".as_ptr()
+                })
+            }),
             OptionSetFlags::NONE,
         );
         reset_option_was_set(kOptBackground);

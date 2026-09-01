@@ -66,8 +66,11 @@ pub(crate) unsafe fn local_window(
 /// `args` points at the option table's call frame, whose old value is a
 /// string (every option in this module is one).
 pub(crate) unsafe fn old_value(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame, and the union's string arm.
-    unsafe { (*args).os_oldval.string.data() }
+    // SAFETY: the caller's frame.
+    unsafe { (*args).os_oldval }
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+        .data()
 }
 
 /// The error buffer and its size, as the message helpers take them.

@@ -32,13 +32,13 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptValData, OptionSetFlags, ShmFlag,
-    VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
+    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, VAR_STRING,
+    dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
 };
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
-    kOptValTypeString, option_has_scope, optval_from_varp, set_option_direct,
+    option_has_scope, optval_from_varp, set_option_direct,
 };
 use crate::state::MODE_TERMINAL;
 use crate::winlayer::Win;
@@ -337,12 +337,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     if let Some(name) = name {
         set_option_direct(
             kOptFileformat,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(name.as_ptr().cast_mut()) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(name.as_ptr().cast_mut()) }),
             opt_flags,
             0 as scid_T,
         );

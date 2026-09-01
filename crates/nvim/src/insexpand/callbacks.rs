@@ -296,10 +296,14 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// This is an `opt_did_set_cb` row in the generated option table.
 pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
     let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
+    let value = unsafe { (*args).os_newval }
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+        .data();
     let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
-        unsafe { option_set_callback_func((*args).os_newval.string.data(), &raw mut buf.b_cfu_cb) }
+        unsafe { option_set_callback_func(value, &raw mut buf.b_cfu_cb) }
     } else {
-        let retval = unsafe { cfu_cb().set_from_option((*args).os_newval.string.data()) };
+        let retval = unsafe { cfu_cb().set_from_option(value) };
         if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
             set_buflocal_cfu_callback(buf);
         }
@@ -324,10 +328,14 @@ pub fn set_buflocal_cfu_callback(mut buf: Buf) {
 /// `opt_did_set_cb` row in the generated option table.
 pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
     let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
+    let value = unsafe { (*args).os_newval }
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+        .data();
     let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
-        unsafe { option_set_callback_func((*args).os_newval.string.data(), &raw mut buf.b_ofu_cb) }
+        unsafe { option_set_callback_func(value, &raw mut buf.b_ofu_cb) }
     } else {
-        let retval = unsafe { ofu_cb().set_from_option((*args).os_newval.string.data()) };
+        let retval = unsafe { ofu_cb().set_from_option(value) };
         if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
             set_buflocal_ofu_callback(buf);
         }

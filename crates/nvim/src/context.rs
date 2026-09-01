@@ -36,15 +36,12 @@ use crate::shada::{
 };
 use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptValData, OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock,
-    kErrorTypeNone, key_value_pair, size_t, typval_T, typval_vval_union, uint8_t,
+    OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone,
+    key_value_pair, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNumber: OptValType = 1;
-pub const kOptValTypeBoolean: OptValType = 0;
-pub const kOptValTypeNil: OptValType = -1;
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;
@@ -213,15 +210,10 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
 
 /// `'shada'` as the fixed string a restore runs under.
 fn shada_while_restoring() -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(
-                SHADA_WHILE_RESTORING.as_ptr().cast_mut(),
-                SHADA_WHILE_RESTORING.count_bytes(),
-            ),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        SHADA_WHILE_RESTORING.as_ptr().cast_mut(),
+        SHADA_WHILE_RESTORING.count_bytes(),
+    ))
 }
 
 /// Every name in the global function table, in hash-table order.

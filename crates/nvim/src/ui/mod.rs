@@ -58,7 +58,7 @@ use crate::main::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
-use crate::option::{kOptValTypeNumber, set_option_value, ui_refresh_options};
+use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::os::cshim::gettext;
 use crate::os::time::{os_hrtime, os_sleep};
@@ -71,7 +71,7 @@ use crate::types::ui::{
 };
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, Integer, KeyValuePair, LineFlags, Object, OptVal,
-    OptValData, OptionSetFlags, RemoteUI, String_0, UIExtension, handle_T,
+    OptionSetFlags, RemoteUI, String_0, UIExtension, handle_T,
 };
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
@@ -258,12 +258,7 @@ pub unsafe fn ui_refresh() {
         if ui_refresh_cmdheight.get() {
             set_option_value(
                 kOptCmdheight,
-                OptVal {
-                    type_0: kOptValTypeNumber,
-                    data: OptValData {
-                        number: had_message as _,
-                    },
-                },
+                OptVal::Number(had_message as _),
                 OptionSetFlags::NONE,
             );
             for mut tp in tabs() {

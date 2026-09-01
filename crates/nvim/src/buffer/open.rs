@@ -43,8 +43,8 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    CpoFlag, Failed, NUL, OptInt, OptVal, OptValData, OptionSetFlags, ShmFlag, String_0,
-    StringBuilder, aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
+    CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0, StringBuilder,
+    aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
 };
 use crate::winlayer::buffers;
 
@@ -135,11 +135,7 @@ fn prepare_exarg(eap: &mut exarg_T, buf: Buf) {
 
 fn set_option_string(id: c_int, value: &'static CStr) {
     let string = String_0::from_raw_parts(value.as_ptr().cast_mut(), value.count_bytes());
-    let val = OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData { string },
-    };
-    set_option_value_give_err(id, val, OptionSetFlags::LOCAL);
+    set_option_value_give_err(id, OptVal::String(string), OptionSetFlags::LOCAL);
 }
 
 fn set_option_false(id: c_int) {

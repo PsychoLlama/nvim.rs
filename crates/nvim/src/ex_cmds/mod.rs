@@ -51,9 +51,9 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::{
     CMD_append, CMD_center, CMD_change, CMD_edit, CMD_left, CMD_right, CmdModFlags, ExtmarkOp, NUL,
-    OptVal, OptValData, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t,
-    bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues, linenr_T,
-    list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    OptVal, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t, bfa_values,
+    bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues, linenr_T, list_T,
+    listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -246,15 +246,10 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     cur_win().w_onebuf_opt.wo_diff = 0;
     set_option_direct(
         kOptFoldcolumn,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: String_0::from_raw_parts(
-                    c"0".as_ptr() as *mut ::core::ffi::c_char,
-                    ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
-                ),
-            },
-        },
+        OptVal::String(String_0::from_raw_parts(
+            c"0".as_ptr() as *mut ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
+        )),
         OptionSetFlags::NONE,
         SID_NONE,
     );

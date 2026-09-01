@@ -10,7 +10,7 @@ use crate::main::{
     need_highlight_changed,
 };
 use crate::message::msg_grid_ref;
-use crate::types::{Integer, OptValType, size_t};
+use crate::types::{Integer, size_t};
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
 
@@ -33,9 +33,6 @@ mod command;
 pub(crate) use self::command::*;
 mod apply;
 pub(crate) use self::apply::*;
-
-/// `OptValType`, for the one option this family sets (`'background'`).
-pub(crate) const kOptValTypeString: OptValType = 2;
 
 /// The highest highlight id, and the longest group name.
 pub(crate) const MAX_HL_ID: c_uint = 20000;

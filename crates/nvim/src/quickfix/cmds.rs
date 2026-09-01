@@ -59,12 +59,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
     if unsafe { *eap.arg } as c_int != NUL {
         set_option_direct(
             kOptErrorfile,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(eap.arg) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(eap.arg) }),
             OptionSetFlags::NONE,
             0 as scid_T,
         );

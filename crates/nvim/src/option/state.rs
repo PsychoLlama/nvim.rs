@@ -37,7 +37,7 @@
 )]
 
 use core::ffi::c_void;
-use core::mem::offset_of;
+use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::options::{kOptCount, kOptInvalid};
@@ -100,17 +100,23 @@ pub(crate) fn store_option_default(opt_idx: OptIndex, value: OptVal) {
 /// Where an immutable option reads its value from: its own default, in
 /// place. It has no variable of its own, and nothing writes here — the set
 /// is refused long before it could.
+///
+/// `OptSlot::from_raw` casts the answer to the pointer type the row's own
+/// type names, which is why the string arm hands back the address of the
+/// whole `String_0` rather than of its bytes: a string option's variable is
+/// a `char *`, and `String_0` is `repr(C)` with its pointer first. The C
+/// reached the same address as `&def_val.data`.
 pub(crate) fn option_default_var(opt_idx: OptIndex) -> *mut c_void {
-    // The one place the array's address is taken. Every offset lands inside
-    // the element it indexes, so the arithmetic needs no `unsafe`: the walk
-    // is `wrapping_*`, exactly as `option/scope.rs` reached the table row's
-    // `def_val` before.
-    STATE
-        .ptr()
-        .cast::<OptionState>()
-        .wrapping_add(slot(opt_idx))
-        .wrapping_byte_add(offset_of!(OptionState, default) + offset_of!(OptVal, data))
-        .cast::<c_void>()
+    // The payload's address, taken through the cell rather than by walking
+    // it: the enum's variants need not share an offset, and the array is
+    // `'static`, so the borrow the closure takes says nothing about how long
+    // the answer is good for.
+    STATE.with_mut(|state| match &mut state[slot(opt_idx)].default {
+        OptVal::Nil => ptr::null_mut(),
+        OptVal::Boolean(word) => ptr::from_mut(word).cast::<c_void>(),
+        OptVal::Number(number) => ptr::from_mut(number).cast::<c_void>(),
+        OptVal::String(string) => ptr::from_mut(string).cast::<c_void>(),
+    })
 }
 
 /// Where the option's global value was last set from.

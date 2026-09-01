@@ -295,12 +295,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         if !b0_fenc.is_null() {
             set_option_value_give_err(
                 kOptFileencoding,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: unsafe { cstr_as_string(b0_fenc) },
-                    },
-                },
+                OptVal::String(unsafe { cstr_as_string(b0_fenc) }),
                 OptionSetFlags::LOCAL,
             );
             unsafe { xfree(b0_fenc.cast()) };

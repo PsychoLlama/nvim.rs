@@ -67,7 +67,6 @@ const INDENT_DEC: c_uint = 3;
 const kBufOptIndentexpr: c_uint = 47;
 const kExtmarkUndo: ExtmarkOp = 1;
 const kOptIndentexpr: OptIndex = 148;
-const kOptValTypeString: OptValType = 2;
 const kOptVartabstop: OptIndex = 338;
 const TAB: c_int = 9;
 const SIN_CHANGED: c_uint = 1;

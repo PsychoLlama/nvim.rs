@@ -55,7 +55,7 @@ use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, Failed, IOSIZE, LuaRetMode, NUL, Object, OptInt, OptVal,
-    OptValData, OptionSetFlags, exarg_T, file_comparison, linenr_T, size_t,
+    OptionSetFlags, exarg_T, file_comparison, linenr_T, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
@@ -92,13 +92,11 @@ mod flag {
     /// `nlua_exec` return modes.
     pub(super) const kRetObject: LuaRetMode = 0;
     pub(super) const kRetNilBool: LuaRetMode = 1;
-    /// `OptVal`'s string tag.
-    pub(super) const kOptValTypeString: c_int = 2;
 }
 
 use flag::{
     DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES,
-    TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kOptValTypeString, kRetNilBool, kRetObject,
+    TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kRetNilBool, kRetObject,
 };
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
@@ -109,12 +107,7 @@ fn keepalt_is_off() -> bool {
 
 /// A borrowed string option value; `set_option_direct` copies what it keeps.
 const fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: static_cstring(value),
-        },
-    }
+    OptVal::String(static_cstring(value))
 }
 
 // -- `:help` ---------------------------------------------------------------

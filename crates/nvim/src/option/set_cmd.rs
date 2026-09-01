@@ -21,10 +21,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
-use super::{
-    NIL_OPTVAL, OptSlot, boolean_optval, option_last_set, optval_boolean, set_op_T,
-    ui_refresh_options,
-};
+use super::{OptSlot, boolean_optval, option_last_set, set_op_T, ui_refresh_options};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
@@ -44,17 +41,17 @@ use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     CMD_index, CMD_setglobal, CMD_setlocal, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal,
-    OptValData, OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
+    OptionSetFlags, exarg_T, scid_T, size_t, uint8_t, uint32_t, uvarnumber_T, win_T,
 };
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
     STR2NR_ALL, didset_options, didset_options2, get_option, get_option_default, get_option_value,
     get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf,
-    kOptScopeWin, kOptValTypeBoolean, kOptValTypeNil, kOptValTypeNumber, kOptValTypeString,
-    option_has_scope, option_has_type, option_is_global_local, option_is_window_local,
-    option_scope_idx, option_var, optval_copy, optval_from_varp, set_option, set_options_default,
-    showoneopt, showoptions, stropt_get_newval, unset_option_local_value,
+    kOptScopeWin, kOptValTypeBoolean, option_has_scope, option_has_type, option_is_global_local,
+    option_is_window_local, option_scope_idx, option_var, optval_copy, optval_from_varp,
+    set_option, set_options_default, showoneopt, showoptions, stropt_get_newval,
+    unset_option_local_value,
 };
 
 /// The messages the parse reports. They go back to [`do_set`] rather than
@@ -272,7 +269,7 @@ unsafe fn get_option_newval(
 ) -> OptVal {
     debug_assert!(!varp.is_none());
 
-    let nil = NIL_OPTVAL;
+    let nil = OptVal::Nil;
     let global = OptionSetFlags::GLOBAL;
     // `get_option_default`'s answer borrows this when the default expands.
     let mut expansion = None;
@@ -304,12 +301,12 @@ unsafe fn get_option_newval(
         return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
     }
 
-    match oldval.type_0 {
-        kOptValTypeBoolean => {
+    match oldval {
+        OptVal::Boolean(_) => {
             let boolean = if nextchar == '!' as c_int {
                 // `:set opt!` inverts, leaving an unset global-local
                 // value unset.
-                unsafe { optval_boolean(oldval.data) }.map(|b| !b)
+                oldval.as_boolean().map(|b| !b)
             } else if prefix == Prefix::Inv {
                 Some(unsafe { *varp.boolean_var() } == 0)
             } else {
@@ -317,8 +314,7 @@ unsafe fn get_option_newval(
             };
             boolean_optval(boolean)
         }
-        kOptValTypeNumber => {
-            let oldval_num = unsafe { oldval.data.number };
+        OptVal::Number(oldval_num) => {
             let arg = unsafe { argp.add(1) };
             let Some(newval_num) = (unsafe { take_number(opt_idx, arg, errmsg) }) else {
                 return nil;
@@ -331,24 +327,18 @@ unsafe fn get_option_newval(
                 OP_REMOVING => oldval_num - newval_num,
                 _ => newval_num,
             };
-            OptVal {
-                type_0: kOptValTypeNumber,
-                data: OptValData { number },
-            }
+            OptVal::Number(number)
         }
-        kOptValTypeString => {
+        OptVal::String(old) => {
             let mut op = op;
-            let old = unsafe { oldval.data.string }.data();
             let op_var = &raw mut op;
-            let newval_str = unsafe { stropt_get_newval(opt_idx, argp, varp, old, op_var, flags) };
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(newval_str) },
-                },
-            }
+            // SAFETY: the old value names its own NUL-terminated bytes.
+            let newval_str =
+                unsafe { stropt_get_newval(opt_idx, argp, varp, old.data(), op_var, flags) };
+            // SAFETY: `stropt_get_newval` answers a NUL-terminated string.
+            OptVal::String(unsafe { cstr_as_string(newval_str) })
         }
-        _ => unreachable!("an option with no type has no value to set"),
+        OptVal::Nil => unreachable!("an option with no type has no value to set"),
     }
 }
 
@@ -526,7 +516,7 @@ unsafe fn do_one_set_option(
             opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errmsg,
         )
     };
-    if newval.type_0 == kOptValTypeNil || !errmsg.is_null() {
+    if newval.is_nil() || !errmsg.is_null() {
         return;
     }
     *errmsg = unsafe {

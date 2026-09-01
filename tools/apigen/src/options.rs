@@ -901,31 +901,18 @@ const fn scope_idx(
 }
 
 const fn boolean(value: bool) -> OptVal {
-    // The union holds the option variable's own tri-state word: 0 false, 1
+    // The variant holds the option variable's own tri-state word: 0 false, 1
     // true, -1 for a global-local option with no value in this scope. A
     // default is never the third.
-    OptVal {
-        type_0: kOptValTypeBoolean,
-        data: OptValData {
-            boolean: if value { 1 } else { 0 },
-        },
-    }
+    OptVal::Boolean(if value { 1 } else { 0 })
 }
 
 const fn number(value: OptInt) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeNumber,
-        data: OptValData { number: value },
-    }
+    OptVal::Number(value)
 }
 
 const fn string(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_cstr(value),
-        },
-    }
+    OptVal::String(String_0::from_cstr(value))
 }
 
 /// Copy one generated part into the table under construction.
@@ -990,7 +977,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptInt",
         "OptScopeFlags",
         "OptVal",
-        "OptValData",
         "OptVar",
         "String_0",
         "ssize_t",

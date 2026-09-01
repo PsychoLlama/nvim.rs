@@ -20,7 +20,7 @@ use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
 use crate::message_fmt::c_str;
 use crate::normal::find_decl;
-use crate::option::{kOptValTypeString, set_option_value_give_err};
+use crate::option::set_option_value_give_err;
 use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::pos::equalpos;
@@ -31,8 +31,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, NUL, OptVal, OptValData, OptionSetFlags, VAR_UNKNOWN, int64_t,
-    linenr_T, pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
+    Direction, EvalFuncData, FAIL, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, int64_t, linenr_T,
+    pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -530,12 +530,7 @@ impl Drop for EmptyCpo {
         if unsafe { *p_cpo.get() } == 0 {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: unsafe { cstr_as_string(self.0) },
-                    },
-                },
+                OptVal::String(unsafe { cstr_as_string(self.0) }),
                 OptionSetFlags::NONE,
             );
         }

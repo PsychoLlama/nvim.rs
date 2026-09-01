@@ -37,16 +37,13 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptValData, OptValType,
-    OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, linenr_T,
-    uint64_t,
+    Arena, Dict, Error, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
+    String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, linenr_T, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
 use core::ptr;
 
-const kOptValTypeString: OptValType = 2;
-const kOptValTypeNil: OptValType = -1;
 const kOptScopeBuf: OptScope = 2;
 const kOptScopeWin: OptScope = 1;
 const kOptScopeGlobal: OptScope = 0;
@@ -276,12 +273,7 @@ unsafe fn do_ft_buf(
 /// An `OptVal` borrowing the static string `text`, for the two option writes
 /// `do_ft_buf` makes: `set_option_direct` copies what it is given.
 fn static_option(text: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_cstr(text),
-        },
-    }
+    OptVal::String(String_0::from_cstr(text))
 }
 
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
@@ -358,7 +350,7 @@ pub unsafe fn nvim_get_option_value(
         leave_ft_buf(ftbuf);
     }
     if !err.is_set() {
-        if value.type_0 != kOptValTypeNil {
+        if !value.is_nil() {
             return optval_as_object(value).reported(err);
         }
         // SAFETY: the caller's option name is NUL-terminated.

@@ -48,7 +48,10 @@ pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
     let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
-    let value = unsafe { (*args).os_newval.string.data() };
+    let value = unsafe { (*args).os_newval }
+        .as_string()
+        .expect("the table installs this callback on a string option only")
+        .data();
     let retval = if unsafe { (*args).os_flags.has(OptionSetFlags::LOCAL) } {
         unsafe { option_set_callback_func(value, &raw mut buf.b_tfu_cb) }
     } else {

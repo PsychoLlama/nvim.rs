@@ -25,12 +25,10 @@ const PUM_PREVIEW_HEIGHT: c_int = 3;
 
 /// `STATIC_CSTR_AS_OPTVAL`: an option value borrowed from a string literal.
 fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(value.as_ptr().cast_mut(), value.count_bytes()),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        value.as_ptr().cast_mut(),
+        value.count_bytes(),
+    ))
 }
 
 /// The selected item's `info` text, if it has one.

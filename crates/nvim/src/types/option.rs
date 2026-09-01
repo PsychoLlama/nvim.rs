@@ -42,23 +42,77 @@ crate::flag_set! {
 
 pub type OptScope = ::core::ffi::c_uint;
 pub type OptScopeFlags = uint8_t;
+/// An option's value, and which of the three kinds of option it belongs to.
+///
+/// Distinct from [`OptValType`], which is what the option *table* declares a
+/// row to be: [`OptVal::kind`] is how the two are compared. A value and its
+/// row agree everywhere except [`OptVal::Nil`], which no row declares.
 #[derive(Copy, Clone)]
-pub struct OptVal {
-    pub type_0: OptValType,
-    pub data: OptValData,
-}
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union OptValData {
+pub enum OptVal {
+    /// A global-local option with no value in this scope, and what the API
+    /// reports as nil. `kOptValTypeNil`.
+    Nil,
     /// A boolean option's value, in the option variable's own alphabet: 0
     /// false, 1 true, and -1 for a global-local option with no local value.
-    /// `optval_boolean`/`boolean_optval` are the `Option<bool>` face of it;
-    /// the raw `c_int` stays because `set_option_varp` writes this word
-    /// straight through to the variable.
-    pub boolean: ::core::ffi::c_int,
-    pub number: OptInt,
-    pub string: String_0,
+    /// [`OptVal::as_boolean`] is the `Option<bool>` face of it; the raw
+    /// `c_int` stays because `set_option_varp` writes this word straight
+    /// through to the variable. `kOptValTypeBoolean`.
+    Boolean(::core::ffi::c_int),
+    /// `kOptValTypeNumber`.
+    Number(OptInt),
+    /// `kOptValTypeString`.
+    String(String_0),
 }
+
+impl OptVal {
+    /// The type this value is, as the option table spells one.
+    pub const fn kind(&self) -> OptValType {
+        match self {
+            OptVal::Nil => -1,
+            OptVal::Boolean(_) => 0,
+            OptVal::Number(_) => 1,
+            OptVal::String(_) => 2,
+        }
+    }
+
+    pub const fn is_nil(&self) -> bool {
+        matches!(self, OptVal::Nil)
+    }
+
+    /// A boolean option's value, `None` for the unset global-local marker
+    /// and for every other kind of option.
+    pub const fn as_boolean(self) -> Option<bool> {
+        match self {
+            OptVal::Boolean(0) => Some(false),
+            OptVal::Boolean(1..) => Some(true),
+            _ => None,
+        }
+    }
+
+    /// The tri-state word itself, for the callers that write it through to
+    /// an option variable.
+    pub const fn tristate(self) -> Option<::core::ffi::c_int> {
+        match self {
+            OptVal::Boolean(word) => Some(word),
+            _ => None,
+        }
+    }
+
+    pub const fn as_number(self) -> Option<OptInt> {
+        match self {
+            OptVal::Number(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    pub const fn as_string(self) -> Option<String_0> {
+        match self {
+            OptVal::String(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 pub type OptValType = ::core::ffi::c_int;
 pub type opt_did_set_cb_T = Option<unsafe fn(*mut optset_T) -> *const ::core::ffi::c_char>;
 pub type opt_expand_cb_T = Option<
@@ -93,8 +147,11 @@ pub struct optset_T {
     pub(crate) os_varp: OptSlot,
     pub os_idx: OptIndex,
     pub os_flags: OptionSetFlags,
-    pub os_oldval: OptValData,
-    pub os_newval: OptValData,
+    /// The values the set is moving between. The C carried the bare union
+    /// and left every `did_set_*` callback to know which arm was live from
+    /// the row the table put it in; these carry their own kind.
+    pub os_oldval: OptVal,
+    pub os_newval: OptVal,
     pub os_value_checked: bool,
     pub os_value_changed: bool,
     pub os_restore_chartab: bool,

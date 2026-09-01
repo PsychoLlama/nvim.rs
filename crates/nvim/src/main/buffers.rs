@@ -32,9 +32,9 @@ use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
     SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg,
-    got_int, kOptErrorfile, kOptShortmess, kOptValTypeString, mparm_T, msg_didany, msg_scroll,
-    no_wait_return, p_ef, p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action,
-    swap_exists_did_quit, time_msg_at,
+    got_int, kOptErrorfile, kOptShortmess, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef,
+    p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit,
+    time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -46,8 +46,8 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptValData, OptionSetFlags, VarLock, Vv, aentry_T,
-    exarg_T, handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
+    IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv, aentry_T, exarg_T,
+    handle_T, kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -115,12 +115,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
     if !parm.use_ef.is_null() {
         set_option_direct(
             kOptErrorfile,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(parm.use_ef) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(parm.use_ef) }),
             OptionSetFlags::NONE,
             SID_CARG,
         );
@@ -460,12 +455,7 @@ unsafe fn set_shortmess(value: *mut c_char) {
     // option layer copies it.
     set_option_value_give_err(
         kOptShortmess,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { cstr_as_string(value) },
-            },
-        },
+        OptVal::String(unsafe { cstr_as_string(value) }),
         OptionSetFlags::NONE,
     );
 }

@@ -45,8 +45,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, buf_T, colnr_T,
-    fmark_T, fmarkv_T, linenr_T, optset_T, pos_T,
+    AdditionalData, NUL, OptInt, OptVal, OptionSetFlags, String_0, buf_T, colnr_T, fmark_T,
+    fmarkv_T, linenr_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
 
@@ -54,8 +54,8 @@ use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
     did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
-    e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, kOptValTypeString,
-    opt_strings_mask, opt_strings_ok, valid_filetype,
+    e_backupext_and_patchmode_are_equal, e_comma_required, illegal_char, opt_strings_mask,
+    opt_strings_ok, valid_filetype,
 };
 use crate::pos::MAXLNUM;
 use crate::winlayer::{Buf, Win};
@@ -182,12 +182,7 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
         // mark (freeing what the old one held).
         set_option_direct(
             kOptComments,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0),
-                },
-            },
+            OptVal::String(String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0)),
             OptionSetFlags::LOCAL,
             SID_NONE,
         );

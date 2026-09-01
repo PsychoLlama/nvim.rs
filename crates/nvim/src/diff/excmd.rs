@@ -327,12 +327,7 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
         }
         wp.w_onebuf_opt.wo_fdm_save = strdup_of(wp.w_onebuf_opt.wo_fdm);
     }
-    let foldmethod = OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4),
-        },
-    };
+    let foldmethod = OptVal::String(String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4));
     let scope = OptionSetFlags::LOCAL;
     // SAFETY: a live window as the option's scope, and a static string as
     // its value.

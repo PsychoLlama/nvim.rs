@@ -21,7 +21,7 @@ use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret, tv_clear};
 use crate::eval::vars::{eval_one_expr_in_str, optval_as_tv};
 use crate::eval::{
     BS, CAR, ESC, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, STR2NR_ALL, TAB,
-    find_option_var_end, get_env_len, kOptValTypeNil,
+    find_option_var_end, get_env_len,
 };
 use crate::eval::{Cur, Tv};
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
@@ -206,7 +206,7 @@ pub(crate) unsafe fn eval_option(
         } else {
             get_option_value(opt_idx, opt_flags)
         };
-        debug_assert!(value.type_0 != kOptValTypeNil);
+        debug_assert!(!value.is_nil());
         unsafe { *rettv = optval_as_tv(value, true) };
         Ok(())
     } else if working && !is_tty_opt && is_option_hidden(opt_idx) {

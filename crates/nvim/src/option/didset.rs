@@ -59,8 +59,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptValData, OptionSetFlags, String_0, Vv, buf_T, colnr_T,
-    event_T, linenr_T, optset_T, ptrdiff_t, size_t, uint8_t, win_T,
+    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, colnr_T, event_T, linenr_T,
+    optset_T, ptrdiff_t, size_t, uint8_t, win_T,
 };
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -71,9 +71,8 @@ use crate::winfloat::win_float_update_statusline;
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,
-    check_blending, did_set_title, kOptValTypeNumber, kOptValTypeString, option_var,
-    option_was_set, optval_boolean, redraw_titles, set_option_value, set_option_varp,
-    set_options_bin,
+    check_blending, did_set_title, option_var, option_was_set, redraw_titles, set_option_value,
+    set_option_varp, set_options_bin,
 };
 use crate::highlight_group::HLF_W;
 use crate::winlayer::{self, Buf, Win};
@@ -86,16 +85,17 @@ const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
 /// What the option table hands a callback, read out of the frame once so
 /// that the rest of a callback is plain Rust.
 ///
-/// The union arms are only read through the accessors below, each of which
-/// is used by a callback whose option the table declares as that type.
+/// The accessors below each belong to a callback whose option the table
+/// declares as that type; the values now carry their own kind, so a
+/// mismatch is a panic naming the option rather than a bad read.
 #[derive(Clone, Copy)]
 struct Frame {
     /// The variable that already holds the new value.
     varp: OptSlot,
     idx: OptIndex,
     flags: OptionSetFlags,
-    old: OptValData,
-    new: OptValData,
+    old: OptVal,
+    new: OptVal,
     /// The window the set is happening in.
     win: Win,
     /// The buffer the set is happening in.
@@ -122,23 +122,24 @@ impl Frame {
     }
 
     fn old_number(self) -> OptInt {
-        // SAFETY: the table declares this option numeric.
-        unsafe { self.old.number }
+        self.old
+            .as_number()
+            .expect("the table declares this option numeric")
     }
 
     fn new_number(self) -> OptInt {
-        // SAFETY: the table declares this option numeric.
-        unsafe { self.new.number }
+        self.new
+            .as_number()
+            .expect("the table declares this option numeric")
     }
 
+    /// `None` is the unset global-local marker, not "false".
     fn old_boolean(self) -> Option<bool> {
-        // SAFETY: the table declares this option boolean.
-        unsafe { optval_boolean(self.old) }
+        self.old.as_boolean()
     }
 
     fn new_boolean(self) -> Option<bool> {
-        // SAFETY: the table declares this option boolean.
-        unsafe { optval_boolean(self.new) }
+        self.new.as_boolean()
     }
 }
 
@@ -183,15 +184,10 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
 
 /// A borrowed string option value. The callee copies it if it keeps it.
 fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(
-                value.as_ptr() as *mut c_char,
-                value.count_bytes() as size_t,
-            ),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        value.as_ptr() as *mut c_char,
+        value.count_bytes() as size_t,
+    ))
 }
 
 /// 'autochdir': follow the current file's directory from now on.
@@ -388,11 +384,7 @@ pub(crate) unsafe fn did_set_lines_or_columns(args: *mut optset_T) -> *const c_c
     let f = unsafe { Frame::read(args) };
     if p_lines.get() != Rows.get() as OptInt || p_columns.get() != Columns.get() as OptInt {
         if updating_screen.get() {
-            let oldval = OptVal {
-                type_0: kOptValTypeNumber,
-                data: f.old,
-            };
-            unsafe { set_option_varp(f.idx, f.varp, oldval, false) };
+            unsafe { set_option_varp(f.idx, f.varp, f.old, false) };
         } else if full_screen.get() {
             unsafe { screen_resize(p_columns.get() as c_int, p_lines.get() as c_int) };
         } else {

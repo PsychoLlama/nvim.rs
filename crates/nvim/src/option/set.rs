@@ -51,21 +51,20 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptValData, OptionSetFlags, String_0, Vv, optset_T, ptrdiff_t,
-    scid_T, sctx_T, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, String_0, Vv, optset_T, ptrdiff_t, scid_T,
+    sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
 
 use super::{
-    NIL_OPTVAL, NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OptSlot, SID_NONE, boolean_optval, check_redraw,
+    NO_LOCAL_UNDOLEVEL, NUMBUFLEN, OptSlot, SID_NONE, boolean_optval, check_redraw,
     do_spelllang_source, do_syntax_autocmd, find_tty_option_end, get_varp, get_varp_scope,
     insecure_flag, is_option_hidden, kOptFlagCurswant, kOptFlagHLOnly, kOptFlagRedrAll,
-    kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeBoolean,
-    kOptValTypeNumber, kOptValTypeString, mark_option_was_set, option_has_scope, option_has_type,
-    option_is_global_local, option_is_global_only, option_scope_idx, option_var, optval_copy,
-    optval_equal, optval_free, optval_from_varp, set_option_last_set, set_option_varp,
-    validate_option_value,
+    kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeWin, kOptValTypeString,
+    mark_option_was_set, option_has_scope, option_has_type, option_is_global_local,
+    option_is_global_only, option_scope_idx, option_var, optval_copy, optval_equal, optval_free,
+    optval_from_varp, set_option_last_set, set_option_varp, validate_option_value,
 };
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
@@ -217,16 +216,11 @@ pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
         } else if is_tty_option(name) {
             xstrdup(c"".as_ptr())
         } else {
-            return NIL_OPTVAL;
+            return OptVal::Nil;
         }
     };
-    OptVal {
-        type_0: kOptValTypeString,
-        // SAFETY: every arm above allocated a NUL-terminated string.
-        data: OptValData {
-            string: unsafe { cstr_as_string(value) },
-        },
-    }
+    // SAFETY: every arm above allocated a NUL-terminated string.
+    OptVal::String(unsafe { cstr_as_string(value) })
 }
 
 /// Remember what a script set `term` or `ttytype` to, so it reads back.
@@ -299,7 +293,7 @@ pub(crate) fn find_option(name: &CStr) -> OptIndex {
 /// unknown option answers nil rather than failing.
 pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptVal {
     if opt_idx == kOptInvalid {
-        return NIL_OPTVAL;
+        return OptVal::Nil;
     }
     // SAFETY: `opt` points into the option table, which is what both of
     // these want.
@@ -330,27 +324,14 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     }
     // A string global-local option is unset when it is empty.
     if option_has_type(opt_idx, kOptValTypeString) {
-        return OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: String_0::from_raw_parts(c"".as_ptr() as *mut c_char, 0),
-            },
-        };
+        return OptVal::String(String_0::from_raw_parts(c"".as_ptr() as *mut c_char, 0));
     }
-    let (type_0, data) = match opt_idx {
-        kOptAutocomplete | kOptAutoread | kOptFsync => {
-            (kOptValTypeBoolean, boolean_optval(None).data)
-        }
-        kOptScrolloff | kOptSidescrolloff => (kOptValTypeNumber, OptValData { number: -1 }),
-        kOptUndolevels => (
-            kOptValTypeNumber,
-            OptValData {
-                number: NO_LOCAL_UNDOLEVEL as _,
-            },
-        ),
+    match opt_idx {
+        kOptAutocomplete | kOptAutoread | kOptFsync => boolean_optval(None),
+        kOptScrolloff | kOptSidescrolloff => OptVal::Number(-1),
+        kOptUndolevels => OptVal::Number(NO_LOCAL_UNDOLEVEL as _),
         _ => unreachable!("global-local option {opt_idx} has no unset value"),
-    };
-    OptVal { type_0, data }
+    }
 }
 
 /// Whether the current window or buffer has left a global-local option's
@@ -406,8 +387,8 @@ pub(crate) unsafe fn did_set_option(
         os_varp: varp,
         os_idx: opt_idx,
         os_flags: opt_flags,
-        os_oldval: old_value.data,
-        os_newval: new_value.data,
+        os_oldval: old_value,
+        os_newval: new_value,
         os_value_checked: false,
         os_value_changed: false,
         os_restore_chartab: false,
@@ -425,7 +406,7 @@ pub(crate) unsafe fn did_set_option(
         && opt.flags & kOptFlagSecure as uint32_t != 0
     {
         errmsg = e_secure.as_ptr();
-    } else if new_value.type_0 == kOptValTypeString
+    } else if new_value.as_string().is_some()
         && check_illegal_path_names(unsafe { CStr::from_ptr(*varp.string_var()) }, opt.flags)
     {
         errmsg = e_invarg.as_ptr();

@@ -63,9 +63,9 @@ use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Error, Event,
-    Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal, OptValData,
-    OptValType, Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event,
-    buf_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T,
+    Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal, OptValType,
+    Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event, buf_T,
+    etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T,
     save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;

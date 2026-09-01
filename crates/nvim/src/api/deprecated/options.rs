@@ -11,7 +11,6 @@ use super::*;
 use crate::api::private::helpers::{Reported, buffer_by_handle, window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
-use crate::option::NIL_OPTVAL;
 use crate::types::OptionSetFlags;
 use core::ffi::{CStr, c_char, c_void};
 
@@ -133,7 +132,7 @@ unsafe fn get_option_from(
     let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {
         return Object::Nil;
     };
-    let mut value: OptVal = NIL_OPTVAL;
+    let mut value: OptVal = OptVal::Nil;
     if option_has_scope(opt_idx, scope) {
         let flags = if scope == kOptScopeGlobal {
             OptionSetFlags::GLOBAL
@@ -148,7 +147,7 @@ unsafe fn get_option_from(
     }
     // An option the scope does not have reads as the unset value, which is
     // the same answer as a name that is not an option's at all.
-    if value.type_0 as ::core::ffi::c_int == kOptValTypeNil as ::core::ffi::c_int {
+    if value.is_nil() {
         // SAFETY: the names and values are NUL-terminated strings.
         *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
         return Object::Nil;

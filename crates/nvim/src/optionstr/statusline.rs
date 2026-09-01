@@ -140,11 +140,12 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
     if is_stl && global && unsafe { c_int::from(*s) } == NUL {
         let mut expansion = None;
-        let default = get_option_default(idx, flags, &mut expansion);
-        // SAFETY: the option's own variable, and the table's default for
-        // it, which is a string.
+        let default = get_option_default(idx, flags, &mut expansion)
+            .as_string()
+            .expect("every option reaching here is a string option");
+        // SAFETY: the option's own variable.
         unsafe { xfree((*varp).cast::<c_void>()) };
-        unsafe { *varp = xstrdup(default.data.string.data()) };
+        unsafe { *varp = xstrdup(default.data()) };
         s = unsafe { *varp };
     }
     // A floating window's status line is part of its frame.
@@ -294,8 +295,11 @@ pub unsafe fn did_set_shada(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_shellpipe_redir(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the frame's new value is a C string.
-    let value = unsafe { CStr::from_ptr((*args).os_newval.string.data()) }.to_bytes();
+    // SAFETY: the caller's frame, and its new value is a C string.
+    let new = unsafe { (*args).os_newval }
+        .as_string()
+        .expect("the table installs this callback on a string option only");
+    let value = unsafe { CStr::from_ptr(new.data()) }.to_bytes();
     let bad = e_invalid_format_string_single_percent_s
         .as_ptr()
         .cast::<c_char>();

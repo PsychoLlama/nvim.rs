@@ -74,10 +74,10 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, Failed, FileInfo, NUL, OptVal, OptValData, OptValType, String_0, StringBuilder,
-    Timestamp, bhdr_T, blocknr_T, buf_T, colnr_T, dict_T, file_comparison, flush_buffers_T,
-    infoptr_T, int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t,
-    time_t, uint8_t, uint16_t, uint64_t, uv_uid_t, varnumber_T,
+    CmdModFlags, Failed, FileInfo, NUL, OptVal, OptValType, String_0, StringBuilder, Timestamp,
+    bhdr_T, blocknr_T, buf_T, colnr_T, dict_T, file_comparison, flush_buffers_T, infoptr_T,
+    int16_t, int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t, time_t, uint8_t,
+    uint16_t, uint64_t, uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;

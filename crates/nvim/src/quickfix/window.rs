@@ -62,12 +62,7 @@ impl Qfl {
 
 /// An option value holding a string constant.
 pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: static_cstring(text),
-        },
-    }
+    OptVal::String(static_cstring(text))
 }
 
 fn cur_win() -> Win {

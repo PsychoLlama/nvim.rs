@@ -251,12 +251,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         if unsafe { *p_cpo.get() } as c_int == NUL {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal {
-                    type_0: kOptValTypeString,
-                    data: OptValData {
-                        string: unsafe { cstr_as_string(save_cpo) },
-                    },
-                },
+                OptVal::String(unsafe { cstr_as_string(save_cpo) }),
                 OptionSetFlags::NONE,
             );
         }

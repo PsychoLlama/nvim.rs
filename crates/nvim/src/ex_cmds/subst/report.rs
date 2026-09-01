@@ -15,7 +15,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
-use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub, kOptValTypeString};
+use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::main::{
     KeyTyped, e_interr, got_int, p_icm, p_rdt, p_report, p_shm, sub_nlines, sub_nsubs,
 };
@@ -29,8 +29,8 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, colnr_T, exarg_T, handle_T, int64_t,
-    linenr_T, lpos_T, pos_T, size_t,
+    NUL, OptInt, OptVal, OptionSetFlags, String_0, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
+    lpos_T, pos_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use ::libc::strcpy;
@@ -40,15 +40,10 @@ use core::ptr;
 /// An option value that borrows a static C string, for the two options this
 /// module sets and puts back.
 pub(crate) fn static_cstr_optval(s: &'static CStr) -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(
-                s.as_ptr() as *mut c_char,
-                s.to_bytes().len() as size_t,
-            ),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(
+        s.as_ptr() as *mut c_char,
+        s.to_bytes().len() as size_t,
+    ))
 }
 
 /// The singular and plural forms of the report, for one line and for several.
@@ -361,12 +356,7 @@ pub(crate) unsafe fn show_sub(
     }
     set_option_direct(
         kOptShortmess,
-        OptVal {
-            type_0: kOptValTypeString,
-            data: OptValData {
-                string: unsafe { cstr_as_string(save_shm_p) },
-            },
-        },
+        OptVal::String(unsafe { cstr_as_string(save_shm_p) }),
         OptionSetFlags::NONE,
         SID_NONE,
     );

@@ -38,7 +38,7 @@ use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 
 use crate::message::redirecting;
-use crate::option::{kOptValTypeString, set_option_direct};
+use crate::option::set_option_direct;
 use crate::options::kOptEventignore;
 use crate::optionstr::free_string_option;
 
@@ -47,8 +47,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
     CMD_SIZE, CMD_echo, CMD_echoerr, CMD_echomsg, CMD_echon, CMD_execute, CmdAddr, CmdModFlags,
-    Failed, NUL, OptInt, OptVal, OptValData, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T,
-    size_t,
+    Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0, cmdidx_T, cmdmod_T, exarg_T, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::atoi;
@@ -569,12 +568,7 @@ unsafe fn apply_cmdmod() {
 
 /// The 'eventignore' value `:noautocmd` installs.
 fn eventignore_all() -> OptVal {
-    OptVal {
-        type_0: kOptValTypeString,
-        data: OptValData {
-            string: String_0::from_raw_parts(c"all".as_ptr() as *mut c_char, 3),
-        },
-    }
+    OptVal::String(String_0::from_raw_parts(c"all".as_ptr() as *mut c_char, 3))
 }
 
 /// Take the modifiers back out of force.
@@ -590,12 +584,7 @@ pub(crate) unsafe fn undo_cmdmod(cm: &mut cmdmod_T) {
     if !cm.cmod_save_ei.is_null() {
         set_option_direct(
             kOptEventignore,
-            OptVal {
-                type_0: kOptValTypeString,
-                data: OptValData {
-                    string: unsafe { cstr_as_string(cm.cmod_save_ei) },
-                },
-            },
+            OptVal::String(unsafe { cstr_as_string(cm.cmod_save_ei) }),
             OptionSetFlags::NONE,
             SID_NONE,
         );

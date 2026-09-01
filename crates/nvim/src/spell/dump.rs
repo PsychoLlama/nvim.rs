@@ -46,8 +46,8 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, NUL, OK, OptVal, OptValData, OptionSetFlags, exarg_T, hashitem_T, idx_T,
-    langp_T, linenr_T, size_t, slang_T, wordcount_T,
+    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, hashitem_T, idx_T, langp_T,
+    linenr_T, size_t, slang_T, wordcount_T,
 };
 use ::libc::{strcat, strcpy};
 
@@ -56,7 +56,7 @@ use super::check::no_spell_checking;
 use super::lookup::valid_word_prefix;
 use super::{
     MAXWLEN, WC_KEY_OFF, WF_ALLCAP, WF_BANNED, WF_CAPMASK, WF_FIXCAP, WF_KEEPCAP, WF_NEEDCOMP,
-    WF_ONECAP, WF_RARE, WF_RAREPFX, WF_REGION, kOptValTypeBoolean,
+    WF_ONECAP, WF_RARE, WF_RAREPFX, WF_REGION,
 };
 
 /// Round 2 of the walk: the keep-case tree.
@@ -114,14 +114,7 @@ pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
 
     // Spell checking has to be on in the new window for the dump to
     // mean anything.
-    set_option_value_give_err(
-        kOptSpell,
-        OptVal {
-            type_0: kOptValTypeBoolean,
-            data: OptValData { boolean: 1 },
-        },
-        OptionSetFlags::LOCAL,
-    );
+    set_option_value_give_err(kOptSpell, OptVal::Boolean(1), OptionSetFlags::LOCAL);
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
     optval_free(spl);
 

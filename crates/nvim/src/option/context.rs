@@ -23,8 +23,7 @@ use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
 
 use super::{
-    NIL_OPTVAL, get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct,
-    set_option_value_handle_tty,
+    get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct, set_option_value_handle_tty,
 };
 
 /// [`set_option_direct`] with another window or buffer standing in for the
@@ -163,7 +162,7 @@ pub(crate) unsafe fn get_option_value_for(
     // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
     let switched = unsafe { ctx.enter(from, err) };
     if err.kind() != kErrorTypeNone {
-        return NIL_OPTVAL;
+        return OptVal::Nil;
     }
     let value = get_option_value(opt_idx, opt_flags);
     if switched {
