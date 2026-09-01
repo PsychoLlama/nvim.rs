@@ -13,7 +13,7 @@
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, kCallbackNone};
+use crate::eval::typval::NumBuf;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::mem::offset_of;
@@ -167,12 +167,7 @@ pub unsafe fn f_prompt_setinterrupt(
 /// buffer it is handed.
 unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut buf_T) -> *mut Callback) {
     // SAFETY: the caller's obligation.
-    let mut callback = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut callback = Callback::None;
     if check_secure() {
         return;
     }

@@ -276,7 +276,8 @@ fn blank_channel(id: uint64_t, type_0: ChannelStreamType, events: *mut MultiQueu
         },
         term: ptr::null_mut(),
         // SAFETY: a zeroed `CallbackReader`/`Callback` is the "none" state —
-        // `kCallbackNone` is 0 and every pointer in them is nullable.
+        // `Callback::None` is discriminant 0 and every pointer in them is
+        // nullable.
         on_data: unsafe { mem::zeroed() },
         on_stderr: unsafe { mem::zeroed() },
         on_exit: unsafe { mem::zeroed() },

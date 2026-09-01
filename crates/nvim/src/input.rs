@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::eval::typval::kCallbackNone;
 use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
 use crate::guard::{Keys, Suppress};
@@ -25,19 +24,14 @@ use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, Callback_data, ExpandContext, IOSIZE, MultiQueue, NUL};
+use crate::types::{Callback, ExpandContext, IOSIZE, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
 use core::ffi::{c_char, c_int, c_void};
 
 const ESC: c_int = 0x1b;
 /// The unset callback, as `CALLBACK_NONE`.
-const CALLBACK_NONE: Callback = Callback {
-    data: Callback_data {
-        funcref: core::ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-};
+const CALLBACK_NONE: Callback = Callback::None;
 
 /// Ask for a `y` or an `n`, with `str` (already translated) as the question;
 /// it is always followed by `" (y/n)?"` and repeated until one of the two —

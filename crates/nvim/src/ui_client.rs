@@ -28,7 +28,6 @@ use crate::api::private::helpers::{
     api_dict_to_keydict, api_free_array, api_metadata, copy_array, cstr_as_string,
 };
 use crate::channel::{channel_connect, channel_job_start};
-use crate::eval::typval::kCallbackNone;
 use crate::event::r#loop::process_events;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::socket::socket_address_is_tcp;
@@ -92,12 +91,7 @@ static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
 /// does not read.
 fn no_reader() -> CallbackReader {
     CallbackReader {
-        cb: Callback {
-            data: crate::types::Callback_data {
-                funcref: core::ptr::null_mut(),
-            },
-            type_0: kCallbackNone,
-        },
+        cb: Callback::None,
         self_0: core::ptr::null_mut::<dict_T>(),
         buffer: garray_T {
             ga_len: 0,
@@ -144,12 +138,7 @@ pub(crate) unsafe fn ui_client_start_server(
     // The wide argument list is bound out here so that the region below is
     // the call and nothing else: a call spread over rustfmt's line width is
     // one unchecked line per argument.
-    let no_exit_cb = Callback {
-        data: crate::types::Callback_data {
-            funcref: core::ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
+    let no_exit_cb = Callback::None;
     let stdin_mode = kChannelStdinPipe;
     let no_term = core::ptr::null();
     let no_env = core::ptr::null_mut::<dict_T>();

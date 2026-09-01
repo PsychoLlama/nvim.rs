@@ -12,7 +12,6 @@ use crate::api::private::helpers::{Reported, array_add, dict_put, dict_put_str, 
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::cstr;
-use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::kvec::InitVec;
 use crate::winlayer::Live;
 
@@ -371,18 +370,18 @@ pub unsafe fn nvim_get_autocmds(
                                     unsafe { dict_put(&mut autocmd_info, c"command", d_command) };
                                     let mut cb: *mut Callback =
                                         unsafe { &raw mut (*ac).handler_fn };
-                                    match unsafe { (*cb).type_0 } as ::core::ffi::c_uint {
-                                        kCallbackLua => {
-                                            if unsafe { nlua_ref_is_function((*cb).data.luaref) } {
+                                    // SAFETY: `cb` is this command's callback.
+                                    match unsafe { &*cb } {
+                                        Callback::Lua(luaref) => {
+                                            let luaref = *luaref;
+                                            // SAFETY: the reference the row owns.
+                                            if unsafe { nlua_ref_is_function(luaref) } {
                                                 // SAFETY: a static C string.
                                                 let key =
                                                     unsafe { cstr_as_string(c"callback".as_ptr()) };
-                                                // SAFETY: the callback holds a
-                                                // Lua reference in this arm.
+                                                // SAFETY: as above.
                                                 let value = unsafe {
-                                                    Object::luaref(api_new_luaref(
-                                                        (*cb).data.luaref,
-                                                    ))
+                                                    Object::luaref(api_new_luaref(luaref))
                                                 };
                                                 // SAFETY: the dict is this call's own.
                                                 unsafe {
@@ -390,7 +389,7 @@ pub unsafe fn nvim_get_autocmds(
                                                 };
                                             }
                                         }
-                                        kCallbackFuncref | kCallbackPartial => {
+                                        Callback::Funcref(_) | Callback::Partial(_) => {
                                             // SAFETY: a static C string.
                                             let key =
                                                 unsafe { cstr_as_string(c"callback".as_ptr()) };
@@ -403,10 +402,9 @@ pub unsafe fn nvim_get_autocmds(
                                             // SAFETY: the dict is this call's own.
                                             unsafe { dict_put_str(&mut autocmd_info, key, value) };
                                         }
-                                        kCallbackNone => {
-                                            unsafe { abort() };
-                                        }
-                                        _ => {}
+                                        // A row with neither a command nor a
+                                        // handler cannot exist.
+                                        Callback::None => unsafe { abort() },
                                     }
                                 }
                                 // SAFETY: a live pointer the code around it already holds.

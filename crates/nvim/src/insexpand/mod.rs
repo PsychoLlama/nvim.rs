@@ -29,10 +29,10 @@ use crate::edit::{
     ins_redraw, insertchar, start_arrow, stop_arrow,
 };
 use crate::eval::typval::{
-    callback_copy, callback_free, kCallbackNone, tv_clear, tv_dict_add_bool, tv_dict_add_dict,
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_add_tv,
-    tv_dict_alloc, tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number,
-    tv_dict_get_tv, tv_dict_set_keys_readonly, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
+    callback_copy, callback_free, tv_clear, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_add_str_len, tv_dict_add_tv, tv_dict_alloc,
+    tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number, tv_dict_get_tv,
+    tv_dict_set_keys_readonly, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
     tv_list_append_dict, tv_list_first, tv_list_unref,
 };
 use crate::eval::userfunc::callback_call_retnr;
@@ -105,11 +105,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Callback, Callback_data, Direction, EvalFuncData,
-    ExpandContext, ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T,
-    colnr_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashtab_T, linenr_T, list_T, optset_T,
-    pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T,
-    typval_vval_union, uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
+    Arena, BackslashEscape, BoolVarValue, Callback, Direction, EvalFuncData, ExpandContext,
+    ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T, colnr_T, dict_T,
+    expand_T, extmark_undo_vec_t, garray_T, hashtab_T, linenr_T, list_T, optset_T, pos_T,
+    ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union,
+    uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -640,24 +640,9 @@ static COMPL_MATCH_ARRAY: GlobalCell<*mut pumitem_T> =
 static COMPL_MATCH_ARRAYSIZE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-static CFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    },
-    type_0: kCallbackNone,
-});
-static OFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    },
-    type_0: kCallbackNone,
-});
-static TSRFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    },
-    type_0: kCallbackNone,
-});
+static CFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
+static OFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
+static TSRFU_CB: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static CPT_CB: GlobalCell<*mut Callback> = GlobalCell::new(::core::ptr::null_mut::<Callback>());
 static CPT_CB_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const CI_WHAT_MODE: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;

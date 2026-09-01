@@ -69,10 +69,10 @@ use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
-    Callback, Callback_data, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter,
-    LuaRetMode, MarkGet, MotionType, OptValType, RemapValues, cmdidx_T, dobuf_action_values,
-    dobuf_start_values, estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T,
-    optmagic_T, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LuaRetMode, MarkGet,
+    MotionType, OptValType, RemapValues, cmdidx_T, dobuf_action_values, dobuf_start_values,
+    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T, optmagic_T, uint8_t,
+    uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -167,7 +167,6 @@ mod tags;
 pub(crate) use self::tags::*;
 mod filetype;
 pub use self::filetype::*;
-use crate::eval::typval::kCallbackNone;
 mod childproc;
 pub(crate) use self::childproc::*;
 pub const kDirectionNotSet: Direction = 0;
@@ -327,12 +326,7 @@ static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 /// The command Ex mode substitutes for a bare newline. Never written, and
 /// recognised by address in `ex_range_without_command`.
 static exmode_plus: &CStr = c"+";
-static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut::<c_char>(),
-    },
-    type_0: kCallbackNone,
-});
+static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static prev_dir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
 static filetype_plugin: GlobalCell<Option<bool>> = GlobalCell::new(None);

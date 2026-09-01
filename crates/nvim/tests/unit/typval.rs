@@ -25,16 +25,16 @@ use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use neovim::eval::typval::{
-    kCallbackNone, tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched,
-    tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove,
-    tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number,
-    tv_list_append_string, tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len,
-    tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
+    tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched, tv_dict_item_alloc,
+    tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove, tv_dict_watcher_add,
+    tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number, tv_list_append_string,
+    tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len, tv_list_unref, tv_list_watch_add,
+    tv_list_watch_remove,
 };
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Callback, Callback_data, Failed, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown, listitem_T,
-    listwatch_T, ptrdiff_t,
+    Callback, Failed, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown, listitem_T, listwatch_T,
+    ptrdiff_t,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -317,10 +317,7 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
     // `kCallbackNone` callback owns nothing.
     unsafe {
         let d = tv_dict_alloc();
-        let callback = Callback {
-            data: Callback_data { luaref: 0 },
-            type_0: kCallbackNone,
-        };
+        let callback = Callback::None;
         let pattern = cstr("key*");
         tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback.clone());
         assert!(tv_dict_is_watched(d));

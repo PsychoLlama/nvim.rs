@@ -15,7 +15,7 @@ use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_later, set_must_redraw,
 };
 use crate::eval::callback_call;
-use crate::eval::typval::{kCallbackNone, tv_clear};
+use crate::eval::typval::tv_clear;
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_process_events;

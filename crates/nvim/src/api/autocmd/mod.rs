@@ -12,17 +12,15 @@ use crate::autocmd::{
     autocmd_register, do_autocmd_event, event_name2nr_str, event_nr2name,
 };
 use crate::buffer::do_modelines;
-use crate::eval::typval::{
-    callback_free, callback_to_string, kCallbackFuncref, kCallbackLua, kCallbackNone,
-};
+use crate::eval::typval::{callback_free, callback_to_string};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::main::curbuf;
 use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
 use crate::types::{
-    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Callback_data,
-    Dict, Error, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
+    Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Dict, Error,
+    Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, auto_event,
     buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeNone, kErrorTypeValidation,
     kObjectTypeString, msglist_T, size_t, uint64_t,

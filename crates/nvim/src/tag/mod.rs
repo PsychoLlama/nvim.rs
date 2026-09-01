@@ -8,10 +8,10 @@ use crate::cmdexpand::{expand_init, expand_one};
 use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::eval::typval::{
-    callback_copy, callback_free, kCallbackNone, tv_clear, tv_dict_add_list, tv_dict_add_nr,
-    tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock, tv_dict_find, tv_dict_get_number,
-    tv_dict_get_string_alloc, tv_get_number, tv_list_alloc, tv_list_append_dict,
-    tv_list_append_number, tv_list_first, tv_list_free,
+    callback_copy, callback_free, tv_clear, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
+    tv_dict_alloc, tv_dict_alloc_lock, tv_dict_find, tv_dict_get_number, tv_dict_get_string_alloc,
+    tv_get_number, tv_list_alloc, tv_list_append_dict, tv_list_append_number, tv_list_first,
+    tv_list_free,
 };
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{callback_call, list2fpos, set_ref_in_callback};
@@ -64,10 +64,10 @@ use crate::state::MODE_INSERT;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, Callback_data, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T,
-    exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t,
-    linenr_T, list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T,
-    typval_T, typval_vval_union, varnumber_T, vimconv_T,
+    AdditionalData, Callback, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T, exarg_T,
+    expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T,
+    list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
+    typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_has;
 use crate::window::{

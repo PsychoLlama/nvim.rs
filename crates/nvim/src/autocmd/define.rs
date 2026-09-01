@@ -18,12 +18,7 @@ use crate::types::{Failed, RefcountSize};
 use crate::winlayer::{Live, Win, tabs};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
-const CALLBACK_INIT: Callback = Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-};
+const CALLBACK_INIT: Callback = Callback::None;
 
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
@@ -459,6 +454,11 @@ pub unsafe fn autocmd_register(
         unsafe { callback_copy(&raw mut (*ac.raw()).handler_fn, handler_fn) };
     } else {
         ac.handler_cmd = unsafe { xstrdup(handler_cmd) };
+        // The slot `kv_pushp` handed over is whatever `xrealloc` left there.
+        // Only `handler_cmd.is_null()` rows are ever asked for a handler, so
+        // the C left it uninitialised; a `Callback` is an enum and a bogus
+        // discriminant is not a value at all.
+        ac.handler_fn = Callback::None;
     }
     ac.script_ctx = current_sctx.get();
     // `SOURCING_LNUM`: the line of the innermost execution-stack frame.

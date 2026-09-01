@@ -309,7 +309,7 @@ pub unsafe fn tv_dict_get_callback(
     key_len: ptrdiff_t,
     result: *mut Callback,
 ) -> bool {
-    unsafe { (*result).type_0 = kCallbackNone };
+    unsafe { *result = Callback::None };
     let di = unsafe { tv_dict_find(d, key, key_len) };
     if di.is_null() {
         return true;

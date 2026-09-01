@@ -22,7 +22,7 @@ use crate::diff::diff_win_options;
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
-use crate::eval::typval::{kCallbackNone, tv_list_alloc};
+use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{
     get_vim_var_list, get_vim_var_str, set_reg_var, set_vim_var_list, set_vim_var_nr,
     set_vim_var_string,
@@ -84,8 +84,8 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    Callback, Callback_data, CallbackReader, IOSIZE, NUL, OptInt, Vv, dict_T, int64_t, linenr_T,
-    list_T, qf_info_T, varnumber_T,
+    Callback, CallbackReader, IOSIZE, NUL, OptInt, Vv, dict_T, int64_t, linenr_T, list_T,
+    qf_info_T, varnumber_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -231,12 +231,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         // stdin/stdout become the RPC channel.
         let mut err: *const c_char = ptr::null();
         let reader = CallbackReader {
-            cb: Callback {
-                data: Callback_data {
-                    funcref: ptr::null_mut(),
-                },
-                type_0: kCallbackNone,
-            },
+            cb: Callback::None,
             self_0: ptr::null_mut::<dict_T>(),
             buffer: GA_EMPTY_INIT_VALUE,
             eof: false,

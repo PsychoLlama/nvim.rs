@@ -285,7 +285,7 @@ pub(crate) unsafe fn get_cpt_sources_count() -> c_int {
 /// Copy a global callback function to a buffer-local callback.
 pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *mut Callback) {
     unsafe { callback_free(bufcb) };
-    if unsafe { (*globcb).type_0 } != kCallbackNone {
+    if unsafe { &*globcb }.is_set() {
         unsafe { callback_copy(bufcb, globcb) };
     }
 }
@@ -372,10 +372,12 @@ pub(crate) unsafe fn copy_cpt_callbacks(
         return;
     }
     unsafe { clear_cpt_callbacks(dest, *dest_cnt) };
+    // `xcalloc`, not `xmalloc`: an entry nothing fills has to read back as
+    // `Callback::None`, which is discriminant 0.
     unsafe { *dest = xcalloc(cnt as size_t, size_of::<Callback>()).cast::<Callback>() };
     unsafe { *dest_cnt = cnt };
     for i in 0..cnt as isize {
-        if unsafe { (*src.offset(i)).type_0 } != kCallbackNone {
+        if unsafe { &*src.offset(i) }.is_set() {
             unsafe { callback_copy((*dest).offset(i), src.offset(i)) };
         }
     }
@@ -418,6 +420,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
     if count == 0 {
         return Ok(());
     }
+    // Zeroed for the reason `copy_cpt_callbacks` zeroes.
     cur_buf().b_p_cpt_cb =
         unsafe { xcalloc(count as size_t, size_of::<Callback>()) }.cast::<Callback>();
     cur_buf().b_p_cpt_count = count;
@@ -439,7 +442,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
                 }
                 let slot = unsafe { cur_buf().b_p_cpt_cb.offset(idx) };
                 if unsafe { option_set_callback_func(part.as_mut_ptr().offset(1), slot) }.is_err() {
-                    unsafe { (*slot).type_0 = kCallbackNone };
+                    unsafe { *slot = Callback::None };
                 }
             }
             idx += 1;
@@ -631,7 +634,7 @@ pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) ->
         if unsafe { *p } as c_int != ',' as c_int && unsafe { *p } as c_int != NUL {
             // 'F{func}' case.
             let slot = unsafe { cur_buf().b_p_cpt_cb.offset(idx as isize) };
-            return if unsafe { (*slot).type_0 } != kCallbackNone {
+            return if unsafe { &*slot }.is_set() {
                 slot
             } else {
                 ptr::null_mut()

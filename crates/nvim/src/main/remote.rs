@@ -14,7 +14,6 @@ use core::ptr;
 
 use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::channel::channel_connect;
-use crate::eval::typval::kCallbackNone;
 use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec;
 use crate::main::exit::os_exit;
@@ -25,8 +24,8 @@ use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
-    Arena, Array, Callback, Callback_data, CallbackReader, Dict, Error, Integer, Object, String_0,
-    dict_T, size_t, uint64_t,
+    Arena, Array, Callback, CallbackReader, Dict, Error, Integer, Object, String_0, dict_T, size_t,
+    uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -54,12 +53,7 @@ pub(crate) unsafe fn server_connect(
     // Nothing reads from this channel; the reply comes back through the
     // request itself.
     let on_data = CallbackReader {
-        cb: Callback {
-            data: Callback_data {
-                funcref: ptr::null_mut(),
-            },
-            type_0: kCallbackNone,
-        },
+        cb: Callback::None,
         self_0: ptr::null_mut::<dict_T>(),
         buffer: GA_EMPTY_INIT_VALUE,
         eof: false,

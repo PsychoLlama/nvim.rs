@@ -83,13 +83,16 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         assert_eq!(tv::dict_watchers(d), []);
         log.check(&[alloc::dict(d)]);
 
-        // A `kCallbackNone` owns nothing.
+        // `Callback::None` owns nothing.
         let none = tv::build_callback(&Cb::None);
         log.check(&[]);
 
         // A funcref owns its name.
         let fref = tv::build_callback(&Cb::Fref(b"tr".to_vec()));
-        log.check(&[alloc::string(fref.data.funcref, "tr".len())]);
+        let Callback::Funcref(fref_name) = fref else {
+            panic!("built a funcref callback");
+        };
+        log.check(&[alloc::string(fref_name, "tr".len())]);
 
         // A partial owns its argument vector, each argument, its dict and
         // its name — allocated in that order.
@@ -99,7 +102,9 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             args: vec![Tv::s("test")],
             dict: Some(Tv::Dict(vec![])),
         })));
-        let pt = partial.data.partial;
+        let Callback::Partial(pt) = partial else {
+            panic!("built a partial callback");
+        };
         let pt_argv = (*pt).pt_argv;
         let pt_dict = (*pt).pt_dict;
         let pt_name = (*pt).pt_name;
@@ -153,7 +158,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             &registered[1].1
         ));
         log.check(&[
-            alloc::freed(registered[1].1.data.funcref),
+            alloc::freed(match registered[1].1 {
+                Callback::Funcref(name) => name,
+                _ => panic!("the watcher holds a funcref"),
+            }),
             alloc::freed(ws[1].pattern),
             alloc::freed(ws[1].at),
         ]);

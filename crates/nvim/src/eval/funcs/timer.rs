@@ -4,9 +4,9 @@
 use super::args::frame;
 use super::wrappers::{arg_number, check_arg, list_alloc_ret};
 use crate::eval::typval::{
-    kCallbackNone, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_number_arg, tv_dict_find, tv_get_number, tv_get_number_chk,
-    tv_list_append_number, tv_list_find_nr, tv_list_len,
+    tv_check_for_nonnull_dict_arg, tv_check_for_number_arg, tv_check_for_opt_number_arg,
+    tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_append_number, tv_list_find_nr,
+    tv_list_len,
 };
 use crate::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
@@ -23,13 +23,13 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, proftime_T,
-    time_t, typval_T, typval_vval_union, varnumber_T,
+    Callback, EvalFuncData, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, proftime_T, time_t, typval_T,
+    typval_vval_union, varnumber_T,
 };
 use crate::ui::ui_flush;
 use ::libc::time;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 use core::ptr;
 
 /// A cleared typval, the shape the evaluator's out-parameters start in.
@@ -302,12 +302,7 @@ pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             }
         }
     }
-    let mut callback = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut::<c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut callback = Callback::None;
     if !unsafe { callback_from_typval(&raw mut callback, args.ptr(1)) } {
         return;
     }

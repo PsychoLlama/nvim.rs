@@ -12,19 +12,18 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::SlotTable;
 use crate::types::{
-    AdditionalData, Array, BreakAt, Callback, Callback_data, Channel, CmdModFlags, DecorState,
-    EstackInfo, FILE, Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, MapHash,
-    MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptValType, Proc, Refcount,
-    RgbValue, ScreenGrid, Set_String, Set_uint32_t, StlClickDefinition, String_0, UV_MUTEX_INIT,
-    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
-    caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, etype_T, except_T, file_comparison,
-    fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, linenr_T,
-    lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
-    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
-    xfmark_T,
+    AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, DecorState, EstackInfo, FILE,
+    Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, MapHash, MarkTreeIter, MarkTreeIter_s,
+    MultiQueue, NS, Object, OptInt, OptValType, Proc, Refcount, RgbValue, ScreenGrid, Set_String,
+    Set_uint32_t, StlClickDefinition, String_0, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark,
+    XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T,
+    disptick_T, estack_T, etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T,
+    handle_T, hlf_T, int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T,
+    nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T, reg_extmatch_T, regmatch_T,
+    regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t,
+    uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
+    uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u,
+    uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -38,7 +37,6 @@ mod exit;
 mod remote;
 mod usage;
 pub use self::exit::*;
-use crate::eval::typval::kCallbackNone;
 use crate::highlight_group::HLF_NONE;
 use crate::normal::VisualMode;
 use crate::pos::MAXLNUM;
@@ -236,12 +234,7 @@ pub static msg_qflist: GlobalCell<*mut c_char> =
 /// borrow of this across one.
 pub(crate) static channels: GlobalCell<SlotTable<uint64_t, *mut Channel>> =
     GlobalCell::new(SlotTable::new());
-pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ::core::ptr::null_mut::<c_char>(),
-    },
-    type_0: kCallbackNone,
-});
+pub static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     itr: [MarkTreeIter {
         pos: MTPos {

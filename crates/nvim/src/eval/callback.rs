@@ -9,13 +9,12 @@ use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_isdigit;
 use crate::eval::collect::set_ref_in_item;
-use crate::eval::typval::{kCallbackFuncref, kCallbackLua, kCallbackNone, kCallbackPartial};
 use crate::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
 use crate::eval::vars::emsg_static;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::window::cur_win;
 use crate::eval::{
-    ARRAY_DICT_INIT, Cb, FUNCEXE_INIT, Tv, callback_depth, check_luafunc_name, kRetNilBool,
+    ARRAY_DICT_INIT, FUNCEXE_INIT, Tv, callback_depth, check_luafunc_name, kRetNilBool,
     partial_name,
 };
 use crate::lua::executor::{
@@ -49,17 +48,19 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
     // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
     // is only ever read through, which is what makes casting its `const`
     // away sound.
-    let (mut cb, tv) = unsafe { (Cb::new(callback), Tv::new(arg.cast_mut())) };
+    // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
+    // is only ever read through, which is what makes casting its `const`
+    // away sound.
+    let tv = unsafe { Tv::new(arg.cast_mut()) };
     let mut r = OK;
     // Every union read below is guarded by the `v_type` that names the live
     // member, which is the promise each SAFETY note restates.
-    if tv.v_type == VAR_PARTIAL && !tv.partial_or_null().is_null() {
-        // SAFETY: `VAR_PARTIAL` says `v_partial` is the live member.
+    let cb = if tv.v_type == VAR_PARTIAL && !tv.partial_or_null().is_null() {
+        // SAFETY: `VAR_PARTIAL` says `v_partial` is the live member, and the
+        // typval holds a live partial the callback becomes a second owner of.
         let partial = tv.partial_or_null();
-        cb.data.partial = partial;
-        // SAFETY: the typval holds a live partial.
         unsafe { (*partial).pt_refcount.retain() };
-        cb.type_0 = kCallbackPartial;
+        Callback::Partial(partial)
     } else if tv.v_type == VAR_STRING
         // SAFETY: `VAR_STRING` says `v_string` is the live member, and a
         // non-null one is NUL-terminated, so its first byte is readable.
@@ -67,30 +68,30 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
         && ascii_isdigit(unsafe { *tv.string_or_null() } as c_int)
     {
         r = FAIL;
+        Callback::None
     } else if tv.v_type == VAR_FUNC || tv.v_type == VAR_STRING {
         let name = tv.string_or_func_name();
         if name.is_null() {
             r = FAIL;
+            Callback::None
         // SAFETY: a non-null name is NUL-terminated.
         } else if unsafe { *name } as c_int == NUL {
-            cb.type_0 = kCallbackNone;
-            cb.data.funcref = null_mut();
+            Callback::None
         } else {
             // A plain String may name a script-local function, which
             // has to be resolved against the current script now.
-            cb.data.funcref = null_mut();
+            let mut funcref = null_mut();
             if tv.v_type == VAR_STRING {
                 // SAFETY: `name` is the typval's NUL-terminated string.
-                cb.data.funcref = unsafe { get_scriptlocal_funcname(name) };
+                funcref = unsafe { get_scriptlocal_funcname(name) };
             }
-            // SAFETY: `funcref` is the member written just above.
-            if unsafe { cb.data.funcref }.is_null() {
+            if funcref.is_null() {
                 // SAFETY: as above -- `name` is NUL-terminated.
-                cb.data.funcref = unsafe { xstrdup(name) };
+                funcref = unsafe { xstrdup(name) };
             }
             // SAFETY: the name just stored is a live owned string.
-            unsafe { func_ref(cb.data.funcref) };
-            cb.type_0 = kCallbackFuncref;
+            unsafe { func_ref(funcref) };
+            Callback::Funcref(funcref)
         }
     // SAFETY: the caller's promise about `arg`.
     } else if unsafe { nlua_is_table_from_lua(arg) } {
@@ -98,17 +99,20 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T
         let name = unsafe { nlua_register_table_as_callable(arg) };
         if name.is_null() {
             r = FAIL;
+            Callback::None
         } else {
             // SAFETY: `name` is the registered function's name.
-            cb.data.funcref = unsafe { xstrdup(name) };
-            cb.type_0 = kCallbackFuncref;
+            Callback::Funcref(unsafe { xstrdup(name) })
         }
     } else if tv.v_type == VAR_SPECIAL || (tv.v_type == VAR_NUMBER && tv.number_or_zero() == 0) {
-        cb.type_0 = kCallbackNone;
-        cb.data.funcref = null_mut();
+        Callback::None
     } else {
         r = FAIL;
-    }
+        Callback::None
+    };
+    // SAFETY: the caller's slot; it need not hold a value yet, and a
+    // `Callback` has no destructor to run over what was there.
+    unsafe { *callback = cb };
 
     if r == FAIL {
         // SAFETY: the message is a NUL-terminated literal.
@@ -144,14 +148,14 @@ pub unsafe fn callback_call(
     }
 
     // SAFETY: the caller's promise -- the callback outlives the call.
-    let cb = unsafe { Cb::new(callback) };
+    let cb = unsafe { &*callback };
     let mut partial: *mut partial_T = null_mut();
     let mut name: *mut c_char;
-    match cb.type_0 {
-        kCallbackFuncref => {
-            // SAFETY: `kCallbackFuncref` says `funcref` is the live member,
-            // and it holds a NUL-terminated name.
-            name = unsafe { cb.data.funcref };
+    match cb {
+        Callback::Funcref(funcref) => {
+            // A funcref holds a NUL-terminated name.
+            name = *funcref;
+            // SAFETY: as above.
             let len = unsafe { cstr::bytes_at(name) }.len() as c_int;
             // SAFETY: `len >= 6` promises six readable bytes.
             if len >= 6 && unsafe { cstr::starts_with(name, VLUA.to_bytes()) } {
@@ -165,27 +169,23 @@ pub unsafe fn callback_call(
                 partial = unsafe { get_vim_var_partial(Vv::Lua) };
             }
         }
-        kCallbackPartial => {
-            // SAFETY: `kCallbackPartial` says `partial` is the live member.
-            partial = unsafe { cb.data.partial };
+        Callback::Partial(held) => {
+            partial = *held;
             // SAFETY: the callback holds a live partial.
             name = unsafe { partial_name(partial) };
         }
-        kCallbackLua => {
+        Callback::Lua(luaref) => {
             // A Lua reference is called directly, with no arguments —
             // this is the "is it still wanted" question, not a
             // general-purpose call.
             let no_args = ARRAY_DICT_INIT;
             let arena = null_mut::<Arena>();
-            // SAFETY: `kCallbackLua` says `luaref` is the live member.
-            let luaref = unsafe { cb.data.luaref };
             // SAFETY: the reference is the one the callback owns, and the
             // call is handed no arguments, no arena and no error sink.
-            let rv = unsafe { nlua_call_ref_quiet(luaref, null(), no_args, kRetNilBool, arena) };
+            let rv = unsafe { nlua_call_ref_quiet(*luaref, null(), no_args, kRetNilBool, arena) };
             return rv.as_boolean().unwrap_or(false);
         }
-        // kCallbackNone, and anything else.
-        _ => return false,
+        Callback::None => return false,
     }
 
     let mut funcexe: funcexe_T = FUNCEXE_INIT;
@@ -213,21 +213,19 @@ pub unsafe fn set_ref_in_callback(
     list_stack: *mut *mut list_stack_T,
 ) -> bool {
     // SAFETY: the caller's promise -- the callback outlives the call.
-    let cb = unsafe { Cb::new(callback) };
-    match cb.type_0 {
-        kCallbackPartial => {
+    match unsafe { &*callback } {
+        Callback::Partial(partial) => {
             let mut tv = UNSET_TV;
             tv.v_type = VAR_PARTIAL;
-            // SAFETY: `kCallbackPartial` says `partial` is the live member.
-            tv.vval.v_partial = unsafe { cb.data.partial };
+            tv.vval.v_partial = *partial;
             // SAFETY: `tv` is this frame's, and the stacks are the caller's.
             unsafe { set_ref_in_item(&raw mut tv, copy_id, ht_stack, list_stack) }
         }
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
-        kCallbackLua => unreachable!("set_ref_in_callback on a Lua callback"),
-        // kCallbackFuncref and kCallbackNone hold nothing collectable.
-        _ => false,
+        Callback::Lua(_) => unreachable!("set_ref_in_callback on a Lua callback"),
+        // A funcref and no callback at all hold nothing collectable.
+        Callback::Funcref(_) | Callback::None => false,
     }
 }
 

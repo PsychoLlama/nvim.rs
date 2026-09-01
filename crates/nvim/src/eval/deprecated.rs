@@ -24,9 +24,7 @@ use core::slice;
 use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::typval::{
-    NumBuf, kCallbackNone, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
-};
+use crate::eval::typval::{NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::main::{e_api_spawn_failed, e_invarg};
@@ -35,9 +33,9 @@ use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, Callback_data, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T,
-    uint64_t, varnumber_T,
+    Callback, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T, uint64_t,
+    varnumber_T,
 };
 use crate::winlayer::buffers;
 
@@ -51,12 +49,7 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 };
 
 /// `CALLBACK_NONE`: no callback at all.
-const CALLBACK_NONE: Callback = Callback {
-    data: Callback_data {
-        funcref: core::ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-};
+const CALLBACK_NONE: Callback = Callback::None;
 
 /// `CALLBACK_READER_INIT`: a stream nobody is listening to.
 const CALLBACK_READER_INIT: CallbackReader = CallbackReader {

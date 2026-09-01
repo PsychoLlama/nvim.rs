@@ -16,8 +16,8 @@ use core::ptr;
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    callback_free, kCallbackNone, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
-    tv_list_append_string, tv_list_ref, tv_list_unref,
+    callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
+    tv_list_ref, tv_list_unref,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -62,7 +62,7 @@ pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
 
 /// Whether a reader has anywhere to deliver to.
 pub(super) fn callback_reader_set(reader: &CallbackReader) -> bool {
-    reader.cb.type_0 != kCallbackNone || !reader.self_0.is_null()
+    reader.cb.is_set() || !reader.self_0.is_null()
 }
 
 pub unsafe fn on_channel_data(

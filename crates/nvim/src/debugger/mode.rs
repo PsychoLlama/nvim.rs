@@ -270,12 +270,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
                 0,
                 ExpandContext::Nothing,
                 ptr::null(),
-                Callback {
-                    data: Callback_data {
-                        funcref: ptr::null_mut(),
-                    },
-                    type_0: kCallbackNone,
-                },
+                Callback::None,
                 false,
                 ptr::null_mut(),
             )

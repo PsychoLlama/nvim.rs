@@ -17,7 +17,6 @@ use crate::cstr;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
-use crate::eval::typval::kCallbackNone;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::guard::{Allow, Suppress};
@@ -40,9 +39,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{
-    Callback, Callback_data, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t,
-};
+use crate::types::{Callback, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t};
 use crate::ui::ui_has;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
@@ -60,12 +57,7 @@ pub(super) enum Confirm {
 
 /// An empty callback, for a prompt that has no completion function.
 fn no_callback() -> Callback {
-    Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    }
+    Callback::None
 }
 
 /// Does 'cpoptions' contain `u`?  Then undo is not synced while asking.

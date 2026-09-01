@@ -23,7 +23,7 @@ static last_qf_id: GlobalCell<c_uint> = GlobalCell::new(0);
 /// A list slot that has never been used.
 pub(crate) fn empty_list() -> qf_list_T {
     // SAFETY: every field is an integer, a bool, a raw pointer, or the
-    // `Callback` whose zero discriminant is `kCallbackNone` and whose union
+    // `Callback` whose zero discriminant is `Callback::None` and whose payload
     // is a pointer either way.
     unsafe { core::mem::zeroed() }
 }

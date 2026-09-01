@@ -27,7 +27,7 @@ use crate::global_cell::GlobalCell;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, Callback, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
+    Array, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
     OptValType, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T,
     partial_T, size_t, timer_T, typval_T, uint64_t,
 };
@@ -78,10 +78,6 @@ pub use self::expr::eval0;
 /// A value the evaluator is working on. The `*const typval_T` arguments the
 /// builtins take are wrapped with `cast_mut()` and only read.
 pub(crate) type Tv = Live<typval_T>;
-
-/// A callback the user handed a builtin, and its ownership of a name or a
-/// partial.
-pub(crate) type Cb = Live<Callback>;
 
 /// A registered timer. The promise is discharged by the reference count:
 /// nothing here holds one across a call that has not taken a reference.

@@ -5,9 +5,8 @@
 use super::args::{Args, frame};
 use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, Callback_data, GA_EMPTY_INIT_VALUE, MAX_FUNC_ARGS,
-    kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout,
-    kRetObject,
+    ARENA_EMPTY, ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, MAX_FUNC_ARGS, kChannelPartAll,
+    kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout, kRetObject,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{arena_array, cstr_as_string};
@@ -17,7 +16,7 @@ use crate::channel::{
 use crate::cstr;
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
-    NumBuf, kCallbackNone, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    NumBuf, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
     tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
@@ -51,12 +50,7 @@ use core::ptr;
 
 /// A cleared `CallbackReader`, which the option parsers fill in.
 const NO_READER: CallbackReader = CallbackReader {
-    cb: Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut::<c_char>(),
-        },
-        type_0: kCallbackNone,
-    },
+    cb: Callback::None,
     self_0: ptr::null_mut::<dict_T>(),
     buffer: GA_EMPTY_INIT_VALUE,
     eof: false,
@@ -559,7 +553,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         on_data.buffered = unsafe { tv_dict_get_number(opts, c"data_buffered".as_ptr()) } != 0;
         // Buffered with no callback means "collect it on the Dict", so
         // the Dict has to be reachable from the reader.
-        if on_data.buffered && on_data.cb.type_0 == kCallbackNone {
+        if on_data.buffered && !on_data.cb.is_set() {
             on_data.self_0 = opts;
         }
     }
@@ -596,7 +590,7 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         return;
     }
     on_stdin.buffered = unsafe { tv_dict_get_number(opts, c"stdin_buffered".as_ptr()) } != 0;
-    if on_stdin.buffered && on_stdin.cb.type_0 == kCallbackNone {
+    if on_stdin.buffered && !on_stdin.cb.is_set() {
         on_stdin.self_0 = opts;
     }
 

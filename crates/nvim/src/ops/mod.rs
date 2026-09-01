@@ -27,7 +27,7 @@ use crate::cursor::{
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
-use crate::eval::typval::{kCallbackNone, tv_clear, tv_dict_add_nr};
+use crate::eval::typval::{tv_clear, tv_dict_add_nr};
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
@@ -83,10 +83,10 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::{
-    Callback, Callback_data, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType, OpType, OptInt,
-    StrCharInfo, VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, colnr_T, dict_T,
-    int32_t, int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uvarnumber_T, varnumber_T, yankreg_T,
+    Callback, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType, OpType, OptInt, StrCharInfo,
+    VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, colnr_T, dict_T, int32_t,
+    int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union,
+    uvarnumber_T, varnumber_T, yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

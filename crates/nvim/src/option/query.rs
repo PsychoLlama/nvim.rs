@@ -16,7 +16,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
-use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_add_tv, tv_dict_alloc, tv_free};
+use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
@@ -32,9 +32,8 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, Callback_data, CpoFlag, Failed, NUL, OptInt, OptVal, OptValData,
-    OptionSetFlags, ShmFlag, VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T,
-    uint8_t,
+    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptValData, OptionSetFlags, ShmFlag,
+    VAR_STRING, dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
 };
 
 use super::{
@@ -195,13 +194,8 @@ pub(crate) unsafe fn option_set_callback_func(
         unsafe { (*tv).vval.v_string = xstrdup(optval) };
         tv
     };
-    let mut cb = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut::<c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
-    if !unsafe { callback_from_typval(&raw mut cb, tv) } || cb.type_0 == kCallbackNone {
+    let mut cb = Callback::None;
+    if !unsafe { callback_from_typval(&raw mut cb, tv) } || !cb.is_set() {
         unsafe { tv_free(tv) };
         return Err(Failed);
     }

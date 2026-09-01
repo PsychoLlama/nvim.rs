@@ -110,12 +110,7 @@ pub unsafe fn get_user_input(
         vval: typval_vval_union { v_number: 0 },
     };
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-    let mut input_callback = Callback {
-        data: Callback_data {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut input_callback = Callback::None;
     let mut prompt_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut defstr_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut cancelreturn_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];

@@ -37,8 +37,8 @@ use crate::drawscreen::{
 };
 use crate::edit::beginline;
 use crate::eval::typval::{
-    KeyTaken, callback_copy, callback_free, callback_put, kCallbackNone, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
+    KeyTaken, callback_copy, callback_free, callback_put, tv_clear, tv_copy, tv_dict_add,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string_alloc, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free,
     tv_dict_unref, tv_free, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
@@ -112,12 +112,12 @@ use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, l
 use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Callback, Callback_data, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt,
-    OptVal, OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType,
-    aco_save_T, bln_values, buf_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T,
-    dobuf_action_values, exarg_T, getf_values, linenr_T, list_T, listitem_T, optset_T, pos_T,
-    ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T,
-    scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T, vimconv_T,
+    Callback, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptVal,
+    OptValData, OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType, aco_save_T,
+    bln_values, buf_T, cleanup_T, cmdidx_T, colnr_T, dict_T, dictitem_T, dobuf_action_values,
+    exarg_T, getf_values, linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T,
+    qf_list_T, qfline_T, qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t,
+    typval_T, typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
@@ -254,12 +254,7 @@ pub const INVALID_QFBUFNR: c_int = 0;
 pub(crate) const E_NO_MORE_ITEMS: &CStr = c"E553: No more items";
 pub(crate) const E_QUICKFIX_LIST_CHANGED: &CStr = c"E925: Current quickfix list was changed";
 pub(crate) const E_LOCATION_LIST_CHANGED: &CStr = c"E926: Current location list was changed";
-static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: core::ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-});
+static qftf_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static qfFile_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
 static qfSep_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
 static qfLine_hl_id: GlobalCell<c_int> = GlobalCell::new(0);

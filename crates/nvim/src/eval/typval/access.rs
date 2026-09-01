@@ -46,8 +46,6 @@ pub(crate) type Bl = Live<blob_T>;
 pub(crate) type Ga = Live<garray_T>;
 /// A live `partial_T`; see [`Tv`].
 pub(crate) type Pt = Live<partial_T>;
-/// A live `Callback`; see [`Tv`].
-pub(crate) type Cb = Live<Callback>;
 /// A live `DictWatcher`; see [`Tv`].
 pub(crate) type Dw = Live<DictWatcher>;
 /// A live `listwatch_T`; see [`Tv`].

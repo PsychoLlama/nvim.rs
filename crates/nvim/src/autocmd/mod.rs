@@ -13,8 +13,8 @@ use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, kCallbackLua,
-    kCallbackNone, tv_clear, tv_dict_add_nr, tv_dict_add_tv, tv_dict_set_keys_readonly,
+    TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear, tv_dict_add_nr,
+    tv_dict_add_tv, tv_dict_set_keys_readonly,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal};
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};
@@ -62,11 +62,11 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Callback_data, Error,
-    Event, Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal,
-    OptValData, OptValType, Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T,
-    auto_event, buf_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T,
-    save_redo_T, save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
+    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Error, Event,
+    Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal, OptValData,
+    OptValType, Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event,
+    buf_T, etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T,
+    save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

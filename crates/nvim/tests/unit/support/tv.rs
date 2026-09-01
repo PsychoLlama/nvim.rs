@@ -32,10 +32,10 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
-    Callback, Callback_data, CallbackType, DictWatcher, Object, Refcount, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VarLock, dict_T, dictitem_T, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, list_T, listitem_T,
-    partial_T, typval_T, typval_vval_union,
+    Callback, DictWatcher, Object, Refcount, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
+    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, list_T, listitem_T, partial_T, typval_T,
+    typval_vval_union,
 };
 
 use super::cstr;
@@ -516,11 +516,11 @@ pub(crate) unsafe fn first_di(d: *const dict_T) -> *mut dictitem_T {
 /// A `Callback`, as `callback2tbl` spelled one.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Cb {
-    /// `kCallbackNone`.
+    /// `Callback::None`.
     None,
-    /// `kCallbackFuncref`, and the name it holds.
+    /// `Callback::Funcref`, and the name it holds.
     Fref(Vec<u8>),
-    /// `kCallbackPartial`, and the partial it holds.
+    /// `Callback::Partial`, and the partial it holds.
     Pt(Box<Pt>),
 }
 
@@ -530,17 +530,13 @@ pub(crate) enum Cb {
 /// `cb` points at a live callback.
 pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
     let mut path = Vec::new();
-    match unsafe { (*cb).type_0 } {
-        neovim::eval::typval::kCallbackNone => Cb::None,
-        neovim::eval::typval::kCallbackFuncref => Cb::Fref(
-            unsafe { CStr::from_ptr((*cb).data.funcref) }
-                .to_bytes()
-                .to_vec(),
-        ),
-        neovim::eval::typval::kCallbackPartial => Cb::Pt(Box::new(unsafe {
-            read_partial((*cb).data.partial, &mut path)
-        })),
-        other => panic!("callback type {other} is not implemented"),
+    match unsafe { &*cb } {
+        Callback::None => Cb::None,
+        Callback::Funcref(name) => Cb::Fref(unsafe { CStr::from_ptr(*name) }.to_bytes().to_vec()),
+        Callback::Partial(partial) => {
+            Cb::Pt(Box::new(unsafe { read_partial(*partial, &mut path) }))
+        }
+        Callback::Lua(_) => panic!("a Lua callback is not implemented"),
     }
 }
 
@@ -551,28 +547,16 @@ pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
 /// # Safety
 /// The editor must be up.
 pub(crate) unsafe fn build_callback(cb: &Cb) -> Callback {
-    let (type_0, data): (CallbackType, Callback_data) = match cb {
-        Cb::None => (
-            neovim::eval::typval::kCallbackNone,
-            Callback_data { luaref: 0 },
-        ),
-        Cb::Fref(name) => (
-            neovim::eval::typval::kCallbackFuncref,
-            Callback_data {
-                funcref: unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast(),
-            },
-        ),
+    match cb {
+        Cb::None => Callback::None,
+        Cb::Fref(name) => {
+            Callback::Funcref(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
+        }
         Cb::Pt(pt) => {
             let mut path = Vec::new();
-            (
-                neovim::eval::typval::kCallbackPartial,
-                Callback_data {
-                    partial: unsafe { pt.build_at(&mut path) },
-                },
-            )
+            Callback::Partial(unsafe { pt.build_at(&mut path) })
         }
-    };
-    Callback { data, type_0 }
+    }
 }
 
 /// One registered dict watcher, as `dict_watchers` spelled it.

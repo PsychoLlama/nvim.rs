@@ -22,7 +22,7 @@ use crate::autocmd::{EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds};
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
 use crate::digraph::keymap_ga_clear;
-use crate::eval::typval::{callback_free, kCallbackNone, tv_dict_alloc};
+use crate::eval::typval::{callback_free, tv_dict_alloc};
 use crate::eval::vars::init_var_dict;
 use crate::ex_cmds::getfile;
 use crate::ex_docmd::tabpage_new;
@@ -333,8 +333,8 @@ pub unsafe fn buflist_new(
         return ptr::null_mut();
     }
 
-    buf.b_prompt_callback.type_0 = kCallbackNone;
-    buf.b_prompt_interrupt.type_0 = kCallbackNone;
+    buf.b_prompt_callback = Callback::None;
+    buf.b_prompt_interrupt = Callback::None;
     buf.b_prompt_text = ptr::null_mut();
     buf.b_prompt_start = INIT_FMARK;
     // The default prompt is "% ".

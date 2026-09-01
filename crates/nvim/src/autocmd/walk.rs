@@ -144,13 +144,13 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     // SAFETY: `ac` and `apc` are the caller's live row and walk cursor, and
     // the row owns the handler this clones.
     let mut callback = unsafe { (*ac).handler_fn.clone() };
-    if callback.type_0 != kCallbackLua {
+    let Callback::Lua(luaref) = callback else {
         let mut argsin = TV_INITIAL_VALUE;
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: three locals of this frame, which outlive the call.
         unsafe { callback_call(&raw mut callback, 0, &raw mut argsin, &raw mut rettv) };
         return false;
-    }
+    };
 
     // SAFETY: every name below is a NUL-terminated string of the row's or
     // the walk's, and each `String_0` borrows it only until the call that
@@ -190,11 +190,11 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     let mut args = ArrayBuf::<1>::new();
     args.push(data.object());
 
-    // SAFETY: `callback` is Lua-typed, so `luaref` is the live union field;
-    // `args` stands for the length of the call.
+    // SAFETY: the reference is the row's own; `args` stands for the length
+    // of the call.
     let result = unsafe {
         nlua_call_ref_quiet(
-            callback.data.luaref,
+            luaref,
             ::core::ptr::null(),
             args.array(),
             kRetNilBool,

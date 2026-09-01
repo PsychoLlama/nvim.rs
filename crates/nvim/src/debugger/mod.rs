@@ -31,7 +31,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int32, skipwhite};
 use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
-use crate::eval::typval::{kCallbackNone, tv_free};
+use crate::eval::typval::tv_free;
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{getcmdline_prompt, getexline};
@@ -58,9 +58,9 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::{
-    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Callback_data, Failed, MAXPATHL, NUL, buf_T,
-    colnr_T, estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t,
-    tasave_T, typval_T, uint8_t,
+    CMD_breakdel, CMD_profdel, CMD_profile, Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T,
+    estack_arg_T, exarg_T, garray_T, int32_t, int64_t, linenr_T, regprog_T, size_t, tasave_T,
+    typval_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};

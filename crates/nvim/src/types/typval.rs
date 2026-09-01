@@ -17,22 +17,34 @@ pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 /// A Vimscript or Lua callable, held by whatever registered it.
 ///
-/// Not `Copy`. Whichever arm is live -- a funcref name, a `partial_T`
+/// Not `Copy`. Whichever variant is live -- a funcref name, a `partial_T`
 /// refcount, a `LuaRef` -- is owned, and `callback_free` releases it.
 /// Duplicating one without `callback_copy` is a second owner of the same
 /// reference, so the copies that remain say `.clone()` and are visible.
+///
+/// `#[repr(C, u32)]` with `None` at zero, because several aggregates that
+/// hold one are born from all-zero bytes and never write the field:
+/// `buf_T` from `Box::new_zeroed`, `qf_list_T` and a channel's readers from
+/// `mem::zeroed`, `'complete'`'s per-source array from `xcalloc`. The
+/// discriminant may not move into a niche, or "no callback" stops being
+/// what those zeroes mean.
 #[derive(Clone)]
-pub struct Callback {
-    pub data: Callback_data,
-    pub type_0: CallbackType,
+#[repr(C, u32)]
+pub enum Callback {
+    None = 0,
+    /// A function name, owned: `func_unref` and `xfree` release it.
+    Funcref(*mut ::core::ffi::c_char) = 1,
+    /// A partial, holding a reference of its own.
+    Partial(*mut partial_T) = 2,
+    /// A Lua value in that state's registry.
+    Lua(LuaRef) = 3,
 }
-pub type CallbackType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub union Callback_data {
-    pub funcref: *mut ::core::ffi::c_char,
-    pub partial: *mut partial_T,
-    pub luaref: LuaRef,
+
+impl Callback {
+    /// Whether anything is registered.
+    pub const fn is_set(&self) -> bool {
+        !matches!(self, Callback::None)
+    }
 }
 /// One `dictwatcheradd()` registration, linked into its dict's queue.
 ///

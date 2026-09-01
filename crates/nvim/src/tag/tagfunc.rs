@@ -19,12 +19,7 @@ use core::ptr;
 
 /// The global `'tagfunc'` callback. A buffer-local one lives in
 /// `b_tfu_cb`.
-static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback {
-    data: Callback_data {
-        funcref: ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-});
+static tfu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 
 /// The address, because every operation the tree has on a callback —
 /// parsing an option into it, marking it for the collector, copying it,
@@ -88,7 +83,7 @@ pub fn set_buflocal_tfu_callback(mut buf: Buf) {
     // SAFETY: a live buffer owns its own callback, and `global_tagfunc`
     // answers the address of a static.
     unsafe { callback_free(&raw mut buf.b_tfu_cb) };
-    if unsafe { (*global_tagfunc()).type_0 } != kCallbackNone {
+    if unsafe { &*global_tagfunc() }.is_set() {
         unsafe { callback_copy(&raw mut buf.b_tfu_cb, global_tagfunc()) };
     }
 }
@@ -129,7 +124,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         None
     };
 
-    if unsafe { *cur_buf().b_p_tfu } == 0 || cur_buf().b_tfu_cb.type_0 == kCallbackNone {
+    if unsafe { *cur_buf().b_p_tfu } == 0 || !cur_buf().b_tfu_cb.is_set() {
         return FAIL;
     }
 

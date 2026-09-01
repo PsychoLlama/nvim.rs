@@ -192,12 +192,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     static prev_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(UINT_MAX);
     static prev_prompt_errors: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    let mut color_cb = Callback {
-        data: Callback_data {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut color_cb = Callback::None;
     let mut can_free_cb = false;
     let mut err: Error = Error::none();
     let mut err_errmsg = e_intern2.as_ptr();
@@ -211,7 +206,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
             break 'body Label::End;
         }
 
-        if colored_ccline.highlight_callback.type_0 != kCallbackNone {
+        if colored_ccline.highlight_callback.is_set() {
             // Currently this should only happen while processing input()
             // prompts.
             debug_assert!(colored_ccline.input_fn != 0);
@@ -239,7 +234,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
             break 'body Label::Error;
         }
 
-        if color_cb.type_0 == kCallbackNone {
+        if !color_cb.is_set() {
             break 'body Label::End;
         }
         if unsafe { *colored_ccline.at(colored_ccline.len()) } as ::core::ffi::c_int != NUL {

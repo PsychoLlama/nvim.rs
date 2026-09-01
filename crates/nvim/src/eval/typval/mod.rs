@@ -31,8 +31,8 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    __compar_fn_t, Arena, BoolVarValue, Callback, CallbackType, DictWatcher, EvalFuncData, LuaRef,
-    QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    __compar_fn_t, Arena, BoolVarValue, Callback, DictWatcher, EvalFuncData, LuaRef, QUEUE,
+    SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
     buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t,
     kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T,
@@ -69,10 +69,6 @@ mod get;
 pub use self::get::*;
 mod nothing;
 pub(crate) use self::nothing::*;
-pub const kCallbackLua: CallbackType = 3;
-pub const kCallbackPartial: CallbackType = 2;
-pub const kCallbackFuncref: CallbackType = 1;
-pub const kCallbackNone: CallbackType = 0;
 pub const DO_NOT_FREE_CNT: ::core::ffi::c_uint = 1073741823;
 pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
 pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;

@@ -36,12 +36,7 @@ unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut dictitem_T) -> Result<(), QfErr
     if check_secure() {
         return Err(QfError::Forbidden);
     }
-    let mut cb = Callback {
-        data: Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut cb = Callback::None;
     // SAFETY: the list's own callback slot, and the caller's entry.
     unsafe { callback_free(&raw mut qfl.qf_qftf_cb) };
     // A value that is not a callable leaves the list without one.

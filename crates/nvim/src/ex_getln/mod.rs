@@ -37,8 +37,8 @@ use crate::drawscreen::{
 };
 use crate::edit::get_literal;
 use crate::eval::typval::{
-    callback_free, kCallbackNone, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear,
-    tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
+    callback_free, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
+    tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
     tv_get_number_chk, tv_get_string_buf_chk, tv_list_first, tv_list_free, tv_list_last,
     tv_list_len,
@@ -131,19 +131,18 @@ use crate::state::{
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, Callback_data, CmdAddr, CmdBuff,
-    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline,
-    Direction, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    HistoryType, Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData,
-    OptValType, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
-    RemapValues, Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T,
-    buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values,
-    dobuf_start_values, event_T, exarg_T, except_T, expand_T, garray_T, handle_T, hashtab_T,
-    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T,
-    proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
-    time_t, typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T,
-    xp_prefix_T,
+    Arena, Array, BackslashEscape, Boolean, CMD_append, Callback, CmdAddr, CmdBuff, CmdParseInfo,
+    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
+    Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
+    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValData, OptValType,
+    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues,
+    Set_ptr_t, String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T,
+    colnr_T, cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T,
+    exarg_T, except_T, expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T,
+    magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t,
+    save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union,
+    uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -457,7 +456,7 @@ static last_prompt_id: GlobalCell<::core::ffi::c_uint> = GlobalCell::new(0 as ::
 ///
 /// This is C's `CLEAR_FIELD(ccline)`, and what [`save_cmdline`] leaves behind
 /// when it moves the command line onto the saved stack.
-/// `kCallbackNone` and a null `funcref` are both zero, so this really is the
+/// `Callback::None` is discriminant 0, so this really is the
 /// zero value and the C's `CLEAR_FIELD` and this constant agree bit for bit.
 pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdbuff: CmdBuff::NONE,
@@ -474,12 +473,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     input_fn: 0,
     cmdbuff_replaced: false,
     prompt_id: 0,
-    highlight_callback: Callback {
-        data: Callback_data {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    },
+    highlight_callback: Callback::None,
     last_colors: ColoredCmdline::NONE,
     level: 0,
     special_char: 0,

@@ -15,8 +15,8 @@ use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
-    callback_free, kCallbackNone, tv_clear, tv_dict_get_callback, tv_dict_get_number,
-    tv_list_alloc, tv_list_append_string, tv_list_ref, tv_list_unref,
+    callback_free, tv_clear, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
+    tv_list_append_string, tv_list_ref, tv_list_unref,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -104,10 +104,10 @@ pub unsafe fn common_job_callbacks(
     err.buffered = unsafe { tv_dict_get_number(vopts, c"stderr_buffered".as_ptr()) } != 0;
     // Buffered output with no callback is collected into the options
     // Dict itself, which is why it becomes the reader's `self`.
-    if out.buffered && out.cb.type_0 == kCallbackNone {
+    if out.buffered && !out.cb.is_set() {
         out.self_0 = vopts;
     }
-    if err.buffered && err.cb.type_0 == kCallbackNone {
+    if err.buffered && !err.cb.is_set() {
         err.self_0 = vopts;
     }
     // SAFETY: as above; this is the reference the readers now share.
@@ -459,7 +459,7 @@ pub unsafe fn prompt_invoke_callback() {
     cur_win().w_cursor.col = 0;
     cur_buf().b_prompt_start.mark.lnum = lnum + 1;
 
-    if cur_buf().b_prompt_callback.type_0 == kCallbackNone {
+    if !cur_buf().b_prompt_callback.is_set() {
         // SAFETY: nothing took the input over.
         unsafe { xfree(user_input as *mut c_void) };
     } else {
@@ -491,7 +491,7 @@ pub unsafe fn prompt_invoke_callback() {
 /// # Safety
 /// As `prompt_invoke_callback`.
 pub unsafe fn invoke_prompt_interrupt() -> bool {
-    if cur_buf().b_prompt_interrupt.type_0 == kCallbackNone {
+    if !cur_buf().b_prompt_interrupt.is_set() {
         return false;
     }
     let mut rettv = UNSET_TV;

@@ -49,38 +49,38 @@ pub unsafe fn tv_dict_watcher_add(
 
 /// Whether `cb1` and `cb2` name the same function.
 pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> bool {
-    if unsafe { (*cb1).type_0 } != unsafe { (*cb2).type_0 } {
-        return false;
-    }
-    match unsafe { (*cb1).type_0 } {
-        kCallbackFuncref => unsafe { cstr::eq((*cb1).data.funcref, (*cb2).data.funcref) },
-        kCallbackPartial => (unsafe { (*cb1).data.partial }) == unsafe { (*cb2).data.partial },
-        kCallbackLua => (unsafe { (*cb1).data.luaref }) == unsafe { (*cb2).data.luaref },
-        kCallbackNone => true,
-        _ => unsafe { abort() },
+    // SAFETY: the caller's callbacks, live for the comparison.
+    match unsafe { (&*cb1, &*cb2) } {
+        (Callback::None, Callback::None) => true,
+        // SAFETY: a funcref names its own NUL-terminated bytes.
+        (Callback::Funcref(a), Callback::Funcref(b)) => unsafe { cstr::eq(*a, *b) },
+        (Callback::Partial(a), Callback::Partial(b)) => a == b,
+        (Callback::Lua(a), Callback::Lua(b)) => a == b,
+        _ => false,
     }
 }
 
 /// Drop whatever `callback` holds and leave it `kCallbackNone`.
 pub unsafe fn callback_free(callback: *mut Callback) {
-    // SAFETY: the caller's promise: a live callback.
-    let mut cb = unsafe { Cb::new(callback) };
-    match cb .type_0 {
-        kCallbackFuncref => {
-            unsafe { func_unref((*callback).data.funcref) };
-            unsafe { xfree((*callback).data.funcref.cast()) };
+    // SAFETY: the caller's promise: a live callback, whose payload it owns.
+    match unsafe { &*callback } {
+        Callback::Funcref(name) => {
+            // SAFETY: a funcref owns its NUL-terminated name.
+            unsafe { func_unref(*name) };
+            unsafe { xfree(name.cast()) };
         }
-        kCallbackPartial => unsafe { partial_unref((*callback).data.partial) },
-        kCallbackLua
-            // NLUA_CLEAR_REF
-            if unsafe { (*callback) .data.luaref } != LUA_NOREF => {
-                unsafe { api_free_luaref((*callback).data.luaref) };
-                cb .data.luaref  = LUA_NOREF as LuaRef;
+        Callback::Partial(partial) => unsafe { partial_unref(*partial) },
+        // NLUA_CLEAR_REF
+        Callback::Lua(reference) => {
+            if *reference != LUA_NOREF {
+                // SAFETY: a registry index, not a pointer.
+                unsafe { api_free_luaref(*reference) };
             }
-        _ => {}
+        }
+        Callback::None => {}
     }
-    cb.type_0 = kCallbackNone;
-    unsafe { (*callback).data.funcref = ::core::ptr::null_mut() };
+    // SAFETY: as above.
+    unsafe { *callback = Callback::None };
 }
 
 /// Store `cb` in `tv` as a Vimscript value, taking a reference to it.
@@ -89,19 +89,25 @@ pub unsafe fn callback_free(callback: *mut Callback) {
 pub unsafe fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
     // SAFETY: the caller's promise: a live typval.
     let mut value = unsafe { Tv::new(tv) };
-    match unsafe { (*cb).type_0 } {
-        kCallbackPartial => {
+    // SAFETY: as above, and a live callback whose payload it owns.
+    match unsafe { &*cb } {
+        Callback::Partial(partial) => {
             value.v_type = VAR_PARTIAL;
-            unsafe { (*tv).vval.v_partial = (*cb).data.partial };
-            unsafe { (*(*cb).data.partial).pt_refcount.retain() };
+            value.vval.v_partial = *partial;
+            // SAFETY: the partial the callback holds; the reference the
+            // typval is about to hold is what this counts.
+            unsafe { (**partial).pt_refcount.retain() };
         }
-        kCallbackFuncref => {
+        Callback::Funcref(name) => {
             value.v_type = VAR_FUNC;
-            unsafe { (*tv).vval.v_string = xstrdup((*cb).data.funcref) };
-            unsafe { func_ref((*cb).data.funcref) };
+            // SAFETY: a funcref names its own NUL-terminated bytes.
+            unsafe {
+                value.vval.v_string = xstrdup(*name);
+                func_ref(*name);
+            }
         }
-        _ => {
-            // kCallbackLua and kCallbackNone: no Vimscript representation.
+        // A Lua callback and no callback at all have no Vimscript form.
+        Callback::Lua(_) | Callback::None => {
             value.v_type = VAR_SPECIAL;
             value.vval.v_special = kSpecialVarNull;
         }
@@ -110,40 +116,52 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
 
 /// Copy `src` into `dest`, taking a reference to whatever it holds.
 pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
-    unsafe { (*dest).type_0 = (*src).type_0 };
-    match unsafe { (*src).type_0 } {
-        kCallbackPartial => {
-            unsafe { (*dest).data.partial = (*src).data.partial };
-            unsafe { (*(*dest).data.partial).pt_refcount.retain() };
+    // SAFETY: the caller's callbacks; `dest` need not hold a value yet, and
+    // a `Callback` has no destructor to run over what was there.
+    let copy = match unsafe { &*src } {
+        Callback::Partial(partial) => {
+            // SAFETY: the partial the source holds; the destination becomes
+            // a second owner of it.
+            unsafe { (**partial).pt_refcount.retain() };
+            Callback::Partial(*partial)
         }
-        kCallbackFuncref => {
-            unsafe { (*dest).data.funcref = xstrdup((*src).data.funcref) };
-            unsafe { func_ref((*src).data.funcref) };
+        Callback::Funcref(name) => {
+            // SAFETY: a funcref names its own NUL-terminated bytes.
+            unsafe {
+                func_ref(*name);
+                Callback::Funcref(xstrdup(*name))
+            }
         }
-        kCallbackLua => unsafe { (*dest).data.luaref = api_new_luaref((*src).data.luaref) },
-        _ => unsafe { (*dest).data.funcref = ::core::ptr::null_mut() },
-    }
+        // SAFETY: a registry index, not a pointer.
+        Callback::Lua(reference) => Callback::Lua(unsafe { api_new_luaref(*reference) }),
+        Callback::None => Callback::None,
+    };
+    // SAFETY: as above.
+    unsafe { *dest = copy };
 }
 
 /// A freshly allocated description of `cb`, as `string()` prints it.
 pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char {
     // SAFETY: the caller's promise: a live callback.
-    let callback = unsafe { Cb::new(cb) };
-    if callback.type_0 == kCallbackLua {
-        return unsafe { nlua_funcref_str((*cb).data.luaref, arena) };
+    // SAFETY: the caller's promise: a live callback.
+    let callback = unsafe { &*cb };
+    if let Callback::Lua(reference) = callback {
+        // SAFETY: a registry index, and the caller's arena.
+        return unsafe { nlua_funcref_str(*reference, arena) };
     }
 
     let msglen: size_t = 100;
     let msg = unsafe { xmallocz(msglen) } as *mut ::core::ffi::c_char;
-    match callback.type_0 {
-        kCallbackFuncref => {
-            let name = unsafe { (*cb).data.funcref };
-            unsafe { snprintf(msg, msglen, c"<vim function: %s>".as_ptr(), name) };
-        }
-        kCallbackPartial => {
-            let name = unsafe { (*(*cb).data.partial).pt_name };
-            unsafe { snprintf(msg, msglen, c"<vim partial: %s>".as_ptr(), name) };
-        }
+    // SAFETY: `msg` is `msglen` writable bytes, and each name below is a
+    // NUL-terminated string the callback owns.
+    match callback {
+        Callback::Funcref(name) => unsafe {
+            snprintf(msg, msglen, c"<vim function: %s>".as_ptr(), *name);
+        },
+        Callback::Partial(partial) => unsafe {
+            let name = (**partial).pt_name;
+            snprintf(msg, msglen, c"<vim partial: %s>".as_ptr(), name);
+        },
         _ => unsafe { *msg = NUL as ::core::ffi::c_char },
     }
     msg

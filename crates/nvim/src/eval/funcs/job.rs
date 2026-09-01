@@ -3,8 +3,7 @@
 
 use super::args::frame;
 use super::{
-    Callback_data, GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc,
-    kProcTypePty,
+    GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
 use crate::api::private::helpers::{cstr_as_string, dict_set_var};
 use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
@@ -15,9 +14,9 @@ use crate::channel::{
 };
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, kCallbackNone, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc,
-    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove,
-    tv_list_alloc, tv_list_append_number, tv_list_len, tv_list_ref,
+    NumBuf, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
+    tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove, tv_list_alloc,
+    tv_list_append_number, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -67,12 +66,7 @@ const NO_READER: CallbackReader = CallbackReader {
 };
 
 /// A cleared `Callback`.
-const NO_CALLBACK: Callback = Callback {
-    data: Callback_data {
-        funcref: ptr::null_mut::<c_char>(),
-    },
-    type_0: kCallbackNone,
-};
+const NO_CALLBACK: Callback = Callback::None;
 
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.

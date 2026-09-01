@@ -37,12 +37,7 @@ pub unsafe fn nvim_create_autocmd(
     let mut autocmd_id: int64_t = -1 as int64_t;
     let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut handler_fn: Callback = Callback {
-        data: Callback_data {
-            funcref: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut handler_fn: Callback = Callback::None;
     let mut event_array: Array = unsafe {
         unpack_string_or_array(
             event,
@@ -76,8 +71,7 @@ pub unsafe fn nvim_create_autocmd(
                                 error = err_bad_value(c"callback", unsafe { cstr::at(bad) });
                                 break '_cleanup;
                             } else {
-                                handler_fn.type_0 = kCallbackLua;
-                                handler_fn.data.luaref = luaref;
+                                handler_fn = Callback::Lua(luaref);
                                 // The reference is the handler's now, so the
                                 // keyset must not free it a second time.
                                 // SAFETY: the pointer the caller handed this call.
@@ -85,8 +79,7 @@ pub unsafe fn nvim_create_autocmd(
                             }
                         }
                         Object::String(name) => {
-                            handler_fn.type_0 = kCallbackFuncref;
-                            handler_fn.data.funcref = unsafe { string_to_cstr(name) };
+                            handler_fn = Callback::Funcref(unsafe { string_to_cstr(name) });
                         }
                         other => {
                             if true {

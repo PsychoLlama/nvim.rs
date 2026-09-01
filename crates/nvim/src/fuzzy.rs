@@ -35,7 +35,7 @@ use crate::ascii::ascii_iswhite;
 use crate::charset::{vim_iswordc, vim_iswordp};
 use crate::eval::callback_call;
 use crate::eval::typval::{
-    NumBuf, callback_free, kCallbackNone, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
+    NumBuf, callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
     tv_dict_get_callback, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
     tv_list_alloc_ret, tv_list_append_list, tv_list_append_number, tv_list_append_tv, tv_list_find,
 };
@@ -48,9 +48,9 @@ use crate::memory::{xfree, xmalloc};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown, linenr_T,
-    list_T, listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
+    Callback, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
+    buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown, linenr_T, list_T,
+    listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
 };
 
 /// The most characters of a pattern or a candidate that are looked at, and
@@ -861,12 +861,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
 
     // The optional third argument says where to find the string of a
     // dict item, and how much of the list to bother with.
-    let mut cb = Callback {
-        data: Callback_data {
-            funcref: core::ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    };
+    let mut cb = Callback::None;
     let mut key = core::ptr::null();
     let mut matchseq = false;
     let mut limit = 0;
@@ -921,7 +916,7 @@ unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatch
         pattern: unsafe { numbuf4.string(pat) },
         source: if !key.is_null() {
             Source::Key(key)
-        } else if cb.type_0 != kCallbackNone {
+        } else if cb.is_set() {
             Source::Callback(&raw mut cb)
         } else {
             Source::Item

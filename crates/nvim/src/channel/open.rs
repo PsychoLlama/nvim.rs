@@ -13,7 +13,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::eval::typval::{kCallbackNone, tv_dict_free};
+use crate::eval::typval::tv_dict_free;
 use crate::event::libuv::uv_strerror;
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::proc::{exit_on_closed_chan, proc_get_exepath, proc_spawn};
@@ -339,7 +339,7 @@ unsafe fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_voi
         }
     }
     let exited = status >= 0;
-    if exited && unsafe { (*chan).on_exit.type_0 } != kCallbackNone {
+    if exited && unsafe { &(*chan).on_exit }.is_set() {
         unsafe { schedule_channel_event(chan) };
     }
     if exited {

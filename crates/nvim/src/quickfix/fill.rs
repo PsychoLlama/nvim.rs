@@ -257,13 +257,13 @@ unsafe fn call_qftf_func(
     if RECURSIVE.get() {
         return ptr::null_mut();
     }
-    let cb = if qfl.qf_qftf_cb.type_0 != kCallbackNone {
+    let cb = if qfl.qf_qftf_cb.is_set() {
         // SAFETY: the caller's list, whose callback outlives this call.
         &raw mut qfl.qf_qftf_cb
     } else {
         global_qftf()
     };
-    if unsafe { (*cb).type_0 } == kCallbackNone {
+    if !unsafe { &*cb }.is_set() {
         return ptr::null_mut();
     }
     RECURSIVE.set(true);

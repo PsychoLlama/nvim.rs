@@ -504,7 +504,7 @@ unsafe fn qf_getprop_idx(
 /// `qfl` must be a live list and `retdict` live.
 unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*qfl).qf_qftf_cb.type_0 } == kCallbackNone {
+    if !unsafe { &(*qfl).qf_qftf_cb }.is_set() {
         return unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) };
     }
     let mut tv = typval_T {

@@ -6,7 +6,7 @@ use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, callback_free, kCallbackNone, tv_dict_watcher_add, tv_dict_watcher_remove, tv_islocked,
+    NumBuf, callback_free, tv_dict_watcher_add, tv_dict_watcher_remove, tv_islocked,
 };
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
@@ -16,19 +16,13 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
-    Callback, Callback_data, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING,
-    typval_T, varnumber_T,
+    Callback, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, typval_T, varnumber_T,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// An unset callback, the shape `callback_from_typval` fills in.
-const NO_CALLBACK: Callback = Callback {
-    data: Callback_data {
-        funcref: ptr::null_mut(),
-    },
-    type_0: kCallbackNone,
-};
+const NO_CALLBACK: Callback = Callback::None;
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
 pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {

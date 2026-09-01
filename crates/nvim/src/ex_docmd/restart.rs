@@ -14,7 +14,7 @@ use crate::api::vim::nvim__chan_set_detach;
 use crate::api::vimscript::nvim_command;
 use crate::channel::{channel_close, channel_job_start, find_channel};
 
-use crate::eval::typval::{NumBuf, kCallbackNone, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
@@ -337,12 +337,7 @@ fn blank_reader() -> CallbackReader {
 
 /// A `Callback` that calls nothing.
 fn blank_callback() -> Callback {
-    Callback {
-        data: crate::types::Callback_data {
-            funcref: ptr::null_mut(),
-        },
-        type_0: kCallbackNone,
-    }
+    Callback::None
 }
 
 /// `:detach` — let the UI go, and keep running headless.

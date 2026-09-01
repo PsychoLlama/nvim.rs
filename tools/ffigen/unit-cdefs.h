@@ -73,7 +73,7 @@ typedef struct termios termios;
 typedef struct winsize winsize;
 typedef struct AdditionalData AdditionalData;
 typedef struct Array Array;
-typedef union Callback_data Callback_data;
+typedef struct Callback Callback;
 typedef union typval_vval_union typval_vval_union;
 typedef struct typval_T typval_T;
 typedef struct ChangedtickDictItem ChangedtickDictItem;
@@ -300,7 +300,6 @@ typedef unsigned int BorderTextType;
 typedef int handle_T;
 typedef handle_T Buffer;
 typedef int CMD_index;
-typedef unsigned int CallbackType;
 typedef int CdCause;
 typedef int CdScope;
 typedef unsigned int ChannelPart;
@@ -646,10 +645,13 @@ struct Array {
   size_t capacity;
   Object *items;
 };
-union Callback_data {
-  char *funcref;
-  partial_T *partial;
-  LuaRef luaref;
+struct Callback {
+  unsigned int tag;
+  union {
+    char *funcref_;
+    partial_T *partial_;
+    LuaRef lua_;
+  } payload;
 };
 union typval_vval_union {
   varnumber_T v_number;
@@ -6015,10 +6017,6 @@ static const int kCCStrategyIgnoreCase = 63;
 static const int kCCStrategyMatchCase = 35;
 static const int kCCStrategyUseOption = 0;
 static const int kCallback = 0;
-static const int kCallbackFuncref = 1;
-static const int kCallbackLua = 3;
-static const int kCallbackNone = 0;
-static const int kCallbackPartial = 2;
 static const int kCdCauseAuto = 2;
 static const int kCdCauseManual = 0;
 static const int kCdCauseOther = -1;
