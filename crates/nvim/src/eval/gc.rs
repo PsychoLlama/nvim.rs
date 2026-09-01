@@ -5,6 +5,13 @@
 //! `tv_dict_free` unlink. `garbage_collect` (eval.rs) walks them to find
 //! the objects nothing references any more.
 
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // Not `forbid(unsafe_code)`: that lint rejects the name-mangling override
 // below, and the symbol it exports is pinned by a functional spec.
 #![deny(unsafe_op_in_unsafe_fn)]
