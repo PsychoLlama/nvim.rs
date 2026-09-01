@@ -440,16 +440,18 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
     let buf = curbuf.get();
     // SAFETY: the caller's contract; the handlers may run arbitrary script,
     // which is why nothing is borrowed across them.
-    if unsafe { has_autocmd(EVENT_SOURCECMD, fname_exp, None) }
-        && unsafe { apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp, false, buf) }
+    if unsafe { has_autocmd(AutoEvent::SourceCmd, fname_exp, None) }
+        && unsafe { apply_autocmds(AutoEvent::SourceCmd, fname_exp, fname_exp, false, buf) }
     {
         let retval = if aborting() { FAIL } else { OK };
         if retval == OK {
-            unsafe { apply_autocmds(EVENT_SOURCEPOST, fname_exp, fname_exp, false, curbuf.get()) };
+            let event = AutoEvent::SourcePost;
+            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, curbuf.get()) };
         }
         return Some(retval);
     }
-    unsafe { apply_autocmds(EVENT_SOURCEPRE, fname_exp, fname_exp, false, curbuf.get()) };
+    let event = AutoEvent::SourcePre;
+    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, curbuf.get()) };
     None
 }
 
@@ -872,7 +874,7 @@ unsafe fn source_bracket(
     if !req.is(Origin::Str) && trigger_source_post {
         let (name, buf) = (*fname_exp, curbuf.get());
         // SAFETY: the resolved name, still owned by this frame.
-        unsafe { apply_autocmds(EVENT_SOURCEPOST, name, name, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::SourcePost, name, name, false, buf) };
     }
     OK
 }

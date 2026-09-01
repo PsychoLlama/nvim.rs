@@ -17,7 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::autocmd::{EVENT_CURSORHOLD, EVENT_CURSORHOLDI, apply_autocmds, trigger_cursorhold};
+use crate::autocmd::{apply_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
@@ -41,9 +41,10 @@ use crate::os::cshim::gettext;
 use crate::os::time::os_hrtime;
 use crate::profile::{prof_input_end, prof_input_start};
 use crate::state::{MODE_INSERT, get_real_state};
+use crate::types::AutoEvent;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    Event, MultiQueue, RStream, Stream, String_0, event_T, key_extra, size_t, uint8_t, uint64_t,
+    Event, MultiQueue, RStream, Stream, String_0, key_extra, size_t, uint8_t, uint64_t,
     uv_handle_type,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -124,10 +125,10 @@ pub fn input_stop() {
 /// An `argv_callback`; reads no argument.
 unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
     let event = if State.get() & MODE_INSERT != 0 {
-        EVENT_CURSORHOLDI
+        AutoEvent::CursorHoldI
     } else {
-        EVENT_CURSORHOLD
-    } as event_T;
+        AutoEvent::CursorHold
+    } as AutoEvent;
     // SAFETY: no pattern and no filename, which `apply_autocmds` documents as
     // "match on the current buffer's name"; `curbuf` is always live.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get()) };

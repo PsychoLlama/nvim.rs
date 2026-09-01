@@ -6,9 +6,7 @@ use crate::api::private::helpers::{
     cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key, object_to_hl_id,
     try_enter, try_leave,
 };
-use crate::autocmd::{
-    EVENT_WINNEW, apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds,
-};
+use crate::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
@@ -23,6 +21,7 @@ use crate::r#move::changed_window_setting;
 use crate::option::{copy_option_part, didset_window_options};
 use crate::os::cshim::strchr;
 use crate::strings::striequal;
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BorderTextType, Buffer, Error, FloatAnchor, FloatRelative,

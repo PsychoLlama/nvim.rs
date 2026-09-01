@@ -24,7 +24,7 @@
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
-use crate::autocmd::{EVENT_MARKSET, aucmd_defer, has_event};
+use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells, vim_isprintc};
 use crate::ex_docmd::ex_msg;
@@ -40,6 +40,7 @@ use crate::os::fs::os_dirname;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
+use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::{Buf, Win, windows};
@@ -183,7 +184,7 @@ pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
 /// `pos` must point at a live position and `buf` at a live buffer.
 unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
-    if !has_event(EVENT_MARKSET) {
+    if !has_event(AutoEvent::MarkSet) {
         return;
     }
     // SAFETY: the caller promised a live position.
@@ -213,7 +214,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
     });
     unsafe {
         aucmd_defer(
-            EVENT_MARKSET,
+            AutoEvent::MarkSet,
             mark_str.as_mut_ptr(),
             ptr::null_mut(),
             AUGROUP_ALL,

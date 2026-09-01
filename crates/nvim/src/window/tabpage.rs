@@ -12,17 +12,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
-use crate::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABENTER, EVENT_TABLEAVE, EVENT_TABNEW,
-    EVENT_TABNEWENTERED, EVENT_WINENTER, EVENT_WINLEAVE, EVENT_WINNEW, block_autocmds,
-    unblock_autocmds,
-};
+use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::diff::diff_clear;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::eval::typval::tv_dict_alloc;
@@ -237,10 +234,10 @@ pub(crate) fn new_tabpage(
         check_tabpage_windows(old_curtab);
         lastused_tabpage.set(old_curtab.raw());
         enter_window(cur_win());
-        fire(EVENT_WINNEW, cur_buf());
-        fire(EVENT_WINENTER, cur_buf());
-        fire_named(EVENT_TABNEW, filename, Some(cur_buf()));
-        fire(EVENT_TABENTER, cur_buf());
+        fire(AutoEvent::WinNew, cur_buf());
+        fire(AutoEvent::WinEnter, cur_buf());
+        fire_named(AutoEvent::TabNew, filename, Some(cur_buf()));
+        fire(AutoEvent::TabEnter, cur_buf());
     } else {
         stash_tabpage(cur_tab());
         adopt_tabpage(old_curtab);
@@ -251,8 +248,8 @@ pub(crate) fn new_tabpage(
         // Trigger autocommands in the context of the new window, letting
         // `switch_win_noblock` handle things like resetting `VIsual_active`.
         in_window(newtp, || {
-            fire(EVENT_WINNEW, cur_buf());
-            fire_named(EVENT_TABNEW, filename, Some(cur_buf()));
+            fire(AutoEvent::WinNew, cur_buf());
+            fire_named(AutoEvent::TabNew, filename, Some(cur_buf()));
         });
     }
     Some((newtp, opened))
@@ -311,7 +308,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
         Err(Failed)
     };
     if status.is_ok() {
-        fire(EVENT_TABNEWENTERED, cur_buf());
+        fire(AutoEvent::TabNewEntered, cur_buf());
     }
     status
 }
@@ -427,16 +424,16 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     reset_VIsual_and_resel(); // stop Visual mode
     if trigger_leave_autocmds {
         if raw_buf(new_curbuf) != curbuf.get() {
-            fire(EVENT_BUFLEAVE, cur_buf());
+            fire(AutoEvent::BufLeave, cur_buf());
             if !tp.is_current() {
                 return Err(Failed);
             }
         }
-        fire(EVENT_WINLEAVE, cur_buf());
+        fire(AutoEvent::WinLeave, cur_buf());
         if !tp.is_current() {
             return Err(Failed);
         }
-        fire(EVENT_TABLEAVE, cur_buf());
+        fire(AutoEvent::TabLeave, cur_buf());
         if !tp.is_current() {
             return Err(Failed);
         }
@@ -530,9 +527,9 @@ fn enter_tab(
     // Apply autocommands after updating the display, once 'lines' and 'columns'
     // have been set correctly.
     if trigger_enter_autocmds {
-        fire(EVENT_TABENTER, cur_buf());
+        fire(AutoEvent::TabEnter, cur_buf());
         if old_curbuf.raw() != curbuf.get() {
-            fire(EVENT_BUFENTER, cur_buf());
+            fire(AutoEvent::BufEnter, cur_buf());
         }
     }
     redraw_all(UPD_NOT_VALID);

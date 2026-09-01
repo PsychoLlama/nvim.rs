@@ -364,8 +364,8 @@ pub unsafe fn ml_recover(checkext: bool) {
     } else {
         let (name, buf) = (cur_buf().b_fname, curbuf.get());
         let none = core::ptr::null_mut();
-        unsafe { apply_autocmds(EVENT_BUFREADPOST, none, name, false, buf) };
-        unsafe { apply_autocmds(EVENT_BUFWINENTER, none, name, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, buf) };
     }
 }
 

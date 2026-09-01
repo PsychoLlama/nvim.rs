@@ -280,10 +280,10 @@ pub unsafe fn call_func(
                 }
 
                 // Trigger FuncUndefined, which may load the function.
+                let event = AutoEvent::FuncUndefined;
+                let no_buf = ptr::null_mut();
                 if fp.is_null()
-                    && unsafe {
-                        apply_autocmds(EVENT_FUNCUNDEFINED, rfname, rfname, true, ptr::null_mut())
-                    }
+                    && unsafe { apply_autocmds(event, rfname, rfname, true, no_buf) }
                     && !aborting()
                 {
                     fp = unsafe { find_func(rfname) };

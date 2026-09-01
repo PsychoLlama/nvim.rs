@@ -6,13 +6,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
-use crate::autocmd::{EVENT_CHANINFO, EVENT_CHANOPEN, apply_autocmds, has_event};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::eval::encode::encode_tv2json;
 use crate::eval::typval::{tv_dict_add_dict, tv_dict_set_keys_readonly};
 use crate::eval::{eval_fmt_source_name_line, get_v_event, restore_v_event};
@@ -27,7 +28,7 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock, event_T,
+    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock,
     key_value_pair, save_v_event_T, typval_T, typval_vval_union, uint64_t,
 };
 
@@ -128,10 +129,10 @@ fn source_name_line() -> CString {
 /// `chan` is a live channel.
 pub unsafe fn channel_info_changed(chan: *mut Channel, new_chan: bool) {
     let event = if new_chan {
-        EVENT_CHANOPEN
+        AutoEvent::ChanOpen
     } else {
-        EVENT_CHANINFO
-    } as event_T;
+        AutoEvent::ChanInfo
+    } as AutoEvent;
     // SAFETY: the caller's live channel. The event carries the reference
     // taken here and `set_info_event` drops it.
     if !has_event(event) {
@@ -139,7 +140,7 @@ pub unsafe fn channel_info_changed(chan: *mut Channel, new_chan: bool) {
     }
     unsafe { channel_incref(chan) };
     let mut ev = one_arg_event(Some(set_info_event), chan.cast());
-    ev.argv[1] = ptr::with_exposed_provenance_mut::<c_void>(event as usize);
+    ev.argv[1] = ptr::with_exposed_provenance_mut::<c_void>(event.index());
     unsafe { multiqueue_put_event(main_loop_events(), ev) };
 }
 
@@ -147,7 +148,8 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the channel and the event id
     // `channel_info_changed` queued it with, plus one reference to drop.
     let chan = unsafe { *argv }.cast::<Channel>();
-    let event = unsafe { *argv.add(1) }.expose_provenance() as event_T;
+    let event = AutoEvent::at_row(unsafe { *argv.add(1) }.expose_provenance())
+        .expect("`channel_info_changed` queued a real event");
 
     let mut save_v_event = save_v_event_T::default();
     let dict = unsafe { get_v_event(&raw mut save_v_event) };

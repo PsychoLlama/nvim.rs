@@ -244,7 +244,8 @@ unsafe fn file_changed_shell(buf: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     let locked = Lock::all_buffers();
     let fname = buf.b_fname;
     // SAFETY: a live buffer and its own file name.
-    let handled = unsafe { apply_autocmds(EVENT_FILECHANGEDSHELL, fname, fname, false, buf.raw()) };
+    let handled =
+        unsafe { apply_autocmds(AutoEvent::FileChangedShell, fname, fname, false, buf.raw()) };
     drop(locked);
     BUSY.set(false);
 
@@ -504,7 +505,7 @@ pub unsafe fn buf_check_timestamp(mut buf: Buf) -> c_int {
 
     // Trigger FileChangedShellPost when the file was changed in any way.
     if bufref.valid() && retval != 0 {
-        let (post, fname) = (EVENT_FILECHANGEDSHELLPOST, buf.b_fname);
+        let (post, fname) = (AutoEvent::FileChangedShellPost, buf.b_fname);
         // SAFETY: a live buffer and its own file name.
         unsafe { apply_autocmds(post, fname, fname, false, buf.raw()) };
     }

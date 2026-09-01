@@ -49,11 +49,12 @@ use crate::os::env::expand_env_save;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
     CmdModFlags, ExtmarkOp, NUL, OptVal, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
-    bcount_t, bfa_values, bln_values, dobuf_action_values, event_T, exarg_T, getf_retvalues,
-    linenr_T, list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, linenr_T,
+    list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -190,7 +191,7 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 ///
 /// Safe: [`Buf`] is the live buffer `apply_autocmds` asks for, and the two
 /// file names it also wants are null here.
-pub(super) fn buf_autocmd(event: event_T, buf: Buf) -> bool {
+pub(super) fn buf_autocmd(event: AutoEvent, buf: Buf) -> bool {
     // SAFETY: a live buffer and no file names.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
 }

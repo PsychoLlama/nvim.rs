@@ -20,7 +20,8 @@
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::types::event_T;
+use crate::types::AutoEvent;
+
 use crate::types::{Failed, Refcount};
 use crate::winlayer::{Buf, Ea, Live, Win, windows};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -127,7 +128,7 @@ pub(crate) fn qf_emsg(msg: *const c_char) {
 /// `on_fname` is upstream's split: the commands that read a file or run a
 /// program match the pattern against the current buffer's name and force the
 /// event, the ones taking their input from Vimscript match on neither.
-pub(crate) fn fire_qf_autocmd(event: event_T, name: &CStr, on_fname: bool) -> bool {
+pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> bool {
     let pat = name.as_ptr().cast_mut();
     let fname = if on_fname {
         cur_buf().b_fname

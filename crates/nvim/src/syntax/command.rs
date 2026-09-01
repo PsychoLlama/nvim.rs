@@ -360,7 +360,7 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
     let buf = curbuf.get();
     // SAFETY: the caller's command and the editor's current buffer.
     let (arg, fname) = unsafe { ((*eap).arg, (*buf).b_fname) };
-    unsafe { apply_autocmds(EVENT_SYNTAX, arg, fname, true, buf) };
+    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, buf) };
 
     // Move the value of b:current_syntax to w:current_syntax.
     let new_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };

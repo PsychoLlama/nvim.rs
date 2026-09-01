@@ -133,14 +133,11 @@ pub unsafe fn nvim_exec_autocmds(
         let event_str = event_str
             .as_string()
             .expect("`unpack_string_or_array` answers Strings only");
-        let mut event_nr: event_T = unsafe { event_name2nr_str(event_str) };
-        if !((event_nr as ::core::ffi::c_uint)
-            < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
-        {
+        let Some(event_nr) = (unsafe { event_name2nr_str(event_str) }) else {
             // SAFETY: the value the keyset carried, live for this call.
             error = err_bad_value(c"event", unsafe { event_str.as_cstr() });
             return ().reported(error);
-        }
+        };
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.size {
             let pat: Object = unsafe { *patterns.items.add(pat_index) };

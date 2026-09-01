@@ -14,13 +14,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ops::Op;
+use crate::types::AutoEvent;
 use crate::winlayer::{Buf, Win};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
-use crate::autocmd::{
-    EVENT_BUFMODIFIEDSET, EVENT_CURSORMOVED, EVENT_TEXTCHANGED, apply_autocmds, has_event,
-};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, fileinfo};
 use crate::diff::ex_diffupdate;
 use crate::drawscreen::{
@@ -60,7 +59,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{NUL, OpType, ShmFlag, VimState, cmdarg_T, event_T, int64_t, oparg_T};
+use crate::types::{NUL, OpType, ShmFlag, VimState, cmdarg_T, int64_t, oparg_T};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use ::libc::time;
@@ -438,11 +437,11 @@ fn normal_check_window_scrolled() {
 fn normal_check_cursor_moved() {
     // SAFETY (throughout): reads the current window and fires an autocommand.
     if !finish_op.get()
-        && has_event(EVENT_CURSORMOVED)
+        && has_event(AutoEvent::CursorMoved)
         && (last_cursormoved_win.get() != curwin.get()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
     {
-        fire_on_curbuf(EVENT_CURSORMOVED);
+        fire_on_curbuf(AutoEvent::CursorMoved);
         last_cursormoved_win.set(curwin.get());
         last_cursormoved.set(cur_win().w_cursor);
     }
@@ -451,10 +450,10 @@ fn normal_check_cursor_moved() {
 fn normal_check_text_changed() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
-        && has_event(EVENT_TEXTCHANGED)
+        && has_event(AutoEvent::TextChanged)
         && cur_buf().b_last_changedtick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
     {
-        fire_on_curbuf(EVENT_TEXTCHANGED);
+        fire_on_curbuf(AutoEvent::TextChanged);
         cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
     }
 }
@@ -462,10 +461,10 @@ fn normal_check_text_changed() {
 fn normal_check_buffer_modified() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
-        && has_event(EVENT_BUFMODIFIEDSET)
+        && has_event(AutoEvent::BufModifiedSet)
         && cur_buf().b_changed_invalid as c_int == 1
     {
-        fire_on_curbuf(EVENT_BUFMODIFIEDSET);
+        fire_on_curbuf(AutoEvent::BufModifiedSet);
         cur_buf().b_changed_invalid = false;
     }
 }
@@ -639,7 +638,7 @@ fn cur_win() -> Win {
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.
-fn fire_on_curbuf(event: event_T) {
+fn fire_on_curbuf(event: AutoEvent) {
     let (fname, fname_io) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: `curbuf` is the live buffer the event is about.
     unsafe { apply_autocmds(event, fname, fname_io, false, curbuf.get()) };

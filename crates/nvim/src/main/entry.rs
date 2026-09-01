@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -15,7 +16,7 @@ use core::ptr;
 use crate::api::ui::remote_ui_wait_for_attach;
 use crate::arglist::alist_init;
 use crate::arglist::global_arglist;
-use crate::autocmd::{EVENT_BUFENTER, EVENT_VIMENTER, apply_autocmds, autocmd_init};
+use crate::autocmd::{apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::diff::diff_win_options;
@@ -443,7 +444,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     }
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
-    unsafe { apply_autocmds(EVENT_BUFENTER, no_fname, no_fname_io, false, curbuf.get()) };
+    let event = AutoEvent::BufEnter;
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, curbuf.get()) };
     time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
@@ -476,7 +478,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as varnumber_T) };
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
-    unsafe { apply_autocmds(EVENT_VIMENTER, no_fname, no_fname_io, false, curbuf.get()) };
+    let event = AutoEvent::VimEnter;
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, curbuf.get()) };
     time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
         unsafe { do_autocmd_uienter_all() };

@@ -6,7 +6,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::{
-    EVENT_BUFADD, apply_autocmds_group, au_get_autocmds_for_event, aucmd_del_for_event_and_group,
+    apply_autocmds_group, au_get_autocmds_for_event, aucmd_del_for_event_and_group,
     aucmd_span_pattern, augroup_add, augroup_del, augroup_exists, augroup_find, augroup_name,
     aupat_get_buflocal_nr, aupat_is_buflocal, aupat_normalize_buflocal_pat, autocmd_delete_id,
     autocmd_register, do_autocmd_event, event_name2nr_str, event_nr2name,
@@ -18,12 +18,13 @@ use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::main::curbuf;
 use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
+use crate::types::AutoEvent;
 use crate::types::{
     Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Dict, Error,
     Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, auto_event,
-    buf_T, event_T, exarg_T, except_T, int64_t, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeString, msglist_T, size_t, uint64_t,
+    KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, buf_T,
+    exarg_T, except_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, msglist_T,
+    size_t, uint64_t,
 };
 use ::libc::abort;
 
@@ -39,7 +40,6 @@ pub use self::exec::*;
 pub use self::group::*;
 pub(crate) use self::pattern::*;
 pub use self::query::*;
-pub const NUM_EVENTS: auto_event = 145;
 pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
 pub const AUGROUP_ALL: ::core::ffi::c_int = -3;

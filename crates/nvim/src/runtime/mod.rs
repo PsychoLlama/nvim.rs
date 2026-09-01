@@ -28,9 +28,7 @@
 use crate::api::private::helpers::{
     arena_array, arena_dict, arena_string, array_add, cstr_as_string, cstr_to_string, dict_put,
 };
-use crate::autocmd::{
-    EVENT_SOURCECMD, EVENT_SOURCEPOST, EVENT_SOURCEPRE, apply_autocmds, has_autocmd,
-};
+use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
 use crate::cmdexpand::globpath;
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
@@ -94,6 +92,7 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
+use crate::types::AutoEvent;
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
     EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus,

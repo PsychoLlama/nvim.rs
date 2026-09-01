@@ -301,7 +301,7 @@ pub(crate) unsafe fn command_line_execute(
         || s.c == Ctrl_C
     {
         unsafe { set_vim_var_char(s.c) }; // set v:char
-        trigger_cmd_autocmd(s.cmdline_type, EVENT_CMDLINELEAVEPRE);
+        trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         s.event_cmdlineleavepre_triggered = true;
         if (s.c == ESC || s.c == Ctrl_C) && wim_has(0, kOptWimFlagList) {
             unsafe { set_no_hlsearch(true) };
@@ -455,7 +455,7 @@ pub(crate) unsafe fn command_line_execute(
 pub(crate) unsafe fn may_trigger_cursormovedc(mut s: Cls) {
     let mut cc = Cc::current();
     if cc.cmdpos != s.prev_cmdpos {
-        trigger_cmd_autocmd(s.cmdline_type, EVENT_CURSORMOVEDC);
+        trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CursorMovedC);
         cc.redraw_state = cc.redraw_state.max(kCmdRedrawPos);
     }
 }
@@ -476,7 +476,7 @@ pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int 
 
 /// Trigger the `CmdlineChanged` autocommands.
 pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
-    if !has_event(EVENT_CMDLINECHANGED) {
+    if !has_event(AutoEvent::CmdlineChanged) {
         return;
     }
     let mut err: Error = Error::none();
@@ -487,7 +487,7 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     // C's TRY_WRAP, with restore_v_event() inside it.
     let mut tstate: TryState = TRY_STATE_INIT;
     unsafe { try_enter(&raw mut tstate) };
-    cmdline_autocmd(EVENT_CMDLINECHANGED, firstcbuf.as_mut_ptr());
+    cmdline_autocmd(AutoEvent::CmdlineChanged, firstcbuf.as_mut_ptr());
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
     unsafe { try_leave(&raw mut tstate, &mut err) };
 

@@ -10,6 +10,7 @@
 
 use crate::cstr;
 use crate::semsg;
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -17,7 +18,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
-use crate::autocmd::{EVENT_TABNEWENTERED, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_is_quickfix, buf_spname};
 use crate::charset::{getdigits, getdigits_int, skipwhite};
 use crate::drawscreen::{UPD_CLEAR, UPD_VALID, screen_resize};
@@ -316,7 +317,7 @@ fn open_tabpage(ea: Ex, old_curwin: *mut win_T) {
         return;
     }
     edit(ea, old_curwin);
-    let (ev, buf) = (EVENT_TABNEWENTERED, curbuf.get());
+    let (ev, buf) = (AutoEvent::TabNewEntered, curbuf.get());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
     unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };

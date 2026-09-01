@@ -11,15 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_TABCLOSED, EVENT_TABCLOSEDPRE, EVENT_TABLEAVE,
-    EVENT_WINCLOSED, EVENT_WINLEAVE, EVENT_WINNEWPRE, has_event,
-};
+use crate::autocmd::has_event;
 use crate::buffer::{BufRef, buf_is_help, close_buffer};
 use crate::diff::diffopt_closeoff;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -239,7 +237,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         enter_ext(wp, flags);
         if other_buffer {
             // careful: after this `wp` and `win` may be invalid!
-            fire(EVENT_BUFENTER, cur_buf());
+            fire(AutoEvent::BufEnter, cur_buf());
         }
     }
 
@@ -251,7 +249,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // The new `curwin` is the last window of the current tab page and is
         // already being closed. Trigger TabLeave now: once its buffer is gone
         // it is no longer safe to do so.
-        fire(EVENT_TABLEAVE, cur_buf());
+        fire(AutoEvent::TabLeave, cur_buf());
     }
     drop(no_split);
 
@@ -353,7 +351,7 @@ fn leave_closing_window(win: Win) -> Leave {
             return Leave::Failed;
         }
         win.w_locked = true;
-        fire(EVENT_BUFLEAVE, cur_buf());
+        fire(AutoEvent::BufLeave, cur_buf());
         if valid_win(win.raw()).is_none() {
             return Leave::Failed;
         }
@@ -363,7 +361,7 @@ fn leave_closing_window(win: Win) -> Leave {
         }
     }
     win.w_locked = true;
-    fire(EVENT_WINLEAVE, cur_buf());
+    fire(AutoEvent::WinLeave, cur_buf());
     if valid_win(win.raw()).is_none() {
         return Leave::Failed;
     }
@@ -399,20 +397,24 @@ fn away_from_preview(wp: Win) -> Win {
 
 pub(crate) fn trigger_winnewpre() {
     window_lock();
-    fire_named(EVENT_WINNEWPRE, ptr::null_mut(), None);
+    fire_named(AutoEvent::WinNewPre, ptr::null_mut(), None);
     window_unlock();
 }
 
 /// `WinClosed`, named after the window's own handle. Never re-entered.
 fn fire_winclosed(mut win: Win) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
-    if RECURSIVE.get() || !event_wanted(EVENT_WINCLOSED) {
+    if RECURSIVE.get() || !event_wanted(AutoEvent::WinClosed) {
         return;
     }
     RECURSIVE.set(true);
     let mut winid = [0 as c_char; NUMBUFLEN as usize];
     number_into(&mut winid, c"%d".as_ptr(), win.handle);
-    fire_named(EVENT_WINCLOSED, winid.as_mut_ptr(), win.buffer_or_none());
+    fire_named(
+        AutoEvent::WinClosed,
+        winid.as_mut_ptr(),
+        win.buffer_or_none(),
+    );
     RECURSIVE.set(false);
 }
 
@@ -427,7 +429,7 @@ fn tabclosedpre(tp: *mut tabpage_T) {
     let ptp = curtab.get();
     // Return quickly when there is no TabClosedPre autocommand to run, or one
     // is already running.
-    if !event_wanted(EVENT_TABCLOSEDPRE) || RECURSIVE.get() {
+    if !event_wanted(AutoEvent::TabClosedPre) || RECURSIVE.get() {
         return;
     }
     if let Some(tp) = valid_tab(tp) {
@@ -435,7 +437,7 @@ fn tabclosedpre(tp: *mut tabpage_T) {
     }
     RECURSIVE.set(true);
     window_lock();
-    fire_named(EVENT_TABCLOSEDPRE, ptr::null_mut(), None);
+    fire_named(AutoEvent::TabClosedPre, ptr::null_mut(), None);
     window_unlock();
     RECURSIVE.set(false);
     // The tab page may have been modified or deleted by the autocommands: try
@@ -580,11 +582,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
         }
         if free_tp_idx > 0 {
             free_tab(tp);
-            if event_wanted(EVENT_TABCLOSED) {
+            if event_wanted(AutoEvent::TabClosed) {
                 let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
                 number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
                 let buf = bufref.get().unwrap_or_else(cur_buf);
-                fire_named(EVENT_TABCLOSED, prev_idx.as_mut_ptr(), Some(buf));
+                fire_named(AutoEvent::TabClosed, prev_idx.as_mut_ptr(), Some(buf));
             }
         }
         return true;
@@ -605,7 +607,7 @@ fn tab_last_win(tp: TabPage) -> Win {
 }
 
 /// Whether any autocommand is listening for `event`.
-fn event_wanted(event: event_T) -> bool {
+fn event_wanted(event: AutoEvent) -> bool {
     // SAFETY: reads the autocommand tables.
     has_event(event)
 }

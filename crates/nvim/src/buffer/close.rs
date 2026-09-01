@@ -19,15 +19,13 @@
 
 use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
+use crate::types::AutoEvent;
 use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
 use crate::allocator::Owned;
-use crate::autocmd::{
-    EVENT_BUFDELETE, EVENT_BUFHIDDEN, EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_BUFWIPEOUT,
-    aubuflocal_remove,
-};
+use crate::autocmd::aubuflocal_remove;
 use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
@@ -572,9 +570,9 @@ fn leave_last_window(
     // When the buffer becomes hidden, but is not unloaded, trigger BufHidden
     // after BufWinLeave.
     let events: &[_] = if how.unload {
-        &[EVENT_BUFWINLEAVE]
+        &[AutoEvent::BufWinLeave]
     } else {
-        &[EVENT_BUFWINLEAVE, EVENT_BUFHIDDEN]
+        &[AutoEvent::BufWinLeave, AutoEvent::BufHidden]
     };
     for &event in events {
         buf.b_locked += 1;
@@ -770,21 +768,21 @@ fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
     detach_updates(buf);
 
     let loaded = !buf.b_ml.ml_mfp.is_null();
-    if loaded && fire_named(EVENT_BUFUNLOAD, buf) && !bufref.valid() {
+    if loaded && fire_named(AutoEvent::BufUnload, buf) && !bufref.valid() {
         // Autocommands deleted the buffer.
         return None;
     }
     let mut buf = bufref.get()?;
     if flags & BFA_DEL as c_int != 0
         && buf.b_p_bl != 0
-        && fire_named(EVENT_BUFDELETE, buf)
+        && fire_named(AutoEvent::BufDelete, buf)
         && !bufref.valid()
     {
         // Autocommands may delete the buffer.
         return None;
     }
     buf = bufref.get()?;
-    if flags & BFA_WIPE as c_int != 0 && fire_named(EVENT_BUFWIPEOUT, buf) && !bufref.valid() {
+    if flags & BFA_WIPE as c_int != 0 && fire_named(AutoEvent::BufWipeout, buf) && !bufref.valid() {
         // Autocommands may delete the buffer.
         return None;
     }

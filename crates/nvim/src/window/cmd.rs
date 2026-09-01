@@ -16,11 +16,12 @@ use crate::keycodes::{
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
     Ctrl_X, Ctrl_Z, Key, NotAKey,
 };
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::autocmd::EVENT_TABNEWENTERED;
+
 use crate::buffer::{buflist_findname_exp, buflist_getfile, find_buf, set_pcmark};
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
@@ -483,7 +484,7 @@ fn move_to_new_tabpage(prenum: c_int) {
     }
     if let Some(newtab) = valid_tab(newtab) {
         goto_tab(newtab, true, true);
-        fire(EVENT_TABNEWENTERED, cur_buf());
+        fire(AutoEvent::TabNewEntered, cur_buf());
     }
 }
 

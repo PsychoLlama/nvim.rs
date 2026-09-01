@@ -7,7 +7,7 @@ use crate::api::private::helpers::{
     api_dict_to_keydict, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
     cstr_as_string, cstrn_as_string, find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
 };
-use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, has_event};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};
 use crate::ex_docmd::{
     excmd_get_argt, execute_cmd, find_ex_command, get_cmd_default_range, get_command_name,
@@ -15,6 +15,7 @@ use crate::ex_docmd::{
     set_cmd_addr_type, set_cmd_count, set_cmd_dflall_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
+use crate::types::AutoEvent;
 
 use crate::garray::{ga_clear, ga_init};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};

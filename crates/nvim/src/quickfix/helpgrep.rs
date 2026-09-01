@@ -205,7 +205,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         _ => None,
     };
     if let Some(name) = au_name {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
             return;
         }
@@ -266,7 +266,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
     }
 
     if let Some(name) = au_name {
-        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+        fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         // When adding to an existing location list stack, an autocommand
         // may have made that stack invalid, in which case there is
         // nothing left to jump to.

@@ -19,9 +19,7 @@ use super::{
     GETFILE_SAME_FILE, NODE_OTHER, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
 };
 use crate::arglist::do_argfile;
-use crate::autocmd::{
-    EVENT_BUFADD, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, augroup_exists, do_doautocmd,
-};
+use crate::autocmd::{augroup_exists, do_doautocmd};
 use crate::buffer::{
     BufFlags, BufRef, buf_dontwrite_msg, buf_hide, buf_is_dontwrite, buf_is_nofilename,
     buf_name_changed, buflist_findname, buflist_new, current_buf, do_autochdir, do_modelines,
@@ -51,6 +49,7 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg;
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
     CmdModFlags, CpoFlag, Failed, MAXPATHL, NUL, OptionSetFlags, ShmFlag, exarg_T, int32_t,
@@ -106,7 +105,7 @@ unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
 /// `new_fname` must be a live file name.
 pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     let buf = curbuf.get();
-    buf_autocmd(EVENT_BUFFILEPRE, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePre, cur_buf());
     // buffer changed, don't change name now
     if buf != curbuf.get() {
         return Err(Failed);
@@ -138,7 +137,7 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     }
     unsafe { xfree(fname.cast()) };
     unsafe { xfree(sfname.cast()) };
-    buf_autocmd(EVENT_BUFFILEPOST, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePost, cur_buf());
     // Change directories when the 'acd' option is set.
     do_autochdir();
     Ok(())
@@ -423,8 +422,8 @@ unsafe fn confirm_partial_write(eap: *mut exarg_T) -> bool {
 /// of soundness -- swapping a buffer's names with its own is a no-op.
 fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     let was_curbuf = curbuf.get();
-    buf_autocmd(EVENT_BUFFILEPRE, cur_buf());
-    buf_autocmd(EVENT_BUFFILEPRE, alt_buf);
+    buf_autocmd(AutoEvent::BufFilePre, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePre, alt_buf);
     // buffer changed, don't change name now
     if curbuf.get() != was_curbuf || aborting() {
         return None;
@@ -439,11 +438,11 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     };
     // SAFETY: `curbuf` is live.
     unsafe { buf_name_changed(cur_buf()) };
-    buf_autocmd(EVENT_BUFFILEPOST, cur_buf());
-    buf_autocmd(EVENT_BUFFILEPOST, alt_buf);
+    buf_autocmd(AutoEvent::BufFilePost, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePost, alt_buf);
     if alt_buf.b_p_bl == 0 {
         alt_buf.b_p_bl = 1;
-        buf_autocmd(EVENT_BUFADD, alt_buf);
+        buf_autocmd(AutoEvent::BufAdd, alt_buf);
     }
     // buffer changed, don't write the file
     if curbuf.get() != was_curbuf || aborting() {

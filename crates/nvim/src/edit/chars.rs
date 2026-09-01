@@ -82,7 +82,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     // buffer.
     if !is_special(c)
         && utf_char2len(c) == 1
-        && !has_event(EVENT_INSERTCHARPRE)
+        && !has_event(AutoEvent::InsertCharPre)
         && !test_disable_char_avail.get()
         && vpeekc() != NUL
         && State.get() & REPLACE_FLAG == 0
@@ -308,7 +308,7 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if c == Ctrl_RSB || !has_event(EVENT_INSERTCHARPRE) {
+    if c == Ctrl_RSB || !has_event(AutoEvent::InsertCharPre) {
         return ::core::ptr::null_mut();
     }
 
@@ -321,7 +321,7 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     unsafe { set_vim_var_string(Vv::Char, buf.as_mut_ptr(), buflen as ptrdiff_t) };
 
     let mut res = ::core::ptr::null_mut();
-    if unsafe { ins_apply_autocmds(EVENT_INSERTCHARPRE) } != 0
+    if unsafe { ins_apply_autocmds(AutoEvent::InsertCharPre) } != 0
         && !unsafe { cstr::eq(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) }
     {
         res = unsafe { xstrdup(get_vim_var_str(Vv::Char)) };

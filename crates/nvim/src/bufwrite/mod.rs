@@ -9,12 +9,7 @@ use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
 
-use crate::autocmd::{
-    EVENT_BUFWRITECMD, EVENT_BUFWRITEPOST, EVENT_BUFWRITEPRE, EVENT_FILEAPPENDCMD,
-    EVENT_FILEAPPENDPOST, EVENT_FILEAPPENDPRE, EVENT_FILEWRITECMD, EVENT_FILEWRITEPOST,
-    EVENT_FILEWRITEPRE, EVENT_FILTERWRITEPOST, EVENT_FILTERWRITEPRE, apply_autocmds_exarg,
-    aucmd_prepbuf, aucmd_restbuf,
-};
+use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
 use crate::drawscreen::status_redraw_all;

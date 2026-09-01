@@ -7,9 +7,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char};
 
-use crate::autocmd::{EVENT_COLORSCHEME, EVENT_COLORSCHEMEPRE, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::eval::vars::get_var_value;
 use crate::global_cell::GlobalCell;
 use crate::main::{
@@ -572,7 +573,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     let buf = curbuf.get();
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
-    unsafe { apply_autocmds(EVENT_COLORSCHEMEPRE, name, fname, false, buf) };
+    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, buf) };
     let mut pattern = [
         b"colors/",
         unsafe { CStr::from_ptr(name) }.to_bytes(),
@@ -586,7 +587,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
         let buf = curbuf.get();
         // SAFETY: the editor's current buffer.
         let fname = unsafe { (*buf).b_fname };
-        unsafe { apply_autocmds(EVENT_COLORSCHEME, name, fname, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, buf) };
     }
 
     RECURSIVE.set(false);

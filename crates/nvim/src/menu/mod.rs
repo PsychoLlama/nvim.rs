@@ -27,12 +27,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::autocmd::{EVENT_MENUPOPUP, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::charset::skipwhite;
 use crate::cstr;
 use crate::eval::typval::{
@@ -718,7 +719,7 @@ pub(crate) unsafe fn show_popupmenu() {
     // runs afterwards.
     unsafe {
         apply_autocmds(
-            EVENT_MENUPOPUP,
+            AutoEvent::MenuPopup,
             mode.as_ptr().cast_mut(),
             ptr::null_mut(),
             false,

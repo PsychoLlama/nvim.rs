@@ -10,12 +10,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::mem::offset_of;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::autocmd::{
-    EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_SWAPEXISTS, apply_autocmds, has_autocmd,
-};
+use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer, setfname};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};

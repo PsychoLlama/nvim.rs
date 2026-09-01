@@ -19,7 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::autocmd::{EVENT_FILECHANGEDRO, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
 };
@@ -81,6 +81,7 @@ use crate::spell::spell_check_window;
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ExtmarkOp, GraphemeState, Vv, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T,

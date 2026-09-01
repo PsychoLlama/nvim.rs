@@ -420,7 +420,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: main thread, reading the autocommand table.
-    if recursive.get() || !has_event(EVENT_TEXTYANKPOST) {
+    if recursive.get() || !has_event(AutoEvent::TextYankPost) {
         return;
     }
     recursive.set(true);
@@ -481,7 +481,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
     let none = ::core::ptr::null_mut();
     // SAFETY: main thread, with a current buffer; null pattern and file name
     // ask for the event's own defaults.
-    unsafe { apply_autocmds(EVENT_TEXTYANKPOST, none, none, false, curbuf.get()) };
+    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, curbuf.get()) };
     drop(locked);
 
     // SAFETY: `save_v_event` is the one `get_v_event` was given.

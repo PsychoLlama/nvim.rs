@@ -25,7 +25,7 @@ use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
 use super::{buffers, check_changed};
 use crate::arglist::{do_argfile, editing_arg_idx};
 use crate::autocmd::{
-    EVENT_SYNTAX, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
+    apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
 };
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
@@ -38,6 +38,7 @@ use crate::normal::do_check_scrollbind;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{aco_save_T, exarg_T, linenr_T, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
@@ -394,7 +395,7 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
             if buf.raw() == curbuf.get() {
                 unsafe {
                     apply_autocmds(
-                        EVENT_SYNTAX,
+                        AutoEvent::Syntax,
                         (*curbuf.get()).b_p_syn,
                         (*curbuf.get()).b_fname,
                         true,
@@ -404,7 +405,7 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
             } else {
                 let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
                 unsafe { aucmd_prepbuf(&raw mut aco, raw) };
-                unsafe { apply_autocmds(EVENT_SYNTAX, syn, name, true, raw) };
+                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, raw) };
                 unsafe { aucmd_restbuf(&raw mut aco) };
             }
             // Start over, in case autocommands messed things up.

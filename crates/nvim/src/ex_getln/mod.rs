@@ -7,9 +7,7 @@ use crate::api::private::helpers::{
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{
-    EVENT_CMDLINECHANGED, EVENT_CMDLINEENTER, EVENT_CMDLINELEAVE, EVENT_CMDLINELEAVEPRE,
-    EVENT_CMDWINENTER, EVENT_CMDWINLEAVE, EVENT_CURSORMOVEDC, apply_autocmds, aucmd_prepbuf,
-    aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
+    apply_autocmds, aucmd_prepbuf, aucmd_restbuf, block_autocmds, has_event, unblock_autocmds,
 };
 use crate::buffer::{
     buf_clear, buf_get_changedtick, buf_open_scratch, buf_set_changedtick, buf_valid, close_buffer,
@@ -129,6 +127,7 @@ use crate::state::{
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
@@ -139,11 +138,11 @@ use crate::types::{
     Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValType, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues, Set_ptr_t,
     String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T,
-    cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, event_T, exarg_T,
-    except_T, expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T,
-    msglist_T, oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T,
-    sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t,
-    uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
+    expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T,
+    oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
+    searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t, uint32_t,
+    uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,

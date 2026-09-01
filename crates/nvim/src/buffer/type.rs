@@ -18,11 +18,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::main::{cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
@@ -230,9 +231,9 @@ pub unsafe fn set_buflisted(on: c_int) {
     }
     buf.b_p_bl = on;
     let event = if on != 0 {
-        EVENT_BUFADD
+        AutoEvent::BufAdd
     } else {
-        EVENT_BUFDELETE
+        AutoEvent::BufDelete
     };
     let raw = curbuf.get();
     // SAFETY: a live buffer; both name arguments are optional.

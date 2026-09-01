@@ -159,16 +159,14 @@ pub unsafe fn nvim_create_autocmd(
                                     let event_str = event_str
                                         .as_string()
                                         .expect("`unpack_string_or_array` answers Strings only");
-                                    let mut event_nr: event_T =
-                                        unsafe { event_name2nr_str(event_str) };
-                                    if !((event_nr as ::core::ffi::c_uint)
-                                        < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
-                                    {
+                                    let Some(event_nr) = (unsafe { event_name2nr_str(event_str) })
+                                    else {
                                         let bad = event_str.data();
                                         // SAFETY: the value the keyset carried, live for this call.
                                         error = err_bad_value(c"event", unsafe { cstr::at(bad) });
                                         break '_cleanup;
-                                    } else {
+                                    };
+                                    {
                                         let mut retval: Result<(), Failed> = Err(Failed);
                                         let mut pat_index: size_t = 0 as size_t;
                                         while pat_index < patterns.size {
@@ -300,8 +298,7 @@ pub unsafe fn nvim_clear_autocmds(
         return ().reported(error);
     }
     if event_array.size == 0 as size_t {
-        let mut event: event_T = EVENT_BUFADD;
-        while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
+        for event in AutoEvent::all() {
             let mut pat_object_index: size_t = 0 as size_t;
             while pat_object_index < patterns.size {
                 let pat_object: Object = unsafe { *patterns.items.add(pat_object_index) };
@@ -314,7 +311,6 @@ pub unsafe fn nvim_clear_autocmds(
                 }
                 pat_object_index = pat_object_index.wrapping_add(1);
             }
-            event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
         }
     } else {
         let mut event_str_index: size_t = 0 as size_t;
@@ -323,14 +319,11 @@ pub unsafe fn nvim_clear_autocmds(
             let event_str = event_str
                 .as_string()
                 .expect("`unpack_string_or_array` answers Strings only");
-            let mut event_nr: event_T = unsafe { event_name2nr_str(event_str) };
-            if !((event_nr as ::core::ffi::c_uint)
-                < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
-            {
+            let Some(event_nr) = (unsafe { event_name2nr_str(event_str) }) else {
                 // SAFETY: the value the keyset carried, live for this call.
                 error = err_bad_value(c"event", unsafe { event_str.as_cstr() });
                 return ().reported(error);
-            }
+            };
             let mut pat_object_index_0: size_t = 0 as size_t;
             while pat_object_index_0 < patterns.size {
                 let pat_object_0: Object = unsafe { *patterns.items.add(pat_object_index_0) };
@@ -350,7 +343,7 @@ pub unsafe fn nvim_clear_autocmds(
 }
 
 unsafe fn clear_autocmd(
-    mut event: event_T,
+    mut event: AutoEvent,
     mut pat: *mut ::core::ffi::c_char,
     mut au_group: ::core::ffi::c_int,
     err: &mut Error,

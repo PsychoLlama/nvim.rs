@@ -10,8 +10,7 @@ use crate::api::private::helpers::{
     parse_hl_msg, set_mark, string_to_array,
 };
 use crate::autocmd::{
-    EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume,
-    unblock_autocmds,
+    apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
 };
 use crate::buffer::{
     buf_close_terminal, buf_get_changedtick, buflist_new, buflist_nr2name, do_buffer,
@@ -89,6 +88,7 @@ use crate::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
     terminal_running, terminal_set_streamed_paste,
 };
+use crate::types::AutoEvent;
 use crate::types::{
     AdditionalData, Arena, Array, ArrayBuilder, Boolean, Buffer, Channel, ChannelStreamType,
     Context, Dict, Error, Float, HlAttrs, HlMessage, Integer, KeyDict_complete_set,

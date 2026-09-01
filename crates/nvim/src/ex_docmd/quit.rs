@@ -10,11 +10,12 @@
 //! any of them refuses, because the checks themselves look at it.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::autocmd::{EVENT_EXITPRE, EVENT_QUITPRE, is_aucmd_win, may_trigger_vim_suspend_resume};
+use crate::autocmd::{is_aucmd_win, may_trigger_vim_suspend_resume};
 
 use crate::buffer::{BufRef, do_bufdel, no_write_message};
 
@@ -42,7 +43,7 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, event_T, exarg_T, linenr_T, ptrdiff_t,
+    CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, exarg_T, linenr_T, ptrdiff_t,
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
@@ -101,7 +102,7 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forcei
     }
     unsafe {
         apply_autocmds(
-            EVENT_QUITPRE,
+            AutoEvent::QuitPre,
             ptr::null_mut(),
             ptr::null_mut(),
             false,
@@ -117,7 +118,7 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forcei
     // ExitPre is only for a quit that would end the process.
     if quit_all || check_more(false, forceit) == OK && only_one_window() {
         apply_autocmds(
-            EVENT_EXITPRE,
+            AutoEvent::ExitPre,
             ptr::null_mut(),
             ptr::null_mut(),
             false,
@@ -643,7 +644,7 @@ fn cur_win() -> Win {
 
 /// `apply_autocmds()` as checked code.
 fn apply_autocmds(
-    event: event_T,
+    event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,

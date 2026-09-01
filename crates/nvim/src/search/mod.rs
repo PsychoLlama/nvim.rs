@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::ascii_isdigit;
-use crate::autocmd::{EVENT_SEARCHWRAPPED, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::change::get_leader_len;
 use crate::charset::{skipwhite, vim_isfilec, vim_iswordc, vim_iswordp};
@@ -76,6 +76,7 @@ use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::state::MODE_SHOWMATCH;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Direction, EvalFuncData, FILE, MotionType, SearchOffset, SearchPattern, cmdarg_T, colnr_T,

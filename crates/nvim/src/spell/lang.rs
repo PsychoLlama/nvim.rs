@@ -30,9 +30,10 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use crate::autocmd::{EVENT_SPELLFILEMISSING, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::BufRef;
 use crate::charset::vim_is_fname_char;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
@@ -132,7 +133,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             if r.is_err() && sl.sl_lang[0] != 0 && round == 1 && {
                 let buf = curbuf.get();
                 let fname = unsafe { (*buf).b_fname };
-                let event = EVENT_SPELLFILEMISSING;
+                let event = AutoEvent::SpellFileMissing;
                 unsafe { apply_autocmds(event, lang, fname, false, buf) }
             } {
                 continue;

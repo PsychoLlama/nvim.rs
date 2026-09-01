@@ -49,7 +49,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // CursorMovedI, if the cursor moved.  Not while the popup menu is up:
     // the command might delete it.
     if ready
-        && has_event(EVENT_CURSORMOVEDI)
+        && has_event(AutoEvent::CursorMovedI)
         && (last_cursormoved_win.get() != curwin.get()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
         && !pum_visible()
@@ -63,7 +63,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
         unsafe { update_curswant() };
-        unsafe { ins_apply_autocmds(EVENT_CURSORMOVEDI) };
+        unsafe { ins_apply_autocmds(AutoEvent::CursorMovedI) };
         last_cursormoved_win.set(curwin.get());
         last_cursormoved.set(cur_win().w_cursor);
     }
@@ -75,7 +75,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // The autocommand may change the buffer *and* the window, so `curbuf`
     // is saved around it; and if it changed the text, the insert's undo
     // block has to be closed the way `ins_apply_autocmds` does it.
-    let fire_text_changed = |event: event_T, tick: *mut varnumber_T| {
+    let fire_text_changed = |event: AutoEvent, tick: *mut varnumber_T| {
         let mut aco = aco_save_T::default();
         let before = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
@@ -95,16 +95,16 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     };
 
     let mut buf = cur_buf();
-    if ready && has_event(EVENT_TEXTCHANGEDI) && !pum_visible() {
+    if ready && has_event(AutoEvent::TextChangedI) && !pum_visible() {
         let tick = &mut buf.b_last_changedtick_i;
         if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
-            fire_text_changed(EVENT_TEXTCHANGEDI, tick);
+            fire_text_changed(AutoEvent::TextChangedI, tick);
         }
     }
-    if ready && has_event(EVENT_TEXTCHANGEDP) && pum_visible() {
+    if ready && has_event(AutoEvent::TextChangedP) && pum_visible() {
         let tick = &mut buf.b_last_changedtick_pum;
         if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
-            fire_text_changed(EVENT_TEXTCHANGEDP, tick);
+            fire_text_changed(AutoEvent::TextChangedP, tick);
         }
     }
 
@@ -113,9 +113,13 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     }
 
     // BufModified, if b_changed_invalid is set.
-    if ready && has_event(EVENT_BUFMODIFIEDSET) && cur_buf().b_changed_invalid && !pum_visible() {
+    if ready
+        && has_event(AutoEvent::BufModifiedSet)
+        && cur_buf().b_changed_invalid
+        && !pum_visible()
+    {
         let none = ::core::ptr::null_mut();
-        unsafe { apply_autocmds(EVENT_BUFMODIFIEDSET, none, none, false, curbuf.get()) };
+        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, curbuf.get()) };
         cur_buf().b_changed_invalid = false;
     }
 

@@ -42,7 +42,7 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
     // SAFETY: a live buffer, and the event takes no file name.
     unsafe {
         apply_autocmds(
-            EVENT_FILECHANGEDRO,
+            AutoEvent::FileChangedRO,
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,

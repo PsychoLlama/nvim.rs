@@ -15,12 +15,13 @@
 
 use crate::cstr;
 use crate::keycodes::{Ctrl_C, Key};
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
-use crate::autocmd::{EVENT_BUFADD, EVENT_BUFDELETE, EVENT_SYNTAX, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
 use crate::charset::buf_init_chartab;
@@ -59,7 +60,7 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, colnr_T, event_T, linenr_T,
+    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, colnr_T, linenr_T,
     optset_T, ptrdiff_t, size_t, uint8_t, win_T,
 };
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
@@ -212,13 +213,13 @@ pub(crate) unsafe fn did_set_buflisted(args: *mut optset_T) -> *const c_char {
     let f = unsafe { Frame::read(args) };
     if f.old_boolean() != Some(f.buf.b_p_bl != 0) {
         let event = if f.buf.b_p_bl != 0 {
-            EVENT_BUFADD
+            AutoEvent::BufAdd
         } else {
-            EVENT_BUFDELETE
+            AutoEvent::BufDelete
         };
         unsafe {
             apply_autocmds(
-                event as event_T,
+                event as AutoEvent,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 true,
@@ -755,7 +756,7 @@ pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
     unsafe { (*buf).b_flags |= BufFlags::SYN_SET };
     unsafe {
         apply_autocmds(
-            EVENT_SYNTAX,
+            AutoEvent::Syntax,
             (*buf).b_p_syn,
             (*buf).b_fname,
             value_changed || syn_recursive.get() == 1,

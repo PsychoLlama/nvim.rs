@@ -169,7 +169,6 @@ pub struct VirtText {
     pub capacity: size_t,
     pub items: *mut VirtTextChunk,
 }
-pub type auto_event = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub struct caller_scope {
     pub script_ctx: sctx_T,
@@ -187,7 +186,6 @@ pub struct dictitem_T {
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 0],
 }
-pub type event_T = auto_event;
 #[derive(Copy, Clone)]
 pub struct mod_entry_T {
     pub flag: ::core::ffi::c_int,

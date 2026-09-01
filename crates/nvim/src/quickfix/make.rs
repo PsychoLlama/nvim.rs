@@ -117,7 +117,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
 
     let au_name = make_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
             return;
         }
@@ -171,7 +171,7 @@ pub unsafe fn ex_make(eap: *mut exarg_T) {
         // QuickFixCmdPost autocommand changing the list is noticed.
         let save_qfid = qf_current_list(qi).qf_id;
         if let Some(name) = au_name {
-            fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+            fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }
         if res > 0 && eap.forceit == 0 && qf_list_still_valid(wp, save_qfid) {
             // Display the first error.

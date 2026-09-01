@@ -342,7 +342,7 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
     let locked = Lock::all_buffers();
     let name = unsafe { (*buf).b_fname };
     let (no_io, no_buf) = (core::ptr::null_mut(), core::ptr::null_mut());
-    unsafe { apply_autocmds(EVENT_SWAPEXISTS, name, no_io, false, no_buf) };
+    unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, no_buf) };
     drop(locked);
 
     unsafe { set_vim_var_string(Vv::Swapname, core::ptr::null(), -1) };
@@ -393,7 +393,7 @@ unsafe fn resolve_swapfile_clash(
     // the question to the user.
     if choice == SEA_CHOICE_NONE
         && swap_exists_action.get() != SEA_NONE
-        && unsafe { has_autocmd(EVENT_SWAPEXISTS, buf_fname, Buf::from_raw(buf)) }
+        && unsafe { has_autocmd(AutoEvent::SwapExists, buf_fname, Buf::from_raw(buf)) }
     {
         choice = unsafe { do_swapexists(buf, fname) };
     }

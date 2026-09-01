@@ -12,15 +12,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::mem::size_of;
 use core::ptr;
 
 use super::arith::NextCurwin;
 use super::*;
-use crate::autocmd::{
-    EVENT_WINRESIZED, EVENT_WINSCROLLED, apply_autocmds, event_ignored, has_event,
-};
+use crate::autocmd::{apply_autocmds, event_ignored, has_event};
 use crate::buffer::BufRef;
 use crate::eval::typval::{
     tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc, tv_dict_extend,
@@ -224,8 +223,8 @@ fn scan_windows(what: &mut Scan) {
         }
         // SAFETY: the window's own 'eventignorewin' string.
         let eiw = wp.w_onebuf_opt.wo_eiw;
-        let ignore_scroll = unsafe { event_ignored(EVENT_WINSCROLLED, eiw) };
-        let ignore_resize = unsafe { event_ignored(EVENT_WINRESIZED, eiw) };
+        let ignore_scroll = unsafe { event_ignored(AutoEvent::WinScrolled, eiw) };
+        let ignore_resize = unsafe { event_ignored(AutoEvent::WinResized, eiw) };
         let size_changed =
             !ignore_resize && (wp.w_last_width != wp.w_width || wp.w_last_height != wp.w_height);
         if size_changed {
@@ -348,7 +347,10 @@ impl Subject {
 pub unsafe fn may_trigger_win_scrolled_resized() {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: reads the autocommand tables.
-    let (do_resize, do_scroll) = (has_event(EVENT_WINRESIZED), has_event(EVENT_WINSCROLLED));
+    let (do_resize, do_scroll) = (
+        has_event(AutoEvent::WinResized),
+        has_event(AutoEvent::WinScrolled),
+    );
     if recursive.get() || !(do_scroll || do_resize) || !did_initial_scroll_size_snapshot.get() {
         return;
     }
@@ -407,7 +409,7 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut list_T) {
         // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
         unsafe { tv_dict_set_keys_readonly(v_event) };
         // SAFETY: as above; this fires user autocommands.
-        unsafe { apply_autocmds(EVENT_WINRESIZED, name, name, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, buf) };
     }
     // SAFETY: the dictionary `get_v_event` saved into `save`.
     unsafe { restore_v_event(v_event, &raw mut save) };
@@ -426,7 +428,7 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut dict_T) {
     unref_dict(scroll_dict);
     let (name, buf) = (scroll.name(), scroll.buffer());
     // SAFETY: a NUL-terminated name and a live buffer; fires autocommands.
-    unsafe { apply_autocmds(EVENT_WINSCROLLED, name, name, false, buf) };
+    unsafe { apply_autocmds(AutoEvent::WinScrolled, name, name, false, buf) };
     // SAFETY: the dictionary `get_v_event` saved into `save`.
     unsafe { restore_v_event(v_event, &raw mut save) };
 }

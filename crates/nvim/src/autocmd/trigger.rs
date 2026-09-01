@@ -67,9 +67,14 @@ pub unsafe fn do_doautocmd(
     {
         // SAFETY: the event name at `arg`, the file name beside it, and
         // `curbuf`, which is live from startup to exit.
+        let Some(event) = (unsafe { event_name2nr(arg, &raw mut arg) }) else {
+            // An unknown name fires nothing, and the walk has already
+            // stepped past it.
+            continue;
+        };
         let ran = unsafe {
             apply_autocmds_group(
-                event_name2nr(arg, &raw mut arg),
+                event,
                 fname,
                 ::core::ptr::null_mut(),
                 true,
@@ -163,7 +168,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
 ///
 /// Everything is copied: `fname`, `fname_io` and `data` are the caller's.
 pub unsafe fn aucmd_defer(
-    event: event_T,
+    event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
@@ -293,7 +298,7 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
     // and outlives the call.
     unsafe {
         apply_autocmds_group(
-            EVENT_TERMRESPONSE,
+            AutoEvent::TermResponse,
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             true,
@@ -313,7 +318,7 @@ unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
     // to read but the editor's own autocommand tables.
     unsafe {
         apply_autocmds(
-            EVENT_VIMRESUME,
+            AutoEvent::VimResume,
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
@@ -333,7 +338,7 @@ pub fn may_trigger_vim_suspend_resume(suspend: bool) {
         // event to read but the editor's own autocommand tables.
         unsafe {
             apply_autocmds(
-                EVENT_VIMSUSPEND,
+                AutoEvent::VimSuspend,
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
@@ -381,9 +386,9 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     unsafe {
         apply_autocmds(
             if attached {
-                EVENT_UIENTER
+                AutoEvent::UIEnter
             } else {
-                EVENT_UILEAVE
+                AutoEvent::UILeave
             },
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
@@ -412,9 +417,9 @@ pub fn do_autocmd_focusgained(gained: bool) {
     unsafe {
         apply_autocmds(
             if gained {
-                EVENT_FOCUSGAINED
+                AutoEvent::FocusGained
             } else {
-                EVENT_FOCUSLOST
+                AutoEvent::FocusLost
             },
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
@@ -453,7 +458,7 @@ pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
     // names, and the buffer is live by `Buf`'s contract.
     let ret = unsafe {
         apply_autocmds(
-            EVENT_FILETYPE,
+            AutoEvent::FileType,
             buf.b_p_ft,
             buf.b_fname,
             force || ft_recursive.get() == 1,

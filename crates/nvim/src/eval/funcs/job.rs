@@ -6,7 +6,7 @@ use super::{
     GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty,
 };
 use crate::api::private::helpers::{cstr_as_string, dict_set_var};
-use crate::autocmd::{EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::{
     channel_close, channel_create_event, channel_decref, channel_incref, channel_job_start,
@@ -42,6 +42,7 @@ use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
+use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, IOSIZE,
@@ -611,7 +612,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     unsafe { channel_incref(chan) };
     unsafe { channel_terminal_alloc(buf, chan) };
     let noname = ptr::null_mut::<c_char>();
-    unsafe { apply_autocmds(EVENT_BUFFILEPRE, noname, noname, false, buf) };
+    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, buf) };
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
@@ -634,7 +635,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let dir = shortened.as_ptr();
         unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
         let _ = unsafe { setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true) };
-        unsafe { apply_autocmds(EVENT_BUFFILEPOST, noname, noname, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, buf) };
 
         if unsafe { terminal_live(chan) } {
             let mut err = Error::none();

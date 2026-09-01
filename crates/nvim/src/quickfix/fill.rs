@@ -359,11 +359,11 @@ unsafe fn finish_qf_buffer() {
     let start_row = c"quickfix".as_ptr().cast_mut();
     let start_col = ptr::null_mut();
     let old_col = curbuf.get();
-    unsafe { apply_autocmds(EVENT_BUFREADPOST, start_row, start_col, false, old_col) };
+    unsafe { apply_autocmds(AutoEvent::BufReadPost, start_row, start_col, false, old_col) };
     let lnum2 = c"quickfix".as_ptr().cast_mut();
     let col = ptr::null_mut();
     let old_col2 = curbuf.get();
-    unsafe { apply_autocmds(EVENT_BUFWINENTER, lnum2, col, false, old_col2) };
+    unsafe { apply_autocmds(AutoEvent::BufWinEnter, lnum2, col, false, old_col2) };
     cur_buf().b_keep_filetype = false;
     cur_buf().b_ro_locked -= 1;
 

@@ -13,13 +13,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_WINENTER, EVENT_WINLEAVE, EVENT_WINNEW,
-};
 use crate::buffer::{do_autochdir, maketitle};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_win_line};
 use crate::ex_eval::aborting;
@@ -279,13 +277,13 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
         // Be careful: if autocommands delete the window, return now.
         if wp.w_buffer != curbuf.get() {
-            fire(EVENT_BUFLEAVE, cur_buf());
+            fire(AutoEvent::BufLeave, cur_buf());
             other_buffer = true;
             if valid_win(wp.raw()).is_none() {
                 return;
             }
         }
-        fire(EVENT_WINLEAVE, cur_buf());
+        fire(AutoEvent::WinLeave, cur_buf());
         if valid_win(wp.raw()).is_none() {
             return;
         }
@@ -338,12 +336,12 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
 
     // Careful: autocommands may close the window and make `wp` invalid.
     if flags & WEE_TRIGGER_NEW_AUTOCMDS as c_int != 0 {
-        fire(EVENT_WINNEW, cur_buf());
+        fire(AutoEvent::WinNew, cur_buf());
     }
     if flags & WEE_TRIGGER_ENTER_AUTOCMDS as c_int != 0 {
-        fire(EVENT_WINENTER, cur_buf());
+        fire(AutoEvent::WinEnter, cur_buf());
         if other_buffer {
-            fire(EVENT_BUFENTER, cur_buf());
+            fire(AutoEvent::BufEnter, cur_buf());
         }
     }
 

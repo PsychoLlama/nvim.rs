@@ -20,14 +20,12 @@
 
 use crate::cstr;
 use crate::memline::MlFlags;
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
 use super::*;
-use crate::autocmd::{
-    EVENT_BUFENTER, EVENT_BUFFILEPOST, EVENT_BUFFILEPRE, EVENT_BUFWINENTER, EVENT_STDINREADPOST,
-    aucmd_prepbuf, aucmd_restbuf,
-};
+use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::change::{changed, save_file_ff};
 use crate::charset::buf_init_chartab;
 use crate::fileio::{Loaded, prep_exarg, readfile};
@@ -247,7 +245,7 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> Result<Load
         } else if retval.is_ok() {
             unchanged_now(buf, false, true);
         }
-        fire_retval(EVENT_STDINREADPOST, cur_buf(), &mut retval);
+        fire_retval(AutoEvent::StdinReadPost, cur_buf(), &mut retval);
     }
     retval
 }
@@ -420,7 +418,7 @@ fn open_buffer_inner(
         win.w_topline = 1 as linenr_T;
         win.w_topfill = 0;
     }
-    fire_retval(EVENT_BUFENTER, cur_buf(), &mut retval);
+    fire_retval(AutoEvent::BufEnter, cur_buf(), &mut retval);
     retval?;
 
     // The autocommands may have changed the current buffer.  Apply the
@@ -436,7 +434,7 @@ fn open_buffer_inner(
             .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
         if flags & READ_NOWINENTER as c_int == 0 {
-            fire_retval(EVENT_BUFWINENTER, cur_buf(), &mut retval);
+            fire_retval(AutoEvent::BufWinEnter, cur_buf(), &mut retval);
         }
     });
     retval
@@ -540,10 +538,10 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<
     let hide = ECMD_HIDE as c_int;
     edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win())?;
     if !bufname.is_null() {
-        fire(EVENT_BUFFILEPRE, cur_buf());
+        fire(AutoEvent::BufFilePre, cur_buf());
         // SAFETY: the current buffer, and the caller's NUL-terminated name.
         let _ = unsafe { setfname(cur_buf(), bufname, ptr::null_mut(), true) };
-        fire(EVENT_BUFFILEPOST, cur_buf());
+        fire(AutoEvent::BufFilePost, cur_buf());
     }
     set_option_string(kOptBufhidden, c"hide");
     set_option_string(kOptBuftype, c"nofile");

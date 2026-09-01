@@ -364,7 +364,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
     // upon the completion before clearing the info, and restore
     // ctrl_x_mode so that complete_info() can be used.
     ctrl_x_mode.set(prev_mode);
-    unsafe { ins_apply_autocmds(EVENT_COMPLETEDONEPRE) };
+    unsafe { ins_apply_autocmds(AutoEvent::CompleteDonePre) };
 
     unsafe { ins_compl_free() };
     compl_started.set(false);

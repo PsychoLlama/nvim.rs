@@ -631,7 +631,7 @@ pub unsafe fn do_search(
             if !sia.is_null() && unsafe { (*sia).sa_wrapped } != 0 {
                 let (name, buf) = (ptr::null_mut(), ptr::null_mut());
                 // SAFETY: a nameless event on no particular buffer.
-                unsafe { apply_autocmds(EVENT_SEARCHWRAPPED, name, name, false, buf) };
+                unsafe { apply_autocmds(AutoEvent::SearchWrapped, name, name, false, buf) };
             }
 
             let mut has_offset = false;

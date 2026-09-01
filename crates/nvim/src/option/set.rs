@@ -19,13 +19,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::tr;
+use crate::types::AutoEvent;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::autocmd::{EVENT_OPTIONSET, apply_autocmds, do_filetype_autocmd};
+use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
 use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
@@ -177,7 +178,7 @@ fn apply_optionset_autocmd(
 
     unsafe {
         apply_autocmds(
-            EVENT_OPTIONSET,
+            AutoEvent::OptionSet,
             get_option(opt_idx).fullname,
             ptr::null_mut(),
             false,

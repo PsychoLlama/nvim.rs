@@ -22,9 +22,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::autocmd::{
-    EVENT_TERMENTER, EVENT_TERMLEAVE, EVENT_TEXTCHANGEDT, apply_autocmds, has_event,
-};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, do_buffer};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
@@ -45,6 +43,7 @@ use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
+use crate::types::AutoEvent;
 use crate::types::{OptInt, VimState, colnr_T, linenr_T, pos_T, uint8_t, winopt_T};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
@@ -368,7 +367,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     let none = ::core::ptr::null_mut();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
-    unsafe { apply_autocmds(EVENT_TERMENTER, none, none, false, buf.raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermEnter, none, none, false, buf.raw()) };
     // SAFETY: reports the mode change, which can run autocommands too.
     unsafe { may_trigger_modechanged() };
     s.term.refcount.release();
@@ -414,7 +413,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
         s.term.refcount.retain();
     }
     // SAFETY: TermLeave against a live buffer, as above.
-    unsafe { apply_autocmds(EVENT_TERMLEAVE, none, none, false, current_buf().raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, current_buf().raw()) };
     if s.close {
         s.term.refcount.release();
         let buf_handle = s.term.buf_handle;
@@ -527,14 +526,14 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     // TextChangedT observers can close the terminal.
     s.term.refcount.retain();
     // SAFETY: reads the editor's own event table.
-    let observed = has_event(EVENT_TEXTCHANGEDT);
+    let observed = has_event(AutoEvent::TextChangedT);
     let mut buf = current_buf();
     // SAFETY: a live buffer's own change counter.
     if observed && buf.b_last_changedtick_i != buf_get_changedtick(buf) {
         let none = ::core::ptr::null_mut();
         // SAFETY: TextChangedT against a live buffer; nothing of the
         // terminal or the session is borrowed across it.
-        unsafe { apply_autocmds(EVENT_TEXTCHANGEDT, none, none, false, buf.raw()) };
+        unsafe { apply_autocmds(AutoEvent::TextChangedT, none, none, false, buf.raw()) };
         let mut buf = current_buf();
         // SAFETY: as above.
         buf.b_last_changedtick_i = buf_get_changedtick(buf);

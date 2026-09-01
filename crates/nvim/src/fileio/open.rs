@@ -17,12 +17,13 @@ use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::fileio::Loaded;
 use crate::os::uv_error::{UV_EFBIG, UV_ENOENT};
+use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use crate::bufwrite::translate;
 use crate::memfile::mf_fname;
-use crate::types::event_T;
+
 use core::ffi::CStr;
 
 use super::*;
@@ -45,7 +46,7 @@ fn filemess_note(fname: *mut c_char, note: &'static CStr) {
 /// `sfname` must be null or the name the read uses, and `eap` the caller's
 /// command or null.
 unsafe fn read_autocmd(
-    event: event_T,
+    event: AutoEvent,
     sfname: *mut c_char,
     eap: *mut exarg_T,
     for_file: bool,
@@ -143,7 +144,7 @@ pub(crate) unsafe fn open_source(
         cur_buf().b_op_start.col = 0;
 
         if how.newfile {
-            if unsafe { read_autocmd(EVENT_BUFREADCMD, sfname, eap, false) } {
+            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, eap, false) } {
                 retval = if aborting() {
                     Err(Failed)
                 } else {
@@ -158,7 +159,7 @@ pub(crate) unsafe fn open_source(
                 }
                 return Err(retval);
             }
-        } else if unsafe { read_autocmd(EVENT_FILEREADCMD, sfname, eap, true) } {
+        } else if unsafe { read_autocmd(AutoEvent::FileReadCmd, sfname, eap, true) } {
             retval = if aborting() {
                 Err(Failed)
             } else {
@@ -318,7 +319,7 @@ pub(crate) unsafe fn open_source(
             if !eap.is_null() {
                 unsafe { set_forced_fenc(eap) };
             }
-            let event = EVENT_BUFNEWFILE;
+            let event = AutoEvent::BufNewFile;
             unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
             // Remember the current fileformat.
             save_file_ff(unsafe { Buf::current() });
@@ -433,13 +434,13 @@ pub(crate) unsafe fn open_source(
         // if no output was done.
         msg_scroll.set(true as c_int);
         if how.filtering {
-            unsafe { read_autocmd(EVENT_FILTERREADPRE, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::FilterReadPre, sfname, eap, false) };
         } else if how.stdin {
-            unsafe { read_autocmd(EVENT_STDINREADPRE, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, eap, false) };
         } else if how.newfile {
-            unsafe { read_autocmd(EVENT_BUFREADPRE, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, eap, false) };
         } else {
-            unsafe { read_autocmd(EVENT_FILEREADPRE, sfname, eap, true) };
+            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, eap, true) };
         }
 
         // The autocommands may have changed 'fileformats'.

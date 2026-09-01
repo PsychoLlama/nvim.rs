@@ -9,14 +9,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::autocmd::{
-    EVENT_BUFUNLOAD, EVENT_BUFWINLEAVE, EVENT_VIMLEAVE, EVENT_VIMLEAVEPRE, apply_autocmds,
-    block_autocmds, is_autocmd_blocked, unblock_autocmds,
-};
+use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
 use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick, buf_valid};
 use crate::eval::garbage_collect;
 use crate::eval::userfunc::invoke_all_defer;
@@ -147,7 +145,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                 {
                     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
                     let fname = unsafe { (*buf).b_fname };
-                    let event = EVENT_BUFWINLEAVE;
+                    let event = AutoEvent::BufWinLeave;
                     unsafe { apply_autocmds(event, fname, fname, false, buf) };
                     if bufref.valid() {
                         unsafe { buf_set_changedtick(buf, -1) };
@@ -168,7 +166,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
                 let (name, raw) = (buf.b_fname, buf.raw());
-                unsafe { apply_autocmds(EVENT_BUFUNLOAD, name, name, false, raw) };
+                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, raw) };
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing
                     // on, so the `b_next` link is gone with it.
@@ -178,7 +176,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             cur = buf.next();
         }
 
-        unsafe { with_autocmds_unblocked(EVENT_VIMLEAVEPRE) };
+        unsafe { with_autocmds_unblocked(AutoEvent::VimLeavePre) };
     }
 
     if !p_shada.get().is_null() && unsafe { *p_shada.get() } as c_int != NUL {
@@ -187,7 +185,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
     }
 
     if v_dying.get() <= 1 {
-        unsafe { with_autocmds_unblocked(EVENT_VIMLEAVE) };
+        unsafe { with_autocmds_unblocked(AutoEvent::VimLeave) };
     }
 
     profile_dump();
@@ -216,7 +214,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
 ///
 /// `deathtrap()` blocks autocommands on the way in, but `VimLeavePre` and
 /// `VimLeave` are exactly the two the user still expects to see.
-unsafe fn with_autocmds_unblocked(event: crate::types::event_T) {
+unsafe fn with_autocmds_unblocked(event: AutoEvent) {
     // SAFETY: the block counter and the autocommand tables are global.
     let blocked = is_autocmd_blocked();
     if blocked {

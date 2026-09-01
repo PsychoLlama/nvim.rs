@@ -83,7 +83,7 @@
 //!
 //! ```ignore
 //! let id = win.id();                  // while the window is provably live
-//! apply_autocmds(EVENT_BUFLEAVE, ...);
+//! apply_autocmds(AutoEvent::BufLeave, ...);
 //! let Some(mut win) = id.get() else {
 //!     return;                         // it did not survive
 //! };

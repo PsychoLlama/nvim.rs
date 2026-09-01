@@ -19,7 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::autocmd::{EVENT_SYNTAX, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::charset::{
     buf_init_chartab, getdigits_int, getdigits_int32, skiptowhite, skipwhite, str_foldcase,
@@ -67,6 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave};
+use crate::types::AutoEvent;
 use crate::types::{
     OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, garray_T, hashtab_T, int16_t, linenr_T,
     lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,

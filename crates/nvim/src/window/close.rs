@@ -13,12 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
-use crate::autocmd::{EVENT_BUFENTER, EVENT_TABENTER, EVENT_WINENTER};
+
 use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_cmds2::{can_abandon, dialog_changed};
@@ -302,10 +303,10 @@ pub(crate) fn close_last_tabpage_window(
     enter_window(cur_win());
 
     // `goto_tab` above did not trigger *Enter autocommands: do that now.
-    fire(EVENT_WINENTER, cur_buf());
-    fire(EVENT_TABENTER, cur_buf());
+    fire(AutoEvent::WinEnter, cur_buf());
+    fire(AutoEvent::TabEnter, cur_buf());
     if old_curbuf != curbuf.get() {
-        fire(EVENT_BUFENTER, cur_buf());
+        fire(AutoEvent::BufEnter, cur_buf());
     }
     true
 }

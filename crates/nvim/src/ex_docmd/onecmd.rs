@@ -12,12 +12,13 @@
 //! and unwinds the command modifiers. That is what the `'doend` block is.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::autocmd::{EVENT_CMDUNDEFINED, apply_autocmds, getnextac, has_event};
+use crate::autocmd::{apply_autocmds, getnextac, has_event};
 
 use crate::cstr;
 use crate::debugger::dbg_check_breakpoint;
@@ -285,7 +286,7 @@ pub(crate) unsafe fn do_one_cmd(
             && ea.cmdidx == CmdIdx::SIZE
             && ea.skip == 0
             && (ubyte(ea.cmd)).is_ascii_uppercase()
-            && has_event(EVENT_CMDUNDEFINED)
+            && has_event(AutoEvent::CmdUndefined)
         {
             let mut end = ea.cmd;
             while (ubyte(end)).is_ascii_alphanumeric() {
@@ -294,9 +295,9 @@ pub(crate) unsafe fn do_one_cmd(
             let cmdname =
                 unsafe { xmemdupz(ea.cmd as *const c_void, end.offset_from(ea.cmd) as size_t) }
                     as *mut c_char;
-            let ret = unsafe {
-                apply_autocmds(EVENT_CMDUNDEFINED, cmdname, cmdname, true, ptr::null_mut())
-            };
+            let event = AutoEvent::CmdUndefined;
+            let no_buf = ptr::null_mut();
+            let ret = unsafe { apply_autocmds(event, cmdname, cmdname, true, no_buf) };
             xfree(cmdname as *mut c_void);
             // Look again only if the autocommands did something and did
             // not fail.

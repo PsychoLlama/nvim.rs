@@ -53,7 +53,7 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
     );
     unsafe { tv_dict_set_keys_readonly(v_event) };
 
-    unsafe { ins_apply_autocmds(EVENT_COMPLETEDONE) };
+    unsafe { ins_apply_autocmds(AutoEvent::CompleteDone) };
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
 

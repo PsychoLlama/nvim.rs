@@ -30,7 +30,8 @@ use super::{
     KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
-use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFWINENTER};
+use crate::types::AutoEvent;
+
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
@@ -651,9 +652,9 @@ unsafe fn enter_new_buffer(
         // by the user.
         // SAFETY: `curbuf` is live.
         do_modelines(OptionSetFlags::WINONLY);
-        fire_retval(EVENT_BUFENTER, cur_buf(), retval);
+        fire_retval(AutoEvent::BufEnter, cur_buf(), retval);
         if flags & ECMD_NOWINENTER as c_int == 0 {
-            fire_retval(EVENT_BUFWINENTER, cur_buf(), retval);
+            fire_retval(AutoEvent::BufWinEnter, cur_buf(), retval);
         }
     }
     // SAFETY: `curwin` is live.

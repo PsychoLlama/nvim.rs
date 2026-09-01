@@ -5,7 +5,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::vim::nvim_echo;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::autocmd::{AUGROUP_ALL, EVENT_PROGRESS, apply_autocmds_group, has_event};
+use crate::autocmd::{AUGROUP_ALL, apply_autocmds_group, has_event};
 use crate::charset::{
     byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
     vim_isprintc, vim_strsize,
@@ -84,6 +84,7 @@ use crate::register::write_reg_contents;
 use crate::runtime::estack_sfile;
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::types::AutoEvent;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,

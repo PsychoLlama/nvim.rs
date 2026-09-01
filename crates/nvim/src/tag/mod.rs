@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
-use crate::autocmd::{EVENT_BUFREADCMD, has_autocmd};
+use crate::autocmd::has_autocmd;
 use crate::buffer::{buf_is_help, buflist_findname_exp, buflist_getfile, find_buf};
 use crate::charset::{ptr2cells, skipdigits, vim_isblankline};
 use crate::cmdexpand::{expand_init, expand_one};
@@ -62,6 +62,7 @@ use crate::runtime::do_in_runtimepath;
 use crate::search::{do_search, ignorecase, ignorecase_opt};
 use crate::state::MODE_INSERT;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, Callback, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T, exarg_T,

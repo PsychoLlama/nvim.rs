@@ -20,9 +20,8 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::{
-    EVENT_BUFREADPOST, EVENT_BUFWINENTER, EVENT_FILETYPE, EVENT_QUICKFIXCMDPOST,
-    EVENT_QUICKFIXCMDPRE, apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf,
-    aucmd_restbuf, block_autocmds, unblock_autocmds,
+    apply_autocmds, au_event_disable, au_event_restore, aucmd_prepbuf, aucmd_restbuf,
+    block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
     buf_is_help, buf_is_normal, buf_is_quickfix, buf_valid, buflist_findname_exp, buflist_getfile,
@@ -110,6 +109,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat};
 use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::types::AutoEvent;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Callback, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptVal,

@@ -199,15 +199,17 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
     let bufref = BufRef::of_opt(Some(b));
     // SAFETY: `buf` is live, and the event has neither a file name nor a
     // pattern. A handler may wipe the buffer, which is what `bufref` checks.
+    let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
+    let event = AutoEvent::BufNew;
     let wiped =
-        unsafe { apply_autocmds(EVENT_BUFNEW, ptr::null_mut(), ptr::null_mut(), false, buf) }
-            && !bufref.valid();
+        unsafe { apply_autocmds(event, no_fname, no_fname_io, false, buf) } && !bufref.valid();
     if wiped {
         return 0;
     }
     // SAFETY: as above.
+    let event = AutoEvent::BufAdd;
     let wiped = listed
-        && unsafe { apply_autocmds(EVENT_BUFADD, ptr::null_mut(), ptr::null_mut(), false, buf) }
+        && unsafe { apply_autocmds(event, no_fname, no_fname_io, false, buf) }
         && !bufref.valid();
     if wiped {
         return 0;

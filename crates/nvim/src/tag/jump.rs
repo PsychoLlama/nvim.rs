@@ -408,7 +408,7 @@ impl Jump {
         // name a BufReadCmd autocommand claims (say "http://sys/file")
         // counts as existing.
         if !unsafe { os_path_exists(self.fname()) }
-            && !unsafe { has_autocmd(EVENT_BUFREADCMD, self.fname(), None) }
+            && !unsafe { has_autocmd(AutoEvent::BufReadCmd, self.fname(), None) }
         {
             unsafe { xfree(nofile_fname.get().cast()) };
             nofile_fname.set(unsafe { xstrdup(self.fname()) });

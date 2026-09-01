@@ -115,7 +115,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
     // what this function is for, and the caller allows it.
     unsafe {
         apply_autocmds(
-            EVENT_RECORDINGLEAVE,
+            AutoEvent::RecordingLeave,
             no_fname,
             no_fname,
             false,
@@ -157,7 +157,7 @@ pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
         // caller allows the autocommands it fires.
         unsafe {
             apply_autocmds(
-                EVENT_RECORDINGENTER,
+                AutoEvent::RecordingEnter,
                 no_fname,
                 no_fname,
                 false,

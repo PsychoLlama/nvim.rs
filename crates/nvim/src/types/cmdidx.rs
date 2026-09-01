@@ -35,7 +35,7 @@ use ::core::ffi::c_int;
 /// `#[allow(non_camel_case_types)]` because a variant is the command, spelled
 /// as the user types it -- see the module doc.
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 #[repr(i32)]
 pub enum CmdIdx {
     USER_BUF = -2,

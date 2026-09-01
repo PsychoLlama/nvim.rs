@@ -282,7 +282,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     if !single_char_insert {
-        unsafe { ins_apply_autocmds(EVENT_INSERTLEAVEPRE) };
+        unsafe { ins_apply_autocmds(AutoEvent::InsertLeavePre) };
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
@@ -400,7 +400,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
     };
     // SAFETY: a static mode name, and `curwin`/`curbuf` are live.
     unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
-    unsafe { ins_apply_autocmds(EVENT_INSERTCHANGE) };
+    unsafe { ins_apply_autocmds(AutoEvent::InsertChange) };
 
     if State.get() & REPLACE_FLAG != 0 {
         State.set(MODE_INSERT | State.get() & MODE_LANGMAP);

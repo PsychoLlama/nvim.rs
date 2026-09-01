@@ -46,7 +46,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
 
     let au_name = cfile_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, false);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, false);
         if claimed && aborting() {
             return;
         }
@@ -95,7 +95,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
     // noticed before the jump.
     let save_qfid = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
-        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, false);
+        fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, false);
     }
 
     let jumps = matches!(eap.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
@@ -176,7 +176,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
     // SAFETY: forwarded from the caller.
     let au_name = cbuffer_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
             return;
         }
@@ -236,7 +236,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
     let save_qfid = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
         let curbuf_old: *const buf_T = curbuf.get();
-        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+        fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         // The autocommand switched buffers: do not jump away from
         // wherever it left the user.
         if !ptr::eq(curbuf.get(), curbuf_old) {
@@ -275,7 +275,7 @@ fn cexpr_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
     // SAFETY: the caller's promise.
     if let Some(name) = cexpr_get_auname(cmdidx) {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
             return false;
         }
@@ -341,7 +341,7 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> Result<(), Faile
     }
     let save_qfid: c_uint = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
-        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+        fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
     }
 
     let jumps = matches!(eap.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);

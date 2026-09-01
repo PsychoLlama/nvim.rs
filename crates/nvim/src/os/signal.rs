@@ -7,7 +7,7 @@
 //! signal-handler context, so they may touch editor state freely.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::autocmd::{EVENT_SIGNAL, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::eval::vars::set_vim_var_nr;
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
@@ -19,6 +19,7 @@ use crate::main::{curbuf, main_loop, p_awa, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::message_fmt::c_str;
 use crate::os::cshim::snprintf;
+use crate::types::AutoEvent;
 use crate::types::{
     IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
@@ -248,7 +249,7 @@ fn handle_signal(signum: c_int) {
             // signal_name yields.
             SIGUSR1 | SIGWINCH => {
                 apply_autocmds(
-                    EVENT_SIGNAL,
+                    AutoEvent::Signal,
                     signal_name(signum).as_ptr() as *mut c_char,
                     (*curbuf.get()).b_fname,
                     true,

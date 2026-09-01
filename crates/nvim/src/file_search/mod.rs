@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::autocmd::{EVENT_DIRCHANGED, EVENT_DIRCHANGEDPRE, apply_autocmds, has_event};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{getdigits_int32, getdigits_long, skipwhite, vim_isfilec};
 use crate::cstr;
 use crate::cursor::get_cursor_line_ptr;
@@ -43,8 +43,9 @@ use crate::path::{
     path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
 };
 use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
+use crate::types::AutoEvent;
 use crate::types::{
-    BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, cmdarg_T, event_T, linenr_T, ptrdiff_t,
+    BoolVarValue, CdCause, CdScope, FileID, MAXPATHL, cmdarg_T, linenr_T, ptrdiff_t,
     save_v_event_T, size_t,
 };
 use ::libc::{abort, strcpy};

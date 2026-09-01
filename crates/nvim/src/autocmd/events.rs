@@ -22,17 +22,18 @@ use crate::types::{Failed, OptionSetFlags};
 /// Every caller has an event that came out of the table, so the index is
 /// in range; `event_nr2name` is the one place a caller can be holding
 /// something else, and it bounds-checks for itself.
-pub(super) fn event_row(event: event_T) -> &'static EventName {
-    &EVENT_NAMES[event as usize]
+pub(super) fn event_row(event: AutoEvent) -> &'static EventName {
+    &EVENT_NAMES[event.index()]
 }
 
 /// The event named by the head of `start`: up to the first whitespace,
 /// comma or bar.  `*end` is left just past the name and its comma, so a
-/// caller can walk a list; `NUM_EVENTS` means no event is spelled that way.
+/// caller can walk a list; `None` means no event is spelled that way, which
+/// upstream said with `NUM_EVENTS`.
 pub unsafe fn event_name2nr(
     start: *const ::core::ffi::c_char,
     end: *mut *mut ::core::ffi::c_char,
-) -> event_T {
+) -> Option<AutoEvent> {
     // SAFETY: the caller's `start` is a NUL-terminated string, so the name
     // and its terminator are one allocation the borrow below stays inside.
     let rest = unsafe { CStr::from_ptr(start) }.to_bytes();
@@ -47,14 +48,11 @@ pub unsafe fn event_name2nr(
     // SAFETY: `consumed` is at most `rest.len()`, so the offset lands on or
     // before the NUL, and `end` is the caller's out-parameter.
     unsafe { *end = start.add(consumed).cast_mut() };
-    match found {
-        Some(at) => EVENT_NAMES[at].event.unsigned_abs(),
-        None => NUM_EVENTS,
-    }
+    found.map(|at| EVENT_NAMES[at].event)
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
-pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
+pub unsafe fn event_name2nr_str(str: String_0) -> Option<AutoEvent> {
     // An empty API string has a null `data`, which is not a valid pointer
     // even for a zero-length slice.
     let wanted: &[u8] = if str.is_empty() {
@@ -62,23 +60,15 @@ pub unsafe fn event_name2nr_str(str: String_0) -> event_T {
     } else {
         unsafe { str.as_bytes() }
     };
-    match event_name_index(wanted) {
-        Some(at) => EVENT_NAMES[at].event.unsigned_abs(),
-        None => NUM_EVENTS,
-    }
+    event_name_index(wanted).map(|at| EVENT_NAMES[at].event)
 }
 
-/// The canonical name of `event`, or `"Unknown"` for an event number that
-/// is not one.
+/// The canonical name of `event`.
 ///
-/// Upstream also asks `event >= 0`, which `event_T` being unsigned makes
-/// vacuous; the answers are the same either way, so the test stays gone.
-pub fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
-    let name = match EVENT_NAMES.get(event as usize) {
-        Some(row) => row.name,
-        None => c"Unknown",
-    };
-    name.as_ptr()
+/// Upstream took an `int` here and answered `"Unknown"` for a number that
+/// was not an event; every event is one now, so the fallback is gone.
+pub fn event_nr2name(event: AutoEvent) -> *const ::core::ffi::c_char {
+    EVENT_NAMES[event.index()].name.as_ptr()
 }
 
 /// Whether `ei` -- a value of 'eventignore' or 'eventignorewin' -- names
@@ -88,7 +78,7 @@ pub fn event_nr2name(event: event_T) -> *const ::core::ffi::c_char {
 /// that a `-name` exclusion answers immediately.  `all` in 'eventignorewin'
 /// covers only the window-local events, which is what the sign of a row's
 /// `event` records.
-pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) -> bool {
+pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) -> bool {
     let mut ignored = false;
     // SAFETY: `ei` is a NUL-terminated option value, so the walk stops at
     // its end.  `skip_all` and `event_name2nr` take the same contract, and
@@ -97,9 +87,9 @@ pub unsafe fn event_ignored(event: event_T, mut ei: *mut ::core::ffi::c_char) ->
         let unignore = unsafe { *ei } == b'-' as ::core::ffi::c_char;
         ei = unsafe { ei.add(usize::from(unignore)) };
         if let Some(after_all) = unsafe { skip_all(ei) } {
-            ignored = ei == p_ei.get() || event_row(event).event <= 0;
+            ignored = ei == p_ei.get() || event_row(event).win_local;
             ei = after_all;
-        } else if unsafe { event_name2nr(ei, &raw mut ei) } == event {
+        } else if unsafe { event_name2nr(ei, &raw mut ei) } == Some(event) {
             if unignore {
                 return false;
             }
@@ -123,8 +113,10 @@ pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
             ei = after_all;
         } else {
             ei = unsafe { ei.add(usize::from(*ei == b'-' as ::core::ffi::c_char)) };
-            let event = unsafe { event_name2nr(ei, &raw mut ei) };
-            if event == NUM_EVENTS || (win && event_row(event).event > 0) {
+            let Some(event) = (unsafe { event_name2nr(ei, &raw mut ei) }) else {
+                return Err(Failed);
+            };
+            if win && !event_row(event).win_local {
                 return Err(Failed);
             }
         }
@@ -210,7 +202,7 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
 /// Whether any autocommand is defined for `event`.
 ///
 /// Safe: the table is the editor's own, live from startup to exit.
-pub fn has_event(event: event_T) -> bool {
+pub fn has_event(event: AutoEvent) -> bool {
     // SAFETY: the table's own row for `event`.
     unsafe { (*au_event_vec(event)).size != 0 }
 }
@@ -221,9 +213,9 @@ pub fn has_event(event: event_T) -> bool {
 /// are live for as long as the editor is.
 fn has_cursorhold() -> bool {
     has_event(if get_real_state() == MODE_NORMAL_BUSY {
-        EVENT_CURSORHOLD
+        AutoEvent::CursorHold
     } else {
-        EVENT_CURSORHOLDI
+        AutoEvent::CursorHoldI
     })
 }
 
@@ -284,7 +276,7 @@ pub fn get_event_name_no_group(
     if !win {
         return EVENT_NAMES[idx].name.as_ptr().cast_mut();
     }
-    match EVENT_NAMES.iter().filter(|row| row.event <= 0).nth(idx) {
+    match EVENT_NAMES.iter().filter(|row| row.win_local).nth(idx) {
         Some(row) => row.name.as_ptr().cast_mut(),
         None => ::core::ptr::null_mut(),
     }
@@ -295,7 +287,7 @@ pub unsafe fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
     let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
     // SAFETY: `event` is a NUL-terminated name by the contract, and `end` is
     // a local for the position `event_name2nr` reports back.
-    unsafe { event_name2nr(event, &raw mut end) != NUM_EVENTS }
+    unsafe { event_name2nr(event, &raw mut end) }.is_some()
 }
 
 /// ASCII-case-folded comparison, the order [`EVENT_NAMES`] is in.
@@ -344,14 +336,16 @@ mod tests {
         }
     }
 
-    /// Every row's index is the `EVENT_*` constant of that *name*, which is
-    /// what `event_nr2name` indexes with, and its `event` is the canonical
-    /// event that name resolves to.
+    /// Every row's index is the [`AutoEvent`] variant of that *name*, which
+    /// is what `event_nr2name` indexes with, and its `event` is the
+    /// canonical event that name resolves to.
     #[test]
     fn every_name_finds_its_own_row() {
+        assert_eq!(EVENT_NAMES.len(), AutoEvent::COUNT);
         for (i, row) in EVENT_NAMES.iter().enumerate() {
             assert_eq!(event_name_index(row.name.to_bytes()), Some(i));
-            assert!(row.event.unsigned_abs() < NUM_EVENTS);
+            assert!(AutoEvent::at_row(i).is_some());
+            assert!(row.event.index() < AutoEvent::COUNT);
         }
     }
 }

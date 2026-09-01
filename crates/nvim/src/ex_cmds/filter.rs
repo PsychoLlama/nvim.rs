@@ -14,7 +14,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
-use crate::autocmd::{EVENT_SHELLCMDPOST, EVENT_SHELLFILTERPOST};
+use crate::types::AutoEvent;
+
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::charset::skipwhite;
@@ -213,7 +214,7 @@ pub unsafe fn do_bang(
             // SAFETY: `eap` is the caller's live argument and `newcmd` a live
             // string; the autocommand runs with the current buffer.
             unsafe { do_filter(line1, line2, eap, newcmd, do_in, do_out) };
-            buf_autocmd(EVENT_SHELLFILTERPOST, cur_buf());
+            buf_autocmd(AutoEvent::ShellFilterPost, cur_buf());
         }
     }
 
@@ -639,7 +640,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // Put the cursor back where it was: the shell wrote over the screen.
     msg_row.set(Rows.get() - 1);
     msg_col.set(0);
-    buf_autocmd(EVENT_SHELLCMDPOST, cur_buf());
+    buf_autocmd(AutoEvent::ShellCmdPost, cur_buf());
 }
 
 /// Which shell 'shell' names, as far as building a command line goes.

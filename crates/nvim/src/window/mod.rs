@@ -35,6 +35,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ptr;
 
@@ -58,8 +59,8 @@ use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType, Set_uint32_t,
-    WinSplit, WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, event_T,
-    getf_values, handle_T, kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
+    WinSplit, WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values,
+    handle_T, kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -508,7 +509,7 @@ fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
 ///
 /// **Nothing derived from a window or buffer survives this call**: the event
 /// may close windows, switch tab pages or wipe the buffer.
-fn fire(event: event_T, buf: Buf) -> bool {
+fn fire(event: AutoEvent, buf: Buf) -> bool {
     let (none, raw) = (ptr::null_mut(), buf.raw());
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, none, none, false, raw) }
@@ -517,7 +518,7 @@ fn fire(event: event_T, buf: Buf) -> bool {
 /// [`fire`] with a name, which the event reports as `<afile>` and matches
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
-fn fire_named(event: event_T, name: *mut ::core::ffi::c_char, buf: Option<Buf>) -> bool {
+fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buf: Option<Buf>) -> bool {
     let buf = buf.map_or(ptr::null_mut(), Buf::raw);
     // SAFETY: a live buffer or null, and a NUL-terminated name or null.
     unsafe { apply_autocmds(event, name, name, false, buf) }

@@ -10,10 +10,11 @@
 //! look like input to all of them.
 
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::autocmd::{EVENT_MODECHANGED, EVENT_SAFESTATE, apply_autocmds, has_event};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::channel::main_loop_events;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
@@ -433,7 +434,7 @@ fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::
 /// The editor must be initialized.
 pub unsafe fn may_trigger_modechanged() {
     // SAFETY: the editor is initialized.
-    if !has_event(EVENT_MODECHANGED) || got_int.get() {
+    if !has_event(AutoEvent::ModeChanged) || got_int.get() {
         return;
     }
     let mut old_mode = last_mode.get();
@@ -460,7 +461,7 @@ pub unsafe fn may_trigger_modechanged() {
     unsafe { tv_dict_set_keys_readonly(v_event) };
     let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
     let buf = curbuf.get();
-    unsafe { apply_autocmds(EVENT_MODECHANGED, fname, fname_io, false, buf) };
+    unsafe { apply_autocmds(AutoEvent::ModeChanged, fname, fname_io, false, buf) };
     last_mode.set(curr_mode);
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
@@ -501,7 +502,7 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
         // SAFETY: the editor is initialized, so `curbuf` is live.
         let (fname, fname_io) = (ptr::null_mut::<c_char>(), ptr::null_mut::<c_char>());
         let buf = curbuf.get();
-        unsafe { apply_autocmds(EVENT_SAFESTATE, fname, fname_io, false, buf) };
+        unsafe { apply_autocmds(AutoEvent::SafeState, fname, fname_io, false, buf) };
     }
     was_safe.set(is_safe);
 }

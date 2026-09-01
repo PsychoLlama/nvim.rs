@@ -19,7 +19,7 @@ pub(crate) unsafe fn au_show_for_all_events(
     group: ::core::ffi::c_int,
     pat: *const ::core::ffi::c_char,
 ) {
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         // SAFETY: `group` and `pat` are the caller's, handed straight on.
         unsafe { au_show_for_event(group, event, pat) };
     }
@@ -32,7 +32,7 @@ pub(crate) unsafe fn au_show_for_all_events(
 /// and each check is at the point where upstream put it.
 pub(crate) unsafe fn au_show_for_event(
     group: ::core::ffi::c_int,
-    event: event_T,
+    event: AutoEvent,
     mut pat: *const ::core::ffi::c_char,
 ) {
     let acs = au_event_vec(event);
@@ -218,7 +218,7 @@ pub(crate) unsafe fn au_show_for_event(
 /// Whether any autocommand for `event` would match the file `sfname`
 /// opened in `buf`.
 pub unsafe fn has_autocmd(
-    event: event_T,
+    event: AutoEvent,
     sfname: *mut ::core::ffi::c_char,
     buf: Option<Buf>,
 ) -> bool {
@@ -393,10 +393,9 @@ pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
         let pattern = p;
         // SAFETY: `event_name` is a NUL-terminated field of the copy, and
         // `p` is a local `event_name2nr` reports the name's end in.
-        let event = unsafe { event_name2nr(event_name, &raw mut p) };
-        if event == NUM_EVENTS {
+        let Some(event) = (unsafe { event_name2nr(event_name, &raw mut p) }) else {
             break 'theend false;
-        }
+        };
 
         let acs = au_event_vec(event);
         // SAFETY: the event table's own row for `event`.

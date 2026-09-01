@@ -1,11 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::{ptr, slice};
 
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
-use crate::autocmd::{EVENT_FUNCUNDEFINED, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::eval::EVALARG_EVALUATE;

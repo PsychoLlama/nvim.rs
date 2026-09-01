@@ -33,8 +33,7 @@
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{
-    EVENT_DIFFUPDATED, apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists,
-    block_autocmds, unblock_autocmds,
+    apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_valid, buflist_findpat, current_buf,
@@ -88,6 +87,7 @@ use crate::path::full_name_save;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
+use crate::types::AutoEvent;
 use crate::types::{
     CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
     OptValType, String_0, aco_save_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T,

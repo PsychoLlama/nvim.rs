@@ -42,7 +42,7 @@ mod view;
 
 use crate::arglist::alist_name;
 use crate::ascii::ascii_isdigit;
-use crate::autocmd::{EVENT_SESSIONWRITEPOST, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::cstr;
 use crate::eval::vars::set_vim_var_string;
@@ -71,6 +71,7 @@ use crate::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::semsg;
+use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
     CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, aentry_T, buf_T, exarg_T,
@@ -541,7 +542,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
     unsafe { xfree(view_file.cast::<c_void>()) };
     unsafe {
         apply_autocmds(
-            EVENT_SESSIONWRITEPOST,
+            AutoEvent::SessionWritePost,
             ptr::null_mut(),
             ptr::null_mut(),
             false,

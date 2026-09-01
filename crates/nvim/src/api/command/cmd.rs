@@ -231,12 +231,12 @@ unsafe fn resolve_command(
     if !p.is_null()
         && ea.cmdidx == CmdIdx::SIZE
         && unsafe { *ea.cmd as u8 }.is_ascii_uppercase()
-        && has_event(EVENT_CMDUNDEFINED)
+        && has_event(AutoEvent::CmdUndefined)
     {
         // SAFETY: as above.
         unsafe {
             p = arena_string(arena, cmd.cmd).data();
-            let ret = apply_autocmds(EVENT_CMDUNDEFINED, p, p, true, ptr::null_mut());
+            let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, ptr::null_mut());
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(ea, ptr::null_mut())
             } else {

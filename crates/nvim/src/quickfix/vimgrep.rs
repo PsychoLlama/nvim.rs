@@ -577,7 +577,7 @@ unsafe fn keep_or_drop_dummy(
     let raw = buf.raw();
     // SAFETY: a live buffer, entered and left again around the events.
     unsafe { aucmd_prepbuf(&raw mut aco, raw) };
-    unsafe { apply_autocmds(EVENT_FILETYPE, buf.b_p_ft, buf.b_fname, true, raw) };
+    unsafe { apply_autocmds(AutoEvent::FileType, buf.b_p_ft, buf.b_fname, true, raw) };
     do_modelines(OptionSetFlags::NOWIN);
     unsafe { aucmd_restbuf(&raw mut aco) };
 }
@@ -628,7 +628,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
 
     let au_name = vgr_get_auname(eap.cmdidx);
     if let Some(name) = au_name {
-        let claimed = fire_qf_autocmd(EVENT_QUICKFIXCMDPRE, name, true);
+        let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
             return;
         }
@@ -671,7 +671,7 @@ pub unsafe fn ex_vimgrep(eap: *mut exarg_T) {
     // noticed before the jump.
     let save_qfid = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
-        fire_qf_autocmd(EVENT_QUICKFIXCMDPOST, name, true);
+        fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
     }
     if !qf_list_still_valid(wp, save_qfid)
         || unsafe { qf_restore_list(qi.raw(), save_qfid) }.is_err()

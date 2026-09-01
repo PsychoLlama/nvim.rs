@@ -25,9 +25,7 @@
 
 use crate::api::private::helpers::{cbuf_to_string, copy_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::autocmd::{
-    EVENT_RECORDINGENTER, EVENT_RECORDINGLEAVE, EVENT_TEXTYANKPOST, apply_autocmds, has_event,
-};
+use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf, getaltfname};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{changed_bytes, changed_lines, del_chars};
@@ -95,6 +93,7 @@ use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::terminal::terminal_paste;
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,

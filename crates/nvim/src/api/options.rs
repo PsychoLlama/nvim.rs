@@ -19,11 +19,11 @@ use crate::api::private::helpers::{
     Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key, window_by_handle,
 };
 use crate::autocmd::{
-    EVENT_FILETYPE, aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event,
-    unblock_autocmds,
+    aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
 };
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::validate::{err_bad_value, err_expected};
@@ -250,7 +250,7 @@ unsafe fn do_ft_buf(
     unsafe { (*ftbuf).b_p_ml = 0 };
     unsafe { (*ftbuf).b_p_ft = xstrdup(filetype) };
     // SAFETY: the autocommand tables are the editor's own.
-    if !has_event(EVENT_FILETYPE) {
+    if !has_event(AutoEvent::FileType) {
         return ftbuf;
     }
     // SAFETY: `ftbuf` is live; the autocommands may delete it, which the

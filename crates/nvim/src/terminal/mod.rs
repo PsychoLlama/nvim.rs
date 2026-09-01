@@ -39,8 +39,8 @@ pub(crate) mod termrequest;
 
 use crate::api::private::helpers::{api_free_object, cstr_as_string, dict_get_value};
 use crate::autocmd::{
-    EVENT_TERMCLOSE, EVENT_TERMOPEN, apply_autocmds, apply_autocmds_group, aucmd_prepbuf,
-    aucmd_restbuf, block_autocmds, is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
+    apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
+    is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
 };
 use crate::change::deleted_lines_buf;
 use crate::channel::main_loop_events;
@@ -59,6 +59,7 @@ use crate::memline::ml_delete_buf;
 use crate::r#move::win_col_off;
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
+use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
@@ -380,7 +381,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) 
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and
     // nothing of either is borrowed across it.
-    unsafe { apply_autocmds(EVENT_TERMOPEN, none, none, false, buf.raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, buf.raw()) };
     // SAFETY: paired with the `aucmd_prepbuf` above.
     unsafe { aucmd_restbuf(&raw mut aco) };
     // SAFETY: the caller's slot, which TermOpen may have emptied. The
@@ -509,7 +510,8 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     let (group, buf) = (AUGROUP_ALL, buf.raw());
     // SAFETY: TermClose against a live buffer; nothing of the terminal is
     // borrowed across it.
-    unsafe { apply_autocmds_group(EVENT_TERMCLOSE, none, none, exited, group, buf, exarg, data) };
+    let event = AutoEvent::TermClose;
+    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, exarg, data) };
     // SAFETY: paired with the `get_v_event` above.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 }

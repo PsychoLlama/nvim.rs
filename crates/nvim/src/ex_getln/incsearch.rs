@@ -18,7 +18,7 @@ use core::ffi::CStr;
 
 /// Fire a `Cmdline*` / `Cmdwin*` autocommand whose `<afile>` and `<amatch>`
 /// are the command-line type character.
-pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: event_T) {
+pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) {
     let mut typestr: [::core::ffi::c_char; 2] =
         [typechar as ::core::ffi::c_char, NUL as ::core::ffi::c_char];
     cmdline_autocmd(evt, typestr.as_mut_ptr());
@@ -27,7 +27,7 @@ pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: event_T) {
 /// C's `apply_autocmds(evt, fname, fname, false, curbuf)`: the one shape
 /// every `Cmdline*`/`Cmdwin*` event is fired with, where `<afile>` and
 /// `<amatch>` are the same string.
-pub(crate) fn cmdline_autocmd(evt: event_T, fname: *mut ::core::ffi::c_char) -> bool {
+pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: *mut ::core::ffi::c_char) -> bool {
     // SAFETY: `fname` is a live NUL-terminated string of the caller's frame,
     // and `curbuf` is a live buffer.
     unsafe { apply_autocmds(evt, fname, fname, false, curbuf.get()) }

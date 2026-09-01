@@ -33,72 +33,72 @@ const SAVE_REDO_INIT: save_redo_T = save_redo_T {
 };
 
 /// The events whose `<afile>` is not a file name, so nothing is set.
-fn afile_is_not_a_name(event: event_T) -> bool {
+fn afile_is_not_a_name(event: AutoEvent) -> bool {
     matches!(
         event,
-        EVENT_COLORSCHEME
-            | EVENT_COLORSCHEMEPRE
-            | EVENT_OPTIONSET
-            | EVENT_MODECHANGED
-            | EVENT_MARKSET
+        AutoEvent::ColorScheme
+            | AutoEvent::ColorSchemePre
+            | AutoEvent::OptionSet
+            | AutoEvent::ModeChanged
+            | AutoEvent::MarkSet
     )
 }
 
 /// The events whose file-name argument is a name of something else -- a
 /// command line, a filetype, a signal -- and must not be expanded to a
 /// full path.
-fn afile_is_not_expanded(event: event_T) -> bool {
+fn afile_is_not_expanded(event: AutoEvent) -> bool {
     matches!(
         event,
-        EVENT_CMDLINECHANGED
-            | EVENT_CMDLINEENTER
-            | EVENT_CMDLINELEAVEPRE
-            | EVENT_CMDLINELEAVE
-            | EVENT_CMDUNDEFINED
-            | EVENT_CURSORMOVEDC
-            | EVENT_CMDWINENTER
-            | EVENT_CMDWINLEAVE
-            | EVENT_COLORSCHEME
-            | EVENT_COLORSCHEMEPRE
-            | EVENT_DIRCHANGED
-            | EVENT_DIRCHANGEDPRE
-            | EVENT_FILETYPE
-            | EVENT_FUNCUNDEFINED
-            | EVENT_MARKSET
-            | EVENT_MENUPOPUP
-            | EVENT_MODECHANGED
-            | EVENT_OPTIONSET
-            | EVENT_PROGRESS
-            | EVENT_QUICKFIXCMDPOST
-            | EVENT_QUICKFIXCMDPRE
-            | EVENT_REMOTEREPLY
-            | EVENT_SIGNAL
-            | EVENT_SPELLFILEMISSING
-            | EVENT_SYNTAX
-            | EVENT_TABCLOSED
-            | EVENT_USER
-            | EVENT_WINCLOSED
-            | EVENT_WINRESIZED
-            | EVENT_WINSCROLLED
+        AutoEvent::CmdlineChanged
+            | AutoEvent::CmdlineEnter
+            | AutoEvent::CmdlineLeavePre
+            | AutoEvent::CmdlineLeave
+            | AutoEvent::CmdUndefined
+            | AutoEvent::CursorMovedC
+            | AutoEvent::CmdwinEnter
+            | AutoEvent::CmdwinLeave
+            | AutoEvent::ColorScheme
+            | AutoEvent::ColorSchemePre
+            | AutoEvent::DirChanged
+            | AutoEvent::DirChangedPre
+            | AutoEvent::FileType
+            | AutoEvent::FuncUndefined
+            | AutoEvent::MarkSet
+            | AutoEvent::MenuPopup
+            | AutoEvent::ModeChanged
+            | AutoEvent::OptionSet
+            | AutoEvent::Progress
+            | AutoEvent::QuickFixCmdPost
+            | AutoEvent::QuickFixCmdPre
+            | AutoEvent::RemoteReply
+            | AutoEvent::Signal
+            | AutoEvent::SpellFileMissing
+            | AutoEvent::Syntax
+            | AutoEvent::TabClosed
+            | AutoEvent::User
+            | AutoEvent::WinClosed
+            | AutoEvent::WinResized
+            | AutoEvent::WinScrolled
     )
 }
 
 /// The events that do not set or reset the `Changed` flag themselves, so
 /// it is put back afterwards.
-fn keeps_changed_flag(event: event_T) -> bool {
+fn keeps_changed_flag(event: AutoEvent) -> bool {
     matches!(
         event,
-        EVENT_BUFREADPOST
-            | EVENT_BUFWRITEPOST
-            | EVENT_FILEAPPENDPOST
-            | EVENT_VIMLEAVE
-            | EVENT_VIMLEAVEPRE
+        AutoEvent::BufReadPost
+            | AutoEvent::BufWritePost
+            | AutoEvent::FileAppendPost
+            | AutoEvent::VimLeave
+            | AutoEvent::VimLeavePre
     )
 }
 
 /// Fire `event`, in every group.
 pub unsafe fn apply_autocmds(
-    event: event_T,
+    event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
@@ -123,7 +123,7 @@ pub unsafe fn apply_autocmds(
 /// [`apply_autocmds`], passing an `exarg_T` on so `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers.
 pub unsafe fn apply_autocmds_exarg(
-    event: event_T,
+    event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
@@ -151,7 +151,7 @@ pub unsafe fn apply_autocmds_exarg(
 /// nothing once that says to abort, and turns it to `FAIL` if a handler
 /// aborted.
 pub unsafe fn apply_autocmds_retval(
-    event: event_T,
+    event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
@@ -188,7 +188,7 @@ pub unsafe fn apply_autocmds_retval(
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
 /// after it.
 pub unsafe fn apply_autocmds_group(
-    event: event_T,
+    event: AutoEvent,
     mut fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
@@ -208,10 +208,7 @@ pub unsafe fn apply_autocmds_group(
 
     'bypass: {
         // Nothing to fire, or firing is off.
-        if event == NUM_EVENTS
-            || unsafe { (*au_event_vec(event)).size } == 0
-            || is_autocmd_blocked()
-        {
+        if unsafe { (*au_event_vec(event)).size } == 0 || is_autocmd_blocked() {
             break 'bypass;
         }
         // While autocommands are running, a new one only fires when it
@@ -225,7 +222,7 @@ pub unsafe fn apply_autocmds_group(
         }
         // FileChangedShell never nests: it would loop forever.
         if filechangeshell_busy.get()
-            && (event == EVENT_FILECHANGEDSHELL || event == EVENT_FILECHANGEDSHELLPOST)
+            && (event == AutoEvent::FileChangedShell || event == AutoEvent::FileChangedShellPost)
         {
             break 'bypass;
         }
@@ -235,12 +232,12 @@ pub unsafe fn apply_autocmds_group(
 
         // 'eventignorewin' is per window, so the question is whether
         // *every* window showing the buffer ignores the event.  Only
-        // window-local events (`event <= 0`) can be listed there.
+        // window-local events can be listed there.
+        let win_local = event_row(event).win_local;
         let mut win_ignore = false;
-        if buf == curbuf.get() && event_row(event).event <= 0 {
+        if buf == curbuf.get() && win_local {
             win_ignore = unsafe { event_ignored(event, cur_win().w_onebuf_opt.wo_eiw) };
-        } else if !buf.is_null() && event_row(event).event <= 0 && unsafe { (*buf).b_nwindows } > 0
-        {
+        } else if !buf.is_null() && win_local && unsafe { (*buf).b_nwindows } > 0 {
             win_ignore = true;
             for wp in tab_windows() {
                 if wp.w_buffer == buf && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw) } {
@@ -260,8 +257,10 @@ pub unsafe fn apply_autocmds_group(
             break 'bypass;
         }
         // `:all` and `:ball` turn these off while they shuffle windows.
-        if (autocmd_no_enter.get() != 0 && (event == EVENT_WINENTER || event == EVENT_BUFENTER))
-            || (autocmd_no_leave.get() != 0 && (event == EVENT_WINLEAVE || event == EVENT_BUFLEAVE))
+        if (autocmd_no_enter.get() != 0
+            && (event == AutoEvent::WinEnter || event == AutoEvent::BufEnter))
+            || (autocmd_no_leave.get() != 0
+                && (event == AutoEvent::WinLeave || event == AutoEvent::BufLeave))
         {
             break 'bypass;
         }
@@ -312,9 +311,9 @@ pub unsafe fn apply_autocmds_group(
         if fname.is_null() || unsafe { *fname } == 0 {
             if buf.is_null() {
                 fname = ::core::ptr::null_mut();
-            } else if event == EVENT_SYNTAX {
+            } else if event == AutoEvent::Syntax {
                 fname = unsafe { (*buf).b_p_syn };
-            } else if event == EVENT_FILETYPE {
+            } else if event == AutoEvent::FileType {
                 fname = unsafe { (*buf).b_p_ft };
             } else {
                 if !unsafe { (*buf).b_sfname.is_null() } {
@@ -383,11 +382,11 @@ pub unsafe fn apply_autocmds_group(
 
         // Some commands need to know autocommands are running.
         autocmd_busy.set(true);
-        filechangeshell_busy.set(event == EVENT_FILECHANGEDSHELL);
+        filechangeshell_busy.set(event == AutoEvent::FileChangedShell);
         let nested = Depth::of(&nesting);
 
         // Remembered for `did_filetype()`.
-        if event == EVENT_FILETYPE {
+        if event == AutoEvent::FileType {
             cur_buf().b_did_filetype = true;
         }
 
@@ -530,11 +529,11 @@ pub unsafe fn apply_autocmds_group(
 
     // Wiping a buffer takes its buffer-local autocommands with it,
     // whether or not anything fired.
-    if event == EVENT_BUFWIPEOUT && !buf.is_null() {
+    if event == AutoEvent::BufWipeout && !buf.is_null() {
         // SAFETY: non-null and live, by this function's own contract.
         unsafe { aubuflocal_remove(Buf::new(buf)) };
     }
-    if retval as ::core::ffi::c_int == OK && event == EVENT_FILETYPE {
+    if retval as ::core::ffi::c_int == OK && event == AutoEvent::FileType {
         cur_buf().b_au_did_filetype = true;
     }
 
@@ -556,7 +555,7 @@ pub unsafe extern "C" fn block_autocmds() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
-    if !is_autocmd_blocked() && termresponse_changed.get() && has_event(EVENT_TERMRESPONSE) {
+    if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
         let sequence = unsafe { cstr_to_string(get_vim_var_str(Vv::Termresponse)) };
         unsafe { do_termresponse_autocmd(sequence) };
         unsafe { api_free_string(sequence) };

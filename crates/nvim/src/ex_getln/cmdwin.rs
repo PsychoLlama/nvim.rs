@@ -279,7 +279,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // Reset here so a CmdwinEnter autocommand can set it.
     cmdwin_result.set(0);
 
-    trigger_cmd_autocmd(cmdwin_type.get(), EVENT_CMDWINENTER);
+    trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinEnter);
     if restart_edit.get() != 0 {
         // An autocmd ran ":startinsert".
         stuff_readbuf_char(Key::Nop.code());
@@ -295,7 +295,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     crate::clipboard::restore_batch_count(save_count);
 
     let save_KeyTyped = KeyTyped.get();
-    trigger_cmd_autocmd(cmdwin_type.get(), EVENT_CMDWINLEAVE);
+    trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinLeave);
     // Restore KeyTyped in case an autocommand modified it.
     KeyTyped.set(save_KeyTyped);
 

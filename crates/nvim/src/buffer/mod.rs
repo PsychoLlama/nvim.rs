@@ -44,6 +44,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -66,8 +67,8 @@ use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, MarkAdjustMode, MarkTree, MetaIndex, OK,
     OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
-    dobuf_action_values, dobuf_start_values, etype_T, event_T, exarg_T, getf_values, linenr_T,
-    uint32_t, varnumber_T,
+    dobuf_action_values, dobuf_start_values, etype_T, exarg_T, getf_values, linenr_T, uint32_t,
+    varnumber_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -417,14 +418,14 @@ pub(crate) fn last_buf() -> Option<Buf> {
 ///
 /// **Everything the caller holds may be stale afterwards** -- take a
 /// [`BufRef`] first.
-pub(crate) fn fire(event: event_T, mut buf: Buf) -> bool {
+pub(crate) fn fire(event: AutoEvent, mut buf: Buf) -> bool {
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
-pub(crate) fn fire_named(event: event_T, mut buf: Buf) -> bool {
+pub(crate) fn fire_named(event: AutoEvent, mut buf: Buf) -> bool {
     let (name, raw) = (buf.b_fname, buf.raw());
     // SAFETY: a live buffer and its own file name.
     unsafe { apply_autocmds(event, name, name, false, raw) }
@@ -432,7 +433,7 @@ pub(crate) fn fire_named(event: event_T, mut buf: Buf) -> bool {
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
-pub(crate) fn fire_retval<T>(event: event_T, mut buf: Buf, retval: &mut Result<T, Failed>) {
+pub(crate) fn fire_retval<T>(event: AutoEvent, mut buf: Buf, retval: &mut Result<T, Failed>) {
     let (none, raw) = (ptr::null_mut(), buf.raw());
     let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.

@@ -54,7 +54,7 @@ pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
 ///
 /// Safe: it takes an event and a group id, not a pointer, and reaches the
 /// rows only through the event's own vector.
-pub fn aucmd_del_for_event_and_group(event: event_T, group: ::core::ffi::c_int) {
+pub fn aucmd_del_for_event_and_group(event: AutoEvent, group: ::core::ffi::c_int) {
     let acs = au_event_vec(event);
     let mut i: usize = 0;
     while i < unsafe { (*acs).size } {
@@ -80,7 +80,7 @@ pub(crate) fn au_cleanup() {
         return;
     }
 
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         let acs = au_event_vec(event);
         let mut nsize: usize = 0;
         let mut i: usize = 0;
@@ -114,7 +114,7 @@ pub(crate) fn au_cleanup() {
 }
 
 /// The autocommand list for `event`, for the API's readers.
-pub fn au_get_autocmds_for_event(event: event_T) -> *mut AutoCmdVec {
+pub fn au_get_autocmds_for_event(event: AutoEvent) -> *mut AutoCmdVec {
     au_event_vec(event)
 }
 
@@ -130,7 +130,7 @@ pub unsafe fn aubuflocal_remove(buf: Buf) {
         apc = unsafe { (*apc).next };
     }
 
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         let acs = au_event_vec(event);
         let mut i: usize = 0;
         while i < unsafe { (*acs).size } {

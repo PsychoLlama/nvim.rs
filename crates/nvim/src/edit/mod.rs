@@ -37,11 +37,7 @@
 use crate::ascii::{
     ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit,
 };
-use crate::autocmd::{
-    EVENT_BUFMODIFIEDSET, EVENT_CURSORMOVEDI, EVENT_INSERTCHANGE, EVENT_INSERTCHARPRE,
-    EVENT_INSERTENTER, EVENT_INSERTLEAVE, EVENT_INSERTLEAVEPRE, EVENT_TEXTCHANGEDI,
-    EVENT_TEXTCHANGEDP, apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event,
-};
+use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
 };
@@ -171,12 +167,12 @@ use crate::textformat::{
     auto_format, check_auto_format, comp_textwidth, fex_format, has_format_option, internal_format,
 };
 use crate::textobject::{bck_word, fwd_word};
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
     PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, cmdarg_T, colnr_T,
-    event_T, int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t,
-    varnumber_T,
+    int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};

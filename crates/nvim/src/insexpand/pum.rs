@@ -207,7 +207,7 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: as above -- `CompleteChanged` takes no file name pattern.
     unsafe {
         apply_autocmds(
-            EVENT_COMPLETECHANGED,
+            AutoEvent::CompleteChanged,
             ptr::null_mut(),
             ptr::null_mut(),
             false,
@@ -564,7 +564,7 @@ pub unsafe fn ins_compl_show_pum() {
     }
 
     if compl_match_array().is_unset() {
-        if compl_started.get() && has_event(EVENT_COMPLETECHANGED) {
+        if compl_started.get() && has_event(AutoEvent::CompleteChanged) {
             // SAFETY: as above.
             unsafe { trigger_complete_changed_event(cur) };
         }
@@ -590,7 +590,7 @@ pub unsafe fn ins_compl_show_pum() {
         compl_curr_match.set(compl_shown_match.get());
     }
 
-    if has_event(EVENT_COMPLETECHANGED) {
+    if has_event(AutoEvent::CompleteChanged) {
         // SAFETY: as above.
         unsafe { trigger_complete_changed_event(cur) };
     }

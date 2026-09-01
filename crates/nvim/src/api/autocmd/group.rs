@@ -42,10 +42,8 @@ pub unsafe fn nvim_create_augroup(
         return (-1 as Integer).reported(error);
     }
     if clear_autocmds {
-        let mut event: event_T = EVENT_BUFADD;
-        while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
+        for event in AutoEvent::all() {
             aucmd_del_for_event_and_group(event, augroup);
-            event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
         }
     }
     (augroup as Integer).reported(error)

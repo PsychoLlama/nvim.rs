@@ -33,10 +33,10 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     let event = if pre {
-        EVENT_DIRCHANGEDPRE
+        AutoEvent::DirChangedPre
     } else {
-        EVENT_DIRCHANGED
-    } as event_T;
+        AutoEvent::DirChanged
+    } as AutoEvent;
     if RECURSIVE.get() || !has_event(event) {
         return;
     }

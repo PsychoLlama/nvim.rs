@@ -103,11 +103,11 @@ pub(crate) unsafe fn run_read_autocmds(
     // and nothing triggered it.
     let buf_read = !how.filtering && (how.newfile || (how.buffer && !sfname.is_null()));
     let (ev, iofile, buf) = if how.filtering {
-        (EVENT_FILTERREADPOST, ptr::null_mut(), curbuf.get())
+        (AutoEvent::FilterReadPost, ptr::null_mut(), curbuf.get())
     } else if buf_read {
-        (EVENT_BUFREADPOST, ptr::null_mut(), curbuf.get())
+        (AutoEvent::BufReadPost, ptr::null_mut(), curbuf.get())
     } else {
-        (EVENT_FILEREADPOST, sfname, ptr::null_mut())
+        (AutoEvent::FileReadPost, sfname, ptr::null_mut())
     };
     // SAFETY: the current buffer is live and `eap` is the caller's command.
     unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, eap) };
@@ -116,7 +116,7 @@ pub(crate) unsafe fn run_read_autocmds(
         let (ft, fname) = (cur_buf().b_p_ft, cur_buf().b_fname);
         // SAFETY: the buffer's own option and file name; `curbuf` is re-read
         // because `BufReadPost` may have moved us.
-        unsafe { apply_autocmds(EVENT_FILETYPE, ft, fname, true, curbuf.get()) };
+        unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, curbuf.get()) };
     }
     if msg_scrolled.get() == n {
         msg_scroll.set(m);

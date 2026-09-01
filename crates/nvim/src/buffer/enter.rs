@@ -19,12 +19,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::semsg;
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::*;
 use crate::arglist::check_arg_idx;
-use crate::autocmd::{EVENT_BUFENTER, EVENT_BUFLEAVE, EVENT_BUFWINENTER};
+
 use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
@@ -249,7 +250,7 @@ pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
-    if !fire(EVENT_BUFLEAVE, cur_buf())
+    if !fire(AutoEvent::BufLeave, cur_buf())
         || prevbufref.valid() && newbufref.valid() && !aborting_now()
     {
         leave_prevbuf(prevbufref, action, unload, prev_nwindows, winid_before);
@@ -406,8 +407,8 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
         let mut win = cur_win();
         win.w_topline = 1 as linenr_T;
         win.w_topfill = 0;
-        fire(EVENT_BUFENTER, cur_buf());
-        fire(EVENT_BUFWINENTER, cur_buf());
+        fire(AutoEvent::BufEnter, cur_buf());
+        fire(AutoEvent::BufWinEnter, cur_buf());
     }
 
     // If autocommands did not change the cursor position, restore cursor lnum

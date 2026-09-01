@@ -13,7 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{Ecmd, EcmdArgs};
-use crate::autocmd::EVENT_BUFLEAVE;
+use crate::types::AutoEvent;
+
 use crate::buffer::current_buf;
 use crate::buffer::{
     BufRef, buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, close_buffer, find_buf,
@@ -250,7 +251,7 @@ unsafe fn leave_for_buffer(
     };
     let save_au_new_curbuf = au_new_curbuf.get();
     au_new_curbuf.set(BufRef::of(buf).record());
-    buf_autocmd(EVENT_BUFLEAVE, cur_buf());
+    buf_autocmd(AutoEvent::BufLeave, cur_buf());
 
     cmdwin_type.set(save_cmdwin_type);
     cmdwin_win.set(save_cmdwin_win);

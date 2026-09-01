@@ -270,14 +270,15 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
 ///
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_apply_autocmds(event: event_T) -> c_int {
+pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     let tick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
     let none = ::core::ptr::null_mut();
     let r = unsafe { apply_autocmds(event, none, none, false, curbuf.get()) } as c_int;
 
-    if event != EVENT_INSERTLEAVE && tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
+    if event != AutoEvent::InsertLeave
+        && tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
     {
         let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
     }

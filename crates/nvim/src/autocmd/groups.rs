@@ -114,7 +114,7 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
         return;
     }
 
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         let acs = au_event_vec(event);
         let mut i: usize = 0;
         // `(*acs).size` is re-read every step: `aucmd_del` only marks a

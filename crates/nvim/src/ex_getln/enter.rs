@@ -309,7 +309,7 @@ pub(crate) unsafe fn command_line_enter(
         };
         firstcbuf[0] = s.cmdline_type as ::core::ffi::c_char;
 
-        if has_event(EVENT_CMDLINEENTER) {
+        if has_event(AutoEvent::CmdlineEnter) {
             let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
 
@@ -318,7 +318,7 @@ pub(crate) unsafe fn command_line_enter(
             // upstream's.
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
-            cmdline_autocmd(EVENT_CMDLINEENTER, firstcbuf.as_mut_ptr());
+            cmdline_autocmd(AutoEvent::CmdlineEnter, firstcbuf.as_mut_ptr());
             unsafe { restore_v_event(dict, &raw mut save_v_event) };
             unsafe { try_leave(&raw mut tstate, &mut err) };
 
@@ -383,10 +383,10 @@ pub(crate) unsafe fn command_line_enter(
         // Trigger CmdlineLeavePre autocommands if not already triggered.
         if !s.event_cmdlineleavepre_triggered {
             unsafe { set_vim_var_char(s.c) }; // set v:char
-            trigger_cmd_autocmd(s.cmdline_type, EVENT_CMDLINELEAVEPRE);
+            trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         }
 
-        if has_event(EVENT_CMDLINELEAVE) {
+        if has_event(AutoEvent::CmdlineLeave) {
             let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
             // Not readonly, unlike the keys above:
@@ -408,7 +408,7 @@ pub(crate) unsafe fn command_line_enter(
             // redraw issues.
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
-            cmdline_autocmd(EVENT_CMDLINELEAVE, firstcbuf.as_mut_ptr());
+            cmdline_autocmd(AutoEvent::CmdlineLeave, firstcbuf.as_mut_ptr());
             unsafe { try_leave(&raw mut tstate, &mut err) };
 
             if unsafe { tv_dict_get_number(dict, c"abort".as_ptr()) } != 0 {

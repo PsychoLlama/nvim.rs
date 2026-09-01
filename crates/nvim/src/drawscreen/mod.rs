@@ -1,8 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 
-use crate::autocmd::{EVENT_VIMRESIZED, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cmdexpand::cmdline_pum_display;

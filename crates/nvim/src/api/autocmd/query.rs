@@ -97,15 +97,12 @@ pub unsafe fn nvim_get_autocmds(
                 check_event = true;
                 let v: Object = opts.event;
                 if let Object::String(event_name) = v {
-                    let mut event_nr: event_T = unsafe { event_name2nr_str(event_name) };
-                    if !((event_nr as ::core::ffi::c_uint)
-                        < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
-                    {
+                    let Some(event_nr) = (unsafe { event_name2nr_str(event_name) }) else {
                         // SAFETY: the value the keyset carried, live for this call.
                         error = err_bad_value(c"event", unsafe { event_name.as_cstr() });
                         break '_cleanup;
-                    }
-                    event_set[event_nr as usize] = true;
+                    };
+                    event_set[event_nr.index()] = true;
                 } else if let Object::Array(events) = v {
                     let mut event_v_index: size_t = 0 as size_t;
                     loop {
@@ -119,16 +116,13 @@ pub unsafe fn nvim_get_autocmds(
                             error = err_expected(c"event item", want, Some(got));
                             break '_cleanup;
                         };
-                        let mut event_nr_0: event_T = unsafe { event_name2nr_str(event_v) };
-                        if !((event_nr_0 as ::core::ffi::c_uint)
-                            < NUM_EVENTS as ::core::ffi::c_int as ::core::ffi::c_uint)
-                        {
+                        let Some(event_nr_0) = (unsafe { event_name2nr_str(event_v) }) else {
                             // SAFETY: the value the keyset carried, live for this call.
                             let name = unsafe { event_v.as_cstr() };
                             error = err_bad_value(c"event", name);
                             break '_cleanup;
-                        }
-                        event_set[event_nr_0 as usize] = true;
+                        };
+                        event_set[event_nr_0.index()] = true;
                         event_v_index = event_v_index.wrapping_add(1);
                     }
                 } else if true {
@@ -264,9 +258,8 @@ pub unsafe fn nvim_get_autocmds(
                 pattern_filter_count += 1 as ::core::ffi::c_int;
                 bufnr_index_0 = bufnr_index_0.wrapping_add(1);
             }
-            let mut event: event_T = EVENT_BUFADD;
-            while (event as ::core::ffi::c_int) < NUM_EVENTS as ::core::ffi::c_int {
-                if !(check_event as ::core::ffi::c_int != 0 && !event_set[event as usize]) {
+            for event in AutoEvent::all() {
+                if !(check_event as ::core::ffi::c_int != 0 && !event_set[event.index()]) {
                     let mut acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
                     let mut i: size_t = 0 as size_t;
                     while i < unsafe { (*acs).size } {
@@ -453,7 +446,6 @@ pub unsafe fn nvim_get_autocmds(
                         i = i.wrapping_add(1);
                     }
                 }
-                event = (event as ::core::ffi::c_int + 1 as ::core::ffi::c_int) as event_T;
             }
         }
     }

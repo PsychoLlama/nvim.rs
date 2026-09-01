@@ -18,11 +18,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::autocmd::{EVENT_TERMREQUEST, apply_autocmds_group, has_event};
+use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::channel::main_loop_events;
 use crate::eval::vars::set_vim_var_string;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::highlight::hl_add_url;
+use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     Event, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
@@ -136,7 +137,8 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
     let buf = buf.raw();
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
-    unsafe { apply_autocmds_group(EVENT_TERMREQUEST, none, none, true, group, buf, exarg, data) };
+    let event = AutoEvent::TermRequest;
+    unsafe { apply_autocmds_group(event, none, none, true, group, buf, exarg, data) };
     term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or
@@ -328,5 +330,5 @@ pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_v
 /// Whether any autocommand is waiting for a `TermRequest`.
 fn listening() -> bool {
     // SAFETY: reads the editor's own event table.
-    has_event(EVENT_TERMREQUEST)
+    has_event(AutoEvent::TermRequest)
 }

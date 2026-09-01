@@ -200,7 +200,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
         }
         unsafe {
             apply_autocmds(
-                EVENT_VIMRESIZED,
+                AutoEvent::VimResized,
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,

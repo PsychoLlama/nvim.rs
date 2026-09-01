@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
 
@@ -64,9 +65,9 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Error, Event,
     Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal, OptValType,
-    Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, auto_event, buf_T,
-    etype_T, event_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T,
-    save_v_event_T, sctx_T, size_t, uint32_t, uint64_t, varnumber_T, win_T,
+    Set_String, Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, buf_T, etype_T, exarg_T,
+    expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T, save_v_event_T, sctx_T, size_t,
+    uint32_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -101,155 +102,9 @@ pub use self::listing::*;
 pub use self::trigger::*;
 pub use self::walk::*;
 pub const kOptValTypeString: OptValType = 2;
-pub const NUM_EVENTS: auto_event = 145;
-pub const EVENT_WINSCROLLED: auto_event = 144;
-pub const EVENT_WINRESIZED: auto_event = 143;
-pub const EVENT_WINNEWPRE: auto_event = 142;
-pub const EVENT_WINNEW: auto_event = 141;
-pub const EVENT_WINLEAVE: auto_event = 140;
-pub const EVENT_WINENTER: auto_event = 139;
-pub const EVENT_WINCLOSED: auto_event = 138;
-pub const EVENT_VIMSUSPEND: auto_event = 137;
-pub const EVENT_VIMRESUME: auto_event = 136;
-pub const EVENT_VIMRESIZED: auto_event = 135;
-pub const EVENT_VIMLEAVEPRE: auto_event = 134;
-pub const EVENT_VIMLEAVE: auto_event = 133;
-pub const EVENT_VIMENTER: auto_event = 132;
-pub const EVENT_USER: auto_event = 131;
-pub const EVENT_UILEAVE: auto_event = 130;
-pub const EVENT_UIENTER: auto_event = 129;
-pub const EVENT_TEXTYANKPOST: auto_event = 128;
-pub const EVENT_TEXTCHANGEDT: auto_event = 127;
-pub const EVENT_TEXTCHANGEDP: auto_event = 126;
-pub const EVENT_TEXTCHANGEDI: auto_event = 125;
-pub const EVENT_TEXTCHANGED: auto_event = 124;
-pub const EVENT_TERMRESPONSE: auto_event = 123;
-pub const EVENT_TERMREQUEST: auto_event = 122;
-pub const EVENT_TERMOPEN: auto_event = 121;
-pub const EVENT_TERMLEAVE: auto_event = 120;
-pub const EVENT_TERMENTER: auto_event = 119;
-pub const EVENT_TERMCLOSE: auto_event = 118;
-pub const EVENT_TERMCHANGED: auto_event = 117;
-pub const EVENT_TABNEWENTERED: auto_event = 116;
-pub const EVENT_TABNEW: auto_event = 115;
-pub const EVENT_TABLEAVE: auto_event = 114;
-pub const EVENT_TABENTER: auto_event = 113;
-pub const EVENT_TABCLOSEDPRE: auto_event = 112;
-pub const EVENT_TABCLOSED: auto_event = 111;
-pub const EVENT_SYNTAX: auto_event = 110;
-pub const EVENT_SWAPEXISTS: auto_event = 109;
-pub const EVENT_STDINREADPRE: auto_event = 108;
-pub const EVENT_STDINREADPOST: auto_event = 107;
-pub const EVENT_SPELLFILEMISSING: auto_event = 106;
-pub const EVENT_SOURCEPRE: auto_event = 105;
-pub const EVENT_SOURCEPOST: auto_event = 104;
-pub const EVENT_SOURCECMD: auto_event = 103;
-pub const EVENT_SIGNAL: auto_event = 102;
-pub const EVENT_SHELLFILTERPOST: auto_event = 101;
-pub const EVENT_SHELLCMDPOST: auto_event = 100;
-pub const EVENT_SESSIONWRITEPOST: auto_event = 99;
-pub const EVENT_SESSIONLOADPRE: auto_event = 98;
-pub const EVENT_SESSIONLOADPOST: auto_event = 97;
-pub const EVENT_SEARCHWRAPPED: auto_event = 96;
-pub const EVENT_SAFESTATE: auto_event = 95;
-pub const EVENT_REMOTEREPLY: auto_event = 94;
-pub const EVENT_RECORDINGLEAVE: auto_event = 93;
-pub const EVENT_RECORDINGENTER: auto_event = 92;
-pub const EVENT_QUITPRE: auto_event = 91;
-pub const EVENT_QUICKFIXCMDPRE: auto_event = 90;
-pub const EVENT_QUICKFIXCMDPOST: auto_event = 89;
-pub const EVENT_PROGRESS: auto_event = 88;
-pub const EVENT_PACKCHANGEDPRE: auto_event = 87;
-pub const EVENT_PACKCHANGED: auto_event = 86;
-pub const EVENT_OPTIONSET: auto_event = 85;
-pub const EVENT_MODECHANGED: auto_event = 84;
-pub const EVENT_MENUPOPUP: auto_event = 83;
-pub const EVENT_MARKSET: auto_event = 82;
-pub const EVENT_LSPTOKENUPDATE: auto_event = 81;
-pub const EVENT_LSPREQUEST: auto_event = 80;
-pub const EVENT_LSPPROGRESS: auto_event = 79;
-pub const EVENT_LSPNOTIFY: auto_event = 78;
-pub const EVENT_LSPDETACH: auto_event = 77;
-pub const EVENT_LSPATTACH: auto_event = 76;
-pub const EVENT_INSERTLEAVEPRE: auto_event = 75;
-pub const EVENT_INSERTLEAVE: auto_event = 74;
-pub const EVENT_INSERTENTER: auto_event = 73;
-pub const EVENT_INSERTCHARPRE: auto_event = 72;
-pub const EVENT_INSERTCHANGE: auto_event = 71;
-pub const EVENT_GUIFAILED: auto_event = 70;
-pub const EVENT_GUIENTER: auto_event = 69;
-pub const EVENT_FUNCUNDEFINED: auto_event = 68;
-pub const EVENT_FOCUSLOST: auto_event = 67;
-pub const EVENT_FOCUSGAINED: auto_event = 66;
-pub const EVENT_FILTERWRITEPRE: auto_event = 65;
-pub const EVENT_FILTERWRITEPOST: auto_event = 64;
-pub const EVENT_FILTERREADPRE: auto_event = 63;
-pub const EVENT_FILTERREADPOST: auto_event = 62;
-pub const EVENT_FILEWRITEPRE: auto_event = 61;
-pub const EVENT_FILEWRITEPOST: auto_event = 60;
-pub const EVENT_FILEWRITECMD: auto_event = 59;
-pub const EVENT_FILETYPE: auto_event = 58;
-pub const EVENT_FILEREADPRE: auto_event = 57;
-pub const EVENT_FILEREADPOST: auto_event = 56;
-pub const EVENT_FILEREADCMD: auto_event = 55;
-pub const EVENT_FILEENCODING: auto_event = 54;
-pub const EVENT_FILECHANGEDSHELLPOST: auto_event = 53;
-pub const EVENT_FILECHANGEDSHELL: auto_event = 52;
-pub const EVENT_FILECHANGEDRO: auto_event = 51;
-pub const EVENT_FILEAPPENDPRE: auto_event = 50;
-pub const EVENT_FILEAPPENDPOST: auto_event = 49;
-pub const EVENT_FILEAPPENDCMD: auto_event = 48;
-pub const EVENT_EXITPRE: auto_event = 47;
-pub const EVENT_ENCODINGCHANGED: auto_event = 46;
-pub const EVENT_DIRCHANGEDPRE: auto_event = 45;
-pub const EVENT_DIRCHANGED: auto_event = 44;
-pub const EVENT_DIFFUPDATED: auto_event = 43;
-pub const EVENT_DIAGNOSTICCHANGED: auto_event = 42;
-pub const EVENT_CURSORMOVEDI: auto_event = 41;
-pub const EVENT_CURSORMOVEDC: auto_event = 40;
-pub const EVENT_CURSORMOVED: auto_event = 39;
-pub const EVENT_CURSORHOLDI: auto_event = 38;
-pub const EVENT_CURSORHOLD: auto_event = 37;
-pub const EVENT_COMPLETEDONEPRE: auto_event = 36;
-pub const EVENT_COMPLETEDONE: auto_event = 35;
-pub const EVENT_COMPLETECHANGED: auto_event = 34;
-pub const EVENT_COLORSCHEMEPRE: auto_event = 33;
-pub const EVENT_COLORSCHEME: auto_event = 32;
-pub const EVENT_CMDWINLEAVE: auto_event = 31;
-pub const EVENT_CMDWINENTER: auto_event = 30;
-pub const EVENT_CMDUNDEFINED: auto_event = 29;
-pub const EVENT_CMDLINELEAVEPRE: auto_event = 28;
-pub const EVENT_CMDLINELEAVE: auto_event = 27;
-pub const EVENT_CMDLINEENTER: auto_event = 26;
-pub const EVENT_CMDLINECHANGED: auto_event = 25;
-pub const EVENT_CHANOPEN: auto_event = 24;
-pub const EVENT_CHANINFO: auto_event = 23;
-pub const EVENT_BUFWRITEPRE: auto_event = 22;
-pub const EVENT_BUFWRITEPOST: auto_event = 21;
-pub const EVENT_BUFWRITECMD: auto_event = 20;
-pub const EVENT_BUFWRITE: auto_event = 19;
-pub const EVENT_BUFWIPEOUT: auto_event = 18;
-pub const EVENT_BUFWINLEAVE: auto_event = 17;
-pub const EVENT_BUFWINENTER: auto_event = 16;
-pub const EVENT_BUFUNLOAD: auto_event = 15;
-pub const EVENT_BUFREADPRE: auto_event = 14;
-pub const EVENT_BUFREADPOST: auto_event = 13;
-pub const EVENT_BUFREADCMD: auto_event = 12;
-pub const EVENT_BUFREAD: auto_event = 11;
-pub const EVENT_BUFNEWFILE: auto_event = 10;
-pub const EVENT_BUFNEW: auto_event = 9;
-pub const EVENT_BUFMODIFIEDSET: auto_event = 8;
-pub const EVENT_BUFLEAVE: auto_event = 7;
-pub const EVENT_BUFHIDDEN: auto_event = 6;
-pub const EVENT_BUFFILEPRE: auto_event = 5;
-pub const EVENT_BUFFILEPOST: auto_event = 4;
-pub const EVENT_BUFENTER: auto_event = 3;
-pub const EVENT_BUFDELETE: auto_event = 2;
-pub const EVENT_BUFCREATE: auto_event = 1;
-pub const EVENT_BUFADD: auto_event = 0;
 #[derive(Copy, Clone)]
 pub struct AutoCmdEvent {
-    pub event: event_T,
+    pub event: AutoEvent,
     pub fname: *mut ::core::ffi::c_char,
     pub fname_io: *mut ::core::ffi::c_char,
     pub buf: Buffer,
@@ -403,188 +258,193 @@ pub const NO_SCREEN: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const PROF_YES: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 /// One row of [`EVENT_NAMES`]: a spelling of an event, and which event it
-/// is.  There is one row -- and one `EVENT_*` constant, at the same index
-/// -- per *name*, so the four aliases have a constant of their own that no
-/// event ever takes: row `EVENT_BUFCREATE` is `BufCreate`, whose `event` is
-/// `EVENT_BUFADD`.  `event_nr2name` reads the row at the index, the name
-/// lookup answers the row's `event`, and the two agree everywhere a real
-/// event value can reach.
+/// is.  There is one row -- and one [`AutoEvent`] variant, at the same
+/// index -- per *name*, so the four aliases have a variant of their own
+/// that no event ever takes: row `AutoEvent::BufCreate` is `BufCreate`,
+/// whose `event` is `AutoEvent::BufAdd`.  `event_nr2name` reads the row at
+/// the index, the name lookup answers the row's `event`, and the two agree
+/// everywhere a real event value can reach.
 ///
-/// The sign of `event` is upstream's window-local flag -- `gen_events.lua`
-/// negates the event of every name whose `auevents.lua` entry is `true` --
-/// and it is read back as `event <= 0`, which is why `BufAdd`, event 0,
-/// counts as window-local by having no sign at all.
+/// `win_local` is upstream's window-local flag, which it packed into the
+/// *sign* of the event number -- `gen_events.lua` negates the event of
+/// every name whose `auevents.lua` entry is `true`, and it was read back as
+/// `event <= 0`, which made `BufAdd`, event 0, window-local by having no
+/// sign at all.  A flag in a field of its own needs no such coincidence.
 pub struct EventName {
     pub name: &'static CStr,
-    pub event: ::core::ffi::c_int,
+    pub event: AutoEvent,
+    /// May this name be listed in 'eventignorewin' as well as
+    /// 'eventignore'?
+    pub win_local: bool,
 }
 
 /// A row of [`EVENT_NAMES`] for an event that is not window-local.
-const fn named(name: &'static CStr, event: auto_event) -> EventName {
+const fn named(name: &'static CStr, event: AutoEvent) -> EventName {
     EventName {
         name,
-        event: event as ::core::ffi::c_int,
+        event,
+        win_local: false,
     }
 }
 
-/// [`named`] for an event that is window-local, so it may be listed in
-/// 'eventignorewin' as well as 'eventignore'.
-const fn named_win_local(name: &'static CStr, event: auto_event) -> EventName {
+/// [`named`] for an event that is window-local.
+const fn named_win_local(name: &'static CStr, event: AutoEvent) -> EventName {
     EventName {
         name,
-        event: -(event as ::core::ffi::c_int),
+        event,
+        win_local: true,
     }
 }
 
 /// Every autocommand event's name, sorted by lower-cased name -- the order
-/// `gen_events.lua` numbers the `auto_event` enum in, so a row's index *is*
+/// `gen_events.lua` numbers the `AutoEvent` enum in, so a row's index *is*
 /// its event number, and the order the name lookup binary searches.
 pub static EVENT_NAMES: [EventName; 145] = [
-    named_win_local(c"BufAdd", EVENT_BUFADD),
-    named_win_local(c"BufCreate", EVENT_BUFADD),
-    named_win_local(c"BufDelete", EVENT_BUFDELETE),
-    named_win_local(c"BufEnter", EVENT_BUFENTER),
-    named_win_local(c"BufFilePost", EVENT_BUFFILEPOST),
-    named_win_local(c"BufFilePre", EVENT_BUFFILEPRE),
-    named_win_local(c"BufHidden", EVENT_BUFHIDDEN),
-    named_win_local(c"BufLeave", EVENT_BUFLEAVE),
-    named_win_local(c"BufModifiedSet", EVENT_BUFMODIFIEDSET),
-    named_win_local(c"BufNew", EVENT_BUFNEW),
-    named_win_local(c"BufNewFile", EVENT_BUFNEWFILE),
-    named_win_local(c"BufRead", EVENT_BUFREADPOST),
-    named_win_local(c"BufReadCmd", EVENT_BUFREADCMD),
-    named_win_local(c"BufReadPost", EVENT_BUFREADPOST),
-    named_win_local(c"BufReadPre", EVENT_BUFREADPRE),
-    named_win_local(c"BufUnload", EVENT_BUFUNLOAD),
-    named_win_local(c"BufWinEnter", EVENT_BUFWINENTER),
-    named_win_local(c"BufWinLeave", EVENT_BUFWINLEAVE),
-    named_win_local(c"BufWipeout", EVENT_BUFWIPEOUT),
-    named_win_local(c"BufWrite", EVENT_BUFWRITEPRE),
-    named_win_local(c"BufWriteCmd", EVENT_BUFWRITECMD),
-    named_win_local(c"BufWritePost", EVENT_BUFWRITEPOST),
-    named_win_local(c"BufWritePre", EVENT_BUFWRITEPRE),
-    named(c"ChanInfo", EVENT_CHANINFO),
-    named(c"ChanOpen", EVENT_CHANOPEN),
-    named(c"CmdlineChanged", EVENT_CMDLINECHANGED),
-    named(c"CmdlineEnter", EVENT_CMDLINEENTER),
-    named(c"CmdlineLeave", EVENT_CMDLINELEAVE),
-    named(c"CmdlineLeavePre", EVENT_CMDLINELEAVEPRE),
-    named(c"CmdUndefined", EVENT_CMDUNDEFINED),
-    named(c"CmdwinEnter", EVENT_CMDWINENTER),
-    named(c"CmdwinLeave", EVENT_CMDWINLEAVE),
-    named(c"ColorScheme", EVENT_COLORSCHEME),
-    named(c"ColorSchemePre", EVENT_COLORSCHEMEPRE),
-    named(c"CompleteChanged", EVENT_COMPLETECHANGED),
-    named(c"CompleteDone", EVENT_COMPLETEDONE),
-    named(c"CompleteDonePre", EVENT_COMPLETEDONEPRE),
-    named_win_local(c"CursorHold", EVENT_CURSORHOLD),
-    named_win_local(c"CursorHoldI", EVENT_CURSORHOLDI),
-    named_win_local(c"CursorMoved", EVENT_CURSORMOVED),
-    named_win_local(c"CursorMovedC", EVENT_CURSORMOVEDC),
-    named_win_local(c"CursorMovedI", EVENT_CURSORMOVEDI),
-    named(c"DiagnosticChanged", EVENT_DIAGNOSTICCHANGED),
-    named(c"DiffUpdated", EVENT_DIFFUPDATED),
-    named(c"DirChanged", EVENT_DIRCHANGED),
-    named(c"DirChangedPre", EVENT_DIRCHANGEDPRE),
-    named(c"EncodingChanged", EVENT_ENCODINGCHANGED),
-    named(c"ExitPre", EVENT_EXITPRE),
-    named_win_local(c"FileAppendCmd", EVENT_FILEAPPENDCMD),
-    named_win_local(c"FileAppendPost", EVENT_FILEAPPENDPOST),
-    named_win_local(c"FileAppendPre", EVENT_FILEAPPENDPRE),
-    named_win_local(c"FileChangedRO", EVENT_FILECHANGEDRO),
-    named_win_local(c"FileChangedShell", EVENT_FILECHANGEDSHELL),
-    named_win_local(c"FileChangedShellPost", EVENT_FILECHANGEDSHELLPOST),
-    named(c"FileEncoding", EVENT_ENCODINGCHANGED),
-    named_win_local(c"FileReadCmd", EVENT_FILEREADCMD),
-    named_win_local(c"FileReadPost", EVENT_FILEREADPOST),
-    named_win_local(c"FileReadPre", EVENT_FILEREADPRE),
-    named_win_local(c"FileType", EVENT_FILETYPE),
-    named_win_local(c"FileWriteCmd", EVENT_FILEWRITECMD),
-    named_win_local(c"FileWritePost", EVENT_FILEWRITEPOST),
-    named_win_local(c"FileWritePre", EVENT_FILEWRITEPRE),
-    named_win_local(c"FilterReadPost", EVENT_FILTERREADPOST),
-    named_win_local(c"FilterReadPre", EVENT_FILTERREADPRE),
-    named_win_local(c"FilterWritePost", EVENT_FILTERWRITEPOST),
-    named_win_local(c"FilterWritePre", EVENT_FILTERWRITEPRE),
-    named(c"FocusGained", EVENT_FOCUSGAINED),
-    named(c"FocusLost", EVENT_FOCUSLOST),
-    named(c"FuncUndefined", EVENT_FUNCUNDEFINED),
-    named(c"GUIEnter", EVENT_GUIENTER),
-    named(c"GUIFailed", EVENT_GUIFAILED),
-    named_win_local(c"InsertChange", EVENT_INSERTCHANGE),
-    named_win_local(c"InsertCharPre", EVENT_INSERTCHARPRE),
-    named_win_local(c"InsertEnter", EVENT_INSERTENTER),
-    named_win_local(c"InsertLeave", EVENT_INSERTLEAVE),
-    named_win_local(c"InsertLeavePre", EVENT_INSERTLEAVEPRE),
-    named(c"LspAttach", EVENT_LSPATTACH),
-    named(c"LspDetach", EVENT_LSPDETACH),
-    named(c"LspNotify", EVENT_LSPNOTIFY),
-    named(c"LspProgress", EVENT_LSPPROGRESS),
-    named(c"LspRequest", EVENT_LSPREQUEST),
-    named(c"LspTokenUpdate", EVENT_LSPTOKENUPDATE),
-    named(c"MarkSet", EVENT_MARKSET),
-    named(c"MenuPopup", EVENT_MENUPOPUP),
-    named(c"ModeChanged", EVENT_MODECHANGED),
-    named(c"OptionSet", EVENT_OPTIONSET),
-    named(c"PackChanged", EVENT_PACKCHANGED),
-    named(c"PackChangedPre", EVENT_PACKCHANGEDPRE),
-    named(c"Progress", EVENT_PROGRESS),
-    named(c"QuickFixCmdPost", EVENT_QUICKFIXCMDPOST),
-    named(c"QuickFixCmdPre", EVENT_QUICKFIXCMDPRE),
-    named(c"QuitPre", EVENT_QUITPRE),
-    named_win_local(c"RecordingEnter", EVENT_RECORDINGENTER),
-    named_win_local(c"RecordingLeave", EVENT_RECORDINGLEAVE),
-    named(c"RemoteReply", EVENT_REMOTEREPLY),
-    named(c"SafeState", EVENT_SAFESTATE),
-    named_win_local(c"SearchWrapped", EVENT_SEARCHWRAPPED),
-    named(c"SessionLoadPost", EVENT_SESSIONLOADPOST),
-    named(c"SessionLoadPre", EVENT_SESSIONLOADPRE),
-    named(c"SessionWritePost", EVENT_SESSIONWRITEPOST),
-    named(c"ShellCmdPost", EVENT_SHELLCMDPOST),
-    named_win_local(c"ShellFilterPost", EVENT_SHELLFILTERPOST),
-    named(c"Signal", EVENT_SIGNAL),
-    named(c"SourceCmd", EVENT_SOURCECMD),
-    named(c"SourcePost", EVENT_SOURCEPOST),
-    named(c"SourcePre", EVENT_SOURCEPRE),
-    named(c"SpellFileMissing", EVENT_SPELLFILEMISSING),
-    named(c"StdinReadPost", EVENT_STDINREADPOST),
-    named(c"StdinReadPre", EVENT_STDINREADPRE),
-    named(c"SwapExists", EVENT_SWAPEXISTS),
-    named(c"Syntax", EVENT_SYNTAX),
-    named(c"TabClosed", EVENT_TABCLOSED),
-    named(c"TabClosedPre", EVENT_TABCLOSEDPRE),
-    named(c"TabEnter", EVENT_TABENTER),
-    named(c"TabLeave", EVENT_TABLEAVE),
-    named(c"TabNew", EVENT_TABNEW),
-    named(c"TabNewEntered", EVENT_TABNEWENTERED),
-    named(c"TermChanged", EVENT_TERMCHANGED),
-    named(c"TermClose", EVENT_TERMCLOSE),
-    named(c"TermEnter", EVENT_TERMENTER),
-    named(c"TermLeave", EVENT_TERMLEAVE),
-    named(c"TermOpen", EVENT_TERMOPEN),
-    named(c"TermRequest", EVENT_TERMREQUEST),
-    named(c"TermResponse", EVENT_TERMRESPONSE),
-    named_win_local(c"TextChanged", EVENT_TEXTCHANGED),
-    named_win_local(c"TextChangedI", EVENT_TEXTCHANGEDI),
-    named_win_local(c"TextChangedP", EVENT_TEXTCHANGEDP),
-    named_win_local(c"TextChangedT", EVENT_TEXTCHANGEDT),
-    named_win_local(c"TextYankPost", EVENT_TEXTYANKPOST),
-    named(c"UIEnter", EVENT_UIENTER),
-    named(c"UILeave", EVENT_UILEAVE),
-    named(c"User", EVENT_USER),
-    named(c"VimEnter", EVENT_VIMENTER),
-    named(c"VimLeave", EVENT_VIMLEAVE),
-    named(c"VimLeavePre", EVENT_VIMLEAVEPRE),
-    named(c"VimResized", EVENT_VIMRESIZED),
-    named(c"VimResume", EVENT_VIMRESUME),
-    named(c"VimSuspend", EVENT_VIMSUSPEND),
-    named_win_local(c"WinClosed", EVENT_WINCLOSED),
-    named_win_local(c"WinEnter", EVENT_WINENTER),
-    named_win_local(c"WinLeave", EVENT_WINLEAVE),
-    named(c"WinNew", EVENT_WINNEW),
-    named(c"WinNewPre", EVENT_WINNEWPRE),
-    named_win_local(c"WinResized", EVENT_WINRESIZED),
-    named_win_local(c"WinScrolled", EVENT_WINSCROLLED),
+    named_win_local(c"BufAdd", AutoEvent::BufAdd),
+    named_win_local(c"BufCreate", AutoEvent::BufAdd),
+    named_win_local(c"BufDelete", AutoEvent::BufDelete),
+    named_win_local(c"BufEnter", AutoEvent::BufEnter),
+    named_win_local(c"BufFilePost", AutoEvent::BufFilePost),
+    named_win_local(c"BufFilePre", AutoEvent::BufFilePre),
+    named_win_local(c"BufHidden", AutoEvent::BufHidden),
+    named_win_local(c"BufLeave", AutoEvent::BufLeave),
+    named_win_local(c"BufModifiedSet", AutoEvent::BufModifiedSet),
+    named_win_local(c"BufNew", AutoEvent::BufNew),
+    named_win_local(c"BufNewFile", AutoEvent::BufNewFile),
+    named_win_local(c"BufRead", AutoEvent::BufReadPost),
+    named_win_local(c"BufReadCmd", AutoEvent::BufReadCmd),
+    named_win_local(c"BufReadPost", AutoEvent::BufReadPost),
+    named_win_local(c"BufReadPre", AutoEvent::BufReadPre),
+    named_win_local(c"BufUnload", AutoEvent::BufUnload),
+    named_win_local(c"BufWinEnter", AutoEvent::BufWinEnter),
+    named_win_local(c"BufWinLeave", AutoEvent::BufWinLeave),
+    named_win_local(c"BufWipeout", AutoEvent::BufWipeout),
+    named_win_local(c"BufWrite", AutoEvent::BufWritePre),
+    named_win_local(c"BufWriteCmd", AutoEvent::BufWriteCmd),
+    named_win_local(c"BufWritePost", AutoEvent::BufWritePost),
+    named_win_local(c"BufWritePre", AutoEvent::BufWritePre),
+    named(c"ChanInfo", AutoEvent::ChanInfo),
+    named(c"ChanOpen", AutoEvent::ChanOpen),
+    named(c"CmdlineChanged", AutoEvent::CmdlineChanged),
+    named(c"CmdlineEnter", AutoEvent::CmdlineEnter),
+    named(c"CmdlineLeave", AutoEvent::CmdlineLeave),
+    named(c"CmdlineLeavePre", AutoEvent::CmdlineLeavePre),
+    named(c"CmdUndefined", AutoEvent::CmdUndefined),
+    named(c"CmdwinEnter", AutoEvent::CmdwinEnter),
+    named(c"CmdwinLeave", AutoEvent::CmdwinLeave),
+    named(c"ColorScheme", AutoEvent::ColorScheme),
+    named(c"ColorSchemePre", AutoEvent::ColorSchemePre),
+    named(c"CompleteChanged", AutoEvent::CompleteChanged),
+    named(c"CompleteDone", AutoEvent::CompleteDone),
+    named(c"CompleteDonePre", AutoEvent::CompleteDonePre),
+    named_win_local(c"CursorHold", AutoEvent::CursorHold),
+    named_win_local(c"CursorHoldI", AutoEvent::CursorHoldI),
+    named_win_local(c"CursorMoved", AutoEvent::CursorMoved),
+    named_win_local(c"CursorMovedC", AutoEvent::CursorMovedC),
+    named_win_local(c"CursorMovedI", AutoEvent::CursorMovedI),
+    named(c"DiagnosticChanged", AutoEvent::DiagnosticChanged),
+    named(c"DiffUpdated", AutoEvent::DiffUpdated),
+    named(c"DirChanged", AutoEvent::DirChanged),
+    named(c"DirChangedPre", AutoEvent::DirChangedPre),
+    named(c"EncodingChanged", AutoEvent::EncodingChanged),
+    named(c"ExitPre", AutoEvent::ExitPre),
+    named_win_local(c"FileAppendCmd", AutoEvent::FileAppendCmd),
+    named_win_local(c"FileAppendPost", AutoEvent::FileAppendPost),
+    named_win_local(c"FileAppendPre", AutoEvent::FileAppendPre),
+    named_win_local(c"FileChangedRO", AutoEvent::FileChangedRO),
+    named_win_local(c"FileChangedShell", AutoEvent::FileChangedShell),
+    named_win_local(c"FileChangedShellPost", AutoEvent::FileChangedShellPost),
+    named(c"FileEncoding", AutoEvent::EncodingChanged),
+    named_win_local(c"FileReadCmd", AutoEvent::FileReadCmd),
+    named_win_local(c"FileReadPost", AutoEvent::FileReadPost),
+    named_win_local(c"FileReadPre", AutoEvent::FileReadPre),
+    named_win_local(c"FileType", AutoEvent::FileType),
+    named_win_local(c"FileWriteCmd", AutoEvent::FileWriteCmd),
+    named_win_local(c"FileWritePost", AutoEvent::FileWritePost),
+    named_win_local(c"FileWritePre", AutoEvent::FileWritePre),
+    named_win_local(c"FilterReadPost", AutoEvent::FilterReadPost),
+    named_win_local(c"FilterReadPre", AutoEvent::FilterReadPre),
+    named_win_local(c"FilterWritePost", AutoEvent::FilterWritePost),
+    named_win_local(c"FilterWritePre", AutoEvent::FilterWritePre),
+    named(c"FocusGained", AutoEvent::FocusGained),
+    named(c"FocusLost", AutoEvent::FocusLost),
+    named(c"FuncUndefined", AutoEvent::FuncUndefined),
+    named(c"GUIEnter", AutoEvent::GUIEnter),
+    named(c"GUIFailed", AutoEvent::GUIFailed),
+    named_win_local(c"InsertChange", AutoEvent::InsertChange),
+    named_win_local(c"InsertCharPre", AutoEvent::InsertCharPre),
+    named_win_local(c"InsertEnter", AutoEvent::InsertEnter),
+    named_win_local(c"InsertLeave", AutoEvent::InsertLeave),
+    named_win_local(c"InsertLeavePre", AutoEvent::InsertLeavePre),
+    named(c"LspAttach", AutoEvent::LspAttach),
+    named(c"LspDetach", AutoEvent::LspDetach),
+    named(c"LspNotify", AutoEvent::LspNotify),
+    named(c"LspProgress", AutoEvent::LspProgress),
+    named(c"LspRequest", AutoEvent::LspRequest),
+    named(c"LspTokenUpdate", AutoEvent::LspTokenUpdate),
+    named(c"MarkSet", AutoEvent::MarkSet),
+    named(c"MenuPopup", AutoEvent::MenuPopup),
+    named(c"ModeChanged", AutoEvent::ModeChanged),
+    named(c"OptionSet", AutoEvent::OptionSet),
+    named(c"PackChanged", AutoEvent::PackChanged),
+    named(c"PackChangedPre", AutoEvent::PackChangedPre),
+    named(c"Progress", AutoEvent::Progress),
+    named(c"QuickFixCmdPost", AutoEvent::QuickFixCmdPost),
+    named(c"QuickFixCmdPre", AutoEvent::QuickFixCmdPre),
+    named(c"QuitPre", AutoEvent::QuitPre),
+    named_win_local(c"RecordingEnter", AutoEvent::RecordingEnter),
+    named_win_local(c"RecordingLeave", AutoEvent::RecordingLeave),
+    named(c"RemoteReply", AutoEvent::RemoteReply),
+    named(c"SafeState", AutoEvent::SafeState),
+    named_win_local(c"SearchWrapped", AutoEvent::SearchWrapped),
+    named(c"SessionLoadPost", AutoEvent::SessionLoadPost),
+    named(c"SessionLoadPre", AutoEvent::SessionLoadPre),
+    named(c"SessionWritePost", AutoEvent::SessionWritePost),
+    named(c"ShellCmdPost", AutoEvent::ShellCmdPost),
+    named_win_local(c"ShellFilterPost", AutoEvent::ShellFilterPost),
+    named(c"Signal", AutoEvent::Signal),
+    named(c"SourceCmd", AutoEvent::SourceCmd),
+    named(c"SourcePost", AutoEvent::SourcePost),
+    named(c"SourcePre", AutoEvent::SourcePre),
+    named(c"SpellFileMissing", AutoEvent::SpellFileMissing),
+    named(c"StdinReadPost", AutoEvent::StdinReadPost),
+    named(c"StdinReadPre", AutoEvent::StdinReadPre),
+    named(c"SwapExists", AutoEvent::SwapExists),
+    named(c"Syntax", AutoEvent::Syntax),
+    named(c"TabClosed", AutoEvent::TabClosed),
+    named(c"TabClosedPre", AutoEvent::TabClosedPre),
+    named(c"TabEnter", AutoEvent::TabEnter),
+    named(c"TabLeave", AutoEvent::TabLeave),
+    named(c"TabNew", AutoEvent::TabNew),
+    named(c"TabNewEntered", AutoEvent::TabNewEntered),
+    named(c"TermChanged", AutoEvent::TermChanged),
+    named(c"TermClose", AutoEvent::TermClose),
+    named(c"TermEnter", AutoEvent::TermEnter),
+    named(c"TermLeave", AutoEvent::TermLeave),
+    named(c"TermOpen", AutoEvent::TermOpen),
+    named(c"TermRequest", AutoEvent::TermRequest),
+    named(c"TermResponse", AutoEvent::TermResponse),
+    named_win_local(c"TextChanged", AutoEvent::TextChanged),
+    named_win_local(c"TextChangedI", AutoEvent::TextChangedI),
+    named_win_local(c"TextChangedP", AutoEvent::TextChangedP),
+    named_win_local(c"TextChangedT", AutoEvent::TextChangedT),
+    named_win_local(c"TextYankPost", AutoEvent::TextYankPost),
+    named(c"UIEnter", AutoEvent::UIEnter),
+    named(c"UILeave", AutoEvent::UILeave),
+    named(c"User", AutoEvent::User),
+    named(c"VimEnter", AutoEvent::VimEnter),
+    named(c"VimLeave", AutoEvent::VimLeave),
+    named(c"VimLeavePre", AutoEvent::VimLeavePre),
+    named(c"VimResized", AutoEvent::VimResized),
+    named(c"VimResume", AutoEvent::VimResume),
+    named(c"VimSuspend", AutoEvent::VimSuspend),
+    named_win_local(c"WinClosed", AutoEvent::WinClosed),
+    named_win_local(c"WinEnter", AutoEvent::WinEnter),
+    named_win_local(c"WinLeave", AutoEvent::WinLeave),
+    named(c"WinNew", AutoEvent::WinNew),
+    named(c"WinNewPre", AutoEvent::WinNewPre),
+    named_win_local(c"WinResized", AutoEvent::WinResized),
+    named_win_local(c"WinScrolled", AutoEvent::WinScrolled),
 ];
 /// The state every event's autocommand list starts in: an empty `kvec`
 /// with nothing allocated.
@@ -605,9 +465,9 @@ static autocmds: GlobalCell<[AutoCmdVec; 145]> = GlobalCell::new([AUTOCMDVEC_INI
 /// one of these across a call into user code.  `wrapping_add` keeps the
 /// whole table's provenance and needs no `unsafe`; only reading through
 /// the result does.
-pub(super) fn au_event_vec(event: event_T) -> *mut AutoCmdVec {
+pub(super) fn au_event_vec(event: AutoEvent) -> *mut AutoCmdVec {
     autocmds
         .ptr()
         .cast::<AutoCmdVec>()
-        .wrapping_add(event as usize)
+        .wrapping_add(event.index())
 }

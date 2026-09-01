@@ -13,12 +13,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use super::*;
 use crate::allocator::Owned;
-use crate::autocmd::{EVENT_BUFADD, EVENT_BUFNEW, apply_autocmds};
+use crate::autocmd::apply_autocmds;
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
 use crate::digraph::keymap_ga_clear;
@@ -51,8 +52,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg;
 use crate::types::{
     AdditionalData, Callback, Failed, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
-    event_T, fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T,
-    size_t, uint64_t,
+    fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T, size_t,
+    uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -179,7 +180,7 @@ fn current_last() -> Option<Buf> {
     last_buffer()
 }
 
-fn fire_buf_event(event: event_T, mut buf: Buf) -> bool {
+fn fire_buf_event(event: AutoEvent, mut buf: Buf) -> bool {
     let raw = buf.raw();
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) }
@@ -360,7 +361,10 @@ fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
     if flags & BLN_LISTED as c_int != 0 && buf.b_p_bl == 0 {
         buf.b_p_bl = 1;
         let bufref = BufRef::of(buf);
-        if flags & BLN_DUMMY as c_int == 0 && fire_buf_event(EVENT_BUFADD, buf) && !bufref.valid() {
+        if flags & BLN_DUMMY as c_int == 0
+            && fire_buf_event(AutoEvent::BufAdd, buf)
+            && !bufref.valid()
+        {
             return ptr::null_mut();
         }
     }
@@ -483,10 +487,11 @@ fn reset_update_subscribers(buf: &mut Buf) {
 /// unexpectedly losing that buffer.
 fn announce_new_buffer(buf: Buf, flags: c_int) -> bool {
     let bufref = BufRef::of(buf);
-    if fire_buf_event(EVENT_BUFNEW, buf) && !bufref.valid() {
+    if fire_buf_event(AutoEvent::BufNew, buf) && !bufref.valid() {
         return false;
     }
-    if flags & BLN_LISTED as c_int != 0 && fire_buf_event(EVENT_BUFADD, buf) && !bufref.valid() {
+    if flags & BLN_LISTED as c_int != 0 && fire_buf_event(AutoEvent::BufAdd, buf) && !bufref.valid()
+    {
         return false;
     }
     // Autocommands may abort script processing.

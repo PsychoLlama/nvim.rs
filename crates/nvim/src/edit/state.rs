@@ -195,7 +195,7 @@ fn insert_enter(s: &mut InsertState) {
     unsafe { pum_check_clear() };
     unsafe { fold_update_after_insert() };
     if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int && s.c != Ctrl_C {
-        unsafe { ins_apply_autocmds(EVENT_INSERTLEAVE) };
+        unsafe { ins_apply_autocmds(AutoEvent::InsertLeave) };
     }
     did_cursorhold.set(false);
 
@@ -227,7 +227,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
     // these editor-wide routines ask for.
     unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
     unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null(), -1) };
-    unsafe { ins_apply_autocmds(EVENT_INSERTENTER) };
+    unsafe { ins_apply_autocmds(AutoEvent::InsertEnter) };
 
     // Highlighting may have changed, e.g. for ModeMsg.
     if need_highlight_changed.get() {

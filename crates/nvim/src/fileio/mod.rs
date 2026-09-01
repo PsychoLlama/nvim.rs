@@ -3,11 +3,8 @@
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::{
-    EVENT_BUFADD, EVENT_BUFDELETE, EVENT_BUFNEW, EVENT_BUFNEWFILE, EVENT_BUFREADCMD,
-    EVENT_BUFREADPOST, EVENT_BUFREADPRE, EVENT_BUFWIPEOUT, EVENT_FILECHANGEDSHELL,
-    EVENT_FILECHANGEDSHELLPOST, EVENT_FILEREADCMD, EVENT_FILEREADPOST, EVENT_FILEREADPRE,
-    EVENT_FILETYPE, EVENT_FILTERREADPOST, EVENT_FILTERREADPRE, EVENT_STDINREADPRE, apply_autocmds,
-    apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists, do_doautocmd,
+    apply_autocmds, apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists,
+    do_doautocmd,
 };
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
@@ -79,12 +76,13 @@ use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
+use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CheckItem, Directory, FAIL, FILE, Failed, FileInfo, IOSIZE, OK, OptInt, OptVal, OptValType,
-    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, event_T, exarg_T, garray_T,
-    iconv_t, int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t,
-    ssize_t, time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, exarg_T, garray_T, iconv_t,
+    int64_t, linenr_T, off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t,
+    time_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -172,7 +170,7 @@ pub enum Loaded {
 
 /// One of the buffer-lifecycle autocommands this file fires about the current
 /// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
-fn autocmd_for_curbuf(event: event_T) {
+fn autocmd_for_curbuf(event: AutoEvent) {
     let (nofile, cb) = (ptr::null_mut(), curbuf.get());
     // SAFETY: the current buffer is live, and the event takes no file name.
     unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
@@ -259,9 +257,9 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
 
     // It's like the unnamed buffer is deleted...
     if cur_buf().b_p_bl != 0 {
-        autocmd_for_curbuf(EVENT_BUFDELETE);
+        autocmd_for_curbuf(AutoEvent::BufDelete);
     }
-    autocmd_for_curbuf(EVENT_BUFWIPEOUT);
+    autocmd_for_curbuf(AutoEvent::BufWipeout);
     if aborting() {
         // Autocommands may abort script processing.
         return Err(Failed);
@@ -277,9 +275,9 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     }
 
     // ...and a new named one is created.
-    autocmd_for_curbuf(EVENT_BUFNEW);
+    autocmd_for_curbuf(AutoEvent::BufNew);
     if cur_buf().b_p_bl != 0 {
-        autocmd_for_curbuf(EVENT_BUFADD);
+        autocmd_for_curbuf(AutoEvent::BufAdd);
     }
     if aborting() {
         return Err(Failed);

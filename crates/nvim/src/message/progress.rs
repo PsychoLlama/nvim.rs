@@ -159,7 +159,7 @@ pub unsafe fn msg_progress(
 /// # Safety
 /// `msg` must be a valid message and `msg_data` null or a valid data block.
 pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut MessageData) {
-    if !has_event(EVENT_PROGRESS) {
+    if !has_event(AutoEvent::Progress) {
         return;
     }
 
@@ -196,7 +196,7 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
     let no_fname = ptr::null_mut();
     let no_buf = ptr::null_mut();
     let no_eap = ptr::null_mut();
-    let fired = EVENT_PROGRESS;
+    let fired = AutoEvent::Progress;
     unsafe {
         apply_autocmds_group(
             fired, pattern, no_fname, true, group, no_buf, no_eap, payload,

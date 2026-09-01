@@ -16,9 +16,10 @@ use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::AutoEvent;
 use core::ffi::c_char;
 
-use crate::types::{CmdModFlags, CpoFlag, Failed, event_T};
+use crate::types::{CmdModFlags, CpoFlag, Failed};
 
 use super::*;
 use crate::buffer::BufRef;
@@ -73,7 +74,7 @@ pub(crate) enum PreWrite {
 /// over its own name has nothing but a `*WriteCmd` autocommand to write it,
 /// and none matched.
 unsafe fn apply_pre(
-    event: event_T,
+    event: AutoEvent,
     sfname: *mut c_char,
     eap: *mut exarg_T,
     overwriting: bool,
@@ -121,20 +122,21 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     let mut did_cmd = false;
     let mut nofile_err = false;
     if mode.req.append {
-        let event = EVENT_FILEAPPENDCMD;
+        let event = AutoEvent::FileAppendCmd;
         did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if !did_cmd {
-            nofile_err = unsafe { apply_pre(EVENT_FILEAPPENDPRE, sfname, eap, mode.overwriting) };
+            nofile_err =
+                unsafe { apply_pre(AutoEvent::FileAppendPre, sfname, eap, mode.overwriting) };
         }
     } else if mode.req.filtering {
         // No <afile>: the filter's output file is not what the event is
         // about.
-        let event = EVENT_FILTERWRITEPRE;
+        let event = AutoEvent::FilterWritePre;
         let no_fname = core::ptr::null_mut();
         unsafe { apply_autocmds_exarg(event, no_fname, sfname, false, curbuf.get(), eap) };
     } else if mode.req.reset_changed && mode.whole {
         let was_changed = curbuf_is_changed();
-        let event = EVENT_BUFWRITECMD;
+        let event = AutoEvent::BufWriteCmd;
         did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if did_cmd {
             if was_changed && !curbuf_is_changed() {
@@ -145,13 +147,15 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 u_update_save_nr(unsafe { Buf::current() });
             }
         } else {
-            nofile_err = unsafe { apply_pre(EVENT_BUFWRITEPRE, sfname, eap, mode.overwriting) };
+            nofile_err =
+                unsafe { apply_pre(AutoEvent::BufWritePre, sfname, eap, mode.overwriting) };
         }
     } else {
-        let event = EVENT_FILEWRITECMD;
+        let event = AutoEvent::FileWriteCmd;
         did_cmd = unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
         if !did_cmd {
-            nofile_err = unsafe { apply_pre(EVENT_FILEWRITEPRE, sfname, eap, mode.overwriting) };
+            nofile_err =
+                unsafe { apply_pre(AutoEvent::FileWritePre, sfname, eap, mode.overwriting) };
         }
     }
 
@@ -278,13 +282,13 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     unsafe { aucmd_prepbuf(&raw mut aco, buf) };
 
     let event = if mode.req.append {
-        EVENT_FILEAPPENDPOST
+        AutoEvent::FileAppendPost
     } else if mode.req.filtering {
-        EVENT_FILTERWRITEPOST
+        AutoEvent::FilterWritePost
     } else if mode.req.reset_changed && mode.whole {
-        EVENT_BUFWRITEPOST
+        AutoEvent::BufWritePost
     } else {
-        EVENT_FILEWRITEPOST
+        AutoEvent::FileWritePost
     };
     // As for FilterWritePre, the filter's file is not the <afile>.
     let afile = if mode.req.filtering {

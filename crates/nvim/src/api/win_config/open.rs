@@ -205,7 +205,7 @@ pub unsafe fn nvim_open_win(
             // SAFETY: an autocommand with neither a file name nor a pattern.
             let switched = unsafe {
                 apply_autocmds(
-                    EVENT_WINNEW,
+                    AutoEvent::WinNew,
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     false,

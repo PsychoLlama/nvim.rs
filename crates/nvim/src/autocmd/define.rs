@@ -119,8 +119,9 @@ pub unsafe fn do_autocmd(
         if all_events {
             unsafe { au_show_for_all_events(group, pat) };
         } else {
-            let event = unsafe { event_name2nr(arg, &raw mut arg) };
-            debug_assert!(event < NUM_EVENTS);
+            // `au_event_check` has already refused an unknown name.
+            let event = unsafe { event_name2nr(arg, &raw mut arg) }
+                .expect("the event list was checked before it was walked");
             unsafe { au_show_for_event(group, event, pat) };
         }
     } else if all_events {
@@ -143,8 +144,9 @@ pub unsafe fn do_autocmd(
             && unsafe { *arg } != b'|' as ::core::ffi::c_char
             && !ascii_iswhite(unsafe { *arg } as ::core::ffi::c_int)
         {
-            let event = unsafe { event_name2nr(arg, &raw mut arg) };
-            debug_assert!(event < NUM_EVENTS);
+            // `au_event_check` has already refused an unknown name.
+            let event = unsafe { event_name2nr(arg, &raw mut arg) }
+                .expect("the event list was checked before it was walked");
             if unsafe {
                 do_autocmd_event(
                     event,
@@ -178,7 +180,7 @@ pub unsafe fn do_all_autocmd_events(
     del: bool,
     group: ::core::ffi::c_int,
 ) {
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         if unsafe { do_autocmd_event(event, pat, once, nested, cmd, del, group) }.is_err() {
             return;
         }
@@ -191,7 +193,7 @@ pub unsafe fn do_all_autocmd_events(
 /// are `:autocmd! {event} {pat} {cmd}`, which deletes the existing
 /// autocommands on the pattern and then appends to the same `AutoPat`.
 pub unsafe fn do_autocmd_event(
-    event: event_T,
+    event: AutoEvent,
     mut pat: *const ::core::ffi::c_char,
     once: bool,
     nested: ::core::ffi::c_int,
@@ -288,7 +290,7 @@ pub unsafe fn do_autocmd_event(
 /// otherwise.
 pub unsafe fn autocmd_register(
     id: int64_t,
-    event: event_T,
+    event: AutoEvent,
     mut pat: *const ::core::ffi::c_char,
     mut patlen: ::core::ffi::c_int,
     group: ::core::ffi::c_int,
@@ -384,17 +386,17 @@ pub unsafe fn autocmd_register(
         // they fired.  The *first* autocommand for one has to seed that
         // state, or it fires immediately on a difference that predates
         // it.
-        if event == EVENT_MODECHANGED && !has_event(EVENT_MODECHANGED) {
+        if event == AutoEvent::ModeChanged && !has_event(AutoEvent::ModeChanged) {
             last_mode.set(unsafe { get_mode() });
         }
-        if (event == EVENT_CURSORMOVED && !has_event(EVENT_CURSORMOVED))
-            || (event == EVENT_CURSORMOVEDI && !has_event(EVENT_CURSORMOVEDI))
+        if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
+            || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
         {
             last_cursormoved_win.set(curwin.get());
             last_cursormoved.set(cur_win().w_cursor);
         }
-        if (event == EVENT_WINSCROLLED || event == EVENT_WINRESIZED)
-            && !(has_event(EVENT_WINSCROLLED) || has_event(EVENT_WINRESIZED))
+        if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
+            && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
         {
             let save_curtab = curtab.get();
             for tp in tabs() {
@@ -527,7 +529,7 @@ pub fn autocmd_delete_id(id: int64_t) -> bool {
     debug_assert!(id > 0);
 
     let mut success = false;
-    for event in 0..NUM_EVENTS {
+    for event in AutoEvent::all() {
         let acs = au_event_vec(event);
         let mut i: usize = 0;
         while i < unsafe { (*acs).size } {
@@ -579,7 +581,7 @@ pub(crate) unsafe fn arg_event_skip(
         && unsafe { *pat } != b'|' as ::core::ffi::c_char
         && !ascii_iswhite(unsafe { *pat } as ::core::ffi::c_int)
     {
-        if unsafe { event_name2nr(pat, &raw mut p) } >= NUM_EVENTS {
+        if unsafe { event_name2nr(pat, &raw mut p) }.is_none() {
             // SAFETY: `pat` is the NUL-terminated rest of the pattern.
             let shown = unsafe { c_str(pat) };
             if have_group {
