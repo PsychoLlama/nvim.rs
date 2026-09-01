@@ -32,10 +32,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use crate::global_cell::GlobalCell;
-use crate::regexp::NFA_CONCAT;
 
 struct Program {
     /// Owns the allocation. Its own length stays 0; `len` below is the real
@@ -122,7 +122,16 @@ pub(crate) fn emit(item: c_int) {
 #[inline(always)]
 pub(crate) fn emit_concat(item: c_int) {
     emit(item);
-    emit(NFA_CONCAT);
+    emit_op(NfaOp::Concat);
+}
+
+/// Append one opcode, which is where the program's *named* half is written.
+///
+/// The `c_int` [`emit`] takes is either an opcode or a literal character;
+/// this is the half the type system can hold on to.
+#[inline(always)]
+pub(crate) fn emit_op(op: NfaOp) {
+    emit(op.code());
 }
 
 /// How many items have been emitted; a handle [`truncate`] can rewind to.

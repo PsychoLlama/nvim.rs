@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::assertions::{at_col, at_cursor, at_line, at_mark, at_vcol, in_visual};
@@ -16,16 +17,8 @@ use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
 use crate::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{
-    NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BACKREF9, NFA_BOF, NFA_BOL, NFA_BOW, NFA_COL,
-    NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_END_COLL, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
-    NFA_END_PATTERN, NFA_EOF, NFA_EOL, NFA_EOW, NFA_IDENT, NFA_LNUM, NFA_LNUM_LT, NFA_MARK,
-    NFA_MARK_LT, NFA_MATCH, NFA_MOPEN1, NFA_MOPEN9, NFA_NEWL, NFA_NOPEN, NFA_NUPPER_IC,
-    NFA_RANGE_MIN, NFA_SKIP, NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_FIRST,
-    NFA_START_INVISIBLE_BEFORE_NEG, NFA_START_INVISIBLE_BEFORE_NEG_FIRST,
-    NFA_START_INVISIBLE_FIRST, NFA_START_INVISIBLE_NEG, NFA_START_INVISIBLE_NEG_FIRST,
-    NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_TOO_EXPENSIVE, NFA_VCOL, NFA_VCOL_LT, NFA_VISUAL,
-    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF1, NFA_ZREF9, NFA_ZSTART, PimResult, Rex, nfa_endp, nfa_match,
-    nfa_pim_T, nfa_regprog_T, nfa_state_T, reg_prev_class, regsubs_T,
+    NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T,
+    reg_prev_class, regsubs_T,
 };
 use crate::types::NUL;
 
@@ -96,11 +89,11 @@ fn is_negated(state: *mut nfa_state_T) -> bool {
     // SAFETY: `state` is a live state of the running program.
 
     matches!(
-        op(state),
-        NFA_START_INVISIBLE_NEG
-            | NFA_START_INVISIBLE_NEG_FIRST
-            | NFA_START_INVISIBLE_BEFORE_NEG
-            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+        NfaOp::try_from(op(state)),
+        Ok(NfaOp::StartInvisibleNeg
+            | NfaOp::StartInvisibleNegFirst
+            | NfaOp::StartInvisibleBeforeNeg
+            | NfaOp::StartInvisibleBeforeNegFirst)
     )
 }
 
@@ -149,8 +142,9 @@ pub(crate) unsafe fn step(
     let idx = *listidx as usize;
     let state = thislist.thread(idx).state;
     let out = out_of(state);
-    match op(state) {
-        NFA_MATCH => {
+    let code = op(state);
+    match NfaOp::try_from(code) {
+        Ok(NfaOp::Match) => {
             // Not in the middle of a grapheme: a match may not stop
             // between a base character and its combining marks.
             if !rex.reg_icombine() && !rex.at_bol() && utf_iscomposing_legacy(curc) {
@@ -166,7 +160,7 @@ pub(crate) unsafe fn step(
             Step::Matched
         }
 
-        NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG | NFA_END_PATTERN => {
+        Ok(NfaOp::EndInvisible | NfaOp::EndInvisibleNeg | NfaOp::EndPattern) => {
             // The lookaround's own match has to end exactly where the
             // outer match asked it to.
             if !unsafe { at_sub_match_end(rex) } {
@@ -174,7 +168,7 @@ pub(crate) unsafe fn step(
             }
             // A negated lookaround discards what it captured: it only
             // has to have matched, and its groups did not really match.
-            if op(state) != NFA_END_INVISIBLE_NEG {
+            if code != NfaOp::EndInvisibleNeg.code() {
                 // SAFETY: `run.m` is the caller's capture set.
                 let m = unsafe { &mut *run.m };
                 copy_both(rex, m, &thislist.thread(idx).subs);
@@ -186,29 +180,38 @@ pub(crate) unsafe fn step(
             Step::Matched
         }
 
-        NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST => unsafe {
-            start_lookaround(rex, thislist, idx, listidx, run)
+        Ok(
+            NfaOp::StartInvisible
+            | NfaOp::StartInvisibleFirst
+            | NfaOp::StartInvisibleNeg
+            | NfaOp::StartInvisibleNegFirst
+            | NfaOp::StartInvisibleBefore
+            | NfaOp::StartInvisibleBeforeFirst
+            | NfaOp::StartInvisibleBeforeNeg
+            | NfaOp::StartInvisibleBeforeNegFirst,
+        ) => unsafe { start_lookaround(rex, thislist, idx, listidx, run) },
+
+        Ok(NfaOp::StartPattern) => unsafe {
+            start_pattern(rex, thislist, nextlist, idx, run, *clen)
         },
 
-        NFA_START_PATTERN => unsafe { start_pattern(rex, thislist, nextlist, idx, run, *clen) },
-
-        NFA_BOL => Step::zero_width(rex.at_bol(), out),
-        NFA_EOL => Step::zero_width(curc == NUL, out),
-        NFA_BOW => Step::zero_width(unsafe { at_word_start(rex, curc) }, out),
-        NFA_EOW => Step::zero_width(unsafe { at_word_end(rex) }, out),
-        NFA_BOF => Step::zero_width(
+        Ok(NfaOp::Bol) => Step::zero_width(rex.at_bol(), out),
+        Ok(NfaOp::Eol) => Step::zero_width(curc == NUL, out),
+        Ok(NfaOp::Bow) => Step::zero_width(unsafe { at_word_start(rex, curc) }, out),
+        Ok(NfaOp::Eow) => Step::zero_width(unsafe { at_word_end(rex) }, out),
+        Ok(NfaOp::Bof) => Step::zero_width(
             rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
             out,
         ),
-        NFA_EOF => Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, out),
+        Ok(NfaOp::Eof) => Step::zero_width(rex.lnum() == rex.reg_maxline() && curc == NUL, out),
 
-        NFA_COMPOSING => {
+        Ok(NfaOp::Composing) => {
             let matched = unsafe { matches_composing(rex, out, curc, *clen) };
             // The group's end, and what follows it, hang off `out1`.
             Step::consuming(matched, out_of(out1_of(state)), *clen)
         }
 
-        NFA_NEWL => {
+        Ok(NfaOp::Newl) => {
             if curc == NUL && !rex.reg_line_lbr() && rex.multi() && rex.lnum() <= rex.reg_maxline()
             {
                 // A real line break: the next list starts on the next
@@ -224,7 +227,7 @@ pub(crate) unsafe fn step(
             }
         }
 
-        NFA_START_COLL | NFA_START_NEG_COLL => {
+        Ok(NfaOp::StartColl | NfaOp::StartNegColl) => {
             if curc == NUL {
                 return Step::Dead;
             }
@@ -232,9 +235,9 @@ pub(crate) unsafe fn step(
             Step::consuming(matched, out_of(out1_of(state)), *clen)
         }
 
-        NFA_ANY => Step::consuming(curc > 0, out, *clen),
+        Ok(NfaOp::Any) => Step::consuming(curc > 0, out, *clen),
 
-        NFA_ANY_COMPOSING => {
+        Ok(NfaOp::AnyComposing) => {
             // `\%C`: a combining character is consumed, anything else
             // leaves the position alone for the group that follows.
             if utf_iscomposing_legacy(curc) {
@@ -244,19 +247,23 @@ pub(crate) unsafe fn step(
             }
         }
 
-        c @ NFA_IDENT..=NFA_NUPPER_IC => Step::consuming(class_matches(rex, c, curc), out, *clen),
+        Ok(class) if class.is_class() => {
+            Step::consuming(class_matches(rex, class, curc), out, *clen)
+        }
 
-        c @ (NFA_BACKREF1..=NFA_BACKREF9 | NFA_ZREF1..=NFA_ZREF9) => {
+        Ok(reference) if reference.is_reference() => {
             let mut bytelen = 0;
-            let matched = if (NFA_BACKREF1..=NFA_BACKREF9).contains(&c) {
-                match_backref(
+            let matched = match reference.index_in(&NfaOp::BACKREFS) {
+                Some(i) => match_backref(
                     rex,
                     &thislist.thread(idx).subs.norm,
-                    c - NFA_BACKREF1 + 1,
+                    group_number(i),
                     &mut bytelen,
-                )
-            } else {
-                match_zref(rex, c - NFA_ZREF1 + 1, &mut bytelen)
+                ),
+                None => {
+                    let i = reference.index_in(&NfaOp::ZREFS).expect("a \\z reference");
+                    match_zref(rex, group_number(i), &mut bytelen)
+                }
             };
             if !matched {
                 return Step::Dead;
@@ -266,7 +273,7 @@ pub(crate) unsafe fn step(
             spanning(out, bytelen, *clen)
         }
 
-        NFA_SKIP => {
+        Ok(NfaOp::Skip) => {
             // Consume the bytes a back-reference still owes.
             let owed = thislist.thread(idx).count - *clen;
             if owed <= 0 {
@@ -280,21 +287,31 @@ pub(crate) unsafe fn step(
             }
         }
 
-        NFA_LNUM..=NFA_LNUM_LT => Step::zero_width(at_line(rex, state), out),
-        NFA_COL..=NFA_COL_LT => Step::zero_width(at_col(rex, state), out),
-        NFA_VCOL..=NFA_VCOL_LT => Step::zero_width(at_vcol(rex, state), out),
-        NFA_MARK..=NFA_MARK_LT => Step::zero_width(at_mark(rex, state), out),
-        NFA_CURSOR => Step::zero_width(at_cursor(rex), out),
-        NFA_VISUAL => Step::zero_width(in_visual(rex), out),
+        Ok(NfaOp::Lnum | NfaOp::LnumGt | NfaOp::LnumLt) => {
+            Step::zero_width(at_line(rex, state), out)
+        }
+        Ok(NfaOp::Col | NfaOp::ColGt | NfaOp::ColLt) => Step::zero_width(at_col(rex, state), out),
+        Ok(NfaOp::Vcol | NfaOp::VcolGt | NfaOp::VcolLt) => {
+            Step::zero_width(at_vcol(rex, state), out)
+        }
+        Ok(NfaOp::Mark | NfaOp::MarkGt | NfaOp::MarkLt) => {
+            Step::zero_width(at_mark(rex, state), out)
+        }
+        Ok(NfaOp::Cursor) => Step::zero_width(at_cursor(rex), out),
+        Ok(NfaOp::Visual) => Step::zero_width(in_visual(rex), out),
 
         // The capture brackets are recorded by `addstate` as it walks
         // past them, so a thread sitting on one has nothing to do.
-        // `NFA_MOPEN` itself is deliberately absent: upstream leaves it
+        // `NfaOp::Mopen` itself is deliberately absent: upstream leaves it
         // to the literal-character arm below, which never matches it.
-        NFA_MOPEN1..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN | NFA_ZSTART => Step::Dead,
+        Ok(NfaOp::Nopen | NfaOp::Zstart) => Step::Dead,
+        Ok(marker) if NfaOp::MOPEN[1..].contains(&marker) || NfaOp::ZOPEN.contains(&marker) => {
+            Step::Dead
+        }
 
-        // A literal character.
-        c => {
+        // A literal character, and every opcode upstream leaves to it.
+        _ => {
+            let c = code;
             let mut matched = c == curc;
             if !matched && rex.reg_ic() {
                 matched = utf_fold(c) == utf_fold(curc);
@@ -307,6 +324,12 @@ pub(crate) unsafe fn step(
             Step::consuming(matched, out, *clen)
         }
     }
+}
+
+/// The group a `\\1`-style reference names: its opcode's position in the run
+/// of nine, plus one.
+fn group_number(index: usize) -> c_int {
+    c_int::try_from(index + 1).expect("a group number below ten")
 }
 
 /// A thread that matched `bytelen` bytes: it may be shorter than the
@@ -383,20 +406,20 @@ unsafe fn at_word_end(rex: Rex) -> bool {
 /// `start` must be an `NFA_START_COLL`/`NFA_START_NEG_COLL` state.
 unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, clen: c_int) -> bool {
     // A negated collection accepts exactly what its members reject.
-    let member_wins = unsafe { (*start).c } == NFA_START_COLL;
+    let member_wins = unsafe { (*start).c } == NfaOp::StartColl.code();
     let mut state = unsafe { (*start).out };
     loop {
         let c = op(state);
-        if c == NFA_COMPOSING {
+        if c == NfaOp::Composing.code() {
             // A member that is a whole grapheme.
             return unsafe { matches_composing(rex, (*(*start).out).out, curc, clen) }
                 == member_wins;
         }
-        if c == NFA_END_COLL {
+        if c == NfaOp::EndColl.code() {
             // Nothing accepted it.
             return !member_wins;
         }
-        if c == NFA_RANGE_MIN {
+        if c == NfaOp::RangeMin.code() {
             let mut lo = unsafe { (*state).val };
             state = out_of(state);
             let hi = unsafe { (*state).val };
@@ -447,11 +470,11 @@ unsafe fn start_lookaround(
     // thread that already carries one runs it now.
     let run_now = thislist.thread(idx).pim.result != PimResult::Unused
         || matches!(
-            op(state),
-            NFA_START_INVISIBLE_FIRST
-                | NFA_START_INVISIBLE_NEG_FIRST
-                | NFA_START_INVISIBLE_BEFORE_FIRST
-                | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+            NfaOp::try_from(op(state)),
+            Ok(NfaOp::StartInvisibleFirst
+                | NfaOp::StartInvisibleNegFirst
+                | NfaOp::StartInvisibleBeforeFirst
+                | NfaOp::StartInvisibleBeforeNegFirst)
         );
     if !run_now {
         // Hand the lookaround to whatever comes after it.

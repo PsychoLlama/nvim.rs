@@ -13,26 +13,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::list::{op, out_of, out1_of};
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::run::failure_chance;
 use super::sub::match_follows;
 use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
-use crate::regexp::{
-    NFA_ANY, NFA_ANY_COMPOSING, NFA_BACKREF1, NFA_BOL, NFA_COMPOSING, NFA_CONCAT, NFA_CURSOR,
-    NFA_DIGIT, NFA_EMPTY, NFA_END_COLL, NFA_END_COMPOSING, NFA_END_INVISIBLE,
-    NFA_END_INVISIBLE_NEG, NFA_END_NEG_COLL, NFA_END_PATTERN, NFA_EOF, NFA_HEX, NFA_IDENT,
-    NFA_LNUM, NFA_MARK_LT, NFA_MATCH, NFA_MOPEN, NFA_MOPEN9, NFA_NCLOSE, NFA_NEWL, NFA_NOPEN,
-    NFA_NUPPER_IC, NFA_OCTAL, NFA_OPT_CHARS, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE,
-    NFA_PREV_ATOM_JUST_BEFORE_NEG, NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH,
-    NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST, NFA_QUEST_NONGREEDY, NFA_RANGE, NFA_RANGE_MAX,
-    NFA_RANGE_MIN, NFA_SKIP, NFA_SPLIT, NFA_STAR, NFA_STAR_NONGREEDY, NFA_START_COLL,
-    NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_NEG,
-    NFA_START_INVISIBLE_NEG, NFA_START_NEG_COLL, NFA_START_PATTERN, NFA_VISUAL, NFA_WHITE,
-    NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN9, NFA_ZREF9, NFA_ZSTART, NSUBEXP,
-    istate, nfa_regprog_T, nfa_state_T, nstate, state_ptr,
-};
+use crate::regexp::{istate, nfa_regprog_T, nfa_state_T, nstate, state_ptr};
 use crate::semsg;
 use crate::types::MB_MAXBYTES;
 
@@ -186,10 +174,11 @@ fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
     // SAFETY: the walk stays inside the program `startstate` belongs to.
 
     while !state.is_null() {
-        match op(state) {
+        let code = op(state);
+        match NfaOp::try_from(code) {
             // The end of the lookbehind's own pattern.
-            NFA_END_INVISIBLE | NFA_END_INVISIBLE_NEG => return len,
-            NFA_SPLIT => {
+            Ok(NfaOp::EndInvisible | NfaOp::EndInvisibleNeg) => return len,
+            Ok(NfaOp::Split) => {
                 let l = nfa_max_width(out_of(state), depth + 1);
                 let r = nfa_max_width(out1_of(state), depth + 1);
                 if l < 0 || r < 0 {
@@ -200,9 +189,9 @@ fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
             // Any character, so as wide as a character gets. A
             // collection continues past its `NFA_END_COLL`, which is
             // where `out1` points.
-            c @ (NFA_ANY | NFA_START_COLL | NFA_START_NEG_COLL) => {
+            Ok(c @ (NfaOp::Any | NfaOp::StartColl | NfaOp::StartNegColl)) => {
                 len += MB_MAXBYTES as c_int;
-                if c != NFA_ANY {
+                if c != NfaOp::Any {
                     if out1_of(state).is_null() || out_of(out1_of(state)).is_null() {
                         return -1;
                     }
@@ -211,41 +200,67 @@ fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
                 }
             }
             // The ASCII-only classes are one byte.
-            NFA_DIGIT | NFA_WHITE | NFA_HEX | NFA_OCTAL => len += 1,
+            Ok(NfaOp::Digit | NfaOp::White | NfaOp::Hex | NfaOp::Octal) => len += 1,
             // The rest can match a multibyte character, which upstream
             // bounds at three bytes rather than `MB_MAXBYTES`.
-            NFA_IDENT..=NFA_NUPPER_IC | NFA_ANY_COMPOSING => len += 3,
+            Ok(NfaOp::AnyComposing) => len += 3,
+            Ok(class) if class.is_class() => len += 3,
             // A nested lookaround matches no input of its own; step
             // over it to what follows.
-            NFA_START_INVISIBLE
-            | NFA_START_INVISIBLE_NEG
-            | NFA_START_INVISIBLE_BEFORE
-            | NFA_START_INVISIBLE_BEFORE_NEG => {
+            Ok(
+                NfaOp::StartInvisible
+                | NfaOp::StartInvisibleNeg
+                | NfaOp::StartInvisibleBefore
+                | NfaOp::StartInvisibleBeforeNeg,
+            ) => {
                 state = out_of(out1_of(state));
                 continue;
             }
             // A back-reference is as wide as whatever it captured, and a
             // line break or a skip is unbounded.
-            NFA_BACKREF1..=NFA_ZREF9 | NFA_NEWL | NFA_SKIP => return -1,
+            Ok(NfaOp::Newl | NfaOp::Skip) => return -1,
+            Ok(reference) if reference.is_reference() => return -1,
             // Zero width.
-            NFA_BOL..=NFA_EOF
-            | NFA_MOPEN..=NFA_ZCLOSE9
-            | NFA_NOPEN..=NFA_NCLOSE
-            | NFA_CURSOR..=NFA_VISUAL
-            | NFA_ZSTART..=NFA_ZEND
-            | NFA_OPT_CHARS
-            | NFA_EMPTY
-            | NFA_START_PATTERN
-            | NFA_END_PATTERN
-            | NFA_COMPOSING
-            | NFA_END_COMPOSING => {}
+            Ok(marker) if marker.is_capture_marker() => {}
+            Ok(
+                NfaOp::Bol
+                | NfaOp::Eol
+                | NfaOp::Bow
+                | NfaOp::Eow
+                | NfaOp::Bof
+                | NfaOp::Eof
+                | NfaOp::Nopen
+                | NfaOp::Nclose
+                | NfaOp::Cursor
+                | NfaOp::Lnum
+                | NfaOp::LnumGt
+                | NfaOp::LnumLt
+                | NfaOp::Col
+                | NfaOp::ColGt
+                | NfaOp::ColLt
+                | NfaOp::Vcol
+                | NfaOp::VcolGt
+                | NfaOp::VcolLt
+                | NfaOp::Mark
+                | NfaOp::MarkGt
+                | NfaOp::MarkLt
+                | NfaOp::Visual
+                | NfaOp::Zstart
+                | NfaOp::Zend
+                | NfaOp::OptChars
+                | NfaOp::Empty
+                | NfaOp::StartPattern
+                | NfaOp::EndPattern
+                | NfaOp::Composing
+                | NfaOp::EndComposing,
+            ) => {}
             // A literal character; any opcode not named above is one
             // this walk cannot reason about.
-            c => {
-                if c < 0 {
+            _ => {
+                if code < 0 {
                     return -1;
                 }
-                len += utf_char2len(c);
+                len += utf_char2len(code);
             }
         }
         state = out_of(state);
@@ -274,11 +289,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
         let item = items[i];
         // The two operators that carry an inline operand read it here, so
         // that both passes step over it.
-        let operand = if matches!(
-            item,
-            NFA_OPT_CHARS | NFA_PREV_ATOM_JUST_BEFORE | NFA_PREV_ATOM_JUST_BEFORE_NEG | NFA_LNUM
-                ..=NFA_MARK_LT
-        ) {
+        let operand = if NfaOp::try_from(item).is_ok_and(NfaOp::has_inline_operand) {
             i += 1;
             items[i]
         } else {
@@ -291,8 +302,8 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             continue;
         }
 
-        match item {
-            NFA_CONCAT => {
+        match NfaOp::try_from(item) {
+            Ok(NfaOp::Concat) => {
                 // Two fragments run one after the other: the first's loose
                 // ends go to the second's start.
                 let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
@@ -301,12 +312,12 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                 patch(e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
-            NFA_OR => {
+            Ok(NfaOp::Or) => {
                 // A choice between two fragments.
                 let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s) = state(NFA_SPLIT, e1.start, e2.start) else {
+                let Some(s) = state(NfaOp::Split.code(), e1.start, e2.start) else {
                     return core::ptr::null_mut();
                 };
                 stack.push(s, append(e1.out, e2.out));
@@ -314,28 +325,31 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             // A repeat is a split whose taken branch loops back to it; `\?`
             // is the same split without the loop. Which of the two edges is
             // the body and which the exit decides whether it is greedy.
-            NFA_STAR | NFA_STAR_NONGREEDY | NFA_QUEST | NFA_QUEST_NONGREEDY => {
+            Ok(
+                repeat
+                @ (NfaOp::Star | NfaOp::StarNongreedy | NfaOp::Quest | NfaOp::QuestNongreedy),
+            ) => {
                 let Some(e) = stack.pop() else {
                     return core::ptr::null_mut();
                 };
-                let greedy = matches!(item, NFA_STAR | NFA_QUEST);
+                let greedy = matches!(repeat, NfaOp::Star | NfaOp::Quest);
                 let (out, out1) = if greedy {
                     (e.start, core::ptr::null_mut())
                 } else {
                     (core::ptr::null_mut(), e.start)
                 };
-                let Some(s) = state(NFA_SPLIT, out, out1) else {
+                let Some(s) = state(NfaOp::Split.code(), out, out1) else {
                     return core::ptr::null_mut();
                 };
                 let exit = list1(if greedy { out1_edge(s) } else { out_edge(s) });
-                if matches!(item, NFA_STAR | NFA_STAR_NONGREEDY) {
+                if matches!(repeat, NfaOp::Star | NfaOp::StarNongreedy) {
                     patch(e.out, s);
                     stack.push(s, exit);
                 } else {
                     stack.push(s, append(e.out, exit));
                 }
             }
-            NFA_END_COLL | NFA_END_NEG_COLL => {
+            Ok(NfaOp::EndColl | NfaOp::EndNegColl) => {
                 // The collection's members are already chained; close them
                 // off with the state the matcher stops at, and point the
                 // opening state's `out1` at it so a walk can skip over the
@@ -343,8 +357,11 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                 let Some(e) = stack.pop() else {
                     return core::ptr::null_mut();
                 };
-                let Some(s) = state(NFA_END_COLL, core::ptr::null_mut(), core::ptr::null_mut())
-                else {
+                let Some(s) = state(
+                    NfaOp::EndColl.code(),
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                ) else {
                     return core::ptr::null_mut();
                 };
                 patch(e.out, s);
@@ -352,7 +369,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                 unsafe { (*e.start).out1 = s };
                 stack.push(e.start, list1(out_edge(s)));
             }
-            NFA_RANGE => {
+            Ok(NfaOp::Range) => {
                 // Two members become a range: their character values move
                 // into `val` and the opcodes say which end each one is.
                 let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
@@ -360,13 +377,13 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                 };
                 // SAFETY: both fragments are single member states.
                 unsafe { (*e2.start).val = (*e2.start).c };
-                unsafe { (*e2.start).c = NFA_RANGE_MAX };
+                unsafe { (*e2.start).c = NfaOp::RangeMax.code() };
                 unsafe { (*e1.start).val = (*e1.start).c };
-                unsafe { (*e1.start).c = NFA_RANGE_MIN };
+                unsafe { (*e1.start).c = NfaOp::RangeMin.code() };
                 patch(e1.out, e2.start);
                 stack.push(e1.start, e2.out);
             }
-            NFA_OPT_CHARS => {
+            Ok(NfaOp::OptChars) => {
                 // `\%[abc]`: `operand` members, each of which becomes a
                 // split that can leave the sequence, so every prefix
                 // matches.
@@ -379,7 +396,8 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                     let Some(e) = stack.pop() else {
                         return core::ptr::null_mut();
                     };
-                    let Some(new) = state(NFA_SPLIT, e.start, core::ptr::null_mut()) else {
+                    let Some(new) = state(NfaOp::Split.code(), e.start, core::ptr::null_mut())
+                    else {
                         return core::ptr::null_mut();
                     };
                     if first_out.is_null() {
@@ -395,35 +413,43 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             // The lookarounds: the operand becomes a machine of its own,
             // entered from an `NFA_START_*` state and ended by the matching
             // `NFA_END_*`.
-            NFA_PREV_ATOM_NO_WIDTH
-            | NFA_PREV_ATOM_NO_WIDTH_NEG
-            | NFA_PREV_ATOM_JUST_BEFORE
-            | NFA_PREV_ATOM_JUST_BEFORE_NEG
-            | NFA_PREV_ATOM_LIKE_PATTERN => {
-                let (start_state, end_state) = lookaround_states(item);
+            Ok(
+                look @ (NfaOp::PrevAtomNoWidth
+                | NfaOp::PrevAtomNoWidthNeg
+                | NfaOp::PrevAtomJustBefore
+                | NfaOp::PrevAtomJustBeforeNeg
+                | NfaOp::PrevAtomLikePattern),
+            ) => {
+                let (start_state, end_state) = lookaround_states(look);
                 let before = matches!(
-                    item,
-                    NFA_PREV_ATOM_JUST_BEFORE | NFA_PREV_ATOM_JUST_BEFORE_NEG
+                    look,
+                    NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg
                 );
-                let pattern = item == NFA_PREV_ATOM_LIKE_PATTERN;
+                let pattern = look == NfaOp::PrevAtomLikePattern;
                 let Some(e) = stack.pop() else {
                     return core::ptr::null_mut();
                 };
-                let Some(end) = state(end_state, core::ptr::null_mut(), core::ptr::null_mut())
-                else {
+                let Some(end) = state(
+                    end_state.code(),
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                ) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s) = state(start_state, e.start, end) else {
+                let Some(s) = state(start_state.code(), e.start, end) else {
                     return core::ptr::null_mut();
                 };
                 if pattern {
                     // `\@>` keeps what it matched, so the sub-match's end is
                     // recorded and the outer match resumes past it.
-                    let Some(skip) = state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut())
-                    else {
+                    let Some(skip) = state(
+                        NfaOp::Skip.code(),
+                        core::ptr::null_mut(),
+                        core::ptr::null_mut(),
+                    ) else {
                         return core::ptr::null_mut();
                     };
-                    let Some(zend) = state(NFA_ZEND, end, core::ptr::null_mut()) else {
+                    let Some(zend) = state(NfaOp::Zend.code(), end, core::ptr::null_mut()) else {
                         return core::ptr::null_mut();
                     };
                     // SAFETY: `end` is a state allocated just above.
@@ -448,8 +474,13 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             }
             // A bracket: an opening state, the operand, and the closing
             // state that pairs with it.
-            NFA_COMPOSING | NFA_MOPEN..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN => {
-                let mclose = closing_bracket(item);
+            Ok(open)
+                if open == NfaOp::Composing
+                    || open == NfaOp::Nopen
+                    || NfaOp::MOPEN.contains(&open)
+                    || NfaOp::ZOPEN.contains(&open) =>
+            {
+                let mclose = closing_bracket(open);
                 // An empty stack means an empty group, `\(\)`.
                 let inner = if stack.frags.is_empty() {
                     None
@@ -463,14 +494,15 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
                 let Some(s) = state(item, start, core::ptr::null_mut()) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s1) = state(mclose, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                let Some(s1) = state(mclose.code(), core::ptr::null_mut(), core::ptr::null_mut())
+                else {
                     return core::ptr::null_mut();
                 };
                 match inner {
                     None => patch(list1(out_edge(s)), s1),
                     Some(e) => {
                         patch(e.out, s1);
-                        if item == NFA_COMPOSING {
+                        if open == NfaOp::Composing {
                             // The matcher reaches the group's end through
                             // `out1`, so that edge has to be wired too.
                             patch(list1(out1_edge(s)), s1);
@@ -481,11 +513,15 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
             }
             // A back-reference matches a run whose length is only known at
             // match time, so an `NFA_SKIP` follows it to consume the rest.
-            NFA_BACKREF1..=NFA_ZREF9 => {
+            Ok(reference) if reference.is_reference() => {
                 let Some(s) = state(item, core::ptr::null_mut(), core::ptr::null_mut()) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s1) = state(NFA_SKIP, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                let Some(s1) = state(
+                    NfaOp::Skip.code(),
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                ) else {
                     return core::ptr::null_mut();
                 };
                 patch(list1(out_edge(s)), s1);
@@ -534,7 +570,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
     // SAFETY: `istate` is below `nstate`, checked just above.
     let matchstate = unsafe { state_ptr.get().offset(istate.get() as isize) };
     istate.set(istate.get() + 1);
-    unsafe { (*matchstate).c = NFA_MATCH };
+    unsafe { (*matchstate).c = NfaOp::Match.code() };
     unsafe { (*matchstate).out = core::ptr::null_mut() };
     unsafe { (*matchstate).out1 = core::ptr::null_mut() };
     unsafe { (*matchstate).id = 0 };
@@ -544,44 +580,52 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
 
 /// How many states one program item needs.
 fn count_for(item: c_int, operand: c_int) -> c_int {
-    match item {
+    match NfaOp::try_from(item) {
         // Wire-ups: no state of their own.
-        NFA_CONCAT | NFA_RANGE => 0,
-        NFA_OPT_CHARS => operand,
+        Ok(NfaOp::Concat | NfaOp::Range) => 0,
+        Ok(NfaOp::OptChars) => operand,
         // Two states for a bracket pair, a back-reference plus its skip, and
         // a lookaround's start and end — four for `\@>`, which also needs
         // the skip and the `\ze` marker.
-        NFA_PREV_ATOM_LIKE_PATTERN => 4,
-        NFA_PREV_ATOM_NO_WIDTH
-        | NFA_PREV_ATOM_NO_WIDTH_NEG
-        | NFA_PREV_ATOM_JUST_BEFORE
-        | NFA_PREV_ATOM_JUST_BEFORE_NEG => 2,
-        NFA_COMPOSING | NFA_MOPEN..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_NOPEN => 2,
-        NFA_BACKREF1..=NFA_ZREF9 => 2,
+        Ok(NfaOp::PrevAtomLikePattern) => 4,
+        Ok(
+            NfaOp::PrevAtomNoWidth
+            | NfaOp::PrevAtomNoWidthNeg
+            | NfaOp::PrevAtomJustBefore
+            | NfaOp::PrevAtomJustBeforeNeg
+            | NfaOp::Composing
+            | NfaOp::Nopen,
+        ) => 2,
+        Ok(op) if NfaOp::MOPEN.contains(&op) || NfaOp::ZOPEN.contains(&op) || op.is_reference() => {
+            2
+        }
         _ => 1,
     }
 }
 
 /// The `NFA_START_*`/`NFA_END_*` pair one lookaround operator compiles to.
-fn lookaround_states(op: c_int) -> (c_int, c_int) {
+fn lookaround_states(op: NfaOp) -> (NfaOp, NfaOp) {
     match op {
-        NFA_PREV_ATOM_NO_WIDTH => (NFA_START_INVISIBLE, NFA_END_INVISIBLE),
-        NFA_PREV_ATOM_NO_WIDTH_NEG => (NFA_START_INVISIBLE_NEG, NFA_END_INVISIBLE_NEG),
-        NFA_PREV_ATOM_JUST_BEFORE => (NFA_START_INVISIBLE_BEFORE, NFA_END_INVISIBLE),
-        NFA_PREV_ATOM_JUST_BEFORE_NEG => (NFA_START_INVISIBLE_BEFORE_NEG, NFA_END_INVISIBLE_NEG),
-        _ => (NFA_START_PATTERN, NFA_END_PATTERN),
+        NfaOp::PrevAtomNoWidth => (NfaOp::StartInvisible, NfaOp::EndInvisible),
+        NfaOp::PrevAtomNoWidthNeg => (NfaOp::StartInvisibleNeg, NfaOp::EndInvisibleNeg),
+        NfaOp::PrevAtomJustBefore => (NfaOp::StartInvisibleBefore, NfaOp::EndInvisible),
+        NfaOp::PrevAtomJustBeforeNeg => (NfaOp::StartInvisibleBeforeNeg, NfaOp::EndInvisibleNeg),
+        _ => (NfaOp::StartPattern, NfaOp::EndPattern),
     }
 }
 
 /// The closing opcode that pairs with an opening bracket.
-fn closing_bracket(mopen: c_int) -> c_int {
-    match mopen {
-        NFA_NOPEN => NFA_NCLOSE,
-        NFA_COMPOSING => NFA_END_COMPOSING,
-        // The `\z(` groups have their own close; the numbered groups are a
-        // fixed distance from theirs.
-        c if (NFA_ZOPEN..=NFA_ZOPEN9).contains(&c) => NFA_ZCLOSE + (c - NFA_ZOPEN),
-        c => c + NSUBEXP as c_int,
+fn closing_bracket(open: NfaOp) -> NfaOp {
+    match open {
+        NfaOp::Nopen => NfaOp::Nclose,
+        NfaOp::Composing => NfaOp::EndComposing,
+        // Both bracket families close with the marker at the same position
+        // in the closing run -- which for the numbered groups is upstream's
+        // "add `NSUBEXP`".
+        _ => match open.index_in(&NfaOp::ZOPEN) {
+            Some(i) => NfaOp::ZCLOSE[i],
+            None => NfaOp::MCLOSE[open.index_in(&NfaOp::MOPEN).expect("an opening bracket")],
+        },
     }
 }
 
@@ -597,13 +641,13 @@ pub(crate) fn nfa_postprocess(prog: *mut nfa_regprog_T) {
     let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
     for i in 0..unsafe { (*prog).nstate } {
         let s = unsafe { states.offset(i as isize) };
-        let c = unsafe { (*s).c };
+        let c = NfaOp::try_from(unsafe { (*s).c });
         if !matches!(
             c,
-            NFA_START_INVISIBLE
-                | NFA_START_INVISIBLE_NEG
-                | NFA_START_INVISIBLE_BEFORE
-                | NFA_START_INVISIBLE_BEFORE_NEG
+            Ok(NfaOp::StartInvisible
+                | NfaOp::StartInvisibleNeg
+                | NfaOp::StartInvisibleBefore
+                | NfaOp::StartInvisibleBeforeNeg)
         ) {
             continue;
         }
@@ -617,7 +661,7 @@ pub(crate) fn nfa_postprocess(prog: *mut nfa_regprog_T) {
             let ch_follows = failure_chance(follows, 0);
             if matches!(
                 c,
-                NFA_START_INVISIBLE_BEFORE | NFA_START_INVISIBLE_BEFORE_NEG
+                Ok(NfaOp::StartInvisibleBefore | NfaOp::StartInvisibleBeforeNeg)
             ) {
                 // A lookbehind of unknown width has to be retried from
                 // every start position, so postpone it unless what

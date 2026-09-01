@@ -20,14 +20,10 @@
 )]
 
 use super::list::{op, out_of, out1_of};
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::regexp::{
-    Capture, NFA_ANY, NFA_ANY_COMPOSING, NFA_COMPOSING, NFA_END_INVISIBLE, NFA_END_INVISIBLE_NEG,
-    NFA_END_PATTERN, NFA_IDENT, NFA_MATCH, NFA_MCLOSE, NFA_NEWL, NFA_NUPPER_IC, NFA_SPLIT,
-    NFA_START_COLL, NFA_START_INVISIBLE, NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_NEG_COLL,
-    NSUBEXP, PimResult, Rex, nfa_pim_T, nfa_state_T, regsub_T,
-};
+use crate::regexp::{Capture, NSUBEXP, PimResult, Rex, nfa_pim_T, nfa_state_T, regsub_T};
 
 /// How far [`match_follows`] follows the machine before giving up.
 const MATCH_FOLLOWS_DEPTH: c_int = 10;
@@ -174,29 +170,44 @@ pub(crate) fn match_follows(startstate: *const nfa_state_T, depth: c_int) -> boo
 
     let mut state = startstate;
     while !state.is_null() {
-        match op(state) {
-            NFA_MATCH
-            | NFA_MCLOSE
-            | NFA_END_INVISIBLE
-            | NFA_END_INVISIBLE_NEG
-            | NFA_END_PATTERN => return true,
-            NFA_SPLIT => {
+        let code = op(state);
+        match NfaOp::try_from(code) {
+            Ok(
+                NfaOp::Match
+                | NfaOp::Mclose
+                | NfaOp::EndInvisible
+                | NfaOp::EndInvisibleNeg
+                | NfaOp::EndPattern,
+            ) => return true,
+            Ok(NfaOp::Split) => {
                 return match_follows(out_of(state), depth + 1)
                     || match_follows(out1_of(state), depth + 1);
             }
             // A lookaround or a grapheme group: what follows it hangs off
             // the end state `out1` points at.
-            NFA_START_INVISIBLE..=NFA_START_INVISIBLE_BEFORE_NEG_FIRST | NFA_COMPOSING => {
+            Ok(
+                NfaOp::StartInvisible
+                | NfaOp::StartInvisibleFirst
+                | NfaOp::StartInvisibleNeg
+                | NfaOp::StartInvisibleNegFirst
+                | NfaOp::StartInvisibleBefore
+                | NfaOp::StartInvisibleBeforeFirst
+                | NfaOp::StartInvisibleBeforeNeg
+                | NfaOp::StartInvisibleBeforeNegFirst
+                | NfaOp::Composing,
+            ) => {
                 state = out_of(out1_of(state));
             }
             // Anything that consumes input means the pattern goes on.
-            NFA_ANY
-            | NFA_ANY_COMPOSING
-            | NFA_IDENT..=NFA_NUPPER_IC
-            | NFA_START_COLL
-            | NFA_START_NEG_COLL
-            | NFA_NEWL => return false,
-            c if c > 0 => return false,
+            Ok(
+                NfaOp::Any
+                | NfaOp::AnyComposing
+                | NfaOp::StartColl
+                | NfaOp::StartNegColl
+                | NfaOp::Newl,
+            ) => return false,
+            Ok(class) if class.is_class() => return false,
+            _ if code > 0 => return false,
             _ => state = out_of(state),
         }
     }

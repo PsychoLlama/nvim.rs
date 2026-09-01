@@ -7,6 +7,7 @@
 use super::list::{op, out_of, out1_of};
 use crate::cstr;
 use crate::guard::Depth;
+use crate::regexp::NfaOp;
 use crate::siemsg;
 use core::ffi::{c_char, c_int, c_ushort};
 
@@ -21,20 +22,10 @@ use crate::mbyte::{
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_ANY, NFA_ANY_COMPOSING,
-    NFA_BACKREF1, NFA_BOF, NFA_BOL, NFA_BOW, NFA_CLASS_ALNUM, NFA_CLASS_ALPHA, NFA_CLASS_BACKSPACE,
-    NFA_CLASS_BLANK, NFA_CLASS_CNTRL, NFA_CLASS_DIGIT, NFA_CLASS_ESCAPE, NFA_CLASS_FNAME,
-    NFA_CLASS_GRAPH, NFA_CLASS_IDENT, NFA_CLASS_KEYWORD, NFA_CLASS_LOWER, NFA_CLASS_PRINT,
-    NFA_CLASS_PUNCT, NFA_CLASS_RETURN, NFA_CLASS_SPACE, NFA_CLASS_TAB, NFA_CLASS_UPPER,
-    NFA_CLASS_XDIGIT, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_COMPOSING, NFA_CURSOR, NFA_EOF, NFA_EOL,
-    NFA_EOW, NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_MATCH,
-    NFA_MCLOSE, NFA_MOPEN, NFA_NCLOSE, NFA_NEWL, NFA_NOPEN, NFA_SPLIT, NFA_START_INVISIBLE,
-    NFA_START_INVISIBLE_BEFORE, NFA_START_INVISIBLE_BEFORE_FIRST, NFA_START_INVISIBLE_BEFORE_NEG,
-    NFA_START_INVISIBLE_BEFORE_NEG_FIRST, NFA_START_PATTERN, NFA_TOO_EXPENSIVE, NFA_VCOL,
-    NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZCLOSE9, NFA_ZREF9, RA_MATCH, Rex, cleanup_subexpr,
-    cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp, nfa_ll_index, nfa_match,
-    nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out, reg_getline,
-    reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, RA_MATCH,
+    Rex, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp,
+    nfa_ll_index, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out,
+    reg_getline, reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
 };
 use crate::types::{Failed, colnr_T, uint8_t};
 
@@ -48,28 +39,28 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
     let ctype = |mask: c_int| unsafe {
         *(*__ctype_b_loc()).offset(c as isize) as c_int & mask as c_ushort as c_int != 0
     };
-    let member = match cls {
-        NFA_CLASS_ALNUM => (1..128).contains(&c) && ctype(_ISalnum as c_int),
-        NFA_CLASS_ALPHA => (1..128).contains(&c) && ctype(_ISalpha as c_int),
-        NFA_CLASS_BLANK => c == b' ' as c_int || c == b'\t' as c_int,
-        NFA_CLASS_CNTRL => (1..=127).contains(&c) && ctype(_IScntrl as c_int),
-        NFA_CLASS_DIGIT => ascii_isdigit(c),
-        NFA_CLASS_GRAPH => (1..=127).contains(&c) && ctype(_ISgraph as c_int),
+    let member = match NfaOp::try_from(cls) {
+        Ok(NfaOp::ClassAlnum) => (1..128).contains(&c) && ctype(_ISalnum as c_int),
+        Ok(NfaOp::ClassAlpha) => (1..128).contains(&c) && ctype(_ISalpha as c_int),
+        Ok(NfaOp::ClassBlank) => c == b' ' as c_int || c == b'\t' as c_int,
+        Ok(NfaOp::ClassCntrl) => (1..=127).contains(&c) && ctype(_IScntrl as c_int),
+        Ok(NfaOp::ClassDigit) => ascii_isdigit(c),
+        Ok(NfaOp::ClassGraph) => (1..=127).contains(&c) && ctype(_ISgraph as c_int),
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
-        NFA_CLASS_LOWER => mb_islower(c) && c != 170 && c != 186,
-        NFA_CLASS_PRINT => unsafe { vim_isprintc(c) },
-        NFA_CLASS_PUNCT => (1..128).contains(&c) && ctype(_ISpunct as c_int),
-        NFA_CLASS_SPACE => (9..=13).contains(&c) || c == b' ' as c_int,
-        NFA_CLASS_UPPER => mb_isupper(c),
-        NFA_CLASS_XDIGIT => ascii_isxdigit(c),
-        NFA_CLASS_TAB => c == b'\t' as c_int,
-        NFA_CLASS_RETURN => c == b'\r' as c_int,
-        NFA_CLASS_BACKSPACE => c == 0x08,
-        NFA_CLASS_ESCAPE => c == ESC,
-        NFA_CLASS_IDENT => unsafe { vim_is_ident_char(c) },
-        NFA_CLASS_KEYWORD => reg_iswordc(rex, c),
-        NFA_CLASS_FNAME => unsafe { vim_isfilec(c) },
+        Ok(NfaOp::ClassLower) => mb_islower(c) && c != 170 && c != 186,
+        Ok(NfaOp::ClassPrint) => unsafe { vim_isprintc(c) },
+        Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ctype(_ISpunct as c_int),
+        Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == b' ' as c_int,
+        Ok(NfaOp::ClassUpper) => mb_isupper(c),
+        Ok(NfaOp::ClassXdigit) => ascii_isxdigit(c),
+        Ok(NfaOp::ClassTab) => c == b'\t' as c_int,
+        Ok(NfaOp::ClassReturn) => c == b'\r' as c_int,
+        Ok(NfaOp::ClassBackspace) => c == 0x08,
+        Ok(NfaOp::ClassEscape) => c == ESC,
+        Ok(NfaOp::ClassIdent) => unsafe { vim_is_ident_char(c) },
+        Ok(NfaOp::ClassKeyword) => reg_iswordc(rex, c),
+        Ok(NfaOp::ClassFname) => unsafe { vim_isfilec(c) },
         _ => {
             siemsg!("E877: (NFA regexp) Invalid character class: {}", cls as i64);
             return Err(Failed);
@@ -212,11 +203,11 @@ pub(crate) fn recursive_regmatch(
     let mut endpos = MatchPos::NOWHERE;
     let mut endposp = core::ptr::null_mut::<MatchPos>();
     if matches!(
-        op(state),
-        NFA_START_INVISIBLE_BEFORE
-            | NFA_START_INVISIBLE_BEFORE_FIRST
-            | NFA_START_INVISIBLE_BEFORE_NEG
-            | NFA_START_INVISIBLE_BEFORE_NEG_FIRST
+        NfaOp::try_from(op(state)),
+        Ok(NfaOp::StartInvisibleBefore
+            | NfaOp::StartInvisibleBeforeFirst
+            | NfaOp::StartInvisibleBeforeNeg
+            | NfaOp::StartInvisibleBeforeNegFirst)
     ) {
         endpos = from;
         endposp = &raw mut endpos;
@@ -319,12 +310,13 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
         return 1;
     }
     // SAFETY: the walk stays inside the program `state` belongs to.
-    match op(state) {
-        NFA_SPLIT => {
+    let code = op(state);
+    match NfaOp::try_from(code) {
+        Ok(NfaOp::Split) => {
             // A split of splits is a long alternation; do not try to
             // reason about it.
-            if unsafe { (*out_of(state)).c } == NFA_SPLIT
-                || unsafe { (*out1_of(state)).c } == NFA_SPLIT
+            if unsafe { (*out_of(state)).c } == NfaOp::Split.code()
+                || unsafe { (*out1_of(state)).c } == NfaOp::Split.code()
             {
                 return 1;
             }
@@ -333,28 +325,46 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
             l.min(r)
         }
         // `.` matches nearly anything.
-        NFA_ANY => 1,
+        Ok(NfaOp::Any) => 1,
         // These match without looking at the input at all.
-        NFA_MATCH | NFA_MCLOSE | NFA_ANY_COMPOSING => 0,
+        Ok(NfaOp::Match | NfaOp::Mclose | NfaOp::AnyComposing) => 0,
         // A lookaround is cheap to *start*.
-        NFA_START_INVISIBLE..=NFA_START_PATTERN => 5,
+        Ok(
+            NfaOp::StartInvisible
+            | NfaOp::StartInvisibleFirst
+            | NfaOp::StartInvisibleNeg
+            | NfaOp::StartInvisibleNegFirst
+            | NfaOp::StartInvisibleBefore
+            | NfaOp::StartInvisibleBeforeFirst
+            | NfaOp::StartInvisibleBeforeNeg
+            | NfaOp::StartInvisibleBeforeNegFirst
+            | NfaOp::StartPattern,
+        ) => 5,
         // A boundary assertion holds in one position out of very many.
-        NFA_BOL | NFA_EOL | NFA_BOF | NFA_EOF | NFA_NEWL => 99,
-        NFA_BOW | NFA_EOW => 90,
+        Ok(NfaOp::Bol | NfaOp::Eol | NfaOp::Bof | NfaOp::Eof | NfaOp::Newl) => 99,
+        Ok(NfaOp::Bow | NfaOp::Eow) => 90,
         // A bracket matches nothing itself: ask what is inside it.
-        NFA_MOPEN..=NFA_ZCLOSE9 | NFA_NOPEN..=NFA_NCLOSE => {
-            failure_chance(out_of(state), depth + 1)
-        }
-        NFA_BACKREF1..=NFA_ZREF9 => 94,
-        NFA_LNUM => 90,
-        NFA_CURSOR | NFA_COL | NFA_VCOL | NFA_MARK => 98,
+        Ok(NfaOp::Nopen | NfaOp::Nclose) => failure_chance(out_of(state), depth + 1),
+        Ok(marker) if marker.is_capture_marker() => failure_chance(out_of(state), depth + 1),
+        Ok(reference) if reference.is_reference() => 94,
+        Ok(NfaOp::Lnum) => 90,
+        Ok(NfaOp::Cursor | NfaOp::Col | NfaOp::Vcol | NfaOp::Mark) => 98,
         // The remaining position assertions: an inequality holds more
         // often than an equality.
-        NFA_LNUM_GT | NFA_LNUM_LT | NFA_COL_GT | NFA_COL_LT | NFA_VCOL_GT | NFA_VCOL_LT
-        | NFA_MARK_GT | NFA_MARK_LT | NFA_VISUAL => 85,
-        NFA_COMPOSING => 95,
+        Ok(
+            NfaOp::LnumGt
+            | NfaOp::LnumLt
+            | NfaOp::ColGt
+            | NfaOp::ColLt
+            | NfaOp::VcolGt
+            | NfaOp::VcolLt
+            | NfaOp::MarkGt
+            | NfaOp::MarkLt
+            | NfaOp::Visual,
+        ) => 85,
+        Ok(NfaOp::Composing) => 95,
         // A literal character.
-        c if c > 0 => 95,
+        _ if code > 0 => 95,
         _ => 50,
     }
 }

@@ -5,6 +5,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use crate::semsg;
 use crate::siemsg;
 use core::ffi::{c_char, c_int};
@@ -15,12 +16,7 @@ use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    NFA_ADD_NL, NFA_ALPHA, NFA_ANY, NFA_BACKREF1, NFA_COMPOSING, NFA_CONCAT, NFA_DIGIT, NFA_FNAME,
-    NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER, NFA_NALPHA, NFA_NDIGIT, NFA_NEWL,
-    NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NOCTAL, NFA_NOPEN, NFA_NUPPER, NFA_NWHITE, NFA_NWORD,
-    NFA_OCTAL, NFA_OR, NFA_PRINT, NFA_SFNAME, NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER,
-    NFA_WHITE, NFA_WORD, RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags,
-    seen_endbrace, unmagic,
+    RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags, seen_endbrace, unmagic,
 };
 use crate::types::NUL;
 
@@ -28,33 +24,33 @@ use crate::types::NUL;
 /// (`classchars` and `nfa_classcodes`) paired them. The `\_x` form of each is
 /// the same opcode with a line break offered as an alternative.
 static CLASS_SHORTHANDS: [(u8, c_int); 27] = [
-    (b'.', NFA_ANY),
-    (b'i', NFA_IDENT),
-    (b'I', NFA_SIDENT),
-    (b'k', NFA_KWORD),
-    (b'K', NFA_SKWORD),
-    (b'f', NFA_FNAME),
-    (b'F', NFA_SFNAME),
-    (b'p', NFA_PRINT),
-    (b'P', NFA_SPRINT),
-    (b's', NFA_WHITE),
-    (b'S', NFA_NWHITE),
-    (b'd', NFA_DIGIT),
-    (b'D', NFA_NDIGIT),
-    (b'x', NFA_HEX),
-    (b'X', NFA_NHEX),
-    (b'o', NFA_OCTAL),
-    (b'O', NFA_NOCTAL),
-    (b'w', NFA_WORD),
-    (b'W', NFA_NWORD),
-    (b'h', NFA_HEAD),
-    (b'H', NFA_NHEAD),
-    (b'a', NFA_ALPHA),
-    (b'A', NFA_NALPHA),
-    (b'l', NFA_LOWER),
-    (b'L', NFA_NLOWER),
-    (b'u', NFA_UPPER),
-    (b'U', NFA_NUPPER),
+    (b'.', NfaOp::Any.code()),
+    (b'i', NfaOp::Ident.code()),
+    (b'I', NfaOp::Sident.code()),
+    (b'k', NfaOp::Kword.code()),
+    (b'K', NfaOp::Skword.code()),
+    (b'f', NfaOp::Fname.code()),
+    (b'F', NfaOp::Sfname.code()),
+    (b'p', NfaOp::Print.code()),
+    (b'P', NfaOp::Sprint.code()),
+    (b's', NfaOp::White.code()),
+    (b'S', NfaOp::Nwhite.code()),
+    (b'd', NfaOp::Digit.code()),
+    (b'D', NfaOp::Ndigit.code()),
+    (b'x', NfaOp::Hex.code()),
+    (b'X', NfaOp::Nhex.code()),
+    (b'o', NfaOp::Octal.code()),
+    (b'O', NfaOp::Noctal.code()),
+    (b'w', NfaOp::Word.code()),
+    (b'W', NfaOp::Nword.code()),
+    (b'h', NfaOp::Head.code()),
+    (b'H', NfaOp::Nhead.code()),
+    (b'a', NfaOp::Alpha.code()),
+    (b'A', NfaOp::Nalpha.code()),
+    (b'l', NfaOp::Lower.code()),
+    (b'L', NfaOp::Nlower.code()),
+    (b'u', NfaOp::Upper.code()),
+    (b'U', NfaOp::Nupper.code()),
 ];
 
 /// Is `c` the magic form of a class shorthand?
@@ -62,12 +58,13 @@ pub(crate) fn is_class_shorthand(c: c_int) -> bool {
     c < 0 && CLASS_SHORTHANDS.iter().any(|(name, _)| magic(*name) == c)
 }
 
-/// One of the class shorthands, with `extra` either 0 or `NFA_ADD_NL`.
+/// One of the class shorthands; `accepts_newline` is the `\\_d` form, which
+/// also matches a line break.
 ///
 /// Reached both from a magic `\d` and from a `\_d`, which is why the lookup
 /// is on the unmagicked character. `atom_start` is where this atom began,
 /// which the `.`-plus-combining-character case needs.
-pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> Parsed {
+pub(crate) fn class_shorthand(c: c_int, accepts_newline: bool) -> Parsed {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
         .find(|(name, _)| *name as c_int == unmagic(c))
@@ -75,7 +72,7 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> Parsed {
         // Reachable two ways: `\_` followed by something that is not a
         // class, and — only in principle — a dispatch that sent a character
         // here that is not one either.
-        if extra == NFA_ADD_NL {
+        if accepts_newline {
             let c = c as i64;
             semsg!("E877: (NFA regexp) Invalid character class: {c}");
             rc_did_emsg.set(true);
@@ -93,9 +90,9 @@ pub(crate) fn class_shorthand(c: c_int, extra: c_int) -> Parsed {
     }
 
     postfix::emit(code);
-    if extra == NFA_ADD_NL {
-        postfix::emit(NFA_NEWL);
-        postfix::emit(NFA_OR);
+    if accepts_newline {
+        postfix::emit_op(NfaOp::Newl);
+        postfix::emit_op(NfaOp::Or);
         regflags.set(regflags.get() | RF_HASNL as u32);
     }
     Ok(())
@@ -108,7 +105,7 @@ pub(crate) fn back_reference(rex: Rex, c: c_int) -> Parsed {
     if !seen_endbrace(refnum + 1) {
         return Err(Rejected);
     }
-    postfix::emit(NFA_BACKREF1 + refnum);
+    postfix::emit_op(NfaOp::backref(refnum + 1));
     rex.set_nfa_has_backref(1);
     Ok(())
 }
@@ -130,11 +127,11 @@ pub(crate) fn previous_substitute() -> Parsed {
         // The join goes after the second and every later character, so
         // the run reads as `a b CONCAT c CONCAT …`.
         if p != sub {
-            postfix::emit(NFA_CONCAT);
+            postfix::emit_op(NfaOp::Concat);
         }
         p = unsafe { p.add(utf_ptr2len(p) as usize) };
     }
-    postfix::emit(NFA_NOPEN);
+    postfix::emit_op(NfaOp::Nopen);
     Ok(())
 }
 
@@ -154,7 +151,7 @@ pub(crate) fn literal(mut c: c_int, atom_start: *mut c_char) -> Parsed {
     loop {
         postfix::emit(c);
         if i > 0 {
-            postfix::emit(NFA_CONCAT);
+            postfix::emit_op(NfaOp::Concat);
         }
         i += utf_char2len(c);
         if i >= plen {
@@ -162,7 +159,7 @@ pub(crate) fn literal(mut c: c_int, atom_start: *mut c_char) -> Parsed {
         }
         c = cursor::char_at(atom_start, i);
     }
-    postfix::emit(NFA_COMPOSING);
+    postfix::emit_op(NfaOp::Composing);
     cursor::seek_to(atom_start.wrapping_offset(plen as isize));
     Ok(())
 }

@@ -14,6 +14,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::regexp::NfaOp;
 use core::ffi::{c_char, c_int};
 
 use super::collection::{Collection, collection};
@@ -25,8 +26,8 @@ use super::parse::nfa_reg;
 use super::{Parsed, Rejected, cursor, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
-    NFA_ADD_NL, NFA_BOL, NFA_BOW, NFA_EOL, NFA_EOW, NFA_NEWL, NL, REG_PAREN, RF_HASNL, Rex, getchr,
-    had_eol, magic, prev_at_start, reg_string, regflags, unmagic,
+    NL, REG_PAREN, RF_HASNL, Rex, getchr, had_eol, magic, prev_at_start, reg_string, regflags,
+    unmagic,
 };
 use crate::semsg;
 use crate::types::NUL;
@@ -75,36 +76,36 @@ pub(crate) fn nfa_regatom(rex: Rex) -> Parsed {
         }
         return match u8::try_from(c) {
             Ok(b'^') => {
-                postfix::emit(NFA_BOL);
+                postfix::emit_op(NfaOp::Bol);
                 Ok(())
             }
             Ok(b'$') => {
-                postfix::emit(NFA_EOL);
+                postfix::emit_op(NfaOp::Eol);
                 had_eol.set(1);
                 Ok(())
             }
-            Ok(b'[') => bracketed(NFA_ADD_NL, atom_start, c),
-            _ => class_shorthand(c, NFA_ADD_NL),
+            Ok(b'[') => bracketed(true, atom_start, c),
+            _ => class_shorthand(c, true),
         };
     }
 
     match c {
         NUL => nul_found(),
         M_CARET => {
-            postfix::emit(NFA_BOL);
+            postfix::emit_op(NfaOp::Bol);
             Ok(())
         }
         M_DOLLAR => {
-            postfix::emit(NFA_EOL);
+            postfix::emit_op(NfaOp::Eol);
             had_eol.set(1);
             Ok(())
         }
         M_LT => {
-            postfix::emit(NFA_BOW);
+            postfix::emit_op(NfaOp::Bow);
             Ok(())
         }
         M_GT => {
-            postfix::emit(NFA_EOW);
+            postfix::emit_op(NfaOp::Eow);
             Ok(())
         }
 
@@ -114,7 +115,7 @@ pub(crate) fn nfa_regatom(rex: Rex) -> Parsed {
             if reg_string.get() != 0 {
                 postfix::emit(NL);
             } else {
-                postfix::emit(NFA_NEWL);
+                postfix::emit_op(NfaOp::Newl);
                 regflags.set(regflags.get() | RF_HASNL as u32);
             }
             Ok(())
@@ -137,10 +138,10 @@ pub(crate) fn nfa_regatom(rex: Rex) -> Parsed {
         M_1..=M_9 => back_reference(rex, c),
         M_Z => z_atom(rex),
         M_PERCENT => percent_atom(rex, save_prev_at_start),
-        M_BRACKET => bracketed(0, atom_start, c),
+        M_BRACKET => bracketed(false, atom_start, c),
 
         // `\d`, `\w`, `\s`, … in their magic form.
-        c if is_class_shorthand(c) => class_shorthand(c, 0),
+        c if is_class_shorthand(c) => class_shorthand(c, false),
 
         _ => literal(c, atom_start),
     }
@@ -155,8 +156,8 @@ fn nul_found() -> Parsed {
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
-fn bracketed(extra: c_int, atom_start: *mut c_char, c: c_int) -> Parsed {
-    match collection(extra, atom_start) {
+fn bracketed(accepts_newline: bool, atom_start: *mut c_char, c: c_int) -> Parsed {
+    match collection(accepts_newline, atom_start) {
         Collection::Done => Ok(()),
         Collection::Failed => Err(Rejected),
         Collection::Literal => literal(c, atom_start),

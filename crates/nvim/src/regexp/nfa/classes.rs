@@ -6,17 +6,14 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::utf_ptr2char;
 use crate::regexp::{
-    NFA_ALPHA, NFA_DIGIT, NFA_FNAME, NFA_HEAD, NFA_HEX, NFA_IDENT, NFA_KWORD, NFA_LOWER,
-    NFA_LOWER_IC, NFA_NALPHA, NFA_NDIGIT, NFA_NHEAD, NFA_NHEX, NFA_NLOWER, NFA_NLOWER_IC,
-    NFA_NOCTAL, NFA_NUPPER, NFA_NUPPER_IC, NFA_NWHITE, NFA_NWORD, NFA_OCTAL, NFA_PRINT, NFA_SFNAME,
-    NFA_SIDENT, NFA_SKWORD, NFA_SPRINT, NFA_UPPER, NFA_UPPER_IC, NFA_WHITE, NFA_WORD, RI_ALPHA,
-    RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex,
+    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex,
 };
 use crate::types::NUL;
 
@@ -58,45 +55,45 @@ fn is_file_char(c: c_int) -> bool {
     unsafe { vim_isfilec(c) }
 }
 
-/// Does the class opcode `c` accept the character `curc` at the input?
+/// Does the class opcode `op` accept the character `curc` at the input?
 ///
 /// The negated forms all also require a character to be there: at the end of
 /// a line there is nothing for `\I` to match.
-pub(crate) fn class_matches(rex: Rex, c: c_int, curc: c_int) -> bool {
-    match c {
-        NFA_IDENT => is_ident_char(curc),
-        NFA_SIDENT => !ascii_isdigit(curc) && is_ident_char(curc),
-        NFA_KWORD => is_word_char(rex),
-        NFA_SKWORD => !ascii_isdigit(curc) && is_word_char(rex),
-        NFA_FNAME => is_file_char(curc),
-        NFA_SFNAME => !ascii_isdigit(curc) && is_file_char(curc),
-        NFA_PRINT => is_printable(rex),
-        NFA_SPRINT => !ascii_isdigit(curc) && is_printable(rex),
-        NFA_WHITE => ascii_iswhite(curc),
-        NFA_NWHITE => curc != NUL && !ascii_iswhite(curc),
-        NFA_DIGIT => ri(curc, RI_DIGIT),
-        NFA_NDIGIT => curc != NUL && !ri(curc, RI_DIGIT),
-        NFA_HEX => ri(curc, RI_HEX),
-        NFA_NHEX => curc != NUL && !ri(curc, RI_HEX),
-        NFA_OCTAL => ri(curc, RI_OCTAL),
-        NFA_NOCTAL => curc != NUL && !ri(curc, RI_OCTAL),
-        NFA_WORD => ri(curc, RI_WORD),
-        NFA_NWORD => curc != NUL && !ri(curc, RI_WORD),
-        NFA_HEAD => ri(curc, RI_HEAD),
-        NFA_NHEAD => curc != NUL && !ri(curc, RI_HEAD),
-        NFA_ALPHA => ri(curc, RI_ALPHA),
-        NFA_NALPHA => curc != NUL && !ri(curc, RI_ALPHA),
-        NFA_LOWER => ri(curc, RI_LOWER),
-        NFA_NLOWER => curc != NUL && !ri(curc, RI_LOWER),
-        NFA_UPPER => ri(curc, RI_UPPER),
-        NFA_NUPPER => curc != NUL && !ri(curc, RI_UPPER),
+pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
+    match op {
+        NfaOp::Ident => is_ident_char(curc),
+        NfaOp::Sident => !ascii_isdigit(curc) && is_ident_char(curc),
+        NfaOp::Kword => is_word_char(rex),
+        NfaOp::Skword => !ascii_isdigit(curc) && is_word_char(rex),
+        NfaOp::Fname => is_file_char(curc),
+        NfaOp::Sfname => !ascii_isdigit(curc) && is_file_char(curc),
+        NfaOp::Print => is_printable(rex),
+        NfaOp::Sprint => !ascii_isdigit(curc) && is_printable(rex),
+        NfaOp::White => ascii_iswhite(curc),
+        NfaOp::Nwhite => curc != NUL && !ascii_iswhite(curc),
+        NfaOp::Digit => ri(curc, RI_DIGIT),
+        NfaOp::Ndigit => curc != NUL && !ri(curc, RI_DIGIT),
+        NfaOp::Hex => ri(curc, RI_HEX),
+        NfaOp::Nhex => curc != NUL && !ri(curc, RI_HEX),
+        NfaOp::Octal => ri(curc, RI_OCTAL),
+        NfaOp::Noctal => curc != NUL && !ri(curc, RI_OCTAL),
+        NfaOp::Word => ri(curc, RI_WORD),
+        NfaOp::Nword => curc != NUL && !ri(curc, RI_WORD),
+        NfaOp::Head => ri(curc, RI_HEAD),
+        NfaOp::Nhead => curc != NUL && !ri(curc, RI_HEAD),
+        NfaOp::Alpha => ri(curc, RI_ALPHA),
+        NfaOp::Nalpha => curc != NUL && !ri(curc, RI_ALPHA),
+        NfaOp::Lower => ri(curc, RI_LOWER),
+        NfaOp::Nlower => curc != NUL && !ri(curc, RI_LOWER),
+        NfaOp::Upper => ri(curc, RI_UPPER),
+        NfaOp::Nupper => curc != NUL && !ri(curc, RI_UPPER),
         // The `_IC` forms are what a `[a-z]` collection recognised as a
         // class compiles to, and they honour 'ignorecase' where the bare
         // `\l`/`\u` do not.
-        NFA_LOWER_IC => lower_ic(rex, curc),
-        NFA_NLOWER_IC => curc != NUL && !lower_ic(rex, curc),
-        NFA_UPPER_IC => upper_ic(rex, curc),
-        NFA_NUPPER_IC => curc != NUL && !upper_ic(rex, curc),
+        NfaOp::LowerIc => lower_ic(rex, curc),
+        NfaOp::NlowerIc => curc != NUL && !lower_ic(rex, curc),
+        NfaOp::UpperIc => upper_ic(rex, curc),
+        NfaOp::NupperIc => curc != NUL && !upper_ic(rex, curc),
         _ => false,
     }
 }

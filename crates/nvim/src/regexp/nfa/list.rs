@@ -23,6 +23,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
@@ -31,10 +32,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
-    NFA_BOF, NFA_BOL, NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE9, NFA_MOPEN,
-    NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE9, NFA_ZEND,
-    NFA_ZOPEN, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP, PimResult, PosKind, Rex, nfa_endp, nfa_ll_index,
-    nfa_pim_T, nfa_state_T, nfa_thread_T, regsub_T, regsubs_T,
+    NSUBEXP, PimResult, PosKind, Rex, nfa_endp, nfa_ll_index, nfa_pim_T, nfa_state_T, nfa_thread_T,
+    regsub_T, regsubs_T,
 };
 use crate::types::NUL;
 
@@ -346,24 +345,42 @@ fn walk(
         (false, off_arg, 0)
     };
 
-    let c = op(state);
+    let c = NfaOp::try_from(op(state));
     // One match rather than `RangeInclusive::contains`, which is a call per
     // range at opt-level 0 and this runs once per `addstate`.
     let transparent = matches!(
         c,
-        NFA_SPLIT
-            | NFA_EMPTY
-            | NFA_MOPEN
-            | NFA_NCLOSE
-            | NFA_ZEND
-            | NFA_MCLOSE..=NFA_MCLOSE9
-            | NFA_ZCLOSE..=NFA_ZCLOSE9
+        Ok(NfaOp::Split
+            | NfaOp::Empty
+            | NfaOp::Mopen
+            | NfaOp::Nclose
+            | NfaOp::Zend
+            | NfaOp::Mclose
+            | NfaOp::Mclose1
+            | NfaOp::Mclose2
+            | NfaOp::Mclose3
+            | NfaOp::Mclose4
+            | NfaOp::Mclose5
+            | NfaOp::Mclose6
+            | NfaOp::Mclose7
+            | NfaOp::Mclose8
+            | NfaOp::Mclose9
+            | NfaOp::Zclose
+            | NfaOp::Zclose1
+            | NfaOp::Zclose2
+            | NfaOp::Zclose3
+            | NfaOp::Zclose4
+            | NfaOp::Zclose5
+            | NfaOp::Zclose6
+            | NfaOp::Zclose7
+            | NfaOp::Zclose8
+            | NfaOp::Zclose9)
     );
 
     if !transparent {
         // `^` and `\%^` in the middle of a line can never match, and a thread
         // sitting on one would only be walked to be thrown away.
-        if matches!(c, NFA_BOL | NFA_BOF) && past_line_start(rex) {
+        if matches!(c, Ok(NfaOp::Bol | NfaOp::Bof)) && past_line_start(rex) {
             return true;
         }
         match place(l, state, subs, pim, add_here, listindex) {
@@ -404,8 +421,8 @@ fn place(
 
     // `NFA_SKIP` counts down the bytes a back-reference still owes, so two
     // threads on it are not the same thread.
-    if seen && c != NFA_SKIP {
-        if !has_backref && pim.is_none() && !l.has_pim && c != NFA_MATCH {
+    if seen && c != NfaOp::Skip.code() {
+        if !has_backref && pim.is_none() && !l.has_pim && c != NfaOp::Match.code() {
             // Without back-references or postponed lookarounds, the state
             // alone identifies the thread. Adding it at the current position
             // is still worth doing when the copy already on the list is
@@ -457,28 +474,32 @@ fn follow(
     depth: c_int,
 ) -> bool {
     let rex = l.rex;
-    let (c, out, out1) = (op(state), out_of(state), out1_of(state));
+    let (c, out, out1) = (NfaOp::try_from(op(state)), out_of(state), out1_of(state));
     match c {
-        NFA_SPLIT => {
+        Ok(NfaOp::Split) => {
             walk(l, out, subs, pim, off_arg, depth + 1)
                 && walk(l, out1, subs, pim, off_arg, depth + 1)
         }
-        NFA_EMPTY | NFA_NOPEN | NFA_NCLOSE => walk(l, out, subs, pim, off_arg, depth + 1),
+        Ok(NfaOp::Empty | NfaOp::Nopen | NfaOp::Nclose) => {
+            walk(l, out, subs, pim, off_arg, depth + 1)
+        }
 
         // A capture opens here.
-        NFA_MOPEN..=NFA_MOPEN9 | NFA_ZOPEN..=NFA_ZOPEN9 | NFA_ZSTART => {
+        Ok(NfaOp::Zstart) => open(l, state, subs, pim, off, off_arg, depth),
+        Ok(marker) if NfaOp::MOPEN.contains(&marker) || NfaOp::ZOPEN.contains(&marker) => {
             open(l, state, subs, pim, off, off_arg, depth)
         }
 
         // The whole match's close, which a `\ze` may already have placed.
-        NFA_MCLOSE if has_zend_set(rex, subs) => walk(l, out, subs, pim, off_arg, depth + 1),
+        Ok(NfaOp::Mclose) if has_zend_set(rex, subs) => walk(l, out, subs, pim, off_arg, depth + 1),
 
         // A capture closes here.
-        NFA_MCLOSE | NFA_MCLOSE1..=NFA_MCLOSE9 | NFA_ZCLOSE..=NFA_ZCLOSE9 | NFA_ZEND => {
+        Ok(NfaOp::Zend) => close(l, state, subs, pim, off, off_arg, depth),
+        Ok(marker) if NfaOp::MCLOSE.contains(&marker) || NfaOp::ZCLOSE.contains(&marker) => {
             close(l, state, subs, pim, off, off_arg, depth)
         }
 
-        // Anything else — including `NFA_MATCH` — ends the walk.
+        // Anything else — including `NfaOp::Match` — ends the walk.
         _ => true,
     }
 }
@@ -489,19 +510,19 @@ fn has_zend_set(rex: Rex, subs: &regsubs_T) -> bool {
 }
 
 /// Which capture set a bracket state records into, and which slot of it.
-fn slot_of(c: c_int, open: bool) -> (usize, bool) {
-    let (first, zfirst, whole) = if open {
-        (NFA_MOPEN, NFA_ZOPEN, NFA_ZSTART)
+fn slot_of(c: NfaOp, open: bool) -> (usize, bool) {
+    let (run, zrun, whole) = if open {
+        (&NfaOp::MOPEN, &NfaOp::ZOPEN, NfaOp::Zstart)
     } else {
-        (NFA_MCLOSE, NFA_ZCLOSE, NFA_ZEND)
+        (&NfaOp::MCLOSE, &NfaOp::ZCLOSE, NfaOp::Zend)
     };
     if c == whole {
         // `\zs` and `\ze` move group 0 rather than a group of their own.
         (0, false)
-    } else if (zfirst..=zfirst + 9).contains(&c) {
-        ((c - zfirst) as usize, true)
+    } else if let Some(slot) = c.index_in(zrun) {
+        (slot, true)
     } else {
-        ((c - first) as usize, false)
+        (c.index_in(run).expect("a capture bracket"), false)
     }
 }
 
@@ -569,7 +590,10 @@ fn open(
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let (c, out) = (op(state), out_of(state));
+    let (c, out) = (
+        NfaOp::try_from(op(state)).expect("a capture bracket"),
+        out_of(state),
+    );
     let (subidx, synt) = slot_of(c, true);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };
@@ -619,7 +643,10 @@ fn close(
 ) -> bool {
     let rex = l.rex;
     let kind = rex.pos_kind();
-    let (c, out) = (op(state), out_of(state));
+    let (c, out) = (
+        NfaOp::try_from(op(state)).expect("a capture bracket"),
+        out_of(state),
+    );
     let (subidx, synt) = slot_of(c, false);
 
     let sub = if synt { &mut subs.synt } else { &mut subs.norm };

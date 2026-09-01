@@ -8,10 +8,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use crate::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
-use crate::regexp::{NFA_END_COMPOSING, Rex, nfa_state_T};
+use crate::regexp::{Rex, nfa_state_T};
 use crate::types::MAX_MCO;
 
 /// Does the grapheme at the input match the group whose first member state
@@ -65,7 +66,7 @@ pub(crate) unsafe fn matches_composing(
     }
 
     // Every mark the group names has to be one of them.
-    while unsafe { (*sta).c } != NFA_END_COMPOSING {
+    while unsafe { (*sta).c } != NfaOp::EndComposing.code() {
         if !marks[..count].contains(unsafe { &(*sta).c }) {
             return false;
         }

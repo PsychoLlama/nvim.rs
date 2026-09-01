@@ -4,6 +4,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::atom::nfa_regatom;
@@ -13,11 +14,8 @@ use crate::ascii::ascii_isdigit;
 use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
 use crate::regexp::{
-    INT32_MAX, NFA_ANY_COMPOSING, NFA_BOF, NFA_COL, NFA_COL_GT, NFA_COL_LT, NFA_CURSOR, NFA_EOF,
-    NFA_LNUM, NFA_LNUM_GT, NFA_LNUM_LT, NFA_MARK, NFA_MARK_GT, NFA_MARK_LT, NFA_NOPEN,
-    NFA_OPT_CHARS, NFA_VCOL, NFA_VCOL_GT, NFA_VCOL_LT, NFA_VISUAL, NFA_ZEND, NFA_ZREF1, NFA_ZSTART,
-    REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs, gethexchrs,
-    getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
+    INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs,
+    gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
 };
 use crate::semsg;
 use crate::types::{MB_MAXBYTES, NUL, colnr_T};
@@ -30,13 +28,13 @@ pub(crate) fn z_atom(rex: Rex) -> Parsed {
     // must reach the default arm rather than alias one of these bytes.
     match u8::try_from(c) {
         Ok(b's') => {
-            postfix::emit(NFA_ZSTART);
+            postfix::emit_op(NfaOp::Zstart);
             if !re_mult_next("\\zs") {
                 return Err(Rejected);
             }
         }
         Ok(b'e') => {
-            postfix::emit(NFA_ZEND);
+            postfix::emit_op(NfaOp::Zend);
             // The match end moves, so the matcher has to keep group 0's
             // end position rather than take it from where it stopped.
             rex.set_nfa_has_zend(1);
@@ -52,7 +50,7 @@ pub(crate) fn z_atom(rex: Rex) -> Parsed {
                 rc_did_emsg.set(true);
                 return Err(Rejected);
             }
-            postfix::emit(NFA_ZREF1 + (c - b'1' as c_int));
+            postfix::emit_op(NfaOp::zref(c - b'0' as c_int));
             re_has_z.set(REX_USE);
         }
         Ok(b'(') => {
@@ -86,11 +84,11 @@ pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> Parsed {
     match u8::try_from(c) {
         Ok(b'(') => {
             nfa_reg(rex, REG_NPAREN)?;
-            postfix::emit(NFA_NOPEN);
+            postfix::emit_op(NfaOp::Nopen);
         }
         Ok(escape @ (b'd' | b'o' | b'x' | b'u' | b'U')) => return character_escape(escape),
-        Ok(b'^') => postfix::emit(NFA_BOF),
-        Ok(b'$') => postfix::emit(NFA_EOF),
+        Ok(b'^') => postfix::emit_op(NfaOp::Bof),
+        Ok(b'$') => postfix::emit_op(NfaOp::Eof),
         Ok(b'#') => {
             // `\%#=1` selects an engine and is only legal at the very start
             // of the pattern, where `vim_regcomp` strips it; getting here
@@ -100,10 +98,10 @@ pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> Parsed {
                 semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
                 return Err(Rejected);
             }
-            postfix::emit(NFA_CURSOR);
+            postfix::emit_op(NfaOp::Cursor);
         }
-        Ok(b'V') => postfix::emit(NFA_VISUAL),
-        Ok(b'C') => postfix::emit(NFA_ANY_COMPOSING),
+        Ok(b'V') => postfix::emit_op(NfaOp::Visual),
+        Ok(b'C') => postfix::emit_op(NfaOp::AnyComposing),
         Ok(b'[') => return optional_sequence(rex),
         _ => return position_atom(c, save_prev_at_start),
     }
@@ -159,9 +157,9 @@ fn optional_sequence(rex: Rex) -> Parsed {
         rc_did_emsg.set(true);
         return Err(Rejected);
     }
-    postfix::emit(NFA_OPT_CHARS);
+    postfix::emit_op(NfaOp::OptChars);
     postfix::emit(n);
-    postfix::emit(NFA_NOPEN);
+    postfix::emit_op(NfaOp::Nopen);
     Ok(())
 }
 
@@ -218,7 +216,12 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
                 if cur {
                     n = cursor_lnum();
                 }
-                postfix::emit(compare(cmp, NFA_LNUM_LT, NFA_LNUM_GT, NFA_LNUM));
+                postfix::emit(compare(
+                    cmp,
+                    NfaOp::LnumLt.code(),
+                    NfaOp::LnumGt.code(),
+                    NfaOp::Lnum.code(),
+                ));
                 // A line assertion matches nothing, so a `^` after it is
                 // still at the start of the pattern.
                 if save_prev_at_start != 0 {
@@ -229,13 +232,23 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
                 if cur {
                     n = cursor_col() + 1;
                 }
-                postfix::emit(compare(cmp, NFA_COL_LT, NFA_COL_GT, NFA_COL));
+                postfix::emit(compare(
+                    cmp,
+                    NfaOp::ColLt.code(),
+                    NfaOp::ColGt.code(),
+                    NfaOp::Col.code(),
+                ));
             }
             _ => {
                 if cur {
                     n = cursor_vcol() + 1;
                 }
-                postfix::emit(compare(cmp, NFA_VCOL_LT, NFA_VCOL_GT, NFA_VCOL));
+                postfix::emit(compare(
+                    cmp,
+                    NfaOp::VcolLt.code(),
+                    NfaOp::VcolGt.code(),
+                    NfaOp::Vcol.code(),
+                ));
                 // A virtual column is bounded by what a byte column can
                 // expand to.
                 limit = INT32_MAX / MB_MAXBYTES as c_int;
@@ -250,7 +263,12 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
     }
 
     if unmagic(c) == b'\'' as c_int && n == 0 {
-        postfix::emit(compare(cmp, NFA_MARK_LT, NFA_MARK_GT, NFA_MARK));
+        postfix::emit(compare(
+            cmp,
+            NfaOp::MarkLt.code(),
+            NfaOp::MarkGt.code(),
+            NfaOp::Mark.code(),
+        ));
         postfix::emit(getchr());
         return Ok(());
     }

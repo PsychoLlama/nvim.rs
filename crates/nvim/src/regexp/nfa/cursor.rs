@@ -13,7 +13,7 @@ use core::ffi::{c_char, c_int};
 
 use super::compile::nfa_recognize_char_class;
 use crate::mbyte::{utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utfc_ptr2len};
-use crate::regexp::{NFA_ADD_NL, pat_seek, regparse, skip_anyof, take_bracketed, take_char_class};
+use crate::regexp::{NfaOp, pat_seek, regparse, skip_anyof, take_bracketed, take_char_class};
 
 /// The cursor, to hand back to the functions here as a saved position.
 pub(crate) fn here() -> *mut c_char {
@@ -93,8 +93,11 @@ pub(crate) fn take_cursor_bracketed(delim: u8) -> c_int {
 
 /// Is the collection between the cursor and `end` one of the character
 /// classes? See [`nfa_recognize_char_class`].
-pub(crate) fn recognize_char_class(end: *mut c_char, extra: c_int) -> c_int {
+pub(crate) fn recognize_char_class(
+    end: *mut c_char,
+    accepts_newline: bool,
+) -> Option<(NfaOp, bool)> {
     // SAFETY: `end` is this collection's closing `]`, found by
     // `collection_end` from the cursor.
-    unsafe { nfa_recognize_char_class(here().cast(), end.cast(), (extra == NFA_ADD_NL) as c_int) }
+    unsafe { nfa_recognize_char_class(here().cast(), end.cast(), accepts_newline) }
 }

@@ -7,16 +7,14 @@
 
 #![forbid(unsafe_code)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::atom::nfa_regatom as regatom;
 use super::{Parsed, Rejected, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
-    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NFA_CONCAT, NFA_EMPTY, NFA_MOPEN,
-    NFA_NOPEN, NFA_OR, NFA_PREV_ATOM_JUST_BEFORE, NFA_PREV_ATOM_JUST_BEFORE_NEG,
-    NFA_PREV_ATOM_LIKE_PATTERN, NFA_PREV_ATOM_NO_WIDTH, NFA_PREV_ATOM_NO_WIDTH_NEG, NFA_QUEST,
-    NFA_QUEST_NONGREEDY, NFA_STAR, NFA_STAR_NONGREEDY, NFA_ZOPEN, NOT_MULTI, NSUBEXP, RE_AUTO,
+    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP, RE_AUTO,
     REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, curchr,
     getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags, parse_state_T, peekchr,
     re_multi_type, read_limits, reg_magic, regflags, regnpar, regnzpar, restore_parse_state,
@@ -72,16 +70,16 @@ fn lookaround() -> Parsed {
     let width = getdecchrs();
     let mut op = unmagic(getchr());
     let code = match op as u8 {
-        b'=' => Some(NFA_PREV_ATOM_NO_WIDTH),
-        b'!' => Some(NFA_PREV_ATOM_NO_WIDTH_NEG),
-        b'>' => Some(NFA_PREV_ATOM_LIKE_PATTERN),
+        b'=' => Some(NfaOp::PrevAtomNoWidth.code()),
+        b'!' => Some(NfaOp::PrevAtomNoWidthNeg.code()),
+        b'>' => Some(NfaOp::PrevAtomLikePattern.code()),
         b'<' => {
             // The message below names whatever followed the `<`, not the
             // `<` itself.
             op = unmagic(getchr());
             match op as u8 {
-                b'=' => Some(NFA_PREV_ATOM_JUST_BEFORE),
-                b'!' => Some(NFA_PREV_ATOM_JUST_BEFORE_NEG),
+                b'=' => Some(NfaOp::PrevAtomJustBefore.code()),
+                b'!' => Some(NfaOp::PrevAtomJustBeforeNeg.code()),
                 _ => None,
             }
         }
@@ -94,8 +92,8 @@ fn lookaround() -> Parsed {
     };
     postfix::emit(code);
     if matches!(
-        code,
-        NFA_PREV_ATOM_JUST_BEFORE | NFA_PREV_ATOM_JUST_BEFORE_NEG
+        NfaOp::try_from(code),
+        Ok(NfaOp::PrevAtomJustBefore | NfaOp::PrevAtomJustBeforeNeg)
     ) {
         postfix::emit(width as c_int);
     }
@@ -137,13 +135,17 @@ fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> R
 
     // `\{}` and `\{,}` are plain stars.
     if minval == 0 && maxval == MAX_LIMIT {
-        postfix::emit(if greedy { NFA_STAR } else { NFA_STAR_NONGREEDY });
+        postfix::emit(if greedy {
+            NfaOp::Star.code()
+        } else {
+            NfaOp::StarNongreedy.code()
+        });
         return Repeat::Emitted;
     }
     // `\{0}` matches nothing at all, so the atom's items go too.
     if maxval == 0 {
         postfix::truncate(atom_start);
-        postfix::emit(NFA_EMPTY);
+        postfix::emit_op(NfaOp::Empty);
         return Repeat::Erased;
     }
     // Under 'regexpengine' = 0 a wide bound is not worth the states; fail
@@ -162,9 +164,9 @@ fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> R
     let mut after_atom = no_state();
     save_parse_state(&mut after_atom);
     let quest = if greedy {
-        NFA_QUEST
+        NfaOp::Quest.code()
     } else {
-        NFA_QUEST_NONGREEDY
+        NfaOp::QuestNongreedy.code()
     };
     let mut i = 0;
     while i < maxval {
@@ -176,7 +178,11 @@ fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> R
         if i + 1 > minval {
             if maxval == MAX_LIMIT {
                 // An open-ended bound: the last copy stands for all of them.
-                postfix::emit(if greedy { NFA_STAR } else { NFA_STAR_NONGREEDY });
+                postfix::emit(if greedy {
+                    NfaOp::Star.code()
+                } else {
+                    NfaOp::StarNongreedy.code()
+                });
             } else {
                 postfix::emit(quest);
             }
@@ -184,7 +190,7 @@ fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> R
         // Nothing to join to for the first copy — and an atom that emitted
         // no items at all leaves nothing to join either.
         if copy_start != atom_start {
-            postfix::emit(NFA_CONCAT);
+            postfix::emit_op(NfaOp::Concat);
         }
         if i + 1 > minval && maxval == MAX_LIMIT {
             break;
@@ -212,19 +218,19 @@ pub(crate) fn nfa_regpiece(rex: Rex) -> Parsed {
     skipchr();
 
     match op {
-        M_STAR => postfix::emit(NFA_STAR),
+        M_STAR => postfix::emit_op(NfaOp::Star),
         // `\+` is "the atom, then the atom starred", which means parsing it
         // a second time.
         M_PLUS => {
             restore_parse_state(&before_atom);
             curchr.set(-1);
             regatom(rex)?;
-            postfix::emit(NFA_STAR);
-            postfix::emit(NFA_CONCAT);
+            postfix::emit_op(NfaOp::Star);
+            postfix::emit_op(NfaOp::Concat);
             skipchr();
         }
         M_AT => lookaround()?,
-        M_QUESTION | M_EQUAL => postfix::emit(NFA_QUEST),
+        M_QUESTION | M_EQUAL => postfix::emit_op(NfaOp::Quest),
         M_BRACE => match counted_repeat(rex, &before_atom, atom_start) {
             Repeat::Emitted => {}
             Repeat::Erased => return Ok(()),
@@ -275,7 +281,7 @@ pub(crate) fn nfa_regconcat(rex: Rex) -> Parsed {
                 if first {
                     first = false;
                 } else {
-                    postfix::emit(NFA_CONCAT);
+                    postfix::emit_op(NfaOp::Concat);
                 }
             }
         }
@@ -302,19 +308,19 @@ pub(crate) fn nfa_regbranch(rex: Rex) -> Parsed {
         // An empty concatenation still has to leave an item behind for the
         // operator that follows to apply to.
         if concat_start == postfix::len() {
-            postfix::emit(NFA_EMPTY);
+            postfix::emit_op(NfaOp::Empty);
         }
-        postfix::emit(NFA_NOPEN);
-        postfix::emit(NFA_PREV_ATOM_NO_WIDTH);
+        postfix::emit_op(NfaOp::Nopen);
+        postfix::emit_op(NfaOp::PrevAtomNoWidth);
         concat_start = postfix::len();
         nfa_regconcat(rex)?;
         if concat_start == postfix::len() {
-            postfix::emit(NFA_EMPTY);
+            postfix::emit_op(NfaOp::Empty);
         }
-        postfix::emit(NFA_CONCAT);
+        postfix::emit_op(NfaOp::Concat);
     }
     if concat_start == postfix::len() {
-        postfix::emit(NFA_EMPTY);
+        postfix::emit_op(NfaOp::Empty);
     }
     Ok(())
 }
@@ -369,7 +375,7 @@ pub(crate) fn nfa_reg(rex: Rex, paren: c_int) -> Parsed {
     while peekchr() == magic(b'|') {
         skipchr();
         nfa_regbranch(rex)?;
-        postfix::emit(NFA_OR);
+        postfix::emit_op(NfaOp::Or);
     }
 
     if paren != REG_NOPAREN {
@@ -393,9 +399,9 @@ pub(crate) fn nfa_reg(rex: Rex, paren: c_int) -> Parsed {
     // the branches emitted.
     if paren == REG_PAREN {
         had_endbrace.with_mut(|seen| seen[parno as usize] = 1);
-        postfix::emit(NFA_MOPEN + parno);
+        postfix::emit_op(NfaOp::mopen(parno));
     } else if paren == REG_ZPAREN {
-        postfix::emit(NFA_ZOPEN + parno);
+        postfix::emit_op(NfaOp::zopen(parno));
     }
     Ok(())
 }
@@ -406,6 +412,6 @@ pub(crate) fn nfa_reg(rex: Rex, paren: c_int) -> Parsed {
 /// `post2nfa` turns into the machine's entry and exit states.
 pub(crate) fn re2post(rex: Rex) -> Parsed {
     nfa_reg(rex, REG_NOPAREN)?;
-    postfix::emit(NFA_MOPEN);
+    postfix::emit_op(NfaOp::Mopen);
     Ok(())
 }

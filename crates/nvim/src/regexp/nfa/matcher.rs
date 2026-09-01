@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use super::list::{ThreadList, addstate, addstate_here};
@@ -22,9 +23,9 @@ use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
 use crate::main::got_int;
 use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
-    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_MOPEN, NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp,
-    nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit,
-    recursive_regmatch, reg_breakcheck, reg_nextline, regsubs_T, skip_to_start,
+    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp, nfa_match,
+    nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, recursive_regmatch,
+    reg_breakcheck, reg_nextline, regsubs_T, skip_to_start,
 };
 use crate::types::NUL;
 
@@ -73,7 +74,7 @@ pub(crate) fn nfa_regmatch(
     // The whole pattern is wrapped in group 0, and when it is the
     // machine's own entry the match's start is recorded here rather
     // than by walking into it.
-    let toplevel = unsafe { (*start).c } == NFA_MOPEN;
+    let toplevel = unsafe { (*start).c } == NfaOp::Mopen.code();
     list[0].id = rex.nfa_listid() + 1;
     let seeded = if toplevel {
         unsafe { record_match_start(rex, m, 0) };
