@@ -17,6 +17,7 @@
 use core::ffi::c_int;
 
 use super::compile::regnext;
+use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
 use super::state::{BT_STATE, BackPos, Braces, BtState, RegStack, capture_slot};
@@ -26,15 +27,22 @@ use crate::message::{iemsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    ADD_NL, BACK, BEHIND, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, EXACTLY, FIRST_NL,
-    LAST_NL, MATCH, MAX_LIMIT, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, PLUS, RA_BREAK,
-    RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE,
-    RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT,
-    RS_ZCLOSE, RS_ZOPEN, Rex, STAR, SUBPAT, ZCLOSE, ZOPEN, bl_maxval, bl_minval, cleanup_subexpr,
+    MAX_LIMIT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH,
+    RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, bl_maxval, bl_minval, cleanup_subexpr,
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture,
     save_subexpr,
 };
 use crate::types::{NUL, int16_t, int64_t, proftime_T, uint8_t};
+
+/// The first code of each run a group number is measured from. These are
+/// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime
+/// expression that nothing folds at opt-level 0.
+const MOPEN: c_int = BtOp::Mopen.code();
+const MCLOSE: c_int = BtOp::Mclose.code();
+const ZOPEN: c_int = BtOp::Zopen.code();
+const ZCLOSE: c_int = BtOp::Zclose.code();
+const BRACE_COMPLEX: c_int = BtOp::BraceComplex.code();
 
 /// The four bytes of a node operand at `off`, big-endian, as the compiler
 /// wrote them.
@@ -45,20 +53,6 @@ pub(crate) unsafe fn operand_u32(p: *const uint8_t, off: usize) -> int64_t {
     // SAFETY: the caller promises the four bytes.
     let b = |i: usize| unsafe { *p.add(off + i) } as int64_t;
     (b(0) << 24) + (b(1) << 16) + (b(2) << 8) + b(3)
-}
-
-const MOPEN_9: c_int = MOPEN + 9;
-const MCLOSE_9: c_int = MCLOSE + 9;
-const ZOPEN_1: c_int = ZOPEN + 1;
-const ZOPEN_9: c_int = ZOPEN + 9;
-const ZCLOSE_1: c_int = ZCLOSE + 1;
-const ZCLOSE_9: c_int = ZCLOSE + 9;
-const BRACE_COMPLEX_9: c_int = BRACE_COMPLEX + 9;
-
-/// Does `op` belong to the `\_x` band, i.e. is it a node that also matches a
-/// line break?
-fn crosses_lines(op: c_int) -> bool {
-    (FIRST_NL..=LAST_NL).contains(&op)
 }
 
 /// Match the program starting at `scan` against `rex.input`.
@@ -133,29 +127,27 @@ unsafe fn walk(
 
             status = RA_CONT;
             let mut next = regnext(scan);
-            let mut op = unsafe { *scan } as c_int;
+            // The `\_x` band is decoded away here, once per node: past the
+            // line break such a node behaves as its plain form.
+            let Ok((op, crosses_lines)) = BtOp::decode(unsafe { *scan }) else {
+                status = RA_FAIL;
+                break;
+            };
 
             // A `\_x` sitting at the end of the line consumes the line
             // break and stays on the same node.
             let at_line_end = rex.byte() as c_int == NUL;
             if !rex.reg_line_lbr()
-                && crosses_lines(op)
+                && crosses_lines
                 && rex.multi()
                 && at_line_end
                 && rex.lnum() <= rex.reg_maxline()
             {
                 reg_nextline(rex);
-            } else if rex.reg_line_lbr()
-                && crosses_lines(op)
-                && rex.byte() as c_int == '\n' as c_int
-            {
+            } else if rex.reg_line_lbr() && crosses_lines && rex.byte() as c_int == '\n' as c_int {
                 // With 'reg_line_lbr' the break is a real newline byte.
                 rex.advance_char();
             } else {
-                // Past the line break, a `\_x` behaves as its plain form.
-                if crosses_lines(op) {
-                    op -= ADD_NL;
-                }
                 let c = rex.char_here();
                 status = match match_one(rex, op, scan, next, c) {
                     Some(status) => status,
@@ -195,7 +187,7 @@ fn push_frame(
     stack: &mut RegStack,
     backpos: &mut BackPos,
     braces: &mut Braces,
-    op: c_int,
+    op: BtOp,
     scan: *mut uint8_t,
     next: &mut *mut uint8_t,
 ) -> c_int {
@@ -205,7 +197,7 @@ fn push_frame(
     match op {
         // A loop's back edge. Coming back to the same node at the same
         // input position means the loop is not making progress.
-        BACK => {
+        BtOp::Back => {
             if backpos.stepped(rex, scan) {
                 RA_CONT
             } else {
@@ -215,26 +207,60 @@ fn push_frame(
 
         // The capture-group boundaries. Each remembers the slot it is
         // about to overwrite so a failure can put it back.
-        MOPEN..=MOPEN_9 => {
+        BtOp::Mopen
+        | BtOp::Mopen1
+        | BtOp::Mopen2
+        | BtOp::Mopen3
+        | BtOp::Mopen4
+        | BtOp::Mopen5
+        | BtOp::Mopen6
+        | BtOp::Mopen7
+        | BtOp::Mopen8
+        | BtOp::Mopen9 => {
             cleanup_subexpr(rex);
-            unsafe { push_capture(rex, stack, RS_MOPEN, scan, op - MOPEN) }
+            unsafe { push_capture(rex, stack, RS_MOPEN, scan, op.code() - MOPEN) }
         }
-        MCLOSE..=MCLOSE_9 => {
+        BtOp::Mclose
+        | BtOp::Mclose1
+        | BtOp::Mclose2
+        | BtOp::Mclose3
+        | BtOp::Mclose4
+        | BtOp::Mclose5
+        | BtOp::Mclose6
+        | BtOp::Mclose7
+        | BtOp::Mclose8
+        | BtOp::Mclose9 => {
             cleanup_subexpr(rex);
-            unsafe { push_capture(rex, stack, RS_MCLOSE, scan, op - MCLOSE) }
+            unsafe { push_capture(rex, stack, RS_MCLOSE, scan, op.code() - MCLOSE) }
         }
-        ZOPEN_1..=ZOPEN_9 => {
+        BtOp::Zopen1
+        | BtOp::Zopen2
+        | BtOp::Zopen3
+        | BtOp::Zopen4
+        | BtOp::Zopen5
+        | BtOp::Zopen6
+        | BtOp::Zopen7
+        | BtOp::Zopen8
+        | BtOp::Zopen9 => {
             cleanup_zsubexpr(rex);
-            unsafe { push_capture(rex, stack, RS_ZOPEN, scan, op - ZOPEN) }
+            unsafe { push_capture(rex, stack, RS_ZOPEN, scan, op.code() - ZOPEN) }
         }
-        ZCLOSE_1..=ZCLOSE_9 => {
+        BtOp::Zclose1
+        | BtOp::Zclose2
+        | BtOp::Zclose3
+        | BtOp::Zclose4
+        | BtOp::Zclose5
+        | BtOp::Zclose6
+        | BtOp::Zclose7
+        | BtOp::Zclose8
+        | BtOp::Zclose9 => {
             cleanup_zsubexpr(rex);
-            unsafe { push_capture(rex, stack, RS_ZCLOSE, scan, op - ZCLOSE) }
+            unsafe { push_capture(rex, stack, RS_ZCLOSE, scan, op.code() - ZCLOSE) }
         }
 
         // `\%(` captures nothing, but still needs a frame so that the
         // unwinder has something to step over.
-        NOPEN | NCLOSE => {
+        BtOp::Nopen | BtOp::Nclose => {
             if stack.push(RS_NOPEN, scan).is_none() {
                 RA_FAIL
             } else {
@@ -244,8 +270,8 @@ fn push_frame(
 
         // The last branch of an alternation needs no frame: there is
         // nothing left to fall back to.
-        BRANCH => {
-            if unsafe { *(*next) } as c_int != BRANCH {
+        BtOp::Branch => {
+            if unsafe { *(*next) } != BtOp::Branch.code() as uint8_t {
                 *next = unsafe { scan.add(3) };
                 RA_CONT
             } else if stack.push(RS_BRANCH, scan).is_none() {
@@ -257,14 +283,16 @@ fn push_frame(
 
         // The bounds of the `{n,m}` that follows, stashed where the node
         // they belong to can find them.
-        BRACE_LIMITS => {
-            let next_op = unsafe { *(*next) } as c_int;
-            if next_op == BRACE_SIMPLE {
+        BtOp::BraceLimits => {
+            let next_op = BtOp::decode(unsafe { *(*next) }).map(|(op, _)| op);
+            if next_op == Ok(BtOp::BraceSimple) {
                 bl_minval.set(unsafe { operand_u32(scan, 3) });
                 bl_maxval.set(unsafe { operand_u32(scan, 7) });
                 RA_CONT
-            } else if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&next_op) {
-                let brace = braces.slot((next_op - BRACE_COMPLEX) as usize);
+            } else if let Ok(next_op) = next_op
+                && let Some(slot) = next_op.index_in(BtOp::BraceComplex)
+            {
+                let brace = braces.slot(slot);
                 brace.min = unsafe { operand_u32(scan, 3) };
                 brace.max = unsafe { operand_u32(scan, 7) };
                 brace.count = 0;
@@ -275,19 +303,34 @@ fn push_frame(
             }
         }
 
-        BRACE_COMPLEX..=BRACE_COMPLEX_9 => unsafe {
-            brace_complex(rex, stack, backpos, braces, op - BRACE_COMPLEX, scan, next)
-        },
+        BtOp::BraceComplex
+        | BtOp::BraceComplex1
+        | BtOp::BraceComplex2
+        | BtOp::BraceComplex3
+        | BtOp::BraceComplex4
+        | BtOp::BraceComplex5
+        | BtOp::BraceComplex6
+        | BtOp::BraceComplex7
+        | BtOp::BraceComplex8
+        | BtOp::BraceComplex9 => {
+            // The slot number is taken before the block so that the call
+            // fits on one line: a wrapped call inside `unsafe` costs a line
+            // of unchecked code each.
+            let slot = op.code() - BRACE_COMPLEX;
+            unsafe { brace_complex(rex, stack, backpos, braces, slot, scan, next) }
+        }
 
-        BRACE_SIMPLE | STAR | PLUS => unsafe { counted_repeat(rex, stack, op, scan) },
+        BtOp::BraceSimple | BtOp::Star | BtOp::Plus => unsafe {
+            counted_repeat(rex, stack, op, scan)
+        },
 
         // `\@=`, `\@!` and `\@>`: run the operand, then decide what its
         // outcome means.
-        NOMATCH | MATCH | SUBPAT => {
+        BtOp::Nomatch | BtOp::Match | BtOp::Subpat => {
             let Some(rp) = stack.push(RS_NOMATCH, scan) else {
                 return RA_FAIL;
             };
-            rp.rs_no = op as int16_t;
+            rp.rs_no = op.code() as int16_t;
             rp.rs_saved = reg_save(rex, backpos);
             *next = unsafe { scan.add(3) };
             RA_CONT
@@ -295,14 +338,14 @@ fn push_frame(
 
         // `\@<=` and `\@<!`: the operand has to match ending here, so the
         // unwinder walks the start position backwards until it does.
-        BEHIND | NOBEHIND => {
+        BtOp::Behind | BtOp::Nobehind => {
             // The capture snapshot rides in front of the frame.
             if !stack.push_behind(RS_BEHIND1, scan) {
                 return RA_FAIL;
             }
             let (rp, bp) = stack.top_behind();
             save_subexpr(rex, bp);
-            rp.rs_no = op as int16_t;
+            rp.rs_no = op.code() as int16_t;
             rp.rs_saved = reg_save(rex, backpos);
             RA_CONT
         }
@@ -395,7 +438,7 @@ unsafe fn brace_complex(
 ///
 /// # Safety
 /// As `push_frame`.
-unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: c_int, scan: *mut uint8_t) -> c_int {
+unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut uint8_t) -> c_int {
     // SAFETY: as `push_frame`.
     let mut rst = regstar_T {
         nextb: NUL,
@@ -407,7 +450,7 @@ unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: c_int, scan: *mut u
     // Knowing the byte the repeat has to stop before lets the unwinder
     // skip positions that cannot possibly continue.
     let next = regnext(scan);
-    if !next.is_null() && unsafe { *next } as c_int == EXACTLY {
+    if !next.is_null() && unsafe { *next } == BtOp::Exactly.code() as uint8_t {
         rst.nextb = unsafe { *next.add(3) } as c_int;
         rst.nextb_ic = if !rex.reg_ic() {
             rst.nextb
@@ -417,8 +460,8 @@ unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: c_int, scan: *mut u
             mb_toupper(rst.nextb)
         };
     }
-    if op != BRACE_SIMPLE {
-        rst.minval = if op == STAR { 0 } else { 1 };
+    if op != BtOp::BraceSimple {
+        rst.minval = if op == BtOp::Star { 0 } else { 1 };
         rst.maxval = MAX_LIMIT as int64_t;
     } else {
         rst.minval = bl_minval.get();

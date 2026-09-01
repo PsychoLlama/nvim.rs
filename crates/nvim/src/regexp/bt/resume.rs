@@ -13,16 +13,16 @@ use core::ffi::{c_char, c_int};
 
 use super::compile::regnext;
 use super::matcher::operand_u32;
+use super::op::BtOp;
 use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
 use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::regexp::{
-    BEHIND, BRANCH, MatchPos, NOBEHIND, NOMATCH, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH,
-    RS_BEHIND1, RS_BEHIND2, RS_BRANCH, RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE,
-    RS_MOPEN, RS_NOMATCH, RS_NOPEN, RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SUBPAT,
-    SavedInput, behind_pos, reg_breakcheck, reg_getline, reg_getline_len, reg_restore, reg_save,
-    regstate_T, restore_subexpr,
+    MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
+    RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, behind_pos, reg_breakcheck,
+    reg_getline, reg_getline_len, reg_restore, reg_save, regstate_T, restore_subexpr,
 };
 use crate::types::{NUL, colnr_T, int64_t, uint8_t};
 
@@ -69,7 +69,7 @@ pub(crate) fn resume(
                     // SAFETY: `scan` is null or a node of the running
                     // program, whose opcode byte and three-byte header are
                     // there to read.
-                    if scan.is_null() || unsafe { **scan } as c_int != BRANCH {
+                    if scan.is_null() || unsafe { **scan } != BtOp::Branch.code() as uint8_t {
                         *status = RA_NOMATCH;
                         stack.pop(scan);
                     } else {
@@ -125,12 +125,16 @@ pub(crate) fn resume(
             // `\@!`. `\@>` keeps whatever the operand consumed.
             RS_NOMATCH => {
                 let no = stack.top().rs_no as c_int;
-                let want = if no == NOMATCH { RA_MATCH } else { RA_NOMATCH };
+                let want = if no == BtOp::Nomatch.code() {
+                    RA_MATCH
+                } else {
+                    RA_NOMATCH
+                };
                 if *status == want {
                     *status = RA_NOMATCH;
                 } else {
                     *status = RA_CONT;
-                    if no != SUBPAT {
+                    if no != BtOp::Subpat.code() {
                         reg_restore(rex, &stack.top().rs_saved, backpos);
                     }
                 }
@@ -219,7 +223,7 @@ unsafe fn behind_step(
     // It matched, and it ended exactly where the look-behind sits.
     if *status == RA_MATCH && rex.is_at(behind_pos.get().pos) {
         behind_pos.set(bp.save_behind);
-        if rp.rs_no as c_int == BEHIND {
+        if rp.rs_no as c_int == BtOp::Behind.code() {
             reg_restore(rex, &bp.save_after, backpos);
         } else {
             // `\@<!` wanted it *not* to match.
@@ -258,7 +262,7 @@ unsafe fn behind_step(
     } else {
         // Nowhere left to look.
         behind_pos.set(bp.save_behind);
-        if rp.rs_no as c_int == NOBEHIND {
+        if rp.rs_no as c_int == BtOp::Nobehind.code() {
             reg_restore(rex, &bp.save_after, backpos);
             *status = RA_MATCH;
         } else if *status == RA_MATCH {

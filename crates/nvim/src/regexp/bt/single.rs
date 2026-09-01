@@ -8,6 +8,7 @@ use crate::cstr;
 use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
+use super::op::BtOp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::main::{curwin, re_extmatch_in};
@@ -19,22 +20,19 @@ use crate::mbyte::{
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{
-    ALPHA, ANY, ANYBUT, ANYOF, BACKREF, BHPOS, BOL, BOW, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
-    FNAME, HEAD, HEX, IDENT, KWORD, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX,
-    NLOWER, NOCTAL, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PRINT, RA_CONT, RA_MATCH, RA_NOMATCH,
-    RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, RI_ALPHA, RI_DIGIT,
-    RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex, SFNAME, SIDENT, SKWORD,
-    SPRINT, UPPER, WHITE, WORD, ZREF, behind_pos, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
+    RA_CONT, RA_MATCH, RA_NOMATCH, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER,
+    RI_OCTAL, RI_UPPER, RI_WORD, Rex, behind_pos, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
     cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len, reg_match_visual,
     reg_nextline, reg_prev_class,
 };
 use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
 
 use crate::winlayer::Win;
-const BACKREF_1: c_int = BACKREF + 1;
-const BACKREF_9: c_int = BACKREF + 9;
-const ZREF_1: c_int = ZREF + 1;
-const ZREF_9: c_int = ZREF + 9;
+
+/// The code each reference run is measured from. `const` items, because
+/// `BtOp::Backref.code()` is a call at opt-level 0.
+const BACKREF: c_int = BtOp::Backref.code();
+const ZREF: c_int = BtOp::Zref.code();
 
 /// Run the opcode `op` if it is one of ours, and say how the match went.
 /// `None` means the opcode belongs to the matcher's own dispatch.
@@ -43,7 +41,7 @@ const ZREF_9: c_int = ZREF + 9;
 /// the node after `scan`, which only `EXACTLY` looks at.
 pub(crate) fn match_one(
     rex: Rex,
-    op: c_int,
+    op: BtOp,
     scan: *mut uint8_t,
     next: *mut uint8_t,
     c: c_int,
@@ -62,28 +60,28 @@ pub(crate) fn match_one(
     let digit_here = || ascii_isdigit(rex.byte() as c_int);
 
     let status = match op {
-        BOL => nomatch_unless(rex.at_bol()),
-        EOL => nomatch_unless(c == NUL),
-        RE_BOF => nomatch_unless(
+        BtOp::Bol => nomatch_unless(rex.at_bol()),
+        BtOp::Eol => nomatch_unless(c == NUL),
+        BtOp::ReBof => nomatch_unless(
             rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() <= 1),
         ),
-        RE_EOF => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
-        CURSOR => nomatch_unless(match cursor_of(rex) {
+        BtOp::ReEof => nomatch_unless(rex.lnum() == rex.reg_maxline() && c == NUL),
+        BtOp::Cursor => nomatch_unless(match cursor_of(rex) {
             Some(cursor) => rex.buf_lnum() == cursor.lnum && rex.col() == cursor.col,
             None => false,
         }),
-        RE_MARK => at_mark(rex, scan),
-        RE_VISUAL => nomatch_unless(reg_match_visual(rex)),
+        BtOp::ReMark => at_mark(rex, scan),
+        BtOp::ReVisual => nomatch_unless(reg_match_visual(rex)),
 
         // `\%23l`, `\%23c`, `\%23v` and their `<`/`>` forms. A line
         // number only means something in a multi-line match.
-        RE_LNUM => nomatch_unless(rex.multi() && re_num_cmp(rex.buf_lnum() as uint32_t, scan)),
-        RE_COL => nomatch_unless(re_num_cmp((rex.col() as uint32_t).wrapping_add(1), scan)),
-        RE_VCOL => nomatch_unless(re_num_cmp(virtual_column(rex).wrapping_add(1), scan)),
+        BtOp::ReLnum => nomatch_unless(rex.multi() && re_num_cmp(rex.buf_lnum() as uint32_t, scan)),
+        BtOp::ReCol => nomatch_unless(re_num_cmp((rex.col() as uint32_t).wrapping_add(1), scan)),
+        BtOp::ReVcol => nomatch_unless(re_num_cmp(virtual_column(rex).wrapping_add(1), scan)),
 
         // `\<` and `\>`: a change of character class, with the classes
         // below 2 (whitespace and punctuation) never starting a word.
-        BOW => {
+        BtOp::Bow => {
             if c == NUL {
                 RA_NOMATCH
             } else {
@@ -91,7 +89,7 @@ pub(crate) fn match_one(
                 nomatch_unless(this > 1 && reg_prev_class(rex) != this)
             }
         }
-        EOW => {
+        BtOp::Eow => {
             if rex.at_bol() {
                 RA_NOMATCH
             } else {
@@ -101,55 +99,71 @@ pub(crate) fn match_one(
             }
         }
 
-        ANY => return take(c != NUL),
-        IDENT => return take(is_ident_char(c)),
-        SIDENT => return take(!digit_here() && is_ident_char(c)),
-        KWORD => return take(rex.iswordp()),
-        SKWORD => return take(!digit_here() && rex.iswordp()),
-        FNAME => return take(is_file_char(c)),
-        SFNAME => return take(!digit_here() && is_file_char(c)),
-        PRINT => return take(is_printable(rex.char_here())),
-        SPRINT => return take(!digit_here() && is_printable(rex.char_here())),
-        WHITE => return take(ascii_iswhite(c)),
-        NWHITE => return take(c != NUL && !ascii_iswhite(c)),
-        DIGIT => return take(ri(RI_DIGIT)),
-        NDIGIT => return take(c != NUL && !ri(RI_DIGIT)),
-        HEX => return take(ri(RI_HEX)),
-        NHEX => return take(c != NUL && !ri(RI_HEX)),
-        OCTAL => return take(ri(RI_OCTAL)),
-        NOCTAL => return take(c != NUL && !ri(RI_OCTAL)),
-        WORD => return take(ri(RI_WORD)),
-        NWORD => return take(c != NUL && !ri(RI_WORD)),
-        HEAD => return take(ri(RI_HEAD)),
-        NHEAD => return take(c != NUL && !ri(RI_HEAD)),
-        ALPHA => return take(ri(RI_ALPHA)),
-        NALPHA => return take(c != NUL && !ri(RI_ALPHA)),
-        LOWER => return take(ri(RI_LOWER)),
-        NLOWER => return take(c != NUL && !ri(RI_LOWER)),
-        UPPER => return take(ri(RI_UPPER)),
-        NUPPER => return take(c != NUL && !ri(RI_UPPER)),
+        BtOp::Any => return take(c != NUL),
+        BtOp::Ident => return take(is_ident_char(c)),
+        BtOp::Sident => return take(!digit_here() && is_ident_char(c)),
+        BtOp::Kword => return take(rex.iswordp()),
+        BtOp::Skword => return take(!digit_here() && rex.iswordp()),
+        BtOp::Fname => return take(is_file_char(c)),
+        BtOp::Sfname => return take(!digit_here() && is_file_char(c)),
+        BtOp::Print => return take(is_printable(rex.char_here())),
+        BtOp::Sprint => return take(!digit_here() && is_printable(rex.char_here())),
+        BtOp::White => return take(ascii_iswhite(c)),
+        BtOp::Nwhite => return take(c != NUL && !ascii_iswhite(c)),
+        BtOp::Digit => return take(ri(RI_DIGIT)),
+        BtOp::Ndigit => return take(c != NUL && !ri(RI_DIGIT)),
+        BtOp::Hex => return take(ri(RI_HEX)),
+        BtOp::Nhex => return take(c != NUL && !ri(RI_HEX)),
+        BtOp::Octal => return take(ri(RI_OCTAL)),
+        BtOp::Noctal => return take(c != NUL && !ri(RI_OCTAL)),
+        BtOp::Word => return take(ri(RI_WORD)),
+        BtOp::Nword => return take(c != NUL && !ri(RI_WORD)),
+        BtOp::Head => return take(ri(RI_HEAD)),
+        BtOp::Nhead => return take(c != NUL && !ri(RI_HEAD)),
+        BtOp::Alpha => return take(ri(RI_ALPHA)),
+        BtOp::Nalpha => return take(c != NUL && !ri(RI_ALPHA)),
+        BtOp::Lower => return take(ri(RI_LOWER)),
+        BtOp::Nlower => return take(c != NUL && !ri(RI_LOWER)),
+        BtOp::Upper => return take(ri(RI_UPPER)),
+        BtOp::Nupper => return take(c != NUL && !ri(RI_UPPER)),
 
-        EXACTLY => exactly(rex, scan, next),
-        ANYOF | ANYBUT => collection(rex, scan, c, op == ANYOF),
-        MULTIBYTECODE => multibyte(rex, scan),
+        BtOp::Exactly => exactly(rex, scan, next),
+        BtOp::Anyof | BtOp::Anybut => collection(rex, scan, c, op == BtOp::Anyof),
+        BtOp::Multibytecode => multibyte(rex, scan),
 
         // `\%C`: swallow any combining characters, matching nothing else.
-        RE_COMPOSING => {
+        BtOp::ReComposing => {
             while utf_iscomposing_legacy(rex.char_here()) {
                 rex.advance(rex.base_len());
             }
             RA_CONT
         }
-        NOTHING => RA_CONT,
+        BtOp::Nothing => RA_CONT,
 
-        BACKREF_1..=BACKREF_9 => back_reference(rex, op - BACKREF),
-        ZREF_1..=ZREF_9 => external_reference(rex, op - ZREF),
+        BtOp::Backref1
+        | BtOp::Backref2
+        | BtOp::Backref3
+        | BtOp::Backref4
+        | BtOp::Backref5
+        | BtOp::Backref6
+        | BtOp::Backref7
+        | BtOp::Backref8
+        | BtOp::Backref9 => back_reference(rex, op.code() - BACKREF),
+        BtOp::Zref1
+        | BtOp::Zref2
+        | BtOp::Zref3
+        | BtOp::Zref4
+        | BtOp::Zref5
+        | BtOp::Zref6
+        | BtOp::Zref7
+        | BtOp::Zref8
+        | BtOp::Zref9 => external_reference(rex, op.code() - ZREF),
 
         // The position a `\@<=` look-behind has to end at.
         // SAFETY: `behind_pos` is this engine's own saved position.
-        BHPOS => nomatch_unless(rex.is_at(behind_pos.get().pos)),
+        BtOp::Bhpos => nomatch_unless(rex.is_at(behind_pos.get().pos)),
 
-        NEWL => {
+        BtOp::Newl => {
             let lbr = rex.reg_line_lbr();
             let at_break = c == NUL && rex.multi() && rex.lnum() <= rex.reg_maxline() && !lbr;
             if !at_break && !(c == '\n' as c_int && lbr) {
@@ -164,7 +178,7 @@ pub(crate) fn match_one(
             }
         }
 
-        END => RA_MATCH,
+        BtOp::End => RA_MATCH,
         _ => return None,
     };
     Some(status)
@@ -308,7 +322,7 @@ fn exactly(rex: Rex, scan: *mut uint8_t, next: *mut uint8_t) -> c_int {
             core::ptr::null_mut::<GraphemeState>(),
         )
     } && !rex.reg_icombine()
-        && unsafe { *next } as c_int != RE_COMPOSING
+        && unsafe { *next } != BtOp::ReComposing.code() as uint8_t
     {
         return RA_NOMATCH;
     }

@@ -6,51 +6,50 @@
 
 use core::ffi::c_int;
 
-use super::compile::{regc, regmbc, regnode, use_multibytecode};
+use super::compile::{regc, regmbc, regnode, regnode_nl, use_multibytecode};
+use super::op::BtOp;
 use crate::main::{e_nopresub, rc_did_emsg};
 use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    ALPHA, ANY, DIGIT, EXACTLY, FNAME, GRAPHEME_STATE_INIT, HASWIDTH, HEAD, HEX, IDENT, KWORD,
-    LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NHEAD, NHEX, NLOWER, NOCTAL, NOT_MULTI, NUPPER, NWHITE,
-    NWORD, OCTAL, PRINT, SFNAME, SIDENT, SIMPLE, SKWORD, SPRINT, UPPER, WHITE, WORD, getchr, magic,
-    one_exactly, peekchr, re_multi_type, reg_prev_sub, regparse, skipchr, ungetchr, unmagic,
+    GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic, one_exactly, peekchr,
+    re_multi_type, reg_prev_sub, regparse, skipchr, ungetchr, unmagic,
 };
 use crate::semsg;
 use crate::types::{GraphemeState, NUL, uint8_t};
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `classcodes`) paired them. The `\_x` form of each is the
-/// same opcode plus `ADD_NL`.
-static CLASS_SHORTHANDS: [(u8, c_int); 27] = [
-    (b'.', ANY),
-    (b'i', IDENT),
-    (b'I', SIDENT),
-    (b'k', KWORD),
-    (b'K', SKWORD),
-    (b'f', FNAME),
-    (b'F', SFNAME),
-    (b'p', PRINT),
-    (b'P', SPRINT),
-    (b's', WHITE),
-    (b'S', NWHITE),
-    (b'd', DIGIT),
-    (b'D', NDIGIT),
-    (b'x', HEX),
-    (b'X', NHEX),
-    (b'o', OCTAL),
-    (b'O', NOCTAL),
-    (b'w', WORD),
-    (b'W', NWORD),
-    (b'h', HEAD),
-    (b'H', NHEAD),
-    (b'a', ALPHA),
-    (b'A', NALPHA),
-    (b'l', LOWER),
-    (b'L', NLOWER),
-    (b'u', UPPER),
-    (b'U', NUPPER),
+/// same opcode with its `\_` form.
+static CLASS_SHORTHANDS: [(u8, BtOp); 27] = [
+    (b'.', BtOp::Any),
+    (b'i', BtOp::Ident),
+    (b'I', BtOp::Sident),
+    (b'k', BtOp::Kword),
+    (b'K', BtOp::Skword),
+    (b'f', BtOp::Fname),
+    (b'F', BtOp::Sfname),
+    (b'p', BtOp::Print),
+    (b'P', BtOp::Sprint),
+    (b's', BtOp::White),
+    (b'S', BtOp::Nwhite),
+    (b'd', BtOp::Digit),
+    (b'D', BtOp::Ndigit),
+    (b'x', BtOp::Hex),
+    (b'X', BtOp::Nhex),
+    (b'o', BtOp::Octal),
+    (b'O', BtOp::Noctal),
+    (b'w', BtOp::Word),
+    (b'W', BtOp::Nword),
+    (b'h', BtOp::Head),
+    (b'H', BtOp::Nhead),
+    (b'a', BtOp::Alpha),
+    (b'A', BtOp::Nalpha),
+    (b'l', BtOp::Lower),
+    (b'L', BtOp::Nlower),
+    (b'u', BtOp::Upper),
+    (b'U', BtOp::Nupper),
 ];
 
 /// Is `c` the magic form of a class shorthand? Those are the atoms that
@@ -59,11 +58,12 @@ pub(crate) fn is_class_shorthand(c: c_int) -> bool {
     c < 0 && CLASS_SHORTHANDS.iter().any(|(name, _)| magic(*name) == c)
 }
 
-/// One of the class shorthands, with `extra` either 0 or `ADD_NL`.
+/// One of the class shorthands. `crosses_lines` is the `\_d` form, which
+/// also matches a line break.
 ///
 /// Reached both from a magic `\d` and from a `\_d`, which is why the lookup
 /// is on the unmagicked character.
-pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, extra: c_int) -> *mut uint8_t {
+pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, crosses_lines: bool) -> *mut uint8_t {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
         .find(|(name, _)| *name as c_int == unmagic(c))
@@ -81,7 +81,7 @@ pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, extra: c_int) -> *mut
         return multibyte_node(flagp, getchr());
     }
 
-    let ret = regnode(code + extra);
+    let ret = regnode_nl(code, crosses_lines);
     *flagp |= HASWIDTH | SIMPLE;
     ret
 }
@@ -89,7 +89,7 @@ pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, extra: c_int) -> *mut
 /// A single character that has to be matched as a whole rather than as
 /// bytes, because a multi may follow it or it can carry combining marks.
 fn multibyte_node(flagp: &mut c_int, c: c_int) -> *mut uint8_t {
-    let ret = regnode(MULTIBYTECODE);
+    let ret = regnode(BtOp::Multibytecode);
     regmbc(c);
     *flagp |= HASWIDTH | SIMPLE;
     ret
@@ -106,7 +106,7 @@ pub(crate) fn literal_run(flagp: &mut c_int, mut c: c_int) -> *mut uint8_t {
         return multibyte_node(flagp, c);
     }
 
-    let ret = regnode(EXACTLY);
+    let ret = regnode(BtOp::Exactly);
     let mut len = 0;
     // A negative `c` is a metacharacter, which only the first iteration may
     // take (as a literal): stopping before one is what leaves it for the
@@ -157,7 +157,7 @@ pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }
-    let ret = regnode(EXACTLY);
+    let ret = regnode(BtOp::Exactly);
     let mut end = sub;
     while unsafe { *end } as c_int != NUL {
         regc(unsafe { *end } as c_int);

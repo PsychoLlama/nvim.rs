@@ -348,8 +348,7 @@ pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, 
     // SAFETY: the caller's window and search state.
     let mut walk = unsafe { ShlWalk::new(wp.raw(), search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
-        if shl.rm.regprog.is_null() || shl.lnum != 0 || unsafe { re_multiline(shl.rm.regprog) } == 0
-        {
+        if shl.rm.regprog.is_null() || shl.lnum != 0 || !unsafe { re_multiline(shl.rm.regprog) } {
             continue;
         }
 

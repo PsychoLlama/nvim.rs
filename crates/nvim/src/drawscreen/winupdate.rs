@@ -368,7 +368,7 @@ unsafe fn find_changed_lines(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
         // solution: redraw every visible line above the change.
         let regprog = SearchHl::current().regprog();
         rg.top_to_mod = if !regprog.is_null() {
-            unsafe { re_multiline(regprog) != 0 }
+            unsafe { re_multiline(regprog) }
         } else {
             false
         };
@@ -376,7 +376,7 @@ unsafe fn find_changed_lines(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
             let mut cur = win.w_match_head;
             while !cur.is_null() {
                 if !unsafe { (*cur).mit_match.regprog }.is_null()
-                    && unsafe { re_multiline((*cur).mit_match.regprog) } != 0
+                    && unsafe { re_multiline((*cur).mit_match.regprog) }
                 {
                     rg.top_to_mod = true;
                     break;

@@ -9,16 +9,15 @@ use core::ffi::c_int;
 
 use super::atom::{denied_in_optional_sequence, regatom};
 use super::compile::{regc, regmbc, regnext, regnode, regnr, regtail, use_multibytecode};
+use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
 use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
 use crate::regexp::{
-    BRANCH, CURSOR, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MCLOSE, MOPEN,
-    MULTIBYTECODE, NOTHING, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL,
-    RE_VISUAL, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, SIMPLE, SPSTART, ZREF, at_start,
-    getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix, one_exactly, pat_byte, re_has_z,
-    re_mult_next, reg_toolong, ungetchr, unmagic,
+    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
+    Rex, SIMPLE, SPSTART, at_start, getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix,
+    one_exactly, pat_byte, re_has_z, re_mult_next, reg_toolong, ungetchr, unmagic,
 };
 use crate::semsg;
 use crate::types::{NUL, colnr_T, int64_t, uint8_t, uint32_t};
@@ -53,14 +52,14 @@ pub(crate) fn z_atom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
                 rc_did_emsg.set(true);
                 return core::ptr::null_mut();
             }
-            let ret = regnode(ZREF + (c - b'0') as c_int);
+            let ret = regnode(BtOp::ZREF[usize::from(c - b'0')]);
             re_has_z.set(REX_USE);
             ret
         }
         // `\zs`/`\ze` move the reported match start/end without consuming
         // anything, so they are the group-0 open and close nodes.
         b's' => {
-            let ret = regnode(MOPEN);
+            let ret = regnode(BtOp::Mopen);
             if re_mult_next("\\zs") {
                 ret
             } else {
@@ -68,7 +67,7 @@ pub(crate) fn z_atom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
             }
         }
         b'e' => {
-            let ret = regnode(MCLOSE);
+            let ret = regnode(BtOp::Mclose);
             if re_mult_next("\\ze") {
                 ret
             } else {
@@ -102,8 +101,8 @@ pub(crate) fn percent_atom(rex: Rex, flagp: &mut c_int, save_prev_at_start: c_in
             }
             ret
         }
-        b'^' => regnode(RE_BOF),
-        b'$' => regnode(RE_EOF),
+        b'^' => regnode(BtOp::ReBof),
+        b'$' => regnode(BtOp::ReEof),
         b'#' => {
             // `\%#=1` selects an engine and is only legal at the very start
             // of the pattern, where `vim_regcomp` strips it; getting here
@@ -113,10 +112,10 @@ pub(crate) fn percent_atom(rex: Rex, flagp: &mut c_int, save_prev_at_start: c_in
                 semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
                 return core::ptr::null_mut();
             }
-            regnode(CURSOR)
+            regnode(BtOp::Cursor)
         }
-        b'V' => regnode(RE_VISUAL),
-        b'C' => regnode(RE_COMPOSING),
+        b'V' => regnode(BtOp::ReVisual),
+        b'C' => regnode(BtOp::ReComposing),
         b'[' => optional_sequence(rex, flagp),
         b'd' | b'o' | b'x' | b'u' | b'U' => character_escape(flagp, c),
         _ => position_atom(c, save_prev_at_start),
@@ -147,7 +146,7 @@ fn optional_sequence(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
             rc_did_emsg.set(true);
             return core::ptr::null_mut();
         }
-        let br = regnode(BRANCH);
+        let br = regnode(BtOp::Branch);
         if ret.is_null() {
             ret = br;
         } else {
@@ -174,8 +173,8 @@ fn optional_sequence(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         return core::ptr::null_mut();
     }
 
-    let lastbranch = regnode(BRANCH);
-    let mut br = regnode(NOTHING);
+    let lastbranch = regnode(BtOp::Branch);
+    let mut br = regnode(BtOp::Nothing);
     if ret != JUST_CALC_SIZE {
         regtail(lastnode, br);
         regtail(lastbranch, br);
@@ -185,7 +184,7 @@ fn optional_sequence(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         // SAFETY: `br` walks nodes of the program just written; stepping
         // three bytes past a branch lands on its operand.
         while br != lastnode {
-            if unsafe { *br } as c_int == BRANCH {
+            if unsafe { *br } == BtOp::Branch.code() as uint8_t {
                 regtail(br, lastbranch);
                 if reg_toolong.get() != 0 {
                     return core::ptr::null_mut();
@@ -219,9 +218,9 @@ fn character_escape(flagp: &mut c_int, c: c_int) -> *mut uint8_t {
     }
     let i = i as c_int;
     let ret = if use_multibytecode(i) {
-        regnode(MULTIBYTECODE)
+        regnode(BtOp::Multibytecode)
     } else {
-        regnode(EXACTLY)
+        regnode(BtOp::Exactly)
     };
     // A NUL in the pattern stands for a newline: the program is a C string,
     // so it cannot hold a NUL byte.
@@ -278,7 +277,7 @@ fn compare_atom(first: c_int, save_prev_at_start: c_int) -> Option<*mut uint8_t>
     if unmagic(c) == b'\'' as c_int && n == 0 {
         // `\%'m`: the position of mark m.
         let c = getchr();
-        let ret = regnode(RE_MARK);
+        let ret = regnode(BtOp::ReMark);
         regc(c);
         regc(cmp);
         return Some(ret);
@@ -298,7 +297,7 @@ fn compare_atom(first: c_int, save_prev_at_start: c_int) -> Option<*mut uint8_t>
             if cur {
                 n = cursor_value(b'l');
             }
-            let ret = regnode(RE_LNUM);
+            let ret = regnode(BtOp::ReLnum);
             // A line assertion matches an empty string, so a `^` after it is
             // still at the start of the pattern.
             if save_prev_at_start != 0 {
@@ -310,13 +309,13 @@ fn compare_atom(first: c_int, save_prev_at_start: c_int) -> Option<*mut uint8_t>
             if cur {
                 n = cursor_value(b'c');
             }
-            regnode(RE_COL)
+            regnode(BtOp::ReCol)
         }
         _ => {
             if cur {
                 n = cursor_value(b'v');
             }
-            regnode(RE_VCOL)
+            regnode(BtOp::ReVcol)
         }
     };
     regnr(n);

@@ -191,8 +191,8 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> Option<CharClass> 
     Some(CHAR_CLASS_TAB[i].1)
 }
 
-pub unsafe fn re_multiline(prog: *const regprog_T) -> c_int {
-    (unsafe { (*prog).regflags } & RF_HASNL as u32) as c_int
+pub unsafe fn re_multiline(prog: *const regprog_T) -> bool {
+    (unsafe { (*prog).regflags } & RF_HASNL as u32) != 0
 }
 
 /// Recognise the one other shape a `[]` collection can bracket: an

@@ -17,16 +17,17 @@
 use core::ffi::{c_int, c_uint};
 use core::mem::offset_of;
 
+use super::op::BtOp;
 use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    BACK, BRACE_COMPLEX, BRANCH, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC,
-    RE_STRICT, RE_STRING, REX_SET, Rex, bt_regprog_T, had_endbrace, had_eol, initchr,
-    num_complex_braces, peekchr, re_has_z, re_multi_type, refresh_cpo_flags, reg_magic, reg_strict,
-    reg_string, reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize,
+    JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC, RE_STRICT, RE_STRING, REX_SET, Rex,
+    bt_regprog_T, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
+    re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
+    regflags, regnpar, regnzpar, regparse, regsize,
 };
 use crate::types::{NUL, int64_t, regengine_T, regprog_T, uint8_t, uint32_t};
 
@@ -274,7 +275,13 @@ pub(crate) fn regmbc(c: c_int) {
 
 /// Emit a node with opcode `op` and an unset next-offset, and hand back a
 /// handle to it — or [`JUST_CALC_SIZE`] during the sizing pass.
-pub(crate) fn regnode(op: c_int) -> *mut uint8_t {
+pub(crate) fn regnode(op: BtOp) -> *mut uint8_t {
+    regnode_nl(op, false)
+}
+
+/// [`regnode`], for the class opcodes that have a `\_x` form: with
+/// `crosses_lines` the node also matches a line break.
+pub(crate) fn regnode_nl(op: BtOp, crosses_lines: bool) -> *mut uint8_t {
     let node = regcode.get();
     if sizing() {
         charge(NODE_HDR);
@@ -282,7 +289,7 @@ pub(crate) fn regnode(op: c_int) -> *mut uint8_t {
     }
     // SAFETY: as `regc`, three bytes' worth.
     regcode.set(unsafe { node.add(NODE_HDR) });
-    unsafe { *node = op as uint8_t };
+    unsafe { *node = op.encode(crosses_lines) };
     unsafe { *node.add(1) = NUL as uint8_t };
     unsafe { *node.add(2) = NUL as uint8_t };
     node
@@ -298,9 +305,9 @@ fn put_uint32(p: *mut uint8_t, val: uint32_t) -> *mut uint8_t {
 
 /// Change an already-emitted node's opcode. `[]` uses this to widen an
 /// `ANYOF` into its newline-accepting form once it sees a `\n` inside.
-pub(crate) fn set_opcode(node: *mut uint8_t, op: c_int) {
+pub(crate) fn set_opcode(node: *mut uint8_t, op: BtOp, crosses_lines: bool) {
     // SAFETY: `node` is a node in the program under construction.
-    unsafe { *node = op as uint8_t };
+    unsafe { *node = op.encode(crosses_lines) };
 }
 
 /// Emit a node's 32-bit operand, big-endian.
@@ -324,7 +331,7 @@ pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
     }]));
     if offset == 0 {
         core::ptr::null_mut()
-    } else if unsafe { *p } as c_int == BACK {
+    } else if unsafe { *p } == BtOp::Back.code() as uint8_t {
         unsafe { p.sub(offset) }
     } else {
         unsafe { p.add(offset) }
@@ -349,7 +356,7 @@ pub(crate) fn regtail(p: *mut uint8_t, val: *const uint8_t) {
     }
     // SAFETY: `scan` is a node in the program and `val` another node in the
     // same allocation, so the difference is well defined.
-    let offset = if unsafe { *scan } as c_int == BACK {
+    let offset = if unsafe { *scan } == BtOp::Back.code() as uint8_t {
         unsafe { scan.offset_from(val) }
     } else {
         unsafe { val.offset_from(scan) }
@@ -373,8 +380,10 @@ pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
     }
     // SAFETY: `p` is a node in the program, so its opcode is readable and a
     // node of either kind is followed by its operand.
-    let op = unsafe { *p } as c_int;
-    if op != BRANCH && !(BRACE_COMPLEX..=BRACE_COMPLEX + 9).contains(&op) {
+    let Ok((op, _)) = BtOp::decode(unsafe { *p }) else {
+        return;
+    };
+    if op != BtOp::Branch && !op.is_complex_brace() {
         return;
     }
     regtail(unsafe { p.add(NODE_HDR) }, val);
@@ -385,7 +394,7 @@ pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
 ///
 /// Returns the first byte after the header, which is where the caller writes
 /// the new node's operand.
-fn open_before(op: c_int, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
+fn open_before(op: BtOp, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
     // SAFETY: `opnd` is a node in the program and everything from it to
     // `regcode` was written by this pass; the sizing pass charged `len` extra
     // bytes for this call, so the destination is in the same allocation.
@@ -397,14 +406,14 @@ fn open_before(op: c_int, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
         dst = unsafe { dst.sub(1) };
         unsafe { *dst = *src };
     }
-    unsafe { *opnd = op as uint8_t };
+    unsafe { *opnd = op.code() as uint8_t };
     unsafe { *opnd.add(1) = NUL as uint8_t };
     unsafe { *opnd.add(2) = NUL as uint8_t };
     unsafe { opnd.add(NODE_HDR) }
 }
 
 /// Insert an operand-less node in front of `opnd`.
-pub(crate) fn reginsert(op: c_int, opnd: *mut uint8_t) {
+pub(crate) fn reginsert(op: BtOp, opnd: *mut uint8_t) {
     if sizing() {
         charge(NODE_HDR);
         return;
@@ -413,7 +422,7 @@ pub(crate) fn reginsert(op: c_int, opnd: *mut uint8_t) {
 }
 
 /// Insert a node carrying one 32-bit number in front of `opnd`.
-pub(crate) fn reginsert_nr(op: c_int, val: int64_t, opnd: *mut uint8_t) {
+pub(crate) fn reginsert_nr(op: BtOp, val: int64_t, opnd: *mut uint8_t) {
     if sizing() {
         charge(NODE_HDR + 4);
         return;
@@ -426,7 +435,7 @@ pub(crate) fn reginsert_nr(op: c_int, val: int64_t, opnd: *mut uint8_t) {
 /// Insert a `BRACE_LIMITS`-shaped node — two 32-bit numbers — in front of
 /// `opnd`, and point it at the end of itself so the matcher can find the
 /// braced atom.
-pub(crate) fn reginsert_limits(op: c_int, minval: int64_t, maxval: int64_t, opnd: *mut uint8_t) {
+pub(crate) fn reginsert_limits(op: BtOp, minval: int64_t, maxval: int64_t, opnd: *mut uint8_t) {
     if sizing() {
         charge(NODE_HDR + 8);
         return;

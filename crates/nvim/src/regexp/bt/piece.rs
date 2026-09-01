@@ -18,17 +18,16 @@ use super::compile::{
     BtProg, regc, regcomp_start, reginsert, reginsert_limits, reginsert_nr, regnext, regnode,
     regoptail, regtail,
 };
+use super::op::BtOp;
 use crate::main::{e_null, rc_did_emsg};
 use crate::mbyte::utf_ptr2char;
 use crate::memory::xfree;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, END, EOW,
-    EXACTLY, HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
-    MAGIC_ON, MATCH, MCLOSE, MOPEN, NCLOSE, NOBEHIND, NOMATCH, NOPEN, NOT_MULTI, NOTHING, NSUBEXP,
-    PLUS, RE_BOF, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC, RF_HASNL, RF_ICASE,
-    RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, STAR, SUBPAT, WORST, ZCLOSE, ZOPEN,
+    HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
+    MAGIC_ON, NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC,
+    RF_HASNL, RF_ICASE, RF_ICOMBINE, RF_LOOKBH, RF_NOICASE, Rex, SIMPLE, SPSTART, WORST,
     bt_regengine, curchr, getchr, getdecchrs, gethexchrs, getoctchrs, had_endbrace, had_eol, magic,
     magic_prefix, num_complex_braces, peekchr, re_has_z, re_multi_type, read_limits, reg_magic,
     reg_toolong, regcode, regflags, regnpar, regnzpar, regparse, regsize, skipchr,
@@ -90,27 +89,27 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     match op {
         M_STAR => {
             if flags & SIMPLE != 0 {
-                reginsert(STAR, ret);
+                reginsert(BtOp::Star, ret);
             } else {
                 // BRANCH ret BACK->ret BRANCH NOTHING: enter the loop or
                 // skip it, and loop back after each pass.
-                reginsert(BRANCH, ret);
-                regoptail(ret, regnode(BACK));
+                reginsert(BtOp::Branch, ret);
+                regoptail(ret, regnode(BtOp::Back));
                 regoptail(ret, ret);
-                regtail(ret, regnode(BRANCH));
-                regtail(ret, regnode(NOTHING));
+                regtail(ret, regnode(BtOp::Branch));
+                regtail(ret, regnode(BtOp::Nothing));
             }
         }
         M_PLUS => {
             if flags & SIMPLE != 0 {
-                reginsert(PLUS, ret);
+                reginsert(BtOp::Plus, ret);
             } else {
                 // As `*`, but the first pass is not optional.
-                let next = regnode(BRANCH);
+                let next = regnode(BtOp::Branch);
                 regtail(ret, next);
-                regtail(regnode(BACK), ret);
-                regtail(next, regnode(BRANCH));
-                regtail(ret, regnode(NOTHING));
+                regtail(regnode(BtOp::Back), ret);
+                regtail(next, regnode(BtOp::Branch));
+                regtail(ret, regnode(BtOp::Nothing));
             }
             *flagp = WORST | HASWIDTH | (flags & (HASNL | HASLOOKBH));
         }
@@ -119,26 +118,26 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         M_AT => {
             let mut nr = getdecchrs();
             let lop = match unmagic(getchr()) as u8 {
-                b'=' => MATCH,
-                b'!' => NOMATCH,
-                b'>' => SUBPAT,
+                b'=' => Some(BtOp::Match),
+                b'!' => Some(BtOp::Nomatch),
+                b'>' => Some(BtOp::Subpat),
                 b'<' => match unmagic(getchr()) as u8 {
-                    b'=' => BEHIND,
-                    b'!' => NOBEHIND,
-                    _ => END,
+                    b'=' => Some(BtOp::Behind),
+                    b'!' => Some(BtOp::Nobehind),
+                    _ => None,
                 },
-                _ => END,
+                _ => None,
             };
-            if lop == END {
+            let Some(lop) = lop else {
                 let prefix = magic_prefix();
                 fail!("E59: Invalid character after {prefix}@");
-            }
-            let behind = lop == BEHIND || lop == NOBEHIND;
+            };
+            let behind = lop == BtOp::Behind || lop == BtOp::Nobehind;
             if behind {
-                regtail(ret, regnode(BHPOS));
+                regtail(ret, regnode(BtOp::Bhpos));
                 *flagp |= HASLOOKBH;
             }
-            regtail(ret, regnode(END));
+            regtail(ret, regnode(BtOp::End));
             if behind {
                 // A missing limit reads as -1; the node carries an unsigned
                 // count, and 0 means "no limit given".
@@ -150,9 +149,9 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
         }
         M_QUESTION | M_EQUAL => {
             // BRANCH ret BRANCH NOTHING: take the atom or step over it.
-            reginsert(BRANCH, ret);
-            regtail(ret, regnode(BRANCH));
-            let next = regnode(NOTHING);
+            reginsert(BtOp::Branch, ret);
+            regtail(ret, regnode(BtOp::Branch));
+            let next = regnode(BtOp::Nothing);
             regtail(ret, next);
             regoptail(ret, next);
         }
@@ -162,8 +161,8 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
                 return core::ptr::null_mut();
             }
             if flags & SIMPLE != 0 {
-                reginsert(BRACE_SIMPLE, ret);
-                reginsert_limits(BRACE_LIMITS, minval as int64_t, maxval as int64_t, ret);
+                reginsert(BtOp::BraceSimple, ret);
+                reginsert_limits(BtOp::BraceLimits, minval as int64_t, maxval as int64_t, ret);
             } else {
                 // A complex `{}` needs a counter slot of its own at match
                 // time, and there are only ten.
@@ -171,10 +170,10 @@ pub(crate) fn regpiece(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
                     let prefix = magic_prefix();
                     fail!("E60: Too many complex {prefix}{{...}}s");
                 }
-                reginsert(BRACE_COMPLEX + num_complex_braces.get(), ret);
-                regoptail(ret, regnode(BACK));
+                reginsert(BtOp::BRACE_COMPLEX[slot(num_complex_braces.get())], ret);
+                regoptail(ret, regnode(BtOp::Back));
                 regoptail(ret, ret);
-                reginsert_limits(BRACE_LIMITS, minval as int64_t, maxval as int64_t, ret);
+                reginsert_limits(BtOp::BraceLimits, minval as int64_t, maxval as int64_t, ret);
                 num_complex_braces.set(num_complex_braces.get() + 1);
             }
             if minval > 0 && maxval > 0 {
@@ -263,7 +262,7 @@ pub(crate) fn regconcat(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
 /// An empty concatenation still needs a node for its caller to chain onto.
 fn finish_concat(first: *mut uint8_t) -> *mut uint8_t {
     if first.is_null() {
-        regnode(NOTHING)
+        regnode(BtOp::Nothing)
     } else {
         first
     }
@@ -274,7 +273,7 @@ fn finish_concat(first: *mut uint8_t) -> *mut uint8_t {
 pub(crate) fn regbranch(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     let mut chain: *mut uint8_t = core::ptr::null_mut();
     *flagp = WORST | HASNL;
-    let ret = regnode(BRANCH);
+    let ret = regnode(BtOp::Branch);
 
     loop {
         let mut flags = 0;
@@ -292,11 +291,11 @@ pub(crate) fn regbranch(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
             return ret;
         }
         skipchr();
-        regtail(latest, regnode(END));
+        regtail(latest, regnode(BtOp::End));
         if reg_toolong.get() != 0 {
             return ret;
         }
-        reginsert(MATCH, latest);
+        reginsert(BtOp::Match, latest);
         chain = latest;
     }
 }
@@ -317,7 +316,7 @@ pub(crate) fn reg(rex: Rex, paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
             }
             parno = regnzpar.get();
             regnzpar.set(parno + 1);
-            regnode(ZOPEN + parno)
+            regnode(BtOp::ZOPEN[slot(parno)])
         }
         REG_PAREN => {
             if regnpar.get() >= NSUBEXP as c_int {
@@ -326,9 +325,9 @@ pub(crate) fn reg(rex: Rex, paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
             }
             parno = regnpar.get();
             regnpar.set(parno + 1);
-            regnode(MOPEN + parno)
+            regnode(BtOp::MOPEN[slot(parno)])
         }
-        REG_NPAREN => regnode(NOPEN),
+        REG_NPAREN => regnode(BtOp::Nopen),
         _ => core::ptr::null_mut(),
     };
 
@@ -363,10 +362,10 @@ pub(crate) fn reg(rex: Rex, paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
     // Every branch's tail, and every branch's operand tail, ends at the
     // closing node.
     let ender = regnode(match paren {
-        REG_ZPAREN => ZCLOSE + parno,
-        REG_PAREN => MCLOSE + parno,
-        REG_NPAREN => NCLOSE,
-        _ => END,
+        REG_ZPAREN => BtOp::ZCLOSE[slot(parno)],
+        REG_PAREN => BtOp::MCLOSE[slot(parno)],
+        REG_NPAREN => BtOp::Nclose,
+        _ => BtOp::End,
     });
     regtail(ret, ender);
     let mut br = ret;
@@ -482,26 +481,36 @@ pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut reg
 fn find_shortcuts(prog: BtProg, flags: c_int) {
     // SAFETY: walking the program just written, whose nodes are well formed.
     let mut scan = prog.first_node();
-    if unsafe { *regnext(scan) } as c_int != END {
+    if opcode_at(regnext(scan)) != Some(BtOp::End) {
         return;
     }
     scan = unsafe { scan.add(3) };
 
     // A pattern anchored at the start only has to be tried there.
-    if unsafe { *scan } as c_int == BOL || unsafe { *scan } as c_int == RE_BOF {
+    if matches!(opcode_at(scan), Some(BtOp::Bol | BtOp::ReBof)) {
         prog.set_anchored(true);
         scan = regnext(scan);
     }
 
     // A known first character lets the executor use a memchr-style skip.
-    if unsafe { *scan } as c_int == EXACTLY {
+    let first = opcode_at(scan);
+    if first == Some(BtOp::Exactly) {
         prog.set_regstart(unsafe { utf_ptr2char(scan.add(3).cast()) });
-    } else if [BOW, EOW, NOTHING, MOPEN, NOPEN, MCLOSE, NCLOSE]
-        .contains(&(unsafe { *scan } as c_int))
-    {
+    } else if matches!(
+        first,
+        Some(
+            BtOp::Bow
+                | BtOp::Eow
+                | BtOp::Nothing
+                | BtOp::Mopen
+                | BtOp::Nopen
+                | BtOp::Mclose
+                | BtOp::Nclose
+        )
+    ) {
         // Those all match empty, so look one node further.
         let next = regnext(scan);
-        if unsafe { *next } as c_int == EXACTLY {
+        if opcode_at(next) == Some(BtOp::Exactly) {
             prog.set_regstart(unsafe { utf_ptr2char(next.add(3).cast()) });
         }
     }
@@ -510,15 +519,13 @@ fn find_shortcuts(prog: BtProg, flags: c_int) {
     // branch has to appear somewhere in the line for the line to match.
     // Only sound when the pattern can start anywhere in it, and never
     // across a line break.
-    if (flags & SPSTART != 0
-        || unsafe { *scan } as c_int == BOW
-        || unsafe { *scan } as c_int == EOW)
+    if (flags & SPSTART != 0 || matches!(opcode_at(scan), Some(BtOp::Bow | BtOp::Eow)))
         && flags & HASNL == 0
     {
         let mut longest: *mut uint8_t = core::ptr::null_mut();
         let mut len = 0;
         while !scan.is_null() {
-            if unsafe { *scan } as c_int == EXACTLY {
+            if opcode_at(scan) == Some(BtOp::Exactly) {
                 let scanlen = unsafe { cstr::bytes_at(scan.add(3).cast()) }.len() as c_int;
                 // `>=` rather than `>`: upstream prefers the *last* of
                 // equally long candidates.
@@ -571,4 +578,23 @@ pub(crate) fn coll_get_char() -> c_int {
 pub(crate) unsafe fn bt_regfree(prog: *mut regprog_T) {
     // SAFETY: one `xmalloc` block, with nothing owned inside it.
     unsafe { xfree(prog.cast()) };
+}
+
+/// A capture group or complex-brace number as an index into one of
+/// [`BtOp`]'s runs. The parser has already refused a tenth of either.
+fn slot(number: c_int) -> usize {
+    usize::try_from(number).expect("a group number")
+}
+
+/// The opcode of the node at `p`, or `None` when `p` is null or holds no
+/// opcode.
+///
+/// # Safety
+/// Only called on nodes of a program this module has just written.
+fn opcode_at(p: *const uint8_t) -> Option<BtOp> {
+    if p.is_null() {
+        return None;
+    }
+    // SAFETY: the caller's node, whose opcode byte is readable.
+    BtOp::decode(unsafe { *p }).ok().map(|(op, _)| op)
 }

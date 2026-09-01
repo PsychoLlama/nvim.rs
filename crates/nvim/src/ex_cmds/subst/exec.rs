@@ -386,7 +386,7 @@ unsafe fn is_last_match(st: &Sub) -> bool {
     unsafe {
         *st.sub_firstline.add(st.matchcol as usize) as c_int == NUL
             && st.nmatch <= 1 as c_int
-            && re_multiline(st.regmatch.regprog) == 0
+            && !re_multiline(st.regmatch.regprog)
     }
 }
 

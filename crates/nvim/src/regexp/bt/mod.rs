@@ -18,6 +18,7 @@ mod escape;
 mod exec;
 mod literal;
 mod matcher;
+mod op;
 mod piece;
 mod repeat;
 mod resume;

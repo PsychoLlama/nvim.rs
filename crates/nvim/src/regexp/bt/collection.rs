@@ -10,8 +10,9 @@
 
 use core::ffi::{c_int, c_uint};
 
-use super::compile::{regc, regmbc, regnode, set_opcode};
+use super::compile::{regc, regmbc, regnode_nl, set_opcode};
 use super::equi_class::reg_equi_class;
+use super::op::BtOp;
 use super::piece::coll_get_char;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
@@ -19,11 +20,10 @@ use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
 use crate::os::cshim::__ctype_b_loc;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ADD_NL, ANYBUT, ANYOF, CharClass, ESC, HASNL,
-    HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE,
-    backslash_abbr, pat_byte, pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit,
-    reg_iswordc, reg_magic, reg_strict, regparse, skip_anyof, skipchr, take_bracketed,
-    take_char_class,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, CharClass, ESC, HASNL, HASWIDTH, INT_MAX,
+    JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr, pat_byte,
+    pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic, reg_strict,
+    regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
 };
 use crate::semsg;
 use crate::types::{NUL, uint8_t};
@@ -38,7 +38,7 @@ pub(crate) enum Collection {
 }
 
 /// Parse a collection whose `[` has already been consumed.
-pub(crate) fn collection(rex: Rex, flagp: &mut c_int, extra: c_int) -> Collection {
+pub(crate) fn collection(rex: Rex, flagp: &mut c_int, crosses_lines: bool) -> Collection {
     if !collection_closes() {
         if reg_strict.get() != 0 {
             // Not `magic_prefix`: this one wants the backslash whenever `[`
@@ -59,10 +59,13 @@ pub(crate) fn collection(rex: Rex, flagp: &mut c_int, extra: c_int) -> Collectio
     if negated {
         pat_seek(1);
     }
-    let ret = regnode(if negated { ANYBUT } else { ANYOF } + extra);
+    let ret = regnode_nl(
+        if negated { BtOp::Anybut } else { BtOp::Anyof },
+        crosses_lines,
+    );
     // `[\n]` widens the node itself, but only a plain `ANYOF` — `[^\n]` and
     // `\_[...]` are already what they need to be.
-    let widens_on_nl = !negated && extra == 0;
+    let widens_on_nl = !negated && !crosses_lines;
 
     // A `]` or `-` in the very first position is that character, not the
     // close and not a range.
@@ -202,7 +205,7 @@ fn escaped(
             // A line break is not a member of the set but a widening of the
             // node itself.
             if ret != JUST_CALC_SIZE && widens_on_nl {
-                set_opcode(ret, ANYOF + ADD_NL);
+                set_opcode(ret, BtOp::Anyof, true);
                 *flagp |= HASNL;
             }
             pat_seek(1);

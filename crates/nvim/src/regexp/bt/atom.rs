@@ -13,12 +13,13 @@ use super::collection::{Collection, collection};
 use super::compile::{regc, regnode, seen_endbrace};
 use super::escape::{percent_atom, z_atom};
 use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
+use super::op::BtOp;
 use super::piece::reg;
 use crate::main::rc_did_emsg;
 use crate::regexp::{
-    ADD_NL, BACKREF, BOL, BOW, EOL, EOW, EXACTLY, HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON,
-    NEWL, NL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST, getchr, had_eol, magic, magic_prefix,
-    one_exactly, prev_at_start, reg_magic, reg_string, unmagic,
+    HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON, NL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST,
+    getchr, had_eol, magic, magic_prefix, one_exactly, prev_at_start, reg_magic, reg_string,
+    unmagic,
 };
 use crate::semsg;
 use crate::types::{NUL, uint8_t};
@@ -76,42 +77,42 @@ pub(crate) fn regatom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     if c == M_UNDERSCORE {
         c = unmagic(getchr());
         return match c as u8 {
-            b'^' => regnode(BOL),
+            b'^' => regnode(BtOp::Bol),
             b'$' => {
                 had_eol.set(1);
-                regnode(EOL)
+                regnode(BtOp::Eol)
             }
             _ => {
                 *flagp |= HASNL;
                 if c == b'[' as c_int {
-                    bracketed(rex, flagp, ADD_NL, c)
+                    bracketed(rex, flagp, true, c)
                 } else {
-                    class_shorthand(flagp, c, ADD_NL)
+                    class_shorthand(flagp, c, true)
                 }
             }
         };
     }
 
     match c {
-        M_CARET => regnode(BOL),
+        M_CARET => regnode(BtOp::Bol),
         M_DOLLAR => {
             had_eol.set(1);
-            regnode(EOL)
+            regnode(BtOp::Eol)
         }
-        M_LT => regnode(BOW),
-        M_GT => regnode(EOW),
+        M_LT => regnode(BtOp::Bow),
+        M_GT => regnode(BtOp::Eow),
 
         // `\n` is a line break, except in a string match, where there are no
         // lines and it is just the byte.
         M_N => {
             if reg_string.get() != 0 {
-                let ret = regnode(EXACTLY);
+                let ret = regnode(BtOp::Exactly);
                 regc(NL);
                 regc(NUL);
                 *flagp |= HASWIDTH | SIMPLE;
                 ret
             } else {
-                let ret = regnode(NEWL);
+                let ret = regnode(BtOp::Newl);
                 *flagp |= HASWIDTH | HASNL;
                 ret
             }
@@ -164,15 +165,15 @@ pub(crate) fn regatom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
             if !seen_endbrace(refnum) {
                 return core::ptr::null_mut();
             }
-            regnode(BACKREF + refnum)
+            regnode(BtOp::BACKREF[group_index(refnum)])
         }
 
         M_Z => z_atom(rex, flagp),
         M_PERCENT => percent_atom(rex, flagp, save_prev_at_start),
-        M_BRACKET => bracketed(rex, flagp, 0, c),
+        M_BRACKET => bracketed(rex, flagp, false, c),
 
         // `\d`, `\w`, `\s`, … in their magic form.
-        c if is_class_shorthand(c) => class_shorthand(flagp, c, 0),
+        c if is_class_shorthand(c) => class_shorthand(flagp, c, false),
 
         _ => literal_run(flagp, c),
     }
@@ -181,10 +182,16 @@ pub(crate) fn regatom(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
 /// A `[` that may open a collection. If it does not close, it is an ordinary
 /// character — unless 'regexpengine' strictness is on, where the missing `]`
 /// is an error.
-fn bracketed(rex: Rex, flagp: &mut c_int, extra: c_int, c: c_int) -> *mut uint8_t {
-    match collection(rex, flagp, extra) {
+fn bracketed(rex: Rex, flagp: &mut c_int, crosses_lines: bool, c: c_int) -> *mut uint8_t {
+    match collection(rex, flagp, crosses_lines) {
         Collection::Node(node) => node,
         Collection::Failed => core::ptr::null_mut(),
         Collection::Literal => literal_run(flagp, c),
     }
+}
+
+/// A `\\1`..`\\9` reference number as an index into [`BtOp::BACKREF`]. The
+/// parser only ever passes one through `M_1..=M_9`.
+fn group_index(refnum: c_int) -> usize {
+    usize::try_from(refnum).expect("a back-reference number")
 }

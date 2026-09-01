@@ -4,14 +4,14 @@
 //! matches exactly one character and cannot backtrack into itself can be run
 //! as a counted loop instead of as a chain of program nodes.
 //!
-//! Every opcode with an `ADD_NL` variant sits `ADD_NL` above its plain form,
-//! so the `FIRST_NL..=LAST_NL` band is exactly the set of `\_x` nodes — the
-//! ones allowed to count a line break as one of their matches.
+//! A `\_x` node is the one allowed to count a line break as one of its
+//! matches, which [`BtOp::decode`] answers alongside the opcode.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
 
+use super::op::BtOp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordp_buf};
 use crate::main::{e_re_corr, got_int};
@@ -19,11 +19,8 @@ use crate::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len}
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, FIRST_NL, FNAME, HEAD, HEX, IDENT, KWORD,
-    LAST_NL, LOWER, MULTIBYTECODE, NALPHA, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOCTAL, NUPPER,
-    NWHITE, NWORD, OCTAL, PRINT, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL,
-    RI_UPPER, RI_WHITE, RI_WORD, Rex, SFNAME, SIDENT, SKWORD, SPRINT, UPPER, WHITE, WORD, cstrchr,
-    reg_nextline,
+    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
+    Rex, cstrchr, reg_nextline,
 };
 use crate::types::{NUL, int64_t, uint8_t};
 
@@ -44,14 +41,17 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
     // the operand three bytes in are readable; `scan` walks the current line,
     // which is NUL-terminated, and every advance below is by the length of
     // the character it just accepted.
-    let op = unsafe { *p } as c_int;
+    let opcode = BtOp::decode(unsafe { *p });
     let opnd = unsafe { p.add(3) };
     let mut scan = rex.input();
     let mut count: int64_t = 0;
 
     // Only a `\_x` node counts a line break, and only in a multi-line
     // match where the line break is not already part of the text.
-    let crosses_lines = (FIRST_NL..=LAST_NL).contains(&op);
+    let Ok((op, crosses_lines)) = opcode else {
+        iemsg(gettext(e_re_corr));
+        return 0;
+    };
     let next_line = || {
         if !rex.multi() || !crosses_lines || rex.lnum() > rex.reg_maxline() || rex.reg_line_lbr() {
             return Line::End;
@@ -104,13 +104,13 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
     // `\i`/`\I` and friends that means digits are members after all; for
     // `[]` it means a hit rather than a miss is what continues the count.
     let positive = matches!(
-        op - if crosses_lines { ADD_NL } else { 0 },
-        IDENT | KWORD | FNAME | PRINT | ANYOF
+        op,
+        BtOp::Ident | BtOp::Kword | BtOp::Fname | BtOp::Print | BtOp::Anyof
     );
 
     match op {
         // `.` and `\_.`: every character, and for `\_.` every line.
-        _ if is(op, ANY) => {
+        BtOp::Any => {
             'any: while count < maxcount {
                 while unsafe { *scan } as c_int != NUL && count < maxcount {
                     count += 1;
@@ -136,7 +136,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         }
 
         // `\i`/`\I`: 'isident' characters.
-        _ if is(op, IDENT) || is(op, SIDENT) => count_class!(false, |scan: *mut uint8_t| {
+        BtOp::Ident | BtOp::Sident => count_class!(false, |scan: *mut uint8_t| {
             unsafe {
                 vim_is_ident_char(utf_ptr2char(scan.cast()))
                     && (positive || !ascii_isdigit(*scan as c_int))
@@ -144,7 +144,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         }),
 
         // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
-        _ if is(op, KWORD) || is(op, SKWORD) => count_class!(false, |scan: *mut uint8_t| {
+        BtOp::Kword | BtOp::Skword => count_class!(false, |scan: *mut uint8_t| {
             unsafe {
                 vim_iswordp_buf(scan.cast(), rex.reg_buf())
                     && (positive || !ascii_isdigit(*scan as c_int))
@@ -152,7 +152,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         }),
 
         // `\f`/`\F`: 'isfname' characters.
-        _ if is(op, FNAME) || is(op, SFNAME) => count_class!(false, |scan: *mut uint8_t| {
+        BtOp::Fname | BtOp::Sfname => count_class!(false, |scan: *mut uint8_t| {
             unsafe {
                 vim_isfilec(utf_ptr2char(scan.cast()))
                     && (positive || !ascii_isdigit(*scan as c_int))
@@ -161,7 +161,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
 
         // `\p`/`\P`: printable characters. This one tests for the end of
         // the line before the class, where the three above do it after.
-        _ if is(op, PRINT) || is(op, SPRINT) => count_class!(true, |scan: *mut uint8_t| {
+        BtOp::Print | BtOp::Sprint => count_class!(true, |scan: *mut uint8_t| {
             unsafe {
                 vim_isprintc(utf_ptr2char(scan.cast()))
                     && (positive || !ascii_isdigit(*scan as c_int))
@@ -172,7 +172,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // `EXACTLY` that a multi can repeat is single-byte by
         // construction (`use_multibytecode` sends the rest to
         // `MULTIBYTECODE`).
-        EXACTLY => {
+        BtOp::Exactly => {
             if rex.reg_ic() {
                 let upper = mb_toupper(unsafe { *opnd } as c_int);
                 let lower = mb_tolower(unsafe { *opnd } as c_int);
@@ -193,7 +193,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
 
         // One multibyte character, compared as bytes first and by case
         // fold only if the bytes differ.
-        MULTIBYTECODE => {
+        BtOp::Multibytecode => {
             let len = unsafe { utfc_ptr2len(opnd.cast()) };
             if len > 1 {
                 let folded = if rex.reg_ic() {
@@ -218,7 +218,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         }
 
         // A `[]` collection.
-        _ if is(op, ANYOF) || is(op, ANYBUT) => {
+        BtOp::Anyof | BtOp::Anybut => {
             let wanted = c_int::from(positive);
             'coll: while count < maxcount {
                 if unsafe { *scan } as c_int == NUL {
@@ -245,7 +245,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         }
 
         // A line break as an atom of its own.
-        NEWL => {
+        BtOp::Newl => {
             while count < maxcount
                 && ((unsafe { *scan } as c_int == NUL
                     && rex.lnum() <= rex.reg_maxline()
@@ -306,33 +306,28 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
     count as c_int
 }
 
-/// Is `op` `base` or its `\_` twin?
-fn is(op: c_int, base: c_int) -> bool {
-    op == base || op == base + ADD_NL
-}
-
 /// The `RI_*` mask an opcode tests against, and whether it wants a hit or a
 /// miss.
-fn byte_class(op: c_int) -> Option<(c_int, bool)> {
-    let (mask, positive) = match op - if op > NUPPER { ADD_NL } else { 0 } {
-        WHITE => (RI_WHITE, true),
-        NWHITE => (RI_WHITE, false),
-        DIGIT => (RI_DIGIT, true),
-        NDIGIT => (RI_DIGIT, false),
-        HEX => (RI_HEX, true),
-        NHEX => (RI_HEX, false),
-        OCTAL => (RI_OCTAL, true),
-        NOCTAL => (RI_OCTAL, false),
-        WORD => (RI_WORD, true),
-        NWORD => (RI_WORD, false),
-        HEAD => (RI_HEAD, true),
-        NHEAD => (RI_HEAD, false),
-        ALPHA => (RI_ALPHA, true),
-        NALPHA => (RI_ALPHA, false),
-        LOWER => (RI_LOWER, true),
-        NLOWER => (RI_LOWER, false),
-        UPPER => (RI_UPPER, true),
-        NUPPER => (RI_UPPER, false),
+fn byte_class(op: BtOp) -> Option<(c_int, bool)> {
+    let (mask, positive) = match op {
+        BtOp::White => (RI_WHITE, true),
+        BtOp::Nwhite => (RI_WHITE, false),
+        BtOp::Digit => (RI_DIGIT, true),
+        BtOp::Ndigit => (RI_DIGIT, false),
+        BtOp::Hex => (RI_HEX, true),
+        BtOp::Nhex => (RI_HEX, false),
+        BtOp::Octal => (RI_OCTAL, true),
+        BtOp::Noctal => (RI_OCTAL, false),
+        BtOp::Word => (RI_WORD, true),
+        BtOp::Nword => (RI_WORD, false),
+        BtOp::Head => (RI_HEAD, true),
+        BtOp::Nhead => (RI_HEAD, false),
+        BtOp::Alpha => (RI_ALPHA, true),
+        BtOp::Nalpha => (RI_ALPHA, false),
+        BtOp::Lower => (RI_LOWER, true),
+        BtOp::Nlower => (RI_LOWER, false),
+        BtOp::Upper => (RI_UPPER, true),
+        BtOp::Nupper => (RI_UPPER, false),
         _ => return None,
     };
     Some((mask, positive))
