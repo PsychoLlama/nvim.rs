@@ -118,6 +118,18 @@ pub struct LexExprToken {
     pub type_0: LexExprTokenType,
     pub data: LexExprTokenData,
 }
+/// A lexed token's payload, read back as the member `LexExprToken::type_0`
+/// selects -- and, in two places, as a member it does not.
+///
+/// **This union cannot become an enum.** `values::option` asks an invalid
+/// option token for `opt.scope` and `operators::comparison` asks an invalid
+/// comparison for `cmp.ccs`, over bytes the lexer wrote as `err`; neither
+/// offset is covered by that write, so the answer is whatever the frame last
+/// held, and both answers reach the highlight list
+/// `nvim_parse_expression` hands back. The C reads the same bytes. An enum
+/// would have to invent a value, which is a different observable behaviour;
+/// see the note above the accessors in `parse.rs`, and
+/// `blank_token`'s `mem::zeroed`, which is load-bearing for the same reason.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union LexExprTokenData {
@@ -145,6 +157,11 @@ pub struct LexExprTokenNumber {
     pub base: uint8_t,
     pub is_float: bool,
 }
+/// A number literal's value, read back as `LexExprTokenNumber::is_float`
+/// selects. Nested inside [`LexExprTokenData`], so it keeps that union's
+/// keep: a member of a union has to be plain data, and reading a *stale*
+/// discriminant is exactly what the outer union's two deliberate cross-arm
+/// reads do.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union LexExprTokenNumberValue {
