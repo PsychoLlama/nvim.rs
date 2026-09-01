@@ -92,11 +92,6 @@ impl Drop for Payload {
     }
 }
 
-/// The values a reader assumes for the fields an entry leaves out.
-unsafe fn defaults_for(type_0: ShadaEntryType) -> ShadaEntryData {
-    sd_default_values[type_0 as usize].data
-}
-
 /// 1 when a field differs from its default and so has to be written.
 fn written<T: PartialEq>(value: T, default: T) -> uint32_t {
     (value != default) as uint32_t
@@ -129,48 +124,44 @@ pub(crate) unsafe fn shada_pack_entry(
     let mut payload = Payload::new();
     let sbuf = &mut payload.buf;
 
-    let packed = match entry.type_0 {
-        kSDItemMissing => unreachable!("shada: a missing entry is never written"),
-        kSDItemUnknown => {
-            unsafe {
-                mpack_raw(
-                    entry.data.unknown_item.contents,
-                    entry.data.unknown_item.size,
-                    sbuf,
-                )
-            };
+    let packed = match entry.data {
+        ShadaEntryData::Missing => unreachable!("shada: a missing entry is never written"),
+        ShadaEntryData::Unknown(item) => {
+            unsafe { mpack_raw(item.contents, item.size, sbuf) };
             Ok(())
         }
-        kSDItemHeader => {
-            unsafe { pack_header(&entry, sbuf) };
+        ShadaEntryData::Header(header) => {
+            unsafe { pack_header(header, sbuf) };
             Ok(())
         }
-        kSDItemHistoryEntry => {
-            unsafe { pack_history(&entry, sbuf) };
+        ShadaEntryData::HistoryEntry(history) => {
+            unsafe { pack_history(&entry, history, sbuf) };
             Ok(())
         }
-        kSDItemVariable => unsafe { pack_variable(&entry, sbuf) },
-        kSDItemSubString => {
-            unsafe { pack_sub_string(&entry, sbuf) };
+        ShadaEntryData::Variable(var) => unsafe { pack_variable(&entry, var, sbuf) },
+        ShadaEntryData::SubString(sub) => {
+            unsafe { pack_sub_string(&entry, sub, sbuf) };
             Ok(())
         }
-        kSDItemSearchPattern => {
-            unsafe { pack_search_pattern(&entry, &mut payload) };
+        ShadaEntryData::SearchPattern(pattern) => {
+            unsafe { pack_search_pattern(&entry, pattern, &mut payload) };
             Ok(())
         }
-        kSDItemChange | kSDItemGlobalMark | kSDItemLocalMark | kSDItemJump => {
-            unsafe { pack_mark(&entry, &mut payload) };
+        ShadaEntryData::GlobalMark(mark)
+        | ShadaEntryData::LocalMark(mark)
+        | ShadaEntryData::Jump(mark)
+        | ShadaEntryData::Change(mark) => {
+            unsafe { pack_mark(&entry, mark, &mut payload) };
             Ok(())
         }
-        kSDItemRegister => {
-            unsafe { pack_register(&entry, &mut payload) };
+        ShadaEntryData::Register(reg) => {
+            unsafe { pack_register(&entry, reg, &mut payload) };
             Ok(())
         }
-        kSDItemBufferList => {
-            unsafe { pack_buffer_list(&entry, &mut payload) };
+        ShadaEntryData::BufferList(list) => {
+            unsafe { pack_buffer_list(list, &mut payload) };
             Ok(())
         }
-        _ => unreachable!("shada: entry type {} is not written here", entry.type_0),
     };
     if let Err(ignorable) = packed {
         return ignorable;
@@ -185,10 +176,9 @@ pub(crate) unsafe fn shada_pack_entry(
     // An unknown entry keeps the type it arrived with.
     mpack_uint64(
         unsafe { &mut (*packer).ptr },
-        if entry.type_0 == kSDItemUnknown {
-            unsafe { entry.data.unknown_item }.type_0
-        } else {
-            entry.type_0 as uint64_t
+        match entry.data {
+            ShadaEntryData::Unknown(item) => item.type_0,
+            data => data.kind() as uint64_t,
         },
     );
     mpack_uint64(unsafe { &mut (*packer).ptr }, entry.timestamp);
@@ -206,8 +196,7 @@ pub(crate) unsafe fn shada_pack_entry(
 /// The file header: whatever `shada_write` chose to record about the Nvim
 /// that wrote it. Nvim has never read it back — it is there for anyone
 /// looking at the file by hand.
-unsafe fn pack_header(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
-    let header = unsafe { entry.data.header };
+unsafe fn pack_header(header: Dict, sbuf: &mut PackerBuffer) {
     mpack_map(&mut sbuf.ptr, header.size as uint32_t);
     for i in 0..header.size {
         let item = unsafe { *header.items.add(i) };
@@ -222,8 +211,7 @@ unsafe fn pack_header(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
 
 /// One history line: the history it belongs to, its text, and — for search
 /// history only — the character the search was started with.
-unsafe fn pack_history(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
-    let history = unsafe { entry.data.history_item };
+unsafe fn pack_history(entry: &ShadaEntry, history: history_item, sbuf: &mut PackerBuffer) {
     let is_search = history.histtype as c_int == HIST_SEARCH;
     mpack_array(
         &mut sbuf.ptr,
@@ -241,9 +229,9 @@ unsafe fn pack_history(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
 /// carries a trailing type tag to tell the two apart when read back.
 unsafe fn pack_variable(
     entry: &ShadaEntry,
+    mut global_var: global_var,
     sbuf: &mut PackerBuffer,
 ) -> Result<(), ShaDaWriteResult> {
-    let mut global_var = unsafe { entry.data.global_var };
     let is_blob = global_var.value.v_type == VAR_BLOB;
     mpack_array(
         &mut sbuf.ptr,
@@ -283,12 +271,12 @@ unsafe fn pack_variable(
 }
 
 /// The last `:substitute` replacement string.
-unsafe fn pack_sub_string(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
+unsafe fn pack_sub_string(entry: &ShadaEntry, sub: sub_string, sbuf: &mut PackerBuffer) {
     mpack_array(
         &mut sbuf.ptr,
         1 + unsafe { additional_data_len(entry.additional_data) },
     );
-    unsafe { mpack_bin(cstr_as_string(entry.data.sub_string.sub), sbuf) };
+    unsafe { mpack_bin(cstr_as_string(sub.sub), sbuf) };
     unsafe { dump_additional_data(entry.additional_data, sbuf) };
 }
 
@@ -296,9 +284,12 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sbuf: &mut PackerBuffer) {
 /// written only when it differs from the default, and then always as the
 /// *negation* of that default — a flag that is present is by definition not
 /// the default value.
-unsafe fn pack_search_pattern(entry: &ShadaEntry, payload: &mut Payload) {
-    let pattern = unsafe { entry.data.search_pattern };
-    let default = unsafe { defaults_for(entry.type_0).search_pattern };
+unsafe fn pack_search_pattern(
+    entry: &ShadaEntry,
+    pattern: KeyDict__shada_search_pat,
+    payload: &mut Payload,
+) {
+    let default = DEFAULT_SEARCH_PATTERN;
     // Each flag, as (wire key, its value here, its default).
     let flags: [(&'static CStr, bool, bool); 8] = [
         (c"sm", pattern.magic, default.magic),
@@ -340,9 +331,8 @@ unsafe fn pack_search_pattern(entry: &ShadaEntry, payload: &mut Payload) {
 
 /// A global mark, local mark, jump or change: a file name and a position in
 /// it, plus the mark's letter for the two kinds that have one.
-unsafe fn pack_mark(entry: &ShadaEntry, payload: &mut Payload) {
-    let mark = unsafe { entry.data.filemark };
-    let default = unsafe { defaults_for(entry.type_0).filemark };
+unsafe fn pack_mark(entry: &ShadaEntry, mark: shada_filemark, payload: &mut Payload) {
+    let default = default_filemark(entry.kind());
 
     let size = 1 // the file name is always there
         + written(mark.mark.lnum, default.mark.lnum)
@@ -362,8 +352,10 @@ unsafe fn pack_mark(entry: &ShadaEntry, payload: &mut Payload) {
         mpack_integer(&mut payload.buf.ptr, mark.mark.col as Integer);
     }
     debug_assert!(
-        !(entry.type_0 == kSDItemJump || entry.type_0 == kSDItemChange)
-            || mark.name == default.name,
+        !matches!(
+            entry.data,
+            ShadaEntryData::Jump(_) | ShadaEntryData::Change(_)
+        ) || mark.name == default.name,
         "shada: a jump or change entry has no mark name"
     );
     if mark.name != default.name {
@@ -374,9 +366,8 @@ unsafe fn pack_mark(entry: &ShadaEntry, payload: &mut Payload) {
 }
 
 /// One register: its lines, its name, and how it is put back.
-unsafe fn pack_register(entry: &ShadaEntry, payload: &mut Payload) {
-    let reg = unsafe { entry.data.reg };
-    let default = unsafe { defaults_for(entry.type_0).reg };
+unsafe fn pack_register(entry: &ShadaEntry, reg: reg, payload: &mut Payload) {
+    let default = DEFAULT_REGISTER;
 
     let size = 2 // the contents and the name are always there
         + written(reg.type_0, default.type_0)
@@ -410,8 +401,7 @@ unsafe fn pack_register(entry: &ShadaEntry, payload: &mut Payload) {
 /// The buffer list: one map per buffer, each a file name and the cursor
 /// position in it. The position's defaults are the same for every buffer,
 /// so they come from `DEFAULT_POS` rather than from an entry type.
-unsafe fn pack_buffer_list(entry: &ShadaEntry, payload: &mut Payload) {
-    let list = unsafe { entry.data.buffer_list };
+unsafe fn pack_buffer_list(list: buffer_list, payload: &mut Payload) {
     let default = DEFAULT_POS;
     mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
     for i in 0..list.size {

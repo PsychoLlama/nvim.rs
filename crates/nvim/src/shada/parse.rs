@@ -41,8 +41,11 @@ pub(crate) unsafe fn parse_known(
     header: &Header,
     cursor: &mut Cursor,
 ) -> Result<(), Malformed> {
-    // Fields the file leaves out keep the type's documented default.
-    unsafe { (*entry).data = sd_default_values[header.type_u64 as usize].data };
+    // Fields the file leaves out keep the type's documented default. The
+    // variant is set before anything is parsed into it, so a failure part
+    // way through still leaves the entry sayable and freeable.
+    let kind = header.type_u64 as ShadaEntryType;
+    unsafe { (*entry).data = ShadaEntryData::default_for(kind) };
 
     // Map keys this Nvim does not know are collected here and written
     // back out with the entry.
@@ -52,7 +55,7 @@ pub(crate) unsafe fn parse_known(
 
     // How many elements of an array entry are left for `extra` once the
     // ones this Nvim understands have been taken.
-    let trailing = match header.type_u64 as ShadaEntryType {
+    let trailing = match kind {
         kSDItemHeader => {
             // The header is written for the benefit of anyone reading
             // the file by hand; Nvim has never read it back.
@@ -93,7 +96,6 @@ pub(crate) unsafe fn parse_known(
 
     match finish {
         Ok(()) => {
-            unsafe { (*entry).type_0 = header.type_u64 as ShadaEntryType };
             unsafe { (*entry).additional_data = extra.items.cast::<AdditionalData>() };
             Ok(())
         }
@@ -113,9 +115,9 @@ unsafe fn parse_search_pattern(
     extra: &mut AdditionalDataBuilder,
     error: &mut *mut c_char,
 ) -> Result<uint32_t, Malformed> {
-    let it = unsafe { &raw mut (*entry).data.search_pattern };
+    let it = unsafe { (*entry).data.search_pattern_mut() };
     if !cursor.keydict(
-        it.cast::<c_void>(),
+        (&raw mut *it).cast::<c_void>(),
         Some(key_dict__shada_search_pat_get_field),
         extra,
         error,
@@ -126,11 +128,11 @@ unsafe fn parse_search_pattern(
             *error,
         );
         // The keyset may have been left holding a borrowed pattern.
-        unsafe { (*it).pat = String_0::NULL };
+        it.pat = String_0::NULL;
         return Err(Malformed);
     }
     if !has_key(
-        unsafe { (*it).is_set___shada_search_pat_ },
+        it.is_set___shada_search_pat_,
         KEYSET_OPTIDX__shada_search_pat__sp,
     ) {
         malformed_entry(c"E575: Error while reading ShaDa file: search pattern entry at position %lu has no pattern", pos);
@@ -138,7 +140,7 @@ unsafe fn parse_search_pattern(
     }
     // The pattern still points into the entry's bytes; take a copy that
     // outlives them.
-    unsafe { (*it).pat = copy_string((*it).pat, core::ptr::null_mut::<Arena>()) };
+    it.pat = unsafe { copy_string(it.pat, core::ptr::null_mut::<Arena>()) };
     Ok(0)
 }
 
@@ -172,7 +174,7 @@ unsafe fn parse_mark(
         return Err(Malformed);
     }
 
-    let mark = unsafe { &raw mut (*entry).data.filemark };
+    let mark = unsafe { (*entry).data.filemark_mut() };
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__n) {
         if header.type_u64 == kSDItemJump as uint64_t
             || header.type_u64 == kSDItemChange as uint64_t
@@ -180,29 +182,27 @@ unsafe fn parse_mark(
             malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has n key which is only valid for local and global mark entries", pos);
             return Err(Malformed);
         }
-        unsafe { (*mark).name = it.n as c_char };
+        mark.name = it.n as c_char;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__l) {
-        unsafe { (*mark).mark.lnum = it.l as linenr_T };
+        mark.mark.lnum = it.l as linenr_T;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__c) {
-        unsafe { (*mark).mark.col = it.c as colnr_T };
+        mark.mark.col = it.c as colnr_T;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__f) {
-        unsafe {
-            (*mark).fname = xmemdupz(it.f.data().cast::<c_void>(), it.f.len()).cast::<c_char>()
-        };
+        mark.fname = unsafe { xmemdupz(it.f.data().cast::<c_void>(), it.f.len()) }.cast::<c_char>();
     }
 
-    if unsafe { (*mark).fname.is_null() } {
+    if mark.fname.is_null() {
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu is missing file name", pos);
         return Err(Malformed);
     }
-    if unsafe { (*mark).mark.lnum } <= 0 {
+    if mark.mark.lnum <= 0 {
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid line number", pos);
         return Err(Malformed);
     }
-    if unsafe { (*mark).mark.col } < 0 {
+    if mark.mark.col < 0 {
         malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has invalid column number", pos);
         return Err(Malformed);
     }
@@ -262,14 +262,13 @@ unsafe fn parse_register(
             malformed_entry(c"E575: Error while reading ShaDa file: register entry at position %lu has rc key with missing or empty array", pos);
             return Err(Malformed);
         }
-        let reg = unsafe { &raw mut (*entry).data.reg };
-        unsafe { (*reg).contents_size = lines.len() };
-        unsafe { (*reg).contents = xmalloc(size_of_val(lines)).cast::<String_0>() };
+        let reg = unsafe { (*entry).data.register_mut() };
+        reg.contents_size = lines.len();
+        reg.contents = unsafe { xmalloc(size_of_val(lines)) }.cast::<String_0>();
         for (i, line) in lines.iter().enumerate() {
             // Each line still points into the entry's bytes.
             unsafe {
-                (*reg)
-                    .contents
+                reg.contents
                     .add(i)
                     .write(copy_string(*line, core::ptr::null_mut::<Arena>()))
             };
@@ -278,25 +277,25 @@ unsafe fn parse_register(
             it.is_set___shada_register_,
             KEYSET_OPTIDX__shada_register__ru,
         ) {
-            unsafe { (*reg).is_unnamed = it.ru };
+            reg.is_unnamed = it.ru;
         }
         if has_key(
             it.is_set___shada_register_,
             KEYSET_OPTIDX__shada_register__rt,
         ) {
-            unsafe { (*reg).type_0 = it.rt as uint8_t as MotionType };
+            reg.type_0 = it.rt as uint8_t as MotionType;
         }
         if has_key(
             it.is_set___shada_register_,
             KEYSET_OPTIDX__shada_register__n,
         ) {
-            unsafe { (*reg).name = it.n as c_char };
+            reg.name = it.n as c_char;
         }
         if has_key(
             it.is_set___shada_register_,
             KEYSET_OPTIDX__shada_register__rw,
         ) {
-            unsafe { (*reg).width = it.rw as size_t };
+            reg.width = it.rw as size_t;
         }
         Ok(0)
     })();
@@ -333,9 +332,9 @@ unsafe fn parse_history(
         return Err(Malformed);
     }
 
-    let history = unsafe { &raw mut (*entry).data.history_item };
-    unsafe { (*history).histtype = hist_type as uint8_t };
-    let is_search = unsafe { (*history).histtype } as c_int == HIST_SEARCH;
+    let history = unsafe { (*entry).data.history_mut() };
+    history.histtype = hist_type as uint8_t;
+    let is_search = history.histtype as c_int == HIST_SEARCH;
     if is_search {
         if len < 3 {
             malformed_entry(c"E575: Error while reading ShaDa file: search history entry at position %lu does not have separator character", pos);
@@ -345,7 +344,7 @@ unsafe fn parse_history(
             malformed_entry(c"E575: Error while reading ShaDa file: search history entry at position %lu has wrong history separator type", pos);
             return Err(Malformed);
         };
-        unsafe { (*history).sep = sep as c_char };
+        history.sep = sep as c_char;
     }
 
     // The text, a NUL, then the separator byte after it.
@@ -353,8 +352,8 @@ unsafe fn parse_history(
     let into = stored.cast::<u8>();
     unsafe { into.copy_from_nonoverlapping(text.as_ptr(), text.len()) };
     unsafe { stored.add(text.len()).write(0) };
-    unsafe { stored.add(text.len() + 1).write((*history).sep) };
-    unsafe { (*history).string = stored };
+    unsafe { stored.add(text.len() + 1).write(history.sep) };
+    history.string = stored;
 
     Ok((len - (2 + is_search as ssize_t)) as uint32_t)
 }
@@ -376,10 +375,9 @@ unsafe fn parse_variable(
         malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has wrong variable name type", pos);
         return Err(Malformed);
     }
-    let global_var = unsafe { &raw mut (*entry).data.global_var };
-    unsafe {
-        (*global_var).name = xmemdupz(name.data().cast::<c_void>(), name.len()).cast::<c_char>()
-    };
+    let global_var = unsafe { (*entry).data.variable_mut() };
+    global_var.name =
+        unsafe { xmemdupz(name.data().cast::<c_void>(), name.len()) }.cast::<c_char>();
 
     let binval = cursor.string();
     let mut is_blob = false;
@@ -391,8 +389,8 @@ unsafe fn parse_variable(
             }
             is_blob = true;
         }
-        unsafe { (*global_var).value = decode_string(binval.data(), binval.len(), is_blob, false) };
-    } else if cursor.typval(unsafe { &raw mut (*global_var).value }) != MPACK_OK {
+        global_var.value = unsafe { decode_string(binval.data(), binval.len(), is_blob, false) };
+    } else if cursor.typval(&raw mut global_var.value) != MPACK_OK {
         malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value", pos);
         return Err(Malformed);
     }
@@ -416,7 +414,7 @@ unsafe fn parse_sub_string(
         return Err(Malformed);
     }
     unsafe {
-        (*entry).data.sub_string.sub =
+        (*entry).data.sub_string_mut().sub =
             xmemdupz(sub.data().cast::<c_void>(), sub.len()).cast::<c_char>()
     };
     Ok((len - 1) as uint32_t)
@@ -439,15 +437,13 @@ unsafe fn parse_buffer_list(
         return Ok(0);
     }
 
-    let list = unsafe { &raw mut (*entry).data.buffer_list };
-    unsafe {
-        (*list).buffers =
-            xcalloc(len as size_t, size_of::<buffer_list_buffer>()).cast::<buffer_list_buffer>()
-    };
+    let list = unsafe { (*entry).data.buffer_list_mut() };
+    list.buffers = unsafe { xcalloc(len as size_t, size_of::<buffer_list_buffer>()) }
+        .cast::<buffer_list_buffer>();
     for i in 0..len as usize {
         // Count it before it is filled in, so that a failure below still
         // frees what has been built.
-        unsafe { (*list).size += 1 };
+        list.size += 1;
         let mut it = KeyDict__shada_buflist_item {
             is_set___shada_buflist_item_: 0,
             l: 0,
@@ -465,7 +461,7 @@ unsafe fn parse_buffer_list(
             unsafe { xfree(item_extra.items.cast::<c_void>()) };
             return Err(Malformed);
         }
-        let e = unsafe { (*list).buffers.add(i) };
+        let e = unsafe { list.buffers.add(i) };
         unsafe { (*e).additional_data = item_extra.items.cast::<AdditionalData>() };
         unsafe { (*e).pos = DEFAULT_POS };
         if has_key(

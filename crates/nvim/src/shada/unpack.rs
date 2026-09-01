@@ -393,9 +393,9 @@ pub(crate) unsafe fn shada_read_next_item(
     max_kbyte: size_t,
 ) -> ShaDaReadResult {
     loop {
-        // Clear the entry — including every pointer in the union, so
-        // that an early failure still leaves it safe to free.
-        unsafe { entry.write_bytes(0, 1) };
+        // Start from an empty entry, so that an early failure still
+        // leaves one that is safe to free.
+        unsafe { entry.write(ShadaEntry::MISSING) };
         if unsafe { file_eof(sd_reader) } {
             return kSDReadStatusFinished;
         }
@@ -438,9 +438,10 @@ pub(crate) unsafe fn shada_read_next_item(
         match unsafe { parse_known(entry, &header, &mut cursor) } {
             Ok(()) => return kSDReadStatusSuccess,
             Err(Malformed) => {
-                unsafe { (*entry).type_0 = header.type_u64 as ShadaEntryType };
+                // `parse_known` set the entry's kind before parsing into
+                // it, so whatever it managed to build is freed here.
                 unsafe { shada_free_shada_entry(entry) };
-                unsafe { (*entry).type_0 = kSDItemMissing };
+                unsafe { (*entry).data = ShadaEntryData::Missing };
                 return kSDReadStatusMalformed;
             }
         }
@@ -456,19 +457,22 @@ unsafe fn read_unknown(
     parse_pos: uint64_t,
     mut cursor: Cursor,
 ) -> ShaDaReadResult {
-    unsafe { (*entry).type_0 = kSDItemUnknown };
-    unsafe { (*entry).data.unknown_item.size = header.length };
-    unsafe { (*entry).data.unknown_item.type_0 = header.type_u64 };
+    let item = unknown_item {
+        type_0: header.type_u64,
+        contents: core::ptr::null_mut(),
+        size: header.length,
+    };
+    unsafe { (*entry).data = ShadaEntryData::Unknown(item) };
     // As above: a strange *first* entry has to be proved to be msgpack
     // before the file is believed to be ShaDa at all.
     if header.fpos == 0 {
         let status = cursor.skip();
         let checked = unsafe { shada_check_status(parse_pos, status, cursor.left) };
         if checked != kSDReadStatusSuccess {
-            unsafe { (*entry).type_0 = kSDItemMissing };
+            unsafe { (*entry).data = ShadaEntryData::Missing };
             return checked;
         }
     }
-    unsafe { (*entry).data.unknown_item.contents = body.into_owned() };
+    unsafe { (*entry).data.unknown_mut().contents = body.into_owned() };
     kSDReadStatusSuccess
 }

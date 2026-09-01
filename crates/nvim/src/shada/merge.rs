@@ -64,7 +64,7 @@ pub(crate) unsafe fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEnt
     let removed = unsafe {
         map_del_cstr_t_ptr_t(
             &raw mut (*hmll).contained_entries,
-            (*hmll_entry).data.data.history_item.string,
+            (*hmll_entry).data.data.history().string,
             core::ptr::null_mut(),
         )
     };
@@ -136,7 +136,7 @@ pub(crate) unsafe fn hmll_insert(
     let val = unsafe {
         map_put_ref_cstr_t_ptr_t(
             &raw mut (*hmll).contained_entries,
-            data.data.history_item.string,
+            data.data.history().string,
             core::ptr::null_mut(),
             &raw mut new_item,
         )
@@ -167,12 +167,7 @@ pub(crate) unsafe fn hmll_dealloc(hmll: *mut HMLList) {
     let map = unsafe { &raw mut (*hmll).contained_entries };
     unsafe { xfree((*map).set.keys.cast::<c_void>()) };
     unsafe { xfree((*map).set.h.hash.cast::<c_void>()) };
-    unsafe {
-        (*map).set = Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: core::ptr::null_mut(),
-        }
-    };
+    unsafe { (*map).set = SET_CSTR_INIT };
     unsafe { xfree((*map).values.cast::<c_void>()) };
     unsafe { (*map).values = core::ptr::null_mut() };
     unsafe { xfree((*hmll).entries.cast::<c_void>()) };
@@ -193,16 +188,13 @@ pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
     let pending: Box<[ShadaEntry]> = entries
         .into_iter()
         .map(|he| ShadaEntry {
-            type_0: kSDItemHistoryEntry,
             can_free_entry: unsafe { (*hms_p).reading },
             timestamp: he.timestamp,
-            data: ShadaEntryData {
-                history_item: history_item {
-                    histtype: history_type,
-                    string: he.text,
-                    sep: he.sep,
-                },
-            },
+            data: ShadaEntryData::HistoryEntry(history_item {
+                histtype: history_type,
+                string: he.text,
+                sep: he.sep,
+            }),
             additional_data: he.additional_data,
         })
         .collect();
@@ -242,7 +234,7 @@ pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntr
     let val = unsafe {
         map_ref_cstr_t_ptr_t(
             &raw mut (*hmll).contained_entries,
-            entry.data.history_item.string,
+            entry.data.history().string,
             &raw mut key_alloc,
         )
     };
@@ -254,7 +246,7 @@ pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntr
             unsafe { shada_free_shada_entry(&raw mut (*existing).data) };
             unsafe { (*existing).data = entry };
             // Freeing the entry above freed the key the map held.
-            unsafe { *key_alloc = entry.data.history_item.string };
+            unsafe { *key_alloc = entry.data.history().string };
             return;
         } else {
             return;
@@ -299,8 +291,8 @@ pub(crate) unsafe fn hms_to_history(hms_p: *const HistoryMergerState) {
     let mut cur = unsafe { (*hms_p).hmll.first };
     while !cur.is_null() {
         merged.push(HistShadaEntry {
-            text: unsafe { (*cur).data.data.history_item.string },
-            sep: unsafe { (*cur).data.data.history_item.sep },
+            text: unsafe { (*cur).data.data.history() }.string,
+            sep: unsafe { (*cur).data.data.history() }.sep,
             timestamp: unsafe { (*cur).data.timestamp },
             additional_data: unsafe { (*cur).data.additional_data },
         });
@@ -445,7 +437,7 @@ unsafe fn insert_mark_list(
 /// freeing the other. A tie goes to the one already there, which is the
 /// running Nvim's.
 unsafe fn keep_newer(slot: *mut ShadaEntry, mut entry: ShadaEntry) {
-    if unsafe { (*slot).type_0 } != kSDItemMissing {
+    if !unsafe { (*slot).data.is_missing() } {
         if unsafe { (*slot).timestamp } >= entry.timestamp {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -469,7 +461,7 @@ pub(crate) unsafe fn shada_read_when_writing(
 ) -> ShaDaWriteResult {
     let mut ret = kSDWriteSuccessful;
     loop {
-        let mut entry: ShadaEntry = unsafe { core::mem::zeroed() };
+        let mut entry = ShadaEntry::MISSING;
         match unsafe { shada_read_next_item(sd_reader, &raw mut entry, srni_flags, max_kbyte) } {
             kSDReadStatusSuccess => {}
             kSDReadStatusFinished => return ret,
@@ -479,27 +471,31 @@ pub(crate) unsafe fn shada_read_when_writing(
             _ => return ret,
         }
 
-        match entry.type_0 {
-            kSDItemMissing => {}
-            kSDItemHeader | kSDItemBufferList => {
-                unreachable!("shada: entry type {} is never merged", entry.type_0)
+        match entry.data {
+            ShadaEntryData::Missing => {}
+            ShadaEntryData::Header(_) | ShadaEntryData::BufferList(_) => {
+                unreachable!("shada: entry type {} is never merged", entry.kind())
             }
-            kSDItemUnknown => {
+            ShadaEntryData::Unknown(_) => {
                 ret = unsafe { shada_pack_entry(packer, entry, 0) };
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
-            kSDItemSearchPattern => {
-                let slot = if unsafe { entry.data.search_pattern }.is_substitute_pattern {
+            ShadaEntryData::SearchPattern(pattern) => {
+                let slot = if pattern.is_substitute_pattern {
                     unsafe { &raw mut (*wms).sub_search_pattern }
                 } else {
                     unsafe { &raw mut (*wms).search_pattern }
                 };
                 unsafe { keep_newer(slot, entry) };
             }
-            kSDItemSubString => unsafe { keep_newer(&raw mut (*wms).replacement, entry) },
-            kSDItemHistoryEntry => ret = unsafe { merge_history(wms, entry, packer, ret) },
-            kSDItemRegister => {
-                let idx = op_reg_index(unsafe { entry.data.reg }.name as c_int);
+            ShadaEntryData::SubString(_) => unsafe {
+                keep_newer(&raw mut (*wms).replacement, entry)
+            },
+            ShadaEntryData::HistoryEntry(item) => {
+                ret = unsafe { merge_history(wms, entry, item, packer, ret) };
+            }
+            ShadaEntryData::Register(reg) => {
+                let idx = op_reg_index(reg.name as c_int);
                 if idx < 0 {
                     ret = unsafe { shada_pack_entry(packer, entry, 0) };
                     unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -507,32 +503,30 @@ pub(crate) unsafe fn shada_read_when_writing(
                     unsafe { keep_newer(&raw mut (*wms).registers[idx as usize], entry) };
                 }
             }
-            kSDItemVariable => {
+            ShadaEntryData::Variable(var) => {
                 // A variable this session has already written wins.
-                if !unsafe {
-                    set_has_cstr_t(&raw mut (*wms).dumped_variables, entry.data.global_var.name)
-                } {
+                if !unsafe { set_has_cstr_t(&raw mut (*wms).dumped_variables, var.name) } {
                     ret = unsafe { shada_pack_entry(packer, entry, 0) };
                 }
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
-            kSDItemGlobalMark => ret = unsafe { merge_global_mark(wms, entry, packer, ret) },
-            kSDItemChange | kSDItemLocalMark => unsafe { merge_file_mark(wms, entry) },
-            kSDItemJump => {
-                let (mark, fname) = (
-                    unsafe { entry.data.filemark }.mark,
-                    unsafe { entry.data.filemark }.fname,
-                );
+            ShadaEntryData::GlobalMark(mark) => {
+                ret = unsafe { merge_global_mark(wms, entry, mark, packer, ret) };
+            }
+            ShadaEntryData::Change(_) | ShadaEntryData::LocalMark(_) => unsafe {
+                merge_file_mark(wms, entry)
+            },
+            ShadaEntryData::Jump(jump) => {
+                let (mark, fname) = (jump.mark, jump.fname);
                 let jumps = unsafe { &mut (*wms).jumps };
                 let jumps_size = unsafe { &mut (*wms).jumps_size };
                 unsafe {
                     insert_mark_list(jumps, jumps_size, entry, |existing| {
-                        marks_equal(existing.data.filemark.mark, mark)
-                            && cstr::eq(existing.data.filemark.fname, fname)
+                        marks_equal(existing.data.filemark().mark, mark)
+                            && cstr::eq(existing.data.filemark().fname, fname)
                     })
                 };
             }
-            _ => {}
         }
     }
 }
@@ -542,10 +536,11 @@ pub(crate) unsafe fn shada_read_when_writing(
 unsafe fn merge_history(
     wms: *mut WriteMergerState,
     mut entry: ShadaEntry,
+    item: history_item,
     packer: *mut PackerBuffer,
     ret: ShaDaWriteResult,
 ) -> ShaDaWriteResult {
-    let histtype = unsafe { entry.data.history_item }.histtype as c_uint;
+    let histtype = item.histtype as c_uint;
     if histtype >= HIST_COUNT {
         let ret = unsafe { shada_pack_entry(packer, entry, 0) };
         unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -568,15 +563,16 @@ unsafe fn merge_history(
 unsafe fn merge_global_mark(
     wms: *mut WriteMergerState,
     mut entry: ShadaEntry,
+    mark: shada_filemark,
     packer: *mut PackerBuffer,
     ret: ShaDaWriteResult,
 ) -> ShaDaWriteResult {
-    if ascii_isdigit(unsafe { entry.data.filemark }.name as c_int) {
+    if ascii_isdigit(mark.name as c_int) {
         unsafe { merge_numbered_mark(wms, entry) };
         return ret;
     }
 
-    let idx = mark_global_index(unsafe { entry.data.filemark }.name);
+    let idx = mark_global_index(mark.name);
     if idx < 0 {
         let ret = unsafe { shada_pack_entry(packer, entry, 0) };
         unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -589,8 +585,7 @@ unsafe fn merge_global_mark(
     };
     // Nothing has claimed the slot yet, so what the file entry has to
     // beat is the mark this Nvim holds.
-    if unsafe { (*slot).type_0 } == kSDItemMissing && global_mark_timestamp(idx) >= entry.timestamp
-    {
+    if unsafe { (*slot).data.is_missing() } && global_mark_timestamp(idx) >= entry.timestamp {
         unsafe { shada_free_shada_entry(&raw mut entry) };
         return ret;
     }
@@ -604,18 +599,15 @@ unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry)
     let marks = unsafe { &(*wms).numbered_marks };
     for i in (1..=marks.len()).rev() {
         let existing = marks[i - 1];
-        if existing.type_0 != kSDItemGlobalMark {
+        if !matches!(existing.data, ShadaEntryData::GlobalMark(_)) {
             continue;
         }
         // The same mark written twice: keep the one already here.
         if existing.timestamp == entry.timestamp
             && existing.additional_data.is_null()
             && entry.additional_data.is_null()
-            && marks_equal(
-                unsafe { existing.data.filemark }.mark,
-                unsafe { entry.data.filemark }.mark,
-            )
-            && unsafe { cstr::eq(existing.data.filemark.fname, entry.data.filemark.fname) }
+            && marks_equal(existing.data.filemark().mark, entry.data.filemark().mark)
+            && unsafe { cstr::eq(existing.data.filemark().fname, entry.data.filemark().fname) }
         {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -636,7 +628,7 @@ unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry)
 /// A buffer-local mark or change-list entry from the file, filed under the
 /// name of the file it belongs to.
 unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
-    let fname = unsafe { entry.data.filemark }.fname;
+    let fname = entry.data.filemark().fname;
     if unsafe { shada_removable(fname) } {
         unsafe { shada_free_shada_entry(&raw mut entry) };
         return;
@@ -651,26 +643,27 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
         unsafe { *key = xstrdup(fname) };
     }
     if unsafe { (*val).is_null() } {
-        unsafe { *val = xcalloc(1, size_of::<FileMarks>()) };
+        let marks = shada_heap(FileMarks::EMPTY).cast::<c_void>();
+        unsafe { *val = marks };
     }
     let filemarks = unsafe { (*val).cast::<FileMarks>() };
     if entry.timestamp > unsafe { (*filemarks).greatest_timestamp } {
         unsafe { (*filemarks).greatest_timestamp = entry.timestamp };
     }
 
-    if entry.type_0 == kSDItemChange {
-        let mark = unsafe { entry.data.filemark.mark };
+    if let ShadaEntryData::Change(change) = entry.data {
+        let mark = change.mark;
         let changes = unsafe { &mut (*filemarks).changes };
         let changes_size = unsafe { &mut (*filemarks).changes_size };
         unsafe {
             insert_mark_list(changes, changes_size, entry, |existing| {
-                marks_equal(existing.data.filemark.mark, mark)
+                marks_equal(existing.data.filemark().mark, mark)
             })
         };
         return;
     }
 
-    let idx = mark_local_index(unsafe { entry.data.filemark }.name);
+    let idx = mark_local_index(entry.data.filemark().name);
     if idx < 0 {
         // A mark name this Nvim does not know: keep it to write back.
         unsafe { (*filemarks).additional_marks_size += 1 };
@@ -690,15 +683,15 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
     }
 
     let slot = unsafe { &raw mut (*filemarks).marks[idx as usize] };
-    if unsafe { (*slot).type_0 } != kSDItemMissing {
+    if !unsafe { (*slot).data.is_missing() } {
         if unsafe { (*slot).timestamp } >= entry.timestamp {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
         }
         if unsafe { (*slot).can_free_entry } {
             // The map's key may be the very string about to be freed.
-            if unsafe { *key } == unsafe { (*slot).data.filemark.fname } {
-                unsafe { *key = entry.data.filemark.fname };
+            if unsafe { *key } == unsafe { (*slot).data.filemark() }.fname {
+                unsafe { *key = entry.data.filemark().fname };
             }
             unsafe { shada_free_shada_entry(slot) };
         }
@@ -717,10 +710,10 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
         // SAFETY: a live buffer from the editor's own list, and the entry's
         // own NUL-terminated file name.
         if !buf.b_ffname.is_null()
-            && unsafe { path_fnamecmp(entry.data.filemark.fname, buf.b_ffname) } == 0
+            && unsafe { path_fnamecmp(entry.data.filemark().fname, buf.b_ffname) } == 0
         {
             let mut fm: fmark_T = fmark_T::UNSET;
-            let name = unsafe { entry.data.filemark.name } as c_int;
+            let name = entry.data.filemark().name as c_int;
             let win = curwin.get();
             unsafe { mark_get(buf.raw(), win, &raw mut fm, kMarkBufLocal, name) };
             if fm.timestamp >= entry.timestamp {

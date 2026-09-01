@@ -19,7 +19,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
-use crate::global_cell::{ConstTable, GlobalCell};
+use crate::global_cell::GlobalCell;
 use crate::main::{
     curbuf, curwin, no_hlsearch, p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose,
 };
@@ -135,24 +135,193 @@ pub struct WriteMergerState {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ShadaEntry {
-    pub type_0: ShadaEntryType,
     pub can_free_entry: bool,
     pub timestamp: Timestamp,
     pub data: ShadaEntryData,
     pub additional_data: *mut AdditionalData,
 }
+
+impl ShadaEntry {
+    /// An empty slot: what a merger's arrays are filled with, and what an
+    /// entry that failed to read is left as.
+    pub(crate) const MISSING: ShadaEntry = ShadaEntry {
+        can_free_entry: false,
+        timestamp: 0,
+        data: ShadaEntryData::Missing,
+        additional_data: ::core::ptr::null_mut(),
+    };
+
+    /// Which kind of entry this is — the number the format writes for it.
+    pub(crate) fn kind(&self) -> ShadaEntryType {
+        self.data.kind()
+    }
+}
+
+/// One entry's payload, and by which variant it is, the kind of entry.
+///
+/// Upstream this is an untagged union beside a separate `type` field; the
+/// two are never written apart, so they are one value here and the reads
+/// that used to have to trust the tag are `match` arms.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union ShadaEntryData {
-    pub header: Dict,
-    pub filemark: shada_filemark,
-    pub search_pattern: KeyDict__shada_search_pat,
-    pub history_item: history_item,
-    pub reg: reg,
-    pub global_var: global_var,
-    pub unknown_item: unknown_item,
-    pub sub_string: sub_string,
-    pub buffer_list: buffer_list,
+pub enum ShadaEntryData {
+    /// No entry at all. An empty slot in a merger's arrays, and what a
+    /// malformed entry is reduced to.
+    Missing,
+    Header(Dict),
+    SearchPattern(KeyDict__shada_search_pat),
+    SubString(sub_string),
+    HistoryEntry(history_item),
+    Register(reg),
+    Variable(global_var),
+    GlobalMark(shada_filemark),
+    Jump(shada_filemark),
+    BufferList(buffer_list),
+    LocalMark(shada_filemark),
+    Change(shada_filemark),
+    /// An entry of a type this Nvim does not know, kept byte for byte so
+    /// that writing the file back does not lose it.
+    Unknown(unknown_item),
+}
+
+impl ShadaEntryData {
+    /// The number the format writes for this kind of entry. An unknown
+    /// entry answers [`kSDItemUnknown`], not the type it arrived with.
+    pub(crate) fn kind(&self) -> ShadaEntryType {
+        match self {
+            ShadaEntryData::Missing => kSDItemMissing,
+            ShadaEntryData::Header(_) => kSDItemHeader,
+            ShadaEntryData::SearchPattern(_) => kSDItemSearchPattern,
+            ShadaEntryData::SubString(_) => kSDItemSubString,
+            ShadaEntryData::HistoryEntry(_) => kSDItemHistoryEntry,
+            ShadaEntryData::Register(_) => kSDItemRegister,
+            ShadaEntryData::Variable(_) => kSDItemVariable,
+            ShadaEntryData::GlobalMark(_) => kSDItemGlobalMark,
+            ShadaEntryData::Jump(_) => kSDItemJump,
+            ShadaEntryData::BufferList(_) => kSDItemBufferList,
+            ShadaEntryData::LocalMark(_) => kSDItemLocalMark,
+            ShadaEntryData::Change(_) => kSDItemChange,
+            ShadaEntryData::Unknown(_) => kSDItemUnknown,
+        }
+    }
+
+    /// Whether this is an empty slot.
+    pub(crate) fn is_missing(&self) -> bool {
+        matches!(self, ShadaEntryData::Missing)
+    }
+
+    /// What the entry's fields default to when the file leaves them out.
+    /// Both sides of the format agree on these, which is what lets a
+    /// writer omit them.
+    pub(crate) fn default_for(kind: ShadaEntryType) -> ShadaEntryData {
+        match kind {
+            kSDItemHeader => ShadaEntryData::Header(EMPTY_DICT),
+            kSDItemSearchPattern => ShadaEntryData::SearchPattern(DEFAULT_SEARCH_PATTERN),
+            kSDItemSubString => ShadaEntryData::SubString(DEFAULT_SUB_STRING),
+            kSDItemHistoryEntry => ShadaEntryData::HistoryEntry(DEFAULT_HISTORY_ITEM),
+            kSDItemRegister => ShadaEntryData::Register(DEFAULT_REGISTER),
+            kSDItemVariable => ShadaEntryData::Variable(DEFAULT_VARIABLE),
+            kSDItemGlobalMark => ShadaEntryData::GlobalMark(default_filemark(kind)),
+            kSDItemJump => ShadaEntryData::Jump(default_filemark(kind)),
+            kSDItemBufferList => ShadaEntryData::BufferList(DEFAULT_BUFFER_LIST),
+            kSDItemLocalMark => ShadaEntryData::LocalMark(default_filemark(kind)),
+            kSDItemChange => ShadaEntryData::Change(default_filemark(kind)),
+            _ => ShadaEntryData::Missing,
+        }
+    }
+
+    /// The mark a global mark, local mark, jump or change entry carries.
+    pub(crate) fn filemark(&self) -> shada_filemark {
+        match self {
+            ShadaEntryData::GlobalMark(mark)
+            | ShadaEntryData::Jump(mark)
+            | ShadaEntryData::LocalMark(mark)
+            | ShadaEntryData::Change(mark) => *mark,
+            other => unreachable!("shada: entry type {} carries no mark", other.kind()),
+        }
+    }
+
+    /// [`Self::filemark`], to write to.
+    pub(crate) fn filemark_mut(&mut self) -> &mut shada_filemark {
+        match self {
+            ShadaEntryData::GlobalMark(mark)
+            | ShadaEntryData::Jump(mark)
+            | ShadaEntryData::LocalMark(mark)
+            | ShadaEntryData::Change(mark) => mark,
+            other => unreachable!("shada: entry type {} carries no mark", other.kind()),
+        }
+    }
+
+    /// The search or substitute pattern a search-pattern entry carries.
+    pub(crate) fn search_pattern_mut(&mut self) -> &mut KeyDict__shada_search_pat {
+        match self {
+            ShadaEntryData::SearchPattern(pattern) => pattern,
+            other => unreachable!("shada: entry type {} is not a search pattern", other.kind()),
+        }
+    }
+
+    /// The line a history entry carries.
+    pub(crate) fn history(&self) -> history_item {
+        match self {
+            ShadaEntryData::HistoryEntry(item) => *item,
+            other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
+        }
+    }
+
+    /// [`Self::history`], to write to.
+    pub(crate) fn history_mut(&mut self) -> &mut history_item {
+        match self {
+            ShadaEntryData::HistoryEntry(item) => item,
+            other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
+        }
+    }
+
+    /// The register a register entry carries.
+    pub(crate) fn register_mut(&mut self) -> &mut reg {
+        match self {
+            ShadaEntryData::Register(reg) => reg,
+            other => unreachable!("shada: entry type {} is not a register", other.kind()),
+        }
+    }
+
+    /// The variable a variable entry carries.
+    pub(crate) fn variable_mut(&mut self) -> &mut global_var {
+        match self {
+            ShadaEntryData::Variable(var) => var,
+            other => unreachable!("shada: entry type {} is not a variable", other.kind()),
+        }
+    }
+
+    /// The replacement string a sub-string entry carries.
+    pub(crate) fn sub_string_mut(&mut self) -> &mut sub_string {
+        match self {
+            ShadaEntryData::SubString(sub) => sub,
+            other => unreachable!("shada: entry type {} is not a sub string", other.kind()),
+        }
+    }
+
+    /// The buffer list a buffer-list entry carries.
+    pub(crate) fn buffer_list(&self) -> buffer_list {
+        match self {
+            ShadaEntryData::BufferList(list) => *list,
+            other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
+        }
+    }
+
+    /// [`Self::buffer_list`], to write to.
+    pub(crate) fn buffer_list_mut(&mut self) -> &mut buffer_list {
+        match self {
+            ShadaEntryData::BufferList(list) => list,
+            other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
+        }
+    }
+
+    /// The bytes an entry of an unrecognised type arrived as.
+    pub(crate) fn unknown_mut(&mut self) -> &mut unknown_item {
+        match self {
+            ShadaEntryData::Unknown(item) => item,
+            other => unreachable!("shada: entry type {} is a known one", other.kind()),
+        }
+    }
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -250,6 +419,64 @@ pub struct HMLList {
     pub num_entries: size_t,
     pub contained_entries: Map_cstr_t_ptr_t,
 }
+
+impl HMLList {
+    /// A ring with no array yet: what a merger holds before `hmll_init`.
+    const EMPTY: HMLList = HMLList {
+        entries: ::core::ptr::null_mut(),
+        first: ::core::ptr::null_mut(),
+        last: ::core::ptr::null_mut(),
+        free_entry: ::core::ptr::null_mut(),
+        last_free_entry: ::core::ptr::null_mut(),
+        size: 0,
+        num_entries: 0,
+        contained_entries: MAP_INIT,
+    };
+}
+
+impl HistoryMergerState {
+    /// A merger that has not been started. `hms_init` makes a usable one.
+    const EMPTY: HistoryMergerState = HistoryMergerState {
+        hmll: HMLList::EMPTY,
+        do_merge: false,
+        reading: false,
+        pending: ::core::ptr::null_mut(),
+        pending_len: 0,
+        pending_pos: 0,
+        history_type: 0,
+    };
+}
+
+impl WriteMergerState {
+    /// Nothing collected yet. Every slot is [`ShadaEntry::MISSING`], which
+    /// is what marks one as empty.
+    pub(crate) const EMPTY: WriteMergerState = WriteMergerState {
+        hms: [HistoryMergerState::EMPTY; 5],
+        global_marks: [ShadaEntry::MISSING; 26],
+        numbered_marks: [ShadaEntry::MISSING; 10],
+        registers: [ShadaEntry::MISSING; 37],
+        jumps: [ShadaEntry::MISSING; 100],
+        jumps_size: 0,
+        search_pattern: ShadaEntry::MISSING,
+        sub_search_pattern: ShadaEntry::MISSING,
+        replacement: ShadaEntry::MISSING,
+        dumped_variables: SET_CSTR_INIT,
+        file_marks: MAP_INIT,
+    };
+}
+
+/// One `value` on the heap, for the aggregates the merge allocates.
+///
+/// `xmalloc` rather than `Box` because these are released with `xfree`, and
+/// written whole rather than `xcalloc`ed because an all-zero
+/// [`ShadaEntryData`] is not a value of it — [`ShadaEntry::MISSING`] is.
+fn shada_heap<T>(value: T) -> *mut T {
+    // SAFETY: fresh storage of exactly `T`'s size, written before it is read.
+    let ptr = unsafe { xmalloc(size_of::<T>()) }.cast::<T>();
+    unsafe { ptr.write(value) };
+    ptr
+}
+
 pub type HMLListEntry = hm_llist_entry;
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -268,6 +495,19 @@ pub struct FileMarks {
     pub additional_marks_size: size_t,
     pub greatest_timestamp: Timestamp,
 }
+
+impl FileMarks {
+    /// One file's marks before any have been collected.
+    pub(crate) const EMPTY: FileMarks = FileMarks {
+        marks: [ShadaEntry::MISSING; 29],
+        changes: [ShadaEntry::MISSING; 100],
+        changes_size: 0,
+        additional_marks: ::core::ptr::null_mut(),
+        additional_marks_size: 0,
+        greatest_timestamp: 0,
+    };
+}
+
 pub const kSDReadChanges: SRNIFlags = 2048;
 pub const kSDReadLocalMarks: SRNIFlags = 1024;
 pub const kSDReadGlobalMarks: SRNIFlags = 128;
@@ -303,11 +543,16 @@ pub const MAPHASH_INIT: MapHash = MapHash {
     keys_capacity: 0 as uint32_t,
     hash: ::core::ptr::null_mut::<uint32_t>(),
 };
+const SET_CSTR_INIT: Set_cstr_t = Set_cstr_t {
+    h: MAPHASH_INIT,
+    keys: ::core::ptr::null_mut::<cstr_t>(),
+};
+const SET_PTR_INIT: Set_ptr_t = Set_ptr_t {
+    h: MAPHASH_INIT,
+    keys: ::core::ptr::null_mut::<ptr_t>(),
+};
 pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
-    set: Set_cstr_t {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<cstr_t>(),
-    },
+    set: SET_CSTR_INIT,
     values: ::core::ptr::null_mut::<ptr_t>(),
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
@@ -349,24 +594,14 @@ unsafe fn set_has_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> bool {
 unsafe fn set_destroy_cstr_t(set: *mut Set_cstr_t) {
     unsafe { xfree((*set).keys.cast()) };
     unsafe { xfree((*set).h.hash.cast()) };
-    unsafe {
-        *set = Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut(),
-        }
-    };
+    unsafe { *set = SET_CSTR_INIT };
 }
 
 /// [`set_destroy_cstr_t`] for a set of pointers.
 unsafe fn set_destroy_ptr_t(set: *mut Set_ptr_t) {
     unsafe { xfree((*set).keys.cast()) };
     unsafe { xfree((*set).h.hash.cast()) };
-    unsafe {
-        *set = Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: ::core::ptr::null_mut(),
-        }
-    };
+    unsafe { *set = SET_PTR_INIT };
 }
 
 /// [`set_destroy_cstr_t`] for a map. Neither the keys nor the values are
@@ -421,194 +656,81 @@ pub const DEFAULT_POS: pos_T = pos_T {
     col: 0 as colnr_T,
     coladd: 0 as colnr_T,
 };
-static sd_default_values: ConstTable<[ShadaEntry; 12]> = ConstTable::new([
-    ShadaEntry {
-        type_0: kSDItemMissing,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            header: Dict {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
-            },
+/// The empty dictionary a header entry starts as.
+const EMPTY_DICT: Dict = Dict {
+    size: 0,
+    capacity: 0,
+    items: ::core::ptr::null_mut::<KeyValuePair>(),
+};
+
+/// What a search-pattern entry's fields default to. A pattern is magic and
+/// was the last one used unless the file says otherwise.
+const DEFAULT_SEARCH_PATTERN: KeyDict__shada_search_pat = KeyDict__shada_search_pat {
+    is_set___shada_search_pat_: 0,
+    magic: true,
+    smartcase: false,
+    has_line_offset: false,
+    place_cursor_at_end: false,
+    is_last_used: true,
+    is_substitute_pattern: false,
+    highlighted: false,
+    search_backward: false,
+    offset: 0 as Integer,
+    pat: String_0::NULL,
+};
+
+/// What a sub-string entry defaults to.
+const DEFAULT_SUB_STRING: sub_string = sub_string {
+    sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+};
+
+/// What a history entry defaults to: the command-line history, no separator.
+const DEFAULT_HISTORY_ITEM: history_item = history_item {
+    histtype: HIST_CMD as uint8_t,
+    string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    sep: 0,
+};
+
+/// What a register entry defaults to: charwise, unnamed, no width.
+const DEFAULT_REGISTER: reg = reg {
+    name: 0,
+    type_0: kMTCharWise,
+    contents: ::core::ptr::null_mut::<String_0>(),
+    is_unnamed: false,
+    contents_size: 0 as size_t,
+    width: 0 as size_t,
+};
+
+/// What a variable entry defaults to.
+const DEFAULT_VARIABLE: global_var = global_var {
+    name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    value: typval_T {
+        v_type: VAR_UNKNOWN,
+        v_lock: VarLock::Unlocked,
+        vval: typval_vval_union {
+            v_string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
         },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     },
-    ShadaEntry {
-        type_0: kSDItemHeader,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            header: Dict {
-                size: 0 as size_t,
-                capacity: 0,
-                items: ::core::ptr::null_mut::<KeyValuePair>(),
-            },
+};
+
+/// What a buffer-list entry defaults to.
+const DEFAULT_BUFFER_LIST: buffer_list = buffer_list {
+    size: 0 as size_t,
+    buffers: ::core::ptr::null_mut::<buffer_list_buffer>(),
+};
+
+/// What a mark entry's fields default to. Only the name differs between the
+/// kinds: a jump and a change have none, while a mark the file does not name
+/// is the `"` one.
+const fn default_filemark(kind: ShadaEntryType) -> shada_filemark {
+    shada_filemark {
+        name: match kind {
+            kSDItemGlobalMark | kSDItemLocalMark => b'"' as ::core::ffi::c_char,
+            _ => 0,
         },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemSearchPattern,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            search_pattern: KeyDict__shada_search_pat {
-                is_set___shada_search_pat_: 0,
-                magic: true,
-                smartcase: false,
-                has_line_offset: false,
-                place_cursor_at_end: false,
-                is_last_used: true,
-                is_substitute_pattern: false,
-                highlighted: false,
-                search_backward: false,
-                offset: 0 as Integer,
-                pat: String_0::from_raw_parts(
-                    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    0 as size_t,
-                ),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemSubString,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            sub_string: sub_string {
-                sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemHistoryEntry,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            history_item: history_item {
-                histtype: HIST_CMD as ::core::ffi::c_int as uint8_t,
-                string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                sep: '\0' as ::core::ffi::c_char,
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemRegister,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            reg: reg {
-                name: '\0' as ::core::ffi::c_char,
-                type_0: kMTCharWise,
-                contents: ::core::ptr::null_mut::<String_0>(),
-                is_unnamed: false,
-                contents_size: 0 as size_t,
-                width: 0 as size_t,
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemVariable,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            global_var: global_var {
-                name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                value: typval_T {
-                    v_type: VAR_UNKNOWN,
-                    v_lock: VarLock::Unlocked,
-                    vval: typval_vval_union {
-                        v_string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-                    },
-                },
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemGlobalMark,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            filemark: shada_filemark {
-                name: '"' as ::core::ffi::c_char,
-                mark: pos_T {
-                    lnum: 1 as linenr_T,
-                    col: 0 as colnr_T,
-                    coladd: 0 as colnr_T,
-                },
-                fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemJump,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            filemark: shada_filemark {
-                name: '\0' as ::core::ffi::c_char,
-                mark: pos_T {
-                    lnum: 1 as linenr_T,
-                    col: 0 as colnr_T,
-                    coladd: 0 as colnr_T,
-                },
-                fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemBufferList,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            buffer_list: buffer_list {
-                size: 0 as size_t,
-                buffers: ::core::ptr::null_mut::<buffer_list_buffer>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemLocalMark,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            filemark: shada_filemark {
-                name: '"' as ::core::ffi::c_char,
-                mark: pos_T {
-                    lnum: 1 as linenr_T,
-                    col: 0 as colnr_T,
-                    coladd: 0 as colnr_T,
-                },
-                fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-    ShadaEntry {
-        type_0: kSDItemChange,
-        can_free_entry: false,
-        timestamp: 0 as Timestamp,
-        data: ShadaEntryData {
-            filemark: shada_filemark {
-                name: '\0' as ::core::ffi::c_char,
-                mark: pos_T {
-                    lnum: 1 as linenr_T,
-                    col: 0 as colnr_T,
-                    coladd: 0 as colnr_T,
-                },
-                fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            },
-        },
-        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
-    },
-]);
+        mark: DEFAULT_POS,
+        fname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    }
+}
+
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

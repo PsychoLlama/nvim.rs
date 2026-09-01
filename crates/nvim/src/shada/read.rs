@@ -112,19 +112,13 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         want_marks,
         get_old_files,
         oldfiles_list,
-        oldfiles_set: Set_cstr_t {
-            h: MAPHASH_INIT,
-            keys: core::ptr::null_mut(),
-        },
-        cl_bufs: Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: core::ptr::null_mut(),
-        },
+        oldfiles_set: SET_CSTR_INIT,
+        cl_bufs: SET_PTR_INIT,
         fname_bufs: MAP_INIT,
         hms,
     };
 
-    let mut entry: ShadaEntry = unsafe { core::mem::zeroed() };
+    let mut entry = ShadaEntry::MISSING;
     loop {
         match unsafe { shada_read_next_item(sd_reader, &raw mut entry, srni_flags, 0) } {
             kSDReadStatusSuccess => {}
@@ -144,28 +138,30 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
 impl Reading {
     /// Put one entry from the file where it belongs.
     unsafe fn apply(&mut self, mut entry: ShadaEntry) {
-        match entry.type_0 {
-            kSDItemMissing => unreachable!("shada: read an entry with no type"),
+        match entry.data {
+            ShadaEntryData::Missing => unreachable!("shada: read an entry with no type"),
             // Only reached with `kSDReadUnknown`, which a plain read
             // never asks for.
-            kSDItemUnknown => {}
-            kSDItemHeader => unsafe { shada_free_shada_entry(&raw mut entry) },
-            kSDItemSearchPattern => unsafe { self.apply_search_pattern(entry) },
-            kSDItemSubString => unsafe { self.apply_sub_string(entry) },
-            kSDItemHistoryEntry => unsafe { self.apply_history(entry) },
-            kSDItemRegister => unsafe { self.apply_register(entry) },
-            kSDItemVariable => unsafe { apply_variable(entry) },
-            kSDItemGlobalMark | kSDItemJump => unsafe { self.apply_file_mark(entry) },
-            kSDItemBufferList => unsafe { apply_buffer_list(entry) },
-            kSDItemLocalMark | kSDItemChange => unsafe { self.apply_buffer_mark(entry) },
-            _ => {}
+            ShadaEntryData::Unknown(_) => {}
+            ShadaEntryData::Header(_) => unsafe { shada_free_shada_entry(&raw mut entry) },
+            ShadaEntryData::SearchPattern(pat) => unsafe { self.apply_search_pattern(entry, pat) },
+            ShadaEntryData::SubString(sub) => unsafe { self.apply_sub_string(entry, sub) },
+            ShadaEntryData::HistoryEntry(item) => unsafe { self.apply_history(entry, item) },
+            ShadaEntryData::Register(reg) => unsafe { self.apply_register(entry, reg) },
+            ShadaEntryData::Variable(var) => unsafe { apply_variable(entry, var) },
+            ShadaEntryData::GlobalMark(_) | ShadaEntryData::Jump(_) => unsafe {
+                self.apply_file_mark(entry)
+            },
+            ShadaEntryData::BufferList(list) => unsafe { apply_buffer_list(entry, list) },
+            ShadaEntryData::LocalMark(_) | ShadaEntryData::Change(_) => unsafe {
+                self.apply_buffer_mark(entry)
+            },
         }
     }
 
     /// A search or substitute pattern. The one this session already has
     /// wins a tie, unless the read was forced.
-    unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry) {
-        let pat = unsafe { entry.data.search_pattern };
+    unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry, pat: KeyDict__shada_search_pat) {
         let is_sub = pat.is_substitute_pattern;
         if !self.force {
             let mut current: SearchPattern = unsafe { core::mem::zeroed() };
@@ -207,7 +203,7 @@ impl Reading {
     }
 
     /// The last `:substitute` replacement string.
-    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry) {
+    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry, sub_string: sub_string) {
         if !self.force {
             let mut current: SubReplacementString = unsafe { core::mem::zeroed() };
             unsafe { sub_get_replacement(&raw mut current) };
@@ -216,7 +212,7 @@ impl Reading {
                 return;
             }
         }
-        let sub = unsafe { entry.data.sub_string }.sub;
+        let sub = sub_string.sub;
         unsafe {
             sub_set_replacement(SubReplacementString {
                 sub,
@@ -231,8 +227,8 @@ impl Reading {
     }
 
     /// One history entry, handed to the merger for its type.
-    unsafe fn apply_history(&mut self, mut entry: ShadaEntry) {
-        let histtype = unsafe { entry.data.history_item }.histtype as c_uint;
+    unsafe fn apply_history(&mut self, mut entry: ShadaEntry, item: history_item) {
+        let histtype = item.histtype as c_uint;
         if histtype >= HIST_COUNT {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -242,8 +238,7 @@ impl Reading {
 
     /// One register. The register this session already holds wins a tie,
     /// unless the read was forced.
-    unsafe fn apply_register(&self, mut entry: ShadaEntry) {
-        let reg = unsafe { entry.data.reg };
+    unsafe fn apply_register(&self, mut entry: ShadaEntry, reg: reg) {
         if reg.type_0 != kMTCharWise && reg.type_0 != kMTLineWise && reg.type_0 != kMTBlockWise {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -273,14 +268,15 @@ impl Reading {
     /// buffer for that name is looked for first: when there is one the mark
     /// refers to it by number and the file name is dropped.
     unsafe fn apply_file_mark(&mut self, mut entry: ShadaEntry) {
-        let buf = unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark.fname) };
+        let buf =
+            unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark().fname) };
         if !buf.is_null() {
-            unsafe { xfree(entry.data.filemark.fname.cast()) };
-            entry.data.filemark.fname = core::ptr::null_mut();
+            unsafe { xfree(entry.data.filemark().fname.cast()) };
+            entry.data.filemark_mut().fname = core::ptr::null_mut();
         }
         let fm = xfmark_T {
             fmark: fmark_T {
-                mark: unsafe { entry.data.filemark }.mark,
+                mark: entry.data.filemark().mark,
                 fnum: if buf.is_null() {
                     0
                 } else {
@@ -291,10 +287,10 @@ impl Reading {
                 additional_data: entry.additional_data,
             },
             // Null exactly when a buffer was found, from just above.
-            fname: unsafe { entry.data.filemark }.fname,
+            fname: entry.data.filemark().fname,
         };
-        if entry.type_0 == kSDItemGlobalMark {
-            if !unsafe { mark_set_global(entry.data.filemark.name, fm, !self.force) } {
+        if let ShadaEntryData::GlobalMark(mark) = entry.data {
+            if !unsafe { mark_set_global(mark.name, fm, !self.force) } {
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
             return;
@@ -308,19 +304,19 @@ impl Reading {
     /// name matters even when the marks themselves were not asked for.
     unsafe fn apply_buffer_mark(&mut self, mut entry: ShadaEntry) {
         if self.get_old_files
-            && !unsafe { set_has_cstr_t(&raw mut self.oldfiles_set, entry.data.filemark.fname) }
+            && !unsafe { set_has_cstr_t(&raw mut self.oldfiles_set, entry.data.filemark().fname) }
         {
             // The entry's own string can be handed to the list, unless
             // the mark below is still going to need it.
             let fname = if self.want_marks {
-                unsafe { xstrdup(entry.data.filemark.fname) }
+                unsafe { xstrdup(entry.data.filemark().fname) }
             } else {
-                unsafe { entry.data.filemark }.fname
+                entry.data.filemark().fname
             };
             unsafe { set_put_cstr_t(&raw mut self.oldfiles_set, fname, core::ptr::null_mut()) };
             unsafe { tv_list_append_allocated_string(self.oldfiles_list, fname) };
             if !self.want_marks {
-                entry.data.filemark.fname = core::ptr::null_mut();
+                entry.data.filemark_mut().fname = core::ptr::null_mut();
             }
         }
         if !self.want_marks {
@@ -329,20 +325,21 @@ impl Reading {
         }
 
         // A mark on a file no buffer is holding has nowhere to go.
-        let buf = unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark.fname) };
+        let buf =
+            unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark().fname) };
         if buf.is_null() {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
         }
         let fm = fmark_T {
-            mark: unsafe { entry.data.filemark }.mark,
+            mark: entry.data.filemark().mark,
             fnum: unsafe { (*buf).handle } as c_int,
             timestamp: entry.timestamp,
             view: INIT_FMARKV,
             additional_data: entry.additional_data,
         };
-        if entry.type_0 == kSDItemLocalMark {
-            if !unsafe { mark_set_local(entry.data.filemark.name, buf, fm, !self.force) } {
+        if let ShadaEntryData::LocalMark(mark) = entry.data {
+            if !unsafe { mark_set_local(mark.name, buf, fm, !self.force) } {
                 unsafe { shada_free_shada_entry(&raw mut entry) };
                 return;
             }
@@ -351,7 +348,7 @@ impl Reading {
             unsafe { insert_change(buf, fm) };
         }
         // The mark took the extra data; only the file name is left.
-        unsafe { xfree(entry.data.filemark.fname.cast()) };
+        unsafe { xfree(entry.data.filemark().fname.cast()) };
     }
 
     /// Everything that could only be done once the whole file had been read.
@@ -389,16 +386,15 @@ impl Reading {
 
 /// A global variable. `var_set_global` takes the value over, so the entry
 /// is emptied of it before the rest is freed.
-unsafe fn apply_variable(mut entry: ShadaEntry) {
-    unsafe { var_set_global(entry.data.global_var.name, entry.data.global_var.value) };
-    entry.data.global_var.value.v_type = VAR_UNKNOWN;
+unsafe fn apply_variable(mut entry: ShadaEntry, var: global_var) {
+    unsafe { var_set_global(var.name, var.value) };
+    entry.data.variable_mut().value.v_type = VAR_UNKNOWN;
     unsafe { shada_free_shada_entry(&raw mut entry) };
 }
 
 /// The buffer list the file was written with: each name becomes a listed
 /// buffer with its cursor where it was left.
-unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
-    let list = unsafe { entry.data.buffer_list };
+unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: buffer_list) {
     for i in 0..list.size {
         let item = unsafe { list.buffers.add(i) };
         let sfname = unsafe { path_try_shorten_fname((*item).fname) };
@@ -543,35 +539,35 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
     if entry.is_null() || !unsafe { (*entry).can_free_entry } {
         return;
     }
-    match unsafe { (*entry).type_0 } {
-        kSDItemUnknown => unsafe { xfree((*entry).data.unknown_item.contents.cast()) },
-        kSDItemHeader => unsafe { api_free_dict((*entry).data.header) },
-        kSDItemGlobalMark | kSDItemJump | kSDItemLocalMark | kSDItemChange => {
-            unsafe { xfree((*entry).data.filemark.fname.cast()) };
-        }
-        kSDItemSearchPattern => unsafe { api_free_string((*entry).data.search_pattern.pat) },
-        kSDItemRegister => {
-            let reg = unsafe { (*entry).data.reg };
+    let data = unsafe { &mut (*entry).data };
+    match data {
+        ShadaEntryData::Missing => {}
+        ShadaEntryData::Unknown(item) => unsafe { xfree(item.contents.cast()) },
+        ShadaEntryData::Header(header) => unsafe { api_free_dict(*header) },
+        ShadaEntryData::GlobalMark(mark)
+        | ShadaEntryData::Jump(mark)
+        | ShadaEntryData::LocalMark(mark)
+        | ShadaEntryData::Change(mark) => unsafe { xfree(mark.fname.cast()) },
+        ShadaEntryData::SearchPattern(pattern) => unsafe { api_free_string(pattern.pat) },
+        ShadaEntryData::Register(reg) => {
             for i in 0..reg.contents_size {
                 unsafe { api_free_string(*reg.contents.add(i)) };
             }
             unsafe { xfree(reg.contents.cast()) };
         }
-        kSDItemHistoryEntry => unsafe { xfree((*entry).data.history_item.string.cast()) },
-        kSDItemVariable => {
-            unsafe { xfree((*entry).data.global_var.name.cast()) };
-            unsafe { tv_clear(&raw mut (*entry).data.global_var.value) };
+        ShadaEntryData::HistoryEntry(item) => unsafe { xfree(item.string.cast()) },
+        ShadaEntryData::Variable(var) => {
+            unsafe { xfree(var.name.cast()) };
+            unsafe { tv_clear(&raw mut var.value) };
         }
-        kSDItemSubString => unsafe { xfree((*entry).data.sub_string.sub.cast()) },
-        kSDItemBufferList => {
-            let list = unsafe { (*entry).data.buffer_list };
+        ShadaEntryData::SubString(sub) => unsafe { xfree(sub.sub.cast()) },
+        ShadaEntryData::BufferList(list) => {
             for i in 0..list.size {
                 unsafe { xfree((*list.buffers.add(i)).fname.cast()) };
                 unsafe { xfree((*list.buffers.add(i)).additional_data.cast()) };
             }
             unsafe { xfree(list.buffers.cast()) };
         }
-        _ => {}
     }
     unsafe { xfree((*entry).additional_data.cast()) };
     unsafe { (*entry).additional_data = core::ptr::null_mut() };

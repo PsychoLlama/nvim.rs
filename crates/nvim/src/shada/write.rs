@@ -90,16 +90,13 @@ pub(crate) unsafe fn shada_write(
         return kSDWriteSuccessful;
     };
 
-    let wms = unsafe { xcalloc(1, size_of::<WriteMergerState>()) }.cast::<WriteMergerState>();
+    let wms = shada_heap(WriteMergerState::EMPTY);
     let histories = unsafe { init_histories(wms, !sd_reader.is_null()) };
     let srni_flags = wanted_kinds(&limits, &histories);
 
     let mut writing = Writing {
         wms,
-        removable_bufs: Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: core::ptr::null_mut(),
-        },
+        removable_bufs: SET_PTR_INIT,
         packer: unsafe { packer_buffer_for_file(sd_writer) },
         limits,
         histories,
@@ -228,12 +225,9 @@ impl Writing {
                 Object::string(unsafe { cstr_as_string(p_enc.get()) }),
             );
         let entry = ShadaEntry {
-            type_0: kSDItemHeader,
             can_free_entry: false,
             timestamp: os_time(),
-            data: ShadaEntryData {
-                header: header.dict(),
-            },
+            data: ShadaEntryData::Header(header.dict()),
             additional_data: core::ptr::null_mut(),
         };
         unsafe { self.pack(entry, 0) }
@@ -244,7 +238,7 @@ impl Writing {
     unsafe fn write_buflist(&mut self) -> ShaDaWriteResult {
         let entry = unsafe { shada_get_buflist(&raw mut self.removable_bufs) };
         let ret = unsafe { self.pack(entry, 0) };
-        unsafe { xfree(entry.data.buffer_list.buffers.cast()) };
+        unsafe { xfree(entry.data.buffer_list().buffers.cast()) };
         ret
     }
 
@@ -278,15 +272,12 @@ impl Writing {
             let mut tgttv: typval_T = unsafe { core::mem::zeroed() };
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
             let entry = ShadaEntry {
-                type_0: kSDItemVariable,
                 can_free_entry: false,
                 timestamp,
-                data: ShadaEntryData {
-                    global_var: global_var {
-                        name: name.cast_mut(),
-                        value: tgttv,
-                    },
-                },
+                data: ShadaEntryData::Variable(global_var {
+                    name: name.cast_mut(),
+                    value: tgttv,
+                }),
                 additional_data: core::ptr::null_mut(),
             };
             let ret = unsafe { self.pack(entry, self.limits.max_kbyte) };
@@ -358,12 +349,9 @@ impl Writing {
         // An empty replacement string is not worth storing.
         if !sub.sub.is_null() {
             let entry = ShadaEntry {
-                type_0: kSDItemSubString,
                 can_free_entry: false,
                 timestamp: sub.timestamp,
-                data: ShadaEntryData {
-                    sub_string: sub_string { sub: sub.sub },
-                },
+                data: ShadaEntryData::SubString(sub_string { sub: sub.sub }),
                 additional_data: sub.additional_data,
             };
             unsafe { (*self.wms).replacement = entry };
@@ -390,16 +378,13 @@ impl Writing {
 
             if let Some(fname) = unsafe { self.mark_fname(&fm) } {
                 let entry = ShadaEntry {
-                    type_0: kSDItemGlobalMark,
                     can_free_entry: false,
                     timestamp: fm.fmark.timestamp,
-                    data: ShadaEntryData {
-                        filemark: shada_filemark {
-                            name,
-                            mark: fm.fmark.mark,
-                            fname: fname.cast_mut(),
-                        },
-                    },
+                    data: ShadaEntryData::GlobalMark(shada_filemark {
+                        name,
+                        mark: fm.fmark.mark,
+                        fname: fname.cast_mut(),
+                    }),
                     additional_data: fm.fmark.additional_data,
                 };
                 // The ten numbered marks are simply the ten most
@@ -461,16 +446,13 @@ impl Writing {
                 break;
             }
             let entry = ShadaEntry {
-                type_0: kSDItemLocalMark,
                 can_free_entry: false,
                 timestamp: fm.timestamp,
-                data: ShadaEntryData {
-                    filemark: shada_filemark {
-                        name,
-                        mark: fm.mark,
-                        fname,
-                    },
-                },
+                data: ShadaEntryData::LocalMark(shada_filemark {
+                    name,
+                    mark: fm.mark,
+                    fname,
+                }),
                 additional_data: fm.additional_data,
             };
             unsafe { (*filemarks).marks[mark_local_index(name) as usize] = entry };
@@ -485,16 +467,13 @@ impl Writing {
         for i in 0..unsafe { (*buf).b_changelistlen } as usize {
             let fm = unsafe { (*buf).b_changelist[i].clone() };
             let entry = ShadaEntry {
-                type_0: kSDItemChange,
                 can_free_entry: false,
                 timestamp: fm.timestamp,
-                data: ShadaEntryData {
-                    filemark: shada_filemark {
-                        name: 0,
-                        mark: fm.mark,
-                        fname,
-                    },
-                },
+                data: ShadaEntryData::Change(shada_filemark {
+                    name: 0,
+                    mark: fm.mark,
+                    fname,
+                }),
                 additional_data: fm.additional_data,
             };
             unsafe { (*filemarks).changes[i] = entry };
@@ -522,7 +501,8 @@ impl Writing {
             unsafe { *key_alloc = xstrdup(fname) };
         }
         if unsafe { (*slot).is_null() } {
-            unsafe { *slot = xcalloc(1, size_of::<FileMarks>()) };
+            let marks = shada_heap(FileMarks::EMPTY).cast::<c_void>();
+            unsafe { *slot = marks };
         }
         unsafe { (*slot).cast::<FileMarks>() }
     }
@@ -537,16 +517,13 @@ impl Writing {
             return;
         }
         let entry = ShadaEntry {
-            type_0: kSDItemGlobalMark,
             can_free_entry: false,
             timestamp: os_time(),
-            data: ShadaEntryData {
-                filemark: shada_filemark {
-                    name: '0' as c_char,
-                    mark: unsafe { (*curwin.get()).w_cursor },
-                    fname: unsafe { (*curbuf.get()).b_ffname },
-                },
-            },
+            data: ShadaEntryData::GlobalMark(shada_filemark {
+                name: '0' as c_char,
+                mark: unsafe { (*curwin.get()).w_cursor },
+                fname: unsafe { (*curbuf.get()).b_ffname },
+            }),
             additional_data: core::ptr::null_mut(),
         };
         unsafe { replace_numbered_mark(self.wms, 0, entry) };
@@ -569,9 +546,7 @@ impl Writing {
             unsafe { (*wms).sub_search_pattern },
             unsafe { (*wms).replacement },
         ] {
-            if entry.type_0 != kSDItemMissing
-                && unsafe { self.pack_freeing(entry) } == kSDWriteFailed
-            {
+            if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
                 return kSDWriteFailed;
             }
         }
@@ -656,9 +631,7 @@ impl Writing {
         let entries = entries.cast::<ShadaEntry>();
         for i in 0..N {
             let entry = unsafe { *entries.add(i) };
-            if entry.type_0 != kSDItemMissing
-                && unsafe { self.pack_freeing(entry) } == kSDWriteFailed
-            {
+            if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
                 return kSDWriteFailed;
             }
         }
