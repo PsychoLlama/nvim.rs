@@ -16,6 +16,7 @@ use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::{Lock, Suppress};
+use crate::memory::xstrlcpy;
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -175,7 +176,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<
         // A relative link is relative to the directory of the name it
         // was found in, so it replaces only the tail of `tmp`.
         if unsafe { path_is_absolute(buf) } {
-            unsafe { strcpy(tmp.as_mut_ptr(), buf) };
+            unsafe { xstrlcpy(tmp.as_mut_ptr(), buf, tmp.len()) };
         } else {
             let tail = unsafe { path_tail(tmp.as_ptr()) };
             if unsafe { cstr::bytes_at(tail) }.len() + unsafe { cstr::bytes_at(buf) }.len()
@@ -183,7 +184,8 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<
             {
                 return Err(Failed);
             }
-            unsafe { strcpy(tail, buf) };
+            let room = tmp.len() - unsafe { tail.offset_from(tmp.as_ptr()) } as usize;
+            unsafe { xstrlcpy(tail, buf, room) };
         }
     }
 

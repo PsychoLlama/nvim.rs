@@ -31,6 +31,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::types::AutoEvent;
+use ::libc::strcasecmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::autocmd::apply_autocmds;
@@ -55,7 +56,6 @@ use crate::types::{
     synblock_T, win_T,
 };
 use crate::window::win_valid_any_tab;
-use ::libc::{strcasecmp, strcpy};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
@@ -106,7 +106,8 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
 
     // The name is passed to spell_load_cb() as a cookie, and truncated
     // there when an error is found.
-    unsafe { strcpy(sl.sl_lang.as_mut_ptr(), lang) };
+    let (into, room) = (sl.sl_lang.as_mut_ptr(), sl.sl_lang.len());
+    unsafe { xstrlcpy(into, lang, room) };
     sl.sl_slang = core::ptr::null_mut();
     sl.sl_nobreak = 0;
 
@@ -164,7 +165,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         // At least one file loaded; now take all the additions.
         let ptr_len = unsafe { cstr::bytes_at(fname_enc.as_ptr()) }.len();
         let at = unsafe { fname_enc.as_mut_ptr().add(ptr_len - 3) };
-        unsafe { strcpy(at, c"add.spl".as_ptr()) };
+        unsafe { xstrlcpy(at, c"add.spl".as_ptr(), fname_enc.len() - (ptr_len - 3)) };
         let _ =
             unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
     }
@@ -407,7 +408,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
                 let sep = c",".as_ptr() as *mut c_char;
                 let len = unsafe { copy_option_part(&raw mut spf, buf, room, sep) } as c_int;
                 let tail = unsafe { buf.offset(len as isize) };
-                unsafe { strcpy(tail, c".spl".as_ptr()) };
+                unsafe { xstrlcpy(tail, c".spl".as_ptr(), MAXPATHL as usize - len as usize) };
 
                 // Skip it if the loop above already took it.
                 let mut c = 0;
@@ -443,7 +444,8 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
                 // ignored for these. The internal word list gets an
                 // arbitrary name.
                 if round == 0 {
-                    unsafe { strcpy(lang.as_mut_ptr(), c"internal wordlist".as_ptr()) };
+                    let (into, name) = (lang.as_mut_ptr(), c"internal wordlist");
+                    unsafe { xstrlcpy(into, name.as_ptr(), MAXWLEN + 1) };
                 } else {
                     let tail = unsafe { path_tail(spf_name.as_mut_ptr()) };
                     unsafe { xstrlcpy(lang.as_mut_ptr(), tail, MAXWLEN + 1) };

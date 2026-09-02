@@ -103,7 +103,7 @@ use crate::types::{
     typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
-use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat, strcpy};
+use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;

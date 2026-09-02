@@ -27,6 +27,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::xstrlcpy;
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -194,7 +195,7 @@ pub(crate) unsafe fn do_in_cached_path(
         // SAFETY: the length test above proves the directory and its separator
         // fit, so `tail` lands inside `buf`.
         let tail = unsafe {
-            strcpy(buf.as_mut_ptr(), item.path);
+            xstrlcpy(buf.as_mut_ptr(), item.path, MAXPATHL as usize);
             add_pathsep(buf.as_mut_ptr());
             buf.as_mut_ptr().add(cstr::bytes_at(buf.as_ptr()).len())
         };

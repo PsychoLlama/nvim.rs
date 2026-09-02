@@ -42,6 +42,7 @@ use crate::hashtab::hash_find;
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, mb_isupper, utf_char2bytes, utf_fold, utf_ptr2char};
 use crate::memory::xmemcpyz;
+use crate::memory::xstrlcpy;
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
@@ -49,8 +50,8 @@ use crate::spellsuggest::{
     suginfo_T,
 };
 use crate::types::{MB_MAXCHAR, NUL, size_t, slang_T, wordcount_T};
-use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
+use core::ptr;
 
 /// A sound-folded word and the room around it, as the callers keep it.
 pub(super) type SoundBuf = [c_char; MAXWLEN];
@@ -725,8 +726,8 @@ pub(super) unsafe fn stp_sal_score(
         // unless the good word has one too.
         //
         // SAFETY: as above; `st_word` is NUL-terminated, `fword` now is
-        // too, and each `strcpy` copies a NUL-terminated tail down one
-        // byte inside `fword`.
+        // too, and each copy moves a NUL-terminated tail down one byte
+        // inside `fword`.
         if ascii_iswhite(unsafe { *su.su_badptr.offset(su.su_badlen as isize) } as c_int)
             && unsafe { *skiptowhite(stp.st_word) } == NUL as c_char
         {
@@ -736,8 +737,11 @@ pub(super) unsafe fn stp_sal_score(
                 if unsafe { *p } == NUL as c_char {
                     break;
                 }
-                // Close the gap over the space in place.
-                unsafe { strcpy(p, p.add(1)) };
+                // Close the gap over the space in place. Upstream's
+                // `STRMOVE`, which is `memmove`: the two overlap by every
+                // byte but one, which `strcpy` does not allow.
+                let rest = unsafe { cstr::bytes_at(p.add(1)) }.len() + 1;
+                unsafe { ptr::copy(p.add(1), p, rest) };
             }
         }
 
@@ -754,7 +758,7 @@ pub(super) unsafe fn stp_sal_score(
         // SAFETY: the test above leaves `st_wordlen + lendiff` under
         // `MAXWLEN`, so both the word and the tail fit in `goodword`, and
         // the tail really is `lendiff` bytes of the line.
-        unsafe { strcpy(goodword.as_mut_ptr(), stp.st_word) };
+        unsafe { xstrlcpy(goodword.as_mut_ptr(), stp.st_word, goodword.len()) };
         let tail = unsafe { goodword.as_mut_ptr().offset(stp.st_wordlen as isize) };
         let rest = unsafe { su.su_badptr.offset((su.su_badlen - lendiff) as isize) };
         unsafe { xmemcpyz(tail as *mut _, rest as *const _, lendiff as size_t) };

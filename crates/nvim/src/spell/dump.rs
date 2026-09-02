@@ -27,6 +27,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::memory::xstrlcat;
 use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -50,7 +51,6 @@ use crate::types::{
     Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, hashitem_T, idx_T, langp_T,
     linenr_T, size_t, slang_T, wordcount_T,
 };
-use ::libc::{strcat, strcpy};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
@@ -356,15 +356,16 @@ unsafe fn dump_word(
 
     if pat.is_null() {
         if flags.has(WordFlags::BANNED | WordFlags::RARE | WordFlags::REGION) || keepcap {
-            unsafe { strcpy(badword.as_mut_ptr(), p) };
-            unsafe { strcat(badword.as_mut_ptr(), c"/".as_ptr()) };
+            let room = badword.len();
+            unsafe { xstrlcpy(badword.as_mut_ptr(), p, room) };
+            unsafe { xstrlcat(badword.as_mut_ptr(), c"/".as_ptr(), room) };
             if keepcap {
-                unsafe { strcat(badword.as_mut_ptr(), c"=".as_ptr()) };
+                unsafe { xstrlcat(badword.as_mut_ptr(), c"=".as_ptr(), room) };
             }
             if flags.has(WordFlags::BANNED) {
-                unsafe { strcat(badword.as_mut_ptr(), c"!".as_ptr()) };
+                unsafe { xstrlcat(badword.as_mut_ptr(), c"!".as_ptr(), room) };
             } else if flags.has(WordFlags::RARE) {
-                unsafe { strcat(badword.as_mut_ptr(), c"?".as_ptr()) };
+                unsafe { xstrlcat(badword.as_mut_ptr(), c"?".as_ptr(), room) };
             }
             if flags.has(WordFlags::REGION) {
                 for i in 0..7 {

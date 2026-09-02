@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::memory::xstrlcpy;
 use crate::winlayer::Win;
 
 use crate::api::private::helpers::cstr_as_string;
@@ -38,7 +39,6 @@ use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
 use crate::types::{Array, NUL, Object, OptInt, colnr_T, linenr_T};
 use crate::ui::{ui_call_msg_showcmd, ui_has};
-use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::highlight_group::HLF_MSG;
@@ -316,7 +316,8 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
         if display[0] as c_int == ' ' as c_int {
-            unsafe { strcpy(display.as_mut_ptr(), c"<20>".as_ptr().cast_mut()) };
+            let room = display.len();
+            unsafe { xstrlcpy(display.as_mut_ptr(), c"<20>".as_ptr(), room) };
         }
         unsafe { CStr::from_ptr(display.as_ptr()) }
     } else {

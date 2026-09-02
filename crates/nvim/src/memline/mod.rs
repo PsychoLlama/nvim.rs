@@ -82,7 +82,7 @@ use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;
 use crate::winlayer::{Buf, buffers};
-use ::libc::{__errno_location, close, lseek, readlink, strcasecmp, strcpy};
+use ::libc::{__errno_location, close, lseek, readlink, strcasecmp};
 
 // The carve of the transpiled module; see each child's docs.
 mod block0;

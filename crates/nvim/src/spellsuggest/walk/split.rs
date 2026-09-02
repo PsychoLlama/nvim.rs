@@ -29,13 +29,13 @@
 use crate::charset::{skiptowhite, skipwhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
+use crate::memory::xstrlcat;
 use crate::spell::WordFlags;
 use crate::spell::{byte_in_str, can_compound, match_compoundrule, nofold_len, spell_iswordp_nmw};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
 use crate::spellsuggest::{MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, badword_captype};
 use crate::types::NUL;
-use ::libc::strcat;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -132,7 +132,8 @@ impl Walk {
         if !try_compound && !bad_word_ends {
             // SAFETY: `preword` is this walk's own NUL-terminated buffer,
             // with room for the separator after the word it holds.
-            unsafe { strcat(self.preword.as_mut_ptr(), c" ".as_ptr()) };
+            let room = self.preword.len();
+            unsafe { xstrlcat(self.preword.as_mut_ptr(), c" ".as_ptr(), room) };
         }
         self.stack[child].preword_len = self.preword_len() as u8;
         self.stack[child].split_off = self.stack[child].good_len;
