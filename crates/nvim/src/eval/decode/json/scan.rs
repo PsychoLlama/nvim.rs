@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use crate::message_fmt::{c_str_len, emsg_text};
 use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int};
@@ -43,10 +44,6 @@ const E685_FLOAT: &CStr = c"E685: internal error: while converting number \"%.*s
                             string2float consumed %zu bytes in place of %zu";
 const E685_INTEGER: &CStr = c"E685: internal error: while converting number \"%.*s\" to integer \
                               vim_str2nr consumed %i bytes in place of %zu";
-
-/// `vim_str2nr` flags: read hexadecimal, and read it whatever the prefix says.
-const STR2NR_HEX: c_int = 4;
-const STR2NR_FORCE: c_int = 128;
 
 /// The UTF-16 surrogate range, which JSON's `\u` escapes use to spell a code
 /// point above U+FFFF as two escapes.
@@ -191,7 +188,7 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
             let mut ch: uvarnumber_T = 0;
             let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
             let (nptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
-            let what = STR2NR_HEX | STR2NR_FORCE;
+            let what = Str2NrBases::HEX | Str2NrBases::FORCE;
             let start = hex.as_ptr();
             #[rustfmt::skip]
             unsafe { vim_str2nr(start, prep, len, what, nptr, &raw mut ch, 4, true, overflow) };
@@ -333,9 +330,9 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         let mut got: c_int = 0;
         let prep = ::core::ptr::null_mut();
         let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
-        let maxlen = want as c_int;
+        let (maxlen, dec) = (want as c_int, Str2NrBases::NONE);
         #[rustfmt::skip]
-        unsafe { vim_str2nr(text, prep, &raw mut got, 0, &raw mut nr, unptr, maxlen, true, overflow) };
+        unsafe { vim_str2nr(text, prep, &raw mut got, dec, &raw mut nr, unptr, maxlen, true, overflow) };
         if want as c_int != got {
             // SAFETY: `text` is readable for `want` bytes.
             let shown = unsafe { c_str_len(text, want) };

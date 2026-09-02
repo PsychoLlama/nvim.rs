@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::Str2NrBases;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::NUL;
@@ -35,7 +36,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             if let Some(s) = val.as_string().filter(|s| !s.is_null()) {
                 let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
                 let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
-                let all = STR2NR_ALL as ::core::ffi::c_int;
+                let all = Str2NrBases::ALL;
                 #[rustfmt::skip]
                 unsafe { vim_str2nr(s, prep, len, all, &raw mut n, unptr, 0, false, overflow) };
             }

@@ -138,11 +138,6 @@ pub const NUMBUFLEN: ::core::ffi::c_int = 65;
 /// `ExtmarkOp`: the edit is undoable, so extmarks move with it.
 pub const kExtmarkUndo: ExtmarkOp = 1;
 
-/// `vim_str2nr` flags: which bases 'nrformats' allows.
-pub const STR2NR_BIN: ::core::ffi::c_int = 1;
-pub const STR2NR_OCT: ::core::ffi::c_int = 2;
-pub const STR2NR_HEX: ::core::ffi::c_int = 4;
-
 /// The three region shapes an operator can be given.
 pub const kMTCharWise: MotionType = 0;
 pub const kMTLineWise: MotionType = 1;

@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -54,7 +55,7 @@ fn first_char_len(line: &[u8]) -> size_t {
 
 /// `vim_str2nr` over a slice: the unsigned value, the prefix letter it
 /// recognised and how many bytes it consumed.
-fn str2nr(bytes: &[u8], what: c_int) -> (uvarnumber_T, c_int, size_t) {
+fn str2nr(bytes: &[u8], what: Str2NrBases) -> (uvarnumber_T, c_int, size_t) {
     debug_assert!(!bytes.is_empty(), "vim_str2nr reads the first byte eagerly");
     let mut value: uvarnumber_T = 0;
     let mut prefix: c_int = 0;
@@ -236,7 +237,7 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
             significand = significand * 10.0 + float_T::from(byte - b'0');
         }
         let mut exp_part: uvarnumber_T = if exp_start != 0 {
-            str2nr(&line[exp_start..ret.len], 0).0
+            str2nr(&line[exp_start..ret.len], Str2NrBases::NONE).0
         } else {
             0
         };
@@ -250,7 +251,7 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         }
         ret.data.num.val.floating = scale_number(significand, 10, exp_part, exp_negative);
     } else {
-        let (value, prefix, len) = str2nr(line, STR2NR_ALL as c_int);
+        let (value, prefix, len) = str2nr(line, Str2NrBases::ALL);
         ret.len = len;
         ret.data.num.val.integer = value;
         base = base_for_prefix(prefix);

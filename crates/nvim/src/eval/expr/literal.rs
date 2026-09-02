@@ -10,6 +10,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -20,8 +21,8 @@ use crate::charset::{hex2nr, skipdigits, vim_str2nr};
 use crate::eval::typval::{tv_blob_alloc, tv_blob_set_ret, tv_clear};
 use crate::eval::vars::{eval_one_expr_in_str, optval_as_tv};
 use crate::eval::{
-    BS, CAR, ESC, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, STR2NR_ALL, TAB,
-    find_option_var_end, get_env_len,
+    BS, CAR, ESC, FF, FSK_IN_STRING, FSK_KEYCODE, FSK_SIMPLIFY, NL, TAB, find_option_var_end,
+    get_env_len,
 };
 use crate::eval::{Cur, Tv};
 use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
@@ -315,7 +316,7 @@ pub(crate) unsafe fn eval_number(
         let mut len: c_int = 0;
         let mut n: varnumber_T = 0;
         let (text, lenp, np) = (cur.get(), &raw mut len, &raw mut n);
-        let all = STR2NR_ALL as c_int;
+        let all = Str2NrBases::ALL;
         // SAFETY: the cursor is on the first digit and the two
         // out-parameters are this frame's locals.
         let (skip_pre, no_len, no_ov) = (null_mut(), null_mut(), null_mut());

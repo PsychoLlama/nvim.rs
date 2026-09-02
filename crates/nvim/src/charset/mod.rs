@@ -45,6 +45,7 @@ use ::libc::{__errno_location, abort};
 
 pub mod display;
 pub mod str2nr;
+pub use str2nr::Str2NrBases;
 pub mod transchar;
 
 // The display half was split out for size; its callers are spread over three
@@ -59,18 +60,6 @@ pub use display::{
 };
 
 use crate::keycodes::Ctrl_V;
-
-/// Bases `vim_str2nr` may recognise, plus the two behaviour flags. `FORCE`
-/// says "the string has no prefix, parse it in the base named by the rest";
-/// `QUOTE` allows `'` as a digit separator.
-pub const STR2NR_DEC: c_int = 0;
-pub const STR2NR_BIN: c_int = 1;
-pub const STR2NR_OCT: c_int = 2;
-pub const STR2NR_HEX: c_int = 4;
-pub const STR2NR_OOCT: c_int = 8;
-pub const STR2NR_ALL: c_int = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT;
-pub const STR2NR_FORCE: c_int = 128;
-pub const STR2NR_QUOTE: c_int = 16;
 
 /// Bits of a `g_chartab` entry.
 const CT_CELL_MASK: uint8_t = 0x7;
@@ -831,7 +820,7 @@ impl Scan {
 /// (`len`), the signed and unsigned values (`nptr`, `unptr`) and whether the
 /// value was clamped (`overflow`).
 ///
-/// `what` is a set of `STR2NR_*` flags. `maxlen` bounds the scan (zero means
+/// `what` is a set of [`Str2NrBases`]. `maxlen` bounds the scan (zero means
 /// the whole string), and `strict` makes a trailing letter or digit reject
 /// the parse outright, leaving `len` at zero.
 ///
@@ -848,7 +837,7 @@ pub unsafe fn vim_str2nr(
     start: *const c_char,
     prep: *mut c_int,
     len: *mut c_int,
-    what: c_int,
+    what: Str2NrBases,
     nptr: *mut varnumber_T,
     unptr: *mut uvarnumber_T,
     maxlen: c_int,

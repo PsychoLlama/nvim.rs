@@ -81,6 +81,13 @@ DECL = re.compile(
     r"(fn|static mut|static|const|struct|enum|union|trait|type|mod) ([A-Za-z0-9_]+)",
     re.M,
 )
+# `flag_set!`/`char_flags!` declare a type the way a `pub struct` would, but
+# from inside a macro invocation, where DECL cannot see it. The head is the
+# invocation's first `pub struct`, optionally naming its backing integer.
+FLAG_SET = re.compile(
+    r"^(?:crate::)?(?:flag_set|char_flags)!\s*\{(.*?)^\}", re.M | re.S
+)
+FLAG_SET_HEAD = re.compile(r"^\s*pub struct ([A-Za-z0-9_]+)\s*(?::[^;]*)?;", re.M)
 # A `pub use` at column 0, up to its `;`. Multi-line trees included.
 REEXPORT = re.compile(r"^pub use ([^;]*);", re.M | re.S)
 # Comment lines, which are stripped before any of the above run.
@@ -179,6 +186,9 @@ def declarations(path: Path):
     what it re-exports, whether it re-exports a glob)."""
     text = strip_comments(path.read_text())
     declared = {name: kind.replace(" ", "-") for kind, name in DECL.findall(text)}
+    for body in FLAG_SET.findall(text):
+        for name in FLAG_SET_HEAD.findall(body):
+            declared.setdefault(name, "struct")
     through = {}
     globbed = False
     for tree in REEXPORT.findall(text):

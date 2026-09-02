@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::keycodes::{Key, find_special_key};
 use crate::types::CmdIdx;
@@ -47,9 +48,9 @@ use crate::types::{
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
-    STR2NR_ALL, didset_options, didset_options2, get_option, get_option_default, get_option_value,
-    get_varp, get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf,
-    kOptScopeWin, kOptValTypeBoolean, option_has_scope, option_has_type, option_is_global_local,
+    didset_options, didset_options2, get_option, get_option_default, get_option_value, get_varp,
+    get_varp_scope, is_tty_option, kOptFlagMLE, kOptFlagSecure, kOptScopeBuf, kOptScopeWin,
+    kOptValTypeBoolean, option_has_scope, option_has_type, option_is_global_local,
     option_is_window_local, option_scope_idx, option_var, optval_copy, optval_from_varp,
     set_option, set_options_default, showoneopt, showoptions, stropt_get_newval,
     unset_option_local_value,
@@ -384,7 +385,7 @@ unsafe fn take_number(
             arg,
             ptr::null_mut(),
             &raw mut len,
-            STR2NR_ALL as c_int,
+            Str2NrBases::ALL,
             &raw mut number,
             ptr::null_mut::<uvarnumber_T>(),
             0,

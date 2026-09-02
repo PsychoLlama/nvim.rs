@@ -15,10 +15,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::{given, strcase_save, strict_bool_arg, xstrnsave};
-use crate::charset::{
-    STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE, skipwhite,
-    transstr, vim_str2nr,
-};
+use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
@@ -62,7 +59,7 @@ pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut base = 10;
-    let mut what = 0;
+    let mut what = Str2NrBases::NONE;
     if given(unsafe { &*argvars.add(1) }) {
         base = unsafe { tv_get_number(argvars.add(1)) as c_int };
         if !matches!(base, 2 | 8 | 10 | 16) {
@@ -70,7 +67,7 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
             return;
         }
         if given(unsafe { &*argvars.add(2) }) && unsafe { tv_get_bool(argvars.add(2)) } != 0 {
-            what |= STR2NR_QUOTE;
+            what |= Str2NrBases::QUOTE;
         }
     }
 
@@ -82,10 +79,10 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
     // An explicit base forces that radix; base 10 accepts none.
     what |= match base {
-        2 => STR2NR_BIN | STR2NR_FORCE,
-        8 => STR2NR_OCT | STR2NR_OOCT | STR2NR_FORCE,
-        16 => STR2NR_HEX | STR2NR_FORCE,
-        _ => 0,
+        2 => Str2NrBases::BIN | Str2NrBases::FORCE,
+        8 => Str2NrBases::OCT_ANY | Str2NrBases::FORCE,
+        16 => Str2NrBases::HEX | Str2NrBases::FORCE,
+        _ => Str2NrBases::NONE,
     };
 
     let mut n: varnumber_T = 0;

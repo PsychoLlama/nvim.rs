@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::types::BS;
 use crate::types::DEL;
@@ -46,9 +47,6 @@ mod codes;
 pub use self::codes::*;
 mod tables;
 pub use self::tables::*;
-
-/// [`vim_str2nr`] flags: accept decimal, octal, hex and binary alike.
-const STR2NR_ALL: c_int = 15;
 
 /// The key code of a `KS_EXTRA` key — everything with no termcap name of its
 /// own, which is most of what a modern terminal sends.
@@ -169,15 +167,11 @@ unsafe fn number_at(p: Cursor) -> (uvarnumber_T, c_int) {
     // spread over nine lines would be nine unchecked lines.
     let (start, prep, lenp) = (p.raw(), ptr::null_mut(), &raw mut len);
     let (nptr, unptr) = (ptr::null_mut::<varnumber_T>(), &raw mut number);
-    let overflow = ptr::null_mut();
+    let (overflow, all) = (ptr::null_mut(), Str2NrBases::ALL);
     // SAFETY: the caller's promise, and every out-parameter is a live local
     // or null. Upstream passes null for `unptr` at the one call site that
     // does not want the value; writing a local it then ignores is the same.
-    unsafe {
-        vim_str2nr(
-            start, prep, lenp, STR2NR_ALL, nptr, unptr, 0, true, overflow,
-        )
-    };
+    unsafe { vim_str2nr(start, prep, lenp, all, nptr, unptr, 0, true, overflow) };
     (number, len)
 }
 

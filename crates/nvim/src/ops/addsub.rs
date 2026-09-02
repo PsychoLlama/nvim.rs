@@ -25,6 +25,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::charset::Str2NrBases;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
@@ -553,9 +554,9 @@ unsafe fn replace_number(
     let mut pre: c_int = 0;
     let mut n: uvarnumber_T = 0;
     let mut overflow = false;
-    let bases = (if fmt.bin { STR2NR_BIN as c_int } else { 0 })
-        + (if fmt.oct { STR2NR_OCT as c_int } else { 0 })
-        + (if fmt.hex { STR2NR_HEX as c_int } else { 0 });
+    let bases = Str2NrBases::BIN.when(fmt.bin)
+        | Str2NrBases::OCT.when(fmt.oct)
+        | Str2NrBases::HEX.when(fmt.hex);
     let none = ::core::ptr::null_mut();
     let at = unsafe { ptr.offset(col as isize) };
     let (prep, np, op) = (&raw mut pre, &raw mut n, &raw mut overflow);

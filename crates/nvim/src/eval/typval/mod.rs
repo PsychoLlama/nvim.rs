@@ -75,7 +75,6 @@ pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
 pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
-pub const STR2NR_ALL: ::core::ffi::c_uint = 15;
 #[derive(Copy, Clone)]
 pub struct Join {
     pub s: String_0,

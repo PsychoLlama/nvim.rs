@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::keycodes::{Ctrl_N, Key};
 use crate::types::{ExpandContext, Failed, NUL};
@@ -192,7 +193,7 @@ pub unsafe fn get_list_range(
                 *str,
                 ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 &raw mut len,
-                0,
+                Str2NrBases::NONE,
                 &raw mut num,
                 ::core::ptr::null_mut::<uvarnumber_T>(),
                 0,
@@ -217,7 +218,7 @@ pub unsafe fn get_list_range(
                 *str,
                 ::core::ptr::null_mut::<::core::ffi::c_int>(),
                 &raw mut len,
-                0,
+                Str2NrBases::NONE,
                 &raw mut num,
                 ::core::ptr::null_mut::<uvarnumber_T>(),
                 0,

@@ -3,22 +3,21 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use neovim::charset::{
-    STR2NR_ALL, STR2NR_BIN, STR2NR_DEC, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT,
-    STR2NR_QUOTE, vim_str2nr,
-};
+use neovim::charset::{Str2NrBases, vim_str2nr};
 use neovim::types::typval::{uvarnumber_T, varnumber_T};
 
 use crate::support::cstr;
 
-const DEC: c_int = STR2NR_DEC as c_int;
-const BIN: c_int = STR2NR_BIN as c_int;
-const OCT: c_int = STR2NR_OCT as c_int;
-const OOCT: c_int = STR2NR_OOCT as c_int;
-const HEX: c_int = STR2NR_HEX as c_int;
-const ALL: c_int = STR2NR_ALL as c_int;
-const FORCE: c_int = STR2NR_FORCE as c_int;
-const QUOTE: c_int = STR2NR_QUOTE as c_int;
+// The cases below add these together the way the Lua spec did, so they stay
+// bare integers here and the call wraps them back up.
+const DEC: c_int = Str2NrBases::NONE.bits();
+const BIN: c_int = Str2NrBases::BIN.bits();
+const OCT: c_int = Str2NrBases::OCT.bits();
+const OOCT: c_int = Str2NrBases::OOCT.bits();
+const HEX: c_int = Str2NrBases::HEX.bits();
+const ALL: c_int = Str2NrBases::ALL.bits();
+const FORCE: c_int = Str2NrBases::FORCE.bits();
+const QUOTE: c_int = Str2NrBases::QUOTE.bits();
 
 /// The out-arguments a case expects. A `None` field is never passed to
 /// `vim_str2nr` (matching the Lua spec, which only ever passed the keys it
@@ -122,7 +121,7 @@ fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::
                 cs.as_ptr(),
                 p_pre,
                 p_len,
-                what,
+                Str2NrBases::from_bits(what),
                 p_num,
                 p_unum,
                 maxlen,

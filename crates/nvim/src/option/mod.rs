@@ -121,7 +121,6 @@ pub(crate) const OP_REMOVING: set_op_T = 3;
 pub(crate) const OP_PREPENDING: set_op_T = 2;
 pub(crate) const OP_ADDING: set_op_T = 1;
 pub(crate) const OP_NONE: set_op_T = 0;
-pub(crate) const STR2NR_ALL: c_uint = 15;
 pub(crate) const FUZZY_SCORE_NONE: c_int = -2147483648;
 pub(crate) const FSK_SIMPLIFY: c_uint = 8;
 pub(crate) const FSK_KEEP_X_KEY: c_uint = 2;

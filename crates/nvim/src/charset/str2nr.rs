@@ -11,11 +11,38 @@
 
 use core::ffi::c_int;
 
-use super::{
-    STR2NR_BIN, STR2NR_DEC, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, STR2NR_OOCT, STR2NR_QUOTE, Scan,
-    is_bdigit, is_digit, is_odigit, is_xdigit,
-};
+use super::{Scan, is_bdigit, is_digit, is_odigit, is_xdigit};
 use crate::types::{uvarnumber_T, varnumber_T};
+
+crate::flag_set! {
+    /// Bases `vim_str2nr` may recognise, plus the two behaviour flags.
+    /// `FORCE` says "the string has no prefix, parse it in the base named by
+    /// the rest"; `QUOTE` allows `'` as a digit separator.
+    ///
+    /// Decimal is the *empty* set: it is what a number is when none of the
+    /// base flags claims it, which is why upstream's `STR2NR_DEC` is zero.
+    pub struct Str2NrBases;
+
+    /// `0b1010`.
+    const BIN = 1;
+    /// A leading zero, and every digit below 8.
+    const OCT = 2;
+    /// `0x2a`.
+    const HEX = 4;
+    /// `0o52`, the explicit octal prefix, as against [`Self::OCT`]'s bare
+    /// leading zero.
+    const OOCT = 8;
+    /// `'` between digits is a separator, as `printf('%'d')` writes.
+    const QUOTE = 16;
+    /// Parse in the base the other flags name rather than looking for a
+    /// prefix.
+    const FORCE = 128;
+
+    /// Every base.
+    const ALL = Self::BIN.bits() | Self::OCT.bits() | Self::HEX.bits() | Self::OOCT.bits();
+    /// Either octal spelling, which is forced the same way.
+    const OCT_ANY = Self::OCT.bits() | Self::OOCT.bits();
+}
 
 const VARNUMBER_MAX: uvarnumber_T = 9223372036854775807;
 const VARNUMBER_MIN: varnumber_T = -9223372036854775808;
@@ -125,15 +152,15 @@ pub fn strict_reject(next: u8) -> bool {
     next.is_ascii_alphanumeric()
 }
 
-/// The radix a `STR2NR_FORCE` request names, given the flags with `FORCE`
-/// and `QUOTE` masked off. `None` is the C's `abort()` arm.
-fn forced_radix(what_without_force: c_int) -> Option<Radix> {
+/// The radix a [`Str2NrBases::FORCE`] request names, given the flags with
+/// `FORCE` and `QUOTE` masked off. `None` is the C's `abort()` arm.
+fn forced_radix(what_without_force: Str2NrBases) -> Option<Radix> {
     match what_without_force {
-        STR2NR_DEC => Some(Radix::Decimal),
-        STR2NR_HEX => Some(Radix::Hexadecimal),
-        STR2NR_BIN => Some(Radix::Binary),
-        // Both octal spellings are forced the same way.
-        STR2NR_OCT | STR2NR_OOCT | 10 => Some(Radix::Octal),
+        Str2NrBases::NONE => Some(Radix::Decimal),
+        Str2NrBases::HEX => Some(Radix::Hexadecimal),
+        Str2NrBases::BIN => Some(Radix::Binary),
+        // Both octal spellings are forced the same way, together or apart.
+        Str2NrBases::OCT | Str2NrBases::OOCT | Str2NrBases::OCT_ANY => Some(Radix::Octal),
         _ => None,
     }
 }
@@ -152,15 +179,15 @@ pub(super) struct Scanned {
 ///
 /// `None` means `what` forces a base its remaining flags do not name, which
 /// upstream answers with `abort()`.
-pub(super) fn scan(scan: &mut Scan, what: c_int) -> Option<Scanned> {
+pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
     // `pre` is the prefix letter the caller is told about: `0`, `b`, `B`,
     // `o`, `O`, `x` or `X`, and zero for a plain decimal number or a forced
     // base.
     let mut pre: c_int = 0;
-    let radix = if what & STR2NR_FORCE != 0 {
+    let radix = if what.has(Str2NrBases::FORCE) {
         // When forcing, the only question is whether there is a prefix to
         // skip; decimal has none.
-        let radix = forced_radix(what & !(STR2NR_FORCE | STR2NR_QUOTE))?;
+        let radix = forced_radix(what.without(Str2NrBases::FORCE | Str2NrBases::QUOTE))?;
         if let Some((lower, upper)) = radix.prefix()
             && scan.within(2)
             && scan.at(0) == b'0'
@@ -170,7 +197,7 @@ pub(super) fn scan(scan: &mut Scan, what: c_int) -> Option<Scanned> {
             scan.advance(2);
         }
         radix
-    } else if what & (STR2NR_HEX | STR2NR_OCT | STR2NR_OOCT | STR2NR_BIN) != 0
+    } else if what.has(Str2NrBases::ALL)
         && scan.within(1)
         && scan.at(0) == b'0'
         && scan.at(1) != b'8'
@@ -178,13 +205,13 @@ pub(super) fn scan(scan: &mut Scan, what: c_int) -> Option<Scanned> {
     {
         pre = scan.at(1) as c_int;
         let prefixed = [
-            (STR2NR_HEX, Radix::Hexadecimal, b'x', b'X'),
-            (STR2NR_BIN, Radix::Binary, b'b', b'B'),
-            (STR2NR_OOCT, Radix::Octal, b'o', b'O'),
+            (Str2NrBases::HEX, Radix::Hexadecimal, b'x', b'X'),
+            (Str2NrBases::BIN, Radix::Binary, b'b', b'B'),
+            (Str2NrBases::OOCT, Radix::Octal, b'o', b'O'),
         ]
         .into_iter()
         .find(|&(flag, base, lower, upper)| {
-            what & flag != 0
+            what.has(flag)
                 && scan.within(2)
                 && (pre == upper as c_int || pre == lower as c_int)
                 && base.digit(scan.at(2)).is_some()
@@ -196,7 +223,7 @@ pub(super) fn scan(scan: &mut Scan, what: c_int) -> Option<Scanned> {
             pre = 0;
             // A leading zero means octal only if every digit that follows is
             // one; `0548` is decimal.
-            let mut octal = what & STR2NR_OCT != 0 && is_odigit(scan.at(1));
+            let mut octal = what.has(Str2NrBases::OCT) && is_odigit(scan.at(1));
             if octal {
                 let mut i = 2;
                 while scan.within(i) && is_digit(scan.at(i)) {
@@ -224,7 +251,7 @@ pub(super) fn scan(scan: &mut Scan, what: c_int) -> Option<Scanned> {
     let mut magnitude: uvarnumber_T = 0;
     let mut overflowed = false;
     while scan.within(0) {
-        if what & STR2NR_QUOTE != 0 && scan.consumed() > after_prefix && scan.at(0) == b'\'' {
+        if what.has(Str2NrBases::QUOTE) && scan.consumed() > after_prefix && scan.at(0) == b'\'' {
             scan.advance(1);
             // The bounds test comes first, as it does in the C: without it
             // the byte after a trailing quote would be read past `maxlen`.

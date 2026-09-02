@@ -55,7 +55,6 @@ use crate::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
 };
 use ::libc::abort;
-pub const STR2NR_ALL: ::core::ffi::c_uint = 15;
 pub const FSK_SIMPLIFY: ::core::ffi::c_uint = 8;
 pub const FSK_IN_STRING: ::core::ffi::c_uint = 4;
 pub const FSK_KEYCODE: ::core::ffi::c_uint = 1;

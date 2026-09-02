@@ -18,12 +18,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    MAXLNUM, RE_MAGIC, STR2NR_BIN, STR2NR_FORCE, STR2NR_HEX, STR2NR_OCT, e_interr, e_invarg,
-    e_noprevre, kExtmarkNOOP, kExtmarkUndo,
-};
+use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
+use crate::charset::Str2NrBases;
 use crate::charset::{skiptobin, skiptodigit, skiptohex, skipwhite, vim_str2nr};
 use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
@@ -250,8 +248,8 @@ struct SortSpec {
     unique: bool,
     /// `r`: compare what the pattern matched, not what follows it.
     use_match: bool,
-    /// The `STR2NR_*` base `b`/`o`/`x` forced, or zero.
-    radix: c_int,
+    /// The base `b`/`o`/`x` forced, or nothing for `n`'s plain decimal.
+    radix: Str2NrBases,
     /// `n`/`b`/`o`/`x`: compare as integers.
     numeric: bool,
     /// `f`: compare as floats.
@@ -297,15 +295,15 @@ unsafe fn parse_sort_flags(
                 formats += 1;
             }
             b'b' => {
-                spec.radix = STR2NR_BIN as c_int + STR2NR_FORCE as c_int;
+                spec.radix = Str2NrBases::BIN | Str2NrBases::FORCE;
                 formats += 1;
             }
             b'o' => {
-                spec.radix = STR2NR_OCT as c_int + STR2NR_FORCE as c_int;
+                spec.radix = Str2NrBases::OCT | Str2NrBases::FORCE;
                 formats += 1;
             }
             b'x' => {
-                spec.radix = STR2NR_HEX as c_int + STR2NR_FORCE as c_int;
+                spec.radix = Str2NrBases::HEX | Str2NrBases::FORCE;
                 formats += 1;
             }
             b'u' => spec.unique = true,
@@ -342,7 +340,7 @@ unsafe fn parse_sort_flags(
         return false;
     }
     // From here on "numeric" covers every integer format.
-    spec.numeric |= spec.radix != 0;
+    spec.numeric |= !spec.radix.is_empty();
     true
 }
 
@@ -396,9 +394,9 @@ unsafe fn number_key(line: *mut c_char, start: colnr_T, end: colnr_T, spec: &Sor
             unsafe { strtod(s, ptr::null_mut()) }
         })
     } else {
-        let mut s = if spec.radix & STR2NR_HEX as c_int != 0 {
+        let mut s = if spec.radix.has(Str2NrBases::HEX) {
             unsafe { skiptohex(from) }
-        } else if spec.radix & STR2NR_BIN as c_int != 0 {
+        } else if spec.radix.has(Str2NrBases::BIN) {
             unsafe { skiptobin(from) }.cast_mut()
         } else {
             unsafe { skiptodigit(from) }
@@ -500,7 +498,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
     let mut spec = SortSpec {
         unique: false,
         use_match: false,
-        radix: 0,
+        radix: Str2NrBases::NONE,
         numeric: false,
         float: false,
     };
