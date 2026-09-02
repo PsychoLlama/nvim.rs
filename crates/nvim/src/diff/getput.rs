@@ -315,9 +315,12 @@ fn diffgetput(
             break;
         }
         cursor = Some(dp);
-        // A copy of the block, taken when it is freed: the fold update at
-        // the tail still needs its line numbers.
-        let mut freed: Option<diff_T> = None;
+        // The freed block's ranges, taken before it goes: the fold update at
+        // the tail still needs its line numbers. Only the two arrays, never
+        // the block -- a `diff_T` also carries a `garray_T` and its list
+        // links, and `diff_free` releases all three.
+        let mut freed: Option<([linenr_T; DB_COUNT as usize], [linenr_T; DB_COUNT as usize])> =
+            None;
         let mut lnum = dp.df_lnum[idx_to];
         let mut count = dp.df_count[idx_to];
         // SAFETY: the editor exists; the short circuit is upstream's.
@@ -398,7 +401,7 @@ fn diffgetput(
                         || dp.equal_entry(idx_from, i)
                 });
                 if all_equal {
-                    freed = Some(*dp);
+                    freed = Some((dp.df_lnum, dp.df_count));
                     // SAFETY: a live block and its predecessor in the list;
                     // the answer is the following block, or null.
                     let next = unsafe { diff_free(tp, dprev, dp.raw()) };
@@ -433,9 +436,8 @@ fn diffgetput(
                 amount,
                 true,
             );
-            if let Some(mut copy) = freed {
-                // SAFETY: `copy` is this frame's copy of the freed block.
-                unsafe { diff_fold_update(&raw mut copy, idx_to as c_int) };
+            if let Some((lnum, count)) = &freed {
+                diff_fold_update(lnum, count, idx_to as c_int);
             }
             // `changed_lines` runs autocommands, which can rebuild the list.
             let still = cursor.map_or(::core::ptr::null_mut(), Df::raw);

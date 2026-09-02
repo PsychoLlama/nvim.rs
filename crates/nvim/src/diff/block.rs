@@ -498,9 +498,9 @@ pub(crate) unsafe fn diff_copy_entry(
     let off = if dprev.is_null() {
         0
     } else {
-        // SAFETY: the caller's previous block; `diff_T` is `Copy`, and this
-        // only reads it.
-        let prev = unsafe { *dprev };
+        // SAFETY: the caller's previous block, borrowed rather than copied:
+        // a `diff_T` owns its `df_changes` array and its list links.
+        let prev = unsafe { &*dprev };
         prev.df_lnum[idx_orig] + prev.df_count[idx_orig]
             - (prev.df_lnum[idx_new] + prev.df_count[idx_new])
     };

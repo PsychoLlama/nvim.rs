@@ -263,20 +263,22 @@ pub fn diff_infold(wp: Win, lnum: linenr_T) -> bool {
     true
 }
 
-/// Rebuild the folds covering `dp` in every window but the one that just
-/// changed.
+/// Rebuild the folds covering a block's ranges in every window but the one
+/// that just changed.
 ///
-/// # Safety
-/// `dp` must be a live diff block.
-pub(crate) unsafe fn diff_fold_update(dp: *mut diff_T, skip_idx: c_int) {
-    // SAFETY: the caller's block.
-    let dp = unsafe { Df::new(dp) };
+/// Takes the ranges, not the block: the one caller reads them off a block it
+/// is about to free, and a `diff_T` carries a `garray_T` and two list links
+/// that a copy taken across the free would leave dangling.
+pub(crate) fn diff_fold_update(
+    lnum: &[linenr_T; DB_COUNT as usize],
+    count: &[linenr_T; DB_COUNT as usize],
+    skip_idx: c_int,
+) {
     let tp = cur_tab();
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
             if tp.tp_diffbuf[i] == wp.w_buffer && i as c_int != skip_idx {
-                // SAFETY: a live window.
-                fold_update(wp, dp.df_lnum[i], dp.end(i));
+                fold_update(wp, lnum[i], lnum[i] + count[i]);
             }
         }
     }

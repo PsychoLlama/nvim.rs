@@ -87,6 +87,10 @@ pub type WinSplit = ::core::ffi::c_uint;
 pub type WinStyle = ::core::ffi::c_uint;
 pub type bfa_values = ::core::ffi::c_uint;
 pub type bln_values = ::core::ffi::c_uint;
+/// `Copy`, and not an owner: the three fields together are a *weak* name for
+/// a buffer -- the address it had, the number it had, and the free count that
+/// says whether the address still means that buffer. Duplicating one
+/// duplicates no claim on anything.
 #[derive(Copy, Clone)]
 pub struct bufref_T {
     pub br_buf: *mut buf_T,
@@ -94,7 +98,10 @@ pub struct bufref_T {
     pub br_buf_free_count: ::core::ffi::c_int,
 }
 pub type diff_T = diffblock_S;
-#[derive(Copy, Clone)]
+/// Not `Copy` and not `Clone`: a block is a node of the tab page's list and
+/// `df_changes` is an array it allocates, so a by-value duplicate would name
+/// a `ga_data` and a `df_next` it does not own. Code that wants a block's
+/// ranges past the block's lifetime copies the two `linenr_T` arrays.
 pub struct diffblock_S {
     pub df_next: *mut diff_T,
     pub df_lnum: [linenr_T; 8],
@@ -103,7 +110,7 @@ pub struct diffblock_S {
     pub has_changes: bool,
     pub df_changes: garray_T,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct diffline_S {
     pub changes: *mut diffline_change_T,
     pub num_changes: ::core::ffi::c_int,
@@ -122,7 +129,6 @@ pub type diffline_change_T = diffline_change_S;
 pub type disptick_T = uint64_t;
 pub type dobuf_action_values = ::core::ffi::c_uint;
 pub type dobuf_start_values = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct fcs_chars_T {
     pub stl: schar_T,
     pub stlnc: schar_T,
@@ -423,7 +429,6 @@ pub struct file_buffer {
     pub deleted_codeunits: size_t,
     pub flush_count: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 pub struct file_buffer_b_signcols {
     pub max: ::core::ffi::c_int,
     pub last_max: ::core::ffi::c_int,
@@ -487,7 +492,6 @@ pub struct lcs_chars_T {
     pub leadmultispace: *mut schar_T,
     pub conceal: schar_T,
 }
-#[derive(Copy, Clone)]
 pub struct llpos_T {
     pub lnum: linenr_T,
     pub col: colnr_T,
@@ -524,7 +528,6 @@ pub struct matchitem {
     pub mit_conceal_char: ::core::ffi::c_int,
 }
 pub type matchitem_T = matchitem;
-#[derive(Copy, Clone)]
 pub struct pos_save_T {
     pub w_topline_save: ::core::ffi::c_int,
     pub w_topline_corr: ::core::ffi::c_int,
