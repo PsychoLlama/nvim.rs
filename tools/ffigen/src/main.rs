@@ -388,11 +388,16 @@ fn bitfield_invocations(ast: &syn::File) -> HashMap<String, BitfieldAccessors> {
 /// longer free `const` items for the const pass to find, emit as
 /// `<Type>_<MEMBER>`.
 ///
+/// The head may name the integer the word is stored in -- a family whose
+/// field is a `uint16_t` says so -- and the alias emitted has to agree, or
+/// every struct holding one is a byte wider in the cdefs than in the tree.
+///
 /// Grammar, mirroring the macro's own:
 ///
-///   <attrs> <vis> struct <Name>; ( <attrs> const <MEMBER> = <expr>; )+
+///   <attrs> <vis> struct <Name> (: <word>)?; ( <attrs> const <MEMBER> = <expr>; )+
 struct FlagSet {
     name: String,
+    word: syn::Type,
     members: Vec<(String, syn::Expr)>,
 }
 
@@ -402,6 +407,11 @@ impl syn::parse::Parse for FlagSet {
         let _vis: syn::Visibility = input.parse()?;
         input.parse::<syn::Token![struct]>()?;
         let name: syn::Ident = input.parse()?;
+        let word = if input.parse::<Option<syn::Token![:]>>()?.is_some() {
+            input.parse()?
+        } else {
+            syn::parse_quote!(::core::ffi::c_int)
+        };
         input.parse::<syn::Token![;]>()?;
         let mut members = Vec::new();
         while !input.is_empty() {
@@ -415,6 +425,7 @@ impl syn::parse::Parse for FlagSet {
         }
         Ok(FlagSet {
             name: name.to_string(),
+            word,
             members,
         })
     }
@@ -550,8 +561,7 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                     expr: expr.clone(),
                 });
         }
-        let int: syn::Type = syn::parse_quote!(::core::ffi::c_int);
-        add(world, fam.name, Kind::Alias(Box::new(int)), None);
+        add(world, fam.name, Kind::Alias(Box::new(fam.word)), None);
     }
     for item in ast.items {
         match item {

@@ -19,6 +19,34 @@
 //! [`char_flags!`] is the third shape: a family whose members are *letters*
 //! of a string option, where the set is the option's value and membership is
 //! a substring search rather than a bit test.
+//!
+//! # Why not `bitflags`
+//!
+//! The obvious alternative is the `bitflags` crate, and it lost on three
+//! counts that are specific to this tree:
+//!
+//!  * **ffigen.** A flag word is a field of `#[repr(C)]` structs the unit
+//!    suite reaches through generated cdefs (`SynFlags bs_flags`), and ffigen
+//!    parses source without expanding macros. It knows [`flag_set!`]'s
+//!    grammar — see `FlagSet` in `tools/ffigen/src/main.rs` — and emits the
+//!    family as the integer typedef it is on the C side. `bitflags!` spells
+//!    its head differently (`struct X: u32 { … }`), so adopting it means
+//!    rewriting that parser to gain nothing the emitter did not already have.
+//!  * **Debug builds.** `bitflags` 2.x is two types: the public newtype wraps
+//!    a private `InternalBitFlags`, and every operation delegates. At
+//!    `-O0`, where `#[inline]` does nothing, `x.intersects(F::B)` compiles to
+//!    two nested calls where `x.has(F::B)` compiles to one. Flag words are
+//!    tested in the redraw and mark-tree paths, and debug-build cost is a
+//!    budget this port tracks.
+//!  * **Unknown bits.** Half these families arrive from a caller that still
+//!    threads a raw `int`, sometimes carrying bits no member names.
+//!    [`from_bits`](flag_set) keeps them; `bitflags`' same-named constructor
+//!    returns `None` and its `from_bits_truncate` drops them silently.
+//!
+//! Against that, `bitflags` would have brought named `Debug`/`Display` output
+//! and an iterator over set flags, neither of which any call site wants. So
+//! the macro stays and no dependency enters; the policy comment in
+//! `Cargo.toml` records the decision.
 #![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -28,7 +56,7 @@
     clippy::ptr_as_ptr
 )]
 
-/// Declare a C flag family as a newtype over `c_int`.
+/// Declare a C flag family as a newtype over an integer.
 ///
 /// ```ignore
 /// crate::flag_set! {
@@ -42,9 +70,25 @@
 /// ```
 ///
 /// The generated type has `NONE`, the named members, `bits`/`from_bits` for
-/// the boundaries where a raw `c_int` is unavoidable, `has` (any of the
+/// the boundaries where a raw integer is unavoidable, `has` (any of the
 /// asked-for bits are set), `has_all` (all of them), `masked`,
 /// `without`/`clear`, `is_empty`, and `|`/`|=`.
+///
+/// The word is a `c_int` unless the head names another integer:
+///
+/// ```ignore
+/// crate::flag_set! {
+///     /// The flag word of a mark-tree key, which is a `uint16_t` field.
+///     pub struct MtFlags: u16;
+///
+///     const REAL = 1 << 0;
+/// }
+/// ```
+///
+/// Name the width the *field* has: the newtype is `#[repr(transparent)]`, so
+/// declaring it is what keeps a flag word inside a `#[repr(C)]` struct laid
+/// out the way the C header laid it out — and what keeps the cdefs ffigen
+/// writes for that struct honest.
 ///
 /// Every generated item takes the *declared* visibility, not a blanket `pub`:
 /// an associated item cannot be seen further than its type, so a `pub fn` on a
@@ -55,12 +99,37 @@ macro_rules! flag_set {
     (
         $(#[$meta:meta])*
         $vis:vis struct $Name:ident;
+        $($members:tt)+
+    ) => {
+        $crate::flag_set! {
+            @word ::core::ffi::c_int;
+            $(#[$meta])*
+            $vis struct $Name;
+            $($members)+
+        }
+    };
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $Name:ident : $word:ty;
+        $($members:tt)+
+    ) => {
+        $crate::flag_set! {
+            @word $word;
+            $(#[$meta])*
+            $vis struct $Name;
+            $($members)+
+        }
+    };
+    (
+        @word $word:ty;
+        $(#[$meta:meta])*
+        $vis:vis struct $Name:ident;
         $( $(#[$cmeta:meta])* const $MEMBER:ident = $value:expr; )+
     ) => {
         $(#[$meta])*
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(transparent)]
-        $vis struct $Name(::core::ffi::c_int);
+        $vis struct $Name($word);
 
         // Every family gets the whole vocabulary whether or not it happens to
         // need all of it: a `bits`/`from_bits` pair a family never crosses an
@@ -73,16 +142,20 @@ macro_rules! flag_set {
 
             $( $(#[$cmeta])* $vis const $MEMBER: Self = Self($value); )+
 
-            /// The flag word as the C `int` the unrewritten callees take.
+            /// The flag word as the bare integer the unrewritten callees
+            /// take.
             #[inline]
-            $vis const fn bits(self) -> ::core::ffi::c_int {
+            $vis const fn bits(self) -> $word {
                 self.0
             }
 
             /// A flag word arriving from C, or from a caller that still
-            /// threads one as an `int`.
+            /// threads one as an integer. Bits no member names are kept:
+            /// several of these words are written by one family and read by
+            /// another, and dropping the unrecognised half would change what
+            /// the editor does.
             #[inline]
-            $vis const fn from_bits(bits: ::core::ffi::c_int) -> Self {
+            $vis const fn from_bits(bits: $word) -> Self {
                 Self(bits)
             }
 
