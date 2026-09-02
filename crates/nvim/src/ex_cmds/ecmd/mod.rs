@@ -25,9 +25,8 @@ mod switch;
 
 use self::switch::{Switch, delbuf_msg, switch_to_other_buffer};
 use super::{
-    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_FORCEIT, ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_NOWINENTER, ECMD_OLDBUF, ECMD_SET_HELP,
-    KEYMAP_INIT, READ_KEEP_UNDO, READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
+    BFA_KEEP_UNDO, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, KEYMAP_INIT, READ_KEEP_UNDO,
+    READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
 use crate::types::AutoEvent;
@@ -120,11 +119,48 @@ unsafe fn strlen_of(s: *const c_char) -> usize {
     unsafe { core::ffi::CStr::from_ptr(s) }.to_bytes().len()
 }
 
+crate::flag_set! {
+    /// How [`do_ecmd`] should go about switching buffers -- upstream's
+    /// `ECMD_*` flag half.
+    pub struct EcmdFlags;
+
+    /// Do not free the buffer being left, even if nothing else holds it.
+    const HIDE = 1;
+    /// Set `b_help` on the new buffer before reading it.
+    const SET_HELP = 2;
+    /// The buffer already exists; do not read the file again.
+    const OLDBUF = 4;
+    /// `!` was given.
+    const FORCEIT = 8;
+    /// Do not edit: only add the file to the buffer list.
+    const ADDBUF = 16;
+    /// As [`Self::ADDBUF`], and make it the alternate file.
+    const ALTBUF = 32;
+    /// Do not trigger `BufWinEnter`.
+    const NOWINENTER = 64;
+}
+
+/// Where [`do_ecmd`] should leave the cursor, where that is not a line number.
+///
+/// Upstream spells these `ECMD_*` too, beside the flags above, but they are
+/// `linenr_T` values for a different parameter and never share a word with
+/// one.
+pub mod newlnum {
+    use crate::types::linenr_T;
+
+    /// The first line.
+    pub const ONE: linenr_T = 1;
+    /// The last position in *any* file -- the one `'"` names.
+    pub const LAST: linenr_T = -1;
+    /// The last position in *this* file, if it has been visited before.
+    pub const LASTL: linenr_T = 0;
+}
+
 /// The line and column `do_ecmd`'s stages hand each other, plus the flags that
 /// say how far the switch has got.
 struct Ecmd {
-    /// Where to put the cursor: `> 0` a line number, `ECMD_LASTL` the last
-    /// position in the loaded file, `ECMD_LAST` the last position in any file.
+    /// Where to put the cursor: `> 0` a line number, or one of
+    /// [`newlnum`]'s three sentinels.
     newlnum: linenr_T,
     /// Column an autocommand moved the cursor to, or `-1`.
     newcol: c_int,
@@ -155,8 +191,7 @@ struct EcmdArgs {
     sfname: *mut c_char,
     /// The Ex command that asked, or NULL.
     eap: *mut exarg_T,
-    /// The `ECMD_*` flags.
-    flags: c_int,
+    flags: EcmdFlags,
     /// The `+cmd` to run once the file is loaded, or NULL.
     command: *mut c_char,
 }
@@ -178,16 +213,10 @@ enum Target {
 /// string to re-edit the same file name (possibly in another directory), or
 /// NULL to start an empty buffer.  `eap` carries the command to run after
 /// loading and the forced 'ff'/'fenc', and can be NULL.  `newlnum` is the line
-/// to put the cursor on, or one of `ECMD_LASTL`/`ECMD_LAST`/`ECMD_ONE`.
+/// to put the cursor on, or one of [`newlnum`]'s sentinels.
 /// `oldwin` should be `curwin` when editing in the current window, and NULL
 /// when the window was split first; when it is not NULL, the previous buffer's
 /// position is remembered for it.
-///
-/// The `flags` are `ECMD_HIDE` (don't free the current buffer), `ECMD_SET_HELP`
-/// (set `b_help` on the new buffer first), `ECMD_OLDBUF` (use the existing
-/// buffer), `ECMD_FORCEIT` (`!` was given), `ECMD_ADDBUF` (don't edit, just add
-/// to the buffer list), `ECMD_ALTBUF` (as `ECMD_ADDBUF`, and set the alternate
-/// file) and `ECMD_NOWINENTER` (do not trigger BufWinEnter).
 ///
 /// Answers `Err` for failure.
 ///
@@ -202,7 +231,7 @@ pub unsafe fn do_ecmd(
     sfname: *mut c_char,
     eap: *mut exarg_T,
     newlnum: linenr_T,
-    flags: c_int,
+    flags: EcmdFlags,
     oldwin: *mut win_T,
 ) -> Result<(), Failed> {
     let mut ffname = ffname;
@@ -268,11 +297,11 @@ pub unsafe fn do_ecmd(
 
         // If the file was changed we may not be allowed to abandon it:
         // - if we are going to re-edit the same file
-        // - or if we are the only window on this file and ECMD_HIDE is false
+        // - or if we are the only window on this file and EcmdFlags::HIDE is false
         // SAFETY: `curbuf` is live.
-        let must_ask = (!other_file && flags & ECMD_OLDBUF as c_int == 0)
+        let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
             || (cur_buf().b_nwindows == 1
-                && flags & (ECMD_HIDE as c_int | ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) == 0);
+                && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
         // SAFETY: as above.
         if must_ask
             && unsafe {
@@ -283,7 +312,7 @@ pub unsafe fn do_ecmd(
                     } else {
                         0
                     }) | (if other_file { 0 } else { CCGD_MULTWIN as c_int })
-                        | (if flags & ECMD_FORCEIT as c_int != 0 {
+                        | (if flags.has(EcmdFlags::FORCEIT) {
                             CCGD_FORCEIT as c_int
                         } else {
                             0
@@ -336,13 +365,13 @@ pub unsafe fn do_ecmd(
             // SAFETY: `curwin` is live.
             cur_win().w_pcmark.lnum = 1;
             cur_win().w_pcmark.col = 0;
-        } else if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0
+        } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF)
             // SAFETY: main thread, message state.
             || unsafe { check_fname() }.is_err()
         {
             break 'theend;
         } else {
-            state.oldbuf = flags & ECMD_OLDBUF as c_int != 0;
+            state.oldbuf = flags.has(EcmdFlags::OLDBUF);
         }
 
         // Don't redraw until the cursor is in the right line, otherwise
@@ -351,7 +380,7 @@ pub unsafe fn do_ecmd(
 
         let buf = curbuf.get();
         // SAFETY: `curbuf` is live.
-        if flags & ECMD_SET_HELP as c_int != 0 || keep_help_flag.get() {
+        if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
             unsafe { prepare_help_buffer() };
         } else if !cur_buf().b_help {
             // Don't make a buffer listed if it's a help buffer.  Useful when
@@ -484,7 +513,7 @@ unsafe fn resolve_target(
     fnum: c_int,
     ffname: &mut *mut c_char,
     sfname: &mut *mut c_char,
-    flags: c_int,
+    flags: EcmdFlags,
     free_fname: &mut *mut c_char,
 ) -> Target {
     if fnum != 0 {
@@ -502,7 +531,7 @@ unsafe fn resolve_target(
     }
 
     // SAFETY: `ffname` is live when non-NULL.
-    if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0
+    if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF)
         && (ffname.is_null() || unsafe { **ffname } as c_int == NUL)
     {
         return Target::Nothing;
@@ -539,7 +568,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // SAFETY: caller's contract.
     // may set b_last_cursor
     unsafe { set_last_cursor(curwin.get()) };
-    if state.newlnum == ECMD_LAST as linenr_T || state.newlnum == ECMD_LASTL as linenr_T {
+    if state.newlnum == newlnum::LAST as linenr_T || state.newlnum == newlnum::LASTL as linenr_T {
         state.newlnum = cur_win().w_cursor.lnum;
         state.solcol = cur_win().w_cursor.col;
     }
@@ -635,7 +664,7 @@ unsafe fn enter_new_buffer(
         // SAFETY: `curbuf` is live and `eap` the caller's.
         cur_buf().b_flags |= BufFlags::CHECK_RO;
         // Open the buffer and read the file.
-        if flags & ECMD_NOWINENTER as c_int != 0 {
+        if flags.has(EcmdFlags::NOWINENTER) {
             state.readfile_flags |= READ_NOWINENTER as c_int;
         }
         let opened = unsafe { open_buffer(false, eap, state.readfile_flags) };
@@ -653,7 +682,7 @@ unsafe fn enter_new_buffer(
         // SAFETY: `curbuf` is live.
         do_modelines(OptionSetFlags::WINONLY);
         fire_retval(AutoEvent::BufEnter, cur_buf(), retval);
-        if flags & ECMD_NOWINENTER as c_int == 0 {
+        if !flags.has(EcmdFlags::NOWINENTER) {
             fire_retval(AutoEvent::BufWinEnter, cur_buf(), retval);
         }
     }

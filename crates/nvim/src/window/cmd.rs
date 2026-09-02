@@ -11,6 +11,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::keycodes::{
     Ctrl__, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_F, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_I, Ctrl_J, Ctrl_K,
     Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_V, Ctrl_W,
@@ -732,9 +734,9 @@ fn grab_filename(prenum1: c_int, lnum: &mut linenr_T) -> *mut c_char {
 /// `do_ecmd()`: edit file `ptr` in the current window, keeping the alternate.
 fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
     let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<exarg_T>(), ptr::null_mut());
-    let lnum = ECMD_LASTL as linenr_T;
+    let lnum = newlnum::LASTL as linenr_T;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
-    unsafe { do_ecmd(0, ptr, sfname, eap, lnum, ECMD_HIDE as c_int, win) }
+    unsafe { do_ecmd(0, ptr, sfname, eap, lnum, EcmdFlags::HIDE, win) }
 }
 
 /// Clamp `wp`'s cursor line into its buffer.

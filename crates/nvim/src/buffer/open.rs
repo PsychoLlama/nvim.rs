@@ -19,6 +19,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
 use crate::types::AutoEvent;
 use core::ffi::{CStr, c_char, c_int};
@@ -534,8 +536,8 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
 /// `bufname` must be null or NUL-terminated, and `curwin` be set.
 pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<(), Failed> {
     let none = ptr::null_mut::<c_char>();
-    let one = ECMD_ONE as c_int as linenr_T;
-    let hide = ECMD_HIDE as c_int;
+    let one = newlnum::ONE as linenr_T;
+    let hide = EcmdFlags::HIDE;
     edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win())?;
     if !bufname.is_null() {
         fire(AutoEvent::BufFilePre, cur_buf());

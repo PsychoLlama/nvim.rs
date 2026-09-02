@@ -3,6 +3,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
@@ -23,8 +25,8 @@ use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
-    DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, ECMD_ADDBUF, ECMD_ALTBUF, ECMD_FORCEIT,
-    ECMD_HIDE, ECMD_OLDBUF, ECMD_ONE, cmdmod_has, ex_pressedreturn, kDirectionNotSet,
+    DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, cmdmod_has, ex_pressedreturn,
+    kDirectionNotSet,
 };
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
@@ -344,13 +346,8 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             ptr::null_mut(),
             ptr::null_mut(),
             eap,
-            ECMD_ONE as linenr_T,
-            ECMD_HIDE as c_int
-                + if ea.forceit != 0 {
-                    ECMD_FORCEIT as c_int
-                } else {
-                    0
-                },
+            newlnum::ONE as linenr_T,
+            EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(ea.forceit != 0),
             if old_curwin.is_null() {
                 curwin.get()
             } else {
@@ -381,27 +378,11 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             ptr::null_mut(),
             eap,
             ea.do_ecmd_lnum,
-            (if buf_hide(curbuf.get()) {
-                ECMD_HIDE as c_int
-            } else {
-                0
-            }) + (if ea.forceit != 0 {
-                ECMD_FORCEIT as c_int
-            } else {
-                0
-            }) + (if old_curwin.is_null() {
-                0
-            } else {
-                ECMD_OLDBUF as c_int
-            }) + (if idx == CmdIdx::badd {
-                ECMD_ADDBUF as c_int
-            } else {
-                0
-            }) + (if idx == CmdIdx::balt {
-                ECMD_ALTBUF as c_int
-            } else {
-                0
-            }),
+            EcmdFlags::HIDE.when(buf_hide(curbuf.get()))
+                | EcmdFlags::FORCEIT.when(ea.forceit != 0)
+                | EcmdFlags::OLDBUF.when(!old_curwin.is_null())
+                | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
+                | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt),
             if old_curwin.is_null() {
                 curwin.get()
             } else {
@@ -640,7 +621,7 @@ fn do_ecmd(
     sfname: *mut c_char,
     eap: *mut exarg_T,
     newlnum: linenr_T,
-    flags: c_int,
+    flags: EcmdFlags,
     oldwin: *mut win_T,
 ) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.

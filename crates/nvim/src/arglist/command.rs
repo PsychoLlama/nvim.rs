@@ -10,6 +10,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -231,9 +233,9 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     let wp = curwin.get();
     // SAFETY: `curwin` is live, so is its buffer.
     let hidden = unsafe { buf_hide((*wp).w_buffer) };
-    let flags = flag_if(hidden, ECMD_HIDE) + flag_if(forceit, ECMD_FORCEIT);
+    let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     let name = arg_name(cur_arg_idx());
-    let last = ECMD_LAST as linenr_T;
+    let last = newlnum::LAST as linenr_T;
     let none = ptr::null_mut();
     // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
     // is held across it.

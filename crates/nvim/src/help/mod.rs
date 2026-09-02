@@ -32,7 +32,9 @@ use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, cur_win, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
 use crate::cstr;
+use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::do_ecmd;
+use crate::ex_cmds::newlnum;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
@@ -55,7 +57,7 @@ use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, Failed, IOSIZE, LuaRetMode, NUL, Object, OptInt, OptVal,
-    OptionSetFlags, exarg_T, file_comparison, linenr_T, size_t,
+    OptionSetFlags, exarg_T, file_comparison, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
@@ -67,7 +69,7 @@ pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{LuaRetMode, c_int, file_comparison};
+    use super::{LuaRetMode, file_comparison};
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
@@ -82,11 +84,6 @@ mod flag {
     /// `do_tag`'s "this is a help tag" kind.
     pub(super) const DT_HELP: c_uint = 8;
 
-    /// `do_ecmd` flags and its "last line" line number.
-    pub(super) const ECMD_HIDE: c_uint = 1;
-    pub(super) const ECMD_SET_HELP: c_uint = 2;
-    pub(super) const ECMD_LASTL: c_int = 0;
-
     /// `path_full_compare`'s "same file" answer.
     pub(super) const kEqualFiles: file_comparison = 1;
     /// `nlua_exec` return modes.
@@ -95,8 +92,8 @@ mod flag {
 }
 
 use flag::{
-    DT_HELP, ECMD_HIDE, ECMD_LASTL, ECMD_SET_HELP, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES,
-    TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE, kRetNilBool, kRetObject,
+    DT_HELP, TAG_HELP, TAG_KEEP_LANG, TAG_MANY, TAG_NAMES, TAG_NO_TAGFUNC, TAG_REGEXP, TAG_VERBOSE,
+    kRetNilBool, kRetObject,
 };
 
 /// Whether the `:keepalt` modifier is off, so that the alternate file may
@@ -380,7 +377,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     opened.alt_fnum = unsafe { (*curbuf.get()).handle };
     let (fnum, fname, sfname) = (0, ptr::null_mut(), ptr::null_mut());
     let (eap_0, win) = (ptr::null_mut(), ptr::null_mut());
-    let (lnum, flags) = (ECMD_LASTL as linenr_T, (ECMD_HIDE + ECMD_SET_HELP) as c_int);
+    let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     // SAFETY: the editor's own current window and buffer.
     let _ = unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
     if keepalt_is_off() {

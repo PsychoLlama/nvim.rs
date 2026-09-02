@@ -16,6 +16,7 @@
 use super::*;
 use crate::cstr;
 use crate::edit::BeginlineOpts;
+use crate::ex_cmds::EcmdFlags;
 use crate::ex_docmd::cmdmod_tab;
 use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
@@ -104,7 +105,7 @@ unsafe fn qf_jump_edit_buffer(
                 ptr::null_mut(),
                 ptr::null_mut(),
                 1,
-                ECMD_HIDE as c_int + ECMD_SET_HELP as c_int,
+                EcmdFlags::HIDE | EcmdFlags::SET_HELP,
                 if prev_winid == cur_win().handle {
                     curwin.get()
                 } else {

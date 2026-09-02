@@ -10,6 +10,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
@@ -30,11 +32,10 @@ use crate::fileio::readfile;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    BLN_LISTED, ECMD_HIDE, ECMD_LASTL, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE,
-    SEA_QUIT, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg,
-    got_int, kOptErrorfile, kOptShortmess, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef,
-    p_efm, p_fdls, p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit,
-    time_msg_at,
+    BLN_LISTED, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, WIN_HOR,
+    WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg, got_int, kOptErrorfile,
+    kOptShortmess, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls, p_menc,
+    p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -396,7 +397,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
             } else {
                 ptr::null_mut()
             };
-            let (last, hide) = (ECMD_LASTL as c_int as linenr_T, ECMD_HIDE as c_int);
+            let (last, hide) = (newlnum::LASTL as linenr_T, EcmdFlags::HIDE);
             let null_ea = ptr::null_mut::<exarg_T>();
             let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
             if swap_exists_did_quit.get() {

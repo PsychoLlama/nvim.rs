@@ -90,7 +90,6 @@ pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexCmdlinePopupMenu: c_uint = 250;
 pub const kZIndexPopupMenu: c_uint = 100;
 pub const kZIndexFloatDefault: c_uint = 50;
-pub const ECMD_ONE: c_int = 1;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;

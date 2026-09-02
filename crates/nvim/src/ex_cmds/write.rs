@@ -15,8 +15,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{
-    ECMD_FORCEIT, ECMD_HIDE, GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER,
-    GETFILE_SAME_FILE, NODE_OTHER, VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
+    GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
+    VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
 };
 use crate::arglist::do_argfile;
 use crate::autocmd::{augroup_exists, do_doautocmd};
@@ -30,6 +30,7 @@ use crate::bufwrite::{WriteRequest, buf_write};
 use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
+use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
 use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
@@ -877,11 +878,7 @@ pub unsafe fn getfile(
             sfname,
             ptr::null_mut(),
             lnum,
-            (if buf_hide(curbuf.get()) {
-                ECMD_HIDE as c_int
-            } else {
-                0
-            }) + (if forceit { ECMD_FORCEIT as c_int } else { 0 }),
+            EcmdFlags::HIDE.when(buf_hide(curbuf.get())) | EcmdFlags::FORCEIT.when(forceit),
             curwin.get(),
         )
     }

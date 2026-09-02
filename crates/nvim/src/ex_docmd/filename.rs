@@ -7,6 +7,7 @@
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::cstr;
+use crate::ex_cmds::newlnum;
 use crate::os::cshim::snprintf;
 use crate::types::CmdIdx;
 
@@ -27,8 +28,8 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::{
-    ECMD_LAST, ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING,
-    VALID_HEAD, VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
+    VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -498,7 +499,7 @@ pub unsafe fn eval_vars(
                             return ptr::null_mut();
                         };
                         if !lnump.is_null() {
-                            unsafe { *lnump = ECMD_LAST as linenr_T };
+                            unsafe { *lnump = newlnum::LAST as linenr_T };
                         }
                         if buf.b_fname.is_null() {
                             result = c"".as_ptr() as *mut c_char;

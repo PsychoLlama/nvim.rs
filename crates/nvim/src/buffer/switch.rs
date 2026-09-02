@@ -18,6 +18,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::CmdIdx;
@@ -454,12 +456,8 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
 
     set_pcmark();
     let none = ptr::null_mut::<c_char>();
-    let one = ECMD_ONE as c_int as linenr_T;
-    let flags = if forceit != 0 {
-        ECMD_FORCEIT as c_int
-    } else {
-        0
-    };
+    let one = newlnum::ONE as linenr_T;
+    let flags = EcmdFlags::FORCEIT.when(forceit != 0);
     let retval = edit_file(0, none, none, ptr::null_mut(), one, flags, cur_win());
 
     // do_ecmd() may create a new buffer, then we have to delete the old one.

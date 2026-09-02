@@ -11,6 +11,8 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Lock, Suppress};
 use crate::memory::xstrdup;
 use crate::types::CmdIdx;
@@ -387,14 +389,12 @@ unsafe fn open_window_for_arg(
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
     let buf = cur_win().buffer();
-    let flags = flag_if(
-        unsafe { buf_hide(buf.raw()) } || buf_is_changed(buf),
-        ECMD_HIDE,
-    ) | ECMD_OLDBUF as c_int;
+    let hide = unsafe { buf_hide(buf.raw()) } || buf_is_changed(buf);
+    let flags = EcmdFlags::HIDE.when(hide) | EcmdFlags::OLDBUF;
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
     let sfname = ptr::null_mut();
     let eap2 = ptr::null_mut();
-    let newlnum = ECMD_ONE as linenr_T;
+    let newlnum = newlnum::ONE as linenr_T;
     let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
     aall.use_firstwin = false;
     Ok(())

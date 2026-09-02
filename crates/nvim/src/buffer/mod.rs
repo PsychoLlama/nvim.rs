@@ -44,6 +44,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -155,8 +156,6 @@ pub const BCO_ENTER: ::core::ffi::c_uint = 1;
 pub const kBffInitChangedtick: ::core::ffi::c_uint = 2;
 pub const kBffClearWinInfo: ::core::ffi::c_uint = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_uint = 2;
-pub const ECMD_FORCEIT: ::core::ffi::c_uint = 8;
-pub const ECMD_ONE: ::core::ffi::c_int = 1;
 #[derive(Copy, Clone)]
 pub struct bufmatch_T {
     pub buf: *mut buf_T,
@@ -165,9 +164,6 @@ pub struct bufmatch_T {
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
 
 pub const READ_DUMMY: ::core::ffi::c_uint = 16;
-pub const ECMD_HIDE: ::core::ffi::c_uint = 1;
-pub const ECMD_OLDBUF: ::core::ffi::c_uint = 4;
-pub const ECMD_LAST: ::core::ffi::c_int = -1;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
@@ -536,7 +532,7 @@ pub(crate) fn edit_file(
     sfname: *mut c_char,
     eap: *mut exarg_T,
     newlnum: linenr_T,
-    flags: c_int,
+    flags: EcmdFlags,
     mut win: Win,
 ) -> Result<(), Failed> {
     let raw = win.raw();

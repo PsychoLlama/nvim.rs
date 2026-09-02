@@ -4,6 +4,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -32,9 +34,9 @@ use crate::memline::ml_get_buf;
 use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::{emsg, messaging};
 use crate::normal::{
-    CmdArg, DT_POP, ECMD_HIDE, ECMD_LAST, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD,
-    HIST_SEARCH, POUND, VSE_NONE, check_clear_op_quit, check_text_or_curbuf_locked, clear_op,
-    clear_op_beep, get_visual_text, normal_search, visual_active,
+    CmdArg, DT_POP, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH, POUND, VSE_NONE,
+    check_clear_op_quit, check_text_or_curbuf_locked, clear_op, clear_op_beep, get_visual_text,
+    normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -963,8 +965,8 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     }
     setpcmark();
     let hidden = unsafe { buf_hide(curbuf.get()) };
-    let hide = if hidden { ECMD_HIDE as c_int } else { 0 };
-    let last = ECMD_LAST as linenr_T;
+    let hide = EcmdFlags::HIDE.when(hidden);
+    let last = newlnum::LAST as linenr_T;
     let win = curwin.get();
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };

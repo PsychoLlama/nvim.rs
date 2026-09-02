@@ -13,6 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
 use crate::message::emsg_ptr;
 use crate::option::boolean_optval;
@@ -351,8 +353,8 @@ unsafe fn pum_show_info(
                     ::core::ptr::null_mut(),
                     ::core::ptr::null_mut(),
                     ::core::ptr::null_mut(),
-                    ECMD_ONE as linenr_T,
-                    0,
+                    newlnum::ONE,
+                    EcmdFlags::NONE,
                     ::core::ptr::null_mut(),
                 )
             };

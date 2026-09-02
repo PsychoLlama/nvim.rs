@@ -16,6 +16,8 @@
 use super::*;
 use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::option::boolean_optval;
 use crate::types::{Failed, OptionSetFlags};
 use crate::window::{
@@ -86,9 +88,9 @@ fn buf_is_valid(buf: *mut buf_T) -> bool {
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
 /// when it is zero, without entering the window.
-fn load_buffer(fnum: c_int, flags: c_int, oldwin: Option<Win>) -> Result<(), Failed> {
+fn load_buffer(fnum: c_int, flags: EcmdFlags, oldwin: Option<Win>) -> Result<(), Failed> {
     let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
-    let one = ECMD_ONE as linenr_T;
+    let one = newlnum::ONE as linenr_T;
     let oldwin = oldwin.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: a buffer number the caller has just looked up, and a live
     // window or null.
@@ -247,11 +249,11 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 
     // Don't store info when the split above left us in another window.
     let oldwin = (oldwin == cur_win()).then_some(oldwin);
-    let hide = ECMD_HIDE as c_int + ECMD_NOWINENTER as c_int;
+    let hide = EcmdFlags::HIDE | EcmdFlags::NOWINENTER;
     match qf_buf {
         // Use the existing quickfix buffer.
         Some(buf) => {
-            let flags = hide + ECMD_OLDBUF as c_int;
+            let flags = hide | EcmdFlags::OLDBUF;
             if load_buffer(buf.handle, flags, oldwin).is_err() {
                 return false;
             }

@@ -84,8 +84,6 @@ pub struct AucmdWinVec {
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
-pub(crate) const ECMD_HIDE: c_uint = 1;
-pub(crate) const ECMD_LASTL: c_int = 0;
 pub(crate) const READ_STDIN: c_uint = 4;
 pub(crate) const READ_NEW: c_uint = 1;
 pub(crate) const ETYPE_ENV: etype_T = 7;

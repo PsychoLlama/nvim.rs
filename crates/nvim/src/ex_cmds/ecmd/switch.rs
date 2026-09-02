@@ -13,6 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{Ecmd, EcmdArgs};
+use crate::ex_cmds::EcmdFlags;
+use crate::ex_cmds::newlnum;
 use crate::types::AutoEvent;
 
 use crate::buffer::current_buf;
@@ -20,10 +22,7 @@ use crate::buffer::{
     BufRef, buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, close_buffer, find_buf,
     get_winopts,
 };
-use crate::ex_cmds::{
-    BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, ECMD_ADDBUF, ECMD_ALTBUF,
-    ECMD_HIDE, ECMD_LAST, ECMD_LASTL, ECMD_SET_HELP, buf_autocmd,
-};
+use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLOAD, buf_autocmd};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
@@ -80,7 +79,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     // SAFETY: `curwin` is live.
     let prev_alt_fnum = cur_win().w_alt_fnum;
 
-    if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) == 0 {
+    if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // SAFETY: `curwin`/`curbuf` are live, and `oldwin` was validated.
         if !cmdmod_has(CmdModFlags::KEEPALT) {
             cur_win().w_alt_fnum = cur_buf().handle;
@@ -93,7 +92,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     let buf;
     if fnum != 0 {
         buf = find_buf(fnum).map_or(ptr::null_mut(), |mut b| b.raw());
-    } else if flags & (ECMD_ADDBUF as c_int | ECMD_ALTBUF as c_int) != 0 {
+    } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.
         // SAFETY: `command` and the names are live when non-NULL.
@@ -112,7 +111,7 @@ pub(super) unsafe fn switch_to_other_buffer(
                 BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
             )
         };
-        if !newbuf.is_null() && flags & ECMD_ALTBUF as c_int != 0 {
+        if !newbuf.is_null() && flags.has(EcmdFlags::ALTBUF) {
             cur_win().w_alt_fnum = unsafe { (*newbuf).handle };
         }
         return Switch::Abandon;
@@ -124,7 +123,7 @@ pub(super) unsafe fn switch_to_other_buffer(
                 sfname,
                 0,
                 BLN_CURBUF as c_int
-                    | (if flags & ECMD_SET_HELP as c_int != 0 {
+                    | (if flags.has(EcmdFlags::SET_HELP) {
                         0
                     } else {
                         BLN_LISTED as c_int
@@ -183,8 +182,8 @@ pub(super) unsafe fn switch_to_other_buffer(
 
     // May jump to last used line number for a loaded buffer or when asked for
     // explicitly.
-    if (state.oldbuf && state.newlnum == ECMD_LASTL as linenr_T)
-        || state.newlnum == ECMD_LAST as linenr_T
+    if (state.oldbuf && state.newlnum == newlnum::LASTL as linenr_T)
+        || state.newlnum == newlnum::LAST as linenr_T
     {
         // SAFETY: `buf` is live.
         let pos = unsafe { &raw mut (*buflist_findfmark(Buf::new(buf))).mark };
@@ -193,7 +192,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     }
 
     // Make the (new) buffer the one used by the current window.  If the old
-    // buffer becomes unused, free it if ECMD_HIDE is false.  If the current
+    // buffer becomes unused, free it if EcmdFlags::HIDE is false.  If the current
     // buffer was empty and has no file name, curbuf is returned by
     // buflist_new(), and there is nothing to do here.
     if buf != curbuf.get() {
@@ -301,7 +300,7 @@ unsafe fn leave_for_buffer(
         close_buffer(
             Win::from_raw(oldwin),
             Buf::current(),
-            if flags & ECMD_HIDE as c_int != 0
+            if flags.has(EcmdFlags::HIDE)
                 || !cur_buf().terminal.is_null() && terminal_running(cur_buf().terminal)
             {
                 0
