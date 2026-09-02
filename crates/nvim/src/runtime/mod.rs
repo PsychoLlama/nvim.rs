@@ -206,13 +206,11 @@ pub struct SearchPathItem {
     pub has_lua: Option<bool>,
     pub pos_in_rtp: size_t,
 }
-#[derive(Copy, Clone)]
 pub struct CharVec {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
 pub struct StringVec {
     pub size: size_t,
     pub capacity: size_t,

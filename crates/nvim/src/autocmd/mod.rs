@@ -101,7 +101,6 @@ pub use self::groups::*;
 pub use self::listing::*;
 pub use self::trigger::*;
 pub use self::walk::*;
-#[derive(Copy, Clone)]
 pub struct AutoCmdEvent {
     pub event: AutoEvent,
     pub fname: *mut ::core::ffi::c_char,

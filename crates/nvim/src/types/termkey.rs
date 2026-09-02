@@ -40,7 +40,6 @@ pub struct TermKey {
     pub ti: *mut ::core::ffi::c_void,
     pub csi: *mut TermKeyCsi,
 }
-#[derive(Copy, Clone)]
 pub struct TermKeyCsi {
     pub saved_string_id: ::core::ffi::c_int,
     pub saved_string: *mut ::core::ffi::c_char,

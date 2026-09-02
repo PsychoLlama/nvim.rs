@@ -12,7 +12,6 @@
 use super::*;
 
 pub type LuaRetMode = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct nlua_ref_state_t {
     pub nil_ref: LuaRef,
     pub empty_dict_ref: LuaRef,

@@ -173,7 +173,6 @@ impl Drop for bhdr_T {
 }
 
 /// A run of pages in the file that no block uses.
-#[derive(Clone, Copy)]
 struct FreeBlock {
     bnum: blocknr_T,
     page_count: c_uint,

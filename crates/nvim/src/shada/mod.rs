@@ -477,14 +477,12 @@ fn shada_heap<T>(value: T) -> *mut T {
 }
 
 pub type HMLListEntry = hm_llist_entry;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct hm_llist_entry {
     pub data: ShadaEntry,
     pub next: *mut hm_llist_entry,
     pub prev: *mut hm_llist_entry,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct FileMarks {
     pub marks: [ShadaEntry; 29],

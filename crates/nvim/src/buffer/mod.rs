@@ -156,7 +156,6 @@ pub const BCO_ENTER: ::core::ffi::c_uint = 1;
 pub const kBffInitChangedtick: ::core::ffi::c_uint = 2;
 pub const kBffClearWinInfo: ::core::ffi::c_uint = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_uint = 2;
-#[derive(Copy, Clone)]
 pub struct bufmatch_T {
     pub buf: *mut buf_T,
     pub match_0: *mut ::core::ffi::c_char,

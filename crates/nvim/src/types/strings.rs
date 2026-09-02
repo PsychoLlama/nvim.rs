@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct keyvalue_T {
     pub key: ::core::ffi::c_int,
     pub value: *mut ::core::ffi::c_char,

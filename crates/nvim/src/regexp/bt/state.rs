@@ -134,7 +134,6 @@ impl BtState {
 }
 
 /// One `BACK` node and the input position the walk last reached it at.
-#[derive(Clone, Copy)]
 struct BackEdge {
     /// The `BACK` node, which is what identifies the loop.
     scan: *mut uint8_t,

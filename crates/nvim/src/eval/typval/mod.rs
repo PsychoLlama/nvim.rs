@@ -75,12 +75,10 @@ pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
 pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
-#[derive(Copy, Clone)]
 pub struct Join {
     pub s: String_0,
     pub tofree: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
 pub struct sortinfo_T {
     pub item_compare_ic: ::core::ffi::c_int,
     pub item_compare_lc: bool,
@@ -92,7 +90,6 @@ pub struct sortinfo_T {
     pub item_compare_selfdict: *mut dict_T,
     pub item_compare_func_err: bool,
 }
-#[derive(Copy, Clone)]
 pub struct ListSortItem {
     pub item: *mut listitem_T,
     pub idx: ::core::ffi::c_int,

@@ -401,7 +401,6 @@ pub struct evalarg_T {
     pub eval_tofree: *mut ::core::ffi::c_char,
 }
 pub type exprtype_T = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct lval_T {
     pub ll_name: *const ::core::ffi::c_char,
     pub ll_name_len: size_t,

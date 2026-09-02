@@ -50,7 +50,6 @@ impl Aim {
 }
 
 /// The nearest approach to the target the search has seen.
-#[derive(Clone, Copy)]
 struct Closest {
     /// Its value, in the aim's unit.
     val: c_int,

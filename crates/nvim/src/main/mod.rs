@@ -76,7 +76,6 @@ pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub(crate) const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
-#[derive(Copy, Clone)]
 pub struct AucmdWinVec {
     pub size: size_t,
     pub capacity: size_t,

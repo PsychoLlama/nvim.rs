@@ -147,7 +147,6 @@ pub type SubIgnoreType = ::core::ffi::c_uint;
 pub const kSubMatchCase: SubIgnoreType = 2;
 pub const kSubIgnoreCase: SubIgnoreType = 1;
 pub const kSubHonorOptions: SubIgnoreType = 0;
-#[derive(Copy, Clone)]
 pub struct LineData {
     pub start_col: ::core::ffi::c_int,
     pub start: lpos_T,

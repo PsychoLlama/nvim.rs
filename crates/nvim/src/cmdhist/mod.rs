@@ -108,7 +108,6 @@ pub fn get_hisidx(histype: c_int) -> c_int {
 }
 
 /// Borrowed view of the entry at raw ring index `idx`.
-#[derive(Copy, Clone)]
 pub struct HistEntryRef {
     /// NUL-terminated entry text; valid until the entry is removed or
     /// overwritten.
@@ -608,7 +607,6 @@ pub unsafe fn get_history_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// One history entry crossing the shada boundary.
-#[derive(Copy, Clone)]
 pub struct HistShadaEntry {
     /// NUL-terminated text. Borrowed from the ring for
     /// [`hist_shada_view`]; a malloc-family allocation owned by the holder

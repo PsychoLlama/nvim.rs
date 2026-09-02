@@ -67,7 +67,6 @@ impl EstackInfo {
 }
 pub type estack_arg_T = ::core::ffi::c_uint;
 pub type etype_T = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct scriptitem_T {
     pub sn_vars: *mut scriptvar_T,
     pub sn_name: *mut ::core::ffi::c_char,

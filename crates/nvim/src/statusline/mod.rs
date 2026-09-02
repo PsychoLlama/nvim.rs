@@ -123,7 +123,6 @@ pub const STL_COLUMN: StlFlag = 99;
 pub const STL_FILENAME: StlFlag = 116;
 pub const STL_FULLPATH: StlFlag = 70;
 pub const STL_FILEPATH: StlFlag = 102;
-#[derive(Copy, Clone)]
 pub struct stl_item {
     pub start: *mut ::core::ffi::c_char,
     pub cmd: *mut ::core::ffi::c_char,

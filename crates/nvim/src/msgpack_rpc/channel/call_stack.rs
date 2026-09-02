@@ -17,7 +17,6 @@
 use crate::types::{ChannelCallFrame, uint32_t};
 
 /// One outstanding request.
-#[derive(Copy, Clone)]
 struct Entry {
     /// The id sent on the wire. Fixed for the frame's life, so it can be
     /// compared without touching the frame.

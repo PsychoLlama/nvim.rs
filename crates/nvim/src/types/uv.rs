@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct addrinfo {
     pub ai_flags: ::core::ffi::c_int,
@@ -23,7 +22,6 @@ pub struct addrinfo {
     pub ai_canonname: *mut ::core::ffi::c_char,
     pub ai_next: *mut addrinfo,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sockaddr {
     pub sa_family: sa_family_t,
@@ -48,7 +46,6 @@ pub struct uv__queue {
     pub next: *mut uv__queue,
     pub prev: *mut uv__queue,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv__work {
     pub work: Option<unsafe extern "C" fn(*mut uv__work) -> ()>,
@@ -58,7 +55,6 @@ pub struct uv__work {
 }
 pub type uv_alloc_cb = Option<unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> ()>;
 pub type uv_async_cb = Option<unsafe extern "C" fn(*mut uv_async_t) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_async_s {
     pub data: *mut ::core::ffi::c_void,
@@ -73,7 +69,6 @@ pub struct uv_async_s {
     pub queue: uv__queue,
     pub pending: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union uv_async_s_u {
     pub fd: ::core::ffi::c_int,
@@ -88,7 +83,6 @@ pub struct uv_buf_t {
 }
 pub type uv_close_cb = Option<unsafe extern "C" fn(*mut uv_handle_t) -> ()>;
 pub type uv_connect_cb = Option<unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_connect_s {
     pub data: *mut ::core::ffi::c_void,
@@ -101,7 +95,6 @@ pub struct uv_connect_s {
 pub type uv_connect_t = uv_connect_s;
 pub type uv_connection_cb =
     Option<unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_dirent_s {
     pub name: *const ::core::ffi::c_char,
@@ -113,7 +106,6 @@ pub type uv_exit_cb =
     Option<unsafe extern "C" fn(*mut uv_process_t, int64_t, ::core::ffi::c_int) -> ()>;
 pub type uv_file = ::core::ffi::c_int;
 pub type uv_fs_cb = Option<unsafe extern "C" fn(*mut uv_fs_t) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_fs_s {
     pub data: *mut ::core::ffi::c_void,
@@ -144,7 +136,6 @@ pub type uv_fs_t = uv_fs_s;
 pub type uv_fs_type = ::core::ffi::c_int;
 pub type uv_getaddrinfo_cb =
     Option<unsafe extern "C" fn(*mut uv_getaddrinfo_t, ::core::ffi::c_int, *mut addrinfo) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_getaddrinfo_s {
     pub data: *mut ::core::ffi::c_void,
@@ -161,7 +152,6 @@ pub struct uv_getaddrinfo_s {
 }
 pub type uv_getaddrinfo_t = uv_getaddrinfo_s;
 pub type uv_gid_t = gid_t;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_handle_s {
     pub data: *mut ::core::ffi::c_void,
@@ -173,7 +163,6 @@ pub struct uv_handle_s {
     pub next_closing: *mut uv_handle_t,
     pub flags: ::core::ffi::c_uint,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union uv_handle_s_u {
     pub fd: ::core::ffi::c_int,
@@ -203,13 +192,11 @@ pub union uv_idle_s_u {
     pub reserved: [*mut ::core::ffi::c_void; 4],
 }
 pub type uv_idle_t = uv_idle_s;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_lib_t {
     pub handle: *mut ::core::ffi::c_void,
     pub errmsg: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_loop_s {
     pub data: *mut ::core::ffi::c_void,
@@ -249,13 +236,11 @@ pub struct uv_loop_s {
     pub inotify_watchers: *mut ::core::ffi::c_void,
     pub inotify_fd: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union uv_loop_s_active_reqs {
     pub unused: *mut ::core::ffi::c_void,
     pub count: ::core::ffi::c_uint,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_loop_s_timer_heap {
     pub min: *mut ::core::ffi::c_void,
@@ -379,7 +364,6 @@ pub type uv_random_cb = Option<
         size_t,
     ) -> (),
 >;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_random_s {
     pub data: *mut ::core::ffi::c_void,
@@ -403,7 +387,6 @@ pub const UV_RWLOCK_INIT: uv_rwlock_t = pthread_rwlock_t { __size: [0; 56] };
 pub type uv_thread_t = pthread_t;
 pub type uv_shutdown_cb =
     Option<unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_shutdown_s {
     pub data: *mut ::core::ffi::c_void,
@@ -414,7 +397,6 @@ pub struct uv_shutdown_s {
 }
 pub type uv_shutdown_t = uv_shutdown_s;
 pub type uv_signal_cb = Option<unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_signal_s {
     pub data: *mut ::core::ffi::c_void,
@@ -431,7 +413,6 @@ pub struct uv_signal_s {
     pub caught_signals: ::core::ffi::c_uint,
     pub dispatched_signals: ::core::ffi::c_uint,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_signal_s_tree_entry {
     pub rbe_left: *mut uv_signal_s,
@@ -439,7 +420,6 @@ pub struct uv_signal_s_tree_entry {
     pub rbe_parent: *mut uv_signal_s,
     pub rbe_color: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union uv_signal_s_u {
     pub fd: ::core::ffi::c_int,
@@ -480,7 +460,6 @@ pub union uv_stdio_container_s_data {
 }
 pub type uv_stdio_container_t = uv_stdio_container_s;
 pub type uv_stdio_flags = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_stream_s {
     pub data: *mut ::core::ffi::c_void,
@@ -504,7 +483,6 @@ pub struct uv_stream_s {
     pub accepted_fd: ::core::ffi::c_int,
     pub queued_fds: *mut ::core::ffi::c_void,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union uv_stream_s_u {
     pub fd: ::core::ffi::c_int,
@@ -574,7 +552,6 @@ pub union uv_timer_s_u {
 }
 pub type uv_clock_id = ::core::ffi::c_uint;
 pub const UV_CLOCK_REALTIME: uv_clock_id = 1;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_timespec64_t {
     pub tv_sec: int64_t,
@@ -583,7 +560,6 @@ pub struct uv_timespec64_t {
 pub type uv_timer_t = uv_timer_s;
 /// libuv's own wall-clock struct, wide enough for a 64-bit `tv_sec` on every
 /// platform (`uv_gettimeofday` fills it).
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_timeval64_t {
     pub tv_sec: int64_t,
@@ -599,7 +575,6 @@ pub type uv_uid_t = uid_t;
 pub type uv_walk_cb =
     Option<unsafe extern "C" fn(*mut uv_handle_t, *mut ::core::ffi::c_void) -> ()>;
 pub type uv_write_cb = Option<unsafe extern "C" fn(*mut uv_write_t, ::core::ffi::c_int) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct uv_write_s {
     pub data: *mut ::core::ffi::c_void,

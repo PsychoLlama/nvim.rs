@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct SignItem {
     pub sh: *mut DecorSignHighlight,
     pub id: uint32_t,

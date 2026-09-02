@@ -54,7 +54,6 @@ pub type TimeWatcher = time_watcher;
 pub type WBuffer = wbuffer;
 pub type argv_callback = Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> ()>;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
-#[derive(Copy, Clone)]
 pub struct loop_0 {
     pub uv: uv_loop_t,
     pub events: *mut MultiQueue,
@@ -122,7 +121,6 @@ pub struct rstream {
 pub type signal_cb =
     Option<unsafe fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type signal_close_cb = Option<unsafe fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct signal_watcher {
     pub uv: uv_signal_t,
@@ -134,7 +132,6 @@ pub struct signal_watcher {
 pub type socket_cb =
     Option<unsafe fn(*mut SocketWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
-#[derive(Copy, Clone)]
 pub struct socket_watcher {
     pub addr: [::core::ffi::c_char; 256],
     pub uv: socket_watcher_uv,
@@ -144,7 +141,6 @@ pub struct socket_watcher {
     pub close_cb: socket_close_cb,
     pub events: *mut MultiQueue,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union socket_watcher_uv {
     pub tcp: socket_watcher_uv_tcp,
@@ -243,7 +239,6 @@ impl time_watcher {
         blockable: false,
     };
 }
-#[derive(Copy, Clone)]
 pub struct wbuffer {
     pub size: size_t,
     pub refcount: RefcountSize,

@@ -12,14 +12,12 @@
 use super::*;
 use crate::types::Failed;
 
-#[derive(Copy, Clone)]
 pub struct switchwin_T {
     pub sw_curwin: *mut win_T,
     pub sw_curtab: *mut tabpage_T,
     pub sw_same_win: bool,
     pub sw_visual_active: bool,
 }
-#[derive(Copy, Clone)]
 pub struct win_execute_T {
     pub wp: *mut win_T,
     pub curpos: pos_T,

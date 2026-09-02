@@ -39,7 +39,6 @@ struct SplitBlocks {
 }
 
 /// The line being inserted, as `ml_append_int` was handed it.
-#[derive(Clone, Copy)]
 struct NewLine {
     /// `len` bytes of text, the last of which is the NUL standing for the
     /// line's newline.
@@ -50,7 +49,6 @@ struct NewLine {
 }
 
 /// Where in the data block `ml_find_line` returned the new line goes.
-#[derive(Clone, Copy)]
 struct InsertAt {
     /// Index of the line being appended *after*, within the block. Negative
     /// means "in front of the block's first line", which is the `lnum == 0`

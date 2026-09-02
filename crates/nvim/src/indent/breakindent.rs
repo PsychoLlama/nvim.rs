@@ -21,7 +21,6 @@ use crate::winlayer::Win;
 
 /// 'breakindentopt', parsed: the five values [`briopt_check`] writes onto a
 /// window as `w_briopt_*`.
-#[derive(Clone, Copy)]
 struct Briopt {
     /// "shift:" — added to the measured indent.
     shift: c_int,

@@ -30,7 +30,6 @@
 
 use super::*;
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict__shada_buflist_item {
     pub is_set___shada_buflist_item_: OptionalKeys,
@@ -38,7 +37,6 @@ pub struct KeyDict__shada_buflist_item {
     pub c: Integer,
     pub f: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict__shada_mark {
     pub is_set___shada_mark_: OptionalKeys,
@@ -47,7 +45,6 @@ pub struct KeyDict__shada_mark {
     pub c: Integer,
     pub f: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict__shada_register {
     pub is_set___shada_register_: OptionalKeys,
@@ -84,7 +81,6 @@ pub struct KeyDict__shada_search_pat {
     /// Wire key: `sp`.
     pub pat: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_buf_attach {
     pub is_set__buf_attach_: OptionalKeys,
@@ -96,14 +92,12 @@ pub struct KeyDict_buf_attach {
     pub utf_sizes: Boolean,
     pub preview: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_buf_delete {
     pub is_set__buf_delete_: OptionalKeys,
     pub force: Boolean,
     pub unload: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_clear_autocmds {
     pub is_set__clear_autocmds_: OptionalKeys,
@@ -113,7 +107,6 @@ pub struct KeyDict_clear_autocmds {
     pub group: Object,
     pub pattern: Object,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_cmd {
     pub is_set__cmd_: OptionalKeys,
@@ -129,14 +122,12 @@ pub struct KeyDict_cmd {
     pub addr: String_0,
     pub nextcmd: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_cmd_magic {
     pub is_set__cmd_magic_: OptionalKeys,
     pub file: Boolean,
     pub bar: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_cmd_mods {
     pub is_set__cmd_mods_: OptionalKeys,
@@ -161,37 +152,31 @@ pub struct KeyDict_cmd_mods {
     pub vertical: Boolean,
     pub split: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_cmd_mods_filter {
     pub is_set__cmd_mods_filter_: OptionalKeys,
     pub pattern: String_0,
     pub force: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_cmd_opts {
     pub output: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_complete_set {
     pub is_set__complete_set_: OptionalKeys,
     pub info: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_context {
     pub is_set__context_: OptionalKeys,
     pub types: Array,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_create_augroup {
     pub is_set__create_augroup_: OptionalKeys,
     pub clear: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_create_autocmd {
     pub is_set__create_autocmd_: OptionalKeys,
@@ -205,7 +190,6 @@ pub struct KeyDict_create_autocmd {
     pub once: Boolean,
     pub pattern: Object,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_echo_opts {
     pub is_set__echo_opts_: OptionalKeys,
@@ -220,12 +204,10 @@ pub struct KeyDict_echo_opts {
     pub source: String_0,
     pub data: Dict,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_empty {
     pub is_set__empty_: OptionalKeys,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_eval_statusline {
     pub is_set__eval_statusline_: OptionalKeys,
@@ -237,7 +219,6 @@ pub struct KeyDict_eval_statusline {
     pub use_tabline: Boolean,
     pub use_statuscol_lnum: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_exec_autocmds {
     pub is_set__exec_autocmds_: OptionalKeys,
@@ -248,12 +229,10 @@ pub struct KeyDict_exec_autocmds {
     pub pattern: Object,
     pub data: Object,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_exec_opts {
     pub output: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_autocmds {
     pub is_set__get_autocmds_: OptionalKeys,
@@ -264,19 +243,16 @@ pub struct KeyDict_get_autocmds {
     pub buf: Object,
     pub id: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_commands {
     pub builtin: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_extmark {
     pub is_set__get_extmark_: OptionalKeys,
     pub details: Boolean,
     pub hl_name: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_extmarks {
     pub is_set__get_extmarks_: OptionalKeys,
@@ -287,7 +263,6 @@ pub struct KeyDict_get_extmarks {
     /// Wire key: `type`.
     pub type_0: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_highlight {
     pub is_set__get_highlight_: OptionalKeys,
@@ -296,13 +271,11 @@ pub struct KeyDict_get_highlight {
     pub link: Boolean,
     pub create: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_get_ns {
     pub is_set__get_ns_: OptionalKeys,
     pub winid: Window,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_highlight {
     pub is_set__highlight_: OptionalKeys,
@@ -345,7 +318,6 @@ pub struct KeyDict_highlight {
 }
 /// The `cterm` sub-dict of a highlight definition. It has no `is_set__` mask:
 /// an unset attribute is simply false.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_highlight_cterm {
     pub bold: Boolean,
@@ -453,7 +425,6 @@ impl Default for KeyDict_highlight_cterm {
     }
 }
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_keymap {
     pub is_set__keymap_: OptionalKeys,
@@ -467,20 +438,17 @@ pub struct KeyDict_keymap {
     pub desc: String_0,
     pub replace_keycodes: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_ns_opts {
     pub is_set__ns_opts_: OptionalKeys,
     pub wins: Array,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_open_term {
     pub is_set__open_term_: OptionalKeys,
     pub on_input: LuaRef,
     pub force_crlf: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_option {
     pub is_set__option_: OptionalKeys,
@@ -489,7 +457,6 @@ pub struct KeyDict_option {
     pub buf: Buffer,
     pub filetype: String_0,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_redraw {
     pub is_set__redraw_: OptionalKeys,
@@ -504,13 +471,11 @@ pub struct KeyDict_redraw {
     pub win: Window,
     pub buf: Buffer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_runtime {
     pub is_lua: Boolean,
     pub do_source: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_set_decoration_provider {
     pub is_set__set_decoration_provider_: OptionalKeys,
@@ -524,7 +489,6 @@ pub struct KeyDict_set_decoration_provider {
     pub _on_spell_nav: LuaRef,
     pub _on_conceal_line: LuaRef,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_set_extmark {
     pub is_set__set_extmark_: OptionalKeys,
@@ -564,13 +528,11 @@ pub struct KeyDict_set_extmark {
     pub scoped: Boolean,
     pub _subpriority: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_tabpage_config {
     pub is_set__tabpage_config_: OptionalKeys,
     pub after: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_user_command {
     pub is_set__user_command_: OptionalKeys,
@@ -588,7 +550,6 @@ pub struct KeyDict_user_command {
     /// Wire key: `register`.
     pub register_: Boolean,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_win_config {
     pub is_set__win_config_: OptionalKeys,
@@ -617,7 +578,6 @@ pub struct KeyDict_win_config {
     pub title_pos: String_0,
     pub _cmdline_offset: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_win_text_height {
     pub is_set__win_text_height_: OptionalKeys,
@@ -627,7 +587,6 @@ pub struct KeyDict_win_text_height {
     pub end_vcol: Integer,
     pub max_height: Integer,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct KeyDict_xdl_diff {
     pub is_set__xdl_diff_: OptionalKeys,

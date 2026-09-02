@@ -11,14 +11,13 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct WinExtmark {
     pub ns_id: NS,
     pub mark_id: uint64_t,
     pub win_row: ::core::ffi::c_int,
     pub win_col: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct spellvars_T {
     pub spv_has_spell: bool,
     pub spv_unchanged: bool,

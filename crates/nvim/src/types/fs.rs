@@ -11,12 +11,12 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct Directory {
     pub request: uv_fs_t,
     pub ent: uv_dirent_t,
 }
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct FileID {
     pub inode: uint64_t,
     pub device_id: uint64_t,
@@ -24,7 +24,7 @@ pub struct FileID {
 /// A `stat` answer.
 ///
 /// `Copy`: a value.
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct FileInfo {
     pub stat: uv_stat_t,
 }

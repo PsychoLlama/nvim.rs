@@ -605,7 +605,7 @@ fn scan_integer(text: &[u8]) -> (lua_Integer, usize) {
 }
 
 /// The three flags the optional second argument can set.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct Options {
     luanil_object: bool,
     luanil_array: bool,

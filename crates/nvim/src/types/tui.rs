@@ -226,7 +226,6 @@ impl Staging {
 }
 
 /// A rectangle of the screen, in half-open rows and columns.
-#[derive(Copy, Clone)]
 pub struct Rect {
     pub top: c_int,
     pub bot: c_int,
@@ -235,7 +234,6 @@ pub struct Rect {
 }
 
 /// Terminal modes the TUI turned on, packed so the whole set can be reset.
-#[derive(Copy, Clone)]
 pub struct TermModes {
     pub grapheme_clusters_theme_updates_resize_events: [u8; 1],
 }
@@ -248,7 +246,6 @@ crate::bitfield_accessors! {
 }
 
 /// Where output goes: a tty when there is one, a pipe otherwise.
-#[derive(Copy, Clone)]
 pub union OutputHandle {
     pub tty: uv_tty_t,
     pub pipe: uv_pipe_t,
@@ -292,7 +289,6 @@ pub struct TermInput {
 }
 
 /// What the TUI wants to be told about.
-#[derive(Copy, Clone)]
 pub struct TermInputCallbacks {
     /// Called on the next reply to a device-attributes query, once. The TUI
     /// sends such a query after resetting the terminal, so the reply is what
@@ -302,7 +298,7 @@ pub struct TermInputCallbacks {
 
 /// The extra capability strings nvim carries because terminfo has no slot
 /// for them. All are fixed sequences chosen by terminal, never parameterised.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub struct TerminfoExt {
     pub enable_focus_reporting: Option<&'static CStr>,
     pub disable_focus_reporting: Option<&'static CStr>,

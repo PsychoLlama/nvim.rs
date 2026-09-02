@@ -181,7 +181,6 @@ pub struct afffile_T {
 }
 pub type affentry_T = affentry_S;
 /// One `PFX`/`SFX` line: what to chop, what to add, and when.
-#[derive(Copy, Clone)]
 pub struct affentry_S {
     pub ae_next: *mut affentry_T,
     pub ae_chop: *mut ::core::ffi::c_char,
@@ -197,7 +196,6 @@ pub struct affentry_S {
 /// The `af_pref`/`af_suff` tables key on [`ah_key`](Self::ah_key), which
 /// the header owns, so the table's key pointer points *into* the header;
 /// [`Self::key`] and [`Self::of_key`] are the two directions.
-#[derive(Copy, Clone)]
 pub struct affheader_T {
     pub ah_key: [::core::ffi::c_char; 17],
     pub ah_flag: ::core::ffi::c_uint,
@@ -232,7 +230,6 @@ impl affheader_T {
 ///
 /// `af_comp` keys on [`ci_key`](Self::ci_key) exactly as `af_pref` keys on
 /// an affix name; see [`affheader_T`].
-#[derive(Copy, Clone)]
 pub struct compitem_T {
     pub ci_key: [::core::ffi::c_char; 17],
     pub ci_flag: ::core::ffi::c_uint,

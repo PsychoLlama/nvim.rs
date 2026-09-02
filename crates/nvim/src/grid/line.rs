@@ -134,14 +134,12 @@ fn at(col: c_int) -> size_t {
 ///
 /// `start` of -1 means nothing was touched, matching the sentinel the
 /// original carries through this whole function.
-#[derive(Clone, Copy)]
 struct Dirty {
     start: c_int,
     end: c_int,
 }
 
 /// The columns of a line that hold content, and how far the rest is cleared.
-#[derive(Clone, Copy)]
 pub struct LineSpan {
     /// First column with content.
     pub col: c_int,
@@ -152,7 +150,6 @@ pub struct LineSpan {
 }
 
 /// The two attributes [`grid_put_linebuf`] applies.
-#[derive(Clone, Copy)]
 pub struct LineAttrs {
     /// Combined into every cell of the line and of the cleared columns.
     pub bg: c_int,

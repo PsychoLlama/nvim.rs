@@ -95,12 +95,10 @@ pub const kExprNodeTernaryValue: ExprASTNodeType = 3;
 pub const kExprNodeTernary: ExprASTNodeType = 2;
 pub const kExprNodeOpMissing: ExprASTNodeType = 1;
 pub const kExprNodeMissing: ExprASTNodeType = 0;
-#[derive(Copy, Clone)]
 pub struct ExprASTConvStackItem {
     pub node_p: *mut *mut ExprASTNode,
     pub ret_node_p: *mut Object,
 }
-#[derive(Copy, Clone)]
 pub struct ExprASTConvStack {
     pub size: size_t,
     pub capacity: size_t,

@@ -254,7 +254,7 @@ fn blob(kind: Kind, width: u32, rest: &[u8]) -> Read {
 }
 
 /// An encoded token: at most [`MAX_TOKEN_LEN`] bytes, on the stack.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct Encoded {
     buf: [u8; MAX_TOKEN_LEN],
     len: usize,

@@ -279,7 +279,6 @@ fn is_restart_key(key: c_int) -> bool {
 
 /// Everything [`mode_name`]'s decision tree reads, snapshotted from the
 /// editor's globals in one place so the tree itself touches none of them.
-#[derive(Clone, Copy)]
 struct ModeInputs {
     /// The `State` bitmask.
     state: ModeFlags,

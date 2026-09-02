@@ -129,7 +129,7 @@ pub const TAG_HELP: ::core::ffi::c_uint = 1;
 /// Each field is bracketed by a start and an `_end` pointer; the parts a
 /// line need not have (the kind, the user data) are NULL when absent. The
 /// buffer is the caller's, and outlives every `TagParts` taken from it.
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct TagParts {
     pub tagname: *mut ::core::ffi::c_char,
     pub tagname_end: *mut ::core::ffi::c_char,

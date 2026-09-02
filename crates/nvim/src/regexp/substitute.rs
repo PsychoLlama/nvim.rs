@@ -106,7 +106,7 @@ type CaseFolder = fn(c_int) -> c_int;
 
 /// The case hooks in force: `\u` and `\l` fold one character, `\U` and `\L`
 /// fold every character until `\e` or `\E`.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct Case {
     once: Option<CaseFolder>,
     rest: Option<CaseFolder>,

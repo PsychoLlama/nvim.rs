@@ -98,7 +98,6 @@ pub struct VTermColor_rgb {
     pub blue: uint8_t,
 }
 pub type VTermDamageSize = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermGlyphInfo {
     pub schar: schar_T,
@@ -127,7 +126,6 @@ crate::bitfield_accessors! {
         3..=3 => continuation, set_continuation: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermParserCallbacks {
     pub text: Option<
@@ -203,7 +201,6 @@ pub struct VTermRect {
     pub start_col: ::core::ffi::c_int,
     pub end_col: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreen {
     pub vt: *mut VTerm,
@@ -321,7 +318,6 @@ crate::bitfield_accessors! {
         19..=19 => overline, set_overline: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermSelectionCallbacks {
     pub set: Option<
@@ -336,7 +332,6 @@ pub struct VTermSelectionCallbacks {
     >,
 }
 pub type VTermSelectionMask = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState {
     pub vt: *mut VTerm,
@@ -389,7 +384,6 @@ crate::bitfield_accessors! {
         0..=0 => protected_cell, set_protected_cell: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateCallbacks {
     pub putglyph: Option<
@@ -461,7 +455,6 @@ pub struct VTermStateCallbacks {
     >,
     pub sb_clear: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void) -> ::core::ffi::c_int>,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFallbacks {
     pub control:
@@ -501,7 +494,6 @@ pub struct VTermStateFallbacks {
         unsafe extern "C" fn(VTermStringFragment, *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
     >,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermStateFields {
     pub pos: VTermPos,
@@ -536,7 +528,6 @@ crate::bitfield_accessors! {
     }
 }
 pub type VTermState_mouse_protocol = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState_saved {
     pub pos: VTermPos,
@@ -557,7 +548,6 @@ crate::bitfield_accessors! {
         2..=3 => cursor_shape, set_cursor_shape: ::core::ffi::c_uint;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermState_selection {
     pub callbacks: *const VTermSelectionCallbacks,
@@ -565,7 +555,6 @@ pub struct VTermState_selection {
     pub buffer: *mut ::core::ffi::c_char,
     pub buflen: size_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union VTermState_tmp {
     pub decrqss: [::core::ffi::c_char; 4],

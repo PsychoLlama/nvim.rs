@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct mapblock {
     pub m_next: *mut mapblock_T,
     pub m_alt: *mut mapblock_T,

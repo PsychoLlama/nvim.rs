@@ -20,7 +20,7 @@ pub struct ColorItem {
     pub is_default: bool,
     pub link_global: bool,
 }
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct ColorKey {
     pub ns_id: ::core::ffi::c_int,
     pub syn_id: ::core::ffi::c_int,

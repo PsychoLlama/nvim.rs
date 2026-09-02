@@ -107,7 +107,6 @@ pub const MFS_FLUSH: ::core::ffi::c_uint = 4;
 pub const MFS_STOP: ::core::ffi::c_uint = 2;
 pub const MFS_ALL: ::core::ffi::c_uint = 1;
 pub const MIN_SWAP_PAGE_SIZE: ::core::ffi::c_uint = 1048;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct DataBlock {
     pub db_id: uint16_t,
@@ -126,7 +125,6 @@ pub struct PointerEntry {
     pub pe_old_lnum: linenr_T,
     pub pe_page_count: ::core::ffi::c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct PointerBlock {
     pub pb_id: uint16_t,
@@ -135,7 +133,6 @@ pub struct PointerBlock {
     pub pb_pointer: [PointerEntry; 0],
 }
 pub const PTR_ID: ::core::ffi::c_uint = 28788;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ZeroBlock {
     pub b0_id: [::core::ffi::c_char; 2],

@@ -84,7 +84,7 @@ unsafe fn line_count_info(
 /// The `_cursor` three are "up to the cursor" outside Visual mode and "over
 /// the selection" inside it, which is the whole difference between the two
 /// messages [`report_counts`] can print.
-#[derive(Default, Clone, Copy)]
+#[derive(Default)]
 struct PosCounts {
     /// Bytes in the buffer.
     bytes: varnumber_T,

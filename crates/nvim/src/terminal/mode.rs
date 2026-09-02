@@ -66,7 +66,6 @@ const DOBUF_FIRST: c_int = 1;
 ///
 /// `state` is first so that a `*mut TerminalState` and the `*mut VimState`
 /// the stack hands back to the callbacks are the same address.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct TerminalState {
     pub state: VimState,

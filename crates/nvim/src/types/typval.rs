@@ -347,7 +347,6 @@ mod refcount_tests {
 }
 
 pub type blob_T = blobvar_S;
-#[derive(Copy, Clone)]
 pub struct blobvar_S {
     pub bv_ga: garray_T,
     pub bv_refcount: Refcount,
@@ -395,7 +394,6 @@ pub struct funccall_S {
     pub fc_copyID: ::core::ffi::c_int,
     pub fc_ufuncs: garray_T,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct funccall_S_fc_fixvar {
     pub di_tv: typval_T,
@@ -403,20 +401,17 @@ pub struct funccall_S_fc_fixvar {
     pub di_key: [::core::ffi::c_char; 21],
 }
 pub type funccall_T = funccall_S;
-#[derive(Copy, Clone)]
 pub struct ht_stack_S {
     pub ht: *mut hashtab_T,
     pub prev: *mut ht_stack_S,
 }
 pub type ht_stack_T = ht_stack_S;
 pub type list_T = listvar_S;
-#[derive(Copy, Clone)]
 pub struct list_stack_S {
     pub list: *mut list_T,
     pub prev: *mut list_stack_S,
 }
 pub type list_stack_T = list_stack_S;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct listitem_S {
     pub li_next: *mut listitem_T,
@@ -424,7 +419,6 @@ pub struct listitem_S {
     pub li_tv: typval_T,
 }
 pub type listitem_T = listitem_S;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct listvar_S {
     pub lv_first: *mut listitem_T,
@@ -512,7 +506,6 @@ impl Default for sctx_T {
         Self::NONE
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct staticList10_T {
     pub sl_list: list_T,
@@ -538,7 +531,6 @@ pub union typval_vval_union {
     pub v_partial: *mut partial_T,
     pub v_blob: *mut blob_T,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ufunc_S {
     pub uf_varargs: ::core::ffi::c_int,

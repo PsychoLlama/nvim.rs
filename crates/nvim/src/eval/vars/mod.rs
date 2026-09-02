@@ -142,7 +142,6 @@ pub const GLV_QUIET: c_int = 2;
 /// One `v:` variable: a `dictitem_T` whose flexible key member is spelled
 /// out at the longest name the table holds (`VIMVAR_KEY_LEN`, 16, plus the
 /// NUL), so that the whole table can be a `static`.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VimVarItem {
     pub di_tv: typval_T,
@@ -151,7 +150,6 @@ pub struct VimVarItem {
 }
 
 /// One row of the `v:` table.
-#[derive(Copy, Clone)]
 pub struct VimVar {
     pub vv_name: *mut c_char,
     pub vv_di: VimVarItem,

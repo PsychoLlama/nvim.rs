@@ -184,7 +184,6 @@ pub struct diffhunk_T {
     pub count_new: ::core::ffi::c_int,
 }
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
-#[derive(Copy, Clone)]
 pub struct linemap_entry_T {
     pub byte_start: colnr_T,
     pub num_bytes: colnr_T,

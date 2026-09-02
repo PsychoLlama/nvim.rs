@@ -59,7 +59,6 @@ pub(crate) const VARNUMBER_MIN: i64 = i64::MIN;
 
 /// What keys a Lua table turned out to contain — the answer
 /// [`nlua_traverse_table`] hands both `pop` walks.
-#[derive(Copy, Clone)]
 pub struct LuaTableProps {
     /// The largest positive integral key found.
     pub maxidx: size_t,

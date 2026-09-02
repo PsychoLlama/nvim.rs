@@ -12,7 +12,6 @@
 use super::*;
 
 pub type MotionType = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct cmdarg_T {
     pub oap: *mut oparg_T,

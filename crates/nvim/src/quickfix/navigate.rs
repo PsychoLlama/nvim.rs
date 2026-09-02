@@ -17,7 +17,6 @@ use core::ffi::c_int;
 
 /// One entry of a list together with its number, which the adjacency search
 /// tracks in step with the entry it walks to.
-#[derive(Clone, Copy)]
 struct At {
     entry: *mut qfline_T,
     /// The entry's position in the list, counted from 1.

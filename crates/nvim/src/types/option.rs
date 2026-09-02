@@ -132,7 +132,6 @@ pub type opt_expand_cb_T = Option<
         *mut *mut *mut ::core::ffi::c_char,
     ) -> Result<(), Failed>,
 >;
-#[derive(Copy, Clone)]
 pub struct optexpand_T {
     // Upstream carries an `oe_varp` here, and its two readers -- the
     // 'listchars'/'fillchars' and 'eventignore'/'eventignorewin' expansions
@@ -148,7 +147,6 @@ pub struct optexpand_T {
     pub oe_xp: *mut expand_T,
     pub oe_set_arg: *mut ::core::ffi::c_char,
 }
-#[derive(Copy, Clone)]
 pub struct optset_T {
     /// The option's storage in the scope being set, with the type its row
     /// declares. `pub(crate)` because [`OptSlot`] is: every `did_set_*`

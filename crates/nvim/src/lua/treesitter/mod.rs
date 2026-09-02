@@ -234,13 +234,11 @@ pub const TSInputEncodingUTF8: TSInputEncoding = 0;
 pub type TSSymbolType = ::core::ffi::c_uint;
 pub const TSSymbolTypeAuxiliary: TSSymbolType = 3;
 pub const TSSymbolTypeAnonymous: TSSymbolType = 1;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSPoint {
     pub row: uint32_t,
     pub column: uint32_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSRange {
     pub start_point: TSPoint,
@@ -248,7 +246,6 @@ pub struct TSRange {
     pub start_byte: uint32_t,
     pub end_byte: uint32_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSInput {
     pub payload: *mut ::core::ffi::c_void,
@@ -263,14 +260,12 @@ pub struct TSInput {
     pub encoding: TSInputEncoding,
     pub decode: TSDecodeFunction,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSParseState {
     pub payload: *mut ::core::ffi::c_void,
     pub current_byte_offset: uint32_t,
     pub has_error: bool,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSParseOptions {
     pub payload: *mut ::core::ffi::c_void,
@@ -279,7 +274,6 @@ pub struct TSParseOptions {
 pub type TSLogType = ::core::ffi::c_uint;
 pub const TSLogTypeLex: TSLogType = 1;
 pub const TSLogTypeParse: TSLogType = 0;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLogger {
     pub payload: *mut ::core::ffi::c_void,
@@ -287,7 +281,6 @@ pub struct TSLogger {
         unsafe extern "C" fn(*mut ::core::ffi::c_void, TSLogType, *const ::core::ffi::c_char) -> (),
     >,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSInputEdit {
     pub start_byte: uint32_t,
@@ -322,7 +315,6 @@ pub type TSQueryPredicateStepType = ::core::ffi::c_uint;
 pub const TSQueryPredicateStepTypeString: TSQueryPredicateStepType = 2;
 pub const TSQueryPredicateStepTypeCapture: TSQueryPredicateStepType = 1;
 pub const TSQueryPredicateStepTypeDone: TSQueryPredicateStepType = 0;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSQueryPredicateStep {
     pub type_0: TSQueryPredicateStepType,
@@ -333,19 +325,16 @@ pub const TSQueryErrorCapture: TSQueryError = 4;
 pub const TSQueryErrorField: TSQueryError = 3;
 pub const TSQueryErrorNodeType: TSQueryError = 2;
 pub const TSQueryErrorNone: TSQueryError = 0;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLanguageMetadata {
     pub major_version: uint8_t,
     pub minor_version: uint8_t,
     pub patch_version: uint8_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaTree {
     pub tree: *const TSTree,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaLoggerOpts {
     pub cb: LuaRef,
@@ -353,7 +342,6 @@ pub struct TSLuaLoggerOpts {
     pub lex: bool,
     pub parse: bool,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TSLuaParserCallbackPayload {
     pub parse_start_time: uint64_t,

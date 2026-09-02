@@ -29,7 +29,6 @@ pub(super) const DEFAULT_MAXWID: c_int = 9999;
 const STL_ALL: &[u8] = b"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
 
 /// The width and alignment prefix of one `%` item.
-#[derive(Clone, Copy)]
 pub(super) struct Spec {
     /// The minimum width, negative when the item is left-aligned. Some item
     /// letters read it before it is clamped and signed, as their argument.

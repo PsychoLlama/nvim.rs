@@ -10,7 +10,6 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
-#[derive(Copy, Clone)]
 pub struct VimMenu {
     pub modes: ::core::ffi::c_int,
     pub enabled: ::core::ffi::c_int,

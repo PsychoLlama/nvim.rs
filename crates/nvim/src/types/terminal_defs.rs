@@ -246,7 +246,6 @@ impl Scrollback {
         self.pending -= 1;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TerminalPending {
     pub resize: bool,
@@ -258,7 +257,6 @@ pub struct TerminalPending {
     pub send: *mut Vec<u8>,
     pub events: *mut MultiQueue,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TerminalCursor {
     pub row: ::core::ffi::c_int,

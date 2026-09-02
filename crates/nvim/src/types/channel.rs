@@ -73,7 +73,6 @@ pub struct Channel {
     pub callback_busy: bool,
     pub callback_scheduled: bool,
 }
-#[derive(Copy, Clone)]
 pub struct ChannelCallFrame {
     pub request_id: uint32_t,
     pub returned: bool,
@@ -87,7 +86,6 @@ pub type ChannelStdinMode = ::core::ffi::c_uint;
 pub const kChannelStdinPipe: ChannelStdinMode = 0;
 pub const kChannelStdinNull: ChannelStdinMode = 1;
 pub type ChannelStreamType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union Channel_stream {
     pub proc: Proc,

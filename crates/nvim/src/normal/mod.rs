@@ -92,7 +92,6 @@ pub(crate) const MSCR_DOWN: c_int = 0;
 pub(crate) const FIND_EVAL: c_uint = 4;
 pub(crate) const FIND_STRING: c_uint = 2;
 pub(crate) const FIND_IDENT: c_uint = 1;
-#[derive(Copy, Clone)]
 pub(crate) struct nv_cmd {
     pub cmd_char: c_int,
     pub cmd_func: nv_func_T,
@@ -117,7 +116,6 @@ pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
 pub(crate) const FIND_ANY: c_uint = 1;
 pub(crate) const FIND_DEFINE: c_uint = 2;
 pub(crate) const DT_POP: c_uint = 2;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct NormalState {
     pub state: VimState,

@@ -19,13 +19,11 @@ pub type ArgvFunc = Option<
         *mut ufunc_T,
     ) -> ::core::ffi::c_int,
 >;
-#[derive(Copy, Clone)]
 pub struct funccal_entry {
     pub top_funccal: *mut ::core::ffi::c_void,
     pub next: *mut funccal_entry_T,
 }
 pub type funccal_entry_T = funccal_entry;
-#[derive(Copy, Clone)]
 pub struct funcdict_T {
     pub fd_dict: *mut dict_T,
     pub fd_newkey: *mut ::core::ffi::c_char,

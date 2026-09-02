@@ -15,13 +15,11 @@ use super::*;
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
 
 pub type SpellAddType = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct fromto_T {
     pub ft_from: *mut ::core::ffi::c_char,
     pub ft_to: *mut ::core::ffi::c_char,
 }
 pub type idx_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
 pub struct langp_T {
     pub lp_slang: *mut slang_T,
     pub lp_sallang: *mut slang_T,
@@ -102,7 +100,6 @@ pub struct spelltab_T {
     pub st_fold: [uint8_t; 256],
     pub st_upper: [uint8_t; 256],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct wordcount_T {
     pub wc_count: uint16_t,

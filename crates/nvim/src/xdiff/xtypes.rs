@@ -104,7 +104,6 @@ impl Params<'_> {
 }
 
 /// `xdemitconf_t`, less the two `#if 0`-ed function-name hooks.
-#[derive(Clone, Copy)]
 pub(crate) struct EmitConf {
     /// Unchanged lines to show either side of a hunk.
     pub ctxlen: i64,

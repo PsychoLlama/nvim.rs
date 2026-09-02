@@ -183,7 +183,6 @@ pub const CSTP_ERROR: c_uint = 1;
 pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
 /// An 'inccommand' preview callback, likewise.
 pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int>;
-#[derive(Copy, Clone)]
 pub struct CommandDefinition {
     pub cmd_name: *mut c_char,
     pub cmd_func: ex_func_T,
@@ -211,7 +210,6 @@ pub const REMAP_YES: RemapValues = 0;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;
-#[derive(Copy, Clone)]
 pub struct dbg_stuff {
     pub trylevel: c_int,
     pub force_abort: c_int,
@@ -225,7 +223,6 @@ pub struct dbg_stuff {
     pub check_cstack: c_int,
     pub current_exception: *mut except_T,
 }
-#[derive(Copy, Clone)]
 pub struct loop_cookie {
     pub lines_gap: *mut garray_T,
     pub current_line: c_int,
@@ -233,7 +230,6 @@ pub struct loop_cookie {
     pub lc_getline: LineGetter,
     pub cookie: *mut c_void,
 }
-#[derive(Copy, Clone)]
 pub struct wcmd_T {
     pub line: *mut c_char,
     pub lnum: linenr_T,

@@ -220,7 +220,6 @@ pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct CommandLineState {
     pub state: VimState,
@@ -254,7 +253,6 @@ pub struct CommandLineState {
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct incsearch_state_T {
     pub search_start: pos_T,

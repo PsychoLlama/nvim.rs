@@ -104,7 +104,6 @@ pub struct fold_T {
 
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
-#[derive(Copy, Clone)]
 pub struct fline_T {
     pub wp: *mut win_T,
     /// Current line number.

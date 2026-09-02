@@ -18,7 +18,6 @@ pub struct lua_State {
     _marker: ::core::marker::PhantomData<(*mut u8, ::core::marker::PhantomPinned)>,
 }
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct luaL_Buffer {
     pub p: *mut ::core::ffi::c_char,
@@ -26,7 +25,6 @@ pub struct luaL_Buffer {
     pub L: *mut lua_State,
     pub buffer: [::core::ffi::c_char; 8192],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct luaL_Reg {
     pub name: *const ::core::ffi::c_char,

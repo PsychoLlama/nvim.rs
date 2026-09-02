@@ -14,7 +14,6 @@ use super::*;
 /// How far a list-backed reader has got.
 ///
 /// `Copy`: three cursors into a list the reader does not own.
-#[derive(Copy, Clone)]
 pub struct ListReaderState {
     pub list: *const list_T,
     pub li: *const listitem_T,

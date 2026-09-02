@@ -22,7 +22,6 @@ pub struct AutoCmd {
     pub once: bool,
     pub nested: bool,
 }
-#[derive(Copy, Clone)]
 pub struct AutoPat {
     pub refcount: RefcountSize,
     pub pat: *mut ::core::ffi::c_char,
@@ -33,7 +32,6 @@ pub struct AutoPat {
     pub allow_dirs: ::core::ffi::c_char,
 }
 pub type AutoPatCmd = AutoPatCmd_S;
-#[derive(Copy, Clone)]
 pub struct AutoPatCmd_S {
     pub lastpat: *mut AutoPat,
     pub auidx: size_t,
@@ -49,7 +47,6 @@ pub struct AutoPatCmd_S {
     pub data: *mut Object,
     pub next: *mut AutoPatCmd,
 }
-#[derive(Copy, Clone)]
 pub struct aco_save_T {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
     pub save_curwin_handle: handle_T,
@@ -84,7 +81,6 @@ impl Default for aco_save_T {
     }
 }
 
-#[derive(Copy, Clone)]
 pub struct aucmdwin_T {
     pub auc_win: *mut win_T,
     pub auc_win_used: bool,

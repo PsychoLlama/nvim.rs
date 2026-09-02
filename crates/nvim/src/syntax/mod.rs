@@ -126,7 +126,6 @@ pub(crate) struct sp_syn {
     pub id: int16_t,
     pub cont_in_list: *mut int16_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct keyentry {
     pub ke_next: *mut keyentry_T,
@@ -185,13 +184,11 @@ pub(crate) struct synpat_T {
     pub sp_prog: *mut regprog_T,
     pub sp_time: syn_time_T,
 }
-#[derive(Copy, Clone)]
 pub(crate) struct syn_cluster_T {
     pub scl_name: *mut ::core::ffi::c_char,
     pub scl_name_u: *mut ::core::ffi::c_char,
     pub scl_list: *mut int16_t,
 }
-#[derive(Copy, Clone)]
 pub(crate) struct syn_opt_arg_T {
     pub flags: SynFlags,
     pub keyword: bool,

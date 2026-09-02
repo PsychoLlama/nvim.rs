@@ -145,7 +145,6 @@ pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
     }
 }
 
-#[derive(Copy, Clone)]
 pub struct bufinfo_T {
     pub bi_buf: Buf,
     pub bi_fp: *mut FILE,

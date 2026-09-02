@@ -18,7 +18,6 @@ pub struct HlMessageChunk {
     pub hl_id: ::core::ffi::c_int,
 }
 pub type MessageData = msg_data;
-#[derive(Copy, Clone)]
 pub struct msg_data {
     pub source: String_0,
     pub percent: Integer,

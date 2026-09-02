@@ -19,7 +19,6 @@ use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
-#[derive(Copy, Clone)]
 struct LangmapEntry {
     from: c_int,
     to: c_int,

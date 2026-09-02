@@ -37,7 +37,6 @@ pub type ExprComparisonType = ::core::ffi::c_uint;
 pub type ExprOptScope = ::core::ffi::c_uint;
 pub type ExprParserFlags = ::core::ffi::c_uint;
 pub type ExprVarScope = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct expr_ast_node {
     pub type_0: ExprASTNodeType,
     pub children: *mut ExprASTNode,

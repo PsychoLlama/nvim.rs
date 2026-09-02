@@ -12,12 +12,10 @@
 use super::*;
 
 pub type cleanup_T = cleanup_stuff;
-#[derive(Copy, Clone)]
 pub struct cleanup_stuff {
     pub pending: ::core::ffi::c_int,
     pub exception: *mut except_T,
 }
-#[derive(Copy, Clone)]
 pub struct cstack_T {
     pub cs_flags: [crate::ex_eval::CsFlags; 50],
     pub cs_pending: [::core::ffi::c_char; 50],
@@ -61,14 +59,12 @@ impl cstack_T {
     }
 }
 pub type eslist_T = eslist_elem;
-#[derive(Copy, Clone)]
 pub struct eslist_elem {
     pub saved_emsg_silent: ::core::ffi::c_int,
     pub next: *mut eslist_T,
 }
 pub type except_T = vim_exception;
 pub type except_type_T = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct exception_state_S {
     pub estate_current_exception: *mut except_T,
     pub estate_did_throw: bool,
@@ -77,7 +73,6 @@ pub struct exception_state_S {
     pub estate_did_emsg: ::core::ffi::c_int,
 }
 pub type exception_state_T = exception_state_S;
-#[derive(Copy, Clone)]
 pub struct msglist {
     pub next: *mut msglist_T,
     pub msg: *mut ::core::ffi::c_char,
@@ -87,7 +82,6 @@ pub struct msglist {
     pub multiline: bool,
 }
 pub type msglist_T = msglist;
-#[derive(Copy, Clone)]
 pub struct vim_exception {
     pub type_0: except_type_T,
     pub value: *mut ::core::ffi::c_char,

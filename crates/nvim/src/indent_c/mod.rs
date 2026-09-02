@@ -83,7 +83,6 @@ pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 pub const FM_BACKWARD: ::core::ffi::c_int = 1;
-#[derive(Copy, Clone)]
 pub struct cpp_baseclass_cache_T {
     pub found: ::core::ffi::c_int,
     pub lpos: lpos_T,

@@ -294,12 +294,10 @@ pub const kEOpLvlAssignment: ExprOpLvl = 3;
 pub const kEOpLvlParens: ExprOpLvl = 2;
 pub const kEOpLvlComplexIdentifier: ExprOpLvl = 1;
 pub const kEOpLvlInvalid: ExprOpLvl = 0;
-#[derive(Copy, Clone)]
 pub struct ExprNodeProps {
     pub lvl: ExprOpLvl,
     pub ass: ExprOpAssociativity,
 }
-#[derive(Copy, Clone)]
 pub struct StringShift {
     pub start: size_t,
     pub orig_len: size_t,

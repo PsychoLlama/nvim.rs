@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Intersection {
     pub size: size_t,
@@ -69,13 +68,11 @@ pub struct MarkTreeIter_s {
 }
 pub type MetaFilter = *const uint32_t;
 pub type MetaIndex = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct mtnode_inner_s {
     pub i_ptr: [*mut MTNode; 20],
     pub i_meta: [[uint32_t; 5]; 20],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct mtnode_s {
     pub n: int32_t,

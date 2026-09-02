@@ -280,7 +280,6 @@ fn next_mark() -> c_int {
 }
 
 /// One header, as a depth-first [`TreeWalk`] arrives at it.
-#[derive(Clone, Copy)]
 pub(crate) struct Visit {
     /// The header itself, already stamped with the walk's `mark`.
     pub(crate) header: Header,

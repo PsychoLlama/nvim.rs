@@ -62,7 +62,7 @@ use tag::ITEM_MAX;
 
 /// One encoded msgpack item: a tag and however much of a payload fits beside
 /// it. Never longer than [`ITEM_MAX`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Item {
     bytes: [u8; ITEM_MAX],
     len: usize,

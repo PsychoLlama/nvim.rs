@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct AutoCmdVec {
     pub size: size_t,
     pub capacity: size_t,
@@ -81,14 +80,12 @@ pub struct Map_uint64_t_ptr_t {
     pub values: *mut ptr_t,
 }
 pub type OptIndex = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
 pub struct ParserHighlight {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut ParserHighlightChunk,
     pub init_array: [ParserHighlightChunk; 16],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ScopeDictDictItem {
     pub di_tv: typval_T,
@@ -135,7 +132,6 @@ pub struct Set_uint64_t {
     pub h: MapHash,
     pub keys: *mut uint64_t,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct StringArray {
     pub size: size_t,
@@ -186,7 +182,6 @@ pub struct dictitem_T {
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 0],
 }
-#[derive(Copy, Clone)]
 pub struct mod_entry_T {
     pub flag: ::core::ffi::c_int,
     pub name: *mut ::core::ffi::c_char,

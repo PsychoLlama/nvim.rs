@@ -31,7 +31,6 @@ use crate::winlayer::{Buf, Win};
 /// `#[repr(C)]` is not required of it any more — nothing outside this family
 /// names the type — but the field order is upstream's and is left alone so the
 /// C can still be read beside it.
-#[derive(Copy, Clone)]
 pub struct WinLineVars {
     /// The decoration state the redraw is walking, acquired once by
     /// [`win_update`](crate::drawscreen::win_update) and threaded down. Every

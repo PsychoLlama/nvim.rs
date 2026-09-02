@@ -119,7 +119,6 @@ pub(crate) type Mb = Live<mapblock_T>;
 pub(crate) type Ma = Live<MapArguments>;
 
 pub type MapArguments = map_arguments;
-#[derive(Copy, Clone)]
 pub struct map_arguments {
     pub buffer: bool,
     pub expr: bool,

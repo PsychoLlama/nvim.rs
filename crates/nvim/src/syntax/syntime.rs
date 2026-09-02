@@ -59,7 +59,6 @@ pub(crate) fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 
 /// One row of the `:syntime report` table: a pattern's accumulated timings,
 /// copied out of its `syn_time_T` so the table can be sorted.
-#[derive(Copy, Clone)]
 struct TimeEntry {
     total: proftime_T,
     count: c_int,

@@ -25,7 +25,7 @@ use core::ptr;
 const STAT_BUF_LEN: usize = SEARCH_STAT_BUF_LEN as usize;
 
 /// What `[N/M]` and `searchcount()` report.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct Stat {
     /// Which match the cursor is on, 1-based; -1 when the count was
     /// interrupted, 0 when there is nothing to report.

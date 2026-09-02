@@ -146,7 +146,6 @@ pub unsafe fn f_min(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
 /// fold whose accumulator is a String or a container leaks one value per
 /// byte. Left as it is — it is a leak, not a crash, and the answer is the
 /// same either way.
-#[derive(Clone, Copy)]
 struct Cleanup {
     blank_rettv: bool,
     clear_acc: bool,

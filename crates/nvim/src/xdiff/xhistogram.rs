@@ -104,7 +104,7 @@ struct HistIndex {
 }
 
 /// The common run [`find_lcs`] settled on, as inclusive line ranges.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct Region {
     begin1: i64,
     end1: i64,

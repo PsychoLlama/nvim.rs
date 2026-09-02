@@ -154,7 +154,6 @@ pub const VIM_YES: c_uint = 2;
 /// One run of displayed message text, for scrolling back over. See
 /// [`self::scrollback`].
 pub type msgchunk_T = msgchunk_S;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct msgchunk_S {
     pub sb_next: *mut msgchunk_T,

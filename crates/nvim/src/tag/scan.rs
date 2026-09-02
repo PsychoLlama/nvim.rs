@@ -129,7 +129,7 @@ impl Pattern {
 }
 
 /// Where a bisection of a sorted tags file has got to.
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub(crate) struct SearchInfo {
     /// Offset of the first line that could still match.
     pub(crate) low_offset: off_T,

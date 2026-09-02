@@ -63,7 +63,6 @@ const SOCK_STREAM: c_int = 1;
 const AI_NUMERICSERV: c_int = 0x400;
 
 /// The buffer `uv_tcp_getsockname` fills in.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sockaddr_storage {
     pub ss_family: sa_family_t,
@@ -74,7 +73,6 @@ pub struct sockaddr_storage {
 /// Just enough of `sockaddr_in`/`sockaddr_in6` to read a bound port: both put
 /// it, in network order, immediately after the address family. Nothing here
 /// looks any further, so the family does not have to be inspected at all.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct sockaddr_head {
     pub family: sa_family_t,

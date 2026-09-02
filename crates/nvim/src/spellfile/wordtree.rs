@@ -168,7 +168,6 @@ pub(super) type wordnode_T = wordnode_S;
 /// *both* `*mut wordnode_T` — documentation of the phase change rather
 /// than a representation. It is one field, and the phases are written down
 /// on it instead.
-#[derive(Copy, Clone)]
 pub struct wordnode_S {
     /// Compression phase: five digest bytes over this node's whole sibling
     /// chain, plus a terminator, so the hash table can key on it as a

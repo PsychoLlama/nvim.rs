@@ -15,7 +15,6 @@ pub type LineFlags = ::core::ffi::c_int;
 /// What a `grid_line` event says about the line it carries.
 pub const kLineFlagWrap: LineFlags = 1;
 pub const kLineFlagInvalid: LineFlags = 2;
-#[derive(Copy, Clone)]
 pub struct RemoteUI {
     pub rgb: bool,
     pub override_0: bool,

@@ -201,7 +201,6 @@ pub const WC_KEY_OFF: usize = ::core::mem::offset_of!(crate::types::wordcount_T,
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
-#[derive(Copy, Clone)]
 pub struct matchinf_T {
     /// The language being tried.
     pub mi_lp: *mut langp_T,
@@ -242,14 +241,12 @@ pub struct matchinf_T {
 
 /// One `SYLLABLE` item: a short sequence of characters counting as one
 /// syllable.
-#[derive(Copy, Clone)]
 pub struct syl_item_T {
     pub sy_chars: [c_char; SY_MAXLEN as usize],
     pub sy_len: c_int,
 }
 
 /// The cookie `do_in_runtimepath` carries while loading a language.
-#[derive(Copy, Clone)]
 pub struct spelload_T {
     /// The language name, truncated when an error is found.
     pub sl_lang: [c_char; MAXWLEN + 1],

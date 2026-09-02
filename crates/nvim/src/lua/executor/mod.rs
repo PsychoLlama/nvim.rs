@@ -68,7 +68,6 @@ unsafe extern "C" {
 }
 
 /// What `lua_getinfo` fills in: `lua.h`'s `lua_Debug`, layout and all.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct lua_Debug {
     pub event: c_int,

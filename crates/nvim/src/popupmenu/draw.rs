@@ -273,7 +273,6 @@ unsafe fn pum_grid_puts_with_attrs(col: c_int, cells: c_int, text: *const c_char
 /// The config it is read into stays in the caller's frame: it is ~460 bytes
 /// and `grid_draw_border` wants a pointer to it, so moving it around costs
 /// more than it reads.
-#[derive(Clone, Copy)]
 struct PumBorder {
     /// Cells the border costs: 0 (none), 1 (shadow, right and bottom only)
     /// or 2 (a full box).
@@ -341,7 +340,6 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
 }
 
 /// What every row of the menu draws the same way.
-#[derive(Clone, Copy)]
 struct RowStyle {
     /// Grid column the item text starts at: the left edge, or the right one
     /// under `'rightleft'`.

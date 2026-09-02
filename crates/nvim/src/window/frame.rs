@@ -25,7 +25,6 @@ use crate::winlayer::{Frame, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
 /// the C's `wp`, `*altfr` and `*dirp` out-parameters as one value.
-#[derive(Clone, Copy)]
 pub(crate) struct AltWin {
     /// The window the cursor goes to.
     pub win: Win,

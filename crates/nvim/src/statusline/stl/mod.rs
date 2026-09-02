@@ -536,7 +536,6 @@ pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
 /// `schar_get_adv` is a cache lookup, a `strlen` and a `memcpy` per cell,
 /// and a padded line is nothing but such cells. Resolving it once turns
 /// padding into a short `copy_from_slice`.
-#[derive(Clone, Copy)]
 pub(super) struct Fill {
     /// The glyph itself, for the two arms that compare it to `-`.
     schar: schar_T,
@@ -621,7 +620,6 @@ fn put_number(out: &mut [u8], at: usize, plan: &parse::NumPlan) -> usize {
 /// runs in the sandbox (a `'statusline'` set from a modeline is not
 /// trusted), and which option to reset to its default when expanding it
 /// provokes an error.
-#[derive(Clone, Copy)]
 pub struct FmtSource {
     pub opt_idx: OptIndex,
     pub opt_scope: OptionSetFlags,
@@ -641,7 +639,6 @@ impl FmtSource {
 ///
 /// `hltab` and `tabtab` answer raw pointers into two of the expander's
 /// arenas, which the next expansion reuses — see this module's header.
-#[derive(Clone, Copy)]
 pub struct StlSinks {
     /// The highlight runs, one per group change.
     pub hltab: *mut *mut stl_hlrec_t,

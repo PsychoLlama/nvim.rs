@@ -75,7 +75,6 @@ pub struct __pthread_rwlock_arch_t {
     pub __pad2: ::core::ffi::c_ulong,
     pub __flags: ::core::ffi::c_uint,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct __va_list_tag {
     pub gp_offset: ::core::ffi::c_uint,
@@ -94,14 +93,12 @@ pub type intmax_t = ::libc::intmax_t;
 pub type intptr_t = isize;
 pub type off_t = ::core::ffi::c_long;
 pub type pid_t = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union pthread_mutex_t {
     pub __data: __pthread_mutex_s,
     pub __size: [::core::ffi::c_char; 40],
     pub __align: ::core::ffi::c_long,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union pthread_rwlock_t {
     pub __data: __pthread_rwlock_arch_t,

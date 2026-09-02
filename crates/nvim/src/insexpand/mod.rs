@@ -169,7 +169,6 @@ pub const CTRL_X_EVAL: ::core::ffi::c_int = 16;
 pub const CTRL_X_REGISTER: ::core::ffi::c_int = 19;
 pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
 pub type compl_T = compl_S;
-#[derive(Copy, Clone)]
 pub struct compl_S {
     pub cp_next: *mut compl_T,
     pub cp_prev: *mut compl_T,

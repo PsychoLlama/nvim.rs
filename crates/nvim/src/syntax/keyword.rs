@@ -107,7 +107,6 @@ pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
 }
 
 /// Everything a run of `:syntax keyword` gives every keyword it defines.
-#[derive(Copy, Clone)]
 struct KeywordDef {
     /// The syntax group the keywords belong to.
     id: c_int,

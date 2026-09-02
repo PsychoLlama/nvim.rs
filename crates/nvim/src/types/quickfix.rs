@@ -94,7 +94,6 @@ pub struct DirStack {
 }
 pub type qfline_T = qfline_S;
 /// One entry in a quickfix list.
-#[derive(Copy, Clone)]
 pub struct qfline_S {
     pub qf_next: *mut qfline_T,
     pub qf_prev: *mut qfline_T,

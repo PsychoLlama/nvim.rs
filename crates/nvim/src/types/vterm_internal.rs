@@ -23,7 +23,6 @@ use core::mem::offset_of;
 
 use super::*;
 
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncoding {
     pub init: Option<unsafe extern "C" fn(*mut VTermEncoding, *mut ::core::ffi::c_void) -> ()>,
@@ -40,7 +39,6 @@ pub struct VTermEncoding {
         ) -> (),
     >,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermEncodingInstance {
     pub enc: *mut VTermEncoding,
@@ -61,7 +59,6 @@ crate::bitfield_accessors! {
         4..=4 => report_associated, set_report_associated: bool;
     }
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermKeyEncodingStack {
     pub items: [VTermKeyEncodingFlags; 16],

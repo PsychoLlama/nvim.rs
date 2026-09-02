@@ -39,7 +39,6 @@ const KS_EXTRA_U8: u8 = KS_EXTRA as u8;
 
 /// Where the cursor was left after the `<Esc>`-in-Insert peek, which is where
 /// `'showcmd'` has to draw the partially matched keys.
-#[derive(Clone, Copy)]
 struct CursorAt {
     wcol: c_int,
     wrow: c_int,

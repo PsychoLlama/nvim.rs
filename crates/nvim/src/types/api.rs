@@ -11,7 +11,6 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-#[derive(Copy, Clone)]
 pub struct AdditionalDataBuilder {
     pub size: size_t,
     pub capacity: size_t,
@@ -38,7 +37,6 @@ pub struct Array {
     pub capacity: size_t,
     pub items: *mut Object,
 }
-#[derive(Copy, Clone)]
 pub struct ArrayBuilder {
     pub size: size_t,
     pub capacity: size_t,
@@ -47,7 +45,6 @@ pub struct ArrayBuilder {
 }
 pub type Boolean = bool;
 pub type Buffer = handle_T;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ChangedtickDictItem {
     pub di_tv: typval_T,
@@ -89,7 +86,6 @@ pub struct HlMessage {
     pub items: *mut HlMessageChunk,
 }
 pub type Integer = int64_t;
-#[derive(Copy, Clone)]
 pub struct KeySetLink {
     pub str: *mut ::core::ffi::c_char,
     pub ptr_off: size_t,
@@ -118,7 +114,6 @@ pub const kObjectTypeLuaRef: ObjectType = 7;
 pub const kObjectTypeBuffer: ObjectType = 8;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeTabpage: ObjectType = 10;
-#[derive(Copy, Clone)]
 pub struct OptKeySet {
     pub is_set_: OptionalKeys,
 }

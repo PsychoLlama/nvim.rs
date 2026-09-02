@@ -131,7 +131,6 @@ pub(super) fn cur_buf() -> Buf {
 
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
-#[derive(Copy, Clone)]
 struct SavedBufferState {
     curwin_save: *mut win_T,
     aco: aco_save_T,

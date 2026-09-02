@@ -48,7 +48,6 @@ fn recs_match(xdf: &XdFile<'_>, a: i64, b: i64, flags: u64) -> bool {
 /// slid up. Neither move changes the edit script's size — which is exactly
 /// why the choice is free, and why [`change_compact`] gets to make it on
 /// aesthetic grounds.
-#[derive(Clone, Copy)]
 struct Group {
     /// First changed line, or the unchanged line an empty group sits above.
     start: i64,
@@ -169,7 +168,6 @@ struct SplitMeasurement {
 }
 
 /// A split's badness. Smaller is better on both counts.
-#[derive(Clone, Copy)]
 struct SplitScore {
     effective_indent: i32,
     penalty: i32,

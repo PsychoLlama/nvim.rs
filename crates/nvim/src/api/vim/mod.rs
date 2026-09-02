@@ -146,7 +146,6 @@ pub const REPTERM_DO_LT: ::core::ffi::c_uint = 2;
 pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
-#[derive(Copy, Clone)]
 pub struct RuntimeCookie {
     pub rv: ArrayBuilder,
     pub arena: *mut Arena,

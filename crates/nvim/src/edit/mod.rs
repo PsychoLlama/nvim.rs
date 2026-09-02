@@ -216,7 +216,6 @@ pub(crate) const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_DEC: ::core::ffi::c_int = 3;
 pub(crate) const INDENT_INC: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_SET: ::core::ffi::c_int = 1;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct InsertState {
     pub state: VimState,
@@ -239,7 +238,6 @@ pub(crate) struct InsertState {
     pub did_restart_edit: ::core::ffi::c_int,
     pub nomove: bool,
 }
-#[derive(Copy, Clone)]
 pub(crate) struct ReplaceStack {
     pub size: size_t,
     pub capacity: size_t,

@@ -50,7 +50,6 @@ impl Codepoints<'_> {
 ///
 /// Lives in `VTermEncodingInstance::data`, a 16-byte inline buffer, so the
 /// layout is dictated by that.
-#[derive(Copy, Clone)]
 struct Utf8Decoder {
     /// Continuation bytes still expected for the sequence in progress.
     bytes_remaining: c_int,
@@ -251,7 +250,6 @@ extern "C" fn decode_usascii(
 
 /// A `VTermEncoding` whose translation table follows it inline, so that
 /// `decode_table` can recover the table from the vtable pointer it is given.
-#[derive(Copy, Clone)]
 #[repr(C)]
 struct TableEncoding {
     enc: VTermEncoding,

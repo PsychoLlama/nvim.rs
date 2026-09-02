@@ -28,7 +28,6 @@ pub struct SearchPattern {
     pub off: SearchOffset,
     pub additional_data: *mut AdditionalData,
 }
-#[derive(Copy, Clone)]
 pub struct searchit_arg_T {
     pub sa_stop_lnum: linenr_T,
     pub sa_tm: *mut proftime_T,

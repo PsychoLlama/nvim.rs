@@ -262,7 +262,6 @@ impl TryFrom<::core::ffi::c_int> for ExpandContext {
 
 pub type CompleteListItemGetter =
     Option<unsafe fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct expand_T {
     pub xp_pattern: *mut ::core::ffi::c_char,

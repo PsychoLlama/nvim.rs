@@ -28,7 +28,6 @@ use crate::types::{Intersection, uint64_t};
 use super::node::INTERSECT_INLINE;
 
 /// A borrowed view of one node's set of covering mark ids.
-#[derive(Copy, Clone)]
 pub struct IdSet {
     set: *mut Intersection,
 }

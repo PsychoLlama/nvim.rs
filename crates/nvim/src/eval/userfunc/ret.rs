@@ -24,7 +24,6 @@ use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, IOSIZE, NUL};
 
 /// One call recorded by `:defer`, to be made when the function returns.
-#[derive(Copy, Clone)]
 pub struct defer_T {
     pub dr_name: *mut c_char,
     pub dr_argvars: [typval_T; MAX_FUNC_ARGS as usize + 1],

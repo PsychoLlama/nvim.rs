@@ -112,7 +112,6 @@ pub struct regsubmatch_T {
     pub sm_maxline: linenr_T,
     pub sm_line_lbr: c_int,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct bt_regprog_T {
     pub engine: *mut regengine_T,
@@ -127,7 +126,6 @@ pub struct bt_regprog_T {
     pub reghasz: uint8_t,
     pub program: [uint8_t; 0],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct nfa_regprog_T {
     pub engine: *mut regengine_T,
@@ -148,7 +146,6 @@ pub struct nfa_regprog_T {
     pub state: [nfa_state_T; 0],
 }
 pub type nfa_state_T = nfa_state;
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct nfa_state {
     pub c: c_int,
@@ -192,7 +189,6 @@ pub(crate) struct nfa_pim_S {
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
-#[derive(Copy, Clone)]
 pub struct parse_state_T {
     pub regparse: *mut c_char,
     pub prevchr_len: c_int,
@@ -206,7 +202,6 @@ pub struct parse_state_T {
 }
 pub(crate) type regitem_T = regitem_S;
 /// One decision the forward walk made, and what undoing it needs.
-#[derive(Copy, Clone)]
 pub(crate) struct regitem_S {
     /// Which decision, and so which of the fields below mean anything.
     pub rs_state: regstate_T,
@@ -238,7 +233,6 @@ pub const RS_MCLOSE: regstate_E = 2;
 pub const RS_MOPEN: regstate_E = 1;
 pub const RS_NOPEN: regstate_E = 0;
 pub type regstar_T = regstar_S;
-#[derive(Copy, Clone)]
 pub struct regstar_S {
     pub nextb: c_int,
     pub nextb_ic: c_int,
@@ -247,7 +241,6 @@ pub struct regstar_S {
     pub maxval: int64_t,
 }
 pub(crate) type regbehind_T = regbehind_S;
-#[derive(Copy, Clone)]
 pub(crate) struct regbehind_S {
     pub save_after: SavedInput,
     pub save_behind: SavedInput,

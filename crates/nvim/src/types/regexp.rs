@@ -12,7 +12,6 @@
 use super::*;
 
 /// The head every compiled pattern starts with, whichever engine built it.
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct regprog {
     pub engine: *mut regengine_T,
@@ -42,7 +41,6 @@ pub type RegExecMulti = Option<
     ) -> ::core::ffi::c_int,
 >;
 /// The vtable of a regexp engine (backtracking or NFA).
-#[derive(Copy, Clone)]
 pub struct regengine {
     pub regcomp: RegComp,
     pub regfree: RegFree,
@@ -52,7 +50,6 @@ pub struct regengine {
 
 pub type magic_T = ::core::ffi::c_uint;
 pub type optmagic_T = ::core::ffi::c_uint;
-#[derive(Copy, Clone)]
 pub struct reg_extmatch_T {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],
