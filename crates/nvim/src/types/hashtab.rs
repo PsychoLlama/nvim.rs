@@ -22,6 +22,60 @@ pub struct hashitem_T {
     pub hi_key: *mut ::core::ffi::c_char,
 }
 
+/// Where a table's slots live.
+///
+/// The C kept the first sixteen in an inline `ht_smallarray` and pointed
+/// `ht_array` at it, so the overwhelmingly common table -- a dictionary of a
+/// handful of keys -- cost no allocation at all. This is that small case as
+/// a *value*: it is stored in the `hashtab_T`, not pointed at from it, so
+/// the table stays movable.
+///
+/// Growth past the small run moves to [`Slots::Heap`], and a shrink back to
+/// exactly [`crate::hashtab::HT_INIT_SIZE`] slots returns to the run -- the
+/// same two transitions the C made, which is why the resize's "is the array
+/// still the small one" test still reads `oldsize == HT_INIT_SIZE`.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the size difference is the point: the small run is stored, not \
+              pointed at, which is what costs a dictionary no allocation"
+)]
+enum Slots {
+    /// No array at all: a [`hashtab_T::new`], or a table
+    /// [`crate::hashtab::hash_clear`] emptied.
+    None,
+    /// The small run, in the table itself.
+    Inline([hashitem_T; crate::hashtab::HT_INIT_SIZE]),
+    /// A grown table's array.
+    Heap(Vec<hashitem_T>),
+}
+
+impl Slots {
+    /// `size` empty slots, inline when that is the small run's size.
+    fn with_size(size: usize) -> Self {
+        if size == crate::hashtab::HT_INIT_SIZE {
+            Slots::Inline([hashitem_T::EMPTY; crate::hashtab::HT_INIT_SIZE])
+        } else {
+            Slots::Heap(vec![hashitem_T::EMPTY; size])
+        }
+    }
+
+    fn as_slice(&self) -> &[hashitem_T] {
+        match self {
+            Slots::None => &[],
+            Slots::Inline(run) => run,
+            Slots::Heap(grown) => grown,
+        }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [hashitem_T] {
+        match self {
+            Slots::None => &mut [],
+            Slots::Inline(run) => run,
+            Slots::Heap(grown) => grown,
+        }
+    }
+}
+
 /// Vim's open-addressed hash table.
 ///
 /// The table **owns** its slots, in a run whose length is a power of two (or
@@ -29,7 +83,8 @@ pub struct hashitem_T {
 /// structural difference from the C, where `ht_array` pointed at the inline
 /// `ht_smallarray` while the table was small -- a self-reference that made a
 /// `hashtab_T` valid only at the address it was initialised at, and
-/// therefore unwrappable and unmovable.
+/// therefore unwrappable and unmovable. The small run is still inline (see
+/// [`Slots`]); nothing points at it.
 ///
 /// What did *not* change is anything a caller can see: the hash, the probe
 /// sequence, the resize thresholds and so the slot every key lands in, which
@@ -41,10 +96,12 @@ pub struct hashitem_T {
 ///
 /// # Slots are named by index, never by pointer
 ///
-/// A lookup answers a [`crate::hashtab::Slot`] -- an index plus a copy of
-/// what the slot held -- and every write goes back through the table. An
-/// index survives a mutation of the table, which a borrow into the slots
-/// would not; what it does not survive is a *resize*, which is what
+/// Because the small run lives *in* the table, a raw pointer into it is
+/// derived from the `hashtab_T` itself and dies at the next
+/// `&mut hashtab_T` -- which every mutation of the table takes. So a lookup
+/// answers a [`crate::hashtab::Slot`], an index plus a copy of what the slot
+/// held, and every write goes back through the table. An index survives a
+/// mutation; what it does not survive is a *resize*, which is what
 /// [`crate::hashtab::hash_lock`] exists to prevent.
 pub struct hashtab_T {
     /// Live entries.
@@ -57,8 +114,8 @@ pub struct hashtab_T {
     /// Non-zero while a caller holds slot indexes across mutations; see
     /// [`crate::hashtab::hash_lock`].
     pub ht_locked: ::core::ffi::c_int,
-    /// The slot array. A separate allocation from this header.
-    slots: Vec<hashitem_T>,
+    /// The slots themselves.
+    slots: Slots,
 }
 
 impl Default for hashitem_T {
@@ -94,22 +151,22 @@ impl hashtab_T {
             ht_filled: 0,
             ht_changed: 0,
             ht_locked: 0,
-            slots: Vec::new(),
+            slots: Slots::None,
         }
     }
 
-    /// A table with its first slot array: what
-    /// [`crate::hashtab::hash_init`] writes.
+    /// A table with its first slot array, which for the initial size is the
+    /// inline run: what [`crate::hashtab::hash_init`] writes.
     pub(crate) fn with_slots() -> Self {
         Self {
-            slots: vec![hashitem_T::EMPTY; crate::hashtab::HT_INIT_SIZE],
+            slots: Slots::with_size(crate::hashtab::HT_INIT_SIZE),
             ..Self::new()
         }
     }
 
     /// How many slots the table has: a power of two, or zero.
     pub fn size(&self) -> usize {
-        self.slots.len()
+        self.slots.as_slice().len()
     }
 
     /// The index mask, one less than the slot count.
@@ -118,18 +175,18 @@ impl hashtab_T {
     /// the only thing that asks for a mask is a probe, and probing a table
     /// [`crate::hashtab::hash_init`] has not reached is a bug.
     pub fn mask(&self) -> hash_T {
-        self.slots.len() - 1
+        self.slots.as_slice().len() - 1
     }
 
     /// Every slot, in index order -- empty ones and tombstones included.
     /// The live entries alone are [`crate::hashtab::hash_items`].
     pub fn slots(&self) -> &[hashitem_T] {
-        &self.slots
+        self.slots.as_slice()
     }
 
     /// Every slot, writable.
     pub fn slots_mut(&mut self) -> &mut [hashitem_T] {
-        &mut self.slots
+        self.slots.as_mut_slice()
     }
 
     /// Give the table a fresh array of `size` empty slots, handing `rehash`
@@ -139,12 +196,12 @@ impl hashtab_T {
         size: usize,
         rehash: impl FnOnce(&[hashitem_T], &mut [hashitem_T]),
     ) {
-        let old = ::core::mem::replace(&mut self.slots, vec![hashitem_T::EMPTY; size]);
-        rehash(&old, &mut self.slots);
+        let old = ::core::mem::replace(&mut self.slots, Slots::with_size(size));
+        rehash(old.as_slice(), self.slots.as_mut_slice());
     }
 
     /// Release the table's slots, leaving it with none.
     pub(crate) fn drop_slots(&mut self) {
-        self.slots = Vec::new();
+        self.slots = Slots::None;
     }
 }
