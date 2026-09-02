@@ -231,20 +231,31 @@ pub const VGR_FUZZY: c_uint = 4;
 pub const VGR_NOJUMP: c_uint = 2;
 pub const VGR_GLOBAL: c_uint = 1;
 pub const QF_WINHEIGHT: c_uint = 10;
-pub const QF_GETLIST_QFTF: c_uint = 2048;
-pub const QF_GETLIST_NONE: c_uint = 0;
-pub const QF_GETLIST_QFBUFNR: c_uint = 1024;
-pub const QF_GETLIST_FILEWINID: c_uint = 512;
-pub const QF_GETLIST_TICK: c_uint = 256;
-pub const QF_GETLIST_SIZE: c_uint = 128;
-pub const QF_GETLIST_IDX: c_uint = 64;
-pub const QF_GETLIST_ITEMS: c_uint = 2;
-pub const QF_GETLIST_ID: c_uint = 32;
-pub const QF_GETLIST_CONTEXT: c_uint = 16;
-pub const QF_GETLIST_WINID: c_uint = 8;
-pub const QF_GETLIST_NR: c_uint = 4;
-pub const QF_GETLIST_TITLE: c_uint = 1;
-pub const QF_GETLIST_ALL: c_uint = 4095;
+crate::flag_set! {
+    /// Which properties `getqflist({what})` was asked for -- one bit per key
+    /// of the `what` dictionary, and the same set of keys in the same order
+    /// on the way out.
+    pub struct GetListProps;
+
+    const TITLE = 1;
+    const ITEMS = 2;
+    const NR = 4;
+    const WINID = 8;
+    const CONTEXT = 16;
+    const ID = 32;
+    const IDX = 64;
+    const SIZE = 128;
+    const TICK = 256;
+    /// A location list's owning window. Answered for a location list only,
+    /// which is why [`Self::ALL`] has to have it taken back out again for a
+    /// quickfix list.
+    const FILEWINID = 512;
+    const QFBUFNR = 1024;
+    const QFTF = 2048;
+
+    /// What `{'all': 1}` asks for: every bit above.
+    const ALL = 4095;
+}
 pub const CMDBUFFSIZE: c_int = 1024;
 pub const INVALID_QFIDX: c_int = -1;
 pub const INVALID_QFBUFNR: c_int = 0;

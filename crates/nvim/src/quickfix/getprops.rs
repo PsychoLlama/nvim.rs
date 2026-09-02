@@ -275,19 +275,19 @@ unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> Resu
 /// The `what` keys, in the order the flag set numbers them. `filewinid` is
 /// the odd one out: it is answered for a location list only, both when it
 /// is asked for by name and when `all` asks for everything.
-const GETLIST_KEYS: [(&str, c_int); 12] = [
-    ("title", QF_GETLIST_TITLE as c_int),
-    ("items", QF_GETLIST_ITEMS as c_int),
-    ("nr", QF_GETLIST_NR as c_int),
-    ("winid", QF_GETLIST_WINID as c_int),
-    ("context", QF_GETLIST_CONTEXT as c_int),
-    ("id", QF_GETLIST_ID as c_int),
-    ("idx", QF_GETLIST_IDX as c_int),
-    ("size", QF_GETLIST_SIZE as c_int),
-    ("changedtick", QF_GETLIST_TICK as c_int),
-    ("filewinid", QF_GETLIST_FILEWINID as c_int),
-    ("qfbufnr", QF_GETLIST_QFBUFNR as c_int),
-    ("quickfixtextfunc", QF_GETLIST_QFTF as c_int),
+const GETLIST_KEYS: [(&str, GetListProps); 12] = [
+    ("title", GetListProps::TITLE),
+    ("items", GetListProps::ITEMS),
+    ("nr", GetListProps::NR),
+    ("winid", GetListProps::WINID),
+    ("context", GetListProps::CONTEXT),
+    ("id", GetListProps::ID),
+    ("idx", GetListProps::IDX),
+    ("size", GetListProps::SIZE),
+    ("changedtick", GetListProps::TICK),
+    ("filewinid", GetListProps::FILEWINID),
+    ("qfbufnr", GetListProps::QFBUFNR),
+    ("quickfixtextfunc", GetListProps::QFTF),
 ];
 
 /// Which properties `what` asks for.
@@ -295,18 +295,18 @@ const GETLIST_KEYS: [(&str, c_int); 12] = [
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn qf_getprop_keys2flags(what: *const dict_T, loclist: bool) -> c_int {
+unsafe fn qf_getprop_keys2flags(what: *const dict_T, loclist: bool) -> GetListProps {
     // SAFETY: forwarded from the caller.
-    let mut flags = QF_GETLIST_NONE as c_int;
+    let mut flags = GetListProps::NONE;
     if unsafe { asked_for(what, "all") } {
-        flags |= QF_GETLIST_ALL as c_int;
+        flags |= GetListProps::ALL;
         if !loclist {
-            flags &= !(QF_GETLIST_FILEWINID as c_int);
+            flags.clear(GetListProps::FILEWINID);
         }
     }
     for (key, flag) in GETLIST_KEYS {
         // `filewinid` belongs to a location list only.
-        if flag == QF_GETLIST_FILEWINID as c_int && !loclist {
+        if flag == GetListProps::FILEWINID && !loclist {
             continue;
         }
         if unsafe { asked_for(what, key) } {
@@ -373,50 +373,50 @@ unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut dict_T) -> Option<c_in
 /// `qi` must be null or a live stack, and `retdict` live.
 unsafe fn qf_getprop_defaults(
     qi: *mut qf_info_T,
-    flags: c_int,
+    flags: GetListProps,
     locstack: bool,
     retdict: *mut dict_T,
 ) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
-    let wanted = |flag: c_uint| flags & flag as c_int != 0;
+    let wanted = |flag: GetListProps| flags.has(flag);
 
     // `?` is upstream's `if (status == OK && ...)` ladder: the first key
     // the dictionary refuses stops the rest from being written.
-    if wanted(QF_GETLIST_TITLE) {
+    if wanted(GetListProps::TITLE) {
         unsafe { add_str(retdict, "title", ptr::null()) }?;
     }
-    if wanted(QF_GETLIST_ITEMS) {
+    if wanted(GetListProps::ITEMS) {
         let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
         unsafe { add_list(retdict, "items", l) }?;
     }
-    if wanted(QF_GETLIST_NR) {
+    if wanted(GetListProps::NR) {
         unsafe { add_nr(retdict, "nr", 0) }?;
     }
-    if wanted(QF_GETLIST_WINID) {
+    if wanted(GetListProps::WINID) {
         unsafe { add_nr(retdict, "winid", qf_winid(qi) as varnumber_T) }?;
     }
-    if wanted(QF_GETLIST_CONTEXT) {
+    if wanted(GetListProps::CONTEXT) {
         unsafe { add_str(retdict, "context", ptr::null()) }?;
     }
-    if wanted(QF_GETLIST_ID) {
+    if wanted(GetListProps::ID) {
         unsafe { add_nr(retdict, "id", 0) }?;
     }
-    if wanted(QF_GETLIST_IDX) {
+    if wanted(GetListProps::IDX) {
         unsafe { add_nr(retdict, "idx", 0) }?;
     }
-    if wanted(QF_GETLIST_SIZE) {
+    if wanted(GetListProps::SIZE) {
         unsafe { add_nr(retdict, "size", 0) }?;
     }
-    if wanted(QF_GETLIST_TICK) {
+    if wanted(GetListProps::TICK) {
         unsafe { add_nr(retdict, "changedtick", 0) }?;
     }
-    if locstack && wanted(QF_GETLIST_FILEWINID) {
+    if locstack && wanted(GetListProps::FILEWINID) {
         unsafe { add_nr(retdict, "filewinid", 0) }?;
     }
-    if wanted(QF_GETLIST_QFBUFNR) {
+    if wanted(GetListProps::QFBUFNR) {
         unsafe { qf_getprop_qfbufnr(qi, retdict) }?;
     }
-    if wanted(QF_GETLIST_QFTF) {
+    if wanted(GetListProps::QFTF) {
         unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) }?;
     }
     Ok(())
@@ -569,43 +569,43 @@ pub(crate) unsafe fn qf_get_properties(
         eidx = unsafe { (*di).di_tv.vval.v_number } as c_int;
     }
 
-    let wanted = |flag: c_uint| flags & flag as c_int != 0;
+    let wanted = |flag: GetListProps| flags.has(flag);
 
     // As in `qf_getprop_defaults`: the first refused key stops the rest.
-    if wanted(QF_GETLIST_TITLE) {
+    if wanted(GetListProps::TITLE) {
         unsafe { add_str(retdict, "title", (*qfl).qf_title) }?;
     }
-    if wanted(QF_GETLIST_NR) {
+    if wanted(GetListProps::NR) {
         unsafe { add_nr(retdict, "nr", (qf_idx + 1) as varnumber_T) }?;
     }
-    if wanted(QF_GETLIST_WINID) {
+    if wanted(GetListProps::WINID) {
         unsafe { add_nr(retdict, "winid", qf_winid(qi) as varnumber_T) }?;
     }
-    if wanted(QF_GETLIST_ITEMS) {
+    if wanted(GetListProps::ITEMS) {
         unsafe { qf_getprop_items(qi, qf_idx, eidx, retdict) };
     }
-    if wanted(QF_GETLIST_CONTEXT) {
+    if wanted(GetListProps::CONTEXT) {
         unsafe { qf_getprop_ctx(qfl, retdict) }?;
     }
-    if wanted(QF_GETLIST_ID) {
+    if wanted(GetListProps::ID) {
         unsafe { add_nr(retdict, "id", (*qfl).qf_id as varnumber_T) }?;
     }
-    if wanted(QF_GETLIST_IDX) {
+    if wanted(GetListProps::IDX) {
         unsafe { qf_getprop_idx(qfl, eidx, retdict) }?;
     }
-    if wanted(QF_GETLIST_SIZE) {
+    if wanted(GetListProps::SIZE) {
         unsafe { add_nr(retdict, "size", (*qfl).qf_count as varnumber_T) }?;
     }
-    if wanted(QF_GETLIST_TICK) {
+    if wanted(GetListProps::TICK) {
         unsafe { add_nr(retdict, "changedtick", (*qfl).qf_changedtick as varnumber_T) }?;
     }
-    if wp.is_some() && wanted(QF_GETLIST_FILEWINID) {
+    if wp.is_some() && wanted(GetListProps::FILEWINID) {
         unsafe { qf_getprop_filewinid(wp, qi, retdict) }?;
     }
-    if wanted(QF_GETLIST_QFBUFNR) {
+    if wanted(GetListProps::QFBUFNR) {
         unsafe { qf_getprop_qfbufnr(qi, retdict) }?;
     }
-    if wanted(QF_GETLIST_QFTF) {
+    if wanted(GetListProps::QFTF) {
         unsafe { qf_getprop_qftf(qfl, retdict) }?;
     }
     Ok(())
