@@ -350,11 +350,22 @@ plus these whole-tree metrics, which are not per-file:
                         enumerator's spelling, and the largest families left
                         (`CMD_append`, `kOptIdx…`) are not SCREAMING_CASE.
                       unions          `union` declarations.
-                      repr_c_outside_perimeter  `#[repr(C)]` in files off the
-                        PERIMETER list. Inside it the layout is a foreign
-                        ABI's and stays; outside it is transpiler residue
-                        that only the on-disk codecs and the typval residue
-                        will keep.
+                      repr_c_ffi_types  `#[repr(C)]` in the FOREIGN_ABI_TYPES
+                        files: the per-library type definitions c2rust
+                        hoisted under `types/`, whose layout belongs to
+                        libuv, libvterm, libtermkey, LuaJIT or libc. Not
+                        debt -- but ratcheted anyway, the way a perimeter
+                        module's `unsafe_lines` are, so a new one is visible.
+                      repr_c_editor_state  `#[repr(C)]` everywhere else
+                        outside PERIMETER: this tree's own aggregates, which
+                        is transpiler residue except where a codec, a
+                        flexible array member or a state-machine base pins
+                        the layout. This is the number the migration drives
+                        down. The two together are every `#[repr(C)]` off
+                        the perimeter -- they were one metric until phase
+                        25's close, whose measurement was that 40% of it was
+                        a foreign ABI wearing this tree's file name, so a
+                        single total could fall while the residue grew.
                       derive_copy     `#[derive(.. Copy ..)]` on a *braced*
                         `struct`/`union` — an aggregate with named fields.
                         Enums are excluded because an enum is Copy-worthy by
@@ -686,6 +697,45 @@ PERIMETER = {
     "that hands out the address of a `.swp` page",
 }
 
+# The foreign ABIs whose *type definitions* live under `types/` instead of in
+# the module that calls the library. c2rust hoisted every struct into a
+# per-library file, so the layout of a `uv_loop_t` is described here while the
+# `uv_run` that needs it is in `event/`, and the layout of a `TermKey` is
+# described here while termkey's parser runs in `tui/`. Those callers are on
+# PERIMETER; these files cannot join it, because they hold no unchecked code
+# at all and `check_perimeter` rejects an entry with nothing behind it.
+#
+# The bar is PERIMETER's first bullet and nothing softer: the layout is
+# defined by a library this tree links against or ports with its C ABI intact
+# (libuv, libvterm, libtermkey, LuaJIT, libc), so `#[repr(C)]` here is that
+# library's interface and not transpiler residue. A type this tree defines
+# and only this tree reads does *not* qualify however C-shaped it looks --
+# `types/keysets.rs` is written through byte offsets by our own generated
+# keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that
+# was vendored and ported rather than linked (docs/perimeter.md keeps
+# `mpack/`'s codec outside for the same reason), and `types/terminal_defs.rs`
+# is `repr(C)` only because the FFI-safety lint follows a pointer out of
+# `buf_T`. All of those stay in `repr_c_editor_state`, where a rewrite is
+# still expected to retire them.
+FOREIGN_ABI_TYPES = {
+    "crates/nvim/src/types/uv.rs": "libuv's own structs: the loop, handles, "
+    "requests and process options, all registered with the library by address",
+    "crates/nvim/src/types/vterm.rs": "libvterm's public types -- the ported "
+    "library keeps its C ABI, so these are its interface",
+    "crates/nvim/src/types/vterm_internal.rs": "the same library's internal "
+    "state, reached through the same ABI",
+    "crates/nvim/src/types/termkey.rs": "libtermkey's instance and driver, "
+    "ported with its ABI intact and driven from `tui/`",
+    "crates/nvim/src/types/lua.rs": "LuaJIT's `lua_State`, `luaL_Buffer` and "
+    "`luaL_Reg` -- the interpreter defines every one of them",
+    "crates/nvim/src/types/libc.rs": "the C library's nominal aggregates, "
+    "plus the pthread types libuv embeds by value",
+    "crates/nvim/src/types/libuv_proc.rs": "a `uv_process_t` and its options "
+    "embedded by value and handed to `uv_spawn` by address",
+    "crates/nvim/src/types/pty_proc_unix.rs": "a libc `winsize` embedded by "
+    "value and handed to the tty ioctls by address",
+}
+
 # `curwin`/`curbuf`/`curtab`'s home: the module whose job is to turn the raw
 # current-object globals into handles. Same entry form as PERIMETER's.
 WINLAYER = {
@@ -738,11 +788,23 @@ VOCABULARY = {
         r"\.(?:offset_from|offset|add|sub|wrapping_add|wrapping_sub)\("
     ),
 }
+# `#[repr(C)]`, shared by the two halves below so that they cannot drift
+# apart: every match lands in exactly one of them.
+REPR_C = re.compile(r"#\[repr\(\s*C\s*[,)]")
+
 # The same, but counted only in files *outside* a home — the shape
 # `unsafe_lines_outside_perimeter` established. name -> (needle, home).
 VOCABULARY_OUTSIDE = {
-    "repr_c_outside_perimeter": (re.compile(r"#\[repr\(\s*C\s*[,)]"), PERIMETER),
+    "repr_c_editor_state": (REPR_C, {**PERIMETER, **FOREIGN_ABI_TYPES}),
     "curwin_raw": (re.compile(r"\bcur(?:win|buf|tab)\s*\.\s*get\(\)"), WINLAYER),
+}
+# ... and the mirror image: counted only in files *inside* a home. `repr(C)`
+# in a foreign ABI's type file is that library's layout, not this tree's, so
+# it is not the same number as the residue and must not share a total with
+# it — but it is still ratcheted, exactly as a perimeter module's
+# `unsafe_lines` still are, so a new one has to say why.
+VOCABULARY_INSIDE = {
+    "repr_c_ffi_types": (REPR_C, FOREIGN_ABI_TYPES),
 }
 # The two halves of `const_int_alias`, which needs a pass over the whole tree
 # before it can count anything: first every `type X = Y;` in the tree, then
@@ -1578,12 +1640,15 @@ def check_perimeter(stats):
 
 def vocabulary(tree):
     """The C-vocabulary counts. See "the C vocabulary" in the doc block."""
-    counts = dict.fromkeys((*VOCABULARY, *VOCABULARY_OUTSIDE), 0)
+    counts = dict.fromkeys((*VOCABULARY, *VOCABULARY_OUTSIDE, *VOCABULARY_INSIDE), 0)
     for file, masked in tree.items():
         for name, needle in VOCABULARY.items():
             counts[name] += len(needle.findall(masked))
         for name, (needle, home) in VOCABULARY_OUTSIDE.items():
             if not in_home(file, home):
+                counts[name] += len(needle.findall(masked))
+        for name, (needle, home) in VOCABULARY_INSIDE.items():
+            if in_home(file, home):
                 counts[name] += len(needle.findall(masked))
     names = set()
     signatures = 0
@@ -1755,7 +1820,8 @@ WHOLE_TREE_LABEL = {
     "const_c_int": "`pub const NAME: c_int` constants",
     "const_int_alias": "`pub const NAME: <integer alias>` constants",
     "unions": "union declarations",
-    "repr_c_outside_perimeter": "`#[repr(C)]` outside the unsafe perimeter",
+    "repr_c_ffi_types": "`#[repr(C)]` on a foreign ABI's own types",
+    "repr_c_editor_state": "`#[repr(C)]` on the editor's own state",
     "derive_copy": "Copy derives on braced aggregates",
     "manual_alloc": "xmalloc/xfree-family calls",
     "garray_sites": "garray_T call sites",
@@ -1768,6 +1834,7 @@ WHOLE_TREE_LABEL = {
 VOCABULARY_KEYS = (
     *VOCABULARY,
     *VOCABULARY_OUTSIDE,
+    *VOCABULARY_INSIDE,
     "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
@@ -2315,8 +2382,13 @@ SELF_TEST_VOCABULARY = [
             # Inside the perimeter the layout is a foreign ABI's, so neither
             # `#[repr(C)]` here is debt.
             "crates/nvim/src/os/b.rs": "#[repr(C)]\nstruct H {\n    x: u8,\n}\n",
+            # ... and the same goes for a foreign ABI's type file, which
+            # counts on the other side of the split rather than not at all.
+            "crates/nvim/src/types/uv.rs": "#[repr(C)]\n"
+            "pub struct uv_loop_s {\n    x: u8,\n}\n"
+            "#[repr(C)]\npub struct uv_idle_s {\n    y: u8,\n}\n",
         },
-        {"derive_copy": 2, "repr_c_outside_perimeter": 2},
+        {"derive_copy": 2, "repr_c_editor_state": 2, "repr_c_ffi_types": 2},
     ),
     (
         {

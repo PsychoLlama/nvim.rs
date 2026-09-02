@@ -92,3 +92,37 @@ To add an entry: put the path and its reason in `PERIMETER`, add the row here,
 run `just refresh`, and justify it in the commit message. The number this
 lowers is the number the migration is judged by, so the bar is the criteria
 above and nothing softer.
+
+## The types the perimeter cannot hold
+
+The perimeter is measured in unchecked lines, and it prunes itself on them:
+an entry with no `unsafe` behind it is stale by definition. That leaves one
+population it structurally cannot describe. c2rust hoisted every C struct out
+of the module that used it and into a per-library file under `types/`, so the
+layout of a `uv_loop_t` is written in `types/uv.rs` while the `uv_run` that
+needs it lives in `event/`, and a `TermKey`'s in `types/termkey.rs` while
+termkey's parser runs in `tui/`. Those files hold **zero** unchecked lines.
+They cannot join the list — `check_perimeter` would reject them — and yet
+their `#[repr(C)]` is libuv's and libtermkey's layout, not this tree's.
+
+`FOREIGN_ABI_TYPES` in `scripts/ratchet.py` names them, on exactly the "a
+foreign ABI" bullet above and nothing softer: `types/uv.rs`, `types/vterm.rs`,
+`types/vterm_internal.rs`, `types/termkey.rs`, `types/lua.rs`,
+`types/libc.rs`, `types/libuv_proc.rs`, `types/pty_proc_unix.rs`. It splits
+one metric in two:
+
+- **`repr_c_ffi_types`** — `#[repr(C)]` in those files. Not debt, but
+  ratcheted like everything else, so a new foreign type is visible.
+- **`repr_c_editor_state`** — `#[repr(C)]` everywhere else off the perimeter:
+  this tree's own aggregates, which are transpiler residue except where a
+  codec, a flexible array member or a state-machine base pins the layout.
+  This is the number to drive down.
+
+The two partition what `repr_c_outside_perimeter` used to total. A type this
+tree defines and only this tree reads is not on the list however C-shaped it
+looks: `types/keysets.rs` is written through byte offsets by our own generated
+keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that was
+vendored and ported rather than linked — the same reason `mpack/`'s codec is
+outside the perimeter — and `types/terminal_defs.rs` is `#[repr(C)]` only
+because the FFI-safety lint follows a pointer out of `buf_T`. All of those
+are still expected to leave the residue column the ordinary way.
