@@ -7,10 +7,7 @@
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 
-use super::{
-    MAGIC_ALL, RF_HASNL, RI_ALPHA, RI_DIGIT, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER,
-    RI_WHITE, RI_WORD, reg_cpo_lit, reg_magic,
-};
+use super::{ByteClass, MAGIC_ALL, RF_HASNL, reg_cpo_lit, reg_magic};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::option::cpo_has;
@@ -60,27 +57,28 @@ pub(crate) fn backslash_abbr(c: c_int) -> c_int {
 /// is meaningful — the engines test `c < 256` before indexing, and
 /// everything at or above 0x80 is classless here because a multibyte
 /// character is classified by [`crate::mbyte`] instead.
-pub(crate) static RI_FLAGS: [i16; 256] = build_ri_flags();
+pub(crate) static RI_FLAGS: [ByteClass; 256] = build_ri_flags();
 
-const fn build_ri_flags() -> [i16; 256] {
-    let mut tab = [0i16; 256];
+const fn build_ri_flags() -> [ByteClass; 256] {
+    use ByteClass as B;
+    let mut tab = [B::NONE; 256];
     let mut i = 0usize;
     while i < 256 {
         let b = i as u8;
         tab[i] = match b {
-            b'0'..=b'7' => RI_DIGIT + RI_HEX + RI_OCTAL + RI_WORD,
-            b'8'..=b'9' => RI_DIGIT + RI_HEX + RI_WORD,
-            b'a'..=b'f' => RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER,
-            b'g'..=b'z' => RI_WORD + RI_HEAD + RI_ALPHA + RI_LOWER,
-            b'A'..=b'F' => RI_HEX + RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER,
-            b'G'..=b'Z' => RI_WORD + RI_HEAD + RI_ALPHA + RI_UPPER,
-            b'_' => RI_WORD + RI_HEAD,
-            _ => 0,
-        } as i16;
+            b'0'..=b'7' => B::DIGIT.or(B::HEX).or(B::OCTAL).or(B::WORD),
+            b'8'..=b'9' => B::DIGIT.or(B::HEX).or(B::WORD),
+            b'a'..=b'f' => B::HEX.or(B::WORD).or(B::HEAD).or(B::ALPHA).or(B::LOWER),
+            b'g'..=b'z' => B::WORD.or(B::HEAD).or(B::ALPHA).or(B::LOWER),
+            b'A'..=b'F' => B::HEX.or(B::WORD).or(B::HEAD).or(B::ALPHA).or(B::UPPER),
+            b'G'..=b'Z' => B::WORD.or(B::HEAD).or(B::ALPHA).or(B::UPPER),
+            b'_' => B::WORD.or(B::HEAD),
+            _ => B::NONE,
+        };
         i += 1;
     }
-    tab[b' ' as usize] |= RI_WHITE as i16;
-    tab[b'\t' as usize] |= RI_WHITE as i16;
+    tab[b' ' as usize] = tab[b' ' as usize].or(B::WHITE);
+    tab[b'\t' as usize] = tab[b'\t' as usize].or(B::WHITE);
     tab
 }
 

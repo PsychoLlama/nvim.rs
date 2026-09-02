@@ -272,19 +272,35 @@ pub const RA_CONT: c_int = 2;
 pub const RA_BREAK: c_int = 3;
 pub const RA_MATCH: c_int = 4;
 pub const RA_NOMATCH: c_int = 5;
+
+crate::flag_set! {
+    /// Which Latin-1 byte classes a byte belongs to -- upstream's `RI_*`,
+    /// the bits [`chars::RI_FLAGS`](chars::RI_FLAGS) holds per byte. Both
+    /// engines answer `\d`, `\w` and their kin by indexing that table and
+    /// testing one of these.
+    ///
+    /// The word is the `i16` the table stores, which is what keeps a
+    /// 256-entry table 512 bytes rather than a kilobyte.
+    pub struct ByteClass: i16;
+
+    const DIGIT = 0x1;
+    const HEX = 0x2;
+    const OCTAL = 0x4;
+    const WORD = 0x8;
+    /// A byte a keyword may *start* with: `\h`, which is `\w` without the
+    /// digits.
+    const HEAD = 0x10;
+    const ALPHA = 0x20;
+    const LOWER = 0x40;
+    const UPPER = 0x80;
+    /// Space and tab only. Set by hand after the table is built, because
+    /// neither is in any of the ranges above.
+    const WHITE = 0x100;
+}
 static reg_prev_sub: GlobalCell<*mut c_char> = GlobalCell::new(core::ptr::null_mut::<c_char>());
 static reg_prev_sublen: GlobalCell<size_t> = GlobalCell::new(0);
 const REGEXP_INRANGE: &CStr = c"]^-n\\";
 const REGEXP_ABBR: &CStr = c"nrtebdoxuU";
-pub const RI_DIGIT: c_int = 0x1 as c_int;
-pub const RI_HEX: c_int = 0x2 as c_int;
-pub const RI_OCTAL: c_int = 0x4 as c_int;
-pub const RI_WORD: c_int = 0x8 as c_int;
-pub const RI_HEAD: c_int = 0x10 as c_int;
-pub const RI_ALPHA: c_int = 0x20 as c_int;
-pub const RI_LOWER: c_int = 0x40 as c_int;
-pub const RI_UPPER: c_int = 0x80 as c_int;
-pub const RI_WHITE: c_int = 0x100 as c_int;
 pub const RF_ICASE: c_int = 1;
 pub const RF_NOICASE: c_int = 2;
 pub const RF_HASNL: c_int = 4;
@@ -380,14 +396,6 @@ static nstate: GlobalCell<c_int> = GlobalCell::new(0);
 static istate: GlobalCell<c_int> = GlobalCell::new(0);
 static nfa_endp: GlobalCell<*mut MatchPos> = GlobalCell::new(core::ptr::null_mut::<MatchPos>());
 static nfa_ll_index: GlobalCell<c_int> = GlobalCell::new(0);
-pub const CLASS_not: c_int = 0x80 as c_int;
-pub const CLASS_af: c_int = 0x40 as c_int;
-pub const CLASS_AF: c_int = 0x20 as c_int;
-pub const CLASS_az: c_int = 0x10 as c_int;
-pub const CLASS_AZ: c_int = 0x8 as c_int;
-pub const CLASS_o7: c_int = 0x4 as c_int;
-pub const CLASS_o9: c_int = 0x2 as c_int;
-pub const CLASS_underscore: c_int = 0x1 as c_int;
 static state_ptr: GlobalCell<*mut nfa_state_T> =
     GlobalCell::new(core::ptr::null_mut::<nfa_state_T>());
 /// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which

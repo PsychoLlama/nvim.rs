@@ -16,10 +16,7 @@ use core::ffi::c_int;
 use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
-use crate::regexp::{
-    CLASS_AF, CLASS_AZ, CLASS_af, CLASS_az, CLASS_not, CLASS_o7, CLASS_o9, CLASS_underscore, Rex,
-    istate, nfa_state_T, nstate, regcomp_start, wants_nfa,
-};
+use crate::regexp::{Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa};
 use crate::types::{NUL, uint8_t};
 
 /// Reset the compile-time state and reserve the postfix program.
@@ -165,41 +162,62 @@ pub(crate) unsafe fn nfa_get_match_text(start: *mut nfa_state_T) -> *mut uint8_t
     text
 }
 
-/// The masks of `[a-z0-9_]`-shaped pieces that add up to one of the
-/// `\w`-style classes. Recognising them lets such a collection compile to a
-/// single state instead of one per member.
-const CLASS_NDIGIT: c_int = CLASS_not | CLASS_o9;
-const CLASS_HEX: c_int = CLASS_o9 | CLASS_af | CLASS_AF;
-const CLASS_NHEX: c_int = CLASS_not | CLASS_HEX;
-const CLASS_NOCTAL: c_int = CLASS_not | CLASS_o7;
-const CLASS_WORD: c_int = CLASS_underscore | CLASS_o9 | CLASS_az | CLASS_AZ;
-const CLASS_NWORD: c_int = CLASS_not | CLASS_WORD;
-const CLASS_HEAD: c_int = CLASS_underscore | CLASS_az | CLASS_AZ;
-const CLASS_NHEAD: c_int = CLASS_not | CLASS_HEAD;
-const CLASS_ALPHA: c_int = CLASS_az | CLASS_AZ;
-const CLASS_NALPHA: c_int = CLASS_not | CLASS_ALPHA;
-const CLASS_NAZ: c_int = CLASS_not | CLASS_az;
-const CLASS_NUP: c_int = CLASS_not | CLASS_AZ;
+crate::flag_set! {
+    /// The `[a-z0-9_]`-shaped pieces a `[]` collection is built from --
+    /// upstream's `CLASS_*`. A collection made only of these adds up to one
+    /// of the `\w`-style classes, and recognising that lets it compile to a
+    /// single state instead of one per member.
+    ///
+    /// The combinations below are the sums that have a name; anything else
+    /// is a collection that has to be compiled member by member.
+    struct CollParts;
 
-/// The opcode an accumulated mask stands for, if any.
-fn class_opcode(config: c_int) -> Option<NfaOp> {
+    /// A leading `^`.
+    const NOT = 0x80;
+    const AF = 0x40;
+    const AF_UPPER = 0x20;
+    const AZ = 0x10;
+    const AZ_UPPER = 0x8;
+    const O7 = 0x4;
+    const O9 = 0x2;
+    const UNDERSCORE = 0x1;
+
+    const NDIGIT = Self::NOT.bits() | Self::O9.bits();
+    const HEX = Self::O9.bits() | Self::AF.bits() | Self::AF_UPPER.bits();
+    const NHEX = Self::NOT.bits() | Self::HEX.bits();
+    const NOCTAL = Self::NOT.bits() | Self::O7.bits();
+    const WORD = Self::UNDERSCORE.bits()
+        | Self::O9.bits()
+        | Self::AZ.bits()
+        | Self::AZ_UPPER.bits();
+    const NWORD = Self::NOT.bits() | Self::WORD.bits();
+    const HEAD = Self::UNDERSCORE.bits() | Self::AZ.bits() | Self::AZ_UPPER.bits();
+    const NHEAD = Self::NOT.bits() | Self::HEAD.bits();
+    const ALPHA = Self::AZ.bits() | Self::AZ_UPPER.bits();
+    const NALPHA = Self::NOT.bits() | Self::ALPHA.bits();
+    const NAZ = Self::NOT.bits() | Self::AZ.bits();
+    const NUP = Self::NOT.bits() | Self::AZ_UPPER.bits();
+}
+
+/// The opcode an accumulated set of parts stands for, if any.
+fn class_opcode(config: CollParts) -> Option<NfaOp> {
     Some(match config {
-        CLASS_o9 => NfaOp::Digit,
-        CLASS_NDIGIT => NfaOp::Ndigit,
-        CLASS_HEX => NfaOp::Hex,
-        CLASS_NHEX => NfaOp::Nhex,
-        CLASS_o7 => NfaOp::Octal,
-        CLASS_NOCTAL => NfaOp::Noctal,
-        CLASS_WORD => NfaOp::Word,
-        CLASS_NWORD => NfaOp::Nword,
-        CLASS_HEAD => NfaOp::Head,
-        CLASS_NHEAD => NfaOp::Nhead,
-        CLASS_ALPHA => NfaOp::Alpha,
-        CLASS_NALPHA => NfaOp::Nalpha,
-        CLASS_az => NfaOp::LowerIc,
-        CLASS_NAZ => NfaOp::NlowerIc,
-        CLASS_AZ => NfaOp::UpperIc,
-        CLASS_NUP => NfaOp::NupperIc,
+        CollParts::O9 => NfaOp::Digit,
+        CollParts::NDIGIT => NfaOp::Ndigit,
+        CollParts::HEX => NfaOp::Hex,
+        CollParts::NHEX => NfaOp::Nhex,
+        CollParts::O7 => NfaOp::Octal,
+        CollParts::NOCTAL => NfaOp::Noctal,
+        CollParts::WORD => NfaOp::Word,
+        CollParts::NWORD => NfaOp::Nword,
+        CollParts::HEAD => NfaOp::Head,
+        CollParts::NHEAD => NfaOp::Nhead,
+        CollParts::ALPHA => NfaOp::Alpha,
+        CollParts::NALPHA => NfaOp::Nalpha,
+        CollParts::AZ => NfaOp::LowerIc,
+        CollParts::NAZ => NfaOp::NlowerIc,
+        CollParts::AZ_UPPER => NfaOp::UpperIc,
+        CollParts::NUP => NfaOp::NupperIc,
         _ => return None,
     })
 }
@@ -222,22 +240,22 @@ pub(crate) unsafe fn nfa_recognize_char_class(
     if unsafe { *end } as c_int != ']' as c_int {
         return None;
     }
-    let mut config = 0;
+    let mut config = CollParts::NONE;
     let mut newl = extra_newl;
     let mut p = start;
     if unsafe { *p } == b'^' {
-        config |= CLASS_not;
+        config |= CollParts::NOT;
         p = unsafe { p.add(1) };
     }
     while p < end {
         if unsafe { p.add(2) } < end && unsafe { *p.add(1) } == b'-' {
             config |= match (unsafe { *p }, unsafe { *p.add(2) }) {
-                (b'0', b'9') => CLASS_o9,
-                (b'0', b'7') => CLASS_o7,
-                (b'a', b'z') => CLASS_az,
-                (b'a', b'f') => CLASS_af,
-                (b'A', b'Z') => CLASS_AZ,
-                (b'A', b'F') => CLASS_AF,
+                (b'0', b'9') => CollParts::O9,
+                (b'0', b'7') => CollParts::O7,
+                (b'a', b'z') => CollParts::AZ,
+                (b'a', b'f') => CollParts::AF,
+                (b'A', b'Z') => CollParts::AZ_UPPER,
+                (b'A', b'F') => CollParts::AF_UPPER,
                 _ => return None,
             };
             p = unsafe { p.add(3) };
@@ -248,7 +266,7 @@ pub(crate) unsafe fn nfa_recognize_char_class(
             newl = true;
             p = unsafe { p.add(2) };
         } else if unsafe { *p } == b'_' {
-            config |= CLASS_underscore;
+            config |= CollParts::UNDERSCORE;
             p = unsafe { p.add(1) };
         } else if unsafe { *p } == b'\n' {
             newl = true;

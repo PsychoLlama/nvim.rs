@@ -18,10 +18,7 @@ use crate::main::{e_re_corr, got_int};
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
-use crate::regexp::{
-    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WHITE, RI_WORD,
-    Rex, cstrchr, reg_nextline,
-};
+use crate::regexp::{ByteClass, RI_FLAGS, Rex, cstrchr, reg_nextline};
 use crate::types::{NUL, int64_t, uint8_t};
 
 /// What stepping onto the next line produced.
@@ -273,7 +270,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                 rex.set_input(scan);
                 return count as c_int;
             };
-            let testval = if positive { mask } else { 0 };
+
             'bytes: while count < maxcount {
                 if unsafe { *scan } as c_int == NUL {
                     match next_line() {
@@ -289,7 +286,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
                             break 'bytes;
                         }
                         scan = unsafe { scan.add(len as usize) };
-                    } else if RI_FLAGS[unsafe { *scan } as usize] as c_int & mask == testval
+                    } else if RI_FLAGS[unsafe { *scan } as usize].has(mask) == positive
                         || literal_newline(scan)
                     {
                         scan = unsafe { scan.add(1) };
@@ -308,26 +305,26 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
 
 /// The `RI_*` mask an opcode tests against, and whether it wants a hit or a
 /// miss.
-fn byte_class(op: BtOp) -> Option<(c_int, bool)> {
+fn byte_class(op: BtOp) -> Option<(ByteClass, bool)> {
     let (mask, positive) = match op {
-        BtOp::White => (RI_WHITE, true),
-        BtOp::Nwhite => (RI_WHITE, false),
-        BtOp::Digit => (RI_DIGIT, true),
-        BtOp::Ndigit => (RI_DIGIT, false),
-        BtOp::Hex => (RI_HEX, true),
-        BtOp::Nhex => (RI_HEX, false),
-        BtOp::Octal => (RI_OCTAL, true),
-        BtOp::Noctal => (RI_OCTAL, false),
-        BtOp::Word => (RI_WORD, true),
-        BtOp::Nword => (RI_WORD, false),
-        BtOp::Head => (RI_HEAD, true),
-        BtOp::Nhead => (RI_HEAD, false),
-        BtOp::Alpha => (RI_ALPHA, true),
-        BtOp::Nalpha => (RI_ALPHA, false),
-        BtOp::Lower => (RI_LOWER, true),
-        BtOp::Nlower => (RI_LOWER, false),
-        BtOp::Upper => (RI_UPPER, true),
-        BtOp::Nupper => (RI_UPPER, false),
+        BtOp::White => (ByteClass::WHITE, true),
+        BtOp::Nwhite => (ByteClass::WHITE, false),
+        BtOp::Digit => (ByteClass::DIGIT, true),
+        BtOp::Ndigit => (ByteClass::DIGIT, false),
+        BtOp::Hex => (ByteClass::HEX, true),
+        BtOp::Nhex => (ByteClass::HEX, false),
+        BtOp::Octal => (ByteClass::OCTAL, true),
+        BtOp::Noctal => (ByteClass::OCTAL, false),
+        BtOp::Word => (ByteClass::WORD, true),
+        BtOp::Nword => (ByteClass::WORD, false),
+        BtOp::Head => (ByteClass::HEAD, true),
+        BtOp::Nhead => (ByteClass::HEAD, false),
+        BtOp::Alpha => (ByteClass::ALPHA, true),
+        BtOp::Nalpha => (ByteClass::ALPHA, false),
+        BtOp::Lower => (ByteClass::LOWER, true),
+        BtOp::Nlower => (ByteClass::LOWER, false),
+        BtOp::Upper => (ByteClass::UPPER, true),
+        BtOp::Nupper => (ByteClass::UPPER, false),
         _ => return None,
     };
     Some((mask, positive))

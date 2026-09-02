@@ -20,10 +20,9 @@ use crate::mbyte::{
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{
-    RA_CONT, RA_MATCH, RA_NOMATCH, RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER,
-    RI_OCTAL, RI_UPPER, RI_WORD, Rex, behind_pos, cleanup_subexpr, cleanup_zsubexpr, cstrchr,
-    cstrncmp, kMarkBufLocal, match_with_backref, reg_getline, reg_getline_len, reg_match_visual,
-    reg_nextline, reg_prev_class,
+    ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, behind_pos, cleanup_subexpr,
+    cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
+    reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
 
@@ -55,7 +54,7 @@ pub(crate) fn match_one(
         Some(RA_CONT)
     };
     // The `RI_*` byte classes only classify Latin-1.
-    let ri = |mask: c_int| c < 0x100 && RI_FLAGS[c as usize] as c_int & mask != 0;
+    let ri = |mask: ByteClass| c < 0x100 && RI_FLAGS[c as usize].has(mask);
     // The `S`-prefixed classes reject a leading digit.
     let digit_here = || ascii_isdigit(rex.byte() as c_int);
 
@@ -110,22 +109,22 @@ pub(crate) fn match_one(
         BtOp::Sprint => return take(!digit_here() && is_printable(rex.char_here())),
         BtOp::White => return take(ascii_iswhite(c)),
         BtOp::Nwhite => return take(c != NUL && !ascii_iswhite(c)),
-        BtOp::Digit => return take(ri(RI_DIGIT)),
-        BtOp::Ndigit => return take(c != NUL && !ri(RI_DIGIT)),
-        BtOp::Hex => return take(ri(RI_HEX)),
-        BtOp::Nhex => return take(c != NUL && !ri(RI_HEX)),
-        BtOp::Octal => return take(ri(RI_OCTAL)),
-        BtOp::Noctal => return take(c != NUL && !ri(RI_OCTAL)),
-        BtOp::Word => return take(ri(RI_WORD)),
-        BtOp::Nword => return take(c != NUL && !ri(RI_WORD)),
-        BtOp::Head => return take(ri(RI_HEAD)),
-        BtOp::Nhead => return take(c != NUL && !ri(RI_HEAD)),
-        BtOp::Alpha => return take(ri(RI_ALPHA)),
-        BtOp::Nalpha => return take(c != NUL && !ri(RI_ALPHA)),
-        BtOp::Lower => return take(ri(RI_LOWER)),
-        BtOp::Nlower => return take(c != NUL && !ri(RI_LOWER)),
-        BtOp::Upper => return take(ri(RI_UPPER)),
-        BtOp::Nupper => return take(c != NUL && !ri(RI_UPPER)),
+        BtOp::Digit => return take(ri(ByteClass::DIGIT)),
+        BtOp::Ndigit => return take(c != NUL && !ri(ByteClass::DIGIT)),
+        BtOp::Hex => return take(ri(ByteClass::HEX)),
+        BtOp::Nhex => return take(c != NUL && !ri(ByteClass::HEX)),
+        BtOp::Octal => return take(ri(ByteClass::OCTAL)),
+        BtOp::Noctal => return take(c != NUL && !ri(ByteClass::OCTAL)),
+        BtOp::Word => return take(ri(ByteClass::WORD)),
+        BtOp::Nword => return take(c != NUL && !ri(ByteClass::WORD)),
+        BtOp::Head => return take(ri(ByteClass::HEAD)),
+        BtOp::Nhead => return take(c != NUL && !ri(ByteClass::HEAD)),
+        BtOp::Alpha => return take(ri(ByteClass::ALPHA)),
+        BtOp::Nalpha => return take(c != NUL && !ri(ByteClass::ALPHA)),
+        BtOp::Lower => return take(ri(ByteClass::LOWER)),
+        BtOp::Nlower => return take(c != NUL && !ri(ByteClass::LOWER)),
+        BtOp::Upper => return take(ri(ByteClass::UPPER)),
+        BtOp::Nupper => return take(c != NUL && !ri(ByteClass::UPPER)),
 
         BtOp::Exactly => exactly(rex, scan, next),
         BtOp::Anyof | BtOp::Anybut => collection(rex, scan, c, op == BtOp::Anyof),

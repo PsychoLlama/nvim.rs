@@ -12,15 +12,13 @@ use core::ffi::{c_char, c_int};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
 use crate::mbyte::utf_ptr2char;
-use crate::regexp::{
-    RI_ALPHA, RI_DIGIT, RI_FLAGS, RI_HEAD, RI_HEX, RI_LOWER, RI_OCTAL, RI_UPPER, RI_WORD, Rex,
-};
+use crate::regexp::{ByteClass, RI_FLAGS, Rex};
 use crate::types::NUL;
 
 /// Is `c` in the Latin-1 class `flag` names? The table only covers the
 /// first 256 code points, so anything above them is out by construction.
-fn ri(c: c_int, flag: c_int) -> bool {
-    (0..0x100).contains(&c) && RI_FLAGS[c as usize] as c_int & flag != 0
+fn ri(c: c_int, flag: ByteClass) -> bool {
+    (0..0x100).contains(&c) && RI_FLAGS[c as usize].has(flag)
 }
 
 /// The character at the input, which for the keyword and file-name classes
@@ -71,22 +69,22 @@ pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
         NfaOp::Sprint => !ascii_isdigit(curc) && is_printable(rex),
         NfaOp::White => ascii_iswhite(curc),
         NfaOp::Nwhite => curc != NUL && !ascii_iswhite(curc),
-        NfaOp::Digit => ri(curc, RI_DIGIT),
-        NfaOp::Ndigit => curc != NUL && !ri(curc, RI_DIGIT),
-        NfaOp::Hex => ri(curc, RI_HEX),
-        NfaOp::Nhex => curc != NUL && !ri(curc, RI_HEX),
-        NfaOp::Octal => ri(curc, RI_OCTAL),
-        NfaOp::Noctal => curc != NUL && !ri(curc, RI_OCTAL),
-        NfaOp::Word => ri(curc, RI_WORD),
-        NfaOp::Nword => curc != NUL && !ri(curc, RI_WORD),
-        NfaOp::Head => ri(curc, RI_HEAD),
-        NfaOp::Nhead => curc != NUL && !ri(curc, RI_HEAD),
-        NfaOp::Alpha => ri(curc, RI_ALPHA),
-        NfaOp::Nalpha => curc != NUL && !ri(curc, RI_ALPHA),
-        NfaOp::Lower => ri(curc, RI_LOWER),
-        NfaOp::Nlower => curc != NUL && !ri(curc, RI_LOWER),
-        NfaOp::Upper => ri(curc, RI_UPPER),
-        NfaOp::Nupper => curc != NUL && !ri(curc, RI_UPPER),
+        NfaOp::Digit => ri(curc, ByteClass::DIGIT),
+        NfaOp::Ndigit => curc != NUL && !ri(curc, ByteClass::DIGIT),
+        NfaOp::Hex => ri(curc, ByteClass::HEX),
+        NfaOp::Nhex => curc != NUL && !ri(curc, ByteClass::HEX),
+        NfaOp::Octal => ri(curc, ByteClass::OCTAL),
+        NfaOp::Noctal => curc != NUL && !ri(curc, ByteClass::OCTAL),
+        NfaOp::Word => ri(curc, ByteClass::WORD),
+        NfaOp::Nword => curc != NUL && !ri(curc, ByteClass::WORD),
+        NfaOp::Head => ri(curc, ByteClass::HEAD),
+        NfaOp::Nhead => curc != NUL && !ri(curc, ByteClass::HEAD),
+        NfaOp::Alpha => ri(curc, ByteClass::ALPHA),
+        NfaOp::Nalpha => curc != NUL && !ri(curc, ByteClass::ALPHA),
+        NfaOp::Lower => ri(curc, ByteClass::LOWER),
+        NfaOp::Nlower => curc != NUL && !ri(curc, ByteClass::LOWER),
+        NfaOp::Upper => ri(curc, ByteClass::UPPER),
+        NfaOp::Nupper => curc != NUL && !ri(curc, ByteClass::UPPER),
         // The `_IC` forms are what a `[a-z]` collection recognised as a
         // class compiles to, and they honour 'ignorecase' where the bare
         // `\l`/`\u` do not.
@@ -99,9 +97,9 @@ pub(crate) fn class_matches(rex: Rex, op: NfaOp, curc: c_int) -> bool {
 }
 
 fn lower_ic(rex: Rex, curc: c_int) -> bool {
-    ri(curc, RI_LOWER) || (ignoring_case(rex) && ri(curc, RI_UPPER))
+    ri(curc, ByteClass::LOWER) || (ignoring_case(rex) && ri(curc, ByteClass::UPPER))
 }
 
 fn upper_ic(rex: Rex, curc: c_int) -> bool {
-    ri(curc, RI_UPPER) || (ignoring_case(rex) && ri(curc, RI_LOWER))
+    ri(curc, ByteClass::UPPER) || (ignoring_case(rex) && ri(curc, ByteClass::LOWER))
 }
