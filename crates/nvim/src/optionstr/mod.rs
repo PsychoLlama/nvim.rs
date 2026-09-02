@@ -76,8 +76,6 @@ pub const COCU_ALL: &CStr = c"nvic";
 pub const COM_ALL: &CStr = c"nbsmexflrO";
 pub const SCL_NO: c_int = -1;
 pub const SID_NONE: c_int = -6;
-pub const STL_IN_ICON: c_int = 1;
-pub const STL_IN_TITLE: c_int = 2;
 /// "E535: Illegal character after <%c>", for the options that spell a
 /// field as a character followed by a value.
 pub(crate) const e_illegal_character_after_chr: &CStr = c"E535: Illegal character after <%c>";

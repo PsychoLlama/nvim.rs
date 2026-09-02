@@ -23,25 +23,25 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{NUL, OptionSetFlags, linenr_T, optset_T};
+use crate::types::{NUL, OptionSetFlags, StlSyntax, linenr_T, optset_T};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
 use super::{
-    SHM_ALL, STL_IN_ICON, STL_IN_TITLE, check_stl_option, did_set_option_listflag,
-    did_set_str_generic, illegal_char, opt_strings_mask,
+    SHM_ALL, check_stl_option, did_set_option_listflag, did_set_str_generic, illegal_char,
+    opt_strings_mask,
 };
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_iconstring(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_titleiconstring(args, STL_IN_ICON) }
+    unsafe { did_set_titleiconstring(args, StlSyntax::ICON) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_titlestring(args: *mut optset_T) -> *const c_char {
-    unsafe { did_set_titleiconstring(args, STL_IN_TITLE) }
+    unsafe { did_set_titleiconstring(args, StlSyntax::TITLE) }
 }
 
 /// 'title' and 'icon' strings are only run through the statusline formatter
@@ -50,19 +50,23 @@ pub unsafe fn did_set_titlestring(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub(crate) unsafe fn did_set_titleiconstring(args: *mut optset_T, flagval: c_int) -> *const c_char {
+pub(crate) unsafe fn did_set_titleiconstring(
+    args: *mut optset_T,
+    flagval: StlSyntax,
+) -> *const c_char {
     // SAFETY: the frame's value is a C string.
     let value = unsafe { *varp(args) };
     // SAFETY: as above; the checker walks it to its terminator.
     let formatted = unsafe {
         !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_none()
     };
-    let syntax = stl_syntax.get();
-    stl_syntax.set(if formatted {
-        syntax | flagval
+    let mut syntax = stl_syntax.get();
+    if formatted {
+        syntax |= flagval;
     } else {
-        syntax & !flagval
-    });
+        syntax.clear(flagval);
+    }
+    stl_syntax.set(syntax);
     did_set_title();
     ptr::null()
 }

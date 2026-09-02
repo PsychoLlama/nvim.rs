@@ -50,8 +50,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, buf_T, exarg_T, int64_t, linenr_T,
-    size_t, time_t,
+    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, buf_T, exarg_T,
+    int64_t, linenr_T, size_t, time_t,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
@@ -629,7 +629,7 @@ pub unsafe fn maketitle() {
             maxlen = ((p_titlelen.get() * Columns.get() as OptInt / 100) as c_int).max(10);
         }
         if opt_is_set(p_titlestring.get()) {
-            if stl_syntax.get() & STL_IN_TITLE != 0 {
+            if stl_syntax.get().has(StlSyntax::TITLE) {
                 build_stl(&mut scratch, p_titlestring.get(), kOptTitlestring, maxlen);
                 title_str = scratch.as_mut_ptr();
             } else {
@@ -649,7 +649,7 @@ pub unsafe fn maketitle() {
     if p_icon.get() != 0 {
         icon_str = scratch.as_mut_ptr();
         if opt_is_set(p_iconstring.get()) {
-            if stl_syntax.get() & STL_IN_ICON != 0 {
+            if stl_syntax.get().has(StlSyntax::ICON) {
                 build_stl(&mut scratch, p_iconstring.get(), kOptIconstring, 0);
             } else {
                 icon_str = p_iconstring.get();

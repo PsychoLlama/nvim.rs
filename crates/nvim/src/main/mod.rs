@@ -16,10 +16,10 @@ use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, DecorState, EstackInfo, FILE,
     Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, MapHash, MarkTreeIter, MarkTreeIter_s,
     MultiQueue, NS, Object, OptInt, Proc, Refcount, RgbValue, ScreenGrid, Set_String, Set_uint32_t,
-    StlClickDefinition, String_0, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T,
-    aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T,
-    etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
-    int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
+    StlClickDefinition, StlSyntax, String_0, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType,
+    alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T,
+    estack_T, etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T,
+    hlf_T, int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
     nvim_stats_s, optmagic_T, pos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
     regprog_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue,
     uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
@@ -869,7 +869,7 @@ pub static no_lines_msg: &CStr = c"--No lines in buffer--";
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
 pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
-pub static stl_syntax: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 pub static virtual_op: GlobalCell<Option<bool>> = GlobalCell::new(None);

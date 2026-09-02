@@ -15,14 +15,15 @@
 
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::types::StlSyntax;
 use crate::winlayer::Win;
 
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
 /// Answers whether either does.
 pub unsafe fn redraw_custom_title_later() -> bool {
-    let custom = (p_icon.get() != 0 && stl_syntax.get() & STL_IN_ICON != 0)
-        || (p_title.get() != 0 && stl_syntax.get() & STL_IN_TITLE != 0);
+    let custom = (p_icon.get() != 0 && stl_syntax.get().has(StlSyntax::ICON))
+        || (p_title.get() != 0 && stl_syntax.get().has(StlSyntax::TITLE));
     if custom {
         need_maketitle.set(true);
     }

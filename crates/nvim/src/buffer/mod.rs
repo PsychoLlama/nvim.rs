@@ -325,8 +325,6 @@ pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SEA_DIALOG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const SEA_QUIT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SEA_RECOVER: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const STL_IN_ICON: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const STL_IN_TITLE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 
 /// The buffer's running total of one kind of extmark metadata, kept at the

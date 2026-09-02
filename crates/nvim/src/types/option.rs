@@ -16,6 +16,16 @@ use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;
 
 crate::flag_set! {
+    /// `stl_syntax`: which of `'title'` and `'icon'` hold a *statusline
+    /// format* rather than plain text, and so have to be re-evaluated
+    /// whenever the window contents change.
+    pub struct StlSyntax;
+
+    const ICON = 1;
+    const TITLE = 2;
+}
+
+crate::flag_set! {
     /// `option.h`'s `OptionSetFlags`: which scope an option-setting call
     /// means, plus the handful of behaviour switches that ride along with it.
     ///
