@@ -64,7 +64,7 @@ pub unsafe fn f_getcompletion(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
     // skips the per-type switch entirely.
-    if unsafe { cstr::bytes_at(type_0) == b"cmdline" } {
+    if unsafe { cstr::eq_bytes(type_0, b"cmdline") } {
         let cmdline_len = unsafe { cstr::bytes_at(pattern) }.len() as c_int;
         unsafe {
             set_cmd_context(

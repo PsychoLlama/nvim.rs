@@ -257,7 +257,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
             let done = input.v_type != VAR_STRING
                 || input.vval.v_string.is_null()
                 || *input.vval.v_string == 0
-                || cstr::bytes_at(input.vval.v_string) == b"cont";
+                || cstr::eq_bytes(input.vval.v_string, b"cont");
             if done {
                 tv_clear(&raw mut input);
                 if ui_has(kUICmdline) {

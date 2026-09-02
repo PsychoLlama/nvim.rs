@@ -303,11 +303,10 @@ pub unsafe fn expand_env_esc(
                     src = src.add(1);
                     dstlen -= 1;
 
-                    if !prefix.is_null()
-                        && src.offset(-(prefix_len as isize)) >= srcp
-                        && cstr::prefix_at(src.offset(-(prefix_len as isize)), prefix_len as size_t)
-                            == cstr::prefix_at(prefix, prefix_len as size_t)
-                    {
+                    if !prefix.is_null() && src.offset(-(prefix_len as isize)) >= srcp && {
+                        let back = src.offset(-(prefix_len as isize));
+                        cstr::prefix_eq(back, prefix, prefix_len as size_t)
+                    } {
                         at_start = true;
                     }
                 }

@@ -160,7 +160,7 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
     // Writing to a screen that has already scrolled needs a hit-enter
     // prompt afterwards. Not when only using CR to move the cursor.
     let overflow = !ui_has(kUIMessages) && msg_scrolled.get() > c_int::from(p_ch.get() == 0);
-    if overflow && !msg_scrolled_ign.get() && unsafe { cstr::bytes_at(str) != b"\r" } {
+    if overflow && !msg_scrolled_ign.get() && unsafe { !cstr::eq_bytes(str, b"\r") } {
         need_wait_return.set(true);
     }
     msg_didany.set(true); // remember that something was output

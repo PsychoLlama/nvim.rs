@@ -96,7 +96,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 // `LSIZE` writable bytes.
                 unsafe { copy_option_part(&raw mut dict, buf, LSIZE as size_t, comma) };
                 // SAFETY: `buf` now holds one NUL-terminated file pattern.
-                if !thesaurus && unsafe { cstr::bytes_at(buf) == b"spell" } {
+                if !thesaurus && unsafe { cstr::eq_bytes(buf, b"spell") } {
                     count = -1;
                 } else {
                     // SAFETY: as above.

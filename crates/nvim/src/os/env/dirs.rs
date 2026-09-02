@@ -173,8 +173,8 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
             return kos_env_path;
         }
 
-        let vimruntime = cstr::bytes_at(name) == b"VIMRUNTIME";
-        if !vimruntime && cstr::bytes_at(name) != b"VIM" {
+        let vimruntime = cstr::eq_bytes(name, b"VIMRUNTIME");
+        if !vimruntime && !cstr::eq_bytes(name, b"VIM") {
             return ptr::null_mut();
         }
 

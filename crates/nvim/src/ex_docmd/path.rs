@@ -282,7 +282,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if new_dir.is_null() || unsafe { allbuf_locked() } {
         return false;
     }
-    if unsafe { cstr::bytes_at(new_dir) == b"-" } {
+    if unsafe { cstr::eq_bytes(new_dir, b"-") } {
         let pdir = get_prevdir(scope);
         if pdir.is_null() {
             emsg(gettext(c"E186: No previous directory".as_ptr()));

@@ -420,7 +420,7 @@ pub unsafe fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
     let buf = curbuf.get();
     unsafe {
-        (*buf).b_p_lisp != 0 && *(*buf).b_p_inde != 0 && cstr::bytes_at((*buf).b_p_lop) == b"expr:1"
+        (*buf).b_p_lisp != 0 && *(*buf).b_p_inde != 0 && cstr::eq_bytes((*buf).b_p_lop, b"expr:1")
     }
 }
 

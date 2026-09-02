@@ -201,10 +201,8 @@ pub(super) unsafe fn fold_del_marker(
             if !cms2.is_null()
                 && unsafe { p.offset_from(line) } >= unsafe { cms2.offset_from(cms) }
                 && unsafe {
-                    cstr::prefix_at(
-                        p.offset(-(cms2.offset_from(cms))),
-                        cms2.offset_from(cms) as size_t,
-                    ) == cstr::prefix_at(cms, cms2.offset_from(cms) as size_t)
+                    let n = cms2.offset_from(cms);
+                    cstr::prefix_eq(p.offset(-n), cms, n as size_t)
                 }
                 && unsafe { cstr::starts_with(p.add(len), cstr::bytes_at(cms2.offset(2))) }
             {
@@ -283,11 +281,11 @@ pub(super) unsafe fn foldlevel_marker(line: FLine) {
     while unsafe { *s } != 0 {
         if unsafe { *s } as c_int == cstart as c_int
             && unsafe {
-                cstr::prefix_at(s.offset(1), foldstartmarkerlen.get().wrapping_sub(1))
-                    == cstr::prefix_at(
-                        startmarker.offset(1),
-                        foldstartmarkerlen.get().wrapping_sub(1),
-                    )
+                cstr::prefix_eq(
+                    s.offset(1),
+                    startmarker.offset(1),
+                    foldstartmarkerlen.get().wrapping_sub(1),
+                )
             }
         {
             s = unsafe { s.add(foldstartmarkerlen.get()) };
@@ -306,11 +304,11 @@ pub(super) unsafe fn foldlevel_marker(line: FLine) {
             }
         } else if unsafe { *s } as c_int == cend as c_int
             && unsafe {
-                cstr::prefix_at(s.offset(1), foldendmarkerlen.get().wrapping_sub(1))
-                    == cstr::prefix_at(
-                        foldendmarker.get().offset(1),
-                        foldendmarkerlen.get().wrapping_sub(1),
-                    )
+                cstr::prefix_eq(
+                    s.offset(1),
+                    foldendmarker.get().offset(1),
+                    foldendmarkerlen.get().wrapping_sub(1),
+                )
             }
         {
             s = unsafe { s.add(foldendmarkerlen.get()) };

@@ -818,5 +818,5 @@ fn len_of(s: *const c_char) -> usize {
 /// as checked code.
 fn equals(p: *const c_char, lit: &[u8]) -> bool {
     // SAFETY: a NUL-terminated string.
-    unsafe { cstr::bytes_at(p) == lit }
+    unsafe { cstr::eq_bytes(p, lit) }
 }

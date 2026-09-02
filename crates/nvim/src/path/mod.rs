@@ -482,7 +482,7 @@ pub unsafe fn append_path(
     let sep_len = PATHSEPSTR.count_bytes();
 
     // Do not append an empty string, or a dot.
-    if to_append_length == 0 || unsafe { cstr::bytes_at(to_append) == b"." } {
+    if to_append_length == 0 || unsafe { cstr::eq_bytes(to_append, b".") } {
         return Ok(());
     }
 

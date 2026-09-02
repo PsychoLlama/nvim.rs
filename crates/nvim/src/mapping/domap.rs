@@ -642,7 +642,7 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
 /// `cmdp` and `arg` must be live, NUL-terminated strings.
 unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, abbr: bool) {
     // SAFETY: the caller's promise — `arg` is live and NUL-terminated.
-    let local = unsafe { cstr::bytes_at(arg) == b"<buffer>" };
+    let local = unsafe { cstr::eq_bytes(arg, b"<buffer>") };
     // SAFETY: as above.
     if !local && unsafe { c_int::from(*arg) } != NUL {
         emsg(gettext(e_invarg));

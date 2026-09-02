@@ -81,11 +81,11 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
 
         let cursor = unsafe { numbuf.dict_string(d, c"cursor".as_ptr()) };
         if !cursor.is_null() {
-            opts.cursor = if unsafe { cstr::bytes_at(cursor) == b"hide" } {
+            opts.cursor = if unsafe { cstr::eq_bytes(cursor, b"hide") } {
                 CursorFlag::Hide
-            } else if unsafe { cstr::bytes_at(cursor) == b"keep" } {
+            } else if unsafe { cstr::eq_bytes(cursor, b"keep") } {
                 CursorFlag::Keep
-            } else if unsafe { cstr::bytes_at(cursor) == b"msg" } {
+            } else if unsafe { cstr::eq_bytes(cursor, b"msg") } {
                 CursorFlag::Msg
             } else {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.

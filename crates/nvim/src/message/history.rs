@@ -322,7 +322,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
 /// # Safety
 /// `eap` must point at a valid command argument block.
 pub unsafe fn ex_messages(eap: *mut exarg_T) {
-    if unsafe { cstr::bytes_at((*eap).arg) == b"clear" } {
+    if unsafe { cstr::eq_bytes((*eap).arg, b"clear") } {
         let keep = if unsafe { (*eap).addr_count } != 0 {
             unsafe { (*eap).line2 as c_int }
         } else {

@@ -164,7 +164,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut dict_T) {
     let di_refresh = find("refresh");
     if !di_refresh.is_null() && unsafe { (*di_refresh).di_tv.v_type } == VAR_STRING {
         let v = unsafe { (*di_refresh).di_tv.vval.v_string };
-        if !v.is_null() && unsafe { cstr::bytes_at(v) == b"always" } {
+        if !v.is_null() && unsafe { cstr::eq_bytes(v, b"always") } {
             compl_opt_refresh_always.set(true);
         }
     }

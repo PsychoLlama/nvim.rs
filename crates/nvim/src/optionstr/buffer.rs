@@ -344,7 +344,7 @@ pub unsafe fn did_set_encoding(args: &mut optset_T) -> Option<&CStr> {
     unsafe { xfree((*varp).cast::<c_void>()) };
     unsafe { *varp = canonical };
     if idx == kOptEncoding {
-        if unsafe { cstr::bytes_at(p_enc.get()) != b"utf-8" } {
+        if unsafe { !cstr::eq_bytes(p_enc.get(), b"utf-8") } {
             return Some(e_unsupportedoption);
         }
         unsafe { spell_reload() };
@@ -559,8 +559,8 @@ pub unsafe fn did_set_lispoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { *varp(args) };
     if c_int::from(unsafe { *value }) != NUL
-        && unsafe { cstr::bytes_at(value) != b"expr:0" }
-        && unsafe { cstr::bytes_at(value) != b"expr:1" }
+        && unsafe { !cstr::eq_bytes(value, b"expr:0") }
+        && unsafe { !cstr::eq_bytes(value, b"expr:1") }
     {
         return invalid();
     }

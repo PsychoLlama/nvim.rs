@@ -588,7 +588,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     for i in 0..num_file {
         let tag = unsafe { *file.offset(i as isize) };
         let len = unsafe { cstr::bytes_at(tag) }.len() as c_int - 3;
-        if len <= 0 || unsafe { cstr::bytes_at(tag.offset(len as isize)) != b"@en" } {
+        if len <= 0 || unsafe { !cstr::eq_bytes(tag.offset(len as isize), b"@en") } {
             continue;
         }
         // Sorting on priority means the same item in another language

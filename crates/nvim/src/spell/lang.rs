@@ -79,7 +79,7 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// to `latin1`.
 pub unsafe fn spell_enc() -> *mut c_char {
     if unsafe { cstr::bytes_at(p_enc.get()) }.len() < 60
-        && unsafe { cstr::bytes_at(p_enc.get()) != b"iso-8859-15" }
+        && unsafe { !cstr::eq_bytes(p_enc.get(), b"iso-8859-15") }
     {
         return p_enc.get();
     }
@@ -263,7 +263,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
             continue;
         }
 
-        if unsafe { cstr::bytes_at(lang.as_ptr()) == b"cjk" } {
+        if unsafe { cstr::eq_bytes(lang.as_ptr(), b"cjk") } {
             unsafe { (*(*wp).w_s).b_cjk = 1 };
             continue;
         }
@@ -636,7 +636,7 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
         let l = unsafe { copy_option_part(&raw mut spf, buf, room, sep) };
         if l >= MAXPATHL as size_t - 4
             || l < 4
-            || unsafe { cstr::bytes_at(spf_name.as_ptr().add(l - 4)) != b".add" }
+            || unsafe { !cstr::eq_bytes(spf_name.as_ptr().add(l - 4), b".add") }
         {
             return false;
         }

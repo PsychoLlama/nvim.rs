@@ -163,14 +163,41 @@ pub(crate) unsafe fn prefix_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
 
 /// Whether two NUL-terminated strings are equal -- `strcmp(a, b) == 0`.
 ///
-/// Where one side is a literal, write `bytes_at(p) == b"..."` instead: it
-/// says which operand is the constant.
+/// Where one side is a literal, [`eq_bytes`] says which operand is the
+/// constant. **Not `bytes_at(p) == b"..."`**: that measures `p` to its
+/// terminator before it looks at a single byte.
 ///
 /// # Safety
 /// [`bytes_at`]'s contract, for both.
 pub(crate) unsafe fn eq(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: caller's contract.
     unsafe { cmp(a, b) }.is_eq()
+}
+
+/// Whether the string at `p` is exactly `want` -- `strcmp` against a
+/// literal, without spelling the literal as a pointer.
+///
+/// **Walks `p` against `want` and stops at the first difference**, as
+/// [`cmp`] does and for the reason written on [`prefix_cmp`]: the obvious
+/// `bytes_at(p) == want` reads every byte of `p` first, so a test that a
+/// one-byte mismatch settles costs the length of whatever `p` happens to
+/// hold.
+///
+/// # Safety
+/// [`bytes_at`]'s contract. `want` must hold no NUL, which is what makes
+/// the walk stop at or before `p`'s terminator.
+pub(crate) unsafe fn eq_bytes(p: *const c_char, want: &[u8]) -> bool {
+    debug_assert!(!want.contains(&0), "a NUL in the literal outruns the walk");
+    for (i, &byte) in want.iter().enumerate() {
+        // SAFETY: caller's contract -- `p`'s terminator is readable, and a
+        // NUL there cannot equal a byte of `want`, so the walk stops on it.
+        if unsafe { *p.cast::<u8>().add(i) } != byte {
+            return false;
+        }
+    }
+    // SAFETY: `want.len()` bytes of `p` just matched, so `p` is at least
+    // that long and the byte after them is readable.
+    unsafe { *p.cast::<u8>().add(want.len()) == 0 }
 }
 
 /// How two NUL-terminated strings order -- `strcmp(a, b)`, as an
@@ -328,6 +355,29 @@ mod tests {
         assert_eq!(short, b"abc");
         assert_eq!(exact, b"abcdef");
         assert_eq!(long, b"abcdef", "the terminator bounds it, not `n`");
+    }
+
+    #[test]
+    fn eq_bytes_answers_strcmp_against_a_literal() {
+        // SAFETY: both are literals, live for the test.
+        let is = |s: &CStr, want: &[u8]| unsafe { eq_bytes(s.as_ptr(), want) };
+        assert!(is(c"abc", b"abc"));
+        assert!(!is(c"abc", b"abd"), "a differing byte");
+        assert!(!is(c"abc", b"ab"), "the string is longer");
+        assert!(!is(c"abc", b"abcd"), "the literal is longer");
+        assert!(is(c"", b""), "both empty");
+        assert!(!is(c"abc", b""), "only the literal is empty");
+    }
+
+    /// A mismatch at byte 0 must not read byte 1 -- the whole point of the
+    /// helper. The string here is not terminated, so measuring it first is
+    /// undefined and only the short-circuit keeps the read in bounds.
+    #[test]
+    fn eq_bytes_stops_at_the_first_difference() {
+        let unterminated = *b"xyz";
+        // SAFETY: `b"a"` differs from `x` at byte 0, so the walk reads
+        // exactly one byte of an array that has three.
+        assert!(!unsafe { eq_bytes(unterminated.as_ptr().cast(), b"a") });
     }
 
     /// `strncmp(a, b, n)`'s three answers, as slice comparisons.

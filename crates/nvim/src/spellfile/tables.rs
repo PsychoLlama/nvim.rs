@@ -193,7 +193,7 @@ pub(super) unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
         }
     }
     // "_" means the rule deletes what it matched.
-    let to = if unsafe { cstr::bytes_at(items[2]) == b"_" } {
+    let to = if unsafe { cstr::eq_bytes(items[2], b"_") } {
         c"".as_ptr().cast_mut()
     } else {
         items[2]
@@ -233,5 +233,5 @@ pub(super) unsafe fn add_fromto(
 /// `s` must be NUL-terminated.
 pub(super) unsafe fn sal_to_bool(s: *mut c_char) -> bool {
     // SAFETY: the caller promises the string.
-    unsafe { cstr::bytes_at(s) == b"1" || cstr::bytes_at(s) == b"true" }
+    unsafe { cstr::eq_bytes(s, b"1") || cstr::eq_bytes(s, b"true") }
 }

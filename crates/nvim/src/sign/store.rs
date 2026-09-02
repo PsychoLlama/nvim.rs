@@ -190,7 +190,7 @@ pub(crate) unsafe fn group_get_ns(group: *const c_char) -> int64_t {
         return 0;
     }
     // SAFETY: the caller's group name.
-    if unsafe { cstr::bytes_at(group) == b"*" } {
+    if unsafe { cstr::eq_bytes(group, b"*") } {
         return ALL_GROUPS;
     }
     // SAFETY: as above.

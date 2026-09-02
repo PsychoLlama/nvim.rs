@@ -377,8 +377,8 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
             if text_len > 0
                 && text_len < len - ins_compl_leader_len() as c_int
                 && unsafe {
-                    cstr::prefix_at(first.offset((len - text_len) as isize), text_len as size_t)
-                        == cstr::prefix_at(p, text_len as size_t)
+                    let tail = first.offset((len - text_len) as isize);
+                    cstr::prefix_eq(tail, p, text_len as size_t)
                 }
             {
                 len -= text_len;

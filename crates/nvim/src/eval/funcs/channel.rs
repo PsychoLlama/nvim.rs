@@ -532,9 +532,9 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
     let mode = arg_string(&mut numbuf, args.get(0));
     let address = arg_string(&mut numbuf2, args.get(1));
-    let tcp = if unsafe { cstr::bytes_at(mode) == b"tcp" } {
+    let tcp = if unsafe { cstr::eq_bytes(mode, b"tcp") } {
         true
-    } else if unsafe { cstr::bytes_at(mode) == b"pipe" } {
+    } else if unsafe { cstr::eq_bytes(mode, b"pipe") } {
         false
     } else {
         let arg0 = "invalid mode";

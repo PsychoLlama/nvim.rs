@@ -640,8 +640,8 @@ unsafe fn build_keywordprg_cmd(
     // `man` and `man -s` take the count as a section number, which goes
     // in front of the word rather than becoming a line range.
     // SAFETY: 'keywordprg' is a NUL-terminated option string.
-    let isman = unsafe { cstr::bytes_at(kp) == b"man" };
-    let isman_s = unsafe { cstr::bytes_at(kp) == b"man -s" };
+    let isman = unsafe { cstr::eq_bytes(kp, b"man") };
+    let isman_s = unsafe { cstr::eq_bytes(kp, b"man -s") };
     if count0 != 0 && !(isman || isman_s) {
         out.push_num(c".,.+%ld", (count0 - 1) as int64_t);
     }
@@ -683,7 +683,7 @@ fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
     }
     // A help tag may contain any of these, so nothing is escaped.
     // SAFETY: 'filetype' is a NUL-terminated option string.
-    if unsafe { cstr::bytes_at(cur_buf().b_p_ft) == b"help" } {
+    if unsafe { cstr::eq_bytes(cur_buf().b_p_ft, b"help") } {
         c""
     } else {
         c"\\|\"\n["

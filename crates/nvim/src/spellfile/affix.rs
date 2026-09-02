@@ -123,7 +123,7 @@ pub(super) unsafe fn handle_affix_header(
 
     // An "S" after the count says another block for this affix follows.
     let mut lasti = 4;
-    if items.len() > lasti && unsafe { cstr::bytes_at(items[lasti]) == b"S" } {
+    if items.len() > lasti && unsafe { cstr::eq_bytes(items[lasti], b"S") } {
         lasti += 1;
         unsafe { (*st.cur_aff).ah_follows = 1 };
     } else {
@@ -137,7 +137,7 @@ pub(super) unsafe fn handle_affix_header(
         let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
-    if unsafe { cstr::bytes_at(items[2]) != b"Y" } && unsafe { cstr::bytes_at(items[2]) != b"N" } {
+    if unsafe { !cstr::eq_bytes(items[2], b"Y") } && unsafe { !cstr::eq_bytes(items[2], b"N") } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (fname, arg2) = unsafe { (c_str(fname), c_str(items[2])) };
         smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
@@ -178,7 +178,7 @@ pub(super) unsafe fn handle_affix_entry(
     // A lone "-" is Hunspell's morphological field separator.
     if items.len() > lasti
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
-        && (unsafe { cstr::bytes_at(items[lasti]) != b"-" } || items.len() != lasti + 1)
+        && (unsafe { !cstr::eq_bytes(items[lasti], b"-") } || items.len() != lasti + 1)
     {
         // SAFETY: the affix file's name and the trailing item.
         let (file, item) = unsafe { (c_str(fname), c_str(items[lasti])) };
@@ -187,10 +187,10 @@ pub(super) unsafe fn handle_affix_entry(
     st.aff_todo -= 1;
 
     let entry = unsafe { (*spin).si_arena.alloc::<affentry_T>() };
-    if unsafe { cstr::bytes_at(items[2]) != b"0" } {
+    if unsafe { !cstr::eq_bytes(items[2], b"0") } {
         unsafe { (*entry).ae_chop = (*spin).si_arena.save_str(items[2]) };
     }
-    if unsafe { cstr::bytes_at(items[3]) != b"0" } {
+    if unsafe { !cstr::eq_bytes(items[3], b"0") } {
         unsafe { (*entry).ae_add = (*spin).si_arena.save_str(items[3]) };
         // Flags the added form itself carries follow a "/".
         unsafe { (*entry).ae_flags = vim_strchr((*entry).ae_add, b'/' as c_int) };
@@ -212,7 +212,7 @@ pub(super) unsafe fn handle_affix_entry(
     unsafe { (*st.cur_aff).ah_first = entry };
 
     let is_prefix = unsafe { *items[0] } as c_int == b'P' as c_int;
-    if unsafe { cstr::bytes_at(items[4]) != b"." } {
+    if unsafe { !cstr::eq_bytes(items[4], b".") } {
         unsafe { (*entry).ae_cond = (*spin).si_arena.save_str(items[4]) };
         let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
         // A prefix condition anchors at the start, a suffix at the end.

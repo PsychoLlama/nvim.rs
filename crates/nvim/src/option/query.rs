@@ -260,7 +260,7 @@ pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
     if local.is_null() || unsafe { *local } == 0 {
         return p_sbr.get();
     }
-    if unsafe { cstr::bytes_at(local) == b"NONE" } {
+    if unsafe { cstr::eq_bytes(local, b"NONE") } {
         return empty_option();
     }
     local

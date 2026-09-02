@@ -584,9 +584,9 @@ pub unsafe fn before_set_vvar(
         let n = unsafe { tv_get_number(tv.raw()) };
         stored.vval.v_number = n;
         // SAFETY: the caller's obligation -- `varname` is NUL-terminated.
-        if unsafe { cstr::bytes_at(varname) == b"searchforward" } {
+        if unsafe { cstr::eq_bytes(varname, b"searchforward") } {
             set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
-        } else if unsafe { cstr::bytes_at(varname) == b"hlsearch" } {
+        } else if unsafe { cstr::eq_bytes(varname, b"hlsearch") } {
             no_hlsearch.set(n == 0);
             unsafe { redraw_all_later(UPD_SOME_VALID) };
         }

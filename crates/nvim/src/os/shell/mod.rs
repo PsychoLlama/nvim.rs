@@ -552,16 +552,16 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
         }
 
         let mut ecmd = cmd;
-        if *p_sxe.get() != NUL as c_char && cstr::bytes_at(p_sxq.get()) == b"(" {
+        if *p_sxe.get() != NUL as c_char && cstr::eq_bytes(p_sxq.get(), b"(") {
             ecmd = vim_strsave_escaped_ext(cmd, p_sxe.get(), '^' as c_char, false);
         }
         let ncmd_size = cstr::bytes_at(ecmd).len() + cstr::bytes_at(p_sxq.get()).len() * 2 + 1;
         let ncmd = xmalloc(ncmd_size) as *mut c_char;
 
         // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
-        if cstr::bytes_at(p_sxq.get()) == b"(" {
+        if cstr::eq_bytes(p_sxq.get(), b"(") {
             vim_snprintf(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
-        } else if cstr::bytes_at(p_sxq.get()) == b"\"(" {
+        } else if cstr::eq_bytes(p_sxq.get(), b"\"(") {
             vim_snprintf(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
         } else {
             vim_snprintf(

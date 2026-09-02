@@ -507,7 +507,7 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const dictitem_T) -> Resu
     let mut newidx = unsafe {
         if (*di).di_tv.v_type == VAR_STRING
             && !(*di).di_tv.vval.v_string.is_null()
-            && cstr::bytes_at((*di).di_tv.vval.v_string) == b"$"
+            && cstr::eq_bytes((*di).di_tv.vval.v_string, b"$")
         {
             // Select the last entry in the list.
             qfl.qf_count

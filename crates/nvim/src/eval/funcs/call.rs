@@ -242,7 +242,7 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
         // Any prefix of "silent" silences; only the exact "silent!"
         // also silences errors.
         silence = unsafe { cstr::starts_with(s, b"silent") };
-        if unsafe { cstr::bytes_at(s) == b"silent!" } {
+        if unsafe { cstr::eq_bytes(s, b"silent!") } {
             emsg_silent.set(1);
             emsg_noredir.set(true);
         }

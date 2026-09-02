@@ -424,10 +424,8 @@ impl Walk {
         // of them have.
         taken == self.stack[level].good_len as c_int - self.stack[level].split_off as c_int
             && unsafe {
-                cstr::prefix_at(
+                cstr::prefix_eq(
                     self.fword_ptr(self.stack[level].split_bad_idx as usize),
-                    taken as size_t,
-                ) == cstr::prefix_at(
                     self.tword
                         .as_ptr()
                         .add(self.stack[level].split_off as usize),

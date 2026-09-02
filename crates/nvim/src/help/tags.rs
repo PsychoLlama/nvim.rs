@@ -61,7 +61,7 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
         unsafe { (*eap).arg = skipwhite((*eap).arg.offset(3)) };
     }
 
-    if unsafe { cstr::bytes_at((*eap).arg) == b"ALL" } {
+    if unsafe { cstr::eq_bytes((*eap).arg, b"ALL") } {
         let (rtp, none, doc) = (p_rtp.get(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
         let flag = (&raw mut add_help_tags).cast::<c_void>();

@@ -206,10 +206,10 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
 unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win> {
     // SAFETY: the caller's obligation; `endp` is a live local that `strtol`
     // leaves pointing into `arg`.
-    if unsafe { cstr::bytes_at(arg) == b"$" } {
+    if unsafe { cstr::eq_bytes(arg, b"$") } {
         return Some(tp.lastwin());
     }
-    if unsafe { cstr::bytes_at(arg) == b"#" } {
+    if unsafe { cstr::eq_bytes(arg, b"#") } {
         return tp.prevwin();
     }
     let mut endp: *mut c_char = ptr::null_mut();

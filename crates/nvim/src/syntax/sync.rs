@@ -421,7 +421,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
         unsafe { xfree(key as *mut ::core::ffi::c_void) };
         key = unsafe { vim_strnsave_up(arg_start, arg_end.offset_from(arg_start) as size_t) };
 
-        if unsafe { cstr::bytes_at(key) == b"CCOMMENT" } {
+        if unsafe { cstr::eq_bytes(key, b"CCOMMENT") } {
             if unsafe { (*eap).skip } == 0 {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
@@ -457,12 +457,12 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                     SyncField::LineBreaks => block.b_syn_sync_linebreaks = n,
                 }
             }
-        } else if unsafe { cstr::bytes_at(key) == b"FROMSTART" } {
+        } else if unsafe { cstr::eq_bytes(key, b"FROMSTART") } {
             if unsafe { (*eap).skip } == 0 {
                 cur_syn_block().b_syn_sync_minlines = MAXLNUM as linenr_T;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
-        } else if unsafe { cstr::bytes_at(key) == b"LINECONT" } {
+        } else if unsafe { cstr::eq_bytes(key, b"LINECONT") } {
             match unsafe { sync_linecont(eap, next_arg) } {
                 Err(LineContError::Illegal) => {
                     illegal = true;
@@ -478,11 +478,11 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
             unsafe { (*eap).arg = next_arg };
-            if unsafe { cstr::bytes_at(key) == b"MATCH" } {
+            if unsafe { cstr::eq_bytes(key, b"MATCH") } {
                 unsafe { syn_cmd_match(eap, 1) };
-            } else if unsafe { cstr::bytes_at(key) == b"REGION" } {
+            } else if unsafe { cstr::eq_bytes(key, b"REGION") } {
                 unsafe { syn_cmd_region(eap, 1) };
-            } else if unsafe { cstr::bytes_at(key) == b"CLEAR" } {
+            } else if unsafe { cstr::eq_bytes(key, b"CLEAR") } {
                 unsafe { syn_cmd_clear(eap, 1) };
             } else {
                 illegal = true;

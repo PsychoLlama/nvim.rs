@@ -161,7 +161,7 @@ pub unsafe fn var2fpos(
         let dollar = !li.is_null()
             && unsafe { (*li).li_tv.v_type } == VAR_STRING
             && !unsafe { (*li).li_tv.string_or_null() }.is_null()
-            && unsafe { cstr::bytes_at((*li).li_tv.string_or_null()) == b"$" };
+            && unsafe { cstr::eq_bytes((*li).li_tv.string_or_null(), b"$") };
         if dollar {
             pos.col = len + 1;
         }

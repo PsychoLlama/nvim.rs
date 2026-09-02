@@ -599,8 +599,8 @@ unsafe fn handle_line(
         return true;
     }
 
-    let is_affix = unsafe { cstr::bytes_at(items[0]) == b"PFX" }
-        || unsafe { cstr::bytes_at(items[0]) == b"SFX" };
+    let is_affix =
+        unsafe { cstr::eq_bytes(items[0], b"PFX") } || unsafe { cstr::eq_bytes(items[0], b"SFX") };
     if is_affix && st.aff_todo == 0 && items.len() >= 4 {
         return unsafe { handle_affix_header(spin, aff, st, items, fname, lnum) };
     }
@@ -638,8 +638,8 @@ unsafe fn handle_line(
         }
         return true;
     }
-    let is_rep = unsafe { cstr::bytes_at(items[0]) == b"REP" }
-        || unsafe { cstr::bytes_at(items[0]) == b"REPSAL" };
+    let is_rep = unsafe { cstr::eq_bytes(items[0], b"REP") }
+        || unsafe { cstr::eq_bytes(items[0], b"REPSAL") };
     if is_rep && items.len() >= 3 {
         unsafe { add_rep_entry(spin, st, items, fname, lnum) };
         return true;
@@ -666,7 +666,7 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { cstr::bytes_at(items[0]) == b"COMMON" } {
+    if unsafe { cstr::eq_bytes(items[0], b"COMMON") } {
         for &item in &items[1..] {
             let hi = unsafe { hash_find(&raw mut (*spin).si_commonwords, item) };
             if !unsafe { (*hi).is_kept() } {
@@ -712,11 +712,11 @@ unsafe fn handle_flag_type(
     lnum: c_int,
 ) {
     // SAFETY: the caller promises the items.
-    if unsafe { cstr::bytes_at(items[1]) == b"long" } {
+    if unsafe { cstr::eq_bytes(items[1], b"long") } {
         unsafe { (*aff).af_flagtype = AFT_LONG };
-    } else if unsafe { cstr::bytes_at(items[1]) == b"num" } {
+    } else if unsafe { cstr::eq_bytes(items[1], b"num") } {
         unsafe { (*aff).af_flagtype = AFT_NUM };
-    } else if unsafe { cstr::bytes_at(items[1]) == b"caplong" } {
+    } else if unsafe { cstr::eq_bytes(items[1], b"caplong") } {
         unsafe { (*aff).af_flagtype = AFT_CAPLONG };
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.

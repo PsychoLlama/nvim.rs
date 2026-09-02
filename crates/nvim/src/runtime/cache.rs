@@ -385,7 +385,7 @@ pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
     // SAFETY: the caller's buffer, indexed inside the length just tested.
     buflen >= 5
         && (buflen < 6 || vim_ispathsep(unsafe { *buf.add(buflen - 6) } as c_int))
-        && unsafe { cstr::bytes_at(buf.add(buflen - 5)) == b"after" }
+        && unsafe { cstr::eq_bytes(buf.add(buflen - 5), b"after") }
 }
 
 /// Free a kvec's buffer and reset it to empty.
