@@ -23,8 +23,7 @@ use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
-use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL};
-use crate::types::{CpoFlag, MAXPATHL, NUL, Vv};
+use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
 use crate::winlayer::Win;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
@@ -675,9 +674,9 @@ impl WinLineVars {
             // number segments the number column's; the fold segment takes
             // none, because `fill_foldcolumn` gave it its own through the
             // user highlight below.
-            let base = if unsafe { (*sp).item } == STL_SIGNCOL {
+            let base = if unsafe { (*sp).item } == Some(StlOpt::SignCol) {
                 scl_attr
-            } else if unsafe { (*sp).item } == STL_FOLDCOL {
+            } else if unsafe { (*sp).item } == Some(StlOpt::FoldCol) {
                 0
             } else {
                 num_attr
@@ -692,7 +691,7 @@ impl WinLineVars {
                     },
                 )
             };
-            fold_vcol = if unsafe { (*sp).item } == STL_FOLDCOL {
+            fold_vcol = if unsafe { (*sp).item } == Some(StlOpt::FoldCol) {
                 unsafe { &raw const (*stcp).fold_vcol }.cast::<colnr_T>()
             } else {
                 ::core::ptr::null()

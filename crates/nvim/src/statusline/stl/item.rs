@@ -20,17 +20,14 @@ use core::ffi::c_int;
 use core::ptr;
 
 use super::{
-    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NumberBase, STL_BYTEVAL_X, STL_CLICK_FUNC, STL_FILENAME,
-    STL_FOLDCOL, STL_FULLPATH, STL_HELPFLAG_ALT, STL_HIGHLIGHT, STL_HIGHLIGHT_COMB,
-    STL_MODIFIED_ALT, STL_OFFSET_X, STL_PREVIEWFLAG_ALT, STL_ROFLAG_ALT, STL_SEPARATE, STL_SIGNCOL,
-    STL_TABCLOSENR, STL_TABPAGENR, STL_TRUNCMARK, STL_USER_HL, STL_VIM_EXPR, STL_VIRTCOL_ALT,
-    StlItem, StlScratch, TMPLEN, as_number, cells_at, char_len_at, dup_cstring, group,
-    in_insert_mode, kNumBaseDecimal, kNumBaseHexadecimal, parse, put_number, strsize_at, syntax_id,
-    tr, upper, vim_var, with_scratch,
+    Env, Fill, Kind, MAX_STL_EVAL_DEPTH, NumberBase, StlItem, StlScratch, TMPLEN, as_number,
+    cells_at, char_len_at, dup_cstring, group, in_insert_mode, kNumBaseDecimal,
+    kNumBaseHexadecimal, parse, put_number, strsize_at, syntax_id, tr, upper, vim_var,
+    with_scratch,
 };
 use crate::cstr;
 use crate::decoration::SCL_NUM;
-use crate::types::Vv;
+use crate::types::{StlOpt, Vv};
 
 /// What carries across items while the format is walked.
 struct State {
@@ -144,7 +141,7 @@ pub(super) fn run(
             continue;
         }
         // `%=`: where leftover width is spread. Ignored inside a group.
-        if fmt[p] == STL_SEPARATE as u8 {
+        if fmt[p] == StlOpt::Separate.letter() {
             p += 1;
             if st.groupdepth > 0 {
                 continue;
@@ -153,7 +150,7 @@ pub(super) fn run(
             continue;
         }
         // `%<`: where to start cutting when the line is too long.
-        if fmt[p] == STL_TRUNCMARK as u8 {
+        if fmt[p] == StlOpt::TruncMark.letter() {
             p += 1;
             with_scratch(|s| s.push(Kind::Trunc, pos));
             continue;
@@ -174,7 +171,7 @@ pub(super) fn run(
         }
 
         // `%N*`: a user highlight group, whose number is the width field.
-        if fmt[p] == STL_USER_HL as u8 {
+        if fmt[p] == StlOpt::UserHl.letter() {
             let minwid = if spec.minwid > 9 { 1 } else { spec.minwid };
             with_scratch(|s| {
                 s.push_item(StlItem {
@@ -190,9 +187,9 @@ pub(super) fn run(
 
         // `%NT` and `%NX`: a region that switches to or closes tab page N.
         // `tabline=%1Ttab\ one%X` switches to tab 1; `%1X` closes it.
-        if fmt[p] == STL_TABPAGENR as u8 || fmt[p] == STL_TABCLOSENR as u8 {
+        if fmt[p] == StlOpt::TabPageNr.letter() || fmt[p] == StlOpt::TabCloseNr.letter() {
             let mut minwid = spec.minwid;
-            if fmt[p] == STL_TABCLOSENR as u8 {
+            if fmt[p] == StlOpt::TabCloseNr.letter() {
                 if minwid == 0 {
                     // A bare `%X` ends the label, so it takes the number of
                     // the last tab label opened -- which, because the items
@@ -221,10 +218,10 @@ pub(super) fn run(
         }
 
         // `%@Func@`: the region a mouse click runs `Func` for.
-        if fmt[p] == STL_CLICK_FUNC as u8 {
+        if fmt[p] == StlOpt::ClickFunc.letter() {
             p += 1;
             let from = p;
-            while p < fmt.len() && fmt[p] != STL_CLICK_FUNC as u8 {
+            while p < fmt.len() && fmt[p] != StlOpt::ClickFunc.letter() {
                 p += 1;
             }
             if p >= fmt.len() {
@@ -283,22 +280,21 @@ pub(super) fn run(
         }
 
         // Anything the alphabet does not name is skipped.
-        if !parse::is_item_letter(fmt[p]) {
+        let Some(opt) = StlOpt::from_byte(fmt[p]) else {
             p += 1;
             continue;
-        }
-        let opt = fmt[p];
+        };
         p += 1;
 
         // `%#name#` and `%$name$` name a highlight group rather than
         // printing anything, so they record and move on.
-        if opt == STL_HIGHLIGHT as u8 || opt == STL_HIGHLIGHT_COMB as u8 {
+        if opt == StlOpt::Highlight || opt == StlOpt::HighlightComb {
             let from = p;
-            while p < fmt.len() && fmt[p] != opt {
+            while p < fmt.len() && fmt[p] != opt.letter() {
                 p += 1;
             }
             if p < fmt.len() {
-                let kind = if opt == STL_HIGHLIGHT_COMB as u8 {
+                let kind = if opt == StlOpt::HighlightComb {
                     Kind::HighlightCombining
                 } else {
                     Kind::Highlight
@@ -319,7 +315,7 @@ pub(super) fn run(
 
         text.clear();
         let mut value = Value::default();
-        if opt == STL_VIM_EXPR as u8 {
+        if opt == StlOpt::VimExpr {
             // Evaluating re-enters the editor, so this is the one arm that
             // must not run under a scratch borrow.
             value.itemisflag = true;
@@ -444,18 +440,18 @@ fn vim_expr(
 }
 
 /// What the item `opt` evaluates to.
-fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u8>) -> Value {
+fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut Vec<u8>) -> Value {
     let mut v = Value::default();
     match opt {
         // The file name, in full, relative, or just its last component.
         // Blanks in it are never replaced by the fill character.
-        b'f' | b'F' | b't' => {
+        StlOpt::FilePath | StlOpt::FullPath | StlOpt::FileName => {
             v.fillable = false;
-            env.file_name(opt == STL_FULLPATH as u8, opt == STL_FILENAME as u8, text);
+            env.file_name(opt == StlOpt::FullPath, opt == StlOpt::FileName, text);
         }
         // The line number, which `'statuscolumn'` overloads with `v:lnum`
         // and `v:relnum` -- and with a sign, when 'signcolumn' is "number".
-        b'l' => {
+        StlOpt::Line => {
             if env.is_statuscol()
                 && (env.win.w_onebuf_opt.wo_nu != 0 || env.win.w_onebuf_opt.wo_rnu != 0)
                 && vim_var(Vv::Virtnum) == 0
@@ -486,15 +482,15 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                 };
             }
         }
-        b'L' => v.num = env.buf.b_ml.ml_line_count as c_int,
-        b'c' => {
+        StlOpt::NumLines => v.num = env.buf.b_ml.ml_line_count as c_int,
+        StlOpt::Column => {
             v.num = if !in_insert_mode() && env.empty_line {
                 0
             } else {
                 env.win.w_cursor.col + 1
             };
         }
-        b'v' | b'V' => {
+        StlOpt::VirtCol | StlOpt::VirtColAlt => {
             let virtcol = env.win.w_virtcol + 1;
             let col = if !in_insert_mode() && env.empty_line {
                 0
@@ -502,27 +498,27 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                 env.win.w_cursor.col + 1
             };
             // `%V` is not shown when it says the same as `%c`.
-            if !(opt == STL_VIRTCOL_ALT as u8 && virtcol == col) {
+            if !(opt == StlOpt::VirtColAlt && virtcol == col) {
                 v.num = virtcol;
             }
         }
-        b'p' => v.num = env.percentage(),
+        StlOpt::Percentage => v.num = env.percentage(),
         // Not a number: `get_rel_pos()` can answer a name like "Top".
-        b'P' => env.rel_pos(text),
-        b'S' => env.showcmd(text),
-        b'a' => {
+        StlOpt::AltPercent => env.rel_pos(text),
+        StlOpt::ShowCmd => env.showcmd(text),
+        StlOpt::ArgListStat => {
             v.fillable = false;
             env.arg_number(text);
         }
-        b'k' => {
+        StlOpt::Keymap => {
             v.fillable = false;
             env.keymap(text);
         }
         // The page number, which only printing ever sets.
-        b'N' => v.num = 0,
-        b'n' => v.num = env.buf.handle,
-        b'o' | b'O' => {
-            if opt == STL_OFFSET_X as u8 {
+        StlOpt::PageNum => v.num = 0,
+        StlOpt::BufNo => v.num = env.buf.handle,
+        StlOpt::Offset | StlOpt::OffsetX => {
+            if opt == StlOpt::OffsetX {
                 v.base = kNumBaseHexadecimal;
             }
             let l = env.line_offset();
@@ -537,26 +533,26 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                     }
             };
         }
-        b'b' | b'B' => {
-            if opt == STL_BYTEVAL_X as u8 {
+        StlOpt::ByteVal | StlOpt::ByteValX => {
+            if opt == StlOpt::ByteValX {
                 v.base = kNumBaseHexadecimal;
             }
             v.num = env.byte_value();
         }
-        b'r' | b'R' => {
+        StlOpt::RoFlag | StlOpt::RoFlagAlt => {
             v.itemisflag = true;
             if env.buf.b_p_ro != 0 {
-                if opt == STL_ROFLAG_ALT as u8 {
+                if opt == StlOpt::RoFlagAlt {
                     text.extend_from_slice(b",RO");
                 } else {
                     text.extend_from_slice(tr(c"[RO]"));
                 }
             }
         }
-        b'h' | b'H' => {
+        StlOpt::HelpFlag | StlOpt::HelpFlagAlt => {
             v.itemisflag = true;
             if env.buf.b_help {
-                if opt == STL_HELPFLAG_ALT as u8 {
+                if opt == StlOpt::HelpFlagAlt {
                     text.extend_from_slice(b",HLP");
                 } else {
                     text.extend_from_slice(tr(c"[Help]"));
@@ -564,8 +560,8 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
             }
         }
         // The 'statuscolumn' fold and sign columns.
-        b'C' | b's' => return statuscol_sign(env, s, opt, pos, text, v),
-        b'y' => env.with_filetype(|ft| {
+        StlOpt::FoldCol | StlOpt::SignCol => return statuscol_sign(env, s, opt, pos, text, v),
+        StlOpt::FileType => env.with_filetype(|ft| {
             // Bracket it only when it fits the scratch buffer, brackets and
             // terminator included.
             if !ft.is_empty() && ft.len() < TMPLEN as usize - 3 {
@@ -574,7 +570,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                 text.push(b']');
             }
         }),
-        b'Y' => {
+        StlOpt::FileTypeAlt => {
             v.itemisflag = true;
             env.with_filetype(|ft| {
                 if !ft.is_empty() && ft.len() < TMPLEN as usize - 2 {
@@ -587,20 +583,20 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
                 }
             });
         }
-        b'w' | b'W' => {
+        StlOpt::PreviewFlag | StlOpt::PreviewFlagAlt => {
             v.itemisflag = true;
             if env.win.w_onebuf_opt.wo_pvw != 0 {
-                if opt == STL_PREVIEWFLAG_ALT as u8 {
+                if opt == StlOpt::PreviewFlagAlt {
                     text.extend_from_slice(b",PRV");
                 } else {
                     text.extend_from_slice(tr(c"[Preview]"));
                 }
             }
         }
-        b'q' => env.quickfix_title(text),
-        b'm' | b'M' => {
+        StlOpt::Quickfix => env.quickfix_title(text),
+        StlOpt::Modified | StlOpt::ModifiedAlt => {
             v.itemisflag = true;
-            let alt = c_int::from(opt == STL_MODIFIED_ALT as u8);
+            let alt = c_int::from(opt == StlOpt::ModifiedAlt);
             let modified = c_int::from(env.is_changed()) * 2;
             let readonly = c_int::from(env.buf.b_p_ma == 0) * 4;
             let flag: &[u8] = match alt + modified + readonly {
@@ -614,6 +610,9 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
             };
             text.extend_from_slice(flag);
         }
+        // The items with no value of their own: the highlight, group,
+        // separator, truncation, tab-page and click letters, each handled
+        // by the walk above before it gets here.
         _ => {}
     }
     v
@@ -626,7 +625,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: u8, pos: usize, text: &mut Vec<u
 fn statuscol_sign(
     env: &Env,
     s: &mut StlScratch,
-    opt: u8,
+    opt: StlOpt,
     pos: usize,
     text: &mut Vec<u8>,
     mut v: Value,
@@ -634,16 +633,16 @@ fn statuscol_sign(
     if !env.is_statuscol() {
         return v;
     }
-    let fdc = if opt == STL_FOLDCOL as u8 {
+    let fdc = if opt == StlOpt::FoldCol {
         env.fold_column_width()
     } else {
         0
     };
     // A fold column is one item wide; a sign column is as wide as the signs
     // need; `%l`'s sign is a single column.
-    let width = if opt == STL_FOLDCOL as u8 {
+    let width = if opt == StlOpt::FoldCol {
         c_int::from(fdc > 0)
-    } else if opt == STL_SIGNCOL as u8 {
+    } else if opt == StlOpt::SignCol {
         env.win.w_scwidth
     } else {
         1
@@ -689,7 +688,7 @@ fn emit(
     out: &mut [u8],
     pos: &mut usize,
     end: usize,
-    opt: u8,
+    opt: StlOpt,
     spec: &parse::Spec,
     v: &Value,
     text: &[u8],
@@ -800,7 +799,7 @@ fn emit(
         }
         st.prevchar_isitem = true;
         let plan = parse::number_plan(
-            opt == STL_VIRTCOL_ALT as u8,
+            opt == StlOpt::VirtColAlt,
             spec.zeropad,
             v.base,
             v.num,

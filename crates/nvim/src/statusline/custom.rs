@@ -48,8 +48,8 @@ use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Array, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, String_0, colnr_T,
-    hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
+    Array, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, StlOpt, String_0,
+    colnr_T, hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
@@ -392,7 +392,7 @@ fn run_highlight(
         // A named group -- `%#Group#`, or the sign and fold columns' own.
         // SAFETY: a group id the expander resolved.
         let new_attr = unsafe { syn_id2attr(-run.userhl) };
-        let attr = if run.item == STL_HIGHLIGHT_COMB {
+        let attr = if run.item == Some(StlOpt::HighlightComb) {
             combine_attr(curattr, new_attr)
         } else {
             new_attr

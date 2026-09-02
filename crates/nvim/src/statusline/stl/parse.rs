@@ -14,6 +14,8 @@ use crate::cstr;
 use core::ffi::{CStr, c_int};
 
 use super::{NumberBase, kNumBaseHexadecimal};
+#[cfg(test)]
+use crate::types::StlOpt;
 
 /// Widest an item may ask to be: upstream bounds both the minimum width and
 /// the maximum width at this.
@@ -21,12 +23,6 @@ pub(super) const MAX_ITEM_WIDTH: c_int = 50;
 
 /// The width an item gets when it does not ask for one.
 pub(super) const DEFAULT_MAXWID: c_int = 9999;
-
-/// Every letter the format language has an item for.
-///
-/// Upstream's `STL_ALL`, which lists `T`, `X` and `@` twice; the duplicates
-/// are harmless and are kept so the two spellings stay comparable.
-const STL_ALL: &[u8] = b"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
 
 /// The width and alignment prefix of one `%` item.
 pub(super) struct Spec {
@@ -103,14 +99,6 @@ pub(super) fn digits(fmt: &[u8], p: &mut usize, def: c_int) -> c_int {
         }
     }
     value as c_int
-}
-
-/// Whether `byte` names an item.
-///
-/// A NUL never does, which is what stops the walk at the end of a format
-/// ending in something like `%0`.
-pub(super) fn is_item_letter(byte: u8) -> bool {
-    byte != 0 && STL_ALL.contains(&byte)
 }
 
 /// How a number item prints: the `vim_snprintf` template, the value, and the
@@ -257,13 +245,20 @@ mod tests {
         assert_eq!(digits(b"2147483647", &mut 0, -7), 2147483647);
     }
 
+    /// Upstream's `STL_ALL`, the alphabet the enum replaced. Kept here as
+    /// the test's own copy so the two spellings stay comparable: a letter
+    /// added to one and not the other fails.
     #[test]
     fn every_item_letter_is_recognised() {
         for byte in b"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@" {
-            assert!(is_item_letter(*byte), "{}", *byte as char);
+            assert!(
+                StlOpt::from_byte(*byte).is_some_and(|o| o.letter() == *byte),
+                "{}",
+                *byte as char
+            );
         }
         for byte in b"\0 dej!)(}." {
-            assert!(!is_item_letter(*byte), "{}", *byte as char);
+            assert!(StlOpt::from_byte(*byte).is_none(), "{}", *byte as char);
         }
     }
 

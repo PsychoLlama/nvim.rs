@@ -83,7 +83,7 @@ use crate::runtime::{
 };
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::get_mode;
-use crate::statusline::{STL_FOLDCOL, STL_SIGNCOL, draw_tabline, win_redr_status, win_redr_winbar};
+use crate::statusline::{draw_tabline, win_redr_status, win_redr_winbar};
 use crate::terminal::{
     terminal_alloc, terminal_buf, terminal_check_size, terminal_destroy, terminal_open,
     terminal_running, terminal_set_streamed_paste,

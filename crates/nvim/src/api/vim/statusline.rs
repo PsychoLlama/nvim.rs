@@ -27,7 +27,7 @@ use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
     win_opt,
 };
-use crate::types::{MAXPATHL, OptionSetFlags};
+use crate::types::{MAXPATHL, OptionSetFlags, StlOpt};
 use crate::winlayer::Win;
 
 /// Everything `nvim_eval_statusline()` needs to have settled before it can
@@ -371,9 +371,9 @@ fn highlight_dicts(
         // the fold column's with nothing, everything else with the default.
         // These are POINTER comparisons upstream, and the group names are
         // interned, so a name equal by value is still a second entry.
-        let combine = if run.item == STL_SIGNCOL {
+        let combine = if run.item == Some(StlOpt::SignCol) {
             syn_id2name(ctx.scl_hl_id)
-        } else if run.item == STL_FOLDCOL {
+        } else if run.item == Some(StlOpt::FoldCol) {
             grpname
         } else {
             dfltname

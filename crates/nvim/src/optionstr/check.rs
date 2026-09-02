@@ -38,8 +38,8 @@ use crate::options::{
     kOptWildoptions, opt_scl_values,
 };
 use crate::os::cshim::gettext;
-use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{Failed, NUL, buf_T, size_t, uint32_t, win_T};
+use crate::strings::vim_snprintf;
+use crate::types::{Failed, NUL, StlOpt, buf_T, size_t, uint32_t, win_T};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -341,14 +341,6 @@ fn digit(byte: u8) -> c_int {
     c_int::from(byte) - c_int::from(b'0')
 }
 
-/// Every item 'statusline' and its relatives accept after a `%`.
-///
-/// The three tab-page items repeat at the end because upstream builds
-/// `STL_ALL` by concatenating the item list with the tab-page one, which
-/// already contains them. Duplicates do not matter to a membership test;
-/// the set is kept exactly as upstream spells it.
-const STL_ALL: &CStr = c"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#$TX@TX@";
-
 /// Check a 'statusline'-format value. Answers an untranslated message, or
 /// `None` when the format is good.
 ///
@@ -410,8 +402,7 @@ pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Option<CString> {
         let Some(&item) = rest.first() else {
             return illegal(NUL);
         };
-        // SAFETY: `STL_ALL` is a C string; `vim_strchr` only reads it.
-        if unsafe { vim_strchr(STL_ALL.as_ptr(), c_int::from(item)) }.is_null() {
+        if StlOpt::from_byte(item).is_none() {
             return illegal(c_int::from(item));
         }
         if item == b'{' {

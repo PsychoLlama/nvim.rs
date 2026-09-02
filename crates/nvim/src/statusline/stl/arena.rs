@@ -23,12 +23,9 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use super::{
-    STL_FOLDCOL, STL_HIGHLIGHT_COMB, STL_SIGNCOL, kStlClickDisabled, kStlClickFuncRun,
-    kStlClickTabClose, kStlClickTabSwitch,
-};
+use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch};
 use crate::global_cell::GlobalCell;
-use crate::types::{StlClickDefinition, StlClickRecord, StlFlag, stl_hlrec_t};
+use crate::types::{StlClickDefinition, StlClickRecord, StlOpt, stl_hlrec_t};
 
 /// What one `%` item turned into. Upstream's `stl_item_t`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
@@ -99,14 +96,16 @@ impl Kind {
         )
     }
 
-    /// The `STL_*` letter the highlight table records for this kind, which
-    /// is what tells the `'statuscolumn'` drawer a run apart.
-    pub(super) fn hl_item(self) -> StlFlag {
+    /// The item the highlight table records for this kind, which is what
+    /// tells the `'statuscolumn'` drawer one run from another. `None` for
+    /// a kind that is not one of the three -- upstream's zero, which is
+    /// not a letter.
+    pub(super) fn hl_item(self) -> Option<StlOpt> {
         match self {
-            Kind::HighlightSign => STL_SIGNCOL,
-            Kind::HighlightFold => STL_FOLDCOL,
-            Kind::HighlightCombining => STL_HIGHLIGHT_COMB,
-            _ => 0,
+            Kind::HighlightSign => Some(StlOpt::SignCol),
+            Kind::HighlightFold => Some(StlOpt::FoldCol),
+            Kind::HighlightCombining => Some(StlOpt::HighlightComb),
+            _ => None,
         }
     }
 }
@@ -211,7 +210,7 @@ impl StlScratch {
 const EMPTY_HLREC: stl_hlrec_t = stl_hlrec_t {
     start: ptr::null_mut(),
     userhl: 0,
-    item: 0,
+    item: None,
 };
 
 /// A click record that is not one: the table's terminator.

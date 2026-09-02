@@ -10,9 +10,9 @@
 //! | [`tabline`] | `draw_tabline()` and its `ext_tabline` form |
 //! | [`stl`] | `build_stl_str_hl()`, the `%` format language itself |
 //!
-//! What stays here is what the four share. The `STL_*` item alphabet the
-//! format language is written in and the `stl_item_t` kinds, because the
-//! expander and its callers both name them; [`build_statuscol_str`]
+//! What stays here is what the four share: the `stl_item_t` kinds, because
+//! the expander and its callers both name them (the format language's own
+//! alphabet is [`crate::types::StlOpt`]); [`build_statuscol_str`]
 //! (`'statuscolumn'`, which is the same language with a different item set)
 //! and the two small entry points -- [`fillchar_status`] and
 //! [`redraw_custom_statusline`] -- the drawing layer calls in; and four
@@ -56,8 +56,8 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptionSetFlags,
-    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, StlFlag, Vv, WinSplit, WinStyle,
-    hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
+    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv, WinSplit, WinStyle, hlf_T,
+    linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -82,47 +82,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
-pub const STL_CLICK_FUNC: StlFlag = 64;
-pub const STL_TABCLOSENR: StlFlag = 88;
-pub const STL_TABPAGENR: StlFlag = 84;
-pub const STL_HIGHLIGHT_COMB: StlFlag = 36;
-pub const STL_HIGHLIGHT: StlFlag = 35;
-pub const STL_USER_HL: StlFlag = 42;
-pub const STL_TRUNCMARK: StlFlag = 60;
-pub const STL_SEPARATE: StlFlag = 61;
-pub const STL_VIM_EXPR: StlFlag = 123;
-pub const STL_SIGNCOL: StlFlag = 115;
-pub const STL_FOLDCOL: StlFlag = 67;
-pub const STL_SHOWCMD: StlFlag = 83;
-pub const STL_PAGENUM: StlFlag = 78;
-pub const STL_ARGLISTSTAT: StlFlag = 97;
-pub const STL_ALTPERCENT: StlFlag = 80;
-pub const STL_PERCENTAGE: StlFlag = 112;
-pub const STL_QUICKFIX: StlFlag = 113;
-pub const STL_MODIFIED_ALT: StlFlag = 77;
-pub const STL_MODIFIED: StlFlag = 109;
-pub const STL_PREVIEWFLAG_ALT: StlFlag = 87;
-pub const STL_PREVIEWFLAG: StlFlag = 119;
-pub const STL_FILETYPE_ALT: StlFlag = 89;
-pub const STL_FILETYPE: StlFlag = 121;
-pub const STL_HELPFLAG_ALT: StlFlag = 72;
-pub const STL_HELPFLAG: StlFlag = 104;
-pub const STL_ROFLAG_ALT: StlFlag = 82;
-pub const STL_ROFLAG: StlFlag = 114;
-pub const STL_BYTEVAL_X: StlFlag = 66;
-pub const STL_BYTEVAL: StlFlag = 98;
-pub const STL_OFFSET_X: StlFlag = 79;
-pub const STL_OFFSET: StlFlag = 111;
-pub const STL_KEYMAP: StlFlag = 107;
-pub const STL_BUFNO: StlFlag = 110;
-pub const STL_NUMLINES: StlFlag = 76;
-pub const STL_LINE: StlFlag = 108;
-pub const STL_VIRTCOL_ALT: StlFlag = 86;
-pub const STL_VIRTCOL: StlFlag = 118;
-pub const STL_COLUMN: StlFlag = 99;
-pub const STL_FILENAME: StlFlag = 116;
-pub const STL_FULLPATH: StlFlag = 70;
-pub const STL_FILEPATH: StlFlag = 102;
 pub struct stl_item {
     pub start: *mut ::core::ffi::c_char,
     pub cmd: *mut ::core::ffi::c_char,
