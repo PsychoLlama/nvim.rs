@@ -11,8 +11,8 @@ typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct KeySetLink KeySetLink;
 typedef struct ParserLine ParserLine;
 typedef struct Scrollback Scrollback;
+typedef struct StringArray StringArray;
 typedef struct VimMenu VimMenu;
-typedef struct VirtTextChunk VirtTextChunk;
 typedef struct blobvar_S blobvar_S;
 typedef struct cleanup_stuff cleanup_stuff;
 typedef struct cmdline_info cmdline_info;
@@ -24,6 +24,7 @@ typedef struct diffline_change_S diffline_change_S;
 typedef struct eslist_elem eslist_elem;
 typedef struct exarg exarg;
 typedef struct exception_state_S exception_state_S;
+typedef struct expand_T expand_T;
 typedef struct expr_ast_node expr_ast_node;
 typedef struct file_buffer file_buffer;
 typedef struct frame_S frame_S;
@@ -63,7 +64,7 @@ typedef struct tabpage_S tabpage_S;
 typedef struct u_entry u_entry;
 typedef struct u_header u_header;
 typedef struct vim_exception vim_exception;
-typedef struct virt_line virt_line;
+typedef struct vim_state vim_state;
 typedef struct wbuffer wbuffer;
 typedef struct window_S window_S;
 typedef struct wininfo_S wininfo_S;
@@ -116,7 +117,6 @@ typedef struct Intersection Intersection;
 typedef struct String String;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
 typedef struct KeyDict__shada_mark KeyDict__shada_mark;
-typedef struct StringArray StringArray;
 typedef struct KeyDict__shada_register KeyDict__shada_register;
 typedef struct KeyDict__shada_search_pat KeyDict__shada_search_pat;
 typedef struct KeyDict_buf_attach KeyDict_buf_attach;
@@ -220,16 +220,9 @@ typedef struct VTermStateFallbacks VTermStateFallbacks;
 typedef struct VTermStateFields VTermStateFields;
 typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
-typedef struct vim_state vim_state;
-typedef struct VirtLines VirtLines;
-typedef struct VirtText VirtText;
 typedef struct addrinfo addrinfo;
 typedef struct bufstate_T bufstate_T;
-typedef struct cmdarg_T cmdarg_T;
 typedef struct dictitem_T dictitem_T;
-typedef struct pos_T pos_T;
-typedef struct sctx_T sctx_T;
-typedef struct expand_T expand_T;
 typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
 typedef struct garray_T garray_T;
@@ -250,10 +243,11 @@ typedef struct mpack_rpc_message_s mpack_rpc_message_s;
 typedef struct mpack_rpc_slot_s mpack_rpc_slot_s;
 typedef struct mpack_rpc_one_session_t mpack_rpc_one_session_t;
 typedef struct mpack_rpc_session_t mpack_rpc_session_t;
-typedef struct oparg_T oparg_T;
+typedef struct pos_T pos_T;
 typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
 typedef struct regprog regprog;
+typedef struct sctx_T sctx_T;
 typedef struct sockaddr sockaddr;
 typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
 typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
@@ -458,7 +452,7 @@ typedef unsigned int VarLock;
 typedef unsigned int VarType;
 typedef unsigned int VarTypeCode;
 typedef void (*VimLFunc)(typval_T *, typval_T *, EvalFuncData);
-typedef struct vim_state VimState;
+typedef vim_state VimState;
 typedef int VimVarFlags;
 typedef unsigned int VirtTextPos;
 typedef unsigned int Vv;
@@ -985,19 +979,6 @@ struct KeyDict__shada_mark {
   Integer l;
   Integer c;
   String f;
-};
-struct StringArray {
-  size_t size;
-  size_t capacity;
-  String *items;
-};
-struct KeyDict__shada_register {
-  OptionalKeys is_set___shada_register_;
-  StringArray rc;
-  Boolean ru;
-  Integer rt;
-  Integer n;
-  Integer rw;
 };
 struct KeyDict__shada_search_pat {
   OptionalKeys is_set___shada_search_pat_;
@@ -1905,20 +1886,6 @@ union VTermValue {
   VTermStringFragment string;
   VTermColor color;
 };
-struct vim_state {
-  state_check_callback check;
-  state_execute_callback execute;
-};
-struct VirtLines {
-  size_t size;
-  size_t capacity;
-  virt_line *items;
-};
-struct VirtText {
-  size_t size;
-  size_t capacity;
-  VirtTextChunk *items;
-};
 struct addrinfo {
   int ai_flags;
   int ai_family;
@@ -1936,56 +1903,10 @@ struct bufstate_T {
   int bs_cchar;
   reg_extmatch_T *bs_extmatch;
 };
-struct cmdarg_T {
-  oparg_T *oap;
-  int prechar;
-  int cmdchar;
-  int nchar;
-  char nchar_composing[32];
-  int nchar_len;
-  int extra_char;
-  int opcount;
-  int count0;
-  int count1;
-  int arg;
-  int retval;
-  char *searchbuf;
-};
 struct dictitem_T {
   typval_T di_tv;
   uint8_t di_flags;
   char di_key[0];
-};
-struct pos_T {
-  linenr_T lnum;
-  colnr_T col;
-  colnr_T coladd;
-};
-struct sctx_T {
-  scid_T sc_sid;
-  int sc_seq;
-  linenr_T sc_lnum;
-  uint64_t sc_chan;
-};
-struct expand_T {
-  char *xp_pattern;
-  ExpandContext xp_context;
-  size_t xp_pattern_len;
-  xp_prefix_T xp_prefix;
-  char *xp_arg;
-  LuaRef xp_luaref;
-  sctx_T xp_script_ctx;
-  BackslashEscape xp_backslash;
-  bool xp_shell;
-  int xp_numfiles;
-  int xp_col;
-  int xp_selected;
-  char *xp_orig;
-  char **xp_files;
-  char *xp_line;
-  char xp_buf[1025];
-  Direction xp_search_dir;
-  pos_T xp_pre_incsearch_pos;
 };
 struct extmark_undo_vec_t {
   size_t size;
@@ -2115,25 +2036,10 @@ struct mpack_rpc_session_t {
   mpack_uint32_t capacity;
   mpack_rpc_slot_s slots[32];
 };
-struct oparg_T {
-  OpType op_type;
-  int regname;
-  MotionType motion_type;
-  int motion_force;
-  bool use_reg_one;
-  bool inclusive;
-  bool end_adjusted;
-  pos_T start;
-  pos_T end;
-  pos_T cursor_start;
-  linenr_T line_count;
-  bool empty;
-  bool is_VIsual;
-  colnr_T start_vcol;
-  colnr_T end_vcol;
-  int prev_opcount;
-  int prev_count0;
-  bool excl_tr_ws;
+struct pos_T {
+  linenr_T lnum;
+  colnr_T col;
+  colnr_T coladd;
 };
 union pthread_mutex_t {
   __pthread_mutex_s __data;
@@ -2151,6 +2057,12 @@ struct regprog {
   unsigned int re_engine;
   unsigned int re_flags;
   bool re_in_use;
+};
+struct sctx_T {
+  scid_T sc_sid;
+  int sc_seq;
+  linenr_T sc_lnum;
+  uint64_t sc_chan;
 };
 struct sockaddr {
   sa_family_t sa_family;

@@ -171,8 +171,8 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
-    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, cmdarg_T, colnr_T,
-    int32_t, int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T,
+    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, colnr_T, int32_t,
+    int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -216,10 +216,12 @@ pub(crate) const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_DEC: ::core::ffi::c_int = 3;
 pub(crate) const INDENT_INC: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_SET: ::core::ffi::c_int = 1;
+/// `#[repr(C)]`: `state_enter` takes `&mut self.state` and the callbacks
+/// cast that `*mut VimState` back to this type, which only works while
+/// `state` is guaranteed to be the first field.
 #[repr(C)]
 pub(crate) struct InsertState {
     pub state: VimState,
-    pub ca: *mut cmdarg_T,
     pub mincol: ::core::ffi::c_int,
     pub cmdchar: ::core::ffi::c_int,
     pub cmdchar_todo: ::core::ffi::c_int,
@@ -235,7 +237,6 @@ pub(crate) struct InsertState {
     pub old_topfill: ::core::ffi::c_int,
     pub inserted_space: ::core::ffi::c_int,
     pub replaceState: ::core::ffi::c_int,
-    pub did_restart_edit: ::core::ffi::c_int,
     pub nomove: bool,
 }
 pub(crate) struct ReplaceStack {

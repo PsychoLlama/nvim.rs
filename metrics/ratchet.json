@@ -14,7 +14,7 @@
   "const_c_int": 408,
   "const_int_alias": 2290,
   "unions": 32,
-  "repr_c_outside_perimeter": 266,
+  "repr_c_outside_perimeter": 243,
   "derive_copy": 307,
   "manual_alloc": 1754,
   "garray_sites": 304,

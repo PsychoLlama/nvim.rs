@@ -220,6 +220,9 @@ pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
+/// `#[repr(C)]`: `state_enter` takes `&mut self.state` and the callbacks
+/// cast that `*mut VimState` back to this type, which only works while
+/// `state` is guaranteed to be the first field.
 #[repr(C)]
 pub struct CommandLineState {
     pub state: VimState,
@@ -253,7 +256,6 @@ pub struct CommandLineState {
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
 }
-#[repr(C)]
 pub struct incsearch_state_T {
     pub search_start: pos_T,
     pub save_cursor: pos_T,
@@ -267,7 +269,6 @@ pub struct incsearch_state_T {
     pub magic_overruled_save: optmagic_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct viewstate_T {
     pub vs_curswant: colnr_T,
     pub vs_leftcol: colnr_T,

@@ -132,7 +132,6 @@ pub struct Set_uint64_t {
     pub h: MapHash,
     pub keys: *mut uint64_t,
 }
-#[repr(C)]
 pub struct StringArray {
     pub size: size_t,
     pub capacity: size_t,
@@ -152,14 +151,12 @@ pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
 pub type VTermOutputCallback =
     unsafe extern "C" fn(*const ::core::ffi::c_char, size_t, *mut ::core::ffi::c_void) -> ();
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct VirtLines {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut virt_line,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct VirtText {
     pub size: size_t,
     pub capacity: size_t,

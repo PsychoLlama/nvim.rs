@@ -117,7 +117,6 @@ pub const kSDWriteIgnError: ShaDaWriteResult = 3;
 pub const kSDWriteFailed: ShaDaWriteResult = 2;
 pub const kSDWriteSuccessful: ShaDaWriteResult = 0;
 #[derive(Clone)]
-#[repr(C)]
 pub struct WriteMergerState {
     pub hms: [HistoryMergerState; 5],
     pub global_marks: [ShadaEntry; 26],
@@ -132,7 +131,6 @@ pub struct WriteMergerState {
     pub file_marks: Map_cstr_t_ptr_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct ShadaEntry {
     pub can_free_entry: bool,
     pub timestamp: Timestamp,
@@ -323,38 +321,32 @@ impl ShadaEntryData {
     }
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct buffer_list {
     pub size: size_t,
     pub buffers: *mut buffer_list_buffer,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct buffer_list_buffer {
     pub pos: pos_T,
     pub fname: *mut ::core::ffi::c_char,
     pub additional_data: *mut AdditionalData,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct sub_string {
     pub sub: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct unknown_item {
     pub type_0: uint64_t,
     pub contents: *mut ::core::ffi::c_char,
     pub size: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct global_var {
     pub name: *mut ::core::ffi::c_char,
     pub value: typval_T,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct reg {
     pub name: ::core::ffi::c_char,
     pub type_0: MotionType,
@@ -364,14 +356,12 @@ pub struct reg {
     pub width: size_t,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct history_item {
     pub histtype: uint8_t,
     pub string: *mut ::core::ffi::c_char,
     pub sep: ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct shada_filemark {
     pub name: ::core::ffi::c_char,
     pub mark: pos_T,
@@ -392,7 +382,6 @@ pub const kSDItemHeader: ShadaEntryType = 1;
 pub const kSDItemMissing: ShadaEntryType = 0;
 pub const kSDItemUnknown: ShadaEntryType = -1;
 #[derive(Clone)]
-#[repr(C)]
 pub struct HistoryMergerState {
     pub hmll: HMLList,
     pub do_merge: bool,
@@ -407,7 +396,6 @@ pub struct HistoryMergerState {
     pub history_type: uint8_t,
 }
 #[derive(Clone)]
-#[repr(C)]
 pub struct HMLList {
     pub entries: *mut HMLListEntry,
     pub first: *mut HMLListEntry,
@@ -477,13 +465,11 @@ fn shada_heap<T>(value: T) -> *mut T {
 }
 
 pub type HMLListEntry = hm_llist_entry;
-#[repr(C)]
 pub struct hm_llist_entry {
     pub data: ShadaEntry,
     pub next: *mut hm_llist_entry,
     pub prev: *mut hm_llist_entry,
 }
-#[repr(C)]
 pub struct FileMarks {
     pub marks: [ShadaEntry; 29],
     pub changes: [ShadaEntry; 100],

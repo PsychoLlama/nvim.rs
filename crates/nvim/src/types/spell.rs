@@ -100,6 +100,10 @@ pub struct spelltab_T {
     pub st_fold: [uint8_t; 256],
     pub st_upper: [uint8_t; 256],
 }
+/// `#[repr(C)]`: `wc_word` is a flexible array member. A record is
+/// `xmalloc(WC_KEY_OFF + len + 1)` and the hash table keys on the inline
+/// word, stepping back by `WC_KEY_OFF` to recover the record -- which only
+/// describes the allocation while `wc_word` is last.
 #[repr(C)]
 pub struct wordcount_T {
     pub wc_count: uint16_t,

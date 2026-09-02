@@ -30,8 +30,9 @@ use crate::mark::global_mark_timestamp;
 /// The entries live in one array — `entries` — handed out from the front
 /// (`last_free_entry`) until it is full; after that a removal leaves exactly
 /// one hole, which `free_entry` remembers. The array stays a raw allocation
-/// rather than a `Box<[_]>` because `HMLList` is embedded in a
-/// [`WriteMergerState`] that is allocated zeroed.
+/// rather than a `Box<[_]>` because the ring is initialised through a
+/// `*mut HMLList` into a merger that is not dropped: [`hmll_dealloc`]
+/// `xfree`s it, and nothing runs a destructor on the list.
 pub(crate) unsafe fn hmll_init(hmll: *mut HMLList, size: size_t) {
     let entries = unsafe { xcalloc(size, size_of::<HMLListEntry>()) }.cast::<HMLListEntry>();
     let empty = HMLList {

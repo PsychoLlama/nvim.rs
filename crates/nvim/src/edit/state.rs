@@ -727,7 +727,6 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
             check: Some(insert_check as unsafe fn(*mut VimState) -> c_int),
             execute: Some(insert_execute as unsafe fn(*mut VimState, c_int) -> c_int),
         },
-        ca: ::core::ptr::null_mut(),
         mincol: 0,
         cmdchar,
         cmdchar_todo: 0,
@@ -743,7 +742,6 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
         old_topfill: 0,
         inserted_space: 0,
         replaceState: 0,
-        did_restart_edit: 0,
         nomove: false,
     };
     insert_enter(&mut s);
