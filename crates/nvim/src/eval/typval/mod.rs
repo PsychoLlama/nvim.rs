@@ -17,7 +17,8 @@ use crate::eval::{
 use crate::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init};
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{
-    hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset, hash_unlock,
+    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
+    hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::main::{
@@ -34,10 +35,10 @@ use crate::types::{
     __compar_fn_t, Arena, BoolVarValue, Callback, DictWatcher, EvalFuncData, LuaRef, QUEUE,
     SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
-    buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashitem_T, hashtab_T, int64_t,
-    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T,
-    partial_T, ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T,
-    uint8_t, varnumber_T, vimconv_T,
+    buf_T, dict_T, dictitem_T, float_T, funcexe_T, garray_T, hashtab_T, int64_t, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, linenr_T, list_T, listitem_T, listwatch_T, partial_T,
+    ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
+    varnumber_T, vimconv_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};

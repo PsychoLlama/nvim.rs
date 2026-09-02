@@ -41,7 +41,7 @@ use crate::hashtab::{hash_add, hash_clear, hash_find};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
 use crate::strings::vim_strchr;
-use crate::types::{NUL, hashitem_T, size_t, uint8_t};
+use crate::types::{NUL, size_t, uint8_t};
 use ::libc::{strcat, strcpy};
 
 use super::{
@@ -257,10 +257,9 @@ pub(super) unsafe fn process_compflags(
                     p.offset_from(prevp) as size_t,
                 )
             };
-            let hi: *mut hashitem_T =
-                unsafe { hash_find(&raw mut (*aff).af_comp, key.as_mut_ptr()) };
-            let id = if unsafe { (*hi).is_kept() } {
-                unsafe { (*compitem_T::of_key((*hi).hi_key)).ci_newID }
+            let hi = unsafe { hash_find(&raw mut (*aff).af_comp, key.as_mut_ptr()) };
+            let id = if hi.is_kept() {
+                unsafe { (*compitem_T::of_key(hi.hi_key)).ci_newID }
             } else {
                 let ci = unsafe { (*spin).si_arena.alloc::<compitem_T>() };
                 unsafe { strcpy(compitem_T::key(ci), key.as_mut_ptr()) };

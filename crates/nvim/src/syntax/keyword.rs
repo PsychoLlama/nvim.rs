@@ -49,10 +49,14 @@ unsafe fn free_entry(kp: *mut keyentry_T) {
 pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
     unsafe { hash_lock(ht) };
     let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut hi = unsafe { (*ht).slot_ptr() };
+    let mut idx = 0;
     while todo > 0 {
-        if !unsafe { (*hi).is_kept() } {
-            hi = unsafe { hi.offset(1) };
+        // Re-read the slot every step rather than carrying a cursor: the
+        // walk mutates the table it stands in, and the small run lives
+        // inside the table. The lock is what keeps the *index* meaningful.
+        let hi = unsafe { (*ht).slot(idx) };
+        idx += 1;
+        if !hi.is_kept() {
             continue;
         }
         todo -= 1;
@@ -61,7 +65,7 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
         // entries of `id`. The slot's key names the chain's head, so
         // removing the head has to rewrite it.
         let mut kp_prev: *mut keyentry_T = ::core::ptr::null_mut();
-        let mut kp = unsafe { key_to_entry((*hi).hi_key) };
+        let mut kp = unsafe { key_to_entry(hi.hi_key) };
         while !kp.is_null() {
             if unsafe { (*kp).k_syn.id } as c_int != id {
                 kp_prev = kp;
@@ -73,7 +77,7 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
                 if kp_next.is_null() {
                     unsafe { hash_remove(ht, hi) };
                 } else {
-                    unsafe { (*hi).hi_key = entry_to_key(kp_next) };
+                    unsafe { hash_set_key(ht, hi, entry_to_key(kp_next)) };
                 }
             } else {
                 unsafe { (*kp_prev).ke_next = kp_next };
@@ -81,7 +85,6 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
             unsafe { free_entry(kp) };
             kp = kp_next;
         }
-        hi = unsafe { hi.offset(1) };
     }
     unsafe { hash_unlock(ht) };
 }
@@ -89,18 +92,19 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
 /// Empty a whole keyword table.
 pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
     let mut todo = unsafe { (*ht).ht_used } as c_int;
-    let mut hi = unsafe { (*ht).slot_ptr() };
+    let mut idx = 0;
     while todo > 0 {
-        if unsafe { (*hi).is_kept() } {
+        let hi = unsafe { (*ht).slot(idx) };
+        idx += 1;
+        if hi.is_kept() {
             todo -= 1;
-            let mut kp = unsafe { key_to_entry((*hi).hi_key) };
+            let mut kp = unsafe { key_to_entry(hi.hi_key) };
             while !kp.is_null() {
                 let kp_next = unsafe { (*kp).ke_next };
                 unsafe { free_entry(kp) };
                 kp = kp_next;
             }
         }
-        hi = unsafe { hi.offset(1) };
     }
     // SAFETY: the caller's table.
     hash_reset(unsafe { &mut *ht });
@@ -162,10 +166,10 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
         syn_field!(cur_syn_block(), b_keywtab)
     };
     let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
-    if unsafe { (*hi).is_kept() } {
+    if hi.is_kept() {
         // The keyword already has entries: prepend to the chain.
-        unsafe { (*kp).ke_next = key_to_entry((*hi).hi_key) };
-        unsafe { (*hi).hi_key = key };
+        unsafe { (*kp).ke_next = key_to_entry(hi.hi_key) };
+        unsafe { hash_set_key(ht, hi, key) };
     } else {
         unsafe { (*kp).ke_next = ::core::ptr::null_mut() };
         unsafe { hash_add_item(ht, hi, key, hash) };

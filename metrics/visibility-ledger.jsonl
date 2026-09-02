@@ -536,7 +536,6 @@
 {"path":"neovim::types::evalarg_T","kind":"struct","file":"crates/nvim/src/types/eval.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::types::frame_T","kind":"type","file":"crates/nvim/src/types/buffer.rs","tests":["crates/nvim/tests/unit/window.rs"]}
 {"path":"neovim::types::garray_T","kind":"struct","file":"crates/nvim/src/types/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/users.rs"]}
-{"path":"neovim::types::hashitem_T","kind":"struct","file":"crates/nvim/src/types/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::types::hashtab_T","kind":"struct","file":"crates/nvim/src/types/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
 {"path":"neovim::types::iovec","kind":"use","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::kBoolVarFalse","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}

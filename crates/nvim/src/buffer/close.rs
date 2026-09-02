@@ -233,7 +233,7 @@ fn clear_buf_vars(buf: Buf) {
     // `changedtick` entry is put there when the buffer is created.
     unsafe {
         let changedtick_hi = hash_find(vars, c"changedtick".as_ptr());
-        debug_assert!(!changedtick_hi.is_null(), "changedtick_hi != NULL");
+        debug_assert!(changedtick_hi.is_kept(), "changedtick is in the table");
         hash_remove(vars, changedtick_hi);
         vars_clear(vars);
     }

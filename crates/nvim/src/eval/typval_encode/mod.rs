@@ -25,8 +25,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::MaybeUninit;
 
 use crate::types::{
-    blob_T, dict_T, float_T, hashitem_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t,
-    typval_T,
+    blob_T, dict_T, float_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t, typval_T,
 };
 
 // The walk itself; this half is the contract it runs against.
@@ -89,7 +88,9 @@ pub(crate) enum Frame {
         /// a `typval_T` that is `&tv->vval.v_dict`; for a partial's self
         /// dictionary, `&pt->pt_dict`.
         dictp: *mut *mut dict_T,
-        hi: *mut hashitem_T,
+        /// The slot the walk stands on -- an *index*, because the small run
+        /// lives inside the `hashtab_T` and a body may take `&mut` to it.
+        idx: usize,
         todo: size_t,
     },
     List {

@@ -691,14 +691,14 @@ unsafe fn node_compress(
             let key = digest_key(child);
             let hash = unsafe { hash_hash(key) };
             let hi = unsafe { hash_lookup(ht, key, cstr::bytes_at(key).len(), hash) };
-            if !unsafe { (*hi).is_kept() } {
+            if !hi.is_kept() {
                 unsafe { hash_add_item(ht, hi, key, hash) };
                 continue;
             }
 
             // Same digest: walk the chain of nodes sharing it looking
             // for a genuinely equal sub-tree to point at instead.
-            let mut tp = unsafe { node_of_digest_key((*hi).hi_key) };
+            let mut tp = unsafe { node_of_digest_key(hi.hi_key) };
             while !tp.is_null() {
                 if unsafe { node_equal(child, tp) } {
                     unsafe { (*tp).wn_refs += 1 };
@@ -710,7 +710,7 @@ unsafe fn node_compress(
             }
             if tp.is_null() {
                 // No match; join the chain for the next comer.
-                let head = unsafe { node_of_digest_key((*hi).hi_key) };
+                let head = unsafe { node_of_digest_key(hi.hi_key) };
                 unsafe { (*child).wn_link = (*head).wn_link };
                 unsafe { (*head).wn_link = child };
             }

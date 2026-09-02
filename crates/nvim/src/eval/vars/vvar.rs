@@ -107,7 +107,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
     // SAFETY: the `v:` hashtab and the row's own key; `hash_find` answers an
     // item of the table it was given.
     let hi = unsafe { hash_find(get_vimvar_ht(), vimvar_key(idx)) };
-    if unsafe { (*hi).is_kept() } {
+    if hi.is_kept() {
         unsafe { hash_remove(get_vimvar_ht(), hi) };
     } else {
         unsafe { internal_error(c"restore_vimvar()".as_ptr()) };

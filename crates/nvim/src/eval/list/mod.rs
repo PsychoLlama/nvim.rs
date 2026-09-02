@@ -66,8 +66,8 @@ use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
     EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Vv,
-    blob_T, dict_T, dictitem_T, hashitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
-    typval_T, typval_vval_union, uint8_t, varnumber_T, vimconv_T,
+    blob_T, dict_T, dictitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
+    typval_vval_union, uint8_t, varnumber_T, vimconv_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -401,24 +401,27 @@ impl Dict {
 
     /// The dict's items, in hashtab order -- upstream's `TV_DICT_ITER`.
     ///
-    /// It holds what the macro holds and no more: the slot cursor and the
-    /// count of live items still to come.  That is what makes it safe to
-    /// drive across a callback: the walk is under [`Dict::hash_lock`], so a
+    /// It holds what the macro holds and no more: the slot cursor -- an
+    /// *index*, since the small run lives inside the table -- and the count
+    /// of live items still to come.  That is what makes it safe to drive
+    /// across a callback: the walk is under [`Dict::hash_lock`], so a
     /// removal only leaves a tombstone in a slot already passed.
     #[inline(always)]
     pub(crate) fn items(self) -> impl Iterator<Item = DictItem> {
-        let (mut slot, mut todo) = self.get().map_or((core::ptr::null_mut(), 0), |d| {
-            (d.dv_hashtab.slot_ptr(), d.dv_hashtab.ht_used)
-        });
+        // The cursor is derived from the raw dict pointer, not from a
+        // borrow of it: a body mutates the table through that same pointer.
+        let ht = (!self.is_null()).then(|| unsafe { &raw const (*self.0).dv_hashtab });
+        // SAFETY: the dict is live for the walk, or NULL and never read.
+        let mut todo = ht.map_or(0, |ht| unsafe { (*ht).ht_used });
+        let mut idx = 0usize;
         core::iter::from_fn(move || {
+            let ht = ht?;
             while todo != 0 {
-                let hi: *mut hashitem_T = slot;
-                // SAFETY: `todo` live items remain, so `hi` is in the array
-                // and the slot after it is one to step to.
-                let key = unsafe {
-                    slot = slot.add(1);
-                    (*hi).is_kept().then(|| (*hi).hi_key)
-                };
+                // SAFETY: the dict is live for the walk and `todo` live
+                // items remain, so `idx` is one of its slots.
+                let hi = unsafe { (*ht).slot(idx) };
+                idx += 1;
+                let key = hi.is_kept().then_some(hi.hi_key);
                 if let Some(key) = key {
                     todo -= 1;
                     // SAFETY-free: a live slot's key is a `dictitem_T`'s

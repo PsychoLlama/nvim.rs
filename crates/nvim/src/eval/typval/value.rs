@@ -174,7 +174,7 @@ pub unsafe fn tv_item_lock(
                 unsafe { (*d).dv_lock = (*d).dv_lock.changed(lock) };
                 if !(0..=1).contains(&deep) {
                     // recursive: lock/unlock the items the Dict contains
-                    for hi in tv_dict_iter(unsafe { &*d }) {
+                    for hi in unsafe { tv_dict_iter(d) } {
                         let di = unsafe { tv_dict_hi2di(hi) };
                         let item = di_tv(di);
                         unsafe { tv_item_lock(item, deep - 1, lock, check_refcount) };

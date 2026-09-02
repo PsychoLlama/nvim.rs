@@ -669,7 +669,7 @@ unsafe fn handle_line(
     if unsafe { cstr::eq_bytes(items[0], b"COMMON") } {
         for &item in &items[1..] {
             let hi = unsafe { hash_find(&raw mut (*spin).si_commonwords, item) };
-            if !unsafe { (*hi).is_kept() } {
+            if !hi.is_kept() {
                 let _ = unsafe { hash_add(&raw mut (*spin).si_commonwords, xstrdup(item)) };
             }
         }

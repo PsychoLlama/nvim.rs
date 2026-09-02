@@ -247,7 +247,7 @@ impl Writing {
     /// A container that turns out to be part of a cycle is skipped: the
     /// encoder would not terminate on it.
     unsafe fn dump_variables(&mut self) -> ShaDaWriteResult {
-        let mut var_iter: *const c_void = core::ptr::null();
+        let mut var_iter: Option<usize> = None;
         let timestamp = os_time();
         loop {
             let mut vartv: typval_T = unsafe { core::mem::zeroed() };
@@ -261,7 +261,7 @@ impl Writing {
 
             if !unsafe { writable_value(&vartv) } {
                 unsafe { tv_clear(&raw mut vartv) };
-                if var_iter.is_null() {
+                if var_iter.is_none() {
                     return kSDWriteSuccessful;
                 }
                 continue;
@@ -295,7 +295,7 @@ impl Writing {
                     )
                 };
             }
-            if var_iter.is_null() {
+            if var_iter.is_none() {
                 return kSDWriteSuccessful;
             }
         }

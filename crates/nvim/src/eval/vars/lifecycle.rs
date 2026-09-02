@@ -199,8 +199,8 @@ pub unsafe fn del_menutrans_vars() {
     // The walk removes entries as it goes, so the table has to be locked
     // against the rehash that would otherwise move the slot array.
     unsafe { hash_lock(ht) };
-    for hi in tv_ht_iter(unsafe { &*ht }) {
-        if unsafe { cstr::starts_with((*hi).hi_key, b"menutrans_") } {
+    for hi in unsafe { tv_ht_iter(ht) } {
+        if unsafe { cstr::starts_with(hi.hi_key, b"menutrans_") } {
             unsafe { delete_var(ht, hi) };
         }
     }
@@ -327,7 +327,7 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
     // SAFETY: the caller's obligation -- a live variable hashtab, whose items
     // are the `dictitem_T`s the walk frees.
     unsafe { hash_lock(ht) };
-    for hi in tv_ht_iter(unsafe { &*ht }) {
+    for hi in unsafe { tv_ht_iter(ht) } {
         // Free the variable, unless it is one of the fixed ones embedded
         // in a `funccall_S` or a scope dictionary.
         let v = unsafe { Di::new(tv_dict_hi2di(hi)) };
@@ -346,7 +346,7 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
 ///
 /// # Safety
 /// `hi` is a live item of `ht`.
-pub(crate) unsafe fn delete_var(ht: *mut hashtab_T, hi: *mut hashitem_T) {
+pub(crate) unsafe fn delete_var(ht: *mut hashtab_T, hi: Slot) {
     // SAFETY: the caller's obligation -- a live item of `ht`, which this
     // takes out of the table and then frees.
     let di = unsafe { Di::new(tv_dict_hi2di(hi)) };

@@ -283,7 +283,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     frame: Frame::Dict {
                         dict,
                         dictp,
-                        hi: d.dv_hashtab.slot_ptr(),
+                        idx: 0,
                         todo: d.dv_hashtab.ht_used,
                     },
                 });
@@ -565,7 +565,7 @@ unsafe fn walk<S: TypvalSink>(
             Frame::Dict {
                 dict,
                 dictp,
-                mut hi,
+                idx: mut slot,
                 mut todo,
             } => {
                 // SAFETY: the dictionary this frame was pushed for, which the
@@ -582,19 +582,19 @@ unsafe fn walk<S: TypvalSink>(
                 if todo != d.dv_hashtab.ht_used {
                     unsafe { sink.conv_dict_between_items(cur_tv, Some(dictp)) };
                 }
-                while !unsafe { (*hi).is_kept() } {
-                    hi = unsafe { hi.add(1) };
+                while !d.dv_hashtab.slot(slot).is_kept() {
+                    slot += 1;
                 }
-                let di = unsafe { tv_dict_hi2di(hi) };
+                let di = unsafe { tv_dict_hi2di(d.dv_hashtab.slot(slot)) };
                 todo -= 1;
-                hi = unsafe { hi.add(1) };
+                slot += 1;
                 if let Frame::Dict {
-                    hi: hi_slot,
+                    idx: slot_field,
                     todo: todo_slot,
                     ..
                 } = &mut stack.get_mut(idx).frame
                 {
-                    *hi_slot = hi;
+                    *slot_field = slot;
                     *todo_slot = todo;
                 }
                 let key = tv_dict_item_key(di);
@@ -713,7 +713,7 @@ unsafe fn walk<S: TypvalSink>(
                                 frame: Frame::Dict {
                                     dict,
                                     dictp,
-                                    hi: frame_dict.dv_hashtab.slot_ptr(),
+                                    idx: 0,
                                     todo: used,
                                 },
                             });

@@ -65,9 +65,13 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static wdone: GlobalCell<size_t> = GlobalCell::new(0);
     static tdone: GlobalCell<size_t> = GlobalCell::new(0);
     static vidx: GlobalCell<size_t> = GlobalCell::new(0);
-    /// The hashtab cursor, shared by the four hashtab scopes: only one
-    /// of them is being walked at a time.
-    static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
+    /// The hashtab cursor, shared by the four hashtab scopes: only one of
+    /// them is being walked at a time.
+    ///
+    /// A slot *index*, parked across calls into the editor: the table's
+    /// small run lives inside the table, so a pointer cursor would not
+    /// survive the next mutation of it.
+    static slot: GlobalCell<usize> = GlobalCell::new(0);
 
     if idx == 0 {
         gdone.set(0);
@@ -86,15 +90,13 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
             return None;
         }
         done.set(n + 1);
-        hi.set(if n == 0 {
-            unsafe { (*ht).slot_ptr() }
-        } else {
-            unsafe { hi.get().add(1) }
-        });
-        while !unsafe { (*hi.get()).is_kept() } {
-            hi.set(unsafe { hi.get().add(1) });
+        slot.set(if n == 0 { 0 } else { slot.get() + 1 });
+        // SAFETY: the caller's table, which holds `ht_used > n` live items,
+        // so a kept slot is still ahead of the cursor.
+        while !unsafe { (*ht).slot(slot.get()) }.is_kept() {
+            slot.set(slot.get() + 1);
         }
-        Some(unsafe { (*hi.get()).hi_key })
+        Some(unsafe { (*ht).slot(slot.get()) }.hi_key)
     };
 
     if let Some(key) = step(&gdone, get_globvar_ht()) {
@@ -255,7 +257,7 @@ pub unsafe fn find_var_in_ht(
     }
 
     let mut hi = unsafe { hash_find_len(ht, varname, varname_len) };
-    if !unsafe { (*hi).is_kept() } {
+    if !hi.is_kept() {
         // A global may be an autoload variable; sourcing its script may
         // define it.  Don't source one that ran already, or every check
         // of "is this name a Funcref variable" would re-run it.
@@ -267,7 +269,7 @@ pub unsafe fn find_var_in_ht(
             }
             hi = unsafe { hash_find_len(ht, varname, varname_len) };
         }
-        if !unsafe { (*hi).is_kept() } {
+        if !hi.is_kept() {
             return ptr::null_mut();
         }
     }
@@ -310,7 +312,7 @@ pub(crate) unsafe fn find_var_ht_dict(
         *vname = name;
 
         // "version" is "v:version" in every scope.
-        if unsafe { (*hash_find_len(get_compat_ht(), name, name_len)).is_kept() } {
+        if unsafe { hash_find_len(get_compat_ht(), name, name_len) }.is_kept() {
             return get_compat_ht();
         }
 

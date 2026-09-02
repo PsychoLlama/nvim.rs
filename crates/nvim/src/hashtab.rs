@@ -11,13 +11,18 @@
 //!
 //! # Boundary
 //!
-//! [`hash_lookup`] and friends answer a `*mut hashitem_T` that callers hold
-//! across further table mutations -- that is the contract [`hash_lock`]
-//! exists for, and it is why the lookups take a raw table pointer rather than
-//! a reference: handing out a reference into a table a caller then mutates
-//! would be the alias the raw pointer avoids. The two entry points that
-//! cannot hand out a slot ([`hash_clear`], [`hash_reset`]) take `&mut` and
-//! are safe.
+//! [`hash_lookup`] and friends answer a [`Slot`]: *which* slot, plus a copy
+//! of what it held. Never a pointer into the array -- the small run lives
+//! inside the `hashtab_T` (see [`hashtab_T`]), so a pointer into it would be
+//! derived from the table and die at the next `&mut hashtab_T`, which is
+//! what every mutation takes. An index survives that. What it does not
+//! survive is a *resize*, and that is the contract [`hash_lock`] exists for.
+//!
+//! It is also why the lookups still take a raw table pointer rather than a
+//! reference: a caller that goes on to mutate the table must not be holding
+//! a borrow of it, and every caller here reaches its table through a raw
+//! pointer to the struct that owns it. The two entry points that cannot hand
+//! out a slot ([`hash_clear`], [`hash_reset`]) take `&mut` and are safe.
 //!
 //! # Initialising storage
 //!
@@ -79,13 +84,51 @@ impl hashitem_T {
     }
 }
 
+/// One slot of a table: *which* slot it is, and what it held when the table
+/// answered it.
+///
+/// An index, not a pointer, and the reason is that the small run is stored
+/// in the `hashtab_T` itself: a pointer into it is derived from the table
+/// and dies at the next `&mut hashtab_T`, which every mutation takes. The
+/// index survives a mutation -- so the C idiom of probing for a key and
+/// then inserting into the slot the probe found still works -- and it dies
+/// only where the array is replaced, which [`hash_lock`] holds off.
+///
+/// The copy is what a caller reads (`is_kept`, `hi_key`, `hi_hash`, through
+/// `Deref`); writes go back through the table, and are exactly
+/// [`hash_add_item`], [`hash_remove`] and [`hash_set_key`].
+///
+/// A handle, so a tuple: the index and the copy are reached through
+/// [`Slot::index`] and `Deref`, never as fields.
+#[derive(Copy, Clone)]
+pub struct Slot(usize, hashitem_T);
+
+impl Slot {
+    /// Which slot of the table this is.
+    pub fn index(self) -> usize {
+        self.0
+    }
+}
+
+impl ::core::ops::Deref for Slot {
+    type Target = hashitem_T;
+
+    fn deref(&self) -> &hashitem_T {
+        &self.1
+    }
+}
+
 impl hashtab_T {
     /// An empty table with its first slot array: what [`hash_init`] writes,
     /// and what a caller that owns its table outright builds directly.
     pub fn init() -> Self {
-        let mut ht = hashtab_T::new();
-        ht.replace_slots(vec![hashitem_T::EMPTY; HT_INIT_SIZE]);
-        ht
+        hashtab_T::with_slots()
+    }
+
+    /// The slot at `idx`: the index to write back through, and what it holds
+    /// now. Panics when `idx` is not one of the table's slots.
+    pub fn slot(&self, idx: usize) -> Slot {
+        Slot(idx, self.slots()[idx])
     }
 
     /// The live entries, in slot order: what every walk of a table hands out,
@@ -259,7 +302,7 @@ pub fn hash_reset(ht: &mut hashtab_T) {
 /// table again until [`hash_init`] or [`hash_reset`] gives it a new array.
 /// The keys are the caller's (see [`hash_clear_all`]).
 pub fn hash_clear(ht: &mut hashtab_T) {
-    ht.replace_slots(Vec::new());
+    ht.drop_slots();
 }
 
 /// Free the table's slots *and* every key, where each key pointer was offset
@@ -284,7 +327,7 @@ pub unsafe fn hash_clear_all(ht: *mut hashtab_T, off: c_uint) {
 ///
 /// `ht` points to a live `hashtab_T` and `key` is NUL-terminated. See
 /// [`hash_lookup`] for what the answer means.
-pub unsafe fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashitem_T {
+pub unsafe fn hash_find(ht: *const hashtab_T, key: *const c_char) -> Slot {
     // SAFETY: the caller's table and NUL-terminated key.
     unsafe {
         hash_lookup(
@@ -300,11 +343,7 @@ pub unsafe fn hash_find(ht: *const hashtab_T, key: *const c_char) -> *mut hashit
 ///
 /// `ht` points to a live `hashtab_T` and `key` is readable for `len` bytes.
 /// See [`hash_lookup`] for what the answer means.
-pub unsafe fn hash_find_len(
-    ht: *const hashtab_T,
-    key: *const c_char,
-    len: usize,
-) -> *mut hashitem_T {
+pub unsafe fn hash_find_len(ht: *const hashtab_T, key: *const c_char, len: usize) -> Slot {
     // SAFETY: the caller's table and `len`-byte key.
     unsafe { hash_lookup(ht, key, len, hash_hash_len(key, len)) }
 }
@@ -338,27 +377,26 @@ unsafe fn lookup_slot(ht: &hashtab_T, wanted: &[u8], hash: hash_T) -> usize {
     unreachable!("probe sequence always finds an empty slot");
 }
 
-/// Find `key` (of `key_len` bytes, hashing to `hash`): returns the item
+/// Find `key` (of `key_len` bytes, hashing to `hash`): returns the slot
 /// holding it, or — for an absent key — the slot where it belongs (a
 /// tombstone if the walk crossed one, else the empty slot that ended it).
 ///
 /// # Safety
 ///
 /// `ht` points to a live `hashtab_T` whose live keys are NUL-terminated, and
-/// `key` is readable for `key_len` bytes. The answer is a pointer *into* the
-/// table's slot array, so it dies at the next resize.
-pub unsafe fn hash_lookup(
+/// `key` is readable for `key_len` bytes. The answer names a slot of the
+/// table's *current* array, so it dies at the next resize.
+pub(crate) unsafe fn hash_lookup(
     ht: *const hashtab_T,
     key: *const c_char,
     key_len: usize,
     hash: hash_T,
-) -> *mut hashitem_T {
+) -> Slot {
     // SAFETY: the caller's key and table.
     let wanted = unsafe { slice::from_raw_parts(key.cast::<u8>(), key_len) };
     let table = unsafe { &*ht };
     let idx = unsafe { lookup_slot(table, wanted, hash) };
-    // SAFETY: `idx` is one of the table's own slots.
-    unsafe { table.slot_ptr().add(idx) }
+    table.slot(idx)
 }
 
 /// Add `key` to the table, complaining (and failing) when it is already
@@ -372,7 +410,7 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> Result<(), Faile
     // SAFETY: the caller's table and NUL-terminated key.
     let hash = unsafe { hash_hash(key) };
     let hi = unsafe { hash_lookup(ht, key, CStr::from_ptr(key).to_bytes().len(), hash) };
-    if unsafe { &*hi }.is_kept() {
+    if hi.is_kept() {
         // SAFETY: `%s` spends the NUL-terminated key.
         let key = unsafe { c_str(key) };
         siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
@@ -387,23 +425,15 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> Result<(), Faile
 ///
 /// # Safety
 ///
-/// `hi` is a slot of `ht`'s current array holding no live key, `hash` is
+/// `hi` names a slot of `ht`'s current array holding no live key, `hash` is
 /// `key`'s hash, and `key` outlives its stay in the table.
-pub unsafe fn hash_add_item(
-    ht: *mut hashtab_T,
-    hi: *mut hashitem_T,
-    key: *mut c_char,
-    hash: hash_T,
-) {
-    // SAFETY: the caller's slot, which is one of `ht`'s own.
-    let was_empty = unsafe {
-        let was_empty = (*hi).is_empty();
-        (*hi).hi_key = key;
-        (*hi).hi_hash = hash;
-        was_empty
-    };
+pub unsafe fn hash_add_item(ht: *mut hashtab_T, hi: Slot, key: *mut c_char, hash: hash_T) {
     // SAFETY: the caller's table.
     let table = unsafe { &mut *ht };
+    let item = &mut table.slots_mut()[hi.index()];
+    let was_empty = item.is_empty();
+    item.hi_key = key;
+    item.hi_hash = hash;
     table.ht_used = table.ht_used.wrapping_add(1);
     table.ht_changed += 1;
     if was_empty {
@@ -412,17 +442,30 @@ pub unsafe fn hash_add_item(
     hash_may_resize(table, 0);
 }
 
+/// Point the slot `hi` names at a different key, without touching the
+/// table's counts: the key is a chain head the caller has just rewritten,
+/// and the entry itself stays.
+///
+/// # Safety
+///
+/// `hi` names a slot of `ht`'s current array, and `key` hashes to what that
+/// slot already records and outlives its stay in the table.
+pub(crate) unsafe fn hash_set_key(ht: *mut hashtab_T, hi: Slot, key: *mut c_char) {
+    // SAFETY: the caller's table.
+    let table = unsafe { &mut *ht };
+    table.slots_mut()[hi.index()].hi_key = key;
+}
+
 /// Remove the item at `hi` (leaving a tombstone). The key itself belongs to
 /// the caller.
 ///
 /// # Safety
 ///
-/// `hi` is a slot of `ht`'s current array holding a live key.
-pub unsafe fn hash_remove(ht: *mut hashtab_T, hi: *mut hashitem_T) {
-    // SAFETY: the caller's slot, which is one of `ht`'s own.
-    unsafe { (*hi).hi_key = removed_sentinel() };
+/// `hi` names a slot of `ht`'s current array holding a live key.
+pub unsafe fn hash_remove(ht: *mut hashtab_T, hi: Slot) {
     // SAFETY: the caller's table.
     let table = unsafe { &mut *ht };
+    table.slots_mut()[hi.index()].hi_key = removed_sentinel();
     table.ht_used = table.ht_used.wrapping_sub(1);
     table.ht_changed += 1;
     hash_may_resize(table, 0);
@@ -455,9 +498,10 @@ pub unsafe fn hash_unlock(ht: *mut hashtab_T) {
 /// Grow, shrink, or compact (drop tombstones from) the slot array when the
 /// load factors say so; `minitems` forces room for that many items up front.
 ///
-/// The old and the new array are always separate allocations, so the rehash
-/// is a straight move between them -- the C had to copy the inline array to
-/// the stack first whenever the destination was that same inline array.
+/// The old array is moved out of the table before the new one goes in, so
+/// the rehash is a straight move between two distinct runs -- the C had to
+/// copy the inline array to the stack first whenever the destination was
+/// that same inline array.
 fn hash_may_resize(ht: &mut hashtab_T, minitems: usize) {
     if ht.ht_locked > 0 {
         return;
@@ -465,9 +509,8 @@ fn hash_may_resize(ht: &mut hashtab_T, minitems: usize) {
     let Some(newsize) = resize_decision(ht.ht_filled, ht.ht_used, ht.size(), minitems) else {
         return;
     };
-    let old = ht.replace_slots(vec![hashitem_T::EMPTY; newsize]);
     let used = ht.ht_used;
-    rehash_into(&old, ht.slots_mut(), used);
+    ht.resize_slots(newsize, |old, new| rehash_into(old, new, used));
     ht.ht_filled = used;
     ht.ht_changed += 1;
 }

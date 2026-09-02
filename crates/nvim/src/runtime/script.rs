@@ -265,15 +265,15 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 ///
 /// The global function table must be walkable, which it is outside a rehash.
 unsafe fn get_script_local_funcs(sid: scid_T) -> *mut list_T {
-    // SAFETY: the process-wide function table, which outlives this walk.
-    let functbl = unsafe { &*func_tbl_get() };
-    // SAFETY: a fresh list, at most one entry per function.
-    let l = unsafe { tv_list_alloc(functbl.ht_used as ptrdiff_t) };
+    let functbl = func_tbl_get();
+    // SAFETY: the process-wide function table, which outlives this walk, and
+    // a fresh list with at most one entry per function.
+    let l = unsafe { tv_list_alloc((*functbl).ht_used as ptrdiff_t) };
 
-    for hi in tv_ht_iter(functbl) {
+    for hi in unsafe { tv_ht_iter(functbl) } {
         // SAFETY: an occupied slot's key is a `ufunc_T`'s inline name buffer,
         // so backing up by that field's offset recovers the function.
-        let fp = unsafe { &*(*hi).hi_key.byte_sub(UF_NAME_OFFSET).cast::<ufunc_T>() };
+        let fp = unsafe { &*hi.hi_key.byte_sub(UF_NAME_OFFSET).cast::<ufunc_T>() };
         if fp.uf_script_ctx.sc_sid != sid {
             continue;
         }

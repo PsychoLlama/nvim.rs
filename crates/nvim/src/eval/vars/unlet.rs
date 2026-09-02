@@ -275,11 +275,13 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             }
         }
 
-        let mut hi = unsafe { hash_find(ht, varname) };
-        if !unsafe { (*hi).is_kept() } {
-            hi = unsafe { find_hi_in_scoped_ht(name, &raw mut ht) };
-        }
-        if !hi.is_null() && unsafe { (*hi).is_kept() } {
+        let found = unsafe { hash_find(ht, varname) };
+        let hi = if found.is_kept() {
+            Some(found)
+        } else {
+            unsafe { find_hi_in_scoped_ht(name, &raw mut ht) }
+        };
+        if let Some(hi) = hi.filter(|hi| hi.is_kept()) {
             // SAFETY: a kept item of a live variable hashtab.
             let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
             let flags = di.di_flags as c_int;

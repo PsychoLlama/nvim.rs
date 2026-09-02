@@ -114,7 +114,7 @@ pub unsafe fn tv_dict_find(
     } else {
         unsafe { hash_find_len(&raw const (*d).dv_hashtab, key, len as size_t) }
     };
-    if !unsafe { (*hi).is_kept() } {
+    if !hi.is_kept() {
         return ::core::ptr::null_mut();
     }
     unsafe { tv_dict_hi2di(hi) }
@@ -211,7 +211,7 @@ pub unsafe fn tv_dict_to_env(denv: *mut dict_T) -> *mut *mut ::core::ffi::c_char
         unsafe { xmalloc((env_size + 1) * ::core::mem::size_of::<*mut ::core::ffi::c_char>()) }
             as *mut *mut ::core::ffi::c_char;
 
-    for (i, hi) in tv_dict_iter(unsafe { &*denv }).enumerate() {
+    for (i, hi) in unsafe { tv_dict_iter(denv) }.enumerate() {
         let var = unsafe { tv_dict_hi2di(hi) };
         let key = tv_dict_item_key(var);
         let str = unsafe { numbuf.string(&raw mut (*var).di_tv) };
@@ -370,7 +370,7 @@ pub(crate) unsafe fn tv_dict2list(
         return;
     }
 
-    for hi in tv_dict_iter(unsafe { &*d }) {
+    for hi in unsafe { tv_dict_iter(d) } {
         let di = unsafe { tv_dict_hi2di(hi) };
         let di_key = tv_dict_item_key(di);
         let mut tv_item = TV_INITIAL_VALUE;

@@ -53,7 +53,7 @@ use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
 use crate::types::{
-    CONV_NONE, Failed, NUL, Timestamp, colnr_T, hash_T, hashitem_T, hashtab_T, size_t, uint8_t,
+    CONV_NONE, Failed, NUL, Timestamp, colnr_T, hash_T, hashtab_T, size_t, uint8_t,
 };
 use crate::ui::ui_flush;
 use ::libc::fclose;
@@ -204,9 +204,8 @@ pub(super) unsafe fn spell_read_dic(
         }
 
         let hash: hash_T = unsafe { hash_hash(dw) };
-        let hi: *mut hashitem_T =
-            unsafe { hash_lookup(&raw mut ht, dw, cstr::bytes_at(dw).len(), hash) };
-        if !unsafe { (*hi).is_kept() } {
+        let hi = unsafe { hash_lookup(&raw mut ht, dw, cstr::bytes_at(dw).len(), hash) };
+        if !hi.is_kept() {
             unsafe { hash_add_item(&raw mut ht, hi, dw, hash) };
         } else {
             // Report every duplicate when 'verbose' is on, otherwise
@@ -350,10 +349,10 @@ unsafe fn get_pfxlist(
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
             let hi = unsafe { hash_find(&raw mut (*affile).af_pref, key.as_mut_ptr()) };
-            if unsafe { (*hi).is_kept() } {
+            if hi.is_kept() {
                 // Only prefixes that were actually postponed have an
                 // id; the rest were expanded into the word list.
-                let id = unsafe { (*affheader_T::of_key((*hi).hi_key)).ah_newID };
+                let id = unsafe { (*affheader_T::of_key(hi.hi_key)).ah_newID };
                 if id != 0 {
                     unsafe { *store_afflist.offset(cnt as isize) = id as uint8_t as c_char };
                     cnt += 1;
@@ -384,10 +383,10 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
             let hi = unsafe { hash_find(&raw mut (*affile).af_comp, key.as_mut_ptr()) };
-            if unsafe { (*hi).is_kept() } {
+            if hi.is_kept() {
                 unsafe {
                     *store_afflist.offset(cnt as isize) =
-                        (*compitem_T::of_key((*hi).hi_key)).ci_newID as uint8_t as c_char
+                        (*compitem_T::of_key(hi.hi_key)).ci_newID as uint8_t as c_char
                 };
                 cnt += 1;
             }

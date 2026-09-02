@@ -238,8 +238,8 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
     unsafe { (*got_tv).vval.v_dict = got };
 
     let mut omitted = 0;
-    for hi in tv_dict_iter(unsafe { &*exp_d }) {
-        let key = unsafe { (*hi).hi_key };
+    for hi in unsafe { tv_dict_iter(exp_d) } {
+        let key = hi.hi_key;
         let expected = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
         let item2 = unsafe { tv_dict_find(got_d, key, -1) };
         if !item2.is_null() && unsafe { tv_equal(expected, &raw mut (*item2).di_tv, false) } {
@@ -255,8 +255,8 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
     }
 
     // Entries only the actual value has.
-    for hi in tv_dict_iter(unsafe { &*got_d }) {
-        let key = unsafe { (*hi).hi_key };
+    for hi in unsafe { tv_dict_iter(got_d) } {
+        let key = hi.hi_key;
         if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
             let tv = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
             let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), tv) };

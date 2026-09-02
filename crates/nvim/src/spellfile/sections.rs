@@ -37,8 +37,8 @@ use crate::os::cshim::{getc, gettext};
 use crate::spell::{ascii_spell_chartab, byte_in_str, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    FILE, NUL, fromto_T, garray_T, hash_T, hashitem_T, int16_t, regprog_T, salfirst_T, salitem_T,
-    size_t, slang_T, uint8_t,
+    FILE, NUL, fromto_T, garray_T, hash_T, int16_t, regprog_T, salfirst_T, salitem_T, size_t,
+    slang_T, uint8_t,
 };
 use ::libc::ungetc;
 
@@ -813,9 +813,9 @@ pub(super) unsafe fn set_map_str(lp: *mut slang_T, map: *const c_char) {
         unsafe { *b.offset((cl + 1 + headcl) as isize) = NUL as c_char };
 
         let hash: hash_T = unsafe { hash_hash(b) };
-        let hi: *mut hashitem_T =
+        let hi =
             unsafe { hash_lookup(&raw mut (*lp).sl_map_hash, b, cstr::bytes_at(b).len(), hash) };
-        if !unsafe { (*hi).is_kept() } {
+        if !hi.is_kept() {
             unsafe { hash_add_item(&raw mut (*lp).sl_map_hash, hi, b, hash) };
         } else {
             emsg(gettext(e_duplicate_char_in_map_entry));

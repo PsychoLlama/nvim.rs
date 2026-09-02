@@ -35,7 +35,7 @@ use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsi
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
-    hash_reset, hash_unlock,
+    hash_reset, hash_set_key, hash_unlock,
 };
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,

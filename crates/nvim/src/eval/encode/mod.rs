@@ -272,17 +272,14 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
             Gap(&mut msg_ga).concat(b", ");
         }
         match frame.frame {
-            Frame::Dict { dict, hi, .. } => {
+            Frame::Dict { dict, idx, .. } => {
                 // The key most recently handed out, which is the slot before
-                // the one the walk is now standing on.
-                // SAFETY: the frame's dictionary is live and `hi` is either
-                // NULL or one past a slot of its hash table.
-                let hi = if hi.is_null() {
-                    unsafe { (*dict).dv_hashtab.slot_ptr() }
-                } else {
-                    unsafe { hi.sub(1) }
-                };
-                let mut key_tv = typval_T::string(unsafe { (*hi).hi_key });
+                // the one the walk is now standing on -- or the first slot,
+                // for a frame that has not handed one out yet.
+                // SAFETY: the frame's dictionary is live and `idx` is a slot
+                // of its hash table, or one past the last.
+                let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
+                let mut key_tv = typval_T::string(hi.hi_key);
                 let key = unsafe { encode_tv2string(&raw mut key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.

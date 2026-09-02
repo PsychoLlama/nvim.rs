@@ -235,45 +235,40 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 /// # Safety
 /// No global variable may be added or removed while a walk is in progress.
 pub(crate) unsafe fn var_shada_iter(
-    iter: *const c_void,
+    iter: Option<usize>,
     name: *mut *const c_char,
     rettv: *mut typval_T,
     flavour: var_flavour_T,
-) -> *const c_void {
+) -> Option<usize> {
     let globvarht = get_globvar_ht();
-    let first = unsafe { (*globvarht).slot_ptr() };
     let count = unsafe { (*globvarht).size() };
-    let wanted = |hi: *const hashitem_T| {
-        let live = unsafe { (*hi).is_kept() };
-        live && unsafe { var_flavour((*hi).hi_key) } & flavour != 0
+    // The walk's position is a slot *index*: it is handed back to the caller
+    // and comes round again, and the table's small run lives inside the
+    // table, so a pointer would not survive a mutation of it.
+    let wanted = |idx: usize| {
+        let hi = unsafe { (*globvarht).slot(idx) };
+        hi.is_kept() && unsafe { var_flavour(hi.hi_key) } & flavour != 0
     };
 
     unsafe { *name = core::ptr::null() };
-    let mut hi = if iter.is_null() {
-        let mut hi = first;
-        while unsafe { hi.offset_from_unsigned(first) } < count && !wanted(hi) {
-            hi = unsafe { hi.add(1) };
-        }
-        if unsafe { hi.offset_from_unsigned(first) } == count {
-            return core::ptr::null();
-        }
-        hi
-    } else {
-        iter.cast::<hashitem_T>()
+    let mut idx = match iter {
+        Some(idx) => idx,
+        None => (0..count).find(|&idx| wanted(idx))?,
     };
 
-    let di = unsafe { (*hi).hi_key.sub(offset_of!(dictitem_T, di_key)) } as *mut dictitem_T;
+    let key = unsafe { (*globvarht).slot(idx) }.hi_key;
+    let di = unsafe { key.sub(offset_of!(dictitem_T, di_key)) } as *mut dictitem_T;
     unsafe { *name = &raw mut (*di).di_key as *mut c_char };
     unsafe { tv_copy(&raw mut (*di).di_tv, rettv) };
 
     // Answer where the *next* one is, so the caller knows to stop.
     loop {
-        hi = unsafe { hi.add(1) };
-        if unsafe { hi.offset_from_unsigned(first) } >= count {
-            return core::ptr::null();
+        idx += 1;
+        if idx >= count {
+            return None;
         }
-        if wanted(hi) {
-            return hi.cast::<c_void>();
+        if wanted(idx) {
+            return Some(idx);
         }
     }
 }
@@ -396,7 +391,7 @@ pub unsafe fn shada_encode_buflist() -> String_0 {
 /// Every global variable `'shada'` says to remember, as msgpack.
 pub unsafe fn shada_encode_gvars() -> String_0 {
     let mut packer = packer_string_buffer();
-    let mut var_iter = core::ptr::null::<c_void>();
+    let mut var_iter: Option<usize> = None;
     let cur_timestamp = os_time();
     loop {
         let mut vartv: typval_T = unsafe { core::mem::zeroed() };
@@ -430,7 +425,7 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
             unsafe { tv_clear(&raw mut tgttv) };
         }
         unsafe { tv_clear(&raw mut vartv) };
-        if var_iter.is_null() {
+        if var_iter.is_none() {
             return packer_take_string(&packer);
         }
     }

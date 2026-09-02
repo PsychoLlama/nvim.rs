@@ -48,8 +48,8 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, hashitem_T, idx_T, langp_T,
-    linenr_T, size_t, slang_T, wordcount_T,
+    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, idx_T, langp_T, linenr_T, size_t,
+    slang_T, wordcount_T,
 };
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
@@ -382,9 +382,9 @@ unsafe fn dump_word(
 
         if dumpflags & DUMPFLAG_COUNT != 0 {
             // ":spelldump!" wants the word's COMMON count.
-            let hi: *mut hashitem_T = unsafe { hash_find(&raw mut (*slang).sl_wordcount, tw) };
-            if unsafe { (*hi).is_kept() } {
-                let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
+            let hi = unsafe { hash_find(&raw mut (*slang).sl_wordcount, tw) };
+            if hi.is_kept() {
+                let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
                 let (buf, size) = (counted.as_mut_ptr(), IOSIZE as size_t);
                 let fmt = c"%s\t%d".as_ptr();
                 let count = unsafe { (*wc).wc_count } as c_int;

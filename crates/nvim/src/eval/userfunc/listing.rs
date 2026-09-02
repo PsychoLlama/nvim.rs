@@ -25,14 +25,15 @@ use crate::types::{ExpandContext, IOSIZE, NUL};
 pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
     let prev_ht_changed = func_table().changed();
     let mut todo = func_table().used();
-    let mut hi: *const hashitem_T = func_table().array();
+    let mut idx = 0;
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     while todo > 0 && !got_int.get() {
-        if unsafe { *hi }.is_kept() {
+        let hi = func_table().slot(idx);
+        if hi.is_kept() {
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+            let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
             todo -= 1;
             // Without a pattern, skip what the user filtered out and the
             // numbered/lambda functions; with one, skip the numbered
@@ -53,7 +54,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
                 }
             }
         }
-        hi = unsafe { hi.add(1) };
+        idx += 1;
     }
 }
 
@@ -215,28 +216,31 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     static done: GlobalCell<size_t> = GlobalCell::new(0);
     static changed: GlobalCell<c_int> = GlobalCell::new(0);
-    static hi: GlobalCell<*mut hashitem_T> = GlobalCell::new(ptr::null_mut());
+    // The cursor is a slot *index*: it is parked in a `static` across calls
+    // into the editor, and the table's small run lives inside the table, so
+    // a pointer would not survive the next mutation of it.
+    static slot: GlobalCell<usize> = GlobalCell::new(0);
 
     if idx == 0 {
         done.set(0);
-        hi.set(func_table().array());
+        slot.set(0);
         changed.set(func_table().changed());
     }
-    debug_assert!(!hi.get().is_null());
     if changed.get() != func_table().changed() || done.get() >= func_table().used() {
         return ptr::null_mut();
     }
 
     if done.get() > 0 {
-        hi.set(unsafe { hi.get().add(1) });
+        slot.set(slot.get() + 1);
     }
     done.set(done.get() + 1);
-    while !unsafe { *hi.get() }.is_kept() {
-        hi.set(unsafe { hi.get().add(1) });
+    while !func_table().slot(slot.get()).is_kept() {
+        slot.set(slot.get() + 1);
     }
     // The key *is* the function's trailing name member, so the function is
     // that many bytes before it.
-    let fp = unsafe { (*hi.get()).hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+    let key = func_table().slot(slot.get()).hi_key;
+    let fp = unsafe { key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
 
     if unsafe { (*fp).uf_flags }.has(FuncFlags::DICT)
         || unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") }

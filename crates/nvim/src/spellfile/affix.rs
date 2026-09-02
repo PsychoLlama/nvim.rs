@@ -32,7 +32,7 @@ use crate::memory::xstrlcpy;
 use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
-use crate::types::{NUL, hashitem_T, hashtab_T, size_t};
+use crate::types::{NUL, hashtab_T, size_t};
 use ::libc::{atoi, strcpy};
 
 use super::aff::{AffState, str_equal};
@@ -68,12 +68,12 @@ pub(super) unsafe fn handle_affix_header(
 
     let mut key: [c_char; 17] = [0; 17];
     unsafe { xstrlcpy(key.as_mut_ptr(), items[1], AH_KEY_LEN as size_t) };
-    let hi: *mut hashitem_T = unsafe { hash_find(tp, key.as_mut_ptr()) };
+    let hi = unsafe { hash_find(tp, key.as_mut_ptr()) };
     let combines = unsafe { *items[2] } as c_int == b'Y' as c_int;
 
-    if unsafe { (*hi).is_kept() } {
+    if hi.is_kept() {
         // A continued block for an affix already defined.
-        st.cur_aff = unsafe { affheader_T::of_key((*hi).hi_key) };
+        st.cur_aff = unsafe { affheader_T::of_key(hi.hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
             // SAFETY: the affix file's name and the item, NUL-terminated.
             let (file, item) = unsafe { (c_str(fname), c_str(items[1])) };

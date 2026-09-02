@@ -487,7 +487,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                         // Insert the new function in the function list.
                         if overwrite {
                             let hi = unsafe { func_table().find(name) };
-                            unsafe { (*hi).hi_key = uf_name_ptr(fp) };
+                            unsafe { func_table().set_key(hi, uf_name_ptr(fp)) };
                         } else if unsafe { func_table().add(uf_name_ptr(fp)) }.is_err() {
                             free_fp = true;
                             break 'erret;

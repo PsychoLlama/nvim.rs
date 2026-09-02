@@ -40,7 +40,9 @@ use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_bl
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
-use crate::hashtab::{hash_add, hash_find, hash_find_len, hash_init, hash_remove};
+use crate::hashtab::{
+    Slot, hash_add, hash_find, hash_find_len, hash_init, hash_remove, hash_set_key,
+};
 use crate::insexpand::ins_compl_active;
 use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{
@@ -82,9 +84,8 @@ use crate::types::{
     Callback, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
     VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T,
     dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T, expand_T, funccal_entry_T,
-    funccall_S_fc_fixvar, funccall_T, funcdict_T, funcexe_T, garray_T, hashitem_T, hashtab_T,
-    linenr_T, listitem_T, lval_T, partial_T, regmatch_T, save_redo_T, size_t, typval_T, ufunc_T,
-    varnumber_T,
+    funccall_S_fc_fixvar, funccall_T, funcdict_T, funcexe_T, garray_T, hashtab_T, linenr_T,
+    listitem_T, lval_T, partial_T, regmatch_T, save_redo_T, size_t, typval_T, ufunc_T, varnumber_T,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};

@@ -107,7 +107,7 @@ pub unsafe fn tv_dict_item_copy(di: *mut dictitem_T) -> *mut dictitem_T {
 /// freed, so the caller must not hold it afterwards.
 pub unsafe fn tv_dict_item_remove(dict: *mut dict_T, item: *mut dictitem_T) {
     let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item)) };
-    if unsafe { (*hi).is_kept() } {
+    if hi.is_kept() {
         unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
     } else {
         let arg0 = "tv_dict_item_remove()";
@@ -163,7 +163,7 @@ pub unsafe fn tv_dict_free_contents(d: *mut dict_T) {
     // SAFETY: the caller's promise: a live dictionary.
     let mut dict = unsafe { Dt::new(d) };
     debug_assert!(dict.dv_hashtab.ht_locked > 0);
-    for hi in tv_dict_iter(unsafe { &*d }) {
+    for hi in unsafe { tv_dict_iter(d) } {
         // Remove the item before freeing it, so that a callback that
         // reaches this dictionary does not see a freed value.
         let di = unsafe { tv_dict_hi2di(hi) };
@@ -468,7 +468,7 @@ pub unsafe fn tv_dict_clear(d: *mut dict_T) {
     // walk.
     unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
     debug_assert!(unsafe { (*d).dv_hashtab.ht_locked } > 0);
-    for hi in tv_dict_iter(unsafe { &*d }) {
+    for hi in unsafe { tv_dict_iter(d) } {
         unsafe { tv_dict_item_free(tv_dict_hi2di(hi)) };
         unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
     }
@@ -495,7 +495,7 @@ pub unsafe fn tv_dict_extend(d1: *mut dict_T, d2: *mut dict_T, action: *const ::
         unsafe { hash_lock(&raw mut (*d2).dv_hashtab) }; // don't rehash on hash_remove()
     }
 
-    for hi2 in tv_dict_iter(unsafe { &*d2 }) {
+    for hi2 in unsafe { tv_dict_iter(d2) } {
         let di2 = unsafe { tv_dict_hi2di(hi2) };
         let di2_key = tv_dict_item_key(di2);
         let di1 = unsafe { tv_dict_find(d1, di2_key, -1) };
@@ -586,7 +586,7 @@ pub unsafe fn tv_dict_equal(d1: *mut dict_T, d2: *mut dict_T, ic: bool) -> bool 
         return false;
     }
 
-    for hi in tv_dict_iter(unsafe { &*d1 }) {
+    for hi in unsafe { tv_dict_iter(d1) } {
         let di1 = unsafe { tv_dict_hi2di(hi) };
         let di2 = unsafe { tv_dict_find(d2, tv_dict_item_key(di1), -1) };
         if di2.is_null() || !unsafe { tv_equal(&raw mut (*di1).di_tv, &raw mut (*di2).di_tv, ic) } {
@@ -623,7 +623,7 @@ pub unsafe fn tv_dict_copy(
         from.dv_copyID = copyID;
         from.dv_copydict = copy;
     }
-    for hi in tv_dict_iter(unsafe { &*orig }) {
+    for hi in unsafe { tv_dict_iter(orig) } {
         let di = unsafe { tv_dict_hi2di(hi) };
         if got_int.get() {
             break;
@@ -673,7 +673,7 @@ pub unsafe fn tv_dict_copy(
 /// # Safety
 /// `dict` must point at a live dictionary.
 pub unsafe fn tv_dict_set_keys_readonly(dict: *mut dict_T) {
-    for hi in tv_dict_iter(unsafe { &*dict }) {
+    for hi in unsafe { tv_dict_iter(dict) } {
         let di = unsafe { tv_dict_hi2di(hi) };
         unsafe { (*di).di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t };
     }

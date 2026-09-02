@@ -236,7 +236,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.
-            for hi in tv_dict_iter(unsafe { &*dict }) {
+            for hi in unsafe { tv_dict_iter(dict) } {
                 let d = unsafe { tv_dict_hi2di(hi) };
                 // SAFETY: an item of the dictionary being unwound.
                 let mut item = unsafe { Di::new(d) };

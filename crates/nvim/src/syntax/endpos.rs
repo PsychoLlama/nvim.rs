@@ -562,7 +562,7 @@ unsafe fn match_keyword(
     cur_si: Option<Item>,
 ) -> *mut keyentry_T {
     let hi = unsafe { hash_find(ht, keyword) };
-    if !unsafe { (*hi).is_kept() } {
+    if !hi.is_kept() {
         return ::core::ptr::null_mut();
     }
     // The hash key IS the entry's trailing `keyword[]` array, so the entry
@@ -570,8 +570,7 @@ unsafe fn match_keyword(
     // SAFETY: `hash_find` answered a live item, and the key is the entry's
     // own trailing array, so the subtraction stays inside the allocation.
     let mut kp = unsafe {
-        (*hi)
-            .hi_key
+        hi.hi_key
             .offset(-(::core::mem::offset_of!(keyentry, keyword) as isize))
     } as *mut keyentry_T;
     while !kp.is_null() {

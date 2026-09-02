@@ -35,8 +35,8 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    NUL, OK, buf_T, fromto_T, garray_T, hash_T, hashitem_T, regprog_T, salitem_T, size_t, slang_T,
-    uint8_t, uint16_t, wordcount_T,
+    NUL, OK, buf_T, fromto_T, garray_T, hash_T, regprog_T, salitem_T, size_t, slang_T, uint8_t,
+    uint16_t, wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
@@ -196,8 +196,8 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
 
     let hash: hash_T = unsafe { hash_hash(p) };
     let p_len = unsafe { cstr::bytes_at(p) }.len();
-    let hi: *mut hashitem_T = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
-    if !unsafe { (*hi).is_kept() } {
+    let hi = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
+    if !hi.is_kept() {
         let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut wordcount_T;
         let key = unsafe { &raw mut (*wc).wc_word }.cast::<c_char>();
         let into = key.cast::<u8>();
@@ -205,7 +205,7 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
         unsafe { (*wc).wc_count = count as uint16_t };
         unsafe { hash_add_item(&raw mut (*lp).sl_wordcount, hi, key, hash) };
     } else {
-        let wc = unsafe { (*hi).hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
+        let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
         // The C adds and then checks for the wrap, which is a saturate
         // spelled the long way round.
         let total = unsafe { (*wc).wc_count }.wrapping_add(count as uint16_t);

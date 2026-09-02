@@ -24,11 +24,11 @@ pub struct hashitem_T {
 
 /// Vim's open-addressed hash table.
 ///
-/// The table **owns** its slots, in a `Vec` whose length is a power of two
-/// (or zero, before [`crate::hashtab::hash_init`] gives it one). That is the
-/// one structural difference from the C, where `ht_array` pointed at an
-/// inline `ht_smallarray` while the table was small -- a self-reference that
-/// made a `hashtab_T` valid only at the address it was initialised at, and
+/// The table **owns** its slots, in a run whose length is a power of two (or
+/// zero, before [`crate::hashtab::hash_init`] gives it one). That is the one
+/// structural difference from the C, where `ht_array` pointed at the inline
+/// `ht_smallarray` while the table was small -- a self-reference that made a
+/// `hashtab_T` valid only at the address it was initialised at, and
 /// therefore unwrappable and unmovable.
 ///
 /// What did *not* change is anything a caller can see: the hash, the probe
@@ -38,6 +38,14 @@ pub struct hashitem_T {
 ///
 /// Keys are borrowed: the table compares them and frees them only on the
 /// caller's behalf ([`crate::hashtab::hash_clear_all`]).
+///
+/// # Slots are named by index, never by pointer
+///
+/// A lookup answers a [`crate::hashtab::Slot`] -- an index plus a copy of
+/// what the slot held -- and every write goes back through the table. An
+/// index survives a mutation of the table, which a borrow into the slots
+/// would not; what it does not survive is a *resize*, which is what
+/// [`crate::hashtab::hash_lock`] exists to prevent.
 pub struct hashtab_T {
     /// Live entries.
     pub ht_used: size_t,
@@ -46,12 +54,10 @@ pub struct hashtab_T {
     /// Bumped by every add, remove and resize, so a walk can tell that a
     /// callback rearranged the table under it.
     pub ht_changed: ::core::ffi::c_int,
-    /// Non-zero while a caller holds slot pointers across mutations; see
+    /// Non-zero while a caller holds slot indexes across mutations; see
     /// [`crate::hashtab::hash_lock`].
     pub ht_locked: ::core::ffi::c_int,
-    /// The slot array. A separate allocation from this header, so a raw
-    /// pointer into it survives writes to the fields above and dies only at
-    /// the next resize.
+    /// The slot array. A separate allocation from this header.
     slots: Vec<hashitem_T>,
 }
 
@@ -92,6 +98,15 @@ impl hashtab_T {
         }
     }
 
+    /// A table with its first slot array: what
+    /// [`crate::hashtab::hash_init`] writes.
+    pub(crate) fn with_slots() -> Self {
+        Self {
+            slots: vec![hashitem_T::EMPTY; crate::hashtab::HT_INIT_SIZE],
+            ..Self::new()
+        }
+    }
+
     /// How many slots the table has: a power of two, or zero.
     pub fn size(&self) -> usize {
         self.slots.len()
@@ -117,20 +132,19 @@ impl hashtab_T {
         &mut self.slots
     }
 
-    /// The slot array as the raw cursor the C-shaped walks step through.
-    ///
-    /// `&self` rather than `&mut self` because that is the borrow the
-    /// callers have: `hash_find` answers a writable slot from a
-    /// `*const hashtab_T`, since a table is usually reached through a shared
-    /// borrow of the struct that holds it (a `slang_T`, a `dict_T`). Writing
-    /// through the result is the caller's business, and its obligation is
-    /// the one `ht_locked` exists for: no slot pointer may outlive a resize.
-    pub fn slot_ptr(&self) -> *mut hashitem_T {
-        self.slots.as_ptr().cast_mut()
+    /// Give the table a fresh array of `size` empty slots, handing `rehash`
+    /// the old slots and the new ones so it can move the live entries over.
+    pub(crate) fn resize_slots(
+        &mut self,
+        size: usize,
+        rehash: impl FnOnce(&[hashitem_T], &mut [hashitem_T]),
+    ) {
+        let old = ::core::mem::replace(&mut self.slots, vec![hashitem_T::EMPTY; size]);
+        rehash(&old, &mut self.slots);
     }
 
-    /// Swap in a new slot array, answering the old one.
-    pub(crate) fn replace_slots(&mut self, slots: Vec<hashitem_T>) -> Vec<hashitem_T> {
-        ::core::mem::replace(&mut self.slots, slots)
+    /// Release the table's slots, leaving it with none.
+    pub(crate) fn drop_slots(&mut self) {
+        self.slots = Vec::new();
     }
 }

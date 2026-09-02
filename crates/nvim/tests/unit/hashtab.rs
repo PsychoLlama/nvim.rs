@@ -12,7 +12,7 @@ use neovim::hashtab::{
     HT_INIT_SIZE, hash_add, hash_clear_all, hash_find, hash_lock, hash_remove, hash_unlock,
 };
 use neovim::memory::{xcalloc, xfree};
-use neovim::types::{hashitem_T, hashtab_T};
+use neovim::types::hashtab_T;
 
 /// A key the table can own: `hash_clear_all` frees keys with `xfree`, and
 /// the crate's allocator is libc's.
@@ -21,8 +21,7 @@ fn owned_key(text: &str) -> *mut c_char {
 }
 
 fn slot_of(ht: &hashtab_T, key: &CStr) -> usize {
-    let hi = unsafe { hash_find(ht, key.as_ptr()) };
-    (hi.addr() - ht.slot_ptr().addr()) / size_of::<hashitem_T>()
+    unsafe { hash_find(ht, key.as_ptr()) }.index()
 }
 
 /// Hand-computed against the C: `hash_hash("a")` is 97, so on a 16-slot
@@ -58,9 +57,9 @@ fn a_removed_key_leaves_a_reusable_tombstone() {
         hash_lock(&raw mut ht);
 
         let a = hash_find(&ht, c"a".as_ptr());
-        xfree((*a).hi_key as *mut c_void);
+        xfree(a.hi_key as *mut c_void);
         hash_remove(&raw mut ht, a);
-        assert!((*a).is_removed());
+        assert!(ht.slot(a.index()).is_removed());
         assert_eq!(ht.ht_used, 1);
         assert_eq!(ht.ht_filled, 2, "a tombstone still occupies its slot");
 
@@ -101,8 +100,8 @@ fn growing_off_the_small_array_keeps_every_key() {
         assert!(ht.size() >= 256, "size {}", ht.size());
         for key in &keys {
             let hi = hash_find(&ht, key.as_ptr());
-            assert!((*hi).is_kept());
-            assert_eq!(CStr::from_ptr((*hi).hi_key), key.as_c_str());
+            assert!(hi.is_kept());
+            assert_eq!(CStr::from_ptr(hi.hi_key), key.as_c_str());
         }
 
         // Every slot is either empty, a tombstone, or a key we put there;
@@ -111,15 +110,15 @@ fn growing_off_the_small_array_keeps_every_key() {
 
         for key in keys.iter().take(50) {
             let hi = hash_find(&ht, key.as_ptr());
-            xfree((*hi).hi_key as *mut c_void);
+            xfree(hi.hi_key as *mut c_void);
             hash_remove(&raw mut ht, hi);
         }
         assert_eq!(ht.ht_used, 14);
         for key in keys.iter().take(50) {
-            assert!(!(*hash_find(&ht, key.as_ptr())).is_kept());
+            assert!(!hash_find(&ht, key.as_ptr()).is_kept());
         }
         for key in keys.iter().skip(50) {
-            assert!((*hash_find(&ht, key.as_ptr())).is_kept());
+            assert!(hash_find(&ht, key.as_ptr()).is_kept());
         }
         hash_clear_all(&raw mut ht, 0);
     }
@@ -167,7 +166,7 @@ fn a_reused_tombstone_keeps_its_slot_in_the_order() {
             assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
         }
         let q = hash_find(&ht, c"q".as_ptr());
-        xfree((*q).hi_key as *mut c_void);
+        xfree(q.hi_key as *mut c_void);
         hash_remove(&raw mut ht, q);
         // `Q` probes 1, 7, 6, 15 and stops at the tombstone in 7.
         assert_eq!(hash_add(&raw mut ht, owned_key("Q")), Ok(()));
@@ -218,7 +217,7 @@ fn shrinking_back_reprobes_in_the_grown_table_order() {
         assert!(ht.size() > HT_INIT_SIZE);
         for key in &filler {
             let hi = hash_find(&ht, key.as_ptr());
-            xfree((*hi).hi_key as *mut c_void);
+            xfree(hi.hi_key as *mut c_void);
             hash_remove(&raw mut ht, hi);
         }
         assert_eq!(ht.size(), HT_INIT_SIZE, "back to the initial size");

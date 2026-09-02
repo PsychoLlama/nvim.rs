@@ -590,10 +590,9 @@ pub(crate) fn tv_dict_item_key(di: *const dictitem_T) -> *mut ::core::ffi::c_cha
 /// found by subtracting an offset from `hi_key`, so an empty or removed
 /// slot yields a wild pointer rather than null.
 #[inline(always)]
-pub(crate) unsafe fn tv_dict_hi2di(hi: *const hashitem_T) -> *mut dictitem_T {
+pub(crate) unsafe fn tv_dict_hi2di(hi: Slot) -> *mut dictitem_T {
     unsafe {
-        (*hi)
-            .hi_key
+        hi.hi_key
             .sub(::core::mem::offset_of!(dictitem_T, di_key))
             .cast::<dictitem_T>()
     }
@@ -603,19 +602,26 @@ pub(crate) unsafe fn tv_dict_hi2di(hi: *const hashitem_T) -> *mut dictitem_T {
 ///
 /// See [`tv_dict_iter`].
 pub(crate) struct DictIter {
-    hi: *mut hashitem_T,
+    ht: *const hashtab_T,
+    idx: usize,
     todo: size_t,
 }
 
 impl Iterator for DictIter {
-    type Item = *mut hashitem_T;
+    type Item = Slot;
 
     #[inline]
-    fn next(&mut self) -> Option<*mut hashitem_T> {
+    fn next(&mut self) -> Option<Slot> {
         while self.todo != 0 {
-            let hi = self.hi;
-            self.hi = unsafe { self.hi.add(1) };
-            if unsafe { (*hi).is_kept() } {
+            // The cursor is an index, and the slot is read out of the table
+            // afresh each step: a body may take `&mut` to the table (every
+            // `hash_remove` does), and the small run lives *in* the table,
+            // so a pointer cursor would not survive the first removal.
+            // SAFETY: the walk's table is live for the walk, and `todo`
+            // live entries remain, so `idx` is one of its slots.
+            let hi = unsafe { (*self.ht).slot(self.idx) };
+            self.idx += 1;
+            if hi.is_kept() {
                 self.todo -= 1;
                 return Some(hi);
             }
@@ -627,21 +633,23 @@ impl Iterator for DictIter {
 /// Walk the occupied slots of `d`'s hashtab: upstream's `TV_DICT_ITER`, which
 /// is `HASHTAB_ITER` plus a `TV_DICT_HI2DI`.
 ///
-/// The item is yielded as the `hashitem_T`, not the `dictitem_T`, because the
+/// The item is yielded as the [`Slot`], not the `dictitem_T`, because the
 /// bodies that remove entries need it for `hash_remove`; [`tv_dict_hi2di`] is
 /// the other half.
 ///
 /// The live-item count is snapshotted before the first step, exactly as the
 /// macro does.  That is what lets a body remove entries as it goes — but only
 /// with the hashtab locked, since an unlocked `hash_remove` may rehash and
-/// invalidate the slot array underneath the walk.
+/// renumber the slots underneath the walk.
 ///
-/// The borrow is momentary — it reads the two hashtab header fields and is
-/// gone before the first step, so a body may write through the caller's raw
-/// pointer as upstream's does.  That is also what makes this one safe.
+/// # Safety
+/// `d` points at a live dictionary that outlives the walk. A raw pointer and
+/// not a reference: a body writes through the table (upstream's does), so the
+/// walk must not be holding a borrow of it.
 #[inline]
-pub(crate) fn tv_dict_iter(d: &dict_T) -> DictIter {
-    tv_ht_iter(&d.dv_hashtab)
+pub(crate) unsafe fn tv_dict_iter(d: *const dict_T) -> DictIter {
+    // SAFETY: the caller's live dictionary.
+    unsafe { tv_ht_iter(&raw const (*d).dv_hashtab) }
 }
 
 /// [`tv_dict_iter`] over a bare hashtab: upstream's `HASHTAB_ITER`.
@@ -649,11 +657,16 @@ pub(crate) fn tv_dict_iter(d: &dict_T) -> DictIter {
 /// The variable scopes are reached both ways -- as a `dict_T` and as the
 /// `hashtab_T` inside it -- so both spellings exist. The contract is the
 /// same one.
+///
+/// # Safety
+/// As [`tv_dict_iter`], for the table rather than the dictionary.
 #[inline]
-pub(crate) fn tv_ht_iter(ht: &hashtab_T) -> DictIter {
+pub(crate) unsafe fn tv_ht_iter(ht: *const hashtab_T) -> DictIter {
     DictIter {
-        hi: ht.slot_ptr(),
-        todo: ht.ht_used,
+        ht,
+        idx: 0,
+        // SAFETY: the caller's live table.
+        todo: unsafe { (*ht).ht_used },
     }
 }
 

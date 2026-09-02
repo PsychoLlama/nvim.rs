@@ -282,7 +282,7 @@ pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
     let hash = unsafe { hash_hash(word) };
     let word_len = unsafe { cstr::bytes_at(word) }.len();
     let hi = unsafe { hash_lookup(&raw mut (*su).su_banned, word, word_len, hash) };
-    if unsafe { (*hi).is_kept() } {
+    if hi.is_kept() {
         return; // already present
     }
     let owned = unsafe { xmemdupz(word as *const c_void, word_len) } as *mut c_char;

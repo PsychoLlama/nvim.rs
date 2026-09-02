@@ -174,10 +174,10 @@ pub(crate) unsafe fn fname_trans_sid(
 /// `name` is NUL-terminated.
 pub unsafe fn find_func(name: *const c_char) -> *mut ufunc_T {
     let hi = unsafe { func_table().find(name) };
-    if unsafe { *hi }.is_kept() {
+    if hi.is_kept() {
         // The key *is* the function's trailing name member, so the
         // function is that many bytes before it.
-        let fp = unsafe { (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) };
+        let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) };
         fp as *mut ufunc_T
     } else {
         ptr::null_mut()

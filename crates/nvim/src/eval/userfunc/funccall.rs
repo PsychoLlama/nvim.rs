@@ -52,10 +52,11 @@ impl FuncTable {
         unsafe { (*self.0).ht_used }
     }
 
-    /// The bucket array, which every walk starts at.
-    pub(crate) fn array(self) -> *mut hashitem_T {
+    /// The slot at `idx`, which is how a walk reads one: an index and not a
+    /// cursor, because a callback may take `&mut` to the table.
+    pub(crate) fn slot(self, idx: usize) -> Slot {
         // SAFETY: as `used`.
-        unsafe { (*self.0).slot_ptr() }
+        unsafe { (*self.0).slot(idx) }
     }
 
     /// The generation counter: every add and remove bumps it, so a walk can
@@ -69,7 +70,7 @@ impl FuncTable {
     ///
     /// # Safety
     /// `name` must be a NUL-terminated string.
-    pub(crate) unsafe fn find(self, name: *const c_char) -> *mut hashitem_T {
+    pub(crate) unsafe fn find(self, name: *const c_char) -> Slot {
         // SAFETY: the caller's key; the table is this crate's `static`.
         unsafe { hash_find(self.0, name) }
     }
@@ -83,11 +84,24 @@ impl FuncTable {
         unsafe { hash_add(self.0, key) }
     }
 
+    /// Point the entry `hi` at a different key: the function it names has
+    /// been redefined, so the entry stays and the key it holds moves to the
+    /// new `ufunc_T`'s own inline name.
+    ///
+    /// # Safety
+    /// `hi` must be a slot of this table and `key` the same name, in
+    /// storage that outlives the entry.
+    pub(crate) unsafe fn set_key(self, hi: Slot, key: *mut c_char) {
+        // SAFETY: the caller's slot and key; the table is this crate's
+        // `static`.
+        unsafe { hash_set_key(self.0, hi, key) };
+    }
+
     /// Drop the entry `hi`, which must be one this table answered.
     ///
     /// # Safety
     /// `hi` must be a live item of this table.
-    pub(crate) unsafe fn remove(self, hi: *mut hashitem_T) {
+    pub(crate) unsafe fn remove(self, hi: Slot) {
         // SAFETY: the caller's item; the table is this crate's `static`.
         unsafe { hash_remove(self.0, hi) };
     }
@@ -189,7 +203,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
         free_fc = false;
         // Make a copy of the a: variables, since that was not done above.
         // SAFETY: as above -- the `a:` dictionary is this funccall's own.
-        for hi in unsafe { tv_dict_iter(&(*fc).fc_l_avars) } {
+        for hi in unsafe { tv_dict_iter(&raw const (*fc).fc_l_avars) } {
             let di = unsafe { tv_dict_hi2di(hi) };
             unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*di).di_tv) };
         }
@@ -270,7 +284,7 @@ pub(crate) unsafe fn func_remove(fp: *mut ufunc_T) -> bool {
     // SAFETY: the caller's promise -- `fp` is a live function, so its
     // inline name is the key it was added under.
     let hi = unsafe { func_table().find(uf_name_ptr(fp)) };
-    if !unsafe { (*hi).is_kept() } {
+    if !hi.is_kept() {
         return false;
     }
     unsafe { func_table().remove(hi) };
@@ -748,21 +762,18 @@ unsafe fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Optio
 ///
 /// # Safety
 /// `name` is NUL-terminated and `pht` is writable.
-pub unsafe fn find_hi_in_scoped_ht(
-    name: *const c_char,
-    pht: *mut *mut hashtab_T,
-) -> *mut hashitem_T {
+pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, pht: *mut *mut hashtab_T) -> Option<Slot> {
     // SAFETY: `current_funccal` is null or the live call in progress, whose
     // `fc_func` is live too; `name` is the caller's NUL-terminated string.
     if current_funccal.get().is_null()
         || unsafe { (*(*current_funccal.get()).fc_func).uf_scoped }.is_null()
     {
-        return ptr::null_mut();
+        return None;
     }
     let namelen = unsafe { cstr::bytes_at(name) }.len();
     // Upstream answers the *last* hashitem it looked at, not only a
-    // found one, so a miss still hands back a non-null empty slot.
-    let mut last: *mut hashitem_T = ptr::null_mut();
+    // found one, so a miss still hands back the slot it stopped on.
+    let mut last: Option<Slot> = None;
     // SAFETY: as above; `varname` is a tail of `name`, so the subtraction
     // leaves the length of what is left of it. That holds for every
     // dereference in the probe.
@@ -772,8 +783,8 @@ pub unsafe fn find_hi_in_scoped_ht(
         if !ht.is_null() && unsafe { *varname } != NUL as c_char {
             let past = unsafe { varname.offset_from(name) } as size_t;
             let hi = unsafe { hash_find_len(ht, varname, namelen.wrapping_sub(past)) };
-            last = hi;
-            if unsafe { (*hi).is_kept() } {
+            last = Some(hi);
+            if hi.is_kept() {
                 unsafe { *pht = ht };
                 return Some(hi);
             }
@@ -912,22 +923,23 @@ pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
 /// Mark everything reachable from a function that is still available by name.
 pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
     let mut todo = func_table().used() as c_int;
-    let mut hi = func_table().array();
+    let mut idx = 0;
     // SAFETY: the walk covers the `ht_used` kept items of the function
     // table's own bucket array, and every key in it is a live function's
     // inline name.
     while todo > 0 && !got_int.get() {
-        if unsafe { (*hi).is_kept() } {
+        let hi = func_table().slot(idx);
+        idx += 1;
+        if hi.is_kept() {
             todo -= 1;
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { (*hi).hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+            let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
             let named = unsafe { func_name_refcount(uf_name_ptr(fp)) };
             if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copyID) } {
                 return true;
             }
         }
-        hi = unsafe { hi.add(1) };
     }
     false
 }

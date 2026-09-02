@@ -218,7 +218,7 @@ pub(super) unsafe fn add_sound_suggest(
     let hash = unsafe { hash_hash(goodword) };
     let goodword_len = unsafe { cstr::bytes_at(goodword).len() };
     let hi = unsafe { hash_lookup(sounddone, goodword, goodword_len, hash) };
-    if !unsafe { (*hi).is_kept() } {
+    if !hi.is_kept() {
         // SAFETY: the allocation is `SFT_WORD_OFF + goodword_len + 1`
         // bytes, so the record's header and the word after it both fit,
         // and `goodword` really is `goodword_len + 1` bytes with its NUL.
@@ -230,7 +230,7 @@ pub(super) unsafe fn add_sound_suggest(
     } else {
         // SAFETY: the key is the inline word of a `sftword_T` allocated
         // above, so stepping back by `SFT_WORD_OFF` recovers the record.
-        let sft = unsafe { (*hi).hi_key.sub(SFT_WORD_OFF) } as *mut sftword_T;
+        let sft = unsafe { hi.hi_key.sub(SFT_WORD_OFF) } as *mut sftword_T;
         if score >= unsafe { (*sft).sft_score } as c_int {
             return;
         }

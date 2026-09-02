@@ -33,7 +33,7 @@ pub unsafe fn list_hashtable_vars(
     empty: bool,
     first: *mut c_int,
 ) {
-    for hi in tv_ht_iter(unsafe { &*ht }) {
+    for hi in unsafe { tv_ht_iter(ht) } {
         // Upstream re-reads `got_int` in the loop condition, so a `:let`
         // listing stops at the interrupt rather than at the end.
         if got_int.get() {

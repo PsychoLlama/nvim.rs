@@ -59,7 +59,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
             // Check if this name was already found.
             let hash = unsafe { hash_hash(name.add(pathlen)) };
             let hi = unsafe { hash_lookup(ht, name.add(pathlen), namelen - pathlen, hash) };
-            if !unsafe { (*hi).is_kept() } {
+            if !hi.is_kept() {
                 // Remove the path that was prepended (+1 for the NUL).
                 let into = name.cast::<u8>();
                 unsafe { into.copy_from(name.add(pathlen).cast(), namelen - pathlen + 1) };

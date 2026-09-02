@@ -67,9 +67,9 @@ use crate::types::{
     KeyDict__shada_search_pat, KeyValuePair, MHPutStatus, Map_cstr_t_ptr_t, MapHash, MarkGet,
     MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
     String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VarLock, bln_values,
-    buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, hashitem_T, int64_t, linenr_T, list_T,
-    pos_T, ptr_t, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uid_t, uint8_t,
-    uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T, yankreg_T,
+    buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, int64_t, linenr_T, list_T, pos_T, ptr_t,
+    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t,
+    uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
