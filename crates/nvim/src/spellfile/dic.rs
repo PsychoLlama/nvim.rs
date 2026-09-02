@@ -35,6 +35,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::spell::WordFlags;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -60,10 +61,8 @@ use ::libc::fclose;
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
 use super::{
-    AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, MAXLINELEN, MAXWLEN, WF_BANNED,
-    WF_COMPROOT, WF_FIXCAP, WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT, WF_NOCOMPBEF,
-    WF_NOSUGGEST, WF_RARE, affentry_T, afffile_T, affheader_T, compitem_T, spell_message_fmt,
-    spellinfo_T, vim_regexec_prog,
+    AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, MAXLINELEN, MAXWLEN, affentry_T,
+    afffile_T, affheader_T, compitem_T, spell_message_fmt, spellinfo_T, vim_regexec_prog,
 };
 
 /// Read a `.dic` file: a count line, then one stem per line with the affix
@@ -224,7 +223,7 @@ pub(super) unsafe fn spell_read_dic(
             duplicate += 1;
         }
 
-        let mut flags = 0;
+        let mut flags = WordFlags::NONE;
         store_afflist[0] = NUL as c_char;
         let mut pfxlen = 0;
         let mut need_affix = false;
@@ -305,20 +304,20 @@ pub(super) unsafe fn spell_read_dic(
 /// # Safety
 ///
 /// `afflist` must be a NUL-terminated flag list and `affile` live.
-unsafe fn get_affix_flags(affile: *mut afffile_T, afflist: *mut c_char) -> c_int {
+unsafe fn get_affix_flags(affile: *mut afffile_T, afflist: *mut c_char) -> WordFlags {
     // SAFETY: the caller promises both.
     let flagtype = unsafe { (*affile).af_flagtype };
-    let mut flags = 0;
+    let mut flags = WordFlags::NONE;
     for (declared, bits) in [
         (
             unsafe { (*affile).af_keepcase },
-            WF_KEEPCAP as c_int | WF_FIXCAP as c_int,
+            WordFlags::KEEPCAP | WordFlags::FIXCAP,
         ),
-        (unsafe { (*affile).af_rare }, WF_RARE as c_int),
-        (unsafe { (*affile).af_bad }, WF_BANNED as c_int),
-        (unsafe { (*affile).af_needcomp }, WF_NEEDCOMP as c_int),
-        (unsafe { (*affile).af_comproot }, WF_COMPROOT as c_int),
-        (unsafe { (*affile).af_nosuggest }, WF_NOSUGGEST as c_int),
+        (unsafe { (*affile).af_rare }, WordFlags::RARE),
+        (unsafe { (*affile).af_bad }, WordFlags::BANNED),
+        (unsafe { (*affile).af_needcomp }, WordFlags::NEEDCOMP),
+        (unsafe { (*affile).af_comproot }, WordFlags::COMPROOT),
+        (unsafe { (*affile).af_nosuggest }, WordFlags::NOSUGGEST),
     ] {
         // A flag of zero means the affix file never declared it.
         if declared != 0 && unsafe { flag_in_afflist(flagtype, afflist, declared) } {
@@ -422,7 +421,7 @@ pub(super) struct AffWord {
     pub xht: *mut hashtab_T,
     /// Which conditions the affix has to meet, and the word's `WF_*` flags.
     pub condit: c_int,
-    pub flags: c_int,
+    pub flags: WordFlags,
     /// The affix ids collected so far, and how many there are.
     pub pfxlist: *mut c_char,
     pub pfxlen: c_int,
@@ -578,7 +577,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                     if !unsafe { (*spin).si_prefroot }.is_null()
                         && !unsafe { (*(*spin).si_prefroot).wn_sibling }.is_null()
                     {
-                        use_flags |= WF_HAS_AFF as c_int;
+                        use_flags |= WordFlags::HAS_AFF;
                         // A non-combinable affix keeps only the
                         // compound ids, not the prefix ids.
                         if unsafe { (*ah).ah_combine } == 0 && !use_pfxlist.is_null() {
@@ -589,9 +588,9 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                         && unsafe { (*ae).ae_comppermit } == 0
                     {
                         use_flags |= if xht.is_null() {
-                            WF_NOCOMPBEF as c_int
+                            WordFlags::NOCOMPBEF
                         } else {
-                            WF_NOCOMPAFT as c_int
+                            WordFlags::NOCOMPAFT
                         };
                     }
 

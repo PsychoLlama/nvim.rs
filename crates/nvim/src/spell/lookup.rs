@@ -43,6 +43,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
@@ -51,16 +52,15 @@ use crate::message::emsg;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t, uint32_t};
+use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t};
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
 use super::{
     FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, SP_BAD,
-    SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, WF_ALLCAP, WF_BANNED, WF_COMPROOT, WF_FIXCAP,
-    WF_HAS_AFF, WF_KEEPCAP, WF_NEEDCOMP, WF_NOCOMPAFT, WF_NOCOMPBEF, WF_ONECAP, WF_PFX_NC, WF_RARE,
-    WF_RAREPFX, WF_REGION, count_syllables, e_format, matchinf_T, spell_valid_case,
+    SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, count_syllables, e_format, matchinf_T,
+    spell_valid_case,
 };
 
 /// Advance `p` past one character.
@@ -265,7 +265,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             // flag/region entry. `break 'variants` is C's `break`: this
             // ending is settled.
             'variant: {
-                let mut flags = unsafe { *idxs.offset(arridx as isize) } as uint32_t;
+                let mut flags = WordFlags::from_bits(unsafe { *idxs.offset(arridx as isize) });
 
                 if mode == FIND_FOLDWORD {
                     // The fold-case tree records what case the word must be
@@ -276,8 +276,8 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         unsafe { (*mip).mi_capflags = captype((*mip).mi_word, (*mip).mi_cend) };
                     }
 
-                    if unsafe { (*mip).mi_capflags } == WF_KEEPCAP as c_int
-                        || !spell_valid_case(unsafe { (*mip).mi_capflags }, flags as c_int)
+                    if unsafe { (*mip).mi_capflags } == WordFlags::KEEPCAP
+                        || !spell_valid_case(unsafe { (*mip).mi_capflags }, flags)
                     {
                         break 'variant;
                     }
@@ -286,21 +286,19 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                     // find_prefix() left at mi_prefarridx.
                     let (cnt, arridx) = unsafe { ((*mip).mi_prefcnt, (*mip).mi_prefarridx) };
                     let after = unsafe { (*mip).mi_word.offset((*mip).mi_cprefixlen as isize) };
-                    let c = unsafe {
-                        valid_word_prefix(cnt, arridx, flags as c_int, after, slang, false)
-                    };
+                    let c = unsafe { valid_word_prefix(cnt, arridx, flags, after, slang, false) };
                     if c == 0 {
                         break 'variant;
                     }
-                    if c & WF_RAREPFX as c_int != 0 {
-                        flags |= WF_RARE;
+                    if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
+                        flags |= WordFlags::RARE;
                     }
                     prefix_found = true;
                 }
 
                 if unsafe { (*slang).sl_nobreak } {
                     if (mode == FIND_COMPOUND || mode == FIND_KEEPCOMPOUND)
-                        && flags & WF_BANNED == 0
+                        && !flags.has(WordFlags::BANNED)
                     {
                         // NOBREAK: a valid word follows, which is all the
                         // caller wanted to know.
@@ -315,7 +313,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                     if !allowed {
                         break 'variant;
                     }
-                } else if flags & WF_NEEDCOMP != 0 {
+                } else if flags.has(WordFlags::NEEDCOMP) {
                     // Only valid as part of a compound.
                     break 'variant;
                 }
@@ -355,7 +353,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         }
                     }
                     unsafe { (*mip).mi_complen += 1 };
-                    if flags & WF_COMPROOT != 0 {
+                    if flags.has(WordFlags::COMPROOT) {
                         unsafe { (*mip).mi_compextra += 1 };
                     }
 
@@ -390,7 +388,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                         }
                     }
                     unsafe { (*mip).mi_complen -= 1 };
-                    if flags & WF_COMPROOT != 0 {
+                    if flags.has(WordFlags::COMPROOT) {
                         unsafe { (*mip).mi_compextra -= 1 };
                     }
                     unsafe { (*mip).mi_lp = save_lp };
@@ -406,15 +404,16 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                     }
                 }
 
-                let res = if flags & WF_BANNED != 0 {
+                let res = if flags.has(WordFlags::BANNED) {
                     SP_BANNED
-                } else if flags & WF_REGION != 0 {
-                    if unsafe { (*(*mip).mi_lp).lp_region } as c_uint & (flags >> 16) != 0 {
+                } else if flags.has(WordFlags::REGION) {
+                    let region = flags.bits() as c_uint >> 16;
+                    if unsafe { (*(*mip).mi_lp).lp_region } as c_uint & region != 0 {
                         SP_OK
                     } else {
                         SP_LOCAL
                     }
-                } else if flags & WF_RARE != 0 {
+                } else if flags.has(WordFlags::RARE) {
                     SP_RARE
                 } else {
                     SP_OK
@@ -464,7 +463,7 @@ unsafe fn compound_part_allowed(
     mip: *mut matchinf_T,
     ptr: *mut c_char,
     wlen: c_int,
-    flags: uint32_t,
+    flags: WordFlags,
     word_ends: bool,
     mode: c_int,
     endlen: c_int,
@@ -473,7 +472,8 @@ unsafe fn compound_part_allowed(
     // No compound flag, or shorter than COMPOUNDMIN, rejects quickly.
     // (Myspell compatibility requires accepting a compound flag on a
     // word that is too short to use it.)
-    if flags >> 24 == 0 || wlen - unsafe { (*mip).mi_compoff } < unsafe { (*slang).sl_compminlen } {
+    let compflag = flags.bits() as c_uint >> 24;
+    if compflag == 0 || wlen - unsafe { (*mip).mi_compoff } < unsafe { (*slang).sl_compminlen } {
         return false;
     }
     // COMPOUNDMIN counts characters, not bytes.
@@ -500,10 +500,10 @@ unsafe fn compound_part_allowed(
 
     // Compounding is not allowed on a side where an affix was added,
     // unless COMPOUNDPERMITFLAG said so.
-    if unsafe { (*mip).mi_complen } > 0 && flags & WF_NOCOMPBEF != 0 {
+    if unsafe { (*mip).mi_complen } > 0 && flags.has(WordFlags::NOCOMPBEF) {
         return false;
     }
-    if !word_ends && flags & WF_NOCOMPAFT != 0 {
+    if !word_ends && flags.has(WordFlags::NOCOMPAFT) {
         return false;
     }
 
@@ -513,7 +513,7 @@ unsafe fn compound_part_allowed(
     } else {
         unsafe { (*slang).sl_compallflags }
     };
-    if !unsafe { byte_in_str(usable, (flags >> 24) as c_int) } {
+    if !unsafe { byte_in_str(usable, compflag as c_int) } {
         return false;
     }
 
@@ -537,21 +537,21 @@ unsafe fn compound_part_allowed(
             p = unsafe { (*mip).mi_word.offset((*mip).mi_compoff as isize) };
         }
         let capflags = unsafe { captype(p, (*mip).mi_word.offset(wlen as isize)) };
-        if capflags == WF_KEEPCAP as c_int
-            || (capflags == WF_ALLCAP as c_int && flags & WF_FIXCAP != 0)
+        if capflags == WordFlags::KEEPCAP
+            || (capflags == WordFlags::ALLCAP && flags.has(WordFlags::FIXCAP))
         {
             return false;
         }
 
-        if capflags != WF_ALLCAP as c_int {
+        if capflags != WordFlags::ALLCAP {
             // A Onecap part is not accepted after a word character. A
             // no-caps part is accepted even where the dictionary word
             // says ONECAP.
             p = unsafe { p.offset(-(utf_head_off((*mip).mi_word, p.offset(-1)) as isize + 1)) };
             let reject = if unsafe { spell_iswordp_nmw(p, (*mip).mi_win) } {
-                capflags == WF_ONECAP as c_int
+                capflags == WordFlags::ONECAP
             } else {
-                flags & WF_ONECAP != 0 && capflags != WF_ONECAP as c_int
+                flags.has(WordFlags::ONECAP) && capflags != WordFlags::ONECAP
             };
             if reject {
                 return false;
@@ -564,7 +564,7 @@ unsafe fn compound_part_allowed(
     // for a word still being built.
     // SAFETY: `mip` is the live matchinf_T of the caller's frame.
     unsafe {
-        (*mip).mi_compflags[(*mip).mi_complen as usize] = (flags >> 24) as uint8_t;
+        (*mip).mi_compflags[(*mip).mi_complen as usize] = compflag as uint8_t;
         (*mip).mi_compflags[((*mip).mi_complen + 1) as usize] = NUL as uint8_t;
     }
     if word_ends {
@@ -714,19 +714,19 @@ pub unsafe fn match_compoundrule(slang: *mut slang_T, compflags: *const uint8_t)
 /// `sl_pidxs` may be used with the word `word` carrying `flags`.
 ///
 /// Returns the prefix's own flags (non-zero) on a match, including
-/// `WF_RAREPFX` when the prefix is rare, or zero when none applies.
+/// `WordFlags::RAREPFX` when the prefix is rare, or zero when none applies.
 ///
 /// A prefix entry packs its ID in the low byte and the index of its
 /// condition regexp in the two bytes above.
 pub unsafe fn valid_word_prefix(
     totprefcnt: c_int,
     arridx: c_int,
-    flags: c_int,
+    flags: WordFlags,
     word: *mut c_char,
     slang: *mut slang_T,
     cond_req: bool,
 ) -> c_int {
-    let prefid = (flags as c_uint >> 24) as c_int;
+    let prefid = (flags.bits() as c_uint >> 24) as c_int;
     for prefcnt in (0..totprefcnt).rev() {
         let pidx = unsafe { *(*slang).sl_pidxs.offset((arridx + prefcnt) as isize) };
 
@@ -736,7 +736,7 @@ pub unsafe fn valid_word_prefix(
 
         // A non-combining prefix cannot go on a word that already has a
         // suffix.
-        if flags & WF_HAS_AFF as c_int != 0 && pidx & WF_PFX_NC as c_int != 0 {
+        if flags.has(WordFlags::HAS_AFF) && WordFlags::from_bits(pidx).has(WordFlags::PFX_NC) {
             continue;
         }
 

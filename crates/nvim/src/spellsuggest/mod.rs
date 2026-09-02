@@ -46,6 +46,7 @@ mod sps;
 mod walk;
 
 use crate::cstr;
+use crate::spell::WordFlags;
 use crate::winlayer::{Live, Win};
 pub(crate) use prompt::spell_suggest;
 pub(crate) use sps::spell_check_sps;
@@ -87,31 +88,7 @@ pub(crate) use crate::spell::MAXWLEN;
 pub(crate) const TAB: c_int = '\t' as c_int;
 
 // Word flags. These live beside each word in the tree, except for
-// `WF_MIXCAP`, which only ever appears in `su_badflags`.
-/// The word is only valid in some regions.
-pub(crate) const WF_REGION: c_int = 0x01;
-/// The word starts with a capital.
-pub(crate) const WF_ONECAP: c_int = 0x02;
-/// The word is all capitals.
-pub(crate) const WF_ALLCAP: c_int = 0x04;
-/// The word is rare.
-pub(crate) const WF_RARE: c_int = 0x08;
-/// The word must never be suggested.
-pub(crate) const WF_BANNED: c_int = 0x10;
-/// A mix of upper and lower case, "macaRONI". Only used for
-/// `su_badflags`.
-pub(crate) const WF_MIXCAP: c_int = 0x20;
-/// The word's case is exactly as spelled and cannot be reconstructed from
-/// the case-folded tree.
-pub(crate) const WF_KEEPCAP: c_int = 0x80;
-/// Every case bit together: `ONECAP | ALLCAP | FIXCAP | KEEPCAP`.
-pub(crate) const WF_CAPMASK: c_int = 0xc6;
-/// The word only counts as part of a compound.
-pub(crate) const WF_NEEDCOMP: c_int = 0x200;
-/// The word is never offered as a suggestion.
-pub(crate) const WF_NOSUGGEST: c_int = 0x400;
-/// The prefix makes the word rare.
-pub(crate) const WF_RAREPFX: c_int = 0x1000000;
+// `WordFlags::MIXCAP`, which only ever appears in `su_badflags`.
 
 // What each kind of change costs. A suggestion's score is the sum over
 // the changes that reach it, and lower is offered first.
@@ -245,7 +222,7 @@ pub(crate) struct suginfo_T {
     /// How much of that line the bad word covers.
     pub su_badlen: c_int,
     /// The bad word's capitalisation, as `WF_` bits.
-    pub su_badflags: c_int,
+    pub su_badflags: WordFlags,
     /// The bad word, truncated at `su_badlen`.
     pub su_badword: [c_char; MAXWLEN],
     /// `su_badword`, case-folded.
@@ -278,7 +255,7 @@ impl suginfo_T {
             su_sga: NO_GARRAY,
             su_badptr: ptr::null_mut(),
             su_badlen: 0,
-            su_badflags: 0,
+            su_badflags: WordFlags::NONE,
             su_badword: [0; MAXWLEN],
             su_fbadword: [0; MAXWLEN],
             su_sal_badword: [0; MAXWLEN],
@@ -349,11 +326,11 @@ pub(crate) unsafe fn window_langs<'a>() -> &'a mut [langp_T] {
 /// # Safety
 ///
 /// `word` and `end` must bound one word of a live line.
-pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> c_int {
+pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> WordFlags {
     // SAFETY: the caller guarantees the word; the scan steps whole
     // characters and stops at `end`.
     let mut flags = unsafe { captype(word, end) };
-    if flags & WF_KEEPCAP == 0 {
+    if !flags.has(WordFlags::KEEPCAP) {
         return flags;
     }
 
@@ -377,13 +354,13 @@ pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> c_i
     // otherwise a leading capital suggests one capital. "ALl" is most
     // likely "All", hence the three-capital floor.
     if upper > lower && upper > 2 {
-        flags |= WF_ALLCAP;
+        flags |= WordFlags::ALLCAP;
     } else if first {
-        flags |= WF_ONECAP;
+        flags |= WordFlags::ONECAP;
     }
     if upper >= 2 && lower >= 2 {
         // maCARONI, maCAroni
-        flags |= WF_MIXCAP;
+        flags |= WordFlags::MIXCAP;
     }
     flags
 }
@@ -497,7 +474,7 @@ unsafe fn spell_find_suggest(
 
     su.su_badflags = unsafe { badword_captype(badptr, badptr.offset(su.su_badlen as isize)) };
     if need_cap {
-        su.su_badflags |= WF_ONECAP;
+        su.su_badflags |= WordFlags::ONECAP;
     }
 
     // Sound-fold with the first language in 'spelllang' that can. That
@@ -524,7 +501,7 @@ unsafe fn spell_find_suggest(
     // A word the spell checker is happy with, spelled lower case, may
     // simply be missing its capital.
     if !spell_isupper(unsafe { utf_ptr2char(badptr) }) && attr == HLF_COUNT {
-        unsafe { make_case_word(su.su_badword() as *mut c_char, bufp, WF_ONECAP) };
+        unsafe { make_case_word(su.su_badword() as *mut c_char, bufp, WordFlags::ONECAP) };
         let sug = su.raw();
         let ga = su.su_ga();
         let badlen = su.su_badlen;

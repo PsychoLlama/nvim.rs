@@ -38,6 +38,7 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc};
 use crate::message::internal_error;
+use crate::spell::WordFlags;
 use crate::spell::{allcap_copy, make_case_word, spell_soundfold};
 use crate::spellsuggest::collect::add_suggestion;
 use crate::spellsuggest::score::{
@@ -46,8 +47,8 @@ use crate::spellsuggest::score::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, WF_CAPMASK,
-    WF_KEEPCAP, WF_NOSUGGEST, WF_REGION, sps_flags, suginfo_T,
+    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, sps_flags,
+    suginfo_T,
 };
 use crate::types::{NUL, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
@@ -377,14 +378,14 @@ unsafe fn emit_word(
     while i <= unsafe { *byts.add(n) } as c_int && unsafe { *byts.add(n + i as usize) } == 0 {
         let mut cword = [0 as c_char; MAXWLEN];
         // SAFETY: as above.
-        let mut flags = unsafe { *idxs.add(n + i as usize) } as c_int;
+        let mut flags = WordFlags::from_bits(unsafe { *idxs.add(n + i as usize) } as c_int);
         i += 1;
 
-        if flags & WF_NOSUGGEST != 0 {
+        if flags.has(WordFlags::NOSUGGEST) {
             continue;
         }
 
-        let p = if flags & WF_KEEPCAP != 0 {
+        let p = if flags.has(WordFlags::KEEPCAP) {
             // The letters came out of the case-folded tree, so the
             // real spelling has to be looked up in the keep-case one.
             //
@@ -395,7 +396,7 @@ unsafe fn emit_word(
         } else {
             // SAFETY: `su` is valid by the contract above.
             flags |= unsafe { (*su).su_badflags };
-            if flags & WF_CAPMASK != 0 {
+            if flags.has(WordFlags::CAPMASK) {
                 // SAFETY: as for `find_keepcap_word` above.
                 unsafe { make_case_word(theword.as_mut_ptr(), cword.as_mut_ptr(), flags) };
                 cword.as_mut_ptr()
@@ -420,8 +421,8 @@ unsafe fn emit_word(
         // A word from another region is worth less.
         //
         // SAFETY: `lp` is valid by the contract above.
-        let mut goodscore = if flags & WF_REGION != 0
-            && (flags as u32 >> 16) & unsafe { (*lp).lp_region } as u32 == 0
+        let mut goodscore = if flags.has(WordFlags::REGION)
+            && (flags.bits() as u32 >> 16) & unsafe { (*lp).lp_region } as u32 == 0
         {
             SCORE_REGION
         } else {

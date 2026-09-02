@@ -25,6 +25,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
@@ -49,8 +50,7 @@ use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
-    SP_BAD, SP_BANNED, SP_OK, SP_RARE, WF_ALLCAP, WF_FIXCAP, WF_KEEPCAP, WF_ONECAP,
-    count_common_word, matchinf_T, spelltab_isu,
+    SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, matchinf_T, spelltab_isu,
 };
 use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 
@@ -156,7 +156,7 @@ pub unsafe fn spell_check(
     mi.mi_end = mi.mi_fend;
 
     // The caps type is worked out later, on demand.
-    mi.mi_capflags = 0;
+    mi.mi_capflags = WordFlags::NONE;
     mi.mi_cend = core::ptr::null_mut();
     mi.mi_win = wp;
 
@@ -349,10 +349,10 @@ unsafe fn advance_camelcase_word(
 
 /// Whether a word written with `wordflags` capitalisation satisfies a tree
 /// entry recorded with `treeflags`.
-pub fn spell_valid_case(wordflags: c_int, treeflags: c_int) -> bool {
-    (wordflags == WF_ALLCAP as c_int && treeflags & WF_FIXCAP as c_int == 0)
-        || (treeflags & (WF_ALLCAP | WF_KEEPCAP) as c_int == 0
-            && (treeflags & WF_ONECAP as c_int == 0 || wordflags & WF_ONECAP as c_int != 0))
+pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
+    (wordflags == WordFlags::ALLCAP && !treeflags.has(WordFlags::FIXCAP))
+        || (!treeflags.has(WordFlags::ALLCAP | WordFlags::KEEPCAP)
+            && (!treeflags.has(WordFlags::ONECAP) || wordflags.has(WordFlags::ONECAP)))
 }
 
 /// Whether spell checking is on for `wp` and a language is actually loaded.

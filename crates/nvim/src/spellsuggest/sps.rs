@@ -190,7 +190,7 @@ pub(super) unsafe fn spell_suggest_file(mut su: Sug, fname: *mut c_char) {
         unsafe { *p.offset(len) = NUL as c_char };
 
         // A suggestion with no case of its own takes the bad word's.
-        if unsafe { captype(p, ptr::null()) } == 0 {
+        if unsafe { captype(p, ptr::null()) }.is_empty() {
             unsafe { make_case_word(p, cwordp, su.su_badflags) };
             p = cwordp;
         }

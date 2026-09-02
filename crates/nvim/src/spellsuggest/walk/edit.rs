@@ -29,6 +29,7 @@
 
 use crate::main::got_int;
 use crate::mbyte::{utf_iscomposing_legacy, utf_ptr2char, utf8len_tab, utfc_ptr2len};
+use crate::spell::WordFlags;
 use crate::spellsuggest::score::similar_chars;
 use crate::spellsuggest::walk::{DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk};
 use crate::spellsuggest::{
@@ -64,7 +65,8 @@ impl Walk {
     pub(super) unsafe fn end_nul(&mut self) {
         let level = self.depth as usize;
         // SAFETY: `su` is the caller's suggestion state.
-        unsafe { (*self.su).su_badflags = self.stack[level].saved_badflags as c_int };
+        let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
+        unsafe { (*self.su).su_badflags = saved };
 
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.

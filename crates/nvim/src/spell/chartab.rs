@@ -21,6 +21,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int};
 
 use crate::main::curwin;
@@ -33,7 +34,7 @@ use crate::strings::vim_strchr;
 use crate::types::{Failed, MB_MAXBYTES, NUL, spelltab_T, uint8_t, win_T};
 use ::libc::strcpy;
 
-use super::{MAXWLEN, WF_ALLCAP, WF_KEEPCAP, WF_ONECAP, did_set_spelltab, spelltab};
+use super::{MAXWLEN, did_set_spelltab, spelltab};
 
 /// A table holding the ASCII answers: digits and letters are word
 /// characters, `A`-`Z` are upper case, and everything else maps to itself.
@@ -245,12 +246,12 @@ pub unsafe fn spell_casefold(
 }
 
 /// Classify the capitalisation of `word` (up to `end`, or its NUL when
-/// `end` is null) as one of `WF_ONECAP`, `WF_ALLCAP`, `WF_KEEPCAP`, or
+/// `end` is null) as one of `WordFlags::ONECAP`, `WordFlags::ALLCAP`, `WordFlags::KEEPCAP`, or
 /// zero for all lower case.
 ///
-/// `WF_KEEPCAP` means the pattern is neither of the simple ones — "MacBeth"
+/// `WordFlags::KEEPCAP` means the pattern is neither of the simple ones — "MacBeth"
 /// — so the word tree has to store it spelled out.
-pub unsafe fn captype(word: *const c_char, end: *const c_char) -> c_int {
+pub unsafe fn captype(word: *const c_char, end: *const c_char) -> WordFlags {
     // Skip over any leading non-word characters.
     let at_end = |p: *const c_char| {
         if end.is_null() {
@@ -262,7 +263,7 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> c_int {
     let mut p = word;
     while !unsafe { spell_iswordp_nmw(p, curwin.get()) } {
         if at_end(p) {
-            return 0;
+            return WordFlags::NONE;
         }
         p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
     }
@@ -278,11 +279,11 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> c_int {
                 // A lower-case letter after two upper-case ones, or
                 // after a mix, cannot be described by a flag.
                 if past_second && allcap {
-                    return WF_KEEPCAP as c_int;
+                    return WordFlags::KEEPCAP;
                 }
                 allcap = false;
             } else if !allcap {
-                return WF_KEEPCAP as c_int;
+                return WordFlags::KEEPCAP;
             }
             past_second = true;
         }
@@ -290,11 +291,11 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> c_int {
     }
 
     if allcap {
-        WF_ALLCAP as c_int
+        WordFlags::ALLCAP
     } else if firstcap {
-        WF_ONECAP as c_int
+        WordFlags::ONECAP
     } else {
-        0
+        WordFlags::NONE
     }
 }
 
@@ -392,10 +393,10 @@ pub unsafe fn nofold_len(fword: *mut c_char, flen: c_int, word: *mut c_char) -> 
 
 /// Write the folded word `fword` into `cword` with the capitalisation that
 /// `flags` (as produced by [`captype`]) describes.
-pub unsafe fn make_case_word(fword: *mut c_char, cword: *mut c_char, flags: c_int) {
-    if flags & WF_ALLCAP as c_int != 0 {
+pub unsafe fn make_case_word(fword: *mut c_char, cword: *mut c_char, flags: WordFlags) {
+    if flags.has(WordFlags::ALLCAP) {
         unsafe { allcap_copy(fword, cword) };
-    } else if flags & WF_ONECAP as c_int != 0 {
+    } else if flags.has(WordFlags::ONECAP) {
         unsafe { onecap_copy(fword, cword, true) };
     } else {
         unsafe { strcpy(cword, fword) };

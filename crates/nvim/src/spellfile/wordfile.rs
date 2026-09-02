@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
+use crate::spell::WordFlags;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::fileio::vim_fgets;
@@ -25,10 +26,7 @@ use crate::types::{CONV_NONE, Failed, NUL, linenr_T, size_t, uint8_t};
 use ::libc::{fclose, strcpy};
 
 use super::wordtree::store_word;
-use super::{
-    MAXLINELEN, MAXREGIONS, WF_BANNED, WF_FIXCAP, WF_KEEPCAP, WF_RARE, WF_REGION,
-    spell_message_fmt, spellinfo_T,
-};
+use super::{MAXLINELEN, MAXREGIONS, spell_message_fmt, spellinfo_T};
 
 /// Read a plain word list: one word per line, with optional `/` flags, and
 /// `/encoding=` and `/regions=` header lines.
@@ -104,7 +102,7 @@ pub(super) unsafe fn spell_read_wordfile(
         }
 
         // A word, with optional flags after a "/".
-        let mut flags = 0;
+        let mut flags = WordFlags::NONE;
         let mut regionmask = unsafe { (*spin).si_region };
         let mut p = unsafe { vim_strchr(line, b'/' as c_int) };
         if !p.is_null() {
@@ -112,16 +110,16 @@ pub(super) unsafe fn spell_read_wordfile(
             p = unsafe { p.add(1) };
             while unsafe { *p } as c_int != NUL {
                 match unsafe { *p } as u8 {
-                    b'=' => flags |= WF_KEEPCAP as c_int | WF_FIXCAP as c_int,
-                    b'!' => flags |= WF_BANNED as c_int,
-                    b'?' => flags |= WF_RARE as c_int,
+                    b'=' => flags |= WordFlags::KEEPCAP | WordFlags::FIXCAP,
+                    b'!' => flags |= WordFlags::BANNED,
+                    b'?' => flags |= WordFlags::RARE,
                     d if d.is_ascii_digit() => {
                         // The first digit replaces the default set of
                         // regions, the rest add to it.
-                        if flags & WF_REGION as c_int == 0 {
+                        if !flags.has(WordFlags::REGION) {
                             regionmask = 0;
                         }
-                        flags |= WF_REGION as c_int;
+                        flags |= WordFlags::REGION;
                         let n = (d - b'0') as c_int;
                         if n == 0 || n > unsafe { (*spin).si_region_count } {
                             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.

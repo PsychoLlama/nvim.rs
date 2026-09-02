@@ -38,6 +38,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
@@ -52,7 +53,7 @@ use crate::spell::{captype, spell_casefold};
 use crate::types::{Failed, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 
-use super::{MAXWLEN, WF_KEEPCAP, spell_message_fmt, spellinfo_T};
+use super::{MAXWLEN, spell_message_fmt, spellinfo_T};
 
 /// Bytes handed out per arena block.
 const SBLOCKSIZE: usize = 16000;
@@ -281,7 +282,7 @@ pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -
 pub(super) unsafe fn store_word(
     spin: &mut spellinfo_T,
     word: *mut c_char,
-    flags: c_int,
+    flags: WordFlags,
     region: c_int,
     pfxlist: *const c_char,
     need_affix: bool,
@@ -306,7 +307,7 @@ pub(super) unsafe fn store_word(
     res = unsafe { add_per_affix(spin, folded, root, with_case, region, pfxlist, need_affix) };
     spin.si_foldwcount += 1;
 
-    if res.is_ok() && (ct == WF_KEEPCAP as c_int || flags & WF_KEEPCAP as c_int != 0) {
+    if res.is_ok() && (ct == WordFlags::KEEPCAP || flags.has(WordFlags::KEEPCAP)) {
         let root = spin.si_keeproot;
         res = unsafe { add_per_affix(spin, word, root, flags, region, pfxlist, need_affix) };
         spin.si_keepwcount += 1;
@@ -328,7 +329,7 @@ unsafe fn add_per_affix(
     spin: &mut spellinfo_T,
     word: *const c_char,
     root: *mut wordnode_T,
-    flags: c_int,
+    flags: WordFlags,
     region: c_int,
     pfxlist: *const c_char,
     need_affix: bool,
@@ -344,7 +345,7 @@ unsafe fn add_per_affix(
             unsafe { *p as c_int }
         };
         if !need_affix || affix_id != NUL {
-            res = unsafe { tree_add_word(spin, word, root, flags, region, affix_id) };
+            res = unsafe { tree_add_word(spin, word, root, flags.bits(), region, affix_id) };
         }
         if p.is_null() || unsafe { *p } as c_int == NUL {
             break;

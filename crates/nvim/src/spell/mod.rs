@@ -91,38 +91,59 @@ pub const kEqualFiles: file_comparison = 1;
 /// buffer in the subsystem is this size.
 pub const MAXWLEN: usize = 254;
 
-/// Flags stored with a word in the tree, in the low bits of its `sl_fidxs`
-/// entry. The region mask sits at bit 16 and the affix ID at bit 24.
-pub type WordFlags = c_uint;
-/// Every capitalisation flag, for masking them off together.
-pub const WF_CAPMASK: WordFlags = 198;
-/// Capitalisation cannot be described by a flag; the word is in the
-/// keep-case tree as written.
-pub const WF_KEEPCAP: WordFlags = 128;
-/// Do not accept the word spelled in all capitals.
-pub const WF_FIXCAP: WordFlags = 64;
-/// The word is explicitly wrong.
-pub const WF_BANNED: WordFlags = 16;
-/// The word is real but unusual.
-pub const WF_RARE: WordFlags = 8;
-pub const WF_ALLCAP: WordFlags = 4;
-pub const WF_ONECAP: WordFlags = 2;
-/// The word is limited to the regions in bits 16 and up.
-pub const WF_REGION: WordFlags = 1;
-/// No compounding after this word.
-pub const WF_NOCOMPAFT: WordFlags = 8192;
-/// No compounding before this word.
-pub const WF_NOCOMPBEF: WordFlags = 4096;
-/// COMPOUNDROOT: the word counts as a root, not a part.
-pub const WF_COMPROOT: WordFlags = 2048;
-/// The word is only valid inside a compound.
-pub const WF_NEEDCOMP: WordFlags = 512;
-/// An affix was applied to reach this word.
-pub const WF_HAS_AFF: WordFlags = 256;
-/// A prefix that does not combine with a suffix.
-pub const WF_PFX_NC: WordFlags = 33554432;
-/// A prefix that makes the word rare.
-pub const WF_RAREPFX: WordFlags = 16777216;
+crate::flag_set! {
+    /// Flags stored with a word in the tree, in the low bits of its
+    /// `sl_fidxs` entry. The region mask sits at bit 16 and the affix ID at
+    /// bit 24, which is why the two prefix flags are so far up.
+    pub struct WordFlags;
+
+    /// The word is limited to the regions in bits 16 and up.
+    const REGION = 0x1;
+    /// The word starts with a capital.
+    const ONECAP = 0x2;
+    /// The word is all capitals.
+    const ALLCAP = 0x4;
+    /// The word is real but unusual.
+    const RARE = 0x8;
+    /// The word is explicitly wrong.
+    const BANNED = 0x10;
+    /// An affix may be applied to this word.
+    const AFX = 0x20;
+    /// A mix of upper and lower case: "macaRONI". **The same bit as
+    /// [`Self::AFX`]**, and upstream means it: this one appears only in
+    /// `suginfo_T::su_badflags`, which never holds a tree flag, and that one
+    /// only in the tree.
+    const MIXCAP = 0x20;
+    /// Do not accept the word spelled in all capitals.
+    const FIXCAP = 0x40;
+    /// Capitalisation cannot be described by a flag; the word is in the
+    /// keep-case tree as written.
+    const KEEPCAP = 0x80;
+    /// An affix was applied to reach this word.
+    const HAS_AFF = 0x100;
+    /// The word is only valid inside a compound.
+    const NEEDCOMP = 0x200;
+    /// The word is never offered as a suggestion.
+    const NOSUGGEST = 0x400;
+    /// COMPOUNDROOT: the word counts as a root, not a part.
+    const COMPROOT = 0x800;
+    /// No compounding before this word.
+    const NOCOMPBEF = 0x1000;
+    /// No compounding after this word.
+    const NOCOMPAFT = 0x2000;
+    /// A prefix that makes the word rare.
+    const RAREPFX = 0x1000000;
+    /// A prefix that does not combine with a suffix.
+    const PFX_NC = 0x2000000;
+
+    /// Every capitalisation flag, for masking them off together. A word's
+    /// case is *one* of these, or none, so this is a sub-field rather than a
+    /// set of independent bits.
+    const CAPMASK = Self::ONECAP.bits()
+        | Self::ALLCAP.bits()
+        | Self::FIXCAP.bits()
+        | Self::KEEPCAP.bits();
+}
 
 /// A `.spl` file is malformed.
 pub const SP_FORMERROR: c_int = -2;
@@ -211,7 +232,7 @@ pub struct matchinf_T {
     pub mi_compextra: c_int,
     /// The best result so far, and the capitalisation it assumed.
     pub mi_result: SpellResult,
-    pub mi_capflags: c_int,
+    pub mi_capflags: WordFlags,
     pub mi_win: *mut win_T,
     /// For NOBREAK: the best result reached *without* a good word
     /// following, kept as a fall-back.

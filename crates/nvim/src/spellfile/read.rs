@@ -28,6 +28,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -63,7 +64,7 @@ use super::{
     SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL, SN_SAL, SN_SOFO, SN_SUGFILE,
     SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SP_FORMERROR, SP_OTHERERROR, SP_TRUNCERROR, SPL_FNAME_ADD,
     VIMSPELLMAGIC, VIMSPELLMAGICL, VIMSPELLVERSION, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION,
-    WF_AFX, WF_REGION, e_spell_trunc, kEqualFiles,
+    e_spell_trunc, kEqualFiles,
 };
 
 /// Marks a tree index that already points at a shared sub-tree, so the
@@ -769,10 +770,10 @@ unsafe fn read_tree_node(
                     if kind == BY_FLAGS2 as c_int {
                         c += unsafe { getc(fd) } << 8;
                     }
-                    if c & WF_REGION as c_int != 0 {
+                    if WordFlags::from_bits(c).has(WordFlags::REGION) {
                         c += unsafe { getc(fd) } << 16;
                     }
-                    if c & WF_AFX as c_int != 0 {
+                    if WordFlags::from_bits(c).has(WordFlags::AFX) {
                         c += unsafe { getc(fd) } << 24;
                     }
                 }

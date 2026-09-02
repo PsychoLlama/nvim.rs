@@ -33,6 +33,7 @@
 
 use crate::cstr;
 use crate::semsg;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::fileio::{put_bytes, put_time};
@@ -52,7 +53,7 @@ use super::{
     SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD,
     SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL,
     SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, VIMSPELLMAGIC,
-    VIMSPELLMAGICL, VIMSPELLVERSION, WF_AFX, WF_REGION, spellinfo_T,
+    VIMSPELLMAGICL, VIMSPELLVERSION, spellinfo_T,
 };
 
 /// A `.spl` file being written.
@@ -629,29 +630,29 @@ unsafe fn put_word_end(fd: *mut FILE, np: *mut wordnode_T, regionmask: c_int, pr
 
     // Region and affix bytes only follow when the word is not in every
     // region, or does take an affix.
-    let mut flags = unsafe { (*np).wn_flags } as c_int;
+    let mut flags = WordFlags::from_bits(unsafe { (*np).wn_flags } as c_int);
     if regionmask != 0 && unsafe { (*np).wn_region } as c_int != regionmask {
-        flags |= WF_REGION as c_int;
+        flags |= WordFlags::REGION;
     }
     if unsafe { (*np).wn_affixID } as c_int != 0 {
-        flags |= WF_AFX as c_int;
+        flags |= WordFlags::AFX;
     }
-    if flags == 0 {
+    if flags.is_empty() {
         unsafe { putc(BY_NOFLAGS as c_int, fd) };
         return;
     }
     if unsafe { (*np).wn_flags } as c_int >= 0x100 {
         unsafe { putc(BY_FLAGS2 as c_int, fd) };
-        unsafe { putc(flags, fd) };
-        unsafe { putc((flags as core::ffi::c_uint >> 8) as c_int, fd) };
+        unsafe { putc(flags.bits(), fd) };
+        unsafe { putc((flags.bits() as core::ffi::c_uint >> 8) as c_int, fd) };
     } else {
         unsafe { putc(BY_FLAGS as c_int, fd) };
-        unsafe { putc(flags, fd) };
+        unsafe { putc(flags.bits(), fd) };
     }
-    if flags & WF_REGION as c_int != 0 {
+    if flags.has(WordFlags::REGION) {
         unsafe { putc((*np).wn_region as c_int, fd) };
     }
-    if flags & WF_AFX as c_int != 0 {
+    if flags.has(WordFlags::AFX) {
         unsafe { putc((*np).wn_affixID as c_int, fd) };
     }
 }

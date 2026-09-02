@@ -29,12 +29,11 @@
 use crate::charset::{skiptowhite, skipwhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
+use crate::spell::WordFlags;
 use crate::spell::{byte_in_str, can_compound, match_compoundrule, nofold_len, spell_iswordp_nmw};
 use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
-use crate::spellsuggest::{
-    MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, WF_NEEDCOMP, badword_captype,
-};
+use crate::spellsuggest::{MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, badword_captype};
 use crate::types::NUL;
 use ::libc::strcat;
 use core::ffi::{c_char, c_int};
@@ -52,7 +51,7 @@ impl Walk {
     /// The walk's trees and bad word must be valid.
     pub(super) unsafe fn try_split_or_compound(
         &mut self,
-        flags: c_int,
+        flags: WordFlags,
         bad_word_ends: bool,
         good_word_ends: bool,
         mut newscore: c_int,
@@ -81,7 +80,7 @@ impl Walk {
         let mut try_compound = unsafe { self.may_compound(flags) };
         if try_compound {
             let comp_len = self.stack[level].comp_len as usize;
-            self.compflags[comp_len] = ((flags as u32) >> 24) as u8;
+            self.compflags[comp_len] = ((flags.bits() as u32) >> 24) as u8;
             self.compflags[comp_len + 1] = NUL as u8;
         }
 
@@ -124,7 +123,7 @@ impl Walk {
         // Saved so that STATE_SPLITUNDO can put it back.
         //
         // SAFETY: as above.
-        self.stack[level].saved_badflags = unsafe { (*self.su).su_badflags } as u8;
+        self.stack[level].saved_badflags = unsafe { (*self.su).su_badflags }.bits() as u8;
         self.stack[level].state = State::SplitUndo;
 
         self.depth += 1;
@@ -186,7 +185,7 @@ impl Walk {
     /// # Safety
     ///
     /// The walk's language must be valid.
-    unsafe fn may_compound(&mut self, flags: c_int) -> bool {
+    unsafe fn may_compound(&mut self, flags: WordFlags) -> bool {
         let level = self.depth as usize;
         let split_off = self.stack[level].split_off as usize;
         let this_word_len =
@@ -199,7 +198,7 @@ impl Walk {
         !self.soundfold
             && !unsafe { (*self.slang).sl_nocompoundsugs }
             && !unsafe { (*self.slang).sl_compprog }.is_null()
-            && (flags as u32) >> 24 != 0
+            && (flags.bits() as u32) >> 24 != 0
             && this_word_len >= unsafe { (*self.slang).sl_compminlen }
             && (unsafe { (*self.slang).sl_compminlen } == 0
                 || unsafe { mb_charlen(self.tword.as_ptr().add(split_off)) }
@@ -208,7 +207,7 @@ impl Walk {
                 || (self.stack[level].comp_len as c_int + 1
                     - self.stack[level].comp_split as c_int)
                     < unsafe { (*self.slang).sl_compmax })
-            && unsafe { self.can_be_compound(((flags as u32) >> 24) as c_int) }
+            && unsafe { self.can_be_compound(((flags.bits() as u32) >> 24) as c_int) }
     }
 
     /// What a split costs, and whether it is allowed at all.
@@ -219,12 +218,14 @@ impl Walk {
     /// # Safety
     ///
     /// The walk's state must be valid.
-    unsafe fn split_penalty(&mut self, flags: c_int, mut newscore: c_int) -> Option<c_int> {
+    unsafe fn split_penalty(&mut self, flags: WordFlags, mut newscore: c_int) -> Option<c_int> {
         let level = self.depth as usize;
 
         // Splitting means the words so far have to be valid on their
         // own. A single word must not carry NEEDCOMPOUND.
-        if self.stack[level].comp_len == self.stack[level].comp_split && flags & WF_NEEDCOMP != 0 {
+        if self.stack[level].comp_len == self.stack[level].comp_split
+            && flags.has(WordFlags::NEEDCOMP)
+        {
             return None;
         }
         let mut last_word = self.preword.as_mut_ptr();

@@ -27,6 +27,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::buffer::buf_is_empty;
@@ -54,10 +55,7 @@ use ::libc::{strcat, strcpy};
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
 use super::lookup::valid_word_prefix;
-use super::{
-    MAXWLEN, WC_KEY_OFF, WF_ALLCAP, WF_BANNED, WF_CAPMASK, WF_FIXCAP, WF_KEEPCAP, WF_NEEDCOMP,
-    WF_ONECAP, WF_RARE, WF_RAREPFX, WF_REGION,
-};
+use super::{MAXWLEN, WC_KEY_OFF};
 
 /// Round 2 of the walk: the keep-case tree.
 const DUMPFLAG_KEEPCASE: c_int = 1;
@@ -165,9 +163,9 @@ pub unsafe fn spell_dump_compl(
             dumpflags |= DUMPFLAG_ICASE;
         } else {
             let n = unsafe { captype(pat, core::ptr::null()) };
-            if n == WF_ONECAP as c_int {
+            if n == WordFlags::ONECAP {
                 dumpflags |= DUMPFLAG_ONECAP;
-            } else if n == WF_ALLCAP as c_int
+            } else if n == WordFlags::ALLCAP
                 && unsafe { cstr::bytes_at(pat) }.len() as c_int > unsafe { utfc_ptr2len(pat) }
             {
                 dumpflags |= DUMPFLAG_ALLCAP;
@@ -259,21 +257,23 @@ pub unsafe fn spell_dump_compl(
                     // Keep-case words are skipped in the fold-case tree
                     // — they show up in the keep-case one — and words
                     // for other regions are skipped entirely.
-                    let mut flags = unsafe { *idxs.offset(n as isize) };
-                    if (round == 2 || flags & WF_KEEPCAP as c_int == 0)
-                        && flags & WF_NEEDCOMP as c_int == 0
+                    let mut flags = WordFlags::from_bits(unsafe { *idxs.offset(n as isize) });
+                    if (round == 2 || !flags.has(WordFlags::KEEPCAP))
+                        && !flags.has(WordFlags::NEEDCOMP)
                         && (do_region
-                            || flags & WF_REGION as c_int == 0
-                            || (flags as c_uint >> 16) & unsafe { (*lp).lp_region } as c_uint != 0)
+                            || !flags.has(WordFlags::REGION)
+                            || (flags.bits() as c_uint >> 16)
+                                & unsafe { (*lp).lp_region } as c_uint
+                                != 0)
                     {
                         word[d] = NUL as c_char;
                         if !do_region {
-                            flags &= !(WF_REGION as c_int);
+                            flags.clear(WordFlags::REGION);
                         }
 
                         // Dump the bare word when it has no prefix, or
                         // when this is the first of its prefixes.
-                        c = (flags as c_uint >> 24) as c_int;
+                        c = (flags.bits() as c_uint >> 24) as c_int;
                         if c == 0 || curi[d] == 2 {
                             let w = word.as_mut_ptr();
                             unsafe { dump_word(slang, w, pat, dir, dumpflags, flags, lnum) };
@@ -323,7 +323,7 @@ unsafe fn dump_word(
     pat: *mut c_char,
     dir: *mut Direction,
     dumpflags: c_int,
-    wordflags: c_int,
+    wordflags: WordFlags,
     lnum: linenr_T,
 ) {
     let mut counted = [0 as c_char; IOSIZE as usize];
@@ -333,21 +333,21 @@ unsafe fn dump_word(
     let mut flags = wordflags;
 
     if dumpflags & DUMPFLAG_ONECAP != 0 {
-        flags |= WF_ONECAP as c_int;
+        flags |= WordFlags::ONECAP;
     }
     if dumpflags & DUMPFLAG_ALLCAP != 0 {
-        flags |= WF_ALLCAP as c_int;
+        flags |= WordFlags::ALLCAP;
     }
 
     let mut p;
-    if dumpflags & DUMPFLAG_KEEPCASE == 0 && flags & WF_CAPMASK as c_int != 0 {
+    if dumpflags & DUMPFLAG_KEEPCASE == 0 && flags.has(WordFlags::CAPMASK) {
         unsafe { make_case_word(word, cword.as_mut_ptr(), flags) };
         p = cword.as_mut_ptr();
     } else {
         p = word;
         if dumpflags & DUMPFLAG_KEEPCASE != 0
-            && (unsafe { captype(word, core::ptr::null()) } & WF_KEEPCAP as c_int == 0
-                || flags & WF_FIXCAP as c_int != 0)
+            && (!unsafe { captype(word, core::ptr::null()) }.has(WordFlags::KEEPCAP)
+                || flags.has(WordFlags::FIXCAP))
         {
             keepcap = true;
         }
@@ -355,20 +355,20 @@ unsafe fn dump_word(
     let tw = p;
 
     if pat.is_null() {
-        if flags & (WF_BANNED | WF_RARE | WF_REGION) as c_int != 0 || keepcap {
+        if flags.has(WordFlags::BANNED | WordFlags::RARE | WordFlags::REGION) || keepcap {
             unsafe { strcpy(badword.as_mut_ptr(), p) };
             unsafe { strcat(badword.as_mut_ptr(), c"/".as_ptr()) };
             if keepcap {
                 unsafe { strcat(badword.as_mut_ptr(), c"=".as_ptr()) };
             }
-            if flags & WF_BANNED as c_int != 0 {
+            if flags.has(WordFlags::BANNED) {
                 unsafe { strcat(badword.as_mut_ptr(), c"!".as_ptr()) };
-            } else if flags & WF_RARE as c_int != 0 {
+            } else if flags.has(WordFlags::RARE) {
                 unsafe { strcat(badword.as_mut_ptr(), c"?".as_ptr()) };
             }
-            if flags & WF_REGION as c_int != 0 {
+            if flags.has(WordFlags::REGION) {
                 for i in 0..7 {
-                    if flags & (0x10000 << i) != 0 {
+                    if flags.has(WordFlags::from_bits(0x10000 << i)) {
                         let badword_len = unsafe { cstr::bytes_at(badword.as_ptr()) }.len();
                         let room = badword.len() - badword_len;
                         let at = unsafe { badword.as_mut_ptr().add(badword_len) };
@@ -422,7 +422,7 @@ unsafe fn dump_prefixes(
     pat: *mut c_char,
     dir: *mut Direction,
     dumpflags: c_int,
-    flags: c_int,
+    flags: WordFlags,
     startlnum: linenr_T,
 ) -> linenr_T {
     let mut arridx = [0 as idx_T; MAXWLEN];
@@ -478,8 +478,8 @@ unsafe fn dump_prefixes(
             if c != 0 {
                 let at = unsafe { prefix.as_mut_ptr().add(d) };
                 unsafe { xstrlcpy(at, word, MAXWLEN - d) };
-                let pfx_flags = if c & WF_RAREPFX as c_int != 0 {
-                    flags | WF_RARE as c_int
+                let pfx_flags = if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
+                    flags | WordFlags::RARE
                 } else {
                     flags
                 };
@@ -499,8 +499,8 @@ unsafe fn dump_prefixes(
                     let at = unsafe { prefix.as_mut_ptr().add(d) };
                     let up = word_up.as_mut_ptr();
                     unsafe { xstrlcpy(at, up, MAXWLEN - d) };
-                    let pfx_flags = if c & WF_RAREPFX as c_int != 0 {
-                        flags | WF_RARE as c_int
+                    let pfx_flags = if WordFlags::from_bits(c).has(WordFlags::RAREPFX) {
+                        flags | WordFlags::RARE
                     } else {
                         flags
                     };
