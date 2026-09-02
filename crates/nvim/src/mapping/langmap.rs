@@ -91,12 +91,9 @@ unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
 /// `from` characters and then all the `to` characters.
 ///
 /// # Safety
-/// `args` must point at a live `optset_T` whose `os_errbuf` has room for
-/// `os_errbuflen` bytes.
-pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's promise -- `args` is a live `optset_T`, whose
-    // `os_errbuf` has room for `os_errbuflen` bytes.
-    let opts = unsafe { Live::new(args) };
+/// The frame's `os_errbuf` must have room for `os_errbuflen` bytes.
+pub unsafe fn did_set_langmap(args: &mut optset_T) -> Option<&CStr> {
+    let opts = &*args;
     langmap_init(); // back to a one-to-one map
     let mut p = p_langmap.get();
     // SAFETY (this body): `p` and `p2` walk `'langmap'`, which is a live
@@ -156,15 +153,14 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
             }
             if to == NUL {
                 let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
-                let missing = c"E357: 'langmap': Matching character missing for %s";
-                // SAFETY: `os_errbuf` has room for `os_errbuflen` bytes, and
-                // the format's one conversion is the rendering below it.
-                unsafe {
-                    let shown = transchar(from);
-                    let fmt = gettext(missing);
-                    snprintf(errbuf, errlen, fmt.as_ptr(), shown.as_ptr());
-                }
-                return errbuf;
+                let fmt = gettext(c"E357: 'langmap': Matching character missing for %s");
+                // SAFETY: `os_errbuf` has room for `os_errbuflen` bytes, the
+                // format's one conversion is the rendering below it, and
+                // `snprintf` terminates what it wrote.
+                return Some(unsafe {
+                    snprintf(errbuf, errlen, fmt.as_ptr(), transchar(from).as_ptr());
+                    CStr::from_ptr(errbuf)
+                });
             }
 
             if from >= 256 {
@@ -201,18 +197,17 @@ pub unsafe fn did_set_langmap(args: *mut optset_T) -> *const c_char {
             if unsafe { *p } != 0 {
                 if unsafe { *p } != b',' as c_char {
                     let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
-                    let extra = c"E358: 'langmap': Extra characters after semicolon: %s";
+                    let fmt = gettext(c"E358: 'langmap': Extra characters after semicolon: %s");
                     // SAFETY: as the `E357` message above.
-                    unsafe {
-                        let fmt = gettext(extra);
+                    return Some(unsafe {
                         snprintf(errbuf, errlen, fmt.as_ptr(), p);
-                    }
-                    return errbuf;
+                        CStr::from_ptr(errbuf)
+                    });
                 }
                 p = unsafe { p.add(1) };
             }
             break;
         }
     }
-    core::ptr::null()
+    None
 }

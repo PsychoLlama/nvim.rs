@@ -345,19 +345,20 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> schar_T {
 /// # Safety
 /// `errbuf` is null or points at `errbuflen` writable bytes; `fmt` takes
 /// one string argument.
-unsafe fn field_value_err(
+unsafe fn field_value_err<'a>(
     errbuf: *mut c_char,
     errbuflen: size_t,
     fmt: *const c_char,
     field: &CStr,
-) -> *const c_char {
+) -> &'a CStr {
     if errbuf.is_null() {
-        return c"".as_ptr();
+        return c"";
     }
     // SAFETY: the caller's buffer and format, with the one argument it
     // takes.
     unsafe { vim_snprintf(errbuf, errbuflen, gettext_ptr(fmt).as_ptr(), field.as_ptr()) };
-    errbuf
+    // SAFETY: `vim_snprintf` terminated what it wrote.
+    unsafe { CStr::from_ptr(errbuf) }
 }
 
 /// A character struct as raw bytes, for the fields the table addresses by
@@ -388,14 +389,14 @@ fn store_field(chars: &mut [u8], slot: usize, value: schar_T) {
 /// # Safety
 /// `wp` is a live window, `value` a C string, and `errbuf` null or
 /// `errbuflen` writable bytes.
-pub unsafe fn set_chars_option(
+pub unsafe fn set_chars_option<'a>(
     wp: *mut win_T,
     value: *const c_char,
     what: CharsOption,
     apply: bool,
     errbuf: *mut c_char,
     errbuflen: size_t,
-) -> *const c_char {
+) -> Option<&'a CStr> {
     let listchars = is_listchars(what);
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
     // SAFETY: the caller's window; both are C strings.
@@ -455,7 +456,7 @@ pub unsafe fn set_chars_option(
                 .iter()
                 .position(|field| field_opens_at(bytes, p, field.name))
             else {
-                return e_invarg.as_ptr();
+                return Some(e_invarg);
             };
             let field = &tab[i];
             let mut s = p + field.name.to_bytes().len() + 1;
@@ -489,13 +490,13 @@ pub unsafe fn set_chars_option(
                         *len = 0;
                         while !at_field_end(bytes, s) {
                             if take_encoded_char(value, &mut s) == 0 {
-                                return width_err(field.name);
+                                return Some(width_err(field.name));
                             }
                             *len += 1;
                         }
                         // The field cannot be empty.
                         if *len == 0 {
-                            return count_err(field.name);
+                            return Some(count_err(field.name));
                         }
                     } else {
                         // Only the last mention of the field fills the run;
@@ -523,27 +524,27 @@ pub unsafe fn set_chars_option(
                 }
                 _ => {
                     if at_end(bytes, s) {
-                        return count_err(field.name);
+                        return Some(count_err(field.name));
                     }
                     let c1 = take_encoded_char(value, &mut s);
                     if c1 == 0 {
-                        return width_err(field.name);
+                        return Some(width_err(field.name));
                     }
                     let mut c2: schar_T = 0;
                     let mut c3: schar_T = 0;
                     if matches!(field.shape, Shape::Tab | Shape::LeadTab) {
                         if at_end(bytes, s) {
-                            return count_err(field.name);
+                            return Some(count_err(field.name));
                         }
                         c2 = take_encoded_char(value, &mut s);
                         if c2 == 0 {
-                            return width_err(field.name);
+                            return Some(width_err(field.name));
                         }
                         // The third character is optional.
                         if !at_field_end(bytes, s) {
                             c3 = take_encoded_char(value, &mut s);
                             if c3 == 0 {
-                                return width_err(field.name);
+                                return Some(width_err(field.name));
                             }
                         }
                         if field.shape == Shape::Tab {
@@ -553,7 +554,7 @@ pub unsafe fn set_chars_option(
                         }
                     }
                     if !at_field_end(bytes, s) {
-                        return count_err(field.name);
+                        return Some(count_err(field.name));
                     }
                     if round > 0 {
                         match field.shape {
@@ -588,7 +589,7 @@ pub unsafe fn set_chars_option(
         }
 
         if listchars && has_leadtab && !has_tab {
-            return e_leadtab_requires_tab.as_ptr();
+            return Some(e_leadtab_requires_tab);
         }
     }
 
@@ -603,7 +604,7 @@ pub unsafe fn set_chars_option(
             unsafe { (*wp).w_p_fcs_chars = fcs };
         }
     }
-    ptr::null()
+    None
 }
 
 /// Does the field named `name` start at `p`? A field name is followed by a
@@ -675,14 +676,14 @@ unsafe fn alloc_run(len: c_int) -> *mut schar_T {
 /// # Safety
 /// `win` is a live window, `val` a C string, `errbuf` null or `errbuflen`
 /// writable bytes.
-pub(crate) unsafe fn did_set_global_chars_option(
+pub(crate) unsafe fn did_set_global_chars_option<'a>(
     win: *mut win_T,
     val: *mut c_char,
     what: CharsOption,
     opt_flags: OptionSetFlags,
     errbuf: *mut c_char,
     errbuflen: size_t,
-) -> *const c_char {
+) -> Option<&'a CStr> {
     let listchars = is_listchars(what);
     // SAFETY: the caller's window.
     let local_ptr = unsafe {
@@ -697,7 +698,7 @@ pub(crate) unsafe fn did_set_global_chars_option(
 
     // SAFETY: the caller's window and value.
     let errmsg = unsafe { set_chars_option(win, val, what, for_this_window, errbuf, errbuflen) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
 
@@ -717,12 +718,12 @@ pub(crate) unsafe fn did_set_global_chars_option(
             if c_int::from(*opt) == NUL {
                 set_chars_option(wp, opt, what, true, errbuf, errbuflen);
             }
-            ptr::null()
+            None
         })
     };
     // SAFETY: `redraw_all_later` only marks the editor's own windows.
     unsafe { redraw_all_later(UPD_NOT_VALID) };
-    ptr::null()
+    None
 }
 
 /// The option-table callback for both options and both scopes: which of the
@@ -730,18 +731,15 @@ pub(crate) unsafe fn did_set_global_chars_option(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame.
-    let (win, varp, idx, flags, errbuf, errbuflen) = unsafe {
-        (
-            (*args).os_win.cast::<win_T>(),
-            (*args).os_varp.string_var(),
-            (*args).os_idx,
-            (*args).os_flags,
-            (*args).os_errbuf,
-            (*args).os_errbuflen,
-        )
-    };
+pub unsafe fn did_set_chars_option(args: &mut optset_T) -> Option<&CStr> {
+    let (win, varp, idx, flags, errbuf, errbuflen) = (
+        args.os_win.cast::<win_T>(),
+        args.os_varp.string_var(),
+        args.os_idx,
+        args.os_flags,
+        args.os_errbuf,
+        args.os_errbuflen,
+    );
     // 'listchars' and 'fillchars' share this callback, so the row says which
     // option it is and the variable says which *scope*: the option's own
     // global one, or this window's copy.
@@ -759,7 +757,7 @@ pub unsafe fn did_set_chars_option(args: *mut optset_T) -> *const c_char {
     {
         unsafe { set_chars_option(win, *varp, which, true, errbuf, errbuflen) }
     } else {
-        ptr::null()
+        None
     }
 }
 
@@ -790,31 +788,28 @@ fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Reads the editor's window list.
-pub unsafe fn check_chars_options() -> *const c_char {
+pub unsafe fn check_chars_options() -> Option<&'static CStr> {
     let check = |wp, value, what, apply| {
         // SAFETY: a live window and a C string; no message is wanted.
-        if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_null() {
-            ptr::null()
+        if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_none() {
+            None
         } else if is_listchars(what) {
-            e_conflicts_with_value_of_listchars.as_ptr()
+            Some(e_conflicts_with_value_of_listchars)
         } else {
-            e_conflicts_with_value_of_fillchars.as_ptr()
+            Some(e_conflicts_with_value_of_fillchars)
         }
     };
 
-    let global = check(curwin.get(), p_lcs.get(), kListchars, false);
-    if !global.is_null() {
-        return global;
+    if let Some(global) = check(curwin.get(), p_lcs.get(), kListchars, false) {
+        return Some(global);
     }
-    let global = check(curwin.get(), p_fcs.get(), kFillchars, false);
-    if !global.is_null() {
-        return global;
+    if let Some(global) = check(curwin.get(), p_fcs.get(), kFillchars, false) {
+        return Some(global);
     }
     // SAFETY: `for_each_window` only visits live windows.
     for_each_window(|wp| {
-        let errmsg = check(wp, unsafe { (*wp).w_onebuf_opt.wo_lcs }, kListchars, true);
-        if !errmsg.is_null() {
-            return errmsg;
+        if let Some(errmsg) = check(wp, unsafe { (*wp).w_onebuf_opt.wo_lcs }, kListchars, true) {
+            return Some(errmsg);
         }
         check(wp, unsafe { (*wp).w_onebuf_opt.wo_fcs }, kFillchars, true)
     })
@@ -826,12 +821,13 @@ pub unsafe fn check_chars_options() -> *const c_char {
 /// `FOR_ALL_TAB_WINDOWS`, i.e. [`winlayer::tab_windows`] -- which already
 /// knows that the current tab page's windows hang off `firstwin` rather than
 /// off its own stale list.
-fn for_each_window(mut visit: impl FnMut(*mut win_T) -> *const c_char) -> *const c_char {
+fn for_each_window(
+    mut visit: impl FnMut(*mut win_T) -> Option<&'static CStr>,
+) -> Option<&'static CStr> {
     for wp in winlayer::tab_windows() {
-        let errmsg = visit(wp.raw());
-        if !errmsg.is_null() {
-            return errmsg;
+        if let Some(errmsg) = visit(wp.raw()) {
+            return Some(errmsg);
         }
     }
-    ptr::null()
+    None
 }

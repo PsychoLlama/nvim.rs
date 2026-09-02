@@ -985,11 +985,13 @@ impl<'w> Emitter<'w> {
                 // `&T` / `&mut T` is ABI-identical to `*const T` / `*mut T`,
                 // so it renders exactly like the Ptr arm above. Unsized
                 // referents are fat pointers and have no C spelling: `[T]`,
-                // `dyn Trait` and bare `str` all fall through to None (the
-                // first two have no arm; `str` is rejected here so it cannot
-                // reach the Path arm and be emitted as an opaque `str *`).
+                // `dyn Trait`, bare `str` and `CStr` all fall through to
+                // None (the first two have no arm; the named ones are
+                // rejected here so they cannot reach the Path arm and be
+                // emitted as an opaque `str *` / `CStr *`).
                 if let syn::Type::Path(tp) = &*r.elem {
-                    if tp.path.is_ident("str") {
+                    let last = tp.path.segments.last().map(|s| s.ident.to_string());
+                    if matches!(last.as_deref(), Some("str" | "CStr" | "OsStr" | "Path")) {
                         return None;
                     }
                 }

@@ -18,7 +18,7 @@ use crate::decoration_provider::get_decor_provider;
 use crate::drawscreen::{
     UPD_NOT_VALID, redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
-use crate::ex_getln::{check_opt_wim, did_set_cedit};
+use crate::ex_getln::{check_opt_wim, derive_cedit_key};
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
@@ -30,15 +30,16 @@ use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
 use crate::options::*;
 use crate::optionstr::{
-    check_string_option, did_set_breakat, didset_string_options, empty_option, set_chars_option,
+    check_string_option, derive_breakat_flags, didset_string_options, empty_option,
+    set_chars_option,
 };
 use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, optset_T,
-    size_t, uint32_t, win_T,
+    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, size_t,
+    uint32_t, win_T,
 };
 use crate::winlayer::Win;
 
@@ -134,8 +135,10 @@ pub(crate) fn didset_options() {
     let _ = unsafe { spell_check_sps() };
     unsafe { compile_cap_prog(cur_win().w_s) };
     unsafe { did_set_spell_option() };
-    unsafe { did_set_cedit(ptr::null_mut::<optset_T>()) };
-    unsafe { did_set_breakat(ptr::null_mut::<optset_T>()) };
+    // The two callbacks these stand in for read no frame at all, and the
+    // startup sweep has none to give.
+    let _ = derive_cedit_key();
+    unsafe { derive_breakat_flags() };
     unsafe { didset_window_options(curwin.get(), true) };
 }
 

@@ -145,7 +145,7 @@ impl Frame {
 }
 
 /// 'arabic': a bundle of other settings, plus the Arabic keymap.
-pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_arabic(args: &mut optset_T) -> Option<&CStr> {
     let (keymap, local) = (cstr_optval(c"arabic"), OptionSetFlags::LOCAL);
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
@@ -158,7 +158,7 @@ pub(crate) unsafe fn did_set_arabic(args: *mut optset_T) -> *const c_char {
         let mut buf = unsafe { Buf::new(win.w_buffer) };
         buf.b_p_iminsert = B_IMODE_NONE as OptInt;
         buf.b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
-        return ptr::null();
+        return None;
     }
 
     if p_tbidi.get() == 0 {
@@ -192,23 +192,23 @@ fn cstr_optval(value: &'static CStr) -> OptVal {
 }
 
 /// 'autochdir': follow the current file's directory from now on.
-pub(crate) unsafe fn did_set_autochdir(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_autochdir(_args: &mut optset_T) -> Option<&CStr> {
     do_autochdir();
-    ptr::null()
+    None
 }
 
 /// 'binary': override four text options for as long as it is on.
-pub(crate) unsafe fn did_set_binary(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_binary(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let f = unsafe { Frame::read(args) };
     let bin = f.buf.b_p_bin != 0;
     set_options_bin(f.old_boolean() == Some(true), bin, f.flags);
     redraw_titles();
-    ptr::null()
+    None
 }
 
 /// 'buflisted': entering or leaving the buffer list is an event.
-pub(crate) unsafe fn did_set_buflisted(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_buflisted(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let f = unsafe { Frame::read(args) };
     if f.old_boolean() != Some(f.buf.b_p_bl != 0) {
@@ -227,12 +227,12 @@ pub(crate) unsafe fn did_set_buflisted(args: *mut optset_T) -> *const c_char {
             )
         };
     }
-    ptr::null()
+    None
 }
 
 /// 'cmdheight': the command line cannot be taller than the screen leaves
 /// room for, and growing or shrinking it moves every window below it.
-pub(crate) unsafe fn did_set_cmdheight(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_cmdheight(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest reads globals.
     let old_value = unsafe { Frame::read(args) }.old_number();
     let room = (Rows.get() - unsafe { min_rows(curtab.get()) } + 1) as OptInt;
@@ -246,65 +246,65 @@ pub(crate) unsafe fn did_set_cmdheight(args: *mut optset_T) -> *const c_char {
     {
         unsafe { command_height() };
     }
-    ptr::null()
+    None
 }
 
 /// 'diff': joining or leaving the diff set redoes the folds.
-pub(crate) unsafe fn did_set_diff(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_diff(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     diff_buf_adjust(win);
     if foldmethod_is_diff(win) {
         fold_update_all(win);
     }
-    ptr::null()
+    None
 }
 
 /// 'endoffile', 'endofline', 'fixendofline', 'bomb': all four show in the
 /// window title.
-pub(crate) unsafe fn did_set_eof_eol_fixeol_bomb(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_eof_eol_fixeol_bomb(_args: &mut optset_T) -> Option<&CStr> {
     redraw_titles();
-    ptr::null()
+    None
 }
 
 /// 'equalalways': switching it on evens the windows out once.
-pub(crate) unsafe fn did_set_equalalways(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_equalalways(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let f = unsafe { Frame::read(args) };
     if p_ea.get() != 0 && f.old_boolean() == Some(false) {
         unsafe { win_equal(f.win.raw(), false, 0) };
     }
-    ptr::null()
+    None
 }
 
 /// 'foldlevel': open or close folds to match.
-pub(crate) unsafe fn did_set_foldlevel(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_foldlevel(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: `curwin` is live.
     unsafe { new_fold_level() };
-    ptr::null()
+    None
 }
 
 /// 'foldminlines': the fold sizes all change.
-pub(crate) unsafe fn did_set_foldminlines(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_foldminlines(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     // SAFETY: the table's call frame, and the window it names is live.
     fold_update_all(unsafe { Frame::read(args) }.win);
-    ptr::null()
+    None
 }
 
 /// 'foldnestmax': only the two computed fold methods have nesting to cap.
-pub(crate) unsafe fn did_set_foldnestmax(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_foldnestmax(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if foldmethod_is_syntax(win) || foldmethod_is_indent(win) {
         fold_update_all(win);
     }
-    ptr::null()
+    None
 }
 
 /// 'helpheight': grow the current window if it is a help window and now too
 /// short.
-pub(crate) unsafe fn did_set_helpheight(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_helpheight(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: `curbuf`/`curwin` are live.
     if firstwin.get() != lastwin.get()
         && cur_buf().b_help
@@ -312,48 +312,48 @@ pub(crate) unsafe fn did_set_helpheight(_args: *mut optset_T) -> *const c_char {
     {
         win_setheight(p_hh.get() as c_int);
     }
-    ptr::null()
+    None
 }
 
 /// 'hlsearch': switching it on un-suppresses the current match highlight.
-pub(crate) unsafe fn did_set_hlsearch(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_hlsearch(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: reads globals only.
     unsafe { set_no_hlsearch(false) };
-    ptr::null()
+    None
 }
 
 /// 'ignorecase': what the search highlight matches changes with it.
-pub(crate) unsafe fn did_set_ignorecase(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_ignorecase(_args: &mut optset_T) -> Option<&CStr> {
     if p_hls.get() != 0 {
         // SAFETY: the screen is the editor's own.
         unsafe { redraw_all_later(UPD_SOME_VALID) };
     }
-    ptr::null()
+    None
 }
 
 /// 'iminsert': the mode message names the input method.
-pub(crate) unsafe fn did_set_iminsert(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_iminsert(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the screen is the editor's own.
     unsafe { showmode() };
     unsafe { status_redraw_curbuf() };
-    ptr::null()
+    None
 }
 
 /// 'langnoremap': the deprecated inverse of 'langremap'.
-pub(crate) unsafe fn did_set_langnoremap(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_langnoremap(_args: &mut optset_T) -> Option<&CStr> {
     p_lrm.set((p_lnr.get() == 0) as c_int);
-    ptr::null()
+    None
 }
 
 /// 'langremap': keeps the deprecated 'langnoremap' in step.
-pub(crate) unsafe fn did_set_langremap(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_langremap(_args: &mut optset_T) -> Option<&CStr> {
     p_lnr.set((p_lrm.get() == 0) as c_int);
-    ptr::null()
+    None
 }
 
 /// 'laststatus': the global status line is a row the frame tree does not
 /// own, so entering or leaving value 3 resizes the top frame by hand.
-pub(crate) unsafe fn did_set_laststatus(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_laststatus(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest is the window layout.
     let f = unsafe { Frame::read(args) };
     let (old_value, value) = (f.old_number(), f.new_number());
@@ -371,7 +371,7 @@ pub(crate) unsafe fn did_set_laststatus(args: *mut optset_T) -> *const c_char {
     unsafe { status_redraw_curbuf() };
     last_status(false);
     win_float_update_statusline();
-    ptr::null()
+    None
 }
 
 /// 'lines'/'columns': a script asking for a different screen size.
@@ -379,7 +379,7 @@ pub(crate) unsafe fn did_set_laststatus(args: *mut optset_T) -> *const c_char {
 /// Mid-redraw the request is refused outright — the value is put straight
 /// back — because the grid the redraw is writing into cannot be resized
 /// under it.
-pub(crate) unsafe fn did_set_lines_or_columns(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_lines_or_columns(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, whose `varp` is this option's own
     // variable; the rest is the screen.
     let f = unsafe { Frame::read(args) };
@@ -407,25 +407,25 @@ pub(crate) unsafe fn did_set_lines_or_columns(args: *mut optset_T) -> *const c_c
     if p_sj.get() >= Rows.get() as OptInt && full_screen.get() {
         p_sj.set((Rows.get() / 2) as OptInt);
     }
-    ptr::null()
+    None
 }
 
 /// 'lisp': the word characters change with it.
-pub(crate) unsafe fn did_set_lisp(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_lisp(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     unsafe { buf_init_chartab(Frame::read(args).buf.raw(), false) };
-    ptr::null()
+    None
 }
 
 /// 'modifiable': shows in the window title.
-pub(crate) unsafe fn did_set_modifiable(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_modifiable(_args: &mut optset_T) -> Option<&CStr> {
     redraw_titles();
-    ptr::null()
+    None
 }
 
 /// 'modified': clearing it makes the buffer's current file format the one it
 /// will be written back in.
-pub(crate) unsafe fn did_set_modified(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_modified(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let mut f = unsafe { Frame::read(args) };
     if f.new_boolean() == Some(false) {
@@ -433,12 +433,12 @@ pub(crate) unsafe fn did_set_modified(args: *mut optset_T) -> *const c_char {
     }
     redraw_titles();
     f.buf.b_modified_was_set = f.new_boolean() != Some(false);
-    ptr::null()
+    None
 }
 
 /// 'number'/'relativenumber': both change how wide the number column is, and
 /// a 'signcolumn' of `number` rides on it.
-pub(crate) unsafe fn did_set_number_relativenumber(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_number_relativenumber(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     // A 'statuscolumn' draws the number itself, so the cached width has
@@ -447,45 +447,45 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: *mut optset_T) -> *cons
         win.w_nrwidth_line_count = 0 as linenr_T;
     }
     let _ = unsafe { check_signcolumn(ptr::null_mut(), win.raw()) };
-    ptr::null()
+    None
 }
 
 /// 'numberwidth': the cached number-column width is stale.
-pub(crate) unsafe fn did_set_numberwidth(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_numberwidth(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     unsafe { Frame::read(args).win.w_nrwidth_line_count = 0 as linenr_T };
-    ptr::null()
+    None
 }
 
 /// 'previewwindow': there can be only one, in the current tab page.
-pub(crate) unsafe fn did_set_previewwindow(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_previewwindow(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window list is the editor's.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_pvw == 0 {
-        return ptr::null();
+        return None;
     }
     for wp in winlayer::windows() {
         if wp.w_onebuf_opt.wo_pvw != 0 && wp != win {
             win.w_onebuf_opt.wo_pvw = 0;
-            return E_PREVIEW_WINDOW_EXISTS.as_ptr();
+            return Some(E_PREVIEW_WINDOW_EXISTS);
         }
     }
-    ptr::null()
+    None
 }
 
 /// 'pumblend': the blend of every highlight group is derived from it.
-pub(crate) unsafe fn did_set_pumblend(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_pumblend(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the highlight table and the popup menu are the editor's own.
     unsafe { hl_invalidate_blends() };
     if pum_drawn() {
         unsafe { pum_redraw() };
     }
-    ptr::null()
+    None
 }
 
 /// 'readonly': clearing it globally also clears the `-R` command-line flag,
 /// and setting it re-arms the "changing a readonly file" warning.
-pub(crate) unsafe fn did_set_readonly(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_readonly(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let mut f = unsafe { Frame::read(args) };
     if f.buf.b_p_ro == 0 && !f.flags.has(OptionSetFlags::LOCAL) {
@@ -495,33 +495,33 @@ pub(crate) unsafe fn did_set_readonly(args: *mut optset_T) -> *const c_char {
         f.buf.b_did_warn = false;
     }
     redraw_titles();
-    ptr::null()
+    None
 }
 
 /// 'scrollback': only shrinking one has anything for the terminal to do.
-pub(crate) unsafe fn did_set_scrollback(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_scrollback(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let f = unsafe { Frame::read(args) };
     if !f.buf.terminal.is_null() && f.new_number() < f.old_number() {
         unsafe { on_scrollback_option_changed(f.buf.terminal) };
     }
-    ptr::null()
+    None
 }
 
 /// 'scrollbind': line the window up with the others straight away.
-pub(crate) unsafe fn did_set_scrollbind(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_scrollbind(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_scb == 0 {
-        return ptr::null();
+        return None;
     }
     unsafe { do_check_scrollbind(false) };
     win.w_scbind_pos = get_vtopline(win);
-    ptr::null()
+    None
 }
 
 /// 'shiftwidth'/'tabstop': indent folds and the C indenter both read them.
-pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window and buffer it names.
     let f = unsafe { Frame::read(args) };
     if foldmethod_is_indent(f.win) {
@@ -535,37 +535,37 @@ pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: *mut optset_T) -> *const c
     if f.varp == OptSlot::Number(own_sw) || f.buf.b_p_sw == 0 {
         unsafe { parse_cino(f.buf) };
     }
-    ptr::null()
+    None
 }
 
 /// 'showtabline': the tab line takes a screen row from the windows.
-pub(crate) unsafe fn did_set_showtabline(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_showtabline(_args: &mut optset_T) -> Option<&CStr> {
     win_new_screen_rows();
-    ptr::null()
+    None
 }
 
 /// 'smoothscroll': switching it off drops any partial-line scroll.
-pub(crate) unsafe fn did_set_smoothscroll(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_smoothscroll(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_sms == 0 {
         win.w_skipcol = 0 as colnr_T;
     }
-    ptr::null()
+    None
 }
 
 /// 'spell': switching it on is what loads the word lists.
-pub(crate) unsafe fn did_set_spell(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_spell(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_spell != 0 {
         return unsafe { parse_spelllang(win.raw()) };
     }
-    ptr::null()
+    None
 }
 
 /// 'swapfile': open or close the buffer's swap file to match.
-pub(crate) unsafe fn did_set_swapfile(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_swapfile(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let buf = unsafe { Frame::read(args) }.buf;
     if buf.b_p_swf != 0 && p_uc.get() != 0 {
@@ -573,42 +573,42 @@ pub(crate) unsafe fn did_set_swapfile(args: *mut optset_T) -> *const c_char {
     } else {
         unsafe { mf_close_file(buf.raw(), true) };
     }
-    ptr::null()
+    None
 }
 
 /// 'textwidth': a 'colorcolumn' entry may be relative to it, in any window.
-pub(crate) unsafe fn did_set_textwidth(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_textwidth(_args: &mut optset_T) -> Option<&CStr> {
     for wp in winlayer::tab_windows() {
         // SAFETY: `wp` is a live window of the editor's own list.
         unsafe { check_colorcolumn(ptr::null_mut(), wp.raw()) };
     }
-    ptr::null()
+    None
 }
 
 /// 'title'/'icon': rebuild what the terminal is showing.
-pub(crate) unsafe fn did_set_title_icon(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_title_icon(_args: &mut optset_T) -> Option<&CStr> {
     did_set_title();
-    ptr::null()
+    None
 }
 
 /// 'titlelen': the title is a percentage of the window width, so it has to
 /// be rebuilt — but not before there is a screen to show it on.
-pub(crate) unsafe fn did_set_titlelen(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_titlelen(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame.
     let old_value = unsafe { Frame::read(args) }.old_number();
     if starting.get() != NO_SCREEN && old_value != p_titlelen.get() {
         need_maketitle.set(true);
     }
-    ptr::null()
+    None
 }
 
 /// 'undofile': switching it on reads back the undo file of every unmodified
 /// buffer it now applies to.
-pub(crate) unsafe fn did_set_undofile(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_undofile(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer list is the editor's.
     let f = unsafe { Frame::read(args) };
     if f.buf.b_p_udf == 0 && p_udf.get() == 0 {
-        return ptr::null();
+        return None;
     }
     let mut hash: [uint8_t; 32] = [0; 32];
     for bp in winlayer::buffers() {
@@ -623,12 +623,12 @@ pub(crate) unsafe fn did_set_undofile(args: *mut optset_T) -> *const c_char {
             unsafe { u_read_undo(ptr::null_mut(), hash, fname) };
         }
     }
-    ptr::null()
+    None
 }
 
 /// 'undolevels': the pending change has to be closed off under the *old*
 /// limit before the new one takes effect.
-pub(crate) unsafe fn did_set_undolevels(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_undolevels(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let mut f = unsafe { Frame::read(args) };
     let pp = f.varp.number_var();
@@ -645,21 +645,21 @@ pub(crate) unsafe fn did_set_undolevels(args: *mut optset_T) -> *const c_char {
         u_sync(true);
         f.buf.b_p_ul = value;
     }
-    ptr::null()
+    None
 }
 
 /// 'updatecount': switching it on from zero is what opens the swap files.
-pub(crate) unsafe fn did_set_updatecount(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_updatecount(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer list is the editor's.
     if p_uc.get() != 0 && unsafe { Frame::read(args) }.old_number() == 0 {
         unsafe { ml_open_files() };
     }
-    ptr::null()
+    None
 }
 
 /// 'wildchar'/'wildcharm': a key that already means something on the command
 /// line cannot also start completion.
-pub(crate) unsafe fn did_set_wildchar(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_wildchar(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, whose `varp` is this numeric option's
     // own variable.
     let c = unsafe { *Frame::read(args).varp.number_var() };
@@ -668,14 +668,14 @@ pub(crate) unsafe fn did_set_wildchar(args: *mut optset_T) -> *const c_char {
         || c == '\r' as OptInt
         || c == Key::Kenter.code() as OptInt
     {
-        return e_invarg.as_ptr();
+        return Some(e_invarg);
     }
-    ptr::null()
+    None
 }
 
 /// 'winblend': the window's own blend, clamped, plus the highlight groups
 /// that depend on it.
-pub(crate) unsafe fn did_set_winblend(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_winblend(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let f = unsafe { Frame::read(args) };
     if f.new_number() != f.old_number() {
@@ -684,38 +684,38 @@ pub(crate) unsafe fn did_set_winblend(args: *mut optset_T) -> *const c_char {
         win.w_hl_needs_update = true;
         unsafe { check_blending(win.raw()) };
     }
-    ptr::null()
+    None
 }
 
 /// 'window': the scroll amount `CTRL-F` uses, capped at the screen.
-pub(crate) unsafe fn did_set_window(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_window(_args: &mut optset_T) -> Option<&CStr> {
     if p_window.get() < 1 || p_window.get() >= Rows.get() as OptInt {
         p_window.set((Rows.get() - 1) as OptInt);
     }
-    ptr::null()
+    None
 }
 
 /// 'winheight': grow the current window if it is now too short.
-pub(crate) unsafe fn did_set_winheight(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_winheight(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: `curwin` is live.
     if firstwin.get() != lastwin.get() && (cur_win().w_height as OptInt) < p_wh.get() {
         win_setheight(p_wh.get() as c_int);
     }
-    ptr::null()
+    None
 }
 
 /// 'winwidth': widen the current window if it is now too narrow.
-pub(crate) unsafe fn did_set_winwidth(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_winwidth(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: `curwin` is live.
     if firstwin.get() != lastwin.get() && (cur_win().w_width as OptInt) < p_wiw.get() {
         win_setwidth(p_wiw.get() as c_int);
     }
-    ptr::null()
+    None
 }
 
 /// 'wrap': the two scroll offsets are exclusive — a wrapped window scrolls
 /// within a line, an unwrapped one scrolls sideways.
-pub(crate) unsafe fn did_set_wrap(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_wrap(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_wrap != 0 {
@@ -723,11 +723,11 @@ pub(crate) unsafe fn did_set_wrap(args: *mut optset_T) -> *const c_char {
     } else {
         win.w_skipcol = 0 as colnr_T;
     }
-    ptr::null()
+    None
 }
 
 /// 'chistory'/'lhistory': how many quickfix or location lists to keep.
-pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_xhistory(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, whose `varp` is this numeric option's
     // own variable, and the window it names is live.
     let f = unsafe { Frame::read(args) };
@@ -737,7 +737,7 @@ pub(crate) unsafe fn did_set_xhistory(args: *mut optset_T) -> *const c_char {
     } else {
         ll_resize_stack(f.win, unsafe { *arg } as c_int);
     }
-    ptr::null()
+    None
 }
 
 /// Fire the `Syntax` autocommand for a buffer whose 'syntax' just changed.

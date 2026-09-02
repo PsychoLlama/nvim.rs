@@ -18,7 +18,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
 
 use crate::main::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
@@ -118,11 +117,11 @@ pub(crate) unsafe fn did_set_opt_flags(
     val: *const c_char,
     values: &[&CStr],
     list: bool,
-) -> *const c_char {
+) -> Option<&'static CStr> {
     if unsafe { opt_strings_ok(val, values, list) } {
-        ptr::null()
+        None
     } else {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     }
 }
 
@@ -131,12 +130,12 @@ pub(crate) unsafe fn did_set_opt_flags(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
-    let (idx, varp) = unsafe { ((*args).os_idx, (*args).os_varp.string_var()) };
+pub unsafe fn did_set_str_generic(args: &mut optset_T) -> Option<&'static CStr> {
+    let (idx, varp) = (args.os_idx, args.os_varp.string_var());
     if unsafe { check_str_opt(idx, varp) }.is_err() {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     } else {
-        ptr::null()
+        None
     }
 }
 
@@ -148,21 +147,21 @@ pub unsafe fn did_set_str_generic(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `val` and `flags` are C strings; `errbuf` is null or points at
 /// `errbuflen` writable bytes.
-pub(crate) unsafe fn did_set_option_listflag(
+pub(crate) unsafe fn did_set_option_listflag<'a>(
     val: *const c_char,
     flags: *const c_char,
     errbuf: *mut c_char,
     errbuflen: size_t,
-) -> *const c_char {
+) -> Option<&'a CStr> {
     // SAFETY: the caller guarantees a C string.
     for &byte in unsafe { CStr::from_ptr(val) }.to_bytes() {
         // SAFETY: `flags` is a C string; `vim_strchr` only reads it.
         if unsafe { vim_strchr(flags, c_int::from(byte)) }.is_null() {
             // SAFETY: the caller's buffer, as documented above.
-            return unsafe { illegal_char(errbuf, errbuflen, c_int::from(byte)) };
+            return Some(unsafe { illegal_char(errbuf, errbuflen, c_int::from(byte)) });
         }
     }
-    ptr::null()
+    None
 }
 
 /// Re-run an option's word-list check against its current value, refreshing

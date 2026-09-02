@@ -23,7 +23,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 use crate::api::private::helpers::{arena_array, arena_dict, array_add, cstr_as_string, dict_put};
 use crate::charset::getdigits_int;
@@ -283,7 +282,7 @@ unsafe fn digits_at(opt: *mut c_char, at: usize) -> (c_int, usize) {
 /// string, and defines highlight groups; main thread only.
 ///
 /// @returns an error message for an illegal option, null otherwise.
-pub(crate) unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
+pub(crate) unsafe fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
     // Set by a `ve` in the mode list, in either round.
     let mut found_ve = false;
 
@@ -297,14 +296,14 @@ pub(crate) unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
             clear_shape_table();
             if bytes.is_empty() {
                 ui_mode_info_set();
-                return ptr::null();
+                return None;
             }
         }
         // SAFETY: `bytes` is the string `opt` points at.
         if let Err(msg) = unsafe { parse_parts(opt, bytes, what, round == 2, &mut found_ve) } {
-            // The option layer takes the message as a bare pointer; that is
-            // the only reason one is handed back rather than reported here.
-            return msg.as_ptr();
+            // The option layer reports it, so it is handed back rather
+            // than reported here.
+            return Some(msg);
         }
     }
 
@@ -323,7 +322,7 @@ pub(crate) unsafe fn parse_shape_opt(what: c_int) -> *const c_char {
         });
     }
     ui_mode_info_set();
-    ptr::null()
+    None
 }
 
 /// One pass over the option value. `apply` is upstream's `round == 2`: the

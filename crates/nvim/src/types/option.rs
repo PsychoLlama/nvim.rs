@@ -124,7 +124,15 @@ impl OptVal {
 }
 
 pub type OptValType = ::core::ffi::c_int;
-pub type opt_did_set_cb_T = Option<unsafe fn(*mut optset_T) -> *const ::core::ffi::c_char>;
+/// What the option table names for an option that has just been set: a
+/// callback that vets the new value and reports a message when it does not
+/// like it.
+///
+/// The message borrows the frame, because a callback that formats one
+/// writes it into the caller's `os_errbuf`; a callback that only names a
+/// constant answers a `'static` one, which coerces.
+pub type opt_did_set_cb_T =
+    Option<for<'a> unsafe fn(&'a mut optset_T) -> Option<&'a ::core::ffi::CStr>>;
 pub type opt_expand_cb_T = Option<
     unsafe fn(
         *mut optexpand_T,

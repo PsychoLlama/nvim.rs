@@ -18,7 +18,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
@@ -272,8 +271,8 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
 
     // The new widths must not conflict with 'listchars' or 'fillchars'.
     let error = unsafe { check_chars_options() };
-    if !error.is_null() {
-        unsafe { emsg(gettext_ptr(error)) };
+    if let Some(error) = error {
+        emsg(gettext(error));
         CELL_WIDTHS.with_mut(|t| *t = saved);
         return;
     }

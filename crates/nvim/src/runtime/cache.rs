@@ -33,7 +33,7 @@ use crate::semsg;
 use crate::smsg;
 
 use crate::types::{FAIL, MAXPATHL, OK};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// The mutex guarding [`runtime_search_path_thread`], named once so the raw
@@ -323,7 +323,7 @@ unsafe fn expand_rtp_entry(
 }
 
 /// The two shapes a 'packpath' entry's `start` packages can take.
-const START_PATTERNS: [&core::ffi::CStr; 2] = [c"/pack/*/start/*", c"/start/*"];
+const START_PATTERNS: [&CStr; 2] = [c"/pack/*/start/*", c"/start/*"];
 
 /// Add one 'packpath' entry's `start` packages to the search path, and queue
 /// their `after/` directories for the end of the build.
@@ -616,9 +616,9 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub unsafe fn did_set_runtimepackpath(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_runtimepackpath(_args: &mut optset_T) -> Option<&CStr> {
     runtime_search_path_valid.set(false);
-    ptr::null()
+    None
 }
 
 /// Free a search path and every string in it.

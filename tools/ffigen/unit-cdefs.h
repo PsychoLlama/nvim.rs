@@ -526,7 +526,7 @@ typedef void (*mpack_walk_cb)(mpack_parser_t *, mpack_node_t *);
 typedef msglist msglist_T;
 typedef long off_t;
 typedef off_t off_T;
-typedef const char *(*opt_did_set_cb_T)(optset_T *);
+typedef struct opt_did_set_cb_T opt_did_set_cb_T;
 typedef struct opt_expand_cb_T opt_expand_cb_T;
 typedef unsigned int optmagic_T;
 typedef partial_S partial_T;

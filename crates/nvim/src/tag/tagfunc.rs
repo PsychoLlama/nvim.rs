@@ -44,28 +44,29 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 ///
 /// # Safety
 /// `args` must describe the option being set.
-pub unsafe fn did_set_tagfunc(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_tagfunc(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
-    let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
-    let value = unsafe { (*args).os_newval }
+    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let value = args
+        .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .data();
-    let retval = if unsafe { (*args).os_flags.has(OptionSetFlags::LOCAL) } {
+    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func(value, &raw mut buf.b_tfu_cb) }
     } else {
         let retval = unsafe { option_set_callback_func(value, global_tagfunc()) };
-        if retval.is_ok() && !unsafe { (*args).os_flags.has(OptionSetFlags::GLOBAL) } {
+        if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             // `:set` without a scope sets the buffer-local copy too.
             set_buflocal_tfu_callback(buf);
         }
         retval
     };
     if retval.is_err() {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     } else {
-        ptr::null()
+        None
     }
 }
 

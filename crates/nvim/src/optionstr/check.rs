@@ -78,21 +78,19 @@ pub unsafe fn didset_string_options() {
 /// "E539: Illegal character <x>", formatted into the caller's buffer.
 ///
 /// # Safety
-/// `errbuf` is null or points at `errbuflen` writable bytes.
-pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> *mut c_char {
+/// `errbuf` is null or points at `errbuflen` writable bytes. The answer
+/// borrows that buffer, so `'a` must not outlive it.
+pub unsafe fn illegal_char<'a>(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> &'a CStr {
     if errbuf.is_null() {
-        return c"".as_ptr().cast_mut();
+        return c"";
     }
-    // SAFETY: the caller's buffer, and `transchar` returns a C string.
+    let fmt = gettext(c"E539: Illegal character <%s>");
+    // SAFETY: the caller's buffer; `transchar` answers a C string and
+    // `vim_snprintf` terminates what it writes.
     unsafe {
-        vim_snprintf(
-            errbuf,
-            errbuflen,
-            gettext(c"E539: Illegal character <%s>").as_ptr(),
-            transchar(c).as_ptr(),
-        )
-    };
-    errbuf
+        vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), transchar(c).as_ptr());
+        CStr::from_ptr(errbuf)
+    }
 }
 
 /// "E535: Illegal character after <%c>", for the options that spell a field
@@ -100,24 +98,21 @@ pub unsafe fn illegal_char(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> 
 ///
 /// # Safety
 /// As [`illegal_char`].
-pub(crate) unsafe fn illegal_char_after_chr(
+pub(crate) unsafe fn illegal_char_after_chr<'a>(
     errbuf: *mut c_char,
     errbuflen: size_t,
     c: c_int,
-) -> *mut c_char {
+) -> &'a CStr {
     if errbuf.is_null() {
-        return c"".as_ptr().cast_mut();
+        return c"";
     }
-    // SAFETY: the caller's buffer; the format takes one `int`.
+    let fmt = gettext(e_illegal_character_after_chr);
+    // SAFETY: the caller's buffer; the format takes one `int`, and
+    // `vim_snprintf` terminates what it writes.
     unsafe {
-        vim_snprintf(
-            errbuf,
-            errbuflen,
-            gettext(e_illegal_character_after_chr).as_ptr(),
-            c,
-        )
-    };
-    errbuf
+        vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), c);
+        CStr::from_ptr(errbuf)
+    }
 }
 
 /// Give every string option of a buffer the empty string in place of a null.

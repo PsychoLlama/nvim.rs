@@ -294,25 +294,26 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_completefunc(args: *mut optset_T) -> *const c_char {
-    let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
-    let value = unsafe { (*args).os_newval }
+pub unsafe fn did_set_completefunc(args: &mut optset_T) -> Option<&CStr> {
+    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let value = args
+        .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .data();
-    let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
+    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func(value, &raw mut buf.b_cfu_cb) }
     } else {
         let retval = unsafe { cfu_cb().set_from_option(value) };
-        if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             set_buflocal_cfu_callback(buf);
         }
         retval
     };
     if retval.is_err() {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     } else {
-        ptr::null()
+        None
     }
 }
 
@@ -326,25 +327,26 @@ pub fn set_buflocal_cfu_callback(mut buf: Buf) {
 
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_omnifunc(args: *mut optset_T) -> *const c_char {
-    let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
-    let value = unsafe { (*args).os_newval }
+pub unsafe fn did_set_omnifunc(args: &mut optset_T) -> Option<&CStr> {
+    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let value = args
+        .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .data();
-    let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
+    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func(value, &raw mut buf.b_ofu_cb) }
     } else {
         let retval = unsafe { ofu_cb().set_from_option(value) };
-        if retval.is_ok() && !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
             set_buflocal_ofu_callback(buf);
         }
         retval
     };
     if retval.is_err() {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     } else {
-        ptr::null()
+        None
     }
 }
 
@@ -466,24 +468,24 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_thesaurusfunc(args: *mut optset_T) -> *const c_char {
-    let mut buf = unsafe { Buf::new((*args).os_buf.cast()) };
-    let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
+pub unsafe fn did_set_thesaurusfunc(args: &mut optset_T) -> Option<&CStr> {
+    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
         unsafe { option_set_callback_func(buf.b_p_tsrfu, &raw mut buf.b_tsrfu_cb) }
     } else {
         // Global option set.
         let retval = unsafe { tsrfu_cb().set_from_option(p_tsrfu.get()) };
         // When using :set, free the local callback.
-        if !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut buf.b_tsrfu_cb) };
         }
         retval
     };
     if retval.is_err() {
-        e_invarg.as_ptr()
+        Some(e_invarg)
     } else {
-        ptr::null()
+        None
     }
 }
 

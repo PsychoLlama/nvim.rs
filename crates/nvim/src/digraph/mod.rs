@@ -667,8 +667,8 @@ struct kmap_T {
 }
 
 /// Source the keymap file for the current buffer's 'keymap' (or unload
-/// language mappings when it is empty). Returns an error message or null.
-pub fn keymap_init() -> *const c_char {
+/// language mappings when it is empty). Answers an error message.
+pub fn keymap_init() -> Option<&'static CStr> {
     let buf = curbuf.get();
     // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
     // NUL-terminated option string.
@@ -681,16 +681,16 @@ pub fn keymap_init() -> *const c_char {
         keymap_unload();
         // SAFETY: a static command string, run like any other ex command.
         let _ = unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
-        return core::ptr::null();
+        return None;
     }
     // Source the keymap file, first for this encoding and then without it.
     // The name is snapshotted above because the script can set 'keymap'.
     // SAFETY: 'encoding' is a NUL-terminated option string.
     let enc = unsafe { CStr::from_ptr(p_enc.get()).to_bytes().to_vec() };
     if source_keymap_file(&keymap, Some(&enc)) || source_keymap_file(&keymap, None) {
-        return core::ptr::null();
+        return None;
     }
-    c"E544: Keymap file not found".as_ptr()
+    Some(c"E544: Keymap file not found")
 }
 
 /// Source `keymap/{name}_{enc}.vim` from the runtime path — or

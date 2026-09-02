@@ -8,7 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::drawscreen::status_redraw_all;
@@ -58,7 +58,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 /// Where a buffer keeps its parsed 'varsofttabstop' stops.
 const VSTS_ARRAY: usize = core::mem::offset_of!(buf_T, b_p_vsts_array);
 
-pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
+pub(crate) unsafe fn did_set_paste(_args: &mut optset_T) -> Option<&CStr> {
     static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sm: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sta: GlobalCell<c_int> = GlobalCell::new(0);
@@ -168,7 +168,7 @@ pub(crate) unsafe fn did_set_paste(_args: *mut optset_T) -> *const c_char {
         OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL,
         &PASTE_DEP_OPTS,
     );
-    ptr::null()
+    None
 }
 
 /// What 'paste' stashes for a 'varsofttabstop' value: null for a value that

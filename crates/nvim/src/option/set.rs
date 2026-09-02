@@ -412,7 +412,10 @@ pub(crate) unsafe fn did_set_option(
     {
         errmsg = e_invarg.as_ptr();
     } else if let Some(did_set_cb) = opt.opt_did_set_cb {
-        errmsg = unsafe { did_set_cb(&raw mut args) };
+        // The callback's message borrows the frame, and is either a static
+        // or the caller's `errbuf` — both outlive this call — so the
+        // pointer stays good once the borrow ends here.
+        errmsg = unsafe { did_set_cb(&mut args) }.map_or(ptr::null(), CStr::as_ptr);
         // 'filetype' and 'syntax' report whether the value really moved;
         // they, 'keymap' and the character-class options report whether
         // they have vetted it themselves; and the character-class
@@ -689,24 +692,22 @@ pub(crate) fn set_option_direct(
 }
 
 /// Copy a callback's message into the option frame's error buffer and
-/// answer it, or answer null.
+/// answer it, or answer `None`.
 ///
-/// A `did_set_*` callback answers a pointer, and `set_option` handed it the
-/// buffer that pointer has to live in; a callback whose message came from
-/// an owned source reports it through here.
+/// A `did_set_*` callback's message borrows the frame, and `set_option`
+/// handed it the buffer that message has to live in; a callback whose
+/// message came from an owned source reports it through here.
 ///
 /// # Safety
 ///
-/// `args` must be the option table's call frame.
-pub(crate) unsafe fn answer_err(args: *mut optset_T, msg: Option<CString>) -> *const c_char {
-    let Some(msg) = msg else {
-        return ptr::null();
-    };
-    // SAFETY: the caller's frame names a buffer of `os_errbuflen` bytes,
-    // and `msg` is NUL-terminated.
-    unsafe { xstrlcpy((*args).os_errbuf, msg.as_ptr(), (*args).os_errbuflen) };
-    // SAFETY: the same frame.
-    unsafe { (*args).os_errbuf }
+/// The frame's `os_errbuf` must be writable for `os_errbuflen` bytes.
+pub(crate) unsafe fn answer_err(args: &optset_T, msg: Option<CString>) -> Option<&CStr> {
+    let msg = msg?;
+    // SAFETY: the frame names a buffer of `os_errbuflen` bytes, and `msg`
+    // is NUL-terminated.
+    unsafe { xstrlcpy(args.os_errbuf, msg.as_ptr(), args.os_errbuflen) };
+    // SAFETY: `xstrlcpy` terminated what it wrote.
+    Some(unsafe { CStr::from_ptr(args.os_errbuf) })
 }
 
 /// Give an option a new value the way a script would. Takes ownership of

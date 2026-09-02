@@ -12,7 +12,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Ea, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::eval::typval::{callback_free, tv_clear, tv_list_copy, tv_list_find};
@@ -182,28 +182,28 @@ pub(crate) unsafe fn findfunc_find_file(
 /// script-local function name to its `<SNR>` form.
 ///
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
-pub unsafe fn did_set_findfunc(args: *mut optset_T) -> *const c_char {
-    let buf = unsafe { (*args).os_buf } as *mut buf_T;
-    let retval = if unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL) {
+pub unsafe fn did_set_findfunc(args: &mut optset_T) -> Option<&CStr> {
+    let buf = args.os_buf as *mut buf_T;
+    let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb) }
     } else {
         let r = option_set_callback_func(p_ffu.get(), global_findfunc());
         // Setting it globally without `:setglobal` clears the local one.
-        if !unsafe { (*args).os_flags }.has(OptionSetFlags::GLOBAL) {
+        if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut (*buf).b_ffu_cb) };
         }
         r
     };
     if retval.is_err() {
-        return e_invarg.as_ptr();
+        return Some(e_invarg);
     }
-    let varp = unsafe { (*args).os_varp }.string_var();
+    let varp = args.os_varp.string_var();
     let name = unsafe { get_scriptlocal_funcname(*varp) };
     if !name.is_null() {
         unsafe { free_string_option(*varp) };
         unsafe { *varp = name };
     }
-    ptr::null()
+    None
 }
 
 /// Mark what the global 'findfunc' callback holds, for the garbage

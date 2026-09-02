@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::arith::NextCurwin;
 use super::*;
@@ -379,7 +379,7 @@ pub(crate) fn set_frame_width(curfrp: Frame, width: c_int) {
     }
 }
 
-pub unsafe fn did_set_winminheight(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winminheight(_args: &mut optset_T) -> Option<&CStr> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh.get() > 0 as OptInt {
@@ -393,10 +393,10 @@ pub unsafe fn did_set_winminheight(_args: *mut optset_T) -> *const c_char {
             first = false;
         }
     }
-    ::core::ptr::null()
+    None
 }
 
-pub unsafe fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winminwidth(_args: &mut optset_T) -> Option<&CStr> {
     let mut first = true;
     while p_wmw.get() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {
@@ -408,7 +408,7 @@ pub unsafe fn did_set_winminwidth(_args: *mut optset_T) -> *const c_char {
             first = false;
         }
     }
-    ::core::ptr::null()
+    None
 }
 
 pub unsafe fn win_drag_status_line(dragwin: *mut win_T, offset: c_int) {

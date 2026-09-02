@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
 
@@ -269,12 +269,12 @@ fn restore_snapshot_rec(sn: Frame, fr: Frame) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
-pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_char {
+pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> Option<&'static CStr> {
     // SAFETY: the caller's promise -- a live window or null, and a
     // NUL-terminated string or null.
     let win = unsafe { Win::from_raw(wp) };
     if win.is_some_and(|w| w.w_buffer.is_null()) {
-        return ptr::null(); // buffer was closed
+        return None; // buffer was closed
     }
     let mut s = match () {
         _ if !cc.is_null() => cc,
@@ -296,7 +296,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
             col = if peek(s) == '-' as c_int { -1 } else { 1 };
             s = step(s);
             if !ascii_isdigit(peek(s)) {
-                return e_invarg.as_ptr();
+                return Some(e_invarg);
             }
             col *= digits(&mut s);
             if tw == 0 {
@@ -313,7 +313,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
         } else if ascii_isdigit(peek(s)) {
             col = digits(&mut s);
         } else {
-            return e_invarg.as_ptr();
+            return Some(e_invarg);
         }
         if !skip {
             color_cols[count as usize] = col - 1; // 1-based to 0-based
@@ -323,21 +323,21 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
             break;
         }
         if peek(s) != ',' as c_int {
-            return e_invarg.as_ptr();
+            return Some(e_invarg);
         }
         s = step(s);
         if peek(s) == NUL {
-            return e_invarg.as_ptr(); // illegal trailing comma
+            return Some(e_invarg); // illegal trailing comma
         }
     }
 
     let Some(mut win) = win else {
-        return ptr::null(); // only parse the value, do not store it
+        return None; // only parse the value, do not store it
     };
     free(win.w_p_cc_cols);
     if count == 0 {
         win.w_p_cc_cols = ptr::null_mut::<c_int>();
-        return ptr::null();
+        return None;
     }
     let cols = &mut color_cols[..count as usize];
     arith::sort_columns(cols);
@@ -357,7 +357,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> *const c_cha
         }
     }
     out[j] = -1; // end marker
-    ptr::null()
+    None
 }
 
 /// The byte `s` points at, as the C reads it.

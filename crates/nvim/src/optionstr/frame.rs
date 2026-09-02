@@ -9,7 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use crate::main::e_invarg;
@@ -17,28 +17,20 @@ use crate::types::{optset_T, win_T};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
-pub(crate) fn invalid() -> *const c_char {
-    e_invarg.as_ptr()
+pub(crate) fn invalid() -> Option<&'static CStr> {
+    Some(e_invarg)
 }
 
 /// The option's value variable — a `char **`, since every option here is a
 /// string.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub(crate) unsafe fn varp(args: *mut optset_T) -> *mut *mut c_char {
-    // SAFETY: the caller's frame.
-    unsafe { (*args).os_varp }.string_var()
+pub(crate) fn varp(args: &optset_T) -> *mut *mut c_char {
+    args.os_varp.string_var()
 }
 
 /// The window the set is happening in. Not necessarily the window whose
 /// value is being set — see [`local_window`].
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub(crate) unsafe fn win(args: *mut optset_T) -> *mut win_T {
-    // SAFETY: the caller's frame.
-    unsafe { (*args).os_win }.cast::<win_T>()
+pub(crate) fn win(args: &optset_T) -> *mut win_T {
+    args.os_win.cast::<win_T>()
 }
 
 /// The window whose own copy of the option is being set, or null when the
@@ -62,22 +54,16 @@ pub(crate) unsafe fn local_window(
 
 /// The value the option held before this set, as a C string.
 ///
-/// # Safety
-/// `args` points at the option table's call frame, whose old value is a
-/// string (every option in this module is one).
-pub(crate) unsafe fn old_value(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame.
-    unsafe { (*args).os_oldval }
+/// Every option in this module is a string one, so the frame's old value
+/// is a string too; the accessor says so.
+pub(crate) fn old_value(args: &optset_T) -> *const c_char {
+    args.os_oldval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .data()
 }
 
 /// The error buffer and its size, as the message helpers take them.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub(crate) unsafe fn errbuf(args: *mut optset_T) -> (*mut c_char, usize) {
-    // SAFETY: the caller's frame.
-    unsafe { ((*args).os_errbuf, (*args).os_errbuflen) }
+pub(crate) fn errbuf(args: &optset_T) -> (*mut c_char, usize) {
+    (args.os_errbuf, args.os_errbuflen)
 }

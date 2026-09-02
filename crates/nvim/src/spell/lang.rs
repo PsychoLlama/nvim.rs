@@ -227,9 +227,9 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// Parse `'spelllang'` and fill `wp->w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
+pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
     if recursive.get() {
-        return core::ptr::null_mut();
+        return None;
     }
     recursive.set(true);
 
@@ -239,7 +239,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
     let mut use_region: *mut c_char = core::ptr::null_mut();
     let mut dont_use_region = false;
     let mut nobreak = false;
-    let mut ret_msg: *mut c_char = core::ptr::null_mut();
+    let mut ret_msg: Option<&'static CStr> = None;
 
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw((*wp).w_buffer) });
 
@@ -338,8 +338,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
                 if !bufref.valid() || !win_valid_any_tab(wp) {
-                    ret_msg = c"E797: SpellFileMissing autocommand deleted buffer".as_ptr()
-                        as *mut c_char;
+                    ret_msg = Some(c"E797: SpellFileMissing autocommand deleted buffer");
                     break 'names;
                 }
             }
@@ -391,7 +390,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> *mut c_char {
         }
     }
 
-    if ret_msg.is_null() {
+    if ret_msg.is_none() {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
         let mut spf = unsafe { (*(*curwin.get()).w_s).b_p_spf };
@@ -654,8 +653,8 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 
 /// Re-parse `'spelllang'` for the current buffer after a spell option
 /// changed.
-pub unsafe fn did_set_spell_option() -> *const c_char {
-    let mut errmsg: *const c_char = core::ptr::null();
+pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
+    let mut errmsg = None;
     for wp in windows() {
         if wp.w_buffer == curbuf.get() && wp.w_onebuf_opt.wo_spell != 0 {
             // SAFETY: a live window of the current tab page.
@@ -671,7 +670,7 @@ pub unsafe fn did_set_spell_option() -> *const c_char {
 ///
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
-pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> *const c_char {
+pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> Option<&'static CStr> {
     let rp: *mut regprog_T = unsafe { (*synblock).b_cap_prog };
 
     if unsafe { (*synblock).b_p_spc }.is_null() || unsafe { *(*synblock).b_p_spc } == 0 {
@@ -682,12 +681,12 @@ pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> *const c_char {
         unsafe { xfree(re as *mut c_void) };
         if unsafe { (*synblock).b_cap_prog }.is_null() {
             unsafe { (*synblock).b_cap_prog = rp }; // keep the previous program
-            return e_invarg.as_ptr();
+            return Some(e_invarg);
         }
     }
 
     unsafe { vim_regfree(rp) };
-    core::ptr::null()
+    None
 }
 
 /// Record `lp`'s `MIDWORD` characters in `wp`, so that [`spell_iswordp`]

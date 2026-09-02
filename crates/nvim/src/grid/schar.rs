@@ -153,7 +153,7 @@ pub unsafe fn schar_cache_clear() {
     // The char options kept their original strings, so their parsed
     // schar_T values can be regenerated against the clean cache. Cell
     // widths have not changed, so this cannot fail.
-    if !unsafe { check_chars_options() }.is_null() {
+    if unsafe { check_chars_options() }.is_some() {
         unsafe { abort() };
     }
 }

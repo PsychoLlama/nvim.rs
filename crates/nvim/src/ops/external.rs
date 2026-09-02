@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
@@ -103,12 +103,12 @@ fn global_opfunc() -> *mut Callback {
 ///
 /// # Safety
 /// The option's current value must be a valid C string.
-pub unsafe fn did_set_operatorfunc(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_operatorfunc(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
     if unsafe { option_set_callback_func(p_opfunc.get(), global_opfunc()) }.is_err() {
-        return e_invarg.as_ptr();
+        return Some(e_invarg);
     }
-    ::core::ptr::null()
+    None
 }
 
 /// Mark the 'operatorfunc' callback with `copy_id` so the collector keeps it.

@@ -58,9 +58,9 @@ use crate::winlayer::{Win, buffers};
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_ambiwidth(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_ambiwidth(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     unsafe { check_chars_options() }
@@ -71,7 +71,7 @@ pub unsafe fn did_set_ambiwidth(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_emoji(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_emoji(_args: &mut optset_T) -> Option<&CStr> {
     if unsafe { check_str_opt(kOptAmbiwidth, ptr::null_mut()) }.is_err() {
         return invalid();
     }
@@ -87,16 +87,16 @@ pub unsafe fn did_set_emoji(_args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_background(args: &mut optset_T) -> Option<&CStr> {
     let mut numbuf = NumBuf::new();
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // SAFETY: both are C strings; only the first byte distinguishes "dark"
     // from "light".
     if unsafe { *old_value(args) == *p_bg.get() } {
-        return ptr::null();
+        return None;
     }
 
     let dark = unsafe { *p_bg.get() } == b'd' as c_char;
@@ -136,7 +136,7 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
             unsafe { terminal_notify_theme(buf.terminal, dark) };
         }
     }
-    ptr::null()
+    None
 }
 
 /// 'breakat' is consulted per character while wrapping, so it is kept as a
@@ -144,7 +144,18 @@ pub unsafe fn did_set_background(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_breakat(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_breakat(_args: &mut optset_T) -> Option<&'static CStr> {
+    // SAFETY: the option's own value is a C string.
+    unsafe { derive_breakat_flags() };
+    None
+}
+
+/// The `'breakat'` character set itself, for the startup sweep, which has
+/// no option frame to hand a callback.
+///
+/// # Safety
+/// `'breakat'`'s value is null or a C string.
+pub(crate) unsafe fn derive_breakat_flags() {
     let value = p_breakat.get();
     let mut chars = BreakAt::NONE;
     if !value.is_null() {
@@ -154,13 +165,12 @@ pub unsafe fn did_set_breakat(_args: *mut optset_T) -> *const c_char {
         }
     }
     breakat_flags.set(chars);
-    ptr::null()
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_breakindentopt(args: *mut optset_T) -> *const c_char {
-    let (wp, varp) = unsafe { (win(args), varp(args)) };
+pub unsafe fn did_set_breakindentopt(args: &mut optset_T) -> Option<&CStr> {
+    let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_briopt };
     let for_window = unsafe { local_window(varp, wp, local) };
@@ -174,13 +184,13 @@ pub unsafe fn did_set_breakindentopt(args: *mut optset_T) -> *const c_char {
         // SAFETY: marks the editor's own windows.
         unsafe { redraw_all_later(UPD_NOT_VALID) };
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_colorcolumn(args: *mut optset_T) -> *const c_char {
-    let (wp, varp) = unsafe { (win(args), varp(args)) };
+pub unsafe fn did_set_colorcolumn(args: &mut optset_T) -> Option<&CStr> {
+    let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window, and the option's C string value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_cc };
     unsafe { check_colorcolumn(*varp, local_window(varp, wp, local)) }
@@ -188,16 +198,16 @@ pub unsafe fn did_set_colorcolumn(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_concealcursor(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_concealcursor(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = unsafe { errbuf(args) };
+    let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), COCU_ALL.as_ptr(), buf, len) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_cursorlineopt(args: *mut optset_T) -> *const c_char {
-    let (wp, varp) = unsafe { (win(args), varp(args)) };
+pub unsafe fn did_set_cursorlineopt(args: &mut optset_T) -> Option<&CStr> {
+    let (wp, varp) = (win(args), varp(args));
     // An empty 'cursorlineopt' is not "no highlighting", it is no answer at
     // all.
     // SAFETY: the option's C string value, and the frame's window, which
@@ -208,14 +218,14 @@ pub unsafe fn did_set_cursorlineopt(args: *mut optset_T) -> *const c_char {
     {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_display(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_display(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // "uhex" changes how an unprintable character is drawn, and "msgsep"
@@ -223,15 +233,15 @@ pub unsafe fn did_set_display(args: *mut optset_T) -> *const c_char {
     // SAFETY: both read the editor's own state.
     unsafe { init_chartab() };
     unsafe { msg_grid_validate() };
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_guicursor(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: reads the option's own value.
     let errmsg = unsafe { parse_shape_opt(SHAPE_CURSOR) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // The Visual-mode cursor shape is drawn as part of the line.
@@ -239,7 +249,7 @@ pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
         // SAFETY: the current window is live.
         unsafe { redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum) };
     }
-    ptr::null()
+    None
 }
 
 /// 'highlight' is Vim's highlight-group mapping, which nvim does not
@@ -247,12 +257,12 @@ pub unsafe fn did_set_guicursor(_args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_highlight(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_highlight(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: both are C strings.
     if !unsafe { cstr::eq(*varp(args), HIGHLIGHT_INIT.as_ptr()) } {
-        return e_unsupportedoption.as_ptr();
+        return Some(e_unsupportedoption);
     }
-    ptr::null()
+    None
 }
 
 /// 'inccommand' cannot change while a preview is on screen, because the
@@ -260,7 +270,7 @@ pub unsafe fn did_set_highlight(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_inccommand(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_inccommand(args: &mut optset_T) -> Option<&CStr> {
     if cmdpreview.get() {
         return invalid();
     }
@@ -269,32 +279,32 @@ pub unsafe fn did_set_inccommand(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_keymodel(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_keymodel(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // SAFETY: the option's C string value; `vim_strchr` only reads it.
     km_stopsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'o')) }.is_null());
     km_startsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'a')) }.is_null());
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_messagesopt(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_messagesopt(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: reads the option's own value.
     if unsafe { messagesopt_changed() }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_mouse(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_mouse(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = unsafe { errbuf(args) };
+    let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), super::MOUSE_ALL.as_ptr(), buf, len) }
 }
 
@@ -304,7 +314,7 @@ pub unsafe fn did_set_mouse(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_mousescroll(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_mousescroll(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the option's own value is a C string.
     let value = unsafe { CStr::from_ptr(p_mousescroll.get()) }.to_bytes();
     let mut vertical: Option<OptInt> = None;
@@ -327,7 +337,7 @@ pub unsafe fn did_set_mousescroll(_args: *mut optset_T) -> *const c_char {
             return invalid();
         }
         if !digits.iter().all(|b| ascii_isdigit(c_int::from(*b))) {
-            return c"E5080: Digit expected".as_ptr();
+            return Some(c"E5080: Digit expected");
         }
         // The digits are read with `getdigits_int`, which is what rejects a
         // number too large for an `int`.
@@ -344,14 +354,14 @@ pub unsafe fn did_set_mousescroll(_args: *mut optset_T) -> *const c_char {
 
     p_mousescroll_vert.set(vertical.unwrap_or(MOUSESCROLL_VERT_DFLT as OptInt));
     p_mousescroll_hor.set(horizontal.unwrap_or(MOUSESCROLL_HOR_DFLT as OptInt));
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_selection(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // Whether the character under the cursor is inside the selection just
@@ -360,7 +370,7 @@ pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
         // SAFETY: marks the current buffer's windows.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    ptr::null()
+    None
 }
 
 /// Every character of 'showbreak' has to fit in one cell, because the
@@ -368,24 +378,24 @@ pub unsafe fn did_set_selection(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_showbreak(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_showbreak(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's value is a C string, and the walk steps by the
     // length of the character it just measured.
     let mut s = unsafe { *varp(args) };
     while unsafe { *s } != 0 {
         if unsafe { ptr2cells(s) } != 1 {
-            return e_showbreak_contains_unprintable_or_wide_character.as_ptr();
+            return Some(e_showbreak_contains_unprintable_or_wide_character);
         }
         s = unsafe { s.add(utfc_ptr2len(s) as usize) };
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_showcmdloc(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_showcmdloc(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if errmsg.is_null() {
+    if errmsg.is_none() {
         // The pending-command display shares the last line with the ruler.
         // SAFETY: recomputes a global from the editor's own state.
         unsafe { comp_col() };
@@ -395,8 +405,8 @@ pub unsafe fn did_set_showcmdloc(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
-    let (wp, varp) = unsafe { (win(args), varp(args)) };
+pub unsafe fn did_set_signcolumn(args: &mut optset_T) -> Option<&CStr> {
+    let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window and value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_scl };
     if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) }.is_err() {
@@ -404,13 +414,13 @@ pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
     }
     // "number" shares the sign column with the number column, so
     // leaving or entering it invalidates the cached number width.
-    let old = unsafe { old_value(args) };
+    let old = old_value(args);
     if (unsafe { *old } == b'n' as c_char && unsafe { *old.add(1) } == b'u' as c_char)
         || unsafe { (*wp).w_minscwidth } == SCL_NUM
     {
         unsafe { (*wp).w_nrwidth_line_count = 0 as linenr_T };
     }
-    ptr::null()
+    None
 }
 
 /// 'virtualedit' keeps a mask beside its string, and the window-local one
@@ -418,10 +428,10 @@ pub unsafe fn did_set_signcolumn(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
-    let wp = unsafe { win(args) };
+pub unsafe fn did_set_virtualedit(args: &mut optset_T) -> Option<&CStr> {
+    let wp = win(args);
     // SAFETY: the caller's frame and window.
-    let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
+    let local = args.os_flags.has(OptionSetFlags::LOCAL);
     let value = unsafe {
         if local {
             (*wp).w_onebuf_opt.wo_ve
@@ -441,7 +451,7 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
     // SAFETY: the option's C string value.
     if local && unsafe { c_int::from(*value) } == NUL {
         store(0 as c_uint);
-        return ptr::null();
+        return None;
     }
     // SAFETY: the same C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_ve_values, true) }) else {
@@ -454,34 +464,34 @@ pub unsafe fn did_set_virtualedit(args: *mut optset_T) -> *const c_char {
         validate_virtcol(unsafe { Win::new(wp) });
         coladvance(unsafe { Win::new(wp) }, unsafe { (*wp).w_virtcol });
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_whichwrap(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_whichwrap(args: &mut optset_T) -> Option<&CStr> {
     // 'whichwrap' is spelled as a comma-separated list but checked as a set
     // of letters, so the comma is one of the accepted letters.
     const WW_AND_COMMA: &CStr = c"bshl<>[]~,";
     debug_assert!(WW_AND_COMMA.to_bytes().starts_with(WW_ALL.to_bytes()));
     // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = unsafe { errbuf(args) };
+    let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), WW_AND_COMMA.as_ptr(), buf, len) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_wildmode(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_wildmode(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: reads the option's own value.
     if unsafe { check_opt_wim() }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_winbar(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winbar(args: &mut optset_T) -> Option<&CStr> {
     unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
@@ -547,32 +557,32 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_winborder(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_winborder(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the option's own C string value.
     if !unsafe { parse_border_opt(p_winborder.get()) } {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_pumborder(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_pumborder(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the option's own C string value.
     if !unsafe { parse_border_opt(p_pumborder.get()) } {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_winhighlight(args: *mut optset_T) -> *const c_char {
-    let (wp, varp) = unsafe { (win(args), varp(args)) };
+pub unsafe fn did_set_winhighlight(args: &mut optset_T) -> Option<&CStr> {
+    let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window and C string value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_winhl };
     if !unsafe { parse_winhl_opt(*varp, local_window(varp, wp, local)) } {
         return invalid();
     }
-    ptr::null()
+    None
 }

@@ -79,17 +79,26 @@ pub fn cmdline_init() {
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
-pub unsafe fn did_set_cedit(_args: *mut optset_T) -> *const ::core::ffi::c_char {
+pub unsafe fn did_set_cedit(_args: &mut optset_T) -> Option<&'static CStr> {
+    derive_cedit_key()
+}
+
+/// The `'cedit'` key itself, for the startup sweep, which has no option
+/// frame to hand a callback.
+///
+/// Safe: the option's value is a C string from the moment the option table
+/// is initialised, which is the whole of the precondition.
+pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
     if unsafe { *p_cedit.get() } as ::core::ffi::c_int == NUL {
         cedit_key.set(-1);
     } else {
         let n = unsafe { string_to_key(p_cedit.get()) };
         if n == 0 || unsafe { vim_isprintc(n) } {
-            return e_invarg.as_ptr();
+            return Some(e_invarg);
         }
         cedit_key.set(n);
     }
-    ::core::ptr::null::<::core::ffi::c_char>()
+    None
 }
 
 /// Open a window on the current command line and its history, and edit in it.

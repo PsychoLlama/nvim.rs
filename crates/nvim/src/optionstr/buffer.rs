@@ -65,13 +65,13 @@ use crate::winlayer::{Buf, Win};
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_backspace(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_backspace(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the option's own C string value.
     if unsafe { ascii_isdigit(c_int::from(*p_bs.get())) } {
         if unsafe { *p_bs.get() } != b'2' as c_char {
             return invalid();
         }
-        return ptr::null();
+        return None;
     }
     unsafe { did_set_str_generic(args) }
 }
@@ -81,9 +81,8 @@ pub unsafe fn did_set_backspace(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame and buffer.
-    let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
+pub unsafe fn did_set_backupcopy(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let value = unsafe {
@@ -110,7 +109,7 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
     // SAFETY: an option's value is a C string.
     if local && unsafe { c_int::from(*value) } == NUL {
         store(0 as c_uint);
-        return ptr::null();
+        return None;
     }
     // SAFETY: a C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_bkc_values, true) }) else {
@@ -126,7 +125,7 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
         return invalid();
     }
     store(mask);
-    ptr::null()
+    None
 }
 
 /// 'backupext' and 'patchmode' both rename a file out of the way, so they
@@ -134,7 +133,7 @@ pub unsafe fn did_set_backupcopy(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_backupext_or_patchmode(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: both are the process's own C string option values.
     let undotted = |value: *mut c_char| {
         if unsafe { *value } == b'.' as c_char {
@@ -144,16 +143,16 @@ pub unsafe fn did_set_backupext_or_patchmode(_args: *mut optset_T) -> *const c_c
         }
     };
     if unsafe { cstr::eq(undotted(p_bex.get()), undotted(p_pm.get())) } {
-        return e_backupext_and_patchmode_are_equal.as_ptr();
+        return Some(e_backupext_and_patchmode_are_equal);
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_bufhidden(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer, and the table's own word list.
-    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    let buf = args.os_buf.cast::<buf_T>();
     unsafe { did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, false) }
 }
 
@@ -162,9 +161,8 @@ pub unsafe fn did_set_bufhidden(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame, buffer and window.
-    let (buf, wp) = unsafe { ((*args).os_buf.cast::<buf_T>(), win(args)) };
+pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, wp) = (args.os_buf.cast::<buf_T>(), win(args));
     // SAFETY: the buffer's own C string value; only the first letter is
     // ever distinguishing.
     let first = unsafe { *(*buf).b_p_bt };
@@ -213,15 +211,15 @@ pub unsafe fn did_set_buftype(args: *mut optset_T) -> *const c_char {
     }
     unsafe { (*buf).b_help = first == b'h' as c_char };
     redraw_titles();
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_cinoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_cinoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer; `parse_cino` re-derives its cache.
-    unsafe { parse_cino(Buf::new((*args).os_buf.cast::<buf_T>())) };
-    ptr::null()
+    unsafe { parse_cino(Buf::new(args.os_buf.cast::<buf_T>())) };
+    None
 }
 
 /// 'comments' is a comma-separated list of `{flags}:{leader}` parts.
@@ -233,9 +231,9 @@ pub unsafe fn did_set_cinoptions(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
-    let (buf, buflen) = unsafe { errbuf(args) };
-    let mut errmsg: *const c_char = ptr::null();
+pub unsafe fn did_set_comments(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, buflen) = errbuf(args);
+    let mut errmsg: Option<&CStr> = None;
     // SAFETY: the frame's C string value, walked to its terminator.
     let mut s = unsafe { *varp(args) };
     while unsafe { *s } != 0 {
@@ -245,7 +243,7 @@ pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
                 && !ascii_isdigit(c_int::from(unsafe { *s }))
                 && unsafe { *s } != b'-' as c_char
             {
-                errmsg = unsafe { illegal_char(buf, buflen, c_int::from(*s as u8)) };
+                errmsg = Some(unsafe { illegal_char(buf, buflen, c_int::from(*s as u8)) });
                 break;
             }
             s = unsafe { s.add(1) };
@@ -253,11 +251,11 @@ pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
         let at_colon = unsafe { *s };
         s = unsafe { s.add(1) };
         if c_int::from(at_colon) == NUL {
-            errmsg = c"E524: Missing colon".as_ptr();
+            errmsg = Some(c"E524: Missing colon");
         } else if unsafe { *s } == b',' as c_char || c_int::from(unsafe { *s }) == NUL {
-            errmsg = c"E525: Zero length string".as_ptr();
+            errmsg = Some(c"E525: Zero length string");
         }
-        if !errmsg.is_null() {
+        if errmsg.is_some() {
             break;
         }
         // The leader, in which a backslash escapes the next byte.
@@ -274,43 +272,42 @@ pub unsafe fn did_set_comments(args: *mut optset_T) -> *const c_char {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_commentstring(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_commentstring(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { *varp(args) };
     if c_int::from(unsafe { *value }) != NUL && unsafe { strstr(value, c"%s".as_ptr()) }.is_null() {
-        return c"E537: 'commentstring' must be empty or contain %s".as_ptr();
+        return Some(c"E537: 'commentstring' must be empty or contain %s");
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_cpoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_cpoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = unsafe { errbuf(args) };
+    let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), CPO_VI.as_ptr(), buf, len) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_diffanchors(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame.
-    let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
+pub unsafe fn did_set_diffanchors(args: &mut optset_T) -> Option<&CStr> {
+    let local = args.os_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: re-reads the option's own value.
     if unsafe { diffanchors_changed(local) }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_diffopt(_args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_diffopt(_args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: re-reads the option's own value.
     if unsafe { diffopt_changed() }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// 'encoding', 'fileencoding' and 'termencoding' share a callback. Only
@@ -319,22 +316,19 @@ pub unsafe fn did_set_diffopt(_args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame and buffer.
-    let (buf, varp, opt_flags, idx) = unsafe {
-        (
-            (*args).os_buf.cast::<buf_T>(),
-            varp(args),
-            (*args).os_flags,
-            (*args).os_idx,
-        )
-    };
+pub unsafe fn did_set_encoding(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, varp, opt_flags, idx) = (
+        args.os_buf.cast::<buf_T>(),
+        varp(args),
+        args.os_flags,
+        args.os_idx,
+    );
     // 'fileencoding' is the buffer-local one of the three; the other two
     // ('encoding' and 'makeencoding') are global and skip this block.
     if idx == kOptFileencoding {
         // SAFETY: the frame's buffer and C string value.
         if unsafe { (*buf).b_p_ma } == 0 && opt_flags != OptionSetFlags::GLOBAL {
-            return e_modifiable.as_ptr();
+            return Some(e_modifiable);
         }
         // 'fileencoding' is one encoding, not a list.
         if !unsafe { vim_strchr(*varp, c_int::from(b',')) }.is_null() {
@@ -351,36 +345,35 @@ pub unsafe fn did_set_encoding(args: *mut optset_T) -> *const c_char {
     unsafe { *varp = canonical };
     if idx == kOptEncoding {
         if unsafe { cstr::bytes_at(p_enc.get()) != b"utf-8" } {
-            return e_unsupportedoption.as_ptr();
+            return Some(e_unsupportedoption);
         }
         unsafe { spell_reload() };
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_eventignore(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_eventignore(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     if unsafe { check_ei(*varp(args)) }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame and buffer.
-    let (buf, opt_flags) = unsafe { ((*args).os_buf.cast::<buf_T>(), (*args).os_flags) };
+pub unsafe fn did_set_fileformat(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
     // SAFETY: `optset_T` names a live buffer for exactly this call.
     let b = unsafe { Buf::new(buf) };
     // Changing a buffer's line endings changes its text.
     if unsafe { (*buf).b_p_ma } == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
-        return e_modifiable.as_ptr();
+        return Some(e_modifiable);
     }
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // SAFETY: the frame's buffer and old value.
@@ -391,7 +384,7 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
     if get_fileformat(b) == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {
         unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
     }
-    ptr::null()
+    None
 }
 
 /// 'filetype' and 'syntax' fire an autocommand, and only when the value
@@ -399,83 +392,83 @@ pub unsafe fn did_set_fileformat(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_filetype_or_syntax(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_filetype_or_syntax(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value and its old one.
     let value = unsafe { *varp(args) };
     if !valid_filetype(unsafe { CStr::from_ptr(value) }) {
         return invalid();
     }
-    unsafe { (*args).os_value_changed = !cstr::eq(old_value(args), value) };
-    unsafe { (*args).os_value_checked = true };
-    ptr::null()
+    unsafe { args.os_value_changed = !cstr::eq(old_value(args), value) };
+    args.os_value_checked = true;
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_foldexpr(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldexpr(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's frame and window.
     unsafe { did_set_optexpr(args) };
-    let wp = unsafe { win(args) };
+    let wp = win(args);
     if foldmethod_is_expr(unsafe { Win::new(wp) }) {
         fold_update_all(unsafe { Win::new(wp) });
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_foldignore(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldignore(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's window.
-    let wp = unsafe { win(args) };
+    let wp = win(args);
     if foldmethod_is_indent(unsafe { Win::new(wp) }) {
         fold_update_all(unsafe { Win::new(wp) });
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_foldmarker(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldmarker(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value and window.
     let value = unsafe { *varp(args) };
     // Two markers separated by a comma, neither of them empty.
     let comma = unsafe { vim_strchr(value, c_int::from(b',')) };
     if comma.is_null() {
-        return e_comma_required.as_ptr();
+        return Some(e_comma_required);
     }
     if comma == value || c_int::from(unsafe { *comma.add(1) }) == NUL {
         return invalid();
     }
-    let wp = unsafe { win(args) };
+    let wp = win(args);
     if foldmethod_is_marker(unsafe { Win::new(wp) }) {
         fold_update_all(unsafe { Win::new(wp) });
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_foldmethod(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_foldmethod(args: &mut optset_T) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
-    if !errmsg.is_null() {
+    if errmsg.is_some() {
         return errmsg;
     }
     // SAFETY: the frame's window.
-    let wp = unsafe { win(args) };
+    let wp = win(args);
     fold_update_all(unsafe { Win::new(wp) });
     // Diff folds are closed to whatever 'foldlevel' says as soon as
     // they exist.
     if foldmethod_is_diff(unsafe { Win::new(wp) }) {
         unsafe { new_fold_level() };
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_formatoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = unsafe { errbuf(args) };
+    let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), FO_ALL.as_ptr(), buf, len) }
 }
 
@@ -485,8 +478,8 @@ pub unsafe fn did_set_formatoptions(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
-    let varp = unsafe { varp(args) };
+pub unsafe fn did_set_iskeyword(args: &mut optset_T) -> Option<&CStr> {
+    let varp = varp(args);
     if varp != option_var(kOptIskeyword).string_var() {
         return unsafe { did_set_isopt(args) };
     }
@@ -494,7 +487,7 @@ pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
     if unsafe { check_isopt(*varp) }.is_err() {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// The shared callback for 'isident', 'isfname', 'isprint' and the
@@ -503,13 +496,13 @@ pub unsafe fn did_set_iskeyword(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_isopt(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_isopt(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer.
-    if !unsafe { buf_init_chartab((*args).os_buf.cast::<buf_T>(), true) } {
-        unsafe { (*args).os_restore_chartab = true };
+    if !unsafe { buf_init_chartab(args.os_buf.cast::<buf_T>(), true) } {
+        args.os_restore_chartab = true;
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// Load a 'keymap' and switch the buffer's language modes to it.
@@ -519,10 +512,8 @@ pub unsafe fn did_set_isopt(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
-    // SAFETY: the caller's frame and buffer.
-    let (buf, varp, opt_flags) =
-        unsafe { ((*args).os_buf.cast::<buf_T>(), varp(args), (*args).os_flags) };
+pub unsafe fn did_set_keymap(args: &mut optset_T) -> Option<&CStr> {
+    let (buf, varp, opt_flags) = (args.os_buf.cast::<buf_T>(), varp(args), args.os_flags);
     // SAFETY: the frame's C string value.
     if !unsafe { valid_filetype(CStr::from_ptr(*varp)) } {
         return invalid();
@@ -533,9 +524,8 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
     // Sources the keymap file named by the option.
     let errmsg = keymap_init();
     secure.set(secure_save);
-    // SAFETY: the caller's frame.
-    unsafe { (*args).os_value_checked = true };
-    if !errmsg.is_null() {
+    args.os_value_checked = true;
+    if errmsg.is_some() {
         return errmsg;
     }
 
@@ -560,12 +550,12 @@ pub unsafe fn did_set_keymap(args: *mut optset_T) -> *const c_char {
         unsafe { set_imsearch_global(buf) };
     }
     unsafe { status_redraw_buf(buf) };
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_lispoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { *varp(args) };
     if c_int::from(unsafe { *value }) != NUL
@@ -574,7 +564,7 @@ pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
     {
         return invalid();
     }
-    ptr::null()
+    None
 }
 
 /// 'matchpairs' is a comma-separated list of `{open}:{close}` pairs. The
@@ -583,7 +573,7 @@ pub unsafe fn did_set_lispoptions(args: *mut optset_T) -> *const c_char {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_matchpairs(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's C string value, walked by character length.
     let mut p = unsafe { *varp(args) };
     while c_int::from(unsafe { *p }) != NUL {
@@ -609,26 +599,26 @@ pub unsafe fn did_set_matchpairs(args: *mut optset_T) -> *const c_char {
         }
         p = unsafe { p.add(1) };
     }
-    ptr::null()
+    None
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_varsofttabstop(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_varsofttabstop(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's frame and buffer.
-    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    let buf = args.os_buf.cast::<buf_T>();
     unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vsts_array) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
+pub unsafe fn did_set_vartabstop(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's frame, buffer and window.
-    let buf = unsafe { (*args).os_buf }.cast::<buf_T>();
+    let buf = args.os_buf.cast::<buf_T>();
     let errmsg = unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vts_array) };
-    if errmsg.is_null() {
+    if errmsg.is_none() {
         // Indent folds are computed from the tab stops.
-        let wp = unsafe { win(args) };
+        let wp = win(args);
         if foldmethod_is_indent(unsafe { Win::new(wp) }) {
             fold_update_all(unsafe { Win::new(wp) });
         }
@@ -645,14 +635,14 @@ pub unsafe fn did_set_vartabstop(args: *mut optset_T) -> *const c_char {
 /// # Safety
 /// `args` points at the option table's call frame, and `into` at the
 /// buffer's array for this option.
-unsafe fn did_set_vartabs(args: *mut optset_T, into: *mut *mut colnr_T) -> *const c_char {
+unsafe fn did_set_vartabs(args: &optset_T, into: *mut *mut colnr_T) -> Option<&'static CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { CStr::from_ptr(*varp(args)) }.to_bytes();
     if value.is_empty() || value == b"0" {
         // SAFETY: the buffer's own array.
         unsafe { xfree((*into).cast::<c_void>()) };
         unsafe { *into = ptr::null_mut() };
-        return ptr::null();
+        return None;
     }
     // Digits and separating commas only; no empty item, and no leading
     // comma.
@@ -670,5 +660,5 @@ unsafe fn did_set_vartabs(args: *mut optset_T, into: *mut *mut colnr_T) -> *cons
         return invalid();
     }
     unsafe { xfree(old.cast::<c_void>()) };
-    ptr::null()
+    None
 }
