@@ -88,12 +88,12 @@ pub(crate) unsafe fn list_func_head(
     unsafe { msg_putchar(b')' as c_int) };
 
     for (flag, text) in [
-        (FC_ABORT, c" abort"),
-        (FC_RANGE, c" range"),
-        (FC_DICT, c" dict"),
-        (FC_CLOSURE, c" closure"),
+        (FuncFlags::ABORT, c" abort"),
+        (FuncFlags::RANGE, c" range"),
+        (FuncFlags::DICT, c" dict"),
+        (FuncFlags::CLOSURE, c" closure"),
     ] {
-        if f.uf_flags & flag != 0 {
+        if f.uf_flags.has(flag) {
             unsafe { msg_puts(text.as_ptr()) };
         }
     }
@@ -122,7 +122,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
     let mut default_args = GARRAY_EMPTY;
     let mut newlines = GARRAY_EMPTY;
     let mut varargs = 0;
-    let mut flags = 0;
+    let mut flags = FuncFlags::NONE;
     let mut fp: *mut ufunc_T = ptr::null_mut();
     let mut free_fp = false;
     let mut overwrite = false;
@@ -267,16 +267,16 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     loop {
                         p = unsafe { skipwhite(p) };
                         if unsafe { cstr::starts_with(p, b"range") } {
-                            flags |= FC_RANGE;
+                            flags |= FuncFlags::RANGE;
                             p = unsafe { p.add(5) };
                         } else if unsafe { cstr::starts_with(p, b"dict") } {
-                            flags |= FC_DICT;
+                            flags |= FuncFlags::DICT;
                             p = unsafe { p.add(4) };
                         } else if unsafe { cstr::starts_with(p, b"abort") } {
-                            flags |= FC_ABORT;
+                            flags |= FuncFlags::ABORT;
                             p = unsafe { p.add(5) };
                         } else if unsafe { cstr::starts_with(p, b"closure") } {
-                            flags |= FC_CLOSURE;
+                            flags |= FuncFlags::CLOSURE;
                             p = unsafe { p.add(7) };
                             if current_funccal.get().is_null() {
                                 let what = if name.is_null() {
@@ -374,7 +374,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                                 // Referenced somewhere: don't redefine
                                 // it, create a new one beside it.
                                 unsafe { (*fp).uf_refcount.release() };
-                                unsafe { (*fp).uf_flags |= FC_REMOVED };
+                                unsafe { (*fp).uf_flags |= FuncFlags::REMOVED };
                                 fp = ptr::null_mut();
                                 overwrite = true;
                             } else {
@@ -481,7 +481,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                             };
 
                             // Behave as though "dict" had been used.
-                            flags |= FC_DICT;
+                            flags |= FuncFlags::DICT;
                         }
 
                         // Insert the new function in the function list.
@@ -498,7 +498,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     unsafe { (*fp).uf_args = newargs };
                     unsafe { (*fp).uf_def_args = default_args };
                     unsafe { (*fp).uf_lines = newlines };
-                    if flags & FC_CLOSURE != 0 {
+                    if flags.has(FuncFlags::CLOSURE) {
                         unsafe { register_closure(fp) };
                     } else {
                         unsafe { (*fp).uf_scoped = ptr::null_mut() };
@@ -509,7 +509,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
                     }
                     unsafe { (*fp).uf_varargs = varargs };
                     if sandbox.get() != 0 {
-                        flags |= FC_SANDBOX;
+                        flags |= FuncFlags::SANDBOX;
                     }
                     unsafe { (*fp).uf_flags = flags };
                     unsafe { (*fp).uf_calls = 0 };

@@ -156,7 +156,6 @@ pub const KEYSET_OPTIDX_keymap__desc: ::core::ffi::c_int = 1 as ::core::ffi::c_i
 pub const KEYSET_OPTIDX_keymap__callback: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
-pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;

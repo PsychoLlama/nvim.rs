@@ -200,16 +200,33 @@ static funcargs: GlobalCell<Vec<*mut typval_T>> = GlobalCell::new(Vec::new());
 static current_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 static previous_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 
-/// `ufunc_T::uf_flags`.
-pub const FC_ABORT: c_int = 0x1;
-pub const FC_RANGE: c_int = 0x2;
-pub const FC_DICT: c_int = 0x4;
-pub const FC_CLOSURE: c_int = 0x8;
-pub const FC_DELETED: c_int = 0x10;
-pub const FC_REMOVED: c_int = 0x20;
-pub const FC_SANDBOX: c_int = 0x40;
-pub const FC_NOARGS: c_int = 0x200;
-pub const FC_LUAREF: c_int = 0x800;
+crate::flag_set! {
+    /// `ufunc_T::uf_flags`: how a user function was defined and what has
+    /// become of it.
+    pub struct FuncFlags;
+
+    /// `:function! foo() abort` -- an error inside aborts the function.
+    const ABORT = 0x1;
+    /// It takes a range and handles it itself.
+    const RANGE = 0x2;
+    /// It is a dictionary function and wants `self`.
+    const DICT = 0x4;
+    /// It captures its enclosing scope.
+    const CLOSURE = 0x8;
+    /// `:delfunction` ran while the function was executing; it goes when
+    /// the last call returns.
+    const DELETED = 0x10;
+    /// A redefinition replaced it, likewise while it was executing.
+    const REMOVED = 0x20;
+    /// Defined inside `:sandbox`, so every call runs sandboxed.
+    const SANDBOX = 0x40;
+    /// A lambda with no `a:` arguments at all, which lets the call skip
+    /// building the argument dictionary.
+    const NOARGS = 0x200;
+    /// Not Vimscript: the body is a Lua reference, and the funcref can go
+    /// back to the API as a `LuaRef`.
+    const LUAREF = 0x800;
+}
 
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,

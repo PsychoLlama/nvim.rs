@@ -130,7 +130,7 @@ pub unsafe fn call_user_func(
     // none of them.
     let (avars, avars_var) = unsafe { (&raw mut (*fc).fc_l_avars, &raw mut (*fc).fc_l_avars_var) };
     unsafe { init_var_dict(avars, avars_var, VAR_SCOPE) };
-    let has_args = f.uf_flags & FC_NOARGS == 0;
+    let has_args = !f.uf_flags.has(FuncFlags::NOARGS);
     if has_args {
         // Set a:0 to the number of arguments past the declared ones.
         let v = take_fixvar(&mut fixvar_idx);
@@ -263,7 +263,7 @@ pub unsafe fn call_user_func(
     // Don't redraw while executing the function.
     let redraw_off = Suppress::redraw();
 
-    let sandboxed = (f.uf_flags & FC_SANDBOX != 0).then(Lock::sandbox);
+    let sandboxed = (f.uf_flags.has(FuncFlags::SANDBOX)).then(Lock::sandbox);
 
     unsafe { estack_push_ufunc(fp, 1) };
     if p_verbose.get() >= 12 {
@@ -338,7 +338,7 @@ pub unsafe fn call_user_func(
     let save_did_emsg = did_emsg.get();
     did_emsg.set(0);
 
-    if default_arg_err && (f.uf_flags & FC_ABORT != 0 || trylevel.get() > 0) {
+    if default_arg_err && (f.uf_flags.has(FuncFlags::ABORT) || trylevel.get() > 0) {
         did_emsg.set(1);
     } else if islambda {
         // A lambda's body is one line, "return <expr>"; evaluate the
@@ -360,7 +360,7 @@ pub unsafe fn call_user_func(
     drop(redraw_off);
 
     // When the function was aborted because of an error, return -1.
-    if (did_emsg.get() != 0 && f.uf_flags & FC_ABORT != 0) || rv.v_type == VAR_UNKNOWN {
+    if (did_emsg.get() != 0 && f.uf_flags.has(FuncFlags::ABORT)) || rv.v_type == VAR_UNKNOWN {
         unsafe { tv_clear(rettv) };
         rv.v_type = VAR_NUMBER;
         rv.vval.v_number = -1;
@@ -478,24 +478,24 @@ pub(crate) unsafe fn call_user_func_check(
 ) -> c_int {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let mut f = unsafe { Uf::new(fp) };
-    if f.uf_flags & FC_LUAREF != 0 {
+    if f.uf_flags.has(FuncFlags::LUAREF) {
         return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, argvars, rettv) };
     }
 
-    if f.uf_flags & FC_RANGE != 0 && !unsafe { (*funcexe).fe_doesrange }.is_null() {
+    if f.uf_flags.has(FuncFlags::RANGE) && !unsafe { (*funcexe).fe_doesrange }.is_null() {
         unsafe { *(*funcexe).fe_doesrange = true };
     }
     let error = unsafe { check_user_func_argcount(fp, argcount) };
     if error != FCERR_UNKNOWN {
         return error;
     }
-    if f.uf_flags & FC_DICT != 0 && selfdict.is_null() {
+    if f.uf_flags.has(FuncFlags::DICT) && selfdict.is_null() {
         return FCERR_DICT;
     }
 
     // SAFETY: the caller's promise -- `funcexe` describes the call.
     let (first, last) = unsafe { ((*funcexe).fe_firstline, (*funcexe).fe_lastline) };
-    let dict = if f.uf_flags & FC_DICT != 0 {
+    let dict = if f.uf_flags.has(FuncFlags::DICT) {
         selfdict
     } else {
         ptr::null_mut()
@@ -602,7 +602,7 @@ pub unsafe fn call_simple_func(
     let fp = unsafe { find_func(rfname) };
     if fp.is_null() {
         ret = Ok(Parsed::NotThis);
-    } else if unsafe { (*fp).uf_flags } & FC_DELETED != 0 {
+    } else if unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
         error = FCERR_DELETED;
     } else {
         let mut argvars = [TV_INITIAL_VALUE; 1];

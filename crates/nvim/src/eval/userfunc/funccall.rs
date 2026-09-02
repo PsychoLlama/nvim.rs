@@ -290,7 +290,7 @@ pub(crate) unsafe fn func_clear_items(fp: *mut ufunc_T) {
     unsafe { ga_clear_strings(&raw mut (*fp).uf_def_args) };
     unsafe { ga_clear_strings(&raw mut (*fp).uf_lines) };
 
-    if f.uf_flags & FC_LUAREF != 0 {
+    if f.uf_flags.has(FuncFlags::LUAREF) {
         unsafe { api_free_luaref(f.uf_luaref) };
         f.uf_luaref = LUA_NOREF as LuaRef;
     }
@@ -332,7 +332,7 @@ unsafe fn func_free(fp: *mut ufunc_T) {
     let mut f = unsafe { Uf::new(fp) };
     // Only remove it when not done already, otherwise we would remove a
     // newer version of the function.
-    if f.uf_flags & (FC_DELETED | FC_REMOVED) == 0 {
+    if !f.uf_flags.has(FuncFlags::DELETED | FuncFlags::REMOVED) {
         unsafe { func_remove(fp) };
     }
     unsafe { xfree(f.uf_name_exp as *mut c_void) };

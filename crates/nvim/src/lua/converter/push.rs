@@ -20,8 +20,9 @@
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
-use super::{FC_LUAREF, nlua_create_typed_table};
+use super::nlua_create_typed_table;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
 use crate::lua::executor::nlua_pushref;
 use crate::lua::ffi::{
@@ -200,7 +201,7 @@ impl TypvalSink for LuaSink {
             } else {
                 find_func(fun)
             };
-            if fp.is_null() || (*fp).uf_flags & FC_LUAREF == 0 {
+            if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
                 None
             } else {
                 Some((*fp).uf_luaref)

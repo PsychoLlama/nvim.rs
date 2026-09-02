@@ -575,7 +575,7 @@ pub unsafe fn get_func_line(
     if do_profiling.get() == PROF_YES {
         unsafe { func_line_end(cookie) };
     }
-    let retval = if (f.uf_flags & FC_ABORT != 0 && did_emsg.get() != 0 && !aborted_in_try())
+    let retval = if (f.uf_flags.has(FuncFlags::ABORT) && did_emsg.get() != 0 && !aborted_in_try())
         || frame.fc_returned != 0
     {
         ptr::null_mut()
@@ -616,7 +616,7 @@ pub unsafe fn get_func_line(
 /// `cookie` is a `funccall_T`.
 pub unsafe fn func_has_ended(cookie: *mut c_void) -> c_int {
     let fcp = cookie as *mut funccall_T;
-    ((unsafe { (*(*fcp).fc_func).uf_flags } & FC_ABORT != 0
+    ((unsafe { (*(*fcp).fc_func).uf_flags }.has(FuncFlags::ABORT)
         && did_emsg.get() != 0
         && !aborted_in_try())
         || unsafe { (*fcp).fc_returned } != 0) as c_int
@@ -627,7 +627,9 @@ pub unsafe fn func_has_ended(cookie: *mut c_void) -> c_int {
 /// # Safety
 /// `cookie` is a `funccall_T`.
 pub unsafe fn func_has_abort(cookie: *mut c_void) -> c_int {
-    unsafe { (*(*(cookie as *mut funccall_T)).fc_func).uf_flags & FC_ABORT }
+    // SAFETY: the caller's promise.
+    let flags = unsafe { (*(*(cookie as *mut funccall_T)).fc_func).uf_flags };
+    flags.masked(FuncFlags::ABORT).bits()
 }
 
 /// The name of the function running under `cookie`.

@@ -17,8 +17,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::c_int;
-
 use crate::types::{ObjectType, kObjectTypeNil, lua_Number, size_t};
 
 // The typval-to-Lua direction, carved out of this module's
@@ -51,9 +49,6 @@ pub const kNluaPushFreeRefs: NluaPushFlags = 2;
 /// holds the type tag, `false` the value.
 pub(crate) const TYPE_IDX_VALUE: bool = true;
 pub(crate) const VAL_IDX_VALUE: bool = false;
-
-/// `ufunc_T::uf_flags`: this function is a Lua reference, not Vimscript.
-pub(crate) const FC_LUAREF: c_int = 0x800;
 
 /// The largest and smallest integers an api `Integer` and a Vimscript
 /// `varnumber_T` hold — both are `int64_t`.

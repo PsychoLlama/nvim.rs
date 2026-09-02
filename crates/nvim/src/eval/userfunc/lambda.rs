@@ -171,7 +171,7 @@ pub unsafe fn get_lambda_tv(
         unsafe { *arg = (*arg).add(1) };
 
         if evaluate {
-            let mut flags = 0;
+            let mut flags = FuncFlags::NONE;
             let name = unsafe { get_lambda_name(&mut lambda_buf) };
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
             let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
@@ -198,7 +198,7 @@ pub unsafe fn get_lambda_tv(
             unsafe { xmemcpyz(expr as *mut c_void, start as *const c_void, len) };
             if unsafe { strstr(expr, c"a:".as_ptr()) }.is_null() {
                 // No a: variables are used for sure.
-                flags |= FC_NOARGS;
+                flags |= FuncFlags::NOARGS;
             }
 
             f.uf_refcount = Refcount::ONE;
@@ -208,7 +208,7 @@ pub unsafe fn get_lambda_tv(
             unsafe { ga_init(&raw mut (*fp).uf_def_args, slot, 1) };
             f.uf_lines = newlines;
             if !current_funccal.get().is_null() && eval_lavars {
-                flags |= FC_CLOSURE;
+                flags |= FuncFlags::CLOSURE;
                 unsafe { register_closure(fp) };
             } else {
                 f.uf_scoped = ptr::null_mut();
@@ -218,7 +218,7 @@ pub unsafe fn get_lambda_tv(
                 unsafe { func_do_profile(fp) };
             }
             if sandbox.get() != 0 {
-                flags |= FC_SANDBOX;
+                flags |= FuncFlags::SANDBOX;
             }
             f.uf_varargs = 1;
             f.uf_flags = flags;
@@ -292,7 +292,7 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
         }
     }
 
-    if fp.is_null() || unsafe { (*fp).uf_flags } & FC_DICT == 0 {
+    if fp.is_null() || !unsafe { (*fp).uf_flags }.has(FuncFlags::DICT) {
         return;
     }
     let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
@@ -347,7 +347,7 @@ pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
     let mut f = unsafe { Uf::new(fp) };
     f.uf_refcount = Refcount::ONE;
     f.uf_varargs = 1;
-    f.uf_flags = FC_LUAREF;
+    f.uf_flags = FuncFlags::LUAREF;
     f.uf_calls = 0;
     f.uf_script_ctx = current_sctx.get();
     f.uf_luaref = ref_0;

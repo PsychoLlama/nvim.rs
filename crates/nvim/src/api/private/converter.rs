@@ -29,6 +29,7 @@ use crate::eval::typval::{
 use crate::eval::typval_encode::{
     ConvPath, ConvType, Flow, InlineStack, TypvalSink, encode_typval,
 };
+use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
@@ -39,10 +40,6 @@ use crate::types::{
     kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use crate::winlayer::Live;
-
-/// `FC_LUAREF`: the `ufunc_T` flag that marks a funcref which is really a Lua
-/// function, and so can go back to the API as a `LuaRef`.
-const FC_LUAREF: c_int = 0x800;
 
 /// `LUA_NOREF`.
 const LUA_NOREF: LuaRef = -2;
@@ -204,7 +201,7 @@ impl TypvalSink for ObjectSink {
             } else {
                 find_func(fun)
             };
-            if fp.is_null() || (*fp).uf_flags & FC_LUAREF == 0 {
+            if fp.is_null() || !(*fp).uf_flags.has(FuncFlags::LUAREF) {
                 None
             } else {
                 Some(api_new_luaref((*fp).uf_luaref))

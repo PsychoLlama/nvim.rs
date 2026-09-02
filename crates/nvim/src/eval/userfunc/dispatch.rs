@@ -299,7 +299,7 @@ pub unsafe fn call_func(
                     fp = unsafe { find_func(rfname) };
                 }
 
-                if !fp.is_null() && unsafe { (*fp).uf_flags } & FC_DELETED != 0 {
+                if !fp.is_null() && unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
                     error = FCERR_DELETED;
                 } else if !fp.is_null() {
                     if let Some(argv_func) = unsafe { (*funcexe).fe_argv_func } {

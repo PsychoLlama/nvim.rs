@@ -10,6 +10,7 @@ use super::*;
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::userfunc::FuncFlags;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
@@ -106,7 +107,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         let callback_di = tv_dict_find(d, c"callback".as_ptr(), key);
         if !callback_di.is_null() && (*callback_di).di_tv.v_type == VAR_FUNC as _ {
             let fp = find_func((*callback_di).di_tv.vval.v_string);
-            if !fp.is_null() && (*fp).uf_flags & FC_LUAREF != 0 {
+            if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
                 orig_rhs = c"".as_ptr().cast_mut();
             }

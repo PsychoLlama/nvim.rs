@@ -238,7 +238,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // that many bytes before it.
     let fp = unsafe { (*hi.get()).hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
 
-    if unsafe { (*fp).uf_flags } & FC_DICT != 0
+    if unsafe { (*fp).uf_flags }.has(FuncFlags::DICT)
         || unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") }
     {
         // Don't show dict and lambda functions.
@@ -362,7 +362,7 @@ pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
         if unsafe { func_remove(fp) } {
             unsafe { (*fp).uf_refcount.release() };
         }
-        unsafe { (*fp).uf_flags |= FC_DELETED };
+        unsafe { (*fp).uf_flags |= FuncFlags::DELETED };
     } else {
         unsafe { func_clear_free(fp, false) };
     }

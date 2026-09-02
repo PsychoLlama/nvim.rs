@@ -542,7 +542,7 @@ pub union typval_vval_union {
 #[repr(C)]
 pub struct ufunc_S {
     pub uf_varargs: ::core::ffi::c_int,
-    pub uf_flags: ::core::ffi::c_int,
+    pub uf_flags: crate::eval::userfunc::FuncFlags,
     pub uf_calls: ::core::ffi::c_int,
     pub uf_cleared: bool,
     pub uf_args: garray_T,
