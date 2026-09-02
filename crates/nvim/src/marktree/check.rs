@@ -23,8 +23,8 @@ use core::ptr;
 
 use crate::marktree::iter::{marktree_itr_current, marktree_itr_first, marktree_itr_next};
 use crate::marktree::key::{
-    DECOR_HIGHLIGHT_INLINE_INIT, MT_BRANCH_FACTOR, MT_FLAG_DECOR_VIRT_TEXT_INLINE, mt_flags,
-    mt_lookup_id, mt_lookup_key, mt_right, mt_start, pos_leq, unrelative,
+    DECOR_HIGHLIGHT_INLINE_INIT, MT_BRANCH_FACTOR, MtFlags, mt_flags, mt_lookup_id, mt_lookup_key,
+    mt_right, mt_start, pos_leq, unrelative,
 };
 use crate::marktree::meta::MetaCount;
 use crate::marktree::node::{MAX_KEYS, Node, id2node};
@@ -32,7 +32,7 @@ use crate::marktree::pair::marktree_intersect_pair;
 use crate::memory::{xfree, xmemdup};
 use crate::types::{
     DecorInlineData, MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter,
-    Set_ptr_t, size_t, uint16_t, uint32_t, uint64_t,
+    Set_ptr_t, size_t, uint32_t, uint64_t,
 };
 
 use super::{
@@ -333,12 +333,8 @@ pub unsafe fn marktree_put_test(
     end: Option<MarkEnd>,
     meta_inline: bool,
 ) {
-    let inline = if meta_inline {
-        MT_FLAG_DECOR_VIRT_TEXT_INLINE
-    } else {
-        0
-    };
-    let flags = mt_flags(start.right_gravity, false, false, false) as ::core::ffi::c_int | inline;
+    let flags = mt_flags(start.right_gravity, false, false, false)
+        | MtFlags::DECOR_VIRT_TEXT_INLINE.when(meta_inline);
     let key = MTKey {
         pos: MTPos {
             row: start.row,
@@ -346,7 +342,7 @@ pub unsafe fn marktree_put_test(
         },
         ns,
         id,
-        flags: flags as uint16_t,
+        flags,
         decor_data: DecorInlineData {
             hl: DECOR_HIGHLIGHT_INLINE_INIT,
         },

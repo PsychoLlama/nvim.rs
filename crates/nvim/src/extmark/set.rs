@@ -21,12 +21,9 @@ use super::{
 };
 use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
-    MT_FLAG_DECOR_SIGNTEXT, MT_FLAG_EXTERNAL_MASK, MT_FLAG_INVALID, mt_decor, mt_decor_any, mt_end,
-    mt_flags, mt_invalid, mt_paired,
+    MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
-use crate::types::{
-    DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint16_t, uint32_t, uint64_t,
-};
+use crate::types::{DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint32_t, uint64_t};
 
 /// Create or update an extmark.
 ///
@@ -40,7 +37,7 @@ pub unsafe fn extmark_set(
     end_row: c_int,
     end_col: colnr_T,
     decor: DecorInline,
-    decor_flags: uint16_t,
+    decor_flags: MtFlags,
     right_gravity: bool,
     end_right_gravity: bool,
     no_undo: bool,
@@ -76,7 +73,7 @@ pub unsafe fn extmark_set(
                 if old_mark.pos.row == row && old_mark.pos.col == col {
                     // Not paired: the key can be revised where it lies.
                     if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
-                        itr_rawkey(&mut itr).flags &= !(MT_FLAG_EXTERNAL_MASK as uint16_t);
+                        itr_rawkey(&mut itr).flags.clear(MtFlags::EXTERNAL_MASK);
                         decor_remove(buf, row, row, col, mt_decor(old_mark), true);
                     }
                     itr_rawkey(&mut itr).flags |= flags;
@@ -114,7 +111,7 @@ pub unsafe fn extmark_set(
         invalidate_decor_state(buf);
     }
 
-    if decor_flags != 0 || decor.ext {
+    if !decor_flags.is_empty() || decor.ext {
         let last_row = if end_row > -1 { end_row } else { row };
         put_decor(buf, decor, row, last_row);
         redraw_decor(buf, row, last_row, col, decor);
@@ -157,18 +154,15 @@ pub(crate) fn extmark_setraw(
     let alt = tree_get_alt(buf.marktree(), key, Some(&mut altitr));
 
     if invalid {
-        itr_rawkey(&mut itr).flags &= !(MT_FLAG_INVALID as uint16_t);
-        itr_rawkey(&mut altitr).flags &= !(MT_FLAG_INVALID as uint16_t);
+        itr_rawkey(&mut itr).flags.clear(MtFlags::INVALID);
+        itr_rawkey(&mut altitr).flags.clear(MtFlags::INVALID);
         let (revised, old) = if mt_end(key) {
             (&mut altitr, alt)
         } else {
             (&mut itr, key)
         };
         tree_revise_meta(buf.marktree(), revised, old);
-    } else if !mt_invalid(key)
-        && key.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0
-        && buf.b_signcols.autom
-    {
+    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buf.b_signcols.autom {
         row1 = alt.pos.row.min(key.pos.row.min(row));
         row2 = alt.pos.row.max(key.pos.row.max(row));
         signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Subtract);
@@ -185,10 +179,7 @@ pub(crate) fn extmark_setraw(
             row.min(alt.pos.row),
             row.max(alt.pos.row),
         );
-    } else if !mt_invalid(key)
-        && key.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0
-        && buf.b_signcols.autom
-    {
+    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buf.b_signcols.autom {
         signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Add);
     }
 }

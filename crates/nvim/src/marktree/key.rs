@@ -25,44 +25,70 @@ pub const MT_LOG2_BRANCH: ::core::ffi::c_uint = 5;
 /// A filter slot set to this selects that meta kind; zero skips it.
 pub const kMTFilterSelect: uint32_t = 4294967295;
 
-/// Set on every key that is a real mark, as opposed to the `(row, col, 0)`
-/// pseudo-key that means "the space before (row, col)".
-pub const MT_FLAG_REAL: ::core::ffi::c_int = 1 << 0;
-/// This key is the end of a range; the matching start shares its `(ns, id)`.
-pub const MT_FLAG_END: ::core::ffi::c_int = 1 << 1;
-/// This key is one half of a range.
-pub const MT_FLAG_PAIRED: ::core::ffi::c_int = 1 << 2;
-/// The other half of the pair is gone.
-pub const MT_FLAG_ORPHANED: ::core::ffi::c_int = 1 << 3;
-pub const MT_FLAG_NO_UNDO: ::core::ffi::c_int = 1 << 4;
-pub const MT_FLAG_INVALIDATE: ::core::ffi::c_int = 1 << 5;
-pub const MT_FLAG_INVALID: ::core::ffi::c_int = 1 << 6;
-/// The decoration payload is a pointer to an out-of-line `DecorExt`, not the
-/// inline highlight.
-pub const MT_FLAG_DECOR_EXT: ::core::ffi::c_int = 1 << 7;
-pub const MT_FLAG_DECOR_HL: ::core::ffi::c_int = 1 << 8;
-pub const MT_FLAG_DECOR_SIGNTEXT: ::core::ffi::c_int = 1 << 9;
-pub const MT_FLAG_DECOR_SIGNHL: ::core::ffi::c_int = 1 << 10;
-pub const MT_FLAG_DECOR_VIRT_LINES: ::core::ffi::c_int = 1 << 11;
-pub const MT_FLAG_DECOR_VIRT_TEXT_INLINE: ::core::ffi::c_int = 1 << 12;
-pub const MT_FLAG_DECOR_CONCEAL_LINES: ::core::ffi::c_int = 1 << 13;
-pub const MT_FLAG_RIGHT_GRAVITY: ::core::ffi::c_int = 1 << 14;
-/// Set on the pseudo-key that sorts after every real key at a position.
-pub const MT_FLAG_LAST: ::core::ffi::c_int = 1 << 15;
+crate::flag_set! {
+    /// What an [`MTKey`] is and what decoration it carries -- upstream's
+    /// `MT_FLAG_*`, the bits `MTKey::flags` holds.
+    ///
+    /// The word is a `uint16_t` and every bit of it is spoken for, so the
+    /// newtype is declared over the same integer: it is a field of a
+    /// `#[repr(C)]` struct that the tree walks by the million.
+    pub struct MtFlags: uint16_t;
 
-pub const MT_FLAG_DECOR_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_EXT
-    | MT_FLAG_DECOR_HL
-    | MT_FLAG_DECOR_SIGNTEXT
-    | MT_FLAG_DECOR_SIGNHL
-    | MT_FLAG_DECOR_VIRT_LINES
-    | MT_FLAG_DECOR_VIRT_TEXT_INLINE;
+    /// Set on every key that is a real mark, as opposed to the
+    /// `(row, col, 0)` pseudo-key that means "the space before (row, col)".
+    const REAL = 1 << 0;
+    /// This key is the end of a range; the matching start shares its
+    /// `(ns, id)`.
+    const END = 1 << 1;
+    /// This key is one half of a range.
+    const PAIRED = 1 << 2;
+    /// The other half of the pair is gone.
+    const ORPHANED = 1 << 3;
+    /// Undo does not restore this mark's position.
+    const NO_UNDO = 1 << 4;
+    /// Deleting the text the mark spans marks it invalid rather than
+    /// collapsing it.
+    const INVALIDATE = 1 << 5;
+    /// [`Self::INVALIDATE`] has fired: the mark is hidden but still stored.
+    const INVALID = 1 << 6;
+    /// The decoration payload is a pointer to an out-of-line `DecorExt`, not
+    /// the inline highlight.
+    const DECOR_EXT = 1 << 7;
+    const DECOR_HL = 1 << 8;
+    const DECOR_SIGNTEXT = 1 << 9;
+    const DECOR_SIGNHL = 1 << 10;
+    const DECOR_VIRT_LINES = 1 << 11;
+    const DECOR_VIRT_TEXT_INLINE = 1 << 12;
+    const DECOR_CONCEAL_LINES = 1 << 13;
+    const RIGHT_GRAVITY = 1 << 14;
+    /// Set on the pseudo-key that sorts after every real key at a position.
+    const LAST = 1 << 15;
 
-/// The flags a consumer outside the tree may modify in place.
-pub const MT_FLAG_EXTERNAL_MASK: ::core::ffi::c_int = MT_FLAG_DECOR_MASK
-    | MT_FLAG_NO_UNDO
-    | MT_FLAG_INVALIDATE
-    | MT_FLAG_INVALID
-    | MT_FLAG_DECOR_CONCEAL_LINES;
+    /// Any decoration at all -- the test the meta index and the redraw path
+    /// ask first. `DECOR_CONCEAL_LINES` is deliberately *not* in it: it is
+    /// tracked per line rather than per key.
+    const DECOR_MASK = Self::DECOR_EXT.bits()
+        | Self::DECOR_HL.bits()
+        | Self::DECOR_SIGNTEXT.bits()
+        | Self::DECOR_SIGNHL.bits()
+        | Self::DECOR_VIRT_LINES.bits()
+        | Self::DECOR_VIRT_TEXT_INLINE.bits();
+
+    /// The flags a consumer outside the tree may modify in place.
+    const EXTERNAL_MASK = Self::DECOR_MASK.bits()
+        | Self::NO_UNDO.bits()
+        | Self::INVALIDATE.bits()
+        | Self::INVALID.bits()
+        | Self::DECOR_CONCEAL_LINES.bits();
+
+    /// The bits [`key_cmp`] looks at: everything else about two marks at one
+    /// position leaves them equal, and the tree keeps those in insertion
+    /// order.
+    const ORDER_MASK = Self::RIGHT_GRAVITY.bits()
+        | Self::END.bits()
+        | Self::REAL.bits()
+        | Self::LAST.bits();
+}
 
 /// Low bit of a lookup handle: set for the end half of a pair.
 pub const MARKTREE_END_FLAG: uint64_t = 1;
@@ -82,7 +108,7 @@ pub const MT_INVALID_KEY: MTKey = MTKey {
     pos: MTPos { row: -1, col: -1 },
     ns: 0,
     id: 0,
-    flags: 0,
+    flags: MtFlags::NONE,
     decor_data: DecorInlineData {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
@@ -105,11 +131,11 @@ pub fn mt_lookup_key(key: MTKey) -> uint64_t {
 }
 
 pub fn mt_paired(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_PAIRED != 0
+    key.flags.has(MtFlags::PAIRED)
 }
 
 pub fn mt_end(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_END != 0
+    key.flags.has(MtFlags::END)
 }
 
 pub fn mt_start(key: MTKey) -> bool {
@@ -117,55 +143,46 @@ pub fn mt_start(key: MTKey) -> bool {
 }
 
 pub fn mt_right(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_RIGHT_GRAVITY != 0
+    key.flags.has(MtFlags::RIGHT_GRAVITY)
 }
 
 pub fn mt_no_undo(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_NO_UNDO != 0
+    key.flags.has(MtFlags::NO_UNDO)
 }
 
 pub fn mt_invalidate(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_INVALIDATE != 0
+    key.flags.has(MtFlags::INVALIDATE)
 }
 
 pub fn mt_invalid(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_INVALID != 0
+    key.flags.has(MtFlags::INVALID)
 }
 
 pub fn mt_decor_any(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_MASK != 0
+    key.flags.has(MtFlags::DECOR_MASK)
 }
 
 pub fn mt_decor_sign(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & (MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL) != 0
+    key.flags
+        .has(MtFlags::DECOR_SIGNTEXT.or(MtFlags::DECOR_SIGNHL))
 }
 
 pub fn mt_conceal_lines(key: MTKey) -> bool {
-    key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_CONCEAL_LINES != 0
+    key.flags.has(MtFlags::DECOR_CONCEAL_LINES)
 }
 
 pub fn mt_decor(key: MTKey) -> DecorInline {
     DecorInline {
-        ext: key.flags as ::core::ffi::c_int & MT_FLAG_DECOR_EXT != 0,
+        ext: key.flags.has(MtFlags::DECOR_EXT),
         data: key.decor_data,
     }
 }
 
-pub fn mt_flags(right_gravity: bool, no_undo: bool, invalidate: bool, decor_ext: bool) -> uint16_t {
-    let mut flags = 0;
-    if right_gravity {
-        flags |= MT_FLAG_RIGHT_GRAVITY;
-    }
-    if no_undo {
-        flags |= MT_FLAG_NO_UNDO;
-    }
-    if invalidate {
-        flags |= MT_FLAG_INVALIDATE;
-    }
-    if decor_ext {
-        flags |= MT_FLAG_DECOR_EXT;
-    }
-    flags as uint16_t
+pub fn mt_flags(right_gravity: bool, no_undo: bool, invalidate: bool, decor_ext: bool) -> MtFlags {
+    MtFlags::RIGHT_GRAVITY.when(right_gravity)
+        | MtFlags::NO_UNDO.when(no_undo)
+        | MtFlags::INVALIDATE.when(invalidate)
+        | MtFlags::DECOR_EXT.when(decor_ext)
 }
 
 pub fn mtpair_from(start: MTKey, end: MTKey) -> MTPair {
@@ -232,9 +249,8 @@ pub fn key_cmp(a: MTKey, b: MTKey) -> ::core::ffi::c_int {
     if cmp != 0 {
         return cmp;
     }
-    let mask = MT_FLAG_RIGHT_GRAVITY | MT_FLAG_END | MT_FLAG_REAL | MT_FLAG_LAST;
-    let a = a.flags as ::core::ffi::c_int & mask;
-    let b = b.flags as ::core::ffi::c_int & mask;
+    let a = a.flags.masked(MtFlags::ORDER_MASK).bits();
+    let b = b.flags.masked(MtFlags::ORDER_MASK).bits();
     (b < a) as ::core::ffi::c_int - (a < b) as ::core::ffi::c_int
 }
 
@@ -246,12 +262,12 @@ mod tests {
         MTPos { row, col }
     }
 
-    fn key(row: i32, col: i32, flags: ::core::ffi::c_int) -> MTKey {
+    fn key(row: i32, col: i32, flags: MtFlags) -> MTKey {
         MTKey {
             pos: pos(row, col),
             ns: 0,
             id: 0,
-            flags: flags as uint16_t,
+            flags,
             decor_data: DecorInlineData {
                 hl: DECOR_HIGHLIGHT_INLINE_INIT,
             },
@@ -278,24 +294,27 @@ mod tests {
 
     #[test]
     fn a_start_is_paired_and_not_an_end() {
-        let start = key(0, 0, MT_FLAG_PAIRED);
-        let end = key(0, 0, MT_FLAG_PAIRED | MT_FLAG_END);
+        let start = key(0, 0, MtFlags::PAIRED);
+        let end = key(0, 0, MtFlags::PAIRED | MtFlags::END);
         assert!(mt_start(start) && !mt_end(start));
         assert!(!mt_start(end) && mt_end(end));
-        assert!(!mt_start(key(0, 0, 0)));
+        assert!(!mt_start(key(0, 0, MtFlags::NONE)));
     }
 
     #[test]
     fn orders_by_position_then_by_the_comparison_flags() {
-        assert!(key_cmp(key(1, 0, 0), key(2, 0, 0)) < 0);
-        assert!(key_cmp(key(1, 5, 0), key(1, 4, 0)) > 0);
+        assert!(key_cmp(key(1, 0, MtFlags::NONE), key(2, 0, MtFlags::NONE)) < 0);
+        assert!(key_cmp(key(1, 5, MtFlags::NONE), key(1, 4, MtFlags::NONE)) > 0);
         // Only the four masked flags matter: two marks differing in a decor
         // flag compare equal.
-        assert_eq!(key_cmp(key(1, 1, MT_FLAG_DECOR_HL), key(1, 1, 0)), 0);
+        assert_eq!(
+            key_cmp(key(1, 1, MtFlags::DECOR_HL), key(1, 1, MtFlags::NONE)),
+            0
+        );
         // A right-gravity mark sorts after a left-gravity one at the same spot,
         // and the "last" pseudo-key sorts after everything.
-        assert!(key_cmp(key(1, 1, MT_FLAG_RIGHT_GRAVITY), key(1, 1, 0)) > 0);
-        assert!(key_cmp(key(1, 1, MT_FLAG_LAST), key(1, 1, MT_FLAG_REAL)) > 0);
+        assert!(key_cmp(key(1, 1, MtFlags::RIGHT_GRAVITY), key(1, 1, MtFlags::NONE)) > 0);
+        assert!(key_cmp(key(1, 1, MtFlags::LAST), key(1, 1, MtFlags::REAL)) > 0);
     }
 
     #[test]
@@ -335,10 +354,10 @@ mod tests {
 
     #[test]
     fn the_flag_builder_sets_exactly_the_four_requested_bits() {
-        assert_eq!(mt_flags(false, false, false, false), 0);
+        assert_eq!(mt_flags(false, false, false, false), MtFlags::NONE);
         assert_eq!(
-            mt_flags(true, true, true, true) as ::core::ffi::c_int,
-            MT_FLAG_RIGHT_GRAVITY | MT_FLAG_NO_UNDO | MT_FLAG_INVALIDATE | MT_FLAG_DECOR_EXT
+            mt_flags(true, true, true, true),
+            MtFlags::RIGHT_GRAVITY | MtFlags::NO_UNDO | MtFlags::INVALIDATE | MtFlags::DECOR_EXT
         );
     }
 
@@ -346,14 +365,14 @@ mod tests {
     fn the_external_mask_covers_every_flag_a_consumer_may_set() {
         // The tree's own bookkeeping bits must stay out of it.
         for own in [
-            MT_FLAG_REAL,
-            MT_FLAG_END,
-            MT_FLAG_PAIRED,
-            MT_FLAG_ORPHANED,
-            MT_FLAG_RIGHT_GRAVITY,
-            MT_FLAG_LAST,
+            MtFlags::REAL,
+            MtFlags::END,
+            MtFlags::PAIRED,
+            MtFlags::ORPHANED,
+            MtFlags::RIGHT_GRAVITY,
+            MtFlags::LAST,
         ] {
-            assert_eq!(MT_FLAG_EXTERNAL_MASK & own, 0);
+            assert!(!MtFlags::EXTERNAL_MASK.has(own));
         }
     }
 }

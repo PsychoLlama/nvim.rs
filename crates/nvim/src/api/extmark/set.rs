@@ -588,7 +588,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             error = Error::exception(why);
                             break '_error;
                         } else {
-                            let mut decor_flags: uint16_t = 0 as uint16_t;
+                            let mut decor_flags = MtFlags::NONE;
                             let mut decor_alloc: *mut DecorVirtText =
                                 ::core::ptr::null_mut::<DecorVirtText>();
                             if virt_text.data.text().size != 0 {
@@ -596,16 +596,12 @@ pub unsafe fn nvim_buf_set_extmark(
                                 if virt_text.pos as ::core::ffi::c_uint
                                     == kVPosInline as ::core::ffi::c_int as ::core::ffi::c_uint
                                 {
-                                    decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_VIRT_TEXT_INLINE)
-                                        as uint16_t;
+                                    decor_flags |= MtFlags::DECOR_VIRT_TEXT_INLINE;
                                 }
                             }
                             if virt_lines.data.lines().size != 0 {
                                 decor_alloc = decor_put_vt(virt_lines, decor_alloc);
-                                decor_flags = (decor_flags as ::core::ffi::c_int
-                                    | MT_FLAG_DECOR_VIRT_LINES)
-                                    as uint16_t;
+                                decor_flags |= MtFlags::DECOR_VIRT_LINES;
                             }
                             let mut decor_indexed: uint32_t = DECOR_ID_INVALID as uint32_t;
                             if sign.flags as ::core::ffi::c_int & kSHIsSign as ::core::ffi::c_int
@@ -614,17 +610,13 @@ pub unsafe fn nvim_buf_set_extmark(
                                 sign.next = decor_indexed;
                                 decor_indexed = decor_put_sh(sign);
                                 if sign.text[0 as ::core::ffi::c_int as usize] != 0 {
-                                    decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_SIGNTEXT)
-                                        as uint16_t;
+                                    decor_flags |= MtFlags::DECOR_SIGNTEXT;
                                 }
                                 if sign.number_hl_id != 0
                                     || sign.line_hl_id != 0
                                     || sign.cursorline_hl_id != 0
                                 {
-                                    decor_flags = (decor_flags as ::core::ffi::c_int
-                                        | MT_FLAG_DECOR_SIGNHL)
-                                        as uint16_t;
+                                    decor_flags |= MtFlags::DECOR_SIGNHL;
                                 }
                             }
                             if has_hl_multiple {
@@ -652,9 +644,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                             as uint16_t;
                                         sh_0.next = decor_indexed;
                                         decor_indexed = decor_put_sh(sh_0);
-                                        decor_flags = (decor_flags as ::core::ffi::c_int
-                                            | MT_FLAG_DECOR_HL)
-                                            as uint16_t;
+                                        decor_flags |= MtFlags::DECOR_HL;
                                     }
                                     i_0 = i_0.wrapping_sub(1);
                                 }
@@ -663,9 +653,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 & kSHConcealLines as ::core::ffi::c_int
                                 != 0
                             {
-                                decor_flags = (decor_flags as ::core::ffi::c_int
-                                    | MT_FLAG_DECOR_CONCEAL_LINES)
-                                    as uint16_t;
+                                decor_flags |= MtFlags::DECOR_CONCEAL_LINES;
                             }
                             let mut decor: DecorInline = DECOR_INLINE_INIT;
                             if !decor_alloc.is_null()
@@ -688,8 +676,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 decor.data.hl = hl;
                             }
                             if has_hl {
-                                decor_flags = (decor_flags as ::core::ffi::c_int | MT_FLAG_DECOR_HL)
-                                    as uint16_t;
+                                decor_flags |= MtFlags::DECOR_HL;
                             }
                             unsafe {
                                 extmark_set(

@@ -473,15 +473,15 @@ pub fn find_key(keys: &[MTKey], k: MTKey) -> (c_int, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, MT_FLAG_REAL, MT_FLAG_RIGHT_GRAVITY};
-    use crate::types::{DecorInlineData, MTPos, uint16_t};
+    use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, MtFlags};
+    use crate::types::{DecorInlineData, MTPos};
 
-    fn key(row: i32, col: i32, flags: c_int) -> MTKey {
+    fn key(row: i32, col: i32, flags: MtFlags) -> MTKey {
         MTKey {
             pos: MTPos { row, col },
             ns: 0,
             id: 0,
-            flags: flags as uint16_t,
+            flags,
             decor_data: DecorInlineData {
                 hl: DECOR_HIGHLIGHT_INLINE_INIT,
             },
@@ -507,43 +507,43 @@ mod tests {
 
     #[test]
     fn an_empty_node_answers_before_everything() {
-        assert_eq!(find_key(&[], key(0, 0, MT_FLAG_REAL)), (-1, false));
+        assert_eq!(find_key(&[], key(0, 0, MtFlags::REAL)), (-1, false));
     }
 
     #[test]
     fn finds_an_exact_match_and_reports_it() {
         let keys = [
-            key(1, 0, MT_FLAG_REAL),
-            key(1, 5, MT_FLAG_REAL),
-            key(3, 2, MT_FLAG_REAL),
+            key(1, 0, MtFlags::REAL),
+            key(1, 5, MtFlags::REAL),
+            key(3, 2, MtFlags::REAL),
         ];
-        assert_eq!(find_key(&keys, key(1, 5, MT_FLAG_REAL)), (1, true));
-        assert_eq!(find_key(&keys, key(3, 2, MT_FLAG_REAL)), (2, true));
+        assert_eq!(find_key(&keys, key(1, 5, MtFlags::REAL)), (1, true));
+        assert_eq!(find_key(&keys, key(3, 2, MtFlags::REAL)), (2, true));
     }
 
     #[test]
     fn a_key_between_two_others_lands_on_the_earlier_one() {
         let keys = [
-            key(1, 0, MT_FLAG_REAL),
-            key(1, 5, MT_FLAG_REAL),
-            key(3, 2, MT_FLAG_REAL),
+            key(1, 0, MtFlags::REAL),
+            key(1, 5, MtFlags::REAL),
+            key(3, 2, MtFlags::REAL),
         ];
-        assert_eq!(find_key(&keys, key(1, 3, MT_FLAG_REAL)), (0, false));
-        assert_eq!(find_key(&keys, key(9, 9, MT_FLAG_REAL)), (2, false));
+        assert_eq!(find_key(&keys, key(1, 3, MtFlags::REAL)), (0, false));
+        assert_eq!(find_key(&keys, key(9, 9, MtFlags::REAL)), (2, false));
         // Before the first key at all.
-        assert_eq!(find_key(&keys, key(0, 0, MT_FLAG_REAL)), (-1, false));
+        assert_eq!(find_key(&keys, key(0, 0, MtFlags::REAL)), (-1, false));
     }
 
     #[test]
     fn gravity_breaks_a_tie_the_way_the_order_does() {
         let keys = [
-            key(1, 1, MT_FLAG_REAL),
-            key(1, 1, MT_FLAG_REAL | MT_FLAG_RIGHT_GRAVITY),
+            key(1, 1, MtFlags::REAL),
+            key(1, 1, MtFlags::REAL | MtFlags::RIGHT_GRAVITY),
         ];
         assert_eq!(
-            find_key(&keys, key(1, 1, MT_FLAG_REAL | MT_FLAG_RIGHT_GRAVITY)),
+            find_key(&keys, key(1, 1, MtFlags::REAL | MtFlags::RIGHT_GRAVITY)),
             (1, true)
         );
-        assert_eq!(find_key(&keys, key(1, 1, MT_FLAG_REAL)), (0, true));
+        assert_eq!(find_key(&keys, key(1, 1, MtFlags::REAL)), (0, true));
     }
 }

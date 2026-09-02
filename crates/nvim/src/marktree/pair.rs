@@ -3,7 +3,7 @@
 //! Paired marks: the second key, and the records of what a range covers.
 //!
 //! A range is two keys sharing a `(ns, id)`, the later one carrying
-//! `MT_FLAG_END`. Everything that keeps the two halves consistent with each
+//! [`MtFlags::END`]. Everything that keeps the two halves consistent with each
 //! other, and with the covering records the nodes between them carry, lives
 //! here; the parent module owns the tree's per-key operations.
 //!
@@ -20,10 +20,10 @@ use core::ffi::c_int;
 
 use crate::marktree::iter::marktree_itr_next_skip;
 use crate::marktree::key::{
-    MARKTREE_END_FLAG, MT_FLAG_ORPHANED, mt_end, mt_lookup_key, mt_lookup_key_side, mt_paired,
+    MARKTREE_END_FLAG, MtFlags, mt_end, mt_lookup_key, mt_lookup_key_side, mt_paired,
 };
 use crate::marktree::node::{Node, id2node};
-use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint16_t, uint64_t};
+use crate::types::{MTKey, MTPos, MarkTree, MarkTreeIter, uint64_t};
 
 use super::{marktree_lookup, marktree_lookup_ns};
 
@@ -134,12 +134,8 @@ pub unsafe fn marktree_restore_pair(b: &mut MarkTree, key: MTKey) {
     }
     // SAFETY: a lookup that found its key left the iterator on a live node.
     let (start, end) = unsafe { (Node::new(itr.x), Node::new(end_itr.x)) };
-    start.update_key(itr.i as usize, |k| {
-        k.flags &= !(MT_FLAG_ORPHANED as uint16_t)
-    });
-    end.update_key(end_itr.i as usize, |k| {
-        k.flags &= !(MT_FLAG_ORPHANED as uint16_t)
-    });
+    start.update_key(itr.i as usize, |k| k.flags.clear(MtFlags::ORPHANED));
+    end.update_key(end_itr.i as usize, |k| k.flags.clear(MtFlags::ORPHANED));
 
     let id = mt_lookup_key_side(key, false);
     // SAFETY: `b` is live and both iterators are positioned in it.

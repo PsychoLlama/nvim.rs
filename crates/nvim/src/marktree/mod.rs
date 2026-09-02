@@ -18,8 +18,8 @@
 //!   affecting a whole subtree can be applied to one node instead of to every
 //!   mark in it, which is what makes a splice near the top of a large buffer
 //!   cheap. Everything that moves a key between nodes has to rebase it.
-//! * **Ranges are two keys.** A `(ns, id)` pair with `MT_FLAG_END` set on the
-//!   second. They are ordered like any other key, and the tree keeps them
+//! * **Ranges are two keys.** A `(ns, id)` pair with [`MtFlags::END`] set on
+//!   the second. They are ordered like any other key, and the tree keeps them
 //!   consistent across splices that would otherwise reverse them. Everything
 //!   that maintains the second key lives in [`pair`].
 //! * **Covering ranges are recorded on nodes, not smeared over keys.** A node
@@ -62,7 +62,7 @@ pub use crate::marktree::splice::*;
 use crate::memory::xfree;
 use crate::types::{
     MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, MarkTreeIter, Set_uint64_t, ptr_t, uint16_t, uint32_t, uint64_t,
+    MarkTree, MarkTreeIter, Set_uint64_t, ptr_t, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.
@@ -123,11 +123,13 @@ pub unsafe fn marktree_put(
     end_right: bool,
 ) {
     assert!(
-        key.flags as c_int & !(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY) == 0,
-        "!(key.flags & ~(MT_FLAG_EXTERNAL_MASK | MT_FLAG_RIGHT_GRAVITY))"
+        key.flags
+            .without(MtFlags::EXTERNAL_MASK | MtFlags::RIGHT_GRAVITY)
+            .is_empty(),
+        "key.flags names only externally settable bits"
     );
     if end_row >= 0 {
-        key.flags |= MT_FLAG_PAIRED as uint16_t;
+        key.flags |= MtFlags::PAIRED;
     }
     // SAFETY: `b` is a live tree, and `key` is the caller's to insert.
     unsafe { marktree_put_key(b, key) };
@@ -136,13 +138,9 @@ pub unsafe fn marktree_put(
     }
 
     let mut end_key = key;
-    end_key.flags = (key.flags & !(MT_FLAG_RIGHT_GRAVITY as uint16_t))
-        | MT_FLAG_END as uint16_t
-        | if end_right {
-            MT_FLAG_RIGHT_GRAVITY as uint16_t
-        } else {
-            0
-        };
+    end_key.flags = key.flags.without(MtFlags::RIGHT_GRAVITY)
+        | MtFlags::END
+        | MtFlags::RIGHT_GRAVITY.when(end_right);
     end_key.pos = MTPos {
         row: end_row,
         col: end_col,
@@ -170,7 +168,7 @@ pub unsafe fn marktree_put(
 /// # Safety
 /// `b` must be a live tree.
 pub unsafe fn marktree_put_key(b: &mut MarkTree, mut k: MTKey) {
-    k.flags |= MT_FLAG_REAL as uint16_t; // let's be real.
+    k.flags |= MtFlags::REAL; // let's be real.
     if b.root.is_null() {
         // SAFETY: `b` is a live tree, which is all `marktree_alloc_node` wants.
         b.root = unsafe { marktree_alloc_node(b, true) };
@@ -259,16 +257,14 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
     //    records were made for.
     let raw = cur.key(curi);
     let mut other = 0;
-    if mt_paired(raw) && raw.flags as c_int & MT_FLAG_ORPHANED == 0 {
+    if mt_paired(raw) && !raw.flags.has(MtFlags::ORPHANED) {
         other = mt_lookup_key_side(raw, !mt_end(raw));
         let mut other_itr = MarkTreeIter::default();
         // SAFETY: `b` is live; the lookup positions `other_itr` in it.
         unsafe { marktree_lookup(b, other, Some(&mut other_itr)) };
         // SAFETY: the lookup left `other_itr` on a live node of `b`.
         let onode = unsafe { Node::new(other_itr.x) };
-        onode.update_key(other_itr.i as usize, |k| {
-            k.flags |= MT_FLAG_ORPHANED as uint16_t
-        });
+        onode.update_key(other_itr.i as usize, |k| k.flags |= MtFlags::ORPHANED);
         if mt_start(raw) {
             let mut this_itr = *itr; // a copy, because this one is mutated
             // SAFETY: `b` is live and both iterators are positioned in it.

@@ -68,14 +68,8 @@ unsafe fn buf_set_sign(
     sign.priority = DecorPriority::from_le_bytes([lo, hi]);
 
     let has_hl = def.sn_line_hl != 0 || def.sn_num_hl != 0 || def.sn_cul_hl != 0;
-    let text_flag = if def.sn_text[0] != 0 {
-        MT_FLAG_DECOR_SIGNTEXT
-    } else {
-        0
-    };
-    let hl_flag = if has_hl { MT_FLAG_DECOR_SIGNHL } else { 0 };
     let decor_flags =
-        u16::try_from(text_flag | hl_flag).expect("both sign flags fit a mark's flag word");
+        MtFlags::DECOR_SIGNTEXT.when(def.sn_text[0] != 0) | MtFlags::DECOR_SIGNHL.when(has_hl);
 
     let decor = DecorInline {
         ext: true,

@@ -14,10 +14,7 @@
 
 use crate::types::{MTKey, uint32_t};
 
-use super::key::{
-    MT_FLAG_DECOR_CONCEAL_LINES, MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
-    MT_FLAG_DECOR_VIRT_LINES, MT_FLAG_DECOR_VIRT_TEXT_INLINE, mt_end, mt_invalid,
-};
+use super::key::{MtFlags, mt_end, mt_invalid};
 
 // Nested so `ffigen` does not publish a name this generic into the flat cdef
 // namespace; it collects top-level consts only, and `pub use` is invisible to
@@ -34,12 +31,12 @@ pub type MetaCount = [uint32_t; META_COUNT];
 /// The key flag each meta index counts. Indexing a plain `static` is safe, so
 /// this deliberately is not a `GlobalCell`: it holds no pointers and is only
 /// ever read.
-pub static META_MAP: MetaCount = [
-    MT_FLAG_DECOR_VIRT_TEXT_INLINE as uint32_t,
-    MT_FLAG_DECOR_VIRT_LINES as uint32_t,
-    MT_FLAG_DECOR_SIGNHL as uint32_t,
-    MT_FLAG_DECOR_SIGNTEXT as uint32_t,
-    MT_FLAG_DECOR_CONCEAL_LINES as uint32_t,
+pub static META_MAP: [MtFlags; META_COUNT] = [
+    MtFlags::DECOR_VIRT_TEXT_INLINE,
+    MtFlags::DECOR_VIRT_LINES,
+    MtFlags::DECOR_SIGNHL,
+    MtFlags::DECOR_SIGNTEXT,
+    MtFlags::DECOR_CONCEAL_LINES,
 ];
 
 /// Add what `k` contributes to `meta`. An end key and an invalidated key
@@ -48,9 +45,8 @@ pub fn meta_add_key(meta: &mut MetaCount, k: MTKey) {
     if mt_end(k) || mt_invalid(k) {
         return;
     }
-    let flags = k.flags as uint32_t;
     for m in 0..META_COUNT {
-        meta[m] = meta[m].wrapping_add(u32::from(flags & META_MAP[m] != 0));
+        meta[m] = meta[m].wrapping_add(u32::from(k.flags.has(META_MAP[m])));
     }
 }
 
@@ -97,10 +93,10 @@ pub fn meta_has(count: &MetaCount, filter: &MetaCount) -> bool {
 
 /// The key flags a filtered walk is looking for: the union of the flags the
 /// filter's selected kinds count.
-pub fn filtered_key_flags(filter: &MetaCount) -> uint32_t {
-    let mut flags: uint32_t = 0;
+pub fn filtered_key_flags(filter: &MetaCount) -> MtFlags {
+    let mut flags = MtFlags::NONE;
     for m in 0..META_COUNT {
-        flags |= META_MAP[m] & filter[m];
+        flags |= META_MAP[m].when(filter[m] != 0);
     }
     flags
 }
@@ -111,17 +107,15 @@ mod tests {
     use crate::decoration::{
         kMTMetaConcealLines, kMTMetaInline, kMTMetaLines, kMTMetaSignHL, kMTMetaSignText,
     };
-    use crate::marktree::key::{
-        DECOR_HIGHLIGHT_INLINE_INIT, MT_FLAG_END, MT_FLAG_INVALID, kMTFilterSelect,
-    };
-    use crate::types::{DecorInlineData, MTPos, uint16_t};
+    use crate::marktree::key::{DECOR_HIGHLIGHT_INLINE_INIT, kMTFilterSelect};
+    use crate::types::{DecorInlineData, MTPos};
 
-    fn key(flags: ::core::ffi::c_int) -> MTKey {
+    fn key(flags: MtFlags) -> MTKey {
         MTKey {
             pos: MTPos { row: 0, col: 0 },
             ns: 0,
             id: 0,
-            flags: flags as uint16_t,
+            flags,
             decor_data: DecorInlineData {
                 hl: DECOR_HIGHLIGHT_INLINE_INIT,
             },
@@ -130,7 +124,7 @@ mod tests {
 
     #[test]
     fn counts_one_per_decoration_kind_the_key_carries() {
-        let meta = meta_describe_key(key(MT_FLAG_DECOR_VIRT_LINES | MT_FLAG_DECOR_CONCEAL_LINES));
+        let meta = meta_describe_key(key(MtFlags::DECOR_VIRT_LINES | MtFlags::DECOR_CONCEAL_LINES));
         assert_eq!(meta[kMTMetaLines as usize], 1);
         assert_eq!(meta[kMTMetaConcealLines as usize], 1);
         assert_eq!(meta[kMTMetaInline as usize], 0);
@@ -140,10 +134,13 @@ mod tests {
 
     #[test]
     fn an_end_key_or_an_invalid_key_counts_for_nothing() {
-        let flags = MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL;
-        assert_eq!(meta_describe_key(key(flags | MT_FLAG_END)), [0; META_COUNT]);
+        let flags = MtFlags::DECOR_SIGNTEXT | MtFlags::DECOR_SIGNHL;
         assert_eq!(
-            meta_describe_key(key(flags | MT_FLAG_INVALID)),
+            meta_describe_key(key(flags | MtFlags::END)),
+            [0; META_COUNT]
+        );
+        assert_eq!(
+            meta_describe_key(key(flags | MtFlags::INVALID)),
             [0; META_COUNT]
         );
         // ... but the start of the same pair does count.
@@ -155,23 +152,20 @@ mod tests {
         let mut filter = [0; META_COUNT];
         filter[kMTMetaSignText as usize] = kMTFilterSelect;
         assert!(meta_has(
-            &meta_describe_key(key(MT_FLAG_DECOR_SIGNTEXT)),
+            &meta_describe_key(key(MtFlags::DECOR_SIGNTEXT)),
             &filter
         ));
         assert!(!meta_has(
-            &meta_describe_key(key(MT_FLAG_DECOR_SIGNHL)),
+            &meta_describe_key(key(MtFlags::DECOR_SIGNHL)),
             &filter
         ));
-        assert_eq!(
-            filtered_key_flags(&filter),
-            MT_FLAG_DECOR_SIGNTEXT as uint32_t
-        );
+        assert_eq!(filtered_key_flags(&filter), MtFlags::DECOR_SIGNTEXT);
     }
 
     #[test]
     fn adding_and_subtracting_a_key_cancel() {
         let mut meta = [3, 4, 5, 6, 7];
-        let k = meta_describe_key(key(MT_FLAG_DECOR_VIRT_TEXT_INLINE));
+        let k = meta_describe_key(key(MtFlags::DECOR_VIRT_TEXT_INLINE));
         meta_add(&mut meta, &k);
         assert_eq!(meta, [4, 4, 5, 6, 7]);
         meta_sub(&mut meta, &k);

@@ -12,6 +12,7 @@ use super::*;
 use crate::api::private::helpers::{Reported, buffer_by_handle};
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::cstr;
+use crate::marktree::key::MtFlags;
 
 pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
     let mut error = Error::none();
@@ -49,7 +50,7 @@ unsafe fn set_decor(
     end_line: ::core::ffi::c_int,
     end_col: colnr_T,
     decor: DecorInline,
-    flags: uint16_t,
+    flags: MtFlags,
 ) {
     // SAFETY: the caller's promise. The mark is new, so it is given no id
     // slot; a null error slot is what upstream passes here too.
@@ -137,7 +138,7 @@ pub unsafe fn nvim_buf_add_highlight(
             end_line,
             col_end as colnr_T,
             decor,
-            MT_FLAG_DECOR_HL as uint16_t,
+            MtFlags::DECOR_HL,
         );
     }
     ns_id.reported(error)
@@ -217,7 +218,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
             -1 as ::core::ffi::c_int,
             -1 as colnr_T,
             decor,
-            0 as uint16_t,
+            MtFlags::NONE,
         );
     }
     src_id.reported(error)

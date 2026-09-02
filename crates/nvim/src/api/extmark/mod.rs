@@ -23,9 +23,7 @@ use crate::map::{
     mh_put_uint32_t, set_has_uint32_t,
 };
 use crate::marktree::key::{
-    MT_FLAG_DECOR_CONCEAL_LINES, MT_FLAG_DECOR_HL, MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
-    MT_FLAG_DECOR_VIRT_LINES, MT_FLAG_DECOR_VIRT_TEXT_INLINE, mt_decor, mt_invalid, mt_invalidate,
-    mt_no_undo, mt_paired, mt_right,
+    MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
 use crate::marktree::mt_inspect;
 use crate::mbyte::{mb_string2cells, utfc_ptr2schar};

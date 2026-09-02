@@ -22,12 +22,12 @@ use super::{
     kExtmarkNoUndo, kExtmarkUndo, push_undo, tree_get_altpos, tree_revise_meta,
 };
 use crate::marktree::key::{
-    MT_FLAG_INVALID, mt_decor, mt_end, mt_invalid, mt_invalidate, mt_lookup_key, mt_no_undo,
-    mt_paired, mt_right,
+    MtFlags, mt_decor, mt_end, mt_invalid, mt_invalidate, mt_lookup_key, mt_no_undo, mt_paired,
+    mt_right,
 };
 use crate::types::{
     ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, buf_T, colnr_T,
-    extmark_undo_vec_t, uint16_t,
+    extmark_undo_vec_t,
 };
 
 /// Invalidate the marks inside a range being deleted, and copy the ones the
@@ -106,8 +106,8 @@ pub(crate) fn splice_delete(
                 }
                 copy = true;
                 invalidated = true;
-                itr_rawkey(&mut itr).flags |= MT_FLAG_INVALID as uint16_t;
-                itr_rawkey(&mut enditr).flags |= MT_FLAG_INVALID as uint16_t;
+                itr_rawkey(&mut itr).flags |= MtFlags::INVALID;
+                itr_rawkey(&mut enditr).flags |= MtFlags::INVALID;
                 tree_revise_meta(buf.marktree(), &mut itr, mark);
                 decor_remove(
                     buf,

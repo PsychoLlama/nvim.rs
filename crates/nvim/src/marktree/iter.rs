@@ -31,14 +31,14 @@ use core::ffi::c_int;
 use core::ptr;
 
 use crate::marktree::key::{
-    MARKTREE_END_FLAG, MT_FLAG_LAST, MT_FLAG_RIGHT_GRAVITY, MT_INVALID_KEY, compose, mt_end,
-    mt_lookup_id, mt_start, mtpair_from, pos_leq, pos_less, relative, unrelative,
+    MARKTREE_END_FLAG, MT_INVALID_KEY, MtFlags, compose, mt_end, mt_lookup_id, mt_start,
+    mtpair_from, pos_leq, pos_less, relative, unrelative,
 };
 use crate::marktree::meta::{MetaCount, filtered_key_flags, meta_has};
 use crate::marktree::node::{Node, find_key, id2node};
 use crate::types::{
     DecorHighlightInline, DecorInlineData, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter,
-    MetaFilter, int32_t, uint16_t, uint32_t,
+    MetaFilter, int32_t,
 };
 
 use super::marktree_lookup;
@@ -58,12 +58,12 @@ pub use sizes::MT_MAX_DEPTH;
 /// Only the position and the flags take part in the ordering, so the
 /// decoration is left zeroed — deliberately *not*
 /// `DECOR_HIGHLIGHT_INLINE_INIT`, whose priority is not zero.
-fn search_key(pos: MTPos, flags: c_int) -> MTKey {
+fn search_key(pos: MTPos, flags: MtFlags) -> MTKey {
     MTKey {
         pos,
         ns: 0,
         id: 0,
-        flags: flags as uint16_t,
+        flags,
         decor_data: DecorInlineData {
             hl: DecorHighlightInline {
                 flags: 0,
@@ -122,9 +122,9 @@ pub unsafe fn marktree_itr_get_ext(
         itr.x = ptr::null_mut();
         return false;
     }
-    let mut k = search_key(p, if gravity { MT_FLAG_RIGHT_GRAVITY } else { 0 });
+    let mut k = search_key(p, MtFlags::RIGHT_GRAVITY.when(gravity));
     if last && !gravity {
-        k.flags = MT_FLAG_LAST as uint16_t;
+        k.flags = MtFlags::LAST;
     }
     itr.pos = MTPos::default();
     // SAFETY: `b` is live and holds keys, so its root is one of its live nodes.
@@ -405,7 +405,7 @@ unsafe fn marktree_itr_check_filter(
         }
         // SAFETY: as above.
         let k = unsafe { Node::new(itr.x) }.key(itr.i as usize);
-        if !mt_end(k) && k.flags as uint32_t & key_filter != 0 {
+        if !mt_end(k) && k.flags.has(key_filter) {
             return true;
         }
         // SAFETY: `b` is live and `itr` is positioned in it.
@@ -577,7 +577,7 @@ pub unsafe fn marktree_itr_step_overlap(
             itr.s[itr.lvl as usize].i = itr.i;
             break;
         }
-        let k = search_key(itr.intersect_pos_x, 0);
+        let k = search_key(itr.intersect_pos_x, MtFlags::NONE);
         itr.i = find_key(x.keys(), k).0 + 1;
         itr.s[itr.lvl as usize].i = itr.i;
         itr.s[itr.lvl as usize].oldcol = itr.pos.col;

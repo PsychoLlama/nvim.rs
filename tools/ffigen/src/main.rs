@@ -431,6 +431,43 @@ impl syn::parse::Parse for FlagSet {
     }
 }
 
+/// Rewrite `Self::MEMBER.bits()` -- how a family spells a mask built from its
+/// own members -- to the `<Family>_<MEMBER>` name the const pass registers,
+/// so `eval_const`'s path lookup finds it. Without this a mask has to repeat
+/// the bit numbers its members already carry, and the two spellings drift.
+fn qualify_self(expr: &syn::Expr, family: &str) -> syn::Expr {
+    let mut out = expr.clone();
+    match &mut out {
+        // `Self::MEMBER.bits()` and `Self::MEMBER.0` are both just the member.
+        syn::Expr::MethodCall(m) if m.method == "bits" && m.args.is_empty() => {
+            return qualify_self(&m.receiver, family);
+        }
+        syn::Expr::Field(f) if matches!(f.member, syn::Member::Unnamed(ref i) if i.index == 0) => {
+            return qualify_self(&f.base, family);
+        }
+        syn::Expr::Path(p) => {
+            let segs = &p.path.segments;
+            if segs.len() == 2 && segs[0].ident == "Self" {
+                let flat = syn::Ident::new(
+                    &format!("{}_{}", family, segs[1].ident),
+                    segs[1].ident.span(),
+                );
+                return syn::parse_quote!(#flat);
+            }
+        }
+        syn::Expr::Binary(b) => {
+            *b.left = qualify_self(&b.left, family);
+            *b.right = qualify_self(&b.right, family);
+        }
+        syn::Expr::Unary(u) => *u.expr = qualify_self(&u.expr, family),
+        syn::Expr::Paren(p) => *p.expr = qualify_self(&p.expr, family),
+        syn::Expr::Group(g) => *g.expr = qualify_self(&g.expr, family),
+        syn::Expr::Cast(c) => *c.expr = qualify_self(&c.expr, family),
+        _ => {}
+    }
+    out
+}
+
 fn flag_set_invocations(ast: &syn::File) -> Vec<FlagSet> {
     let mut out = Vec::new();
     for item in &ast.items {
@@ -558,7 +595,7 @@ fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
                 .or_default()
                 .push(Konst {
                     file: rel.to_string(),
-                    expr: expr.clone(),
+                    expr: qualify_self(expr, &fam.name),
                 });
         }
         add(world, fam.name, Kind::Alias(Box::new(fam.word)), None);

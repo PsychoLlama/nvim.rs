@@ -40,7 +40,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::main::decor_state;
 use crate::map::set_has_uint32_t;
-use crate::marktree::key::{MT_FLAG_DECOR_EXT, MT_FLAG_DECOR_HL};
+use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
@@ -219,7 +219,7 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
 /// Safe: the flag decides which branch of the union is read, and the answer
 /// is a pointer, which dereferencing is what needs a promise.
 pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
-    if mark.flags as c_int & MT_FLAG_DECOR_EXT != 0 {
+    if mark.flags.has(MtFlags::DECOR_EXT) {
         // SAFETY: the flag says the union holds the `ext` branch.
         unsafe { mark.decor_data.ext.vt }
     } else {
@@ -559,7 +559,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
         let ns = src_id as uint32_t;
         let no_id = ptr::null_mut();
         let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
-        let flags = MT_FLAG_DECOR_HL as uint16_t;
+        let flags = MtFlags::DECOR_HL;
         // SAFETY: `buf` is the caller's live buffer and `decor` is the
         // inline decoration built above, which the mark takes over.
         unsafe {

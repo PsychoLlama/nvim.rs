@@ -63,9 +63,7 @@ use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
 use crate::main::{curwin, e_argreq, e_dictreq, e_invarg, e_listreq, got_int};
 use crate::map::mh_get_string;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
-use crate::marktree::key::{
-    MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT, mt_decor, mt_decor_sign, mt_end,
-};
+use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
 use crate::marktree::{marktree_itr_current, marktree_itr_next};
 use crate::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xstrdup};

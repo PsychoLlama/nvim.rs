@@ -21,9 +21,7 @@ use super::{Sh, kSHIsSign, ns_in_win};
 use crate::decoration::{SCL_NUM, SIGN_WIDTH, kMTMetaSignText};
 use crate::global_cell::GlobalCell;
 use crate::marktree::cursor::Cursor;
-use crate::marktree::key::{
-    MT_FLAG_DECOR_SIGNTEXT, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid,
-};
+use crate::marktree::key::{MtFlags, kMTFilterSelect, mt_decor, mt_decor_sign, mt_end, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
@@ -329,7 +327,7 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: 
     // Signs that start before `row1` but reach into the range.
     walk.seek_overlap(row1, 0);
     while let Some(pair) = walk.step_overlap() {
-        if pair.start.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0 && !mt_invalid(pair.start) {
+        if pair.start.flags.has(MtFlags::DECOR_SIGNTEXT) && !mt_invalid(pair.start) {
             for i in row1..=row2.min(pair.end_pos.row) {
                 count[(i - row1) as usize] += 1;
             }
@@ -343,7 +341,7 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: 
         if mark.pos.row > row2 {
             break;
         }
-        if mark.flags as c_int & MT_FLAG_DECOR_SIGNTEXT != 0 && !mt_invalid(mark) && !mt_end(mark) {
+        if mark.flags.has(MtFlags::DECOR_SIGNTEXT) && !mt_invalid(mark) && !mt_end(mark) {
             let end: MTPos = walk.altpos(mark);
             for i in mark.pos.row..=row2.min(end.row) {
                 count[(i - row1) as usize] += 1;
