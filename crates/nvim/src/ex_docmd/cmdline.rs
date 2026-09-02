@@ -30,10 +30,9 @@ use crate::ex_docmd::source::{
 };
 
 use crate::ex_docmd::{
-    CSF_ACTIVE, CSF_FINALLY, CSF_FOR, CSF_TRY, CSF_WHILE, CSL_HAD_CONT, CSL_HAD_ENDLOOP,
-    CSL_HAD_FINA, CSL_HAD_LOOP, CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, dbg_stuff,
-    loop_cookie, wcmd_T,
+    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, dbg_stuff, loop_cookie, wcmd_T,
 };
+use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
     aborting, cleanup_conditionals, do_intthrow, has_loop_cmd, report_make_pending,
 };
@@ -477,8 +476,13 @@ pub unsafe fn do_cmdline(
             // commands were being executed, jump back to the `:while`
             // or `:for`; if they were being skipped, the loop level has
             // already been decremented.
-            if cstack.cs_lflags & (CSL_HAD_CONT as c_int | CSL_HAD_ENDLOOP as c_int) != 0 {
-                cstack.cs_lflags &= !(CSL_HAD_CONT as c_int | CSL_HAD_ENDLOOP as c_int);
+            if cstack
+                .cs_lflags
+                .has(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP)
+            {
+                cstack
+                    .cs_lflags
+                    .clear(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP);
 
                 // Only a `:while` or `:for` entry has a usable
                 // `cs_line`; taking one from any other kind would make
@@ -488,12 +492,12 @@ pub unsafe fn do_cmdline(
                     && !got_int.get()
                     && !did_throw.get()
                     && idx >= 0
-                    && cstack.cs_flags[idx as usize] & (CSF_WHILE as c_int | CSF_FOR as c_int) != 0
+                    && cstack.cs_flags[idx as usize].has(CsFlags::LOOP)
                     && cstack.cs_line[idx as usize] >= 0
-                    && cstack.cs_flags[idx as usize] & CSF_ACTIVE as c_int != 0
+                    && cstack.cs_flags[idx as usize].has(CsFlags::ACTIVE)
                 {
                     current_line = cstack.cs_line[idx as usize];
-                    cstack.cs_lflags |= CSL_HAD_LOOP as c_int;
+                    cstack.cs_lflags |= CsLoopFlags::HAD_LOOP;
                     line_breakcheck();
 
                     // The next breakpoint at or after the `:while`.
@@ -514,13 +518,13 @@ pub unsafe fn do_cmdline(
                     rewind_conditionals(
                         &raw mut cstack,
                         idx - 1,
-                        CSF_WHILE as c_int | CSF_FOR as c_int,
+                        CsFlags::LOOP,
                         &raw mut cstack.cs_looplevel,
                     );
                 }
-            } else if cstack.cs_lflags & CSL_HAD_LOOP as c_int != 0 {
+            } else if cstack.cs_lflags.has(CsLoopFlags::HAD_LOOP) {
                 // A `:while` or `:for` remembers where its body starts.
-                cstack.cs_lflags &= !(CSL_HAD_LOOP as c_int);
+                cstack.cs_lflags.clear(CsLoopFlags::HAD_LOOP);
                 cstack.cs_line[cstack.cs_idx as usize] = current_line_before;
             }
         }
@@ -541,8 +545,8 @@ pub unsafe fn do_cmdline(
         // entry active, so that the finally clause runs at all — which
         // includes the case where the `:finally` itself is what noticed
         // a missing `:endif`, `:endwhile` or `:endfor`.
-        if cstack.cs_lflags & CSL_HAD_FINA as c_int != 0 {
-            cstack.cs_lflags &= !(CSL_HAD_FINA as c_int);
+        if cstack.cs_lflags.has(CsLoopFlags::HAD_FINA) {
+            cstack.cs_lflags.clear(CsLoopFlags::HAD_FINA);
             unsafe {
                 report_make_pending(
                     cstack.cs_pending[cstack.cs_idx as usize] as c_int
@@ -557,7 +561,7 @@ pub unsafe fn do_cmdline(
             did_emsg.set(0);
             got_int.set(false);
             did_throw.set(false);
-            cstack.cs_flags[cstack.cs_idx as usize] |= CSF_ACTIVE as c_int | CSF_FINALLY as c_int;
+            cstack.cs_flags[cstack.cs_idx as usize] |= CsFlags::ACTIVE | CsFlags::FINALLY;
         }
 
         // The global `trylevel` is what a *nested* `do_cmdline` reads.
@@ -611,11 +615,11 @@ pub unsafe fn do_cmdline(
                     && func_has_ended(real_cookie) == 0)
         {
             let flags_here = cstack.cs_flags[cstack.cs_idx as usize];
-            let missing = if flags_here & CSF_TRY as c_int != 0 {
+            let missing = if flags_here.has(CsFlags::TRY) {
                 e_endtry.as_ptr()
-            } else if flags_here & CSF_WHILE as c_int != 0 {
+            } else if flags_here.has(CsFlags::WHILE) {
                 e_endwhile.as_ptr()
-            } else if flags_here & CSF_FOR as c_int != 0 {
+            } else if flags_here.has(CsFlags::FOR) {
                 e_endfor.as_ptr()
             } else {
                 e_endif.as_ptr()
@@ -628,7 +632,7 @@ pub unsafe fn do_cmdline(
         // drops anything pending; one in a catch clause finishes the
         // exception it caught. This also frees the `cs_forinfo`s.
         loop {
-            let mut idx = unsafe { cleanup_conditionals(&raw mut cstack, 0, true) };
+            let mut idx = unsafe { cleanup_conditionals(&raw mut cstack, CsFlags::NONE, true) };
             if idx >= 0 {
                 // Drop a try block that is not in its finally clause.
                 idx -= 1;
@@ -636,7 +640,7 @@ pub unsafe fn do_cmdline(
             rewind_conditionals(
                 &raw mut cstack,
                 idx,
-                CSF_WHILE as c_int | CSF_FOR as c_int,
+                CsFlags::LOOP,
                 &raw mut cstack.cs_looplevel,
             );
             if cstack.cs_idx < 0 {
@@ -806,7 +810,7 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 fn rewind_conditionals(
     cstack: *mut cstack_T,
     idx: c_int,
-    cond_type: c_int,
+    cond_type: CsFlags,
     cond_level: *mut c_int,
 ) {
     // SAFETY: the pointers are the command line's own, and live for the call.

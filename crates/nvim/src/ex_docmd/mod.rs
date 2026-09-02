@@ -175,21 +175,9 @@ pub const OPTION_MAGIC_OFF: optmagic_T = 2;
 pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const kMarkAll: MarkGet = 1;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const CSF_CAUGHT: c_uint = 4096;
-pub const CSF_THROWN: c_uint = 2048;
-pub const CSF_FINALLY: c_uint = 512;
-pub const CSF_TRY: c_uint = 256;
-pub const CSF_FOR: c_uint = 16;
-pub const CSF_WHILE: c_uint = 8;
-pub const CSF_ACTIVE: c_uint = 2;
-pub const CSF_TRUE: c_uint = 1;
 pub const CSTP_THROW: c_uint = 4;
 pub const CSTP_INTERRUPT: c_uint = 2;
 pub const CSTP_ERROR: c_uint = 1;
-pub const CSL_HAD_FINA: c_uint = 8;
-pub const CSL_HAD_CONT: c_uint = 4;
-pub const CSL_HAD_ENDLOOP: c_uint = 2;
-pub const CSL_HAD_LOOP: c_uint = 1;
 /// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
 /// outside this crate calls the table.
 pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;

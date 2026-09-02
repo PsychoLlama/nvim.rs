@@ -205,6 +205,13 @@ macro_rules! flag_set {
                 self.0 &= !flags.0;
             }
 
+            /// Flip `flags` in place: C's `opts ^= FOO`, for the handful of
+            /// words a caller toggles rather than sets or clears.
+            #[inline]
+            $vis const fn toggle(&mut self, flags: Self) {
+                self.0 ^= flags.0;
+            }
+
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.
             #[inline]
             $vis const fn without(self, flags: Self) -> Self {

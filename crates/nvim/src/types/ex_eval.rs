@@ -19,7 +19,7 @@ pub struct cleanup_stuff {
 }
 #[derive(Copy, Clone)]
 pub struct cstack_T {
-    pub cs_flags: [::core::ffi::c_int; 50],
+    pub cs_flags: [crate::ex_eval::CsFlags; 50],
     pub cs_pending: [::core::ffi::c_char; 50],
     /// What the `:finally` clause at each level postponed: the pending
     /// `:return`'s value, or the pending exception. Which of the two is
@@ -33,7 +33,7 @@ pub struct cstack_T {
     pub cs_looplevel: ::core::ffi::c_int,
     pub cs_trylevel: ::core::ffi::c_int,
     pub cs_emsg_silent_list: *mut eslist_T,
-    pub cs_lflags: ::core::ffi::c_int,
+    pub cs_lflags: crate::ex_eval::CsLoopFlags,
 }
 
 impl cstack_T {

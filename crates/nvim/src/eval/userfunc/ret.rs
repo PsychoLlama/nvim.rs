@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -461,7 +462,7 @@ pub unsafe fn do_return(
 
     // Cleanup (and inactivate) conditionals, but stop when a `:finally`
     // is reached: the return still has to be pending until that has run.
-    let idx = unsafe { cleanup_conditionals(ea.cstack, 0, true) };
+    let idx = unsafe { cleanup_conditionals(ea.cstack, CsFlags::NONE, true) };
     if idx >= 0 {
         // A `:finally` is going to run first; remember the return value.
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_RETURN as c_char };

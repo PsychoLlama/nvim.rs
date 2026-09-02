@@ -43,10 +43,10 @@ use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    CSF_ACTIVE, CSF_CAUGHT, CSF_THROWN, CSF_TRUE, DoCmdOpts, PROF_YES, cmdnames,
-    e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_func_T, exmode_plus,
-    quitmore,
+    DoCmdOpts, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
+    e_not_an_editor_command, ex_func_T, exmode_plus, quitmore,
 };
+use crate::ex_eval::CsFlags;
 
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
@@ -239,7 +239,7 @@ pub(crate) unsafe fn do_one_cmd(
             // the whole of this command.
             || unsafe {
                 (*cstack).cs_idx >= 0
-                    && (*cstack).cs_flags[(*cstack).cs_idx as usize] & CSF_ACTIVE as c_int == 0
+                    && !(*cstack).cs_flags[(*cstack).cs_idx as usize].has(CsFlags::ACTIVE)
             }) as c_int;
 
         // The command name is needed before the range can be read: it is
@@ -633,7 +633,7 @@ pub(crate) unsafe fn profile_cmd(
     if do_profiling.get() != PROF_YES
         || !(unsafe { (*eap).skip } == 0
             || cs.cs_idx == 0
-            || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1] & CSF_ACTIVE as c_int != 0))
+            || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1].has(CsFlags::ACTIVE)))
     {
         return;
     }
@@ -643,13 +643,12 @@ pub(crate) unsafe fn profile_cmd(
         CmdIdx::catch => {
             skip = !skip
                 && !(idx >= 0
-                    && cs.cs_flags[idx as usize] & CSF_THROWN as c_int != 0
-                    && cs.cs_flags[idx as usize] & CSF_CAUGHT as c_int == 0);
+                    && cs.cs_flags[idx as usize].has(CsFlags::THROWN)
+                    && !cs.cs_flags[idx as usize].has(CsFlags::CAUGHT));
         }
         CmdIdx::r#else | CmdIdx::elseif => {
             skip = skip
-                || !(idx >= 0
-                    && cs.cs_flags[idx as usize] & (CSF_ACTIVE as c_int | CSF_TRUE as c_int) == 0);
+                || !(idx >= 0 && !cs.cs_flags[idx as usize].has(CsFlags::ACTIVE | CsFlags::TRUE));
         }
         CmdIdx::finally => skip = false,
         // The four block-enders are the only commands left that keep the

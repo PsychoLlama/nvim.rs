@@ -21,6 +21,7 @@ use crate::semsg;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -800,7 +801,7 @@ pub unsafe fn do_finish(eap: *mut exarg_T, reanimate: bool) {
     // conditional not in its finally clause -- which then is to be executed
     // next -- is found.  In that case make the `":finish"` pending for
     // execution at the `":endtry"`.  Otherwise, finish normally.
-    let idx = unsafe { cleanup_conditionals((*eap).cstack, 0, true) };
+    let idx = unsafe { cleanup_conditionals((*eap).cstack, CsFlags::NONE, true) };
     if idx >= 0 {
         unsafe { (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
         unsafe { report_make_pending(CSTP_FINISH, NULL_0) };

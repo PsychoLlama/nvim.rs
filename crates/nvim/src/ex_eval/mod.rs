@@ -4,9 +4,9 @@
 //! Everything here is state on one array, `cstack_T`, which `do_cmdline`
 //! owns and passes in through `eap->cstack`. Each `:if`/`:while`/`:for`/
 //! `:try` pushes an entry; the matching end command pops it. An entry's
-//! `cs_flags` says what it is ([`flag::CSF_WHILE`], [`flag::CSF_TRY`], ...)
-//! and how it stands: `CSF_ACTIVE` means its commands are being *executed*
-//! rather than merely parsed, and `CSF_TRUE` means the condition was met at
+//! `cs_flags` says what it is ([`CsFlags::WHILE`], [`CsFlags::TRY`], ...)
+//! and how it stands: `CsFlags::ACTIVE` means its commands are being *executed*
+//! rather than merely parsed, and `CsFlags::TRUE` means the condition was met at
 //! least once, which is what tells `:endif` whether to show a debug prompt
 //! and `:finally` whether its clause needs running at all.
 //!
@@ -74,10 +74,49 @@ use core::ptr;
 use std::ffi::CString;
 
 use flag::{
-    CSF_ACTIVE, CSF_CAUGHT, CSF_ELSE, CSF_FINALLY, CSF_FINISHED, CSF_FOR, CSF_SILENT, CSF_TRUE,
-    CSF_TRY, CSF_WHILE, CSL_HAD_CONT, CSL_HAD_ENDLOOP, CSL_HAD_LOOP, CSTACK_LEN, CSTP_BREAK,
-    CSTP_CONTINUE, CSTP_FINISH, CSTP_NONE, CSTP_RETURN, CSTP_THROW,
+    CSTACK_LEN, CSTP_BREAK, CSTP_CONTINUE, CSTP_FINISH, CSTP_NONE, CSTP_RETURN, CSTP_THROW,
 };
+
+crate::flag_set! {
+    /// `cstack_T.cs_flags`: what a conditional stack entry is, and how it
+    /// stands. The first two are the state; the rest name the command.
+    pub struct CsFlags;
+
+    /// The condition held -- for a `:while`, on the iteration being set up.
+    const TRUE = 1;
+    /// The entry's commands are being *executed* rather than merely parsed.
+    const ACTIVE = 2;
+    const ELSE = 4;
+    const WHILE = 8;
+    const FOR = 16;
+    const TRY = 256;
+    const FINALLY = 512;
+    /// An exception was thrown and this `:try` should check its `:catch`es.
+    const THROWN = 2048;
+    /// One of them matched.
+    const CAUGHT = 4096;
+    /// And that catch clause has ended.
+    const FINISHED = 8192;
+    /// This `:try` reset `emsg_silent`; the old value is on
+    /// `cs_emsg_silent_list`.
+    const SILENT = 16384;
+
+    /// Either loop command, which is how every caller that cares about
+    /// loops asks -- `cleanup_conditionals` and `rewind_conditionals` take
+    /// this, or [`Self::TRY`], or nothing.
+    const LOOP = Self::WHILE.bits() | Self::FOR.bits();
+}
+
+crate::flag_set! {
+    /// `cstack_T.cs_lflags`: what `do_cmdline` should do next about the
+    /// innermost loop.
+    pub struct CsLoopFlags;
+
+    const HAD_LOOP = 1;
+    const HAD_ENDLOOP = 2;
+    const HAD_CONT = 4;
+    const HAD_FINA = 8;
+}
 
 pub(crate) use exception::{
     cause_errthrow, discard_current_exception, do_errthrow, do_intthrow, exception_state_clear,
@@ -96,25 +135,6 @@ pub(crate) mod flag {
     /// How deep `:if`/`:while`/`:for`/`:try` may nest.
     pub(crate) const CSTACK_LEN: c_int = 50;
 
-    /// `cstack_T.cs_flags`: what a conditional stack entry is, and how it
-    /// stands. The first two are the state; the rest name the command.
-    pub(crate) const CSF_TRUE: c_int = 1;
-    pub(crate) const CSF_ACTIVE: c_int = 2;
-    pub(crate) const CSF_ELSE: c_int = 4;
-    pub(crate) const CSF_WHILE: c_int = 8;
-    pub(crate) const CSF_FOR: c_int = 16;
-    pub(crate) const CSF_TRY: c_int = 256;
-    pub(crate) const CSF_FINALLY: c_int = 512;
-    /// An exception was thrown and this `:try` should check its `:catch`es.
-    pub(crate) const CSF_THROWN: c_int = 2048;
-    /// One of them matched.
-    pub(crate) const CSF_CAUGHT: c_int = 4096;
-    /// And that catch clause has ended.
-    pub(crate) const CSF_FINISHED: c_int = 8192;
-    /// This `:try` reset `emsg_silent`; the old value is on
-    /// `cs_emsg_silent_list`.
-    pub(crate) const CSF_SILENT: c_int = 16384;
-
     /// `cstack_T.cs_pending`: what a finally clause postponed. The last
     /// three are alternatives, not bits -- `CSTP_RETURN` deliberately
     /// overlaps `CSTP_BREAK | CSTP_CONTINUE`, as upstream defines it.
@@ -126,13 +146,6 @@ pub(crate) mod flag {
     pub(crate) const CSTP_CONTINUE: c_int = 16;
     pub(crate) const CSTP_RETURN: c_int = 24;
     pub(crate) const CSTP_FINISH: c_int = 32;
-
-    /// `cstack_T.cs_lflags`: what `do_cmdline` should do next about the
-    /// innermost loop.
-    pub(crate) const CSL_HAD_LOOP: c_int = 1;
-    pub(crate) const CSL_HAD_ENDLOOP: c_int = 2;
-    pub(crate) const CSL_HAD_CONT: c_int = 4;
-    pub(crate) const CSL_HAD_FINA: c_int = 8;
 
     /// `except_T.type_0`.
     pub(crate) const ET_USER: except_type_T = 0;
@@ -180,7 +193,7 @@ unsafe fn check_skip(cstack: *mut cstack_T) -> bool {
     did_emsg.get() != 0
         || got_int.get()
         || did_throw.get()
-        || (idx > 0 && unsafe { (*cstack).cs_flags[(idx - 1) as usize] } & CSF_ACTIVE == 0)
+        || (idx > 0 && !unsafe { (*cstack).cs_flags[(idx - 1) as usize] }.has(CsFlags::ACTIVE))
 }
 
 /// Throw away the value a pending `:return` was carrying.
@@ -272,22 +285,21 @@ pub(crate) unsafe fn ex_if(eap: *mut exarg_T) {
     }
     unsafe { (*cstack).cs_idx += 1 };
     let idx = unsafe { (*cstack).cs_idx } as usize;
-    unsafe { (*cstack).cs_flags[idx] = 0 };
+    unsafe { (*cstack).cs_flags[idx] = CsFlags::NONE };
 
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
     let result = unsafe { eval_to_bool((*eap).arg, &raw mut error, eap, skip, false) };
 
-    unsafe {
-        (*cstack).cs_flags[idx] = if skip || error {
-            // Set TRUE, so this conditional never becomes active.
-            CSF_TRUE
-        } else if result {
-            CSF_ACTIVE | CSF_TRUE
-        } else {
-            0
-        }
+    let flags = if skip || error {
+        // Set TRUE, so this conditional never becomes active.
+        CsFlags::TRUE
+    } else if result {
+        CsFlags::ACTIVE | CsFlags::TRUE
+    } else {
+        CsFlags::NONE
     };
+    unsafe { (*cstack).cs_flags[idx] = flags };
 }
 
 /// `:endif`
@@ -300,8 +312,7 @@ pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_idx } < 0
         || unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }
-            & (CSF_WHILE | CSF_FOR | CSF_TRY)
-            != 0
+            .has(CsFlags::LOOP | CsFlags::TRY)
     {
         unsafe { (*eap).errmsg = Some(c"E580: :endif without :if".to_owned()) };
         return;
@@ -312,7 +323,7 @@ pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
     // interrupt before the ":endif", so throw an interrupt exception if
     // appropriate -- doing it here stops the exception for a parsing
     // error being discarded by that interrupt exception later on.
-    if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] } & CSF_TRUE == 0
+    if !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRUE)
         && unsafe { dbg_check_skipped(eap) }
     {
         unsafe { do_intthrow(cstack) };
@@ -331,8 +342,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
 
     if unsafe { (*cstack).cs_idx } < 0
         || unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }
-            & (CSF_WHILE | CSF_FOR | CSF_TRY)
-            != 0
+            .has(CsFlags::LOOP | CsFlags::TRY)
     {
         if unsafe { (*eap).cmdidx } == CmdIdx::r#else {
             unsafe { (*eap).errmsg = Some(c"E581: :else without :if".to_owned()) };
@@ -340,7 +350,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
         }
         unsafe { (*eap).errmsg = Some(c"E582: :elseif without :if".to_owned()) };
         skip = true;
-    } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] } & CSF_ELSE != 0 {
+    } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::ELSE) {
         if unsafe { (*eap).cmdidx } == CmdIdx::r#else {
             unsafe { (*eap).errmsg = Some(E_MULTIPLE_ELSE.to_owned()) };
             return;
@@ -351,14 +361,14 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
 
     let idx = unsafe { (*cstack).cs_idx } as usize;
     // Skipping, or the ":if" was TRUE: reset ACTIVE. Otherwise set it.
-    if skip || unsafe { (*cstack).cs_flags[idx] } & CSF_TRUE != 0 {
+    if skip || unsafe { (*cstack).cs_flags[idx] }.has(CsFlags::TRUE) {
         if unsafe { (*eap).errmsg.is_none() } {
-            unsafe { (*cstack).cs_flags[idx] = CSF_TRUE };
+            unsafe { (*cstack).cs_flags[idx] = CsFlags::TRUE };
         }
         // Don't evaluate an ":elseif".
         skip = true;
     } else {
-        unsafe { (*cstack).cs_flags[idx] = CSF_ACTIVE };
+        unsafe { (*cstack).cs_flags[idx] = CsFlags::ACTIVE };
     }
 
     // When debugging or at a breakpoint, show the prompt if it has not
@@ -373,7 +383,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
     }
 
     if unsafe { (*eap).cmdidx } != CmdIdx::elseif {
-        unsafe { (*cstack).cs_flags[idx] |= CSF_ELSE };
+        unsafe { (*cstack).cs_flags[idx] |= CsFlags::ELSE };
         return;
     }
 
@@ -398,10 +408,15 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
     // the expression then failed too: "skip" is set in that case, so
     // `emsg` ignores the parsing error.
     if !skip && !error {
-        unsafe { (*cstack).cs_flags[idx] = if result { CSF_ACTIVE | CSF_TRUE } else { 0 } };
+        let flags = if result {
+            CsFlags::ACTIVE | CsFlags::TRUE
+        } else {
+            CsFlags::NONE
+        };
+        unsafe { (*cstack).cs_flags[idx] = flags };
     } else if unsafe { (*eap).errmsg.is_none() } {
         // Set TRUE, so this conditional never becomes active.
-        unsafe { (*cstack).cs_flags[idx] = CSF_TRUE };
+        unsafe { (*cstack).cs_flags[idx] = CsFlags::TRUE };
     }
 }
 
@@ -420,7 +435,7 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
     // The loop flag is set when we jumped back from the matching
     // ":endwhile"/":endfor". When it is not set, this cstack entry needs
     // initialising.
-    let jumped_back = unsafe { (*cstack).cs_lflags } & CSL_HAD_LOOP != 0;
+    let jumped_back = unsafe { (*cstack).cs_lflags }.has(CsLoopFlags::HAD_LOOP);
     if !jumped_back {
         unsafe { (*cstack).cs_idx += 1 };
         unsafe { (*cstack).cs_looplevel += 1 };
@@ -428,7 +443,12 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
     }
     let idx = unsafe { (*cstack).cs_idx } as usize;
     let is_while = unsafe { (*eap).cmdidx } == CmdIdx::r#while;
-    unsafe { (*cstack).cs_flags[idx] = if is_while { CSF_WHILE } else { CSF_FOR } };
+    let flags = if is_while {
+        CsFlags::WHILE
+    } else {
+        CsFlags::FOR
+    };
+    unsafe { (*cstack).cs_flags[idx] = flags };
 
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
@@ -439,15 +459,15 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
     };
 
     if !skip && !error && result {
-        unsafe { (*cstack).cs_flags[idx] |= CSF_ACTIVE | CSF_TRUE };
-        unsafe { (*cstack).cs_lflags ^= CSL_HAD_LOOP };
+        unsafe { (*cstack).cs_flags[idx] |= CsFlags::ACTIVE | CsFlags::TRUE };
+        unsafe { (*cstack).cs_lflags.toggle(CsLoopFlags::HAD_LOOP) };
     } else {
-        unsafe { (*cstack).cs_lflags &= !CSL_HAD_LOOP };
+        unsafe { (*cstack).cs_lflags.clear(CsLoopFlags::HAD_LOOP) };
         // The ":while" was FALSE or the ":for" ran off the end of the
         // list: show the debug prompt at the ":endwhile"/":endfor" as if
         // there had been a ":break" in a TRUE loop.
         if !skip && !error {
-            unsafe { (*cstack).cs_flags[idx] |= CSF_TRUE };
+            unsafe { (*cstack).cs_flags[idx] |= CsFlags::TRUE };
         }
     }
 }
@@ -508,12 +528,12 @@ pub(crate) unsafe fn ex_continue(eap: *mut exarg_T) {
     // Find the matching ":while". This may stop at a try conditional not
     // in its finally clause, which is then what runs next, so deactivate
     // every conditional except the ":while" itself, if it is reached.
-    let idx = unsafe { cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, false) };
+    let idx = unsafe { cleanup_conditionals(cstack, CsFlags::LOOP, false) };
     debug_assert!(idx >= 0, "idx >= 0");
-    if unsafe { (*cstack).cs_flags[idx as usize] } & (CSF_WHILE | CSF_FOR) != 0 {
-        unsafe { rewind_conditionals(cstack, idx, CSF_TRY, &raw mut (*cstack).cs_trylevel) };
+    if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::LOOP) {
+        unsafe { rewind_conditionals(cstack, idx, CsFlags::TRY, &raw mut (*cstack).cs_trylevel) };
         // Let `do_cmdline` jump back to the matching ":while".
-        unsafe { (*cstack).cs_lflags |= CSL_HAD_CONT };
+        unsafe { (*cstack).cs_lflags |= CsLoopFlags::HAD_CONT };
     } else {
         // A try conditional not in its finally clause came first: make
         // the ":continue" pending until the ":endtry".
@@ -536,8 +556,8 @@ pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
     // Deactivate conditionals until the matching ":while" or a try
     // conditional not in its finally clause is found. In the latter case
     // the ":break" becomes pending until the ":endtry".
-    let idx = unsafe { cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, true) };
-    if idx >= 0 && unsafe { (*cstack).cs_flags[idx as usize] } & (CSF_WHILE | CSF_FOR) == 0 {
+    let idx = unsafe { cleanup_conditionals(cstack, CsFlags::LOOP, true) };
+    if idx >= 0 && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::LOOP) {
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_BREAK as c_char };
         unsafe { report_make_pending(CSTP_BREAK, ptr::null_mut()) };
     }
@@ -556,7 +576,11 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     } else {
         err_msg(e_for)
     };
-    let csf = if ending_while { CSF_WHILE } else { CSF_FOR };
+    let csf = if ending_while {
+        CsFlags::WHILE
+    } else {
+        CsFlags::FOR
+    };
 
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
         unsafe { (*eap).errmsg = err };
@@ -564,41 +588,41 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     }
 
     let mut fl = unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] };
-    if fl & csf == 0 {
+    if !fl.has(csf) {
         // In a ":while"/":for" but with the wrong endloop command: do
         // not rewind to the next enclosing one.
-        if fl & CSF_WHILE != 0 {
+        if fl.has(CsFlags::WHILE) {
             unsafe { (*eap).errmsg = Some(c"E732: Using :endfor with :while".to_owned()) };
-        } else if fl & CSF_FOR != 0 {
+        } else if fl.has(CsFlags::FOR) {
             unsafe { (*eap).errmsg = Some(c"E733: Using :endwhile with :for".to_owned()) };
         }
     }
-    if fl & (CSF_WHILE | CSF_FOR) == 0 {
-        if fl & CSF_TRY == 0 {
+    if !fl.has(CsFlags::LOOP) {
+        if !fl.has(CsFlags::TRY) {
             unsafe { (*eap).errmsg = err_msg(e_endif) };
-        } else if fl & CSF_FINALLY != 0 {
+        } else if fl.has(CsFlags::FINALLY) {
             unsafe { (*eap).errmsg = err_msg(e_endtry) };
         }
         // Find the matching ":while" and report what is missing.
         let mut idx = unsafe { (*cstack).cs_idx };
         while idx > 0 {
             fl = unsafe { (*cstack).cs_flags[idx as usize] };
-            if fl & CSF_TRY != 0 && fl & CSF_FINALLY == 0 {
+            if fl.has(CsFlags::TRY) && !fl.has(CsFlags::FINALLY) {
                 // Give up at a try conditional not in its finally
                 // clause, and ignore the ":endwhile"/":endfor".
                 unsafe { (*eap).errmsg = err };
                 return;
             }
-            if fl & csf != 0 {
+            if fl.has(csf) {
                 break;
             }
             idx -= 1;
         }
         // Clean up and rewind every contained, unclosed conditional.
-        unsafe { cleanup_conditionals(cstack, CSF_WHILE | CSF_FOR, false) };
-        unsafe { rewind_conditionals(cstack, idx, CSF_TRY, &raw mut (*cstack).cs_trylevel) };
-    } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] } & CSF_TRUE != 0
-        && unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] } & CSF_ACTIVE == 0
+        unsafe { cleanup_conditionals(cstack, CsFlags::LOOP, false) };
+        unsafe { rewind_conditionals(cstack, idx, CsFlags::TRY, &raw mut (*cstack).cs_trylevel) };
+    } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRUE)
+        && !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::ACTIVE)
         && unsafe { dbg_check_skipped(eap) }
     {
         // When debugging or at a breakpoint, show the prompt if it has
@@ -611,7 +635,7 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
     }
 
     // Let `do_cmdline` jump back to the matching ":while"/":for".
-    unsafe { (*cstack).cs_lflags |= CSL_HAD_ENDLOOP };
+    unsafe { (*cstack).cs_lflags |= CsLoopFlags::HAD_ENDLOOP };
 }
 
 /// Make conditionals inactive, and discard what their finally clauses had
@@ -619,12 +643,12 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
 /// clause is reached. A caught exception in an active catch clause on the
 /// way is finished.
 ///
-/// `searched_cond` is `CSF_WHILE | CSF_FOR`, or `CSF_TRY`, or 0 meaning the
+/// `searched_cond` is `CsFlags::LOOP`, or `CsFlags::TRY`, or 0 meaning the
 /// innermost try conditional not in its finally clause. `inclusive` says
 /// whether the conditional searched for is itself made inactive; a try
 /// conditional not in its finally clause found on the way always is.
 ///
-/// With `inclusive` and `searched_cond == CSF_TRY | CSF_SILENT`, the
+/// With `inclusive` and `searched_cond == CsFlags::TRY | CsFlags::SILENT`, the
 /// `emsg_silent` a `:try` saved is restored -- [`ex_endtry`] wants that, and
 /// normally it only happens when such a conditional is left.
 ///
@@ -634,34 +658,34 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
 /// Module contract.
 pub(crate) unsafe fn cleanup_conditionals(
     cstack: *mut cstack_T,
-    searched_cond: c_int,
+    searched_cond: CsFlags,
     inclusive: bool,
 ) -> c_int {
     let mut stop = false;
     // SAFETY: module contract, here and for the walk below.
     let mut idx = unsafe { (*cstack).cs_idx };
     while idx >= 0 {
-        if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_TRY != 0 {
+        if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::TRY) {
             unsafe { discard_finally_pending(cstack, idx) };
 
             // Stop at a try conditional not in its finally clause. If it
             // is in an active catch clause, finish the caught exception.
-            if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_FINALLY == 0 {
-                if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_ACTIVE != 0
-                    && unsafe { (*cstack).cs_flags[idx as usize] } & CSF_CAUGHT != 0
-                    && unsafe { (*cstack).cs_flags[idx as usize] } & CSF_FINISHED == 0
+            if !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY) {
+                if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::ACTIVE)
+                    && unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::CAUGHT)
+                    && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINISHED)
                 {
                     unsafe {
                         exception::finish_exception((*cstack).pending_exception(idx as usize))
                     };
-                    unsafe { (*cstack).cs_flags[idx as usize] |= CSF_FINISHED };
+                    unsafe { (*cstack).cs_flags[idx as usize] |= CsFlags::FINISHED };
                 }
                 // Stop here -- unless the try block never got active,
                 // because of an inactive surrounding conditional or
                 // because the ":try" came after an error, interrupt or
                 // throw.
-                if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_TRUE != 0 {
-                    if searched_cond == 0 && !inclusive {
+                if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::TRUE) {
+                    if searched_cond.is_empty() && !inclusive {
                         break;
                     }
                     stop = true;
@@ -671,27 +695,27 @@ pub(crate) unsafe fn cleanup_conditionals(
 
         // Stop on the searched-for conditional type, even when the
         // surrounding one is inactive or something was made pending.
-        if unsafe { (*cstack).cs_flags[idx as usize] } & searched_cond != 0 {
+        if unsafe { (*cstack).cs_flags[idx as usize] }.has(searched_cond) {
             if !inclusive {
                 break;
             }
             stop = true;
         }
-        unsafe { (*cstack).cs_flags[idx as usize] &= !CSF_ACTIVE };
-        if stop && searched_cond != CSF_TRY | CSF_SILENT {
+        unsafe { (*cstack).cs_flags[idx as usize].clear(CsFlags::ACTIVE) };
+        if stop && searched_cond != CsFlags::TRY | CsFlags::SILENT {
             break;
         }
 
         // Leaving a try conditional that reset "emsg_silent" on entry:
         // restore the saved value and free the memory holding it.
-        if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_TRY != 0
-            && unsafe { (*cstack).cs_flags[idx as usize] } & CSF_SILENT != 0
+        if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::TRY)
+            && unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::SILENT)
         {
             let elem: *mut eslist_T = unsafe { (*cstack).cs_emsg_silent_list };
             unsafe { (*cstack).cs_emsg_silent_list = (*elem).next };
             emsg_silent.set(unsafe { (*elem).saved_emsg_silent });
             unsafe { xfree(elem.cast()) };
-            unsafe { (*cstack).cs_flags[idx as usize] &= !CSF_SILENT };
+            unsafe { (*cstack).cs_flags[idx as usize].clear(CsFlags::SILENT) };
         }
         if stop {
             break;
@@ -707,12 +731,12 @@ pub(crate) unsafe fn cleanup_conditionals(
 /// interrupt happened after it.
 ///
 /// # Safety
-/// Module contract; `idx` names a `CSF_TRY` entry.
+/// Module contract; `idx` names a `CsFlags::TRY` entry.
 unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
     // SAFETY: module contract.
     if !(did_emsg.get() != 0
         || got_int.get()
-        || unsafe { (*cstack).cs_flags[idx as usize] } & CSF_FINALLY != 0)
+        || unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY))
     {
         return;
     }
@@ -734,7 +758,7 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
             unsafe { (*cstack).cs_pending[idx as usize] = CSTP_NONE as c_char };
         }
         _ => {
-            if unsafe { (*cstack).cs_flags[idx as usize] } & CSF_FINALLY == 0 {
+            if !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY) {
                 return;
             }
             if pending & CSTP_THROW != 0
@@ -760,9 +784,9 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
 unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
     // SAFETY: module contract.
     let flags = unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] };
-    if flags & CSF_WHILE != 0 {
+    if flags.has(CsFlags::WHILE) {
         err_msg(e_endwhile)
-    } else if flags & CSF_FOR != 0 {
+    } else if flags.has(CsFlags::FOR) {
         err_msg(e_endfor)
     } else {
         err_msg(e_endif)
@@ -778,16 +802,16 @@ unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
 pub(crate) unsafe fn rewind_conditionals(
     cstack: *mut cstack_T,
     idx: c_int,
-    cond_type: c_int,
+    cond_type: CsFlags,
     cond_level: *mut c_int,
 ) {
     // SAFETY: module contract.
     while unsafe { (*cstack).cs_idx } > idx {
         let top = unsafe { (*cstack).cs_idx } as usize;
-        if unsafe { (*cstack).cs_flags[top] } & cond_type != 0 {
+        if unsafe { (*cstack).cs_flags[top] }.has(cond_type) {
             unsafe { *cond_level -= 1 };
         }
-        if unsafe { (*cstack).cs_flags[top] } & CSF_FOR != 0 {
+        if unsafe { (*cstack).cs_flags[top] }.has(CsFlags::FOR) {
             unsafe { free_for_info((*cstack).cs_forinfo[top]) };
         }
         unsafe { (*cstack).cs_idx -= 1 };
