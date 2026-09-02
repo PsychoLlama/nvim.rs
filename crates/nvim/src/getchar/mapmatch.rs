@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::types::MB_MAXCHAR;
@@ -107,7 +108,7 @@ pub(crate) unsafe fn at_ins_compl_key() -> bool {
     if tb.len() > 3
         && c == K_SPECIAL
         && tb.byte(1) == KS_MODIFIER
-        && tb.byte(2) & MOD_MASK_CTRL != 0
+        && ModMask::from_bits(tb.byte(2)).has(ModMask::CTRL)
     {
         c = tb.byte(3) & 0x1f;
     }
@@ -142,7 +143,7 @@ pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
 
         // A modifier that was not used for a mapping: apply it to the
         // ASCII key. Shift would already have been applied.
-        let mut modifier = tb.byte(offset + 2);
+        let mut modifier = ModMask::from_bits(tb.byte(offset + 2));
         let c = tb.byte(offset + 3);
         let new_c = merge_modifiers(c, &mut modifier);
         if new_c == c {
@@ -154,7 +155,7 @@ pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
             // before the merge. In some cases -- at the hit-return
             // prompt, say -- they are put back into the typeahead.
             vgetc_char.set(c);
-            vgetc_mod_mask.set(tb.byte(2));
+            vgetc_mod_mask.set(ModMask::from_bits(tb.byte(2)));
         }
 
         let mut new_string = [0u8; MB_MAXBYTES];
@@ -170,14 +171,14 @@ pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
         // SAFETY: `new_string` holds `len` bytes plus room for the NUL
         // `put_string_in_typebuf` writes, and the offsets below are within
         // the typeahead — `offset + 3` was just tested against its length.
-        let ok = if modifier == 0 {
+        let ok = if modifier.is_empty() {
             // The whole three-byte prefix plus the key becomes the key.
             // SAFETY (this body): `new_string` has room for the longest
             // character plus the NUL `put_string_in_typebuf` writes.
             unsafe { put_string_in_typebuf(offset, 4, at, len) }
         } else {
             // Some of the modifier is left over; keep the prefix.
-            tb.set_byte(offset + 2, modifier as u8);
+            tb.set_byte(offset + 2, modifier.bits() as u8);
             unsafe { put_string_in_typebuf(offset + 3, 1, at, len) }
         };
         if ok.is_err() {
@@ -272,16 +273,20 @@ unsafe fn search_maphash(
 
             // How many bytes of the typeahead this mapping agrees with.
             let mut nomap = nolmaplen;
-            let mut modifiers = 0;
+            let mut modifiers = ModMask::NONE;
+            // Upstream keeps `modifiers == 1` as the marker for "the byte
+            // after this one is the modifier byte", which is not a modifier
+            // bit at all (they start at 0x02); it is a separate flag here.
+            let mut modifier_next = false;
             let tb = typeahead();
             let mut mlen = 1;
             while mlen < tb.len() {
                 let mut c2 = tb.byte(mlen);
                 if nomap > 0 {
                     if nomap == 2 && c2 == KS_MODIFIER {
-                        modifiers = 1;
-                    } else if nomap == 1 && modifiers == 1 {
-                        modifiers = c2;
+                        modifier_next = true;
+                    } else if nomap == 1 && modifier_next {
+                        modifiers = ModMask::from_bits(c2);
                     }
                     nomap -= 1;
                 } else {
@@ -294,7 +299,8 @@ unsafe fn search_maphash(
                         // in different terminals and GUIs.
                         c2 = unsafe { langmap_adjust(c2, true) };
                     }
-                    modifiers = 0;
+                    modifiers = ModMask::NONE;
+                    modifier_next = false;
                 }
                 if c_int::from(unsafe { *mp.m_keys.offset(mlen as isize) } as u8) != c2 {
                     break;

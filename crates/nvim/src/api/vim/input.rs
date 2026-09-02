@@ -15,6 +15,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::Depth;
+use crate::keycodes::ModMask;
 use crate::keycodes::{
     KE_LEFTDRAG, KE_LEFTMOUSE, KE_LEFTRELEASE, KE_MIDDLEMOUSE, KE_MOUSEDOWN, KE_MOUSELEFT,
     KE_MOUSEMOVE, KE_MOUSERIGHT, KE_MOUSEUP, KE_RIGHTMOUSE, KE_X1MOUSE, KE_X2MOUSE,
@@ -110,7 +111,7 @@ pub unsafe fn nvim_input_mouse(
 ) -> Result<(), Error> {
     let mut error = Error::none();
     let mut code: ::core::ffi::c_int = 0;
-    let mut modmask: ::core::ffi::c_int = 0;
+    let mut modmask = ModMask::NONE;
     may_trigger_vim_suspend_resume(false);
     '_error: {
         if !(button.data().is_null() || action.data().is_null()) {
@@ -156,14 +157,13 @@ pub unsafe fn nvim_input_mouse(
                     break '_error;
                 }
             }
-            modmask = 0 as ::core::ffi::c_int;
+            modmask = ModMask::NONE;
             let mut i: size_t = 0 as size_t;
             while i < modifier.len() {
                 let mut byte: ::core::ffi::c_char = unsafe { *modifier.data().add(i) };
                 if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
-                    let mut mod_0: ::core::ffi::c_int =
-                        name_to_mod_mask(byte as ::core::ffi::c_int);
-                    if !(mod_0 != 0 as ::core::ffi::c_int) {
+                    let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
+                    if mod_0.is_empty() {
                         // `%c` wrote the one byte, whatever it was; the
                         // adaptor keeps it rather than widening it to a char.
                         let raw = byte as u8;
@@ -177,7 +177,7 @@ pub unsafe fn nvim_input_mouse(
             }
             input_enqueue_mouse(
                 code,
-                modmask as uint8_t,
+                modmask.bits() as uint8_t,
                 grid as ::core::ffi::c_int,
                 row as ::core::ffi::c_int,
                 col as ::core::ffi::c_int,

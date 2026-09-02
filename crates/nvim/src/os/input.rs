@@ -24,11 +24,11 @@ use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, mult
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
+use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl_C, FSK_KEYCODE, K_SPECIAL, KE_EVENT, KE_FILLER, KE_LEFTMOUSE, KE_MIDDLEMOUSE,
     KE_MOUSEDOWN, KE_MOUSEMOVE, KE_MOUSERIGHT, KE_RIGHTMOUSE, KE_RIGHTRELEASE, KE_X1MOUSE,
-    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, MOD_MASK_2CLICK, MOD_MASK_3CLICK,
-    MOD_MASK_4CLICK, MOD_MASK_CTRL, trans_special,
+    KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, trans_special,
 };
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
@@ -500,9 +500,9 @@ fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<
         return Some(0);
     }
     Some(match orig_num_clicks.get() {
-        2 => MOD_MASK_2CLICK as uint8_t,
-        3 => MOD_MASK_3CLICK as uint8_t,
-        4 => MOD_MASK_4CLICK as uint8_t,
+        2 => ModMask::TWO_CLICK.bits() as uint8_t,
+        3 => ModMask::THREE_CLICK.bits() as uint8_t,
+        4 => ModMask::FOUR_CLICK.bits() as uint8_t,
         _ => 0,
     })
 }
@@ -766,7 +766,7 @@ fn process_ctrl_c() {
                     && i >= 3
                     && unread[i - 3] == K_SPECIAL as u8
                     && unread[i - 2] == KS_MODIFIER as u8
-                    && unread[i - 1] == MOD_MASK_CTRL as u8)
+                    && unread[i - 1] == ModMask::CTRL.bits() as u8)
         })?;
         unread[at] = Ctrl_C as u8;
         Some(at)

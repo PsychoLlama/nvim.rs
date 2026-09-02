@@ -110,15 +110,6 @@ pub(crate) const MSCR_UP: c_int = 1;
 pub(crate) const MSCR_LEFT: c_int = -1;
 pub(crate) const MSCR_RIGHT: c_int = -2;
 
-pub(crate) const MOD_MASK_SHIFT: c_int = 0x2;
-pub(crate) const MOD_MASK_CTRL: c_int = 0x4;
-pub(crate) const MOD_MASK_ALT: c_int = 0x8;
-pub(crate) const MOD_MASK_META: c_int = 0x10;
-pub(crate) const MOD_MASK_2CLICK: c_int = 0x20;
-pub(crate) const MOD_MASK_3CLICK: c_int = 0x40;
-pub(crate) const MOD_MASK_4CLICK: c_int = 0x60;
-pub(crate) const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
-
 const FR_LEAF: c_int = 0;
 const FR_ROW: c_int = 1;
 /// The `'mouse'` flag a drag needs before it may start Visual mode.

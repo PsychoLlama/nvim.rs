@@ -699,8 +699,6 @@ pub const BUFFER_ESC_CHARS: &::core::ffi::CStr = c" \t\n*?[`$\\%#'\"|!<";
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
-pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const UINT_MAX: ::core::ffi::c_uint = (INT_MAX as ::core::ffi::c_uint)
     .wrapping_mul(2 as ::core::ffi::c_uint)

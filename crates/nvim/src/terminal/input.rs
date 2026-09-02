@@ -21,6 +21,7 @@
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::{ins_char_typebuf, ungetchars};
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
 use crate::main::{KeyTyped, curbuf, curwin, mod_mask, tpf_flags, vgetc_char, vgetc_mod_mask};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
@@ -53,10 +54,6 @@ use crate::vterm::vterm::{
     VTERM_KEY_NONE, VTERM_KEY_PAGEDOWN, VTERM_KEY_PAGEUP, VTERM_KEY_RIGHT, VTERM_KEY_TAB,
     VTERM_KEY_UP, VTERM_MOD_ALT, VTERM_MOD_CTRL, VTERM_MOD_NONE, VTERM_MOD_SHIFT,
 };
-
-const MOD_MASK_SHIFT: c_int = 0x2;
-const MOD_MASK_CTRL: c_int = 0x4;
-const MOD_MASK_ALT: c_int = 0x8;
 
 const TAB: c_int = 9;
 const ESC: c_int = 27;
@@ -92,16 +89,16 @@ const BUTTON_X2: c_int = 9;
 /// lowercase letter.
 fn convert_modifiers(key: &mut c_int, state: &mut VTermModifier) {
     let mods = mod_mask.get();
-    if mods & MOD_MASK_SHIFT != 0 {
+    if mods.has(ModMask::SHIFT) {
         *state |= VTERM_MOD_SHIFT;
     }
-    if mods & MOD_MASK_CTRL != 0 {
+    if mods.has(ModMask::CTRL) {
         *state |= VTERM_MOD_CTRL;
-        if mods & MOD_MASK_SHIFT == 0 && (b'A' as c_int..=b'Z' as c_int).contains(key) {
+        if !mods.has(ModMask::SHIFT) && (b'A' as c_int..=b'Z' as c_int).contains(key) {
             *key += b'a' as c_int - b'A' as c_int;
         }
     }
-    if mods & MOD_MASK_ALT != 0 {
+    if mods.has(ModMask::ALT) {
         *state |= VTERM_MOD_ALT;
     }
     match Key::try_from(*key) {

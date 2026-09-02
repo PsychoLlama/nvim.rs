@@ -647,18 +647,31 @@ impl TryFrom<c_int> for Key {
     }
 }
 
-/// Modifier bits, as they travel in a `K_SPECIAL KS_MODIFIER <bits>` sequence
-/// and in `mod_mask`.
-pub const MOD_MASK_SHIFT: c_int = 0x02;
-pub const MOD_MASK_CTRL: c_int = 0x04;
-pub const MOD_MASK_ALT: c_int = 0x08;
-pub const MOD_MASK_META: c_int = 0x10;
-pub const MOD_MASK_2CLICK: c_int = 0x20;
-pub const MOD_MASK_3CLICK: c_int = 0x40;
-pub const MOD_MASK_4CLICK: c_int = 0x60;
-pub const MOD_MASK_CMD: c_int = 0x80;
-/// The two bits the click-count values share.
-pub const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
+crate::flag_set! {
+    /// Modifier bits, as they travel in a `K_SPECIAL KS_MODIFIER <bits>`
+    /// sequence and in `mod_mask`.
+    ///
+    /// Two of the eight bits are not a flag at all: together they are a
+    /// *count*, and [`Self::MULTI_CLICK`] is the sub-field they occupy.
+    /// `mouse_click_count` is the only thing that should read them.
+    pub struct ModMask;
+
+    const SHIFT = 0x02;
+    const CTRL = 0x04;
+    const ALT = 0x08;
+    const META = 0x10;
+    /// Click count 1 in the two-bit sub-field.
+    const TWO_CLICK = 0x20;
+    /// Click count 2 -- *not* [`Self::TWO_CLICK`] with another bit set.
+    const THREE_CLICK = 0x40;
+    /// Click count 3, which is both bits at once and so overlaps the two
+    /// above.
+    const FOUR_CLICK = 0x60;
+    const CMD = 0x80;
+
+    /// The two bits the click counts live in.
+    const MULTI_CLICK = Self::TWO_CLICK.bits() | Self::THREE_CLICK.bits();
+}
 
 /// Which mouse button an event is about.
 pub const MOUSE_LEFT: c_int = 0x00;

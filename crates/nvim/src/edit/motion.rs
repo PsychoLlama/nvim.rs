@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::keycodes::Key;
+use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win, first_tab};
 use core::ffi::{c_char, c_int};
 
@@ -38,7 +39,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
     let starts = match Key::try_from(c) {
         Ok(
             Key::Khome | Key::Kend | Key::Pageup | Key::Kpageup | Key::Pagedown | Key::Kpagedown,
-        ) => mod_mask.get() & MOD_MASK_SHIFT != 0,
+        ) => mod_mask.get().has(ModMask::SHIFT),
         Ok(Key::SLeft | Key::SRight | Key::SUp | Key::SDown | Key::SEnd | Key::SHome) => true,
         _ => false,
     };
@@ -48,13 +49,13 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
 
     start_selection();
     stuff_readbuf_char(Ctrl_O);
-    if mod_mask.get() != 0 {
+    if !mod_mask.get().is_empty() {
         // The modifiers have to be stuffed back too, as the three-byte
         // K_SPECIAL sequence that carries them.
         let buf: [c_char; 4] = [
             K_SPECIAL as c_char,
             KS_MODIFIER as c_char,
-            mod_mask.get() as uint8_t as c_char,
+            mod_mask.get().bits() as uint8_t as c_char,
             NUL as c_char,
         ];
         // SAFETY: `buf` is a live four-byte array and 3 of it is read.
@@ -266,7 +267,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
 pub(crate) fn ins_page(back: bool) {
     hide_dollar();
 
-    if mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if mod_mask.get().has(ModMask::CTRL) {
         // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
             start_arrow_at(&mut cur_win().w_cursor);

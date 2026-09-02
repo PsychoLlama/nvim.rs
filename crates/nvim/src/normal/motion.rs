@@ -3,6 +3,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_H, Key};
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};
@@ -27,9 +28,8 @@ use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, CAR, CmdArg, MOD_MASK_CTRL, MOD_MASK_SHIFT, TAB, adjust_for_sel,
-    clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page, unadjust_for_sel,
-    visual_active, visual_mode,
+    CA_NO_ADJ_OP_END, CAR, CmdArg, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise,
+    may_fold_open, nv_page, unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
 use crate::options::{
@@ -292,8 +292,8 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
     // A modifier turns this into a word move.
-    if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-        if mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
+        if mod_mask.get().has(ModMask::CTRL) {
             ca.arg = 1;
         }
         // SAFETY: `cap` is the caller's live command argument.
@@ -390,8 +390,8 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
     let mut ca = unsafe { CmdArg::new(cap) };
     let mut win = cur_win();
     // A modifier turns this into a word move.
-    if mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0 {
-        if mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
+        if mod_mask.get().has(ModMask::CTRL) {
             ca.arg = 1;
         }
         unsafe { nv_bck_word(cap) };
@@ -452,7 +452,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
+    if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = BACKWARD as c_int;
         unsafe { nv_page(cap) };
         return;
@@ -470,7 +470,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if mod_mask.get() & MOD_MASK_SHIFT != 0 {
+    if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = FORWARD as c_int;
         unsafe { nv_page(cap) };
         return;
@@ -509,7 +509,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_end(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if ca.arg != 0 || mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if ca.arg != 0 || mod_mask.get().has(ModMask::CTRL) {
         ca.arg = 1;
         unsafe { nv_goto(cap) };
         // The count named the line, so `$` must not use it again.
@@ -668,7 +668,7 @@ pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
 pub(crate) unsafe fn nv_home(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    if mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if mod_mask.get().has(ModMask::CTRL) {
         unsafe { nv_goto(cap) };
     } else {
         // `<Home>` is `1|`.

@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::guard::{Allow, Keys};
+use crate::keycodes::ModMask;
 use crate::keycodes::{Key, key_unescape};
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
@@ -18,9 +19,9 @@ use core::ptr;
 ///
 /// Only Ctrl has such codes: `CTRL-A` is 0x01 rather than `<C-> A`. The
 /// modifier is cleared out of `*modifiers` when it was folded in.
-pub fn merge_modifiers(c_arg: c_int, modifiers: &mut c_int) -> c_int {
+pub fn merge_modifiers(c_arg: c_int, modifiers: &mut ModMask) -> c_int {
     let mut c = c_arg;
-    if *modifiers & MOD_MASK_CTRL != 0 {
+    if modifiers.has(ModMask::CTRL) {
         if c >= '@' as c_int && c <= 0x7f {
             c &= 0x1f;
             if c == NUL {
@@ -31,7 +32,7 @@ pub fn merge_modifiers(c_arg: c_int, modifiers: &mut c_int) -> c_int {
             c = 0x1e;
         }
         if c != c_arg {
-            *modifiers &= !MOD_MASK_CTRL;
+            modifiers.clear(ModMask::CTRL);
         }
     }
     c
@@ -133,8 +134,8 @@ fn vgetc_from_typeahead() -> c_int {
         unsafe { vgetorpeek(true) }
     }
 
-    mod_mask.set(0);
-    vgetc_mod_mask.set(0);
+    mod_mask.set(ModMask::NONE);
+    vgetc_mod_mask.set(ModMask::NONE);
     vgetc_char.set(0);
     // `wrapping_sub` and not `-`: upstream's comment says
     // `last_recorded_len` can be *larger* than what the last `vgetc`
@@ -151,7 +152,7 @@ fn vgetc_from_typeahead() -> c_int {
 
     let c = loop {
         // No mapping once a modifier has been read.
-        let raw_key = (mod_mask.get() != 0).then(Keys::unmapped_with_codes);
+        let raw_key = (!mod_mask.get().is_empty()).then(Keys::unmapped_with_codes);
         let mut c = next_byte();
         drop(raw_key);
 
@@ -163,7 +164,7 @@ fn vgetc_from_typeahead() -> c_int {
             c = next_byte();
             drop((unmapped, no_codes));
             if second == KS_MODIFIER {
-                mod_mask.set(c);
+                mod_mask.set(ModMask::from_bits(c));
                 continue;
             }
             c = key_unescape(second as u8, c as u8);
@@ -194,20 +195,20 @@ fn vgetc_from_typeahead() -> c_int {
         // When mappings are enabled (so not after i_CTRL-V) and the user
         // typed an unmapped <M-x>, read it as <Esc>x instead. #8213
         // Not in Terminal mode (#16202, #16220), and not for mouse keys:
-        // terminals encode those as CSI sequences where MOD_MASK_ALT
+        // terminals encode those as CSI sequences where ModMask::ALT
         // means something even unmapped.
         if no_mapping.get() == 0
             && KeyTyped.get()
-            && mod_mask.get() == MOD_MASK_ALT
+            && mod_mask.get() == ModMask::ALT
             && State.get() & MODE_TERMINAL == 0
             && !is_mouse_key(c)
         {
-            mod_mask.set(0);
+            mod_mask.set(ModMask::NONE);
             // SAFETY: `ins_char_typebuf` is callable at any time.
-            let len = unsafe { ins_char_typebuf(c, 0, false) };
+            let len = unsafe { ins_char_typebuf(c, ModMask::NONE, false) };
             // SAFETY: as above.
-            unsafe { ins_char_typebuf(ESC, 0, false) };
-            // K_SPECIAL KS_MODIFIER MOD_MASK_ALT takes three more bytes.
+            unsafe { ins_char_typebuf(ESC, ModMask::NONE, false) };
+            // K_SPECIAL KS_MODIFIER ModMask::ALT takes three more bytes.
             let old_len = len + 3;
             ungetchars(old_len);
             unsee_keys(old_len as usize);
@@ -272,11 +273,11 @@ fn keypad_equivalent(c: c_int) -> c_int {
 ///
 /// Safe: it only reads and writes the editor's own `mod_mask`.
 fn modified_key(shifted: c_int, control: c_int, plain: c_int) -> c_int {
-    if mod_mask.get() == MOD_MASK_SHIFT {
-        mod_mask.set(0);
+    if mod_mask.get() == ModMask::SHIFT {
+        mod_mask.set(ModMask::NONE);
         shifted
-    } else if mod_mask.get() == MOD_MASK_CTRL {
-        mod_mask.set(0);
+    } else if mod_mask.get() == ModMask::CTRL {
+        mod_mask.set(ModMask::NONE);
         control
     } else {
         plain

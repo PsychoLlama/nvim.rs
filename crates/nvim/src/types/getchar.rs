@@ -30,7 +30,7 @@ pub struct tasave_T {
     pub(crate) save_typebuf: TypeAhead,
     pub(crate) typebuf_valid: bool,
     pub(crate) old_char: ::core::ffi::c_int,
-    pub(crate) old_mod_mask: ::core::ffi::c_int,
+    pub(crate) old_mod_mask: crate::keycodes::ModMask,
     pub(crate) save_readbuf1: KeyBuffer,
     pub(crate) save_readbuf2: KeyBuffer,
 }

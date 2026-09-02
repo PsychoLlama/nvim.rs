@@ -11,6 +11,7 @@ use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
 use crate::getchar::typeahead;
 use crate::guard::Keys;
+use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl__, Ctrl_A, Ctrl_B, Ctrl_C, Ctrl_D, Ctrl_E, Ctrl_G, Ctrl_H, Ctrl_HAT, Ctrl_K, Ctrl_L,
     Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_W, Key, NotAKey,
@@ -294,7 +295,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 cc.cmdpos += unsafe { utfc_ptr2len(cc.text().offset(cc.cmdpos as isize)) };
                 if !((s.c == Key::SRight.code()
                     || s.c == Key::CRight.code()
-                    || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
+                    || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && unsafe { *cc.text().offset(cc.cmdpos as isize) } as ::core::ffi::c_int
                         != ' ' as ::core::ffi::c_int)
                 {
@@ -318,7 +319,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 if !(cc.cmdpos > 0
                     && (s.c == Key::SLeft.code()
                         || s.c == Key::CLeft.code()
-                        || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0)
+                        || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL))
                     && unsafe { *cc.at(cc.cmdpos - 1) } as ::core::ffi::c_int
                         != ' ' as ::core::ffi::c_int)
                 {
@@ -514,7 +515,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
             // Get the next (two) characters. Do not include the modifiers
             // in the key, for CTRL-SHIFT-V.
-            s.c = unsafe { get_literal(mod_mask.get() & MOD_MASK_SHIFT != 0) };
+            s.c = unsafe { get_literal(mod_mask.get().has(ModMask::SHIFT)) };
 
             s.do_abbr = false; // don't do abbreviation now
             cc.special_char = NUL as ::core::ffi::c_char;
@@ -567,7 +568,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             // doesn't enter the string <S-Space>. This should only happen
             // after ^V.
             if !is_special(c) {
-                mod_mask.set(0);
+                mod_mask.set(ModMask::NONE);
             }
             None
         }
@@ -603,7 +604,7 @@ pub(crate) unsafe fn command_line_handle_key(mut s: Cls) -> ::core::ffi::c_int {
     }
 
     // C's `end:` — put the character in the command line.
-    if is_special(s.c) || mod_mask.get() != 0 {
+    if is_special(s.c) || !mod_mask.get().is_empty() {
         let name = get_special_key_name(s.c, mod_mask.get());
         unsafe { put_on_cmdline(name.as_ptr().cast_mut(), -1, true) };
     } else {

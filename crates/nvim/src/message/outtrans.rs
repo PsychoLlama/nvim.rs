@@ -9,6 +9,7 @@
 use super::*;
 use crate::charset::CharDisplay;
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
@@ -342,11 +343,11 @@ pub(crate) unsafe fn str2special(
 
     let mut str = unsafe { *sp };
     let mut c = unsafe { *str as u8 as c_int };
-    let mut modifiers = 0;
+    let mut modifiers = ModMask::NONE;
     let mut special = false;
     if c == K_SPECIAL && unsafe { *str.add(1) } != 0 && unsafe { *str.add(2) } != 0 {
         if unsafe { *str.add(1) as u8 as c_int } == KS_MODIFIER {
-            modifiers = unsafe { *str.add(2) as u8 as c_int };
+            modifiers = ModMask::from_bits(unsafe { *str.add(2) as u8 as c_int });
             str = unsafe { str.add(3) };
             c = unsafe { *str as u8 as c_int };
         }
@@ -354,7 +355,7 @@ pub(crate) unsafe fn str2special(
             c = to_special(unsafe { *str.add(1) as u8 }, unsafe { *str.add(2) as u8 });
             str = unsafe { str.add(2) };
         }
-        if c < 0 || modifiers != 0 {
+        if c < 0 || !modifiers.is_empty() {
             special = true;
         }
     }

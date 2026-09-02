@@ -10,6 +10,7 @@ use super::*;
 use crate::cstr;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
+use crate::keycodes::ModMask;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -89,7 +90,7 @@ pub unsafe fn do_dialog(
             }
             _ if c == b':' as c_int && ex_cmd != 0 => {
                 retval = dfltbutton;
-                unsafe { ins_char_typebuf(b':' as c_int, 0, false) };
+                unsafe { ins_char_typebuf(b':' as c_int, ModMask::NONE, false) };
                 break;
             }
             _ => {

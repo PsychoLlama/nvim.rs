@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::ModMask;
 use crate::keycodes::{
     Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key, get_mouse_button,
 };
@@ -231,7 +232,7 @@ pub(crate) unsafe fn do_mouse(
         let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
         if over_text
             && which_button == MOUSE_RIGHT
-            && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+            && !mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
         {
             if !is_click {
                 // Ignore right button release events, only shows the popup
@@ -243,10 +244,10 @@ pub(crate) unsafe fn do_mouse(
         // Only do this translation when mouse is over the buffer text.
         if over_text
             && which_button == MOUSE_LEFT
-            && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0
+            && mod_mask.get().has(ModMask::SHIFT | ModMask::ALT)
         {
             which_button = MOUSE_RIGHT;
-            mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
+            mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
         }
     }
 
@@ -307,7 +308,7 @@ pub(crate) unsafe fn do_mouse(
         oap.clear();
     }
 
-    if mod_mask.get() == 0
+    if mod_mask.get().is_empty()
         && !is_drag
         && jump_flags & (MOUSE_FOLD_CLOSE | MOUSE_FOLD_OPEN) != 0
         && which_button == MOUSE_LEFT
@@ -439,7 +440,7 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
     let mods = mod_mask.get();
 
     // CTRL right mouse button does CTRL-T.
-    if is_click && mods & MOD_MASK_CTRL != 0 && which_button == MOUSE_RIGHT {
+    if is_click && mods.has(ModMask::CTRL) && which_button == MOUSE_RIGHT {
         if State.get() & MODE_INSERT != 0 {
             stuff_char(Ctrl_O);
         }
@@ -452,19 +453,19 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
     }
 
     // CTRL only works with left mouse button.
-    if mods & MOD_MASK_CTRL != 0 && which_button != MOUSE_LEFT {
+    if mods.has(ModMask::CTRL) && which_button != MOUSE_LEFT {
         return Some(false);
     }
 
     // When a modifier is down, ignore drag and release events, as well as
     // multiple clicks and the middle mouse button.
     // Accept shift-leftmouse drags when 'mousemodel' is "popup.*".
-    if mods & (MOD_MASK_SHIFT | MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_META) != 0
-        && (!is_click || mods & MOD_MASK_MULTI_CLICK != 0 || which_button == MOUSE_MIDDLE)
-        && !(mods & (MOD_MASK_SHIFT | MOD_MASK_ALT) != 0
+    if mods.has(ModMask::SHIFT | ModMask::CTRL | ModMask::ALT | ModMask::META)
+        && (!is_click || mods.has(ModMask::MULTI_CLICK) || which_button == MOUSE_MIDDLE)
+        && !(mods.has(ModMask::SHIFT | ModMask::ALT)
             && mouse_model_popup()
             && which_button == MOUSE_LEFT)
-        && !(mods & MOD_MASK_ALT != 0 && !mouse_model_popup() && which_button == MOUSE_RIGHT)
+        && !(mods.has(ModMask::ALT) && !mouse_model_popup() && which_button == MOUSE_RIGHT)
     {
         return Some(false);
     }
@@ -588,7 +589,7 @@ fn tab_line_click(
         if def.type_0 == kStlClickTabSwitch {
             if which_button == MOUSE_MIDDLE {
                 close = true;
-            } else if mod_mask.get() & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+            } else if mod_mask.get().masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
                 // Double click opens a new page.
                 end_visual_mode();
                 tabpage_new();
@@ -668,7 +669,7 @@ fn click_definition(
                 if landed.statuscol
                     && mouse_model_popup()
                     && which_button == MOUSE_RIGHT
-                    && mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0
+                    && !mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
                 {
                     do_popup(which_button, m_pos_flag, m_pos);
                 }
@@ -760,8 +761,8 @@ fn dispatch_action(a: Action, win: Win) {
     // SAFETY: `curbuf` is live from startup to exit.
     let buf = unsafe { Buf::current() };
     let in_quickfix = buf_is_quickfix(Some(buf));
-    let double_click = mods & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK;
-    if (mods & MOD_MASK_CTRL != 0 || double_click) && in_quickfix {
+    let double_click = mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK;
+    if (mods.has(ModMask::CTRL) || double_click) && in_quickfix {
         // Ctrl-Mouse click or double click in a quickfix window jumps to the
         // error under the mouse pointer.  A null location list means it is a
         // quickfix window rather than a location list one.
@@ -776,7 +777,7 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    if mods & MOD_MASK_CTRL != 0 || (buf.b_help && double_click) {
+    if mods.has(ModMask::CTRL) || (buf.b_help && double_click) {
         // Ctrl-Mouse click (or double click in a help window) jumps to the
         // tag under the mouse pointer.
         if State.get() & MODE_INSERT != 0 {
@@ -787,7 +788,7 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    if mods & MOD_MASK_SHIFT != 0 {
+    if mods.has(ModMask::SHIFT) {
         // Shift-Mouse click searches for the next occurrence of the word
         // under the mouse pointer.
         if State.get() & MODE_INSERT != 0 || (visual_active() && visual_select()) {
@@ -807,7 +808,7 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    if mods & MOD_MASK_MULTI_CLICK != 0
+    if mods.has(ModMask::MULTI_CLICK)
         && State.get() & (MODE_NORMAL | MODE_INSERT) != 0
         && mouse_can_visual
     {
@@ -816,7 +817,7 @@ fn dispatch_action(a: Action, win: Win) {
     }
 
     if visual_active() && !old_active {
-        set_visual_mode(VisualMode::from_raw(if mods & MOD_MASK_ALT != 0 {
+        set_visual_mode(VisualMode::from_raw(if mods.has(ModMask::ALT) {
             Ctrl_V
         } else {
             'v' as c_int
@@ -826,7 +827,7 @@ fn dispatch_action(a: Action, win: Win) {
 
 /// A double, triple or quadruple click starts or widens a Visual selection: a
 /// word, a line, or -- for a double click on a bracket -- the block it opens.
-fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mods: c_int) {
+fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mods: ModMask) {
     if is_click || !visual_active() {
         if visual_active() {
             orig_cursor.set(visual_anchor());
@@ -839,18 +840,18 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
             may_start_select('o' as c_int);
             setmouse();
         }
-        set_visual_mode(match mods & MOD_MASK_MULTI_CLICK {
+        set_visual_mode(match mods.masked(ModMask::MULTI_CLICK) {
             // Double click with ALT pressed makes it blockwise.
-            MOD_MASK_2CLICK if mods & MOD_MASK_ALT != 0 => VisualMode::BLOCK,
-            MOD_MASK_2CLICK => VisualMode::CHAR,
-            MOD_MASK_3CLICK => VisualMode::LINE,
-            MOD_MASK_4CLICK => VisualMode::BLOCK,
+            ModMask::TWO_CLICK if mods.has(ModMask::ALT) => VisualMode::BLOCK,
+            ModMask::TWO_CLICK => VisualMode::CHAR,
+            ModMask::THREE_CLICK => VisualMode::LINE,
+            ModMask::FOUR_CLICK => VisualMode::BLOCK,
             _ => visual_mode(),
         });
     }
 
     // A double click selects a word or a block.
-    if mods & MOD_MASK_MULTI_CLICK == MOD_MASK_2CLICK {
+    if mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
         let matched = is_click && select_matching_block(win, oap);
         if !matched && (is_click || is_drag) {
             // When not found a match or when dragging: extend to include a

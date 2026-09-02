@@ -14,6 +14,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::keycodes::ModMask;
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
@@ -35,53 +36,53 @@ use crate::keycodes::{
 };
 
 /// A modifier prefix letter and the bits it stands for.
-struct ModMask {
+struct ModPrefix {
     /// The bits of the modifier state this row is about.
-    mask: c_int,
+    mask: ModMask,
     /// The value those bits must have for the row to apply. Only the
     /// multi-click rows differ from `mask`: they share one two-bit field.
-    flag: c_int,
+    flag: ModMask,
     /// The letter that spells the modifier in `<X-Key>`.
     name: u8,
 }
 
-const fn mod_mask(mask: c_int, flag: c_int, name: u8) -> ModMask {
-    ModMask { mask, flag, name }
+const fn mod_prefix(mask: ModMask, flag: ModMask, name: u8) -> ModPrefix {
+    ModPrefix { mask, flag, name }
 }
 
 /// The modifiers that are spelled out when a key is printed, in the order
 /// they are printed: `<M-C-S-Up>`, never `<S-C-M-Up>`.
-static PRINTED_MOD_MASKS: [ModMask; 8] = [
-    mod_mask(MOD_MASK_ALT, MOD_MASK_ALT, b'M'),
-    mod_mask(MOD_MASK_META, MOD_MASK_META, b'T'),
-    mod_mask(MOD_MASK_CTRL, MOD_MASK_CTRL, b'C'),
-    mod_mask(MOD_MASK_SHIFT, MOD_MASK_SHIFT, b'S'),
-    mod_mask(MOD_MASK_MULTI_CLICK, MOD_MASK_2CLICK, b'2'),
-    mod_mask(MOD_MASK_MULTI_CLICK, MOD_MASK_3CLICK, b'3'),
-    mod_mask(MOD_MASK_MULTI_CLICK, MOD_MASK_4CLICK, b'4'),
-    mod_mask(MOD_MASK_CMD, MOD_MASK_CMD, b'D'),
+static PRINTED_MOD_MASKS: [ModPrefix; 8] = [
+    mod_prefix(ModMask::ALT, ModMask::ALT, b'M'),
+    mod_prefix(ModMask::META, ModMask::META, b'T'),
+    mod_prefix(ModMask::CTRL, ModMask::CTRL, b'C'),
+    mod_prefix(ModMask::SHIFT, ModMask::SHIFT, b'S'),
+    mod_prefix(ModMask::MULTI_CLICK, ModMask::TWO_CLICK, b'2'),
+    mod_prefix(ModMask::MULTI_CLICK, ModMask::THREE_CLICK, b'3'),
+    mod_prefix(ModMask::MULTI_CLICK, ModMask::FOUR_CLICK, b'4'),
+    mod_prefix(ModMask::CMD, ModMask::CMD, b'D'),
 ];
 
 /// `A` is an alternative spelling of `M`, accepted where a key is written but
 /// never printed — which is why it is not one of [`PRINTED_MOD_MASKS`].
-static ALT_MOD_MASK: ModMask = mod_mask(MOD_MASK_ALT, MOD_MASK_ALT, b'A');
+static ALT_MOD_MASK: ModPrefix = mod_prefix(ModMask::ALT, ModMask::ALT, b'A');
 
 /// The modifier bit a `<X-Key>` prefix letter names — `S` for shift, `C` for
 /// ctrl — or 0 when it names no modifier. ASCII case is folded.
-pub fn name_to_mod_mask(c: c_int) -> c_int {
+pub fn name_to_mod_mask(c: c_int) -> ModMask {
     let c = to_upper_ascii(c);
     PRINTED_MOD_MASKS
         .iter()
         .chain(iter::once(&ALT_MOD_MASK))
         .find(|m| c == c_int::from(m.name))
-        .map_or(0, |m| m.flag)
+        .map_or(ModMask::NONE, |m| m.flag)
 }
 
 /// The modifier prefixes `modifiers` calls for, in printing order.
-pub(crate) fn printed_modifiers(modifiers: c_int) -> impl Iterator<Item = u8> {
+pub(crate) fn printed_modifiers(modifiers: ModMask) -> impl Iterator<Item = u8> {
     PRINTED_MOD_MASKS
         .iter()
-        .filter(move |m| modifiers & m.mask == m.flag)
+        .filter(move |m| modifiers.masked(m.mask) == m.flag)
         .map(|m| m.name)
 }
 
@@ -89,14 +90,14 @@ pub(crate) fn printed_modifiers(modifiers: c_int) -> impl Iterator<Item = u8> {
 /// key without it. Mouse codes are deliberately not in here.
 struct ModifierKey {
     /// The modifier bit the shifted code carries.
-    modifier: u8,
+    modifier: ModMask,
     /// Termcap name of the key *with* the modifier.
     with: [u8; 2],
     /// Termcap name of the key *without* it.
     without: [u8; 2],
 }
 
-const fn mod_key(modifier: u8, with: [u8; 2], without: [u8; 2]) -> ModifierKey {
+const fn mod_key(modifier: ModMask, with: [u8; 2], without: [u8; 2]) -> ModifierKey {
     ModifierKey {
         modifier,
         with,
@@ -106,8 +107,8 @@ const fn mod_key(modifier: u8, with: [u8; 2], without: [u8; 2]) -> ModifierKey {
 
 /// The modifier bits and the `KS_EXTRA` marker, narrowed to the byte type
 /// [`MODIFIER_KEYS`] stores. Upstream's table is a flat `uint8_t[]`.
-const SHIFT: u8 = MOD_MASK_SHIFT as u8;
-const CTRL: u8 = MOD_MASK_CTRL as u8;
+const SHIFT: ModMask = ModMask::SHIFT;
+const CTRL: ModMask = ModMask::CTRL;
 const EXTRA: u8 = KS_EXTRA as u8;
 
 /// Shifted and ctrl'ed terminal codes, and the unmodified code each stands
@@ -211,23 +212,20 @@ pub(crate) const fn termcap_key(name: [u8; 2]) -> c_int {
 /// itself, exactly as the C is. A large *positive* key congruent to one of the
 /// table's codes modulo 65536 therefore matches: `<S-U+8A95>` comes out as
 /// `<S-Up>`. Faithful to upstream, and left that way deliberately.
-pub(crate) fn simplify(key: c_int, modifiers: c_int) -> Option<(c_int, c_int)> {
+pub(crate) fn simplify(key: c_int, modifiers: ModMask) -> Option<(c_int, ModMask)> {
     let name = termcap_name(key);
     let row = MODIFIER_KEYS
         .iter()
-        .find(|m| name == m.without && modifiers & c_int::from(m.modifier) != 0)?;
-    Some((
-        termcap_key(row.with),
-        modifiers & !c_int::from(row.modifier),
-    ))
+        .find(|m| name == m.without && modifiers.has(m.modifier))?;
+    Some((termcap_key(row.with), modifiers.without(row.modifier)))
 }
 
 /// The unmodified key a shifted terminal code stands for, and the modifier it
 /// carries — the reverse of [`simplify`], used when a code is printed.
-pub(crate) fn unshift(key: c_int) -> Option<(c_int, c_int)> {
+pub(crate) fn unshift(key: c_int) -> Option<(c_int, ModMask)> {
     let name = termcap_name(key);
     let row = MODIFIER_KEYS.iter().find(|m| name == m.with)?;
-    Some((termcap_key(row.without), c_int::from(row.modifier)))
+    Some((termcap_key(row.without), row.modifier))
 }
 
 /// One name of one key code.

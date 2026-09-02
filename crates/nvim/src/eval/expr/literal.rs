@@ -12,6 +12,7 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -375,7 +376,7 @@ pub(crate) unsafe fn eval_string(
                 // to 9 (6 for the character, 3 for a modifier): reserve
                 // five extra.
                 extra += 5;
-                let mut modifiers: c_int = 0;
+                let mut modifiers = ModMask::NONE;
                 let mut flags = FSK_KEYCODE as c_int | FSK_IN_STRING as c_int;
                 if p.at(1) != b'*' {
                     flags |= FSK_SIMPLIFY as c_int;

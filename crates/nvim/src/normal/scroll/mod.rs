@@ -5,6 +5,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -15,7 +16,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin, did_syncbind, mod_mask, p_sbo};
 use crate::normal::{
-    CmdArg, MOD_MASK_CTRL, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
+    CmdArg, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
     set_visual_select, visual_active, visual_select,
 };
 use crate::plines::plines_m_win_fill;
@@ -159,7 +160,7 @@ pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
     if check_clear_op(ca.op()) {
         return;
     }
-    if mod_mask.get() & MOD_MASK_CTRL != 0 {
+    if mod_mask.get().has(ModMask::CTRL) {
         if ca.arg == BACKWARD as c_int {
             goto_tabpage(-ca.count1);
         } else {

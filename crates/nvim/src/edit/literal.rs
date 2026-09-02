@@ -21,6 +21,7 @@
 
 use crate::cstr;
 use crate::keycodes::Key;
+use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -46,7 +47,7 @@ pub(crate) fn ins_ctrl_v() {
     add_to_showcmd_c(Ctrl_V);
 
     // Do not fold the modifiers into the key for CTRL-SHIFT-V.
-    let c = unsafe { get_literal(mod_mask.get() & MOD_MASK_SHIFT != 0) };
+    let c = unsafe { get_literal(mod_mask.get().has(ModMask::SHIFT)) };
     if did_putchar {
         // When the line fits in 'columns' the `^` is at the start of the
         // next line and the redraw will not have removed it.
@@ -96,7 +97,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
         if !no_simplify {
             nc = merge_mod_mask(nc);
         }
-        if mod_mask.get() & !MOD_MASK_SHIFT != 0 {
+        if !mod_mask.get().without(ModMask::SHIFT).is_empty() {
             // A character with a non-Shift modifier cannot be part of
             // i_CTRL-V_digit.
             break;
@@ -173,7 +174,7 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
     if nc != 0 {
         vungetc(nc);
         // A character typed with i_CTRL-V_digit cannot have modifiers.
-        mod_mask.set(0);
+        mod_mask.set(ModMask::NONE);
     }
     got_int.set(false); // CTRL-C after CTRL-V is not an interrupt
     cc
@@ -190,11 +191,11 @@ pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
 ///
 /// `ctrlv` says `c` was typed just after CTRL-V.
 pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: c_int) {
-    if mod_mask.get() & MOD_MASK_CMD != 0 {
+    if mod_mask.get().has(ModMask::CMD) {
         // The Command key never produces a normal key.
         allow_modmask = 1;
     }
-    if c < 0 || (mod_mask.get() != 0 && allow_modmask != 0) {
+    if c < 0 || (!mod_mask.get().is_empty() && allow_modmask != 0) {
         let mut name = get_special_key_name(c, mod_mask.get());
         let (p, len) = (
             name.as_mut_ptr(),
@@ -268,7 +269,7 @@ pub(crate) fn ins_digraph() -> c_int {
         unsafe { edit_unputchar() };
     }
 
-    if c < 0 || mod_mask.get() != 0 {
+    if c < 0 || !mod_mask.get().is_empty() {
         clear_showcmd();
         insert_special(c, 1, 0);
         return NUL;

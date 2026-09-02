@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
 use crate::types::MB_MAXCHAR;
 use crate::types::{Failed, NUL};
@@ -346,13 +347,13 @@ pub unsafe fn put_escstr(
             // Special key codes have to be translated to make sense when
             // they are read back.
             if c == K_SPECIAL && what != EscTarget::SetValue {
-                let mut modifiers = 0;
+                let mut modifiers = ModMask::NONE;
                 // SAFETY: a `K_SPECIAL` escape is three bytes long, so
                 // `str[1]` and `str[2]` are inside the same string.
                 if unsafe { c_int::from(*str.add(1)) } == KS_MODIFIER {
                     // SAFETY: as above.
                     unsafe {
-                        modifiers = c_int::from(*str.add(2));
+                        modifiers = ModMask::from_bits(c_int::from(*str.add(2)));
                         str = str.add(3);
                     }
 
@@ -377,7 +378,7 @@ pub unsafe fn put_escstr(
                         str = str.add(2);
                     }
                 }
-                if c < 0 || modifiers != 0 {
+                if c < 0 || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
                     // SAFETY: a NUL-terminated rendering that outlives the

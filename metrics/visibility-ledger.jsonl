@@ -155,11 +155,7 @@
 {"path":"neovim::indent::get_sts_value","kind":"fn","file":"crates/nvim/src/indent/mod.rs","tests":["crates/nvim/tests/unit/indent.rs"]}
 {"path":"neovim::indent::indent_size_ts","kind":"fn","file":"crates/nvim/src/indent/mod.rs","tests":["crates/nvim/tests/unit/indent.rs"]}
 {"path":"neovim::keycodes::FSK_IN_STRING","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::MOD_MASK_ALT","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::MOD_MASK_CMD","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::MOD_MASK_CTRL","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::MOD_MASK_META","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
-{"path":"neovim::keycodes::MOD_MASK_SHIFT","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
+{"path":"neovim::keycodes::ModMask","kind":"struct","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::REPTERM_DO_LT","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::REPTERM_FROM_PART","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}
 {"path":"neovim::keycodes::REPTERM_NO_SPECIAL","kind":"const","file":"crates/nvim/src/keycodes/codes.rs","tests":["crates/nvim/tests/unit/keycodes.rs"]}

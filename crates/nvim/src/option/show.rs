@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::ModMask;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -417,7 +418,8 @@ pub(crate) unsafe fn put_set(
             // as its name.
             let mut wc: OptInt = 0;
             if unsafe { wc_use_keyname(opt_idx, varp, &mut wc) } {
-                if unsafe { fputs(get_special_key_name(wc as c_int, 0).as_ptr(), fd) } < 0 {
+                let name = get_special_key_name(wc as c_int, ModMask::NONE);
+                if unsafe { fputs(name.as_ptr(), fd) } < 0 {
                     return Err(Failed);
                 }
             } else if unsafe { fprintf(fd, c"%ld".as_ptr(), number) } < 0 {
@@ -549,7 +551,8 @@ pub(crate) unsafe fn option_value2string(
     if option_has_type(opt_idx, kOptValTypeNumber) {
         let mut wc: OptInt = 0;
         if unsafe { wc_use_keyname(opt_idx, varp, &mut wc) } {
-            unsafe { xstrlcpy(buf, get_special_key_name(wc as c_int, 0).as_ptr(), cap) };
+            let name = get_special_key_name(wc as c_int, ModMask::NONE);
+            unsafe { xstrlcpy(buf, name.as_ptr(), cap) };
         } else if wc != 0 {
             // A 'wildchar' that is not a named key still shows as the
             // character rather than as its code.

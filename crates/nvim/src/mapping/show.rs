@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
 use crate::types::CmdIdx;
 use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
@@ -152,14 +153,14 @@ pub(crate) unsafe fn translate_mapping(
             // SAFETY: `str` is on a non-NUL byte, so `add(1)` is readable, and
             // `add(2)` only once `add(1)` is itself known non-NUL.
             if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
-                let mut modifiers = 0;
+                let mut modifiers = ModMask::NONE;
                 // SAFETY: as above.
                 if c_int::from(unsafe { *str.add(1) }) == KS_MODIFIER {
                     // SAFETY: `str[1]` and `str[2]` are both non-NUL, so both
                     // steps land on a byte of the same string.
                     unsafe {
                         str = str.add(2);
-                        modifiers = c_int::from(*str);
+                        modifiers = ModMask::from_bits(c_int::from(*str));
                         str = str.add(1);
                         c = c_int::from(*str);
                     }
@@ -176,7 +177,7 @@ pub(crate) unsafe fn translate_mapping(
                     // SAFETY: as above.
                     str = unsafe { str.add(2) };
                 }
-                if c < 0 || modifiers != 0 {
+                if c < 0 || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
                     // SAFETY: `gap` is the local growarray, and `name` is a

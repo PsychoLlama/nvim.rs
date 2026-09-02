@@ -324,6 +324,3 @@ static pc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub(crate) const INPUT_BUFLEN: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub(crate) const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;
 pub(crate) const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
-pub(crate) const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub(crate) const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub(crate) const MOD_MASK_CMD: ::core::ffi::c_int = 0x80 as ::core::ffi::c_int;

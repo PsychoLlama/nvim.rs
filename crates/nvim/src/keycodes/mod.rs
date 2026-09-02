@@ -178,13 +178,13 @@ unsafe fn number_at(p: Cursor) -> (uvarnumber_T, c_int) {
 /// Fold `modifiers` into `key` where the terminal has a code for the
 /// combination: `<S-Up>` is a key of its own, not `Up` plus a shift bit.
 /// `modifiers` is left holding whatever could not be folded in.
-pub fn simplify_key(key: c_int, modifiers: &mut c_int) -> c_int {
-    if *modifiers & (MOD_MASK_SHIFT | MOD_MASK_CTRL) == 0 {
+pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
+    if !modifiers.has(ModMask::SHIFT | ModMask::CTRL) {
         return key;
     }
     // TAB is the one key with a shifted code but no unshifted termcap row.
-    if key == TAB && *modifiers & MOD_MASK_SHIFT != 0 {
-        *modifiers &= !MOD_MASK_SHIFT;
+    if key == TAB && modifiers.has(ModMask::SHIFT) {
+        modifiers.clear(ModMask::SHIFT);
         return Key::STab.code();
     }
     match simplify(key, *modifiers) {
@@ -234,7 +234,7 @@ fn handle_x_keys(key: c_int) -> c_int {
 pub(crate) type SpecialKeyName = [c_char; MAX_KEY_NAME_LEN as usize + 1];
 
 /// The `<...>` spelling of `key` with `modifiers` held down.
-pub fn get_special_key_name(key: c_int, modifiers: c_int) -> SpecialKeyName {
+pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
     let mut key = key;
     let mut modifiers = modifiers;
     // A key that stands for a normal character.
@@ -257,12 +257,12 @@ pub fn get_special_key_name(key: c_int, modifiers: c_int) -> SpecialKeyName {
             && key & 0x80 != 0
         {
             key &= 0x7f;
-            modifiers |= MOD_MASK_ALT;
+            modifiers |= ModMask::ALT;
             name = name_of_code(key);
         }
         if name.is_none() && !unsafe { vim_isprintc(key) } && key < ' ' as c_int {
             key += '@' as c_int;
-            modifiers |= MOD_MASK_CTRL;
+            modifiers |= ModMask::CTRL;
         }
     }
 
@@ -332,7 +332,7 @@ pub unsafe fn trans_special(
     escape_ks: bool,
     did_simplify: *mut bool,
 ) -> c_uint {
-    let mut modifiers = 0;
+    let mut modifiers = ModMask::NONE;
     let key = unsafe { find_special_key(srcp, src_len, &raw mut modifiers, flags, did_simplify) };
     if key == 0 {
         return 0;
@@ -351,13 +351,13 @@ pub unsafe fn trans_special(
 /// or three times that with `escape_ks` set.
 pub unsafe fn special_to_buf(
     key: c_int,
-    modifiers: c_int,
+    modifiers: ModMask,
     escape_ks: bool,
     dst: *mut c_char,
 ) -> c_uint {
     let mut dlen = 0;
-    if modifiers != 0 {
-        let prefix = [K_SPECIAL as u8, KS_MODIFIER as u8, modifiers as u8];
+    if !modifiers.is_empty() {
+        let prefix = [K_SPECIAL as u8, KS_MODIFIER as u8, modifiers.bits() as u8];
         // SAFETY: the caller's promise -- room for the modifier prefix.
         dlen = unsafe { put_bytes(dst, dlen, &prefix) };
     }
@@ -401,7 +401,7 @@ unsafe fn put_bytes(dst: *mut c_char, at: usize, bytes: &[u8]) -> usize {
 pub unsafe fn find_special_key(
     srcp: *mut *const c_char,
     src_len: size_t,
-    modp: *mut c_int,
+    modp: *mut ModMask,
     flags: c_int,
     did_simplify: *mut bool,
 ) -> c_int {
@@ -470,12 +470,12 @@ pub unsafe fn find_special_key(
     let end_of_name = bp.skip(1);
 
     // Which modifiers are given?
-    let mut modifiers = 0;
+    let mut modifiers = ModMask::NONE;
     bp = src.skip(1);
     while bp < last_dash {
         if bp.byte() != b'-' as c_char {
             let bit = name_to_mod_mask(c_int::from(bp.byte() as u8));
-            if bit == 0 {
+            if bit.is_empty() {
                 return 0; // illegal modifier name
             }
             modifiers |= bit;
@@ -508,7 +508,7 @@ pub unsafe fn find_special_key(
             // NUL bounds the character `utfc_ptr2len` measures.
             len = unsafe { utfc_ptr2len(last_dash.skip(1).raw()) };
         }
-        if modifiers != 0 && last_dash.at((len + 1) as isize) == b'>' as c_char {
+        if !modifiers.is_empty() && last_dash.at((len + 1) as isize) == b'>' as c_char {
             // SAFETY: as above -- a character inside the caller's buffer.
             unsafe { utf_ptr2char(last_dash.skip(off).raw()) }
         } else {
@@ -564,30 +564,30 @@ pub unsafe fn find_special_key(
 /// `bool` or be null.
 unsafe fn extract_modifiers(
     key: c_int,
-    modp: *mut c_int,
+    modp: *mut ModMask,
     simplify: bool,
     did_simplify: *mut bool,
 ) -> c_int {
     let mut key = key;
     let mut modifiers = unsafe { *modp };
 
-    if modifiers & MOD_MASK_SHIFT != 0 && is_ascii_alpha(key) {
+    if modifiers.has(ModMask::SHIFT) && is_ascii_alpha(key) {
         key = to_upper_ascii(key);
         // <C-S-a> keeps the shift; <S-a>, <A-S-a> and <S-A> do not.
-        if modifiers & MOD_MASK_CTRL == 0 {
-            modifiers &= !MOD_MASK_SHIFT;
+        if !modifiers.has(ModMask::CTRL) {
+            modifiers.clear(ModMask::SHIFT);
         }
     }
     // <C-H> and <C-h> mean the same thing; always use "H".
-    if modifiers & MOD_MASK_CTRL != 0 && is_ascii_alpha(key) {
+    if modifiers.has(ModMask::CTRL) && is_ascii_alpha(key) {
         key = to_upper_ascii(key);
     }
     if simplify
-        && modifiers & MOD_MASK_CTRL != 0
+        && modifiers.has(ModMask::CTRL)
         && ((key >= '?' as c_int && key <= '_' as c_int) || is_ascii_alpha(key))
     {
         key = to_upper_ascii(key) ^ 0x40;
-        modifiers &= !MOD_MASK_CTRL;
+        modifiers.clear(ModMask::CTRL);
         if key == NUL {
             key = Key::Zero.code(); // <C-@> is <Nul>
         }

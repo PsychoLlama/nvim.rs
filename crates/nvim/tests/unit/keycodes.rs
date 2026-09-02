@@ -18,9 +18,8 @@ use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
 use neovim::keycodes::{
-    FSK_IN_STRING, MOD_MASK_ALT, MOD_MASK_CMD, MOD_MASK_CTRL, MOD_MASK_META, MOD_MASK_SHIFT,
-    REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL, find_special_key, get_special_key_code,
-    get_special_key_name, replace_termcodes,
+    FSK_IN_STRING, ModMask, REPTERM_DO_LT, REPTERM_FROM_PART, REPTERM_NO_SPECIAL, find_special_key,
+    get_special_key_code, get_special_key_name, replace_termcodes,
 };
 
 use crate::support::{cstr, take_bytes};
@@ -152,7 +151,7 @@ const TERMCODES: &[Encodings] = &[
     ("", b"<>", b"<>", b"<>", b"<>"),
 ];
 
-/// `(name, get_special_key_code(name), get_special_key_name(code, 0))`, one row
+/// `(name, get_special_key_code(name), get_special_key_name(code, ModMask::NONE))`, one row
 /// per distinct name in `key_names_table`. Two entries share the name `Tab`
 /// (`TAB` and `K_TAB`); only the first is reachable by name, so it appears once.
 const KEY_CODES: &[(&str, c_int, &str)] = &[
@@ -379,7 +378,7 @@ fn key_code(name: &str) -> c_int {
     unsafe { get_special_key_code(s.as_ptr()) }
 }
 
-fn key_name(code: c_int, modifiers: c_int) -> String {
+fn key_name(code: c_int, modifiers: ModMask) -> String {
     let name = get_special_key_name(code, modifiers);
     // SAFETY: `get_special_key_name` NUL-terminates its answer.
     unsafe { CStr::from_ptr(name.as_ptr()) }
@@ -389,10 +388,10 @@ fn key_name(code: c_int, modifiers: c_int) -> String {
 
 /// Wrapper over `find_special_key`: returns the key code and the modifier
 /// mask it reported.
-fn special_key(src: &str, flags: c_int) -> (c_int, c_int) {
+fn special_key(src: &str, flags: c_int) -> (c_int, ModMask) {
     let s = cstr(src);
     let mut srcp: *const c_char = s.as_ptr();
-    let mut modifiers: c_int = 0;
+    let mut modifiers = ModMask::NONE;
     let key =
         unsafe { find_special_key(&mut srcp, src.len(), &mut modifiers, flags, ptr::null_mut()) };
     (key, modifiers)
@@ -408,7 +407,7 @@ fn find_special_key_no_keycode() {
 fn find_special_key_keycode_with_multiple_modifiers() {
     let (key, modifiers) = special_key("<C-M-S-A>", 0);
     assert_ne!(0, key);
-    assert_ne!(0, modifiers);
+    assert!(!modifiers.is_empty());
 }
 
 #[test]
@@ -474,30 +473,30 @@ fn replace_termcodes_matches_the_sweep_baseline() {
 fn key_names_table_round_trips() {
     for &(name, code, printed) in KEY_CODES {
         assert_eq!(code, key_code(name), "code of {name}");
-        assert_eq!(printed, key_name(code, 0), "name of {name}");
+        assert_eq!(printed, key_name(code, ModMask::NONE), "name of {name}");
     }
 
     // The modifier letters, in the order the modifier table lists them.
     let up = key_code("Up");
-    assert_eq!("<S-Up>", key_name(up, MOD_MASK_SHIFT));
-    assert_eq!("<C-Up>", key_name(up, MOD_MASK_CTRL));
-    assert_eq!("<M-Up>", key_name(up, MOD_MASK_ALT));
-    assert_eq!("<D-Up>", key_name(up, MOD_MASK_CMD));
-    assert_eq!("<T-Up>", key_name(up, MOD_MASK_META));
+    assert_eq!("<S-Up>", key_name(up, ModMask::SHIFT));
+    assert_eq!("<C-Up>", key_name(up, ModMask::CTRL));
+    assert_eq!("<M-Up>", key_name(up, ModMask::ALT));
+    assert_eq!("<D-Up>", key_name(up, ModMask::CMD));
+    assert_eq!("<T-Up>", key_name(up, ModMask::META));
     assert_eq!(
         "<M-C-S-Up>",
-        key_name(up, MOD_MASK_ALT | MOD_MASK_CTRL | MOD_MASK_SHIFT)
+        key_name(up, ModMask::ALT | ModMask::CTRL | ModMask::SHIFT)
     );
     // An unnamed special key prints as t_xx.
-    assert_eq!("<t_zz>", key_name(key_code("t_zz"), 0));
+    assert_eq!("<t_zz>", key_name(key_code("t_zz"), ModMask::NONE));
     // A printable character prints as itself; a control one gains <C-.
-    assert_eq!("<a>", key_name('a' as c_int, 0));
-    assert_eq!("<C-A>", key_name(1, 0));
+    assert_eq!("<a>", key_name('a' as c_int, ModMask::NONE));
+    assert_eq!("<C-A>", key_name(1, ModMask::NONE));
     // Above 0x7f it is a codepoint, not an Alt-ed byte: the un-alting branch
     // asks for `utf_char2len(c) == 1 && (c & 0x80)`, which nothing satisfies.
-    assert_eq!("<\u{e1}>", key_name(0xe1, 0));
+    assert_eq!("<\u{e1}>", key_name(0xe1, ModMask::NONE));
     // Modifiers on a plain character are still spelled out.
-    assert_eq!("<M-a>", key_name('a' as c_int, MOD_MASK_ALT));
+    assert_eq!("<M-a>", key_name('a' as c_int, ModMask::ALT));
 }
 
 /// The name lookup folds ASCII case, both ways, for every name in the table.

@@ -11,13 +11,10 @@
 #![forbid(unsafe_code)]
 
 use crate::keycodes::Key;
+use crate::keycodes::ModMask;
 use core::ffi::{CStr, c_char, c_int};
 
-use super::{
-    MOD_MASK_2CLICK, MOD_MASK_3CLICK, MOD_MASK_4CLICK, MOD_MASK_ALT, MOD_MASK_CTRL, MOD_MASK_META,
-    MOD_MASK_MULTI_CLICK, MOD_MASK_SHIFT, MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1,
-    MOUSE_X2, MSCR_RIGHT,
-};
+use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
 use crate::main::{mouse_col, mouse_grid, mouse_row};
 use crate::types::{colnr_T, varnumber_T};
 
@@ -83,26 +80,26 @@ pub(crate) fn key_extra(c: c_int) -> c_int {
 
 /// How many clicks in a row `mod_mask` records.
 ///
-/// The bits are cumulative -- `MOD_MASK_4CLICK` *is* 2CLICK|3CLICK -- so the
+/// The bits are cumulative -- `ModMask::FOUR_CLICK` *is* 2CLICK|3CLICK -- so the
 /// wider counts have to be tested first.
-pub(crate) fn click_count(mod_mask: c_int) -> varnumber_T {
-    match mod_mask & MOD_MASK_MULTI_CLICK {
-        MOD_MASK_4CLICK => 4,
-        MOD_MASK_3CLICK => 3,
-        MOD_MASK_2CLICK => 2,
+pub(crate) fn click_count(mod_mask: ModMask) -> varnumber_T {
+    match mod_mask.masked(ModMask::MULTI_CLICK) {
+        ModMask::FOUR_CLICK => 4,
+        ModMask::THREE_CLICK => 3,
+        ModMask::TWO_CLICK => 2,
         _ => 1,
     }
 }
 
 /// The four-byte modifier string a `%@Func@` handler receives, one letter per
 /// modifier held down and a space where it was not.
-pub(crate) fn modifier_letters(mod_mask: c_int) -> [c_char; 5] {
-    let held = |bit: c_int, letter: u8| (if mod_mask & bit != 0 { letter } else { b' ' }) as c_char;
+pub(crate) fn modifier_letters(mod_mask: ModMask) -> [c_char; 5] {
+    let held = |bit: ModMask, letter: u8| (if mod_mask.has(bit) { letter } else { b' ' }) as c_char;
     [
-        held(MOD_MASK_SHIFT, b's'),
-        held(MOD_MASK_CTRL, b'c'),
-        held(MOD_MASK_ALT, b'a'),
-        held(MOD_MASK_META, b'm'),
+        held(ModMask::SHIFT, b's'),
+        held(ModMask::CTRL, b'c'),
+        held(ModMask::ALT, b'a'),
+        held(ModMask::META, b'm'),
         0,
     ]
 }

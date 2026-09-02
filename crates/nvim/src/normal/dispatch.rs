@@ -25,6 +25,7 @@ use crate::getchar::{
     typeahead, ungetchars, vpeekc, vungetc,
 };
 use crate::guard::{Allow, Keys, Suppress};
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
@@ -39,9 +40,9 @@ use crate::mbyte::{
 };
 use crate::memory::xfree;
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArg, ESC, GRAPHEME_STATE_INIT, MOD_MASK_SHIFT, NL,
-    NV_CMDS, NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState,
-    NormalStateRef, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArg, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS,
+    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef,
+    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
     do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
     set_visual_select, start_selection, visual_active, visual_select,
@@ -688,9 +689,9 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                     unsafe { unshift_special(&raw mut ns.ca) };
                     ns.idx = find_command(ns.ca.cmdchar);
                     debug_assert!(ns.idx >= 0);
-                } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
+                } else if flags & NV_SSS != 0 && mod_mask.get().has(ModMask::SHIFT) {
                     start_selection();
-                    mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
+                    mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
                 }
             }
 

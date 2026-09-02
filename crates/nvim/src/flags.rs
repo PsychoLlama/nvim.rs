@@ -127,7 +127,9 @@ macro_rules! flag_set {
         $( $(#[$cmeta:meta])* const $MEMBER:ident = $value:expr; )+
     ) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+        // `Default` is the empty set, which is what a zeroed flag word means
+        // everywhere one is zeroed -- and every one of these is, somewhere.
+        #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
         #[repr(transparent)]
         $vis struct $Name($word);
 

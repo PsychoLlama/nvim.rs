@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -21,10 +22,10 @@ use crate::main::{KeyTyped, curbuf, curwin, fdo_flags, jop_flags, mod_mask, no_h
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
-    CmdArg, KMarkNoContext, MOD_MASK_CTRL, TAB, check_clear_op, check_clear_op_quit, clear_op,
-    clear_op_beep, e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine,
-    kMarkChangedCursor, kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed,
-    kMarkMoveSuccess, kMarkSetView, kMarkSwitchedBuf, nv_operator,
+    CmdArg, KMarkNoContext, TAB, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    e_changelist_is_empty, kMTCharWise, kMTLineWise, kMarkAll, kMarkBeginLine, kMarkChangedCursor,
+    kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
+    kMarkSwitchedBuf, nv_operator,
 };
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
@@ -277,7 +278,7 @@ pub(crate) unsafe fn nv_pcmark(cap: *mut cmdarg_T) {
         return;
     }
     // CTRL-TAB is the last-used tab page, not a jump.
-    if ca.cmdchar == TAB && mod_mask.get() == MOD_MASK_CTRL {
+    if ca.cmdchar == TAB && mod_mask.get() == ModMask::CTRL {
         if !goto_tabpage_lastused() {
             clear_op_beep(ca.op());
         }

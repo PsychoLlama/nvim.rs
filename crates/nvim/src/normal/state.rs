@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::types::AutoEvent;
 use crate::winlayer::{Buf, Win};
@@ -46,9 +47,9 @@ use crate::main::{
 use crate::memory::{xfree, xstrdup};
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
 use crate::normal::{
-    CA_COMMAND_BUSY, MOD_MASK_SHIFT, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS,
-    NormalState, check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap,
-    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    CA_COMMAND_BUSY, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS, NormalState,
+    check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap, end_visual_mode,
+    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::options::kOptFdoFlagAll;
@@ -277,7 +278,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
     let mut ns = unsafe { NormalStateRef::new(s) };
     let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
     // "stopsel": an unshifted movement ends the selection.
-    if km_stopsel.get() && flags & NV_STS != 0 && mod_mask.get() & MOD_MASK_SHIFT == 0 {
+    if km_stopsel.get() && flags & NV_STS != 0 && !mod_mask.get().has(ModMask::SHIFT) {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -291,8 +292,8 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
                 unsafe { clearopbeep(&raw mut ns.oa) };
                 return true;
             }
-        } else if flags & NV_SSS != 0 && mod_mask.get() & MOD_MASK_SHIFT != 0 {
-            mod_mask.set(mod_mask.get() & !MOD_MASK_SHIFT);
+        } else if flags & NV_SSS != 0 && mod_mask.get().has(ModMask::SHIFT) {
+            mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
         }
     }
     false

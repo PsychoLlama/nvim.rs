@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::keycodes::ModMask;
 use crate::keycodes::{KE_IGNORE, KS_EXTRA, key_unescape};
 use crate::types::MB_MAXCHAR;
 use crate::types::{MB_MAXBYTES, NUL};
@@ -178,14 +179,14 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
 
     // Split the key into its modifier prefix and the key itself.
     let mut ptr: *const c_char = key.buf.as_ptr().cast();
-    let mut modifiers = 0;
+    let mut modifiers = ModMask::NONE;
     // SAFETY (this body): `showcmd_buf` is this module's own fixed-size array,
     // and every write below is bounded by `SHOWCMD_COLS`.
     if c_int::from(unsafe { *ptr } as u8) == K_SPECIAL
         && c_int::from(unsafe { *ptr.add(1) } as u8) == KS_MODIFIER
         && c_int::from(unsafe { *ptr.add(2) } as u8) != NUL
     {
-        modifiers = c_int::from(unsafe { *ptr.add(2) } as u8);
+        modifiers = ModMask::from_bits(c_int::from(unsafe { *ptr.add(2) } as u8));
         ptr = unsafe { ptr.add(3) };
     }
 
@@ -204,8 +205,8 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
             // which reads better: CTRL-A rather than <C-> then A.
             let mut left = modifiers;
             let merged = merge_modifiers(c, &mut left);
-            if left == 0 {
-                modifiers = 0;
+            if left.is_empty() {
+                modifiers = ModMask::NONE;
                 c = merged;
             }
         }
@@ -213,10 +214,10 @@ pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
 
     // TODO(zeertzjq): is there a more readable and yet compact
     // representation of modifiers and special keys?
-    if modifiers != 0 {
+    if !modifiers.is_empty() {
         add_to_showcmd(K_SPECIAL);
         add_to_showcmd(KS_MODIFIER);
-        add_to_showcmd(modifiers);
+        add_to_showcmd(modifiers.bits());
     }
     if c != NUL {
         add_to_showcmd(c);

@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::keycodes::ModMask;
 use crate::types::{Failed, MB_MAXBYTES};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -570,7 +571,7 @@ pub unsafe fn ins_typebuf(
 ///
 /// # Safety
 /// Callable at any time.
-pub unsafe fn ins_char_typebuf(c: c_int, modifiers: c_int, on_key_ignore: bool) -> c_int {
+pub unsafe fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
     // Room for the modifier prefix plus a K_SPECIAL-escaped character.
     let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
     // SAFETY (this body): `buf` is this frame's own array, sized for the

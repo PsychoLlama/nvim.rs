@@ -15,12 +15,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::keycodes::ModMask;
 use core::cmp::Ordering;
 use core::ffi::c_int;
 
 use super::{
-    MOD_MASK_ALT, MOD_MASK_CTRL, MOD_MASK_SHIFT, MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS,
-    MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
+    MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS, MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
 };
 use crate::main::{State, mod_mask};
 use crate::normal::{
@@ -42,7 +42,7 @@ pub(crate) fn visual_jump_flags(
     old_curwin: Win,
 ) -> Option<(pos_T, pos_T)> {
     if State.get() & (MODE_NORMAL | MODE_INSERT) == 0
-        || mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0
+        || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
     {
         return None;
     }
@@ -87,7 +87,7 @@ pub(crate) fn visual_jump_flags(
 /// in the quarter the cursor is in is the one that moves.
 pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: pos_T, mut end_visual: pos_T) {
     // When ALT is pressed make Visual mode blockwise.
-    if mod_mask.get() & MOD_MASK_ALT != 0 {
+    if mod_mask.get().has(ModMask::ALT) {
         set_visual_mode(VisualMode::BLOCK);
     }
 

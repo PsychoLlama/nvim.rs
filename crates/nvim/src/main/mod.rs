@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::{ConstTable, GlobalCell, SharedCell};
+use crate::keycodes::ModMask;
 use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
@@ -529,8 +530,8 @@ pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
 pub static Rows: GlobalCell<c_int> = GlobalCell::new(24 as c_int);
 pub static Columns: GlobalCell<c_int> = GlobalCell::new(80 as c_int);
-pub static mod_mask: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static vgetc_mod_mask: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
+pub static vgetc_mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
 pub static vgetc_char: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static cmdline_row: GlobalCell<c_int> = GlobalCell::new(0);
 pub static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);

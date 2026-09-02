@@ -20,6 +20,7 @@ use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_grow};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
+use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
@@ -205,7 +206,7 @@ static e_cmd_mapping_must_end_with_cr: &::core::ffi::CStr =
 static e_cmd_mapping_must_end_with_cr_before_second_cmd: &::core::ffi::CStr =
     c"E1136: <Cmd> mapping must end with <CR> before second <Cmd>";
 static old_char: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static old_mod_mask: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+static old_mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
 static old_mouse_grid: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static old_mouse_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -215,6 +216,3 @@ pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 pub const K_SELECT_STRING: &::core::ffi::CStr = c"\x80\xF5X";
-pub const MOD_MASK_SHIFT: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const MOD_MASK_CTRL: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const MOD_MASK_ALT: ::core::ffi::c_int = 0x8 as ::core::ffi::c_int;

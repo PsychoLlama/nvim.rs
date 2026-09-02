@@ -230,15 +230,15 @@ pub(crate) unsafe fn getchar_common(
     unsafe { set_vim_var_nr(Vv::MouseLnum, 0) };
     unsafe { set_vim_var_nr(Vv::MouseCol, 0) };
 
-    if n != 0 && (!opts.allow_number || n < 0 || mod_mask.get() != 0) {
+    if n != 0 && (!opts.allow_number || n < 0 || !mod_mask.get().is_empty()) {
         // Render the key as a string: modifier prefix, then either the
         // key code's three bytes or the character's UTF-8 ones.
         let mut temp = [0 as c_char; 10]; // modifier 3 + mbyte char 6 + NUL
         let mut i = 0;
-        if mod_mask.get() != 0 {
+        if !mod_mask.get().is_empty() {
             temp[0] = K_SPECIAL as c_char;
             temp[1] = KS_MODIFIER as c_char;
-            temp[2] = mod_mask.get() as c_char;
+            temp[2] = mod_mask.get().bits() as c_char;
             i = 3;
         }
         if n < 0 {
@@ -292,5 +292,5 @@ pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// `rettv` must be a valid return slot.
 pub unsafe fn f_getcharmod(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    unsafe { (*rettv).vval.v_number = mod_mask.get() as varnumber_T };
+    unsafe { (*rettv).vval.v_number = varnumber_T::from(mod_mask.get().bits()) };
 }

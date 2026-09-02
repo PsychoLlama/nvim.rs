@@ -2,6 +2,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_H, Key};
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -21,10 +22,10 @@ use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
-    CmdArg, MOD_MASK_CTRL, adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked,
-    clear_op_beep, invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark,
-    nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
-    nv_replace_mode, nv_screengo, nv_visual, nv_vreplace, visual_active,
+    CmdArg, adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked, clear_op_beep,
+    invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
+    nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
+    nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::linetabsize;
@@ -280,7 +281,7 @@ unsafe fn nv_g_key(cap: *mut cmdarg_T, nchar: c_int) -> bool {
             | Key::X2drag
             | Key::X2release,
         ) => {
-            mod_mask.set(MOD_MASK_CTRL);
+            mod_mask.set(ModMask::CTRL);
             unsafe { do_mouse(ca.oap, nchar, BACKWARD as c_int, ca.count1, false) };
         }
         Ok(Key::Ignore) => {}

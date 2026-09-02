@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::keycodes::Key;
+use crate::keycodes::ModMask;
 use core::ffi::CStr;
 
 use super::*;
@@ -92,7 +93,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 /// # Safety
 /// `cap` must be a live command argument.
 pub(crate) unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
-    let shift_or_ctrl = mod_mask.get() & (MOD_MASK_SHIFT | MOD_MASK_CTRL) != 0;
+    let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
     // SAFETY: `curwin` is live from startup to exit.
     let win = unsafe { Win::current() };
     // SAFETY: the caller's promise.

@@ -12,6 +12,7 @@ use crate::ex_getln::getcmdline_prompt;
 use crate::getchar::{fix_input_buffer, merge_modifiers};
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
+use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
 use crate::main::{
     State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
@@ -102,7 +103,7 @@ unsafe fn is_swallowed_key(first: u8, key: c_int) -> bool {
 /// waiting.
 pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
     let save_mapped_ctrl_c = mapped_ctrl_c.get();
-    mod_mask.set(0);
+    mod_mask.set(ModMask::NONE);
     mapped_ctrl_c.set(0); // Mappings are not used here.
 
     let mut buf: Vec<u8> = Vec::new();
@@ -175,7 +176,7 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
             break key;
         }
         if c_int::from(buf[1]) == KS_MODIFIER {
-            mod_mask.set(c_int::from(buf[2]));
+            mod_mask.set(ModMask::from_bits(c_int::from(buf[2])));
         }
         len -= 3;
         if len > 0 {
