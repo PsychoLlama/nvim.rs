@@ -19,34 +19,6 @@
 //! [`char_flags!`] is the third shape: a family whose members are *letters*
 //! of a string option, where the set is the option's value and membership is
 //! a substring search rather than a bit test.
-//!
-//! # Why not `bitflags`
-//!
-//! The obvious alternative is the `bitflags` crate, and it lost on three
-//! counts that are specific to this tree:
-//!
-//!  * **ffigen.** A flag word is a field of `#[repr(C)]` structs the unit
-//!    suite reaches through generated cdefs (`SynFlags bs_flags`), and ffigen
-//!    parses source without expanding macros. It knows [`flag_set!`]'s
-//!    grammar — see `FlagSet` in `tools/ffigen/src/main.rs` — and emits the
-//!    family as the integer typedef it is on the C side. `bitflags!` spells
-//!    its head differently (`struct X: u32 { … }`), so adopting it means
-//!    rewriting that parser to gain nothing the emitter did not already have.
-//!  * **Debug builds.** `bitflags` 2.x is two types: the public newtype wraps
-//!    a private `InternalBitFlags`, and every operation delegates. At
-//!    `-O0`, where `#[inline]` does nothing, `x.intersects(F::B)` compiles to
-//!    two nested calls where `x.has(F::B)` compiles to one. Flag words are
-//!    tested in the redraw and mark-tree paths, and debug-build cost is a
-//!    budget this port tracks.
-//!  * **Unknown bits.** Half these families arrive from a caller that still
-//!    threads a raw `int`, sometimes carrying bits no member names.
-//!    [`from_bits`](flag_set) keeps them; `bitflags`' same-named constructor
-//!    returns `None` and its `from_bits_truncate` drops them silently.
-//!
-//! Against that, `bitflags` would have brought named `Debug`/`Display` output
-//! and an iterator over set flags, neither of which any call site wants. So
-//! the macro stays and no dependency enters; the policy comment in
-//! `Cargo.toml` records the decision.
 #![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,

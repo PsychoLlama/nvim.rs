@@ -46,21 +46,9 @@ libc = "0.2"
 nvim-mainthread = { path = "../mainthread" }
 # The error derive. It replaces hand-written `Display`/`std::error::Error`
 # impls — starting with `api::Error`, whose message an editor shows rather
-# than reports, which is why no report-style error crate (`anyhow`,
-# `eyre`, `miette`) enters here: an editor-internal error is a Vim message,
-# not a diagnostic with a backtrace and a source chain. Pure Rust, proc-macro
-# only, nothing of it survives into the binary but the impls it wrote.
+# than reports. Pure Rust, proc-macro only, nothing of it survives into the
+# binary but the impls it wrote.
 thiserror = { version = "2", default-features = false, features = ["std"] }
-#
-# Considered and declined: `bitflags`. It clears (1) and (2) — pure Rust, and
-# a flag set is exactly the kind of shape this table is for — but it loses to
-# the `flag_set!` macro in src/flags.rs on this tree's specifics: ffigen reads
-# source without expanding macros and already knows that macro's grammar, so
-# every flag word that is a field of a `#[repr(C)]` struct keeps its cdef for
-# free; `bitflags` 2.x delegates each operation through a private inner type,
-# which is two calls per flag test at `-O0`; and its `from_bits` rejects bits
-# no member names, where these families routinely carry them. See the "Why not
-# `bitflags`" section of src/flags.rs for the whole comparison.
 
 # Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
 # an explicit `unsafe {}` block. The transpiled tree has thousands of such
