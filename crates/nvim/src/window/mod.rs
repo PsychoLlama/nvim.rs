@@ -36,7 +36,9 @@
 
 use crate::cstr;
 use crate::types::AutoEvent;
+use crate::types::CAR;
 use crate::types::CmdIdx;
+use crate::types::TAB;
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
@@ -58,9 +60,9 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CdCause, Direction, Error, MapHash, MotionType, OptInt, OptValType, Set_uint32_t,
-    WinSplit, WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values,
-    handle_T, kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
+    AlignTextPos, CdCause, Direction, Error, MapHash, MotionType, OptInt, Set_uint32_t, WinSplit,
+    WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T,
+    kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -111,9 +113,6 @@ pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNumber: OptValType = 1;
-pub const kOptValTypeBoolean: OptValType = 0;
 pub const GETF_SWITCH: getf_values = 4;
 pub const GETF_ALT: getf_values = 2;
 pub const GETF_SETMARK: getf_values = 1;
@@ -195,8 +194,6 @@ pub const SET_INIT: Set_uint32_t = Set_uint32_t {
     h: MAPHASH_INIT,
     keys: ::core::ptr::null_mut::<uint32_t>(),
 };
-pub const TAB: ::core::ffi::c_int = 9;
-pub const CAR: ::core::ffi::c_int = 13;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";

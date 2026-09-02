@@ -82,6 +82,7 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
+use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ExtmarkOp, GraphemeState, Vv, bcount_t, buf_T, colnr_T, fmark_T, fmarkv_T,
@@ -137,7 +138,6 @@ pub const SIN_INSERT: ::core::ffi::c_int = 2;
 /// `ml_delete_flags()`: report "N fewer lines".
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub const COM_NEST: ::core::ffi::c_int = 'n' as ::core::ffi::c_int;
 pub const COM_BLANK: ::core::ffi::c_int = 'b' as ::core::ffi::c_int;

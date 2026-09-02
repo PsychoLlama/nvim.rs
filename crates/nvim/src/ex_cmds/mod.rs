@@ -50,11 +50,15 @@ use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
 use crate::types::AutoEvent;
+use crate::types::CAR;
 use crate::types::CmdIdx;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, NUL, OptVal, OptValType, OptionSetFlags, String_0, UndoObjectType, Vv,
-    bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, linenr_T,
-    list_T, listitem_T, lpos_T, size_t, uint8_t, win_T,
+    CmdModFlags, ExtmarkOp, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t,
+    bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, linenr_T, list_T,
+    listitem_T, lpos_T, size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -88,7 +92,6 @@ pub const kExtmarkSplice: UndoObjectType = 0;
 pub const REGSUB_BACKSLASH: ::core::ffi::c_uint = 4;
 pub const REGSUB_MAGIC: ::core::ffi::c_uint = 2;
 pub const REGSUB_COPY: ::core::ffi::c_uint = 1;
-pub const kOptValTypeString: OptValType = 2;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
@@ -181,10 +184,6 @@ pub const NODE_OTHER: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const EXFLAG_PRINT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// Fire `event` for `buf`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.

@@ -30,6 +30,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::NL;
+use crate::types::TAB;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -95,8 +97,6 @@ pub use self::walk::*;
 
 /// The C-level vocabulary every transpiled module carries a copy of;
 /// consolidating them tree-wide is a family of its own, not this slice's.
-pub const TAB: c_int = '\t' as c_int;
-pub const NL: c_int = '\n' as c_int;
 /// `setlocale`'s category for character classification.
 pub const LC_CTYPE: c_int = 0;
 /// `SIZE_MAX`, which `iconv` answers with on failure.

@@ -13,7 +13,7 @@ use super::*;
 use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
-use crate::option::{OptSlot, kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString};
+use crate::option::OptSlot;
 
 crate::flag_set! {
     /// `option.h`'s `OptionSetFlags`: which scope an option-setting call
@@ -447,3 +447,15 @@ crate::char_flags! {
 /// The fixed value of `'maxcombine'`: the most composing characters that can
 /// follow a base character.
 pub const MAX_MCO: ::core::ffi::c_int = 6;
+
+/// No value at all -- the option is not set here.
+pub const kOptValTypeNil: OptValType = -1;
+
+/// A `'boolean'` option's value.
+pub const kOptValTypeBoolean: OptValType = 0;
+
+/// A `'number'` option's value.
+pub const kOptValTypeNumber: OptValType = 1;
+
+/// A `'string'` option's value.
+pub const kOptValTypeString: OptValType = 2;

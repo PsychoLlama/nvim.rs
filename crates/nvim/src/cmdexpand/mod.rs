@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::arglist::get_arglist_name;
+use crate::types::TAB;
 
 use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
@@ -273,7 +274,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);

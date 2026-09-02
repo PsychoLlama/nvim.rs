@@ -20,6 +20,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::BS;
+use crate::types::DEL;
+use crate::types::TAB;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::{ptr, slice};
 

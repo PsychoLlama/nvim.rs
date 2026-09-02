@@ -5,6 +5,8 @@ use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
 use crate::semsg;
 use crate::tr_plural;
+use crate::types::CAR;
+use crate::types::NL;
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
@@ -226,8 +228,6 @@ pub const O_APPEND: ::core::ffi::c_int = 0o2000 as ::core::ffi::c_int;
 pub const __O_NOFOLLOW: ::core::ffi::c_int = 0o400000 as ::core::ffi::c_int;
 pub const O_NOFOLLOW: ::core::ffi::c_int = __O_NOFOLLOW;
 pub const UV_FS_COPYFILE_FICLONE: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const NODE_WRITABLE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 /// `'cpoptions'` "W": refuse to overwrite a read-only file even with `!`.
 pub(crate) const E_READONLY_CPO: &CStr = c"is read-only (cannot override: \"W\" in 'cpoptions')";

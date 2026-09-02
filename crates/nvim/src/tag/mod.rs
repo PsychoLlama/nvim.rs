@@ -63,6 +63,7 @@ use crate::search::{do_search, ignorecase, ignorecase_opt};
 use crate::state::MODE_INSERT;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;
+use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, Callback, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T, exarg_T,
@@ -153,7 +154,6 @@ pub const MT_ST_CUR: ::core::ffi::c_uint = 0;
 pub const MT_RE_OFF: ::core::ffi::c_uint = 8;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const CMDBUFFSIZE: ::core::ffi::c_int = 1024 as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const TAGSTACKSIZE: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

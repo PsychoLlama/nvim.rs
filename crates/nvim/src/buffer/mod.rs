@@ -45,6 +45,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::types::AutoEvent;
+use crate::types::NL;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -66,7 +67,7 @@ use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, MarkAdjustMode, MarkTree, MetaIndex, OK,
-    OptValType, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
+    UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
     dobuf_action_values, dobuf_start_values, etype_T, exarg_T, getf_values, linenr_T, uint32_t,
     varnumber_T,
 };
@@ -112,8 +113,6 @@ pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
 pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const kCdCauseAuto: CdCause = 2;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
@@ -208,7 +207,6 @@ pub const KEYMAP_INIT: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 #[inline(always)]
 pub fn buf_get_changedtick(buf: Buf) -> varnumber_T {
     // SAFETY: `b:changedtick`'s dict item is always a `VAR_NUMBER`, which is

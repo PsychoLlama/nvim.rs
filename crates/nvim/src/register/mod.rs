@@ -94,6 +94,10 @@ use crate::state::REPLACE_FLAG;
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::terminal::terminal_paste;
 use crate::types::AutoEvent;
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,
@@ -171,10 +175,6 @@ pub const FIND_STRING: ::core::ffi::c_int = 2;
 pub const FIND_IDENT: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 static expr_line: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);

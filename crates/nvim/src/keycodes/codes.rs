@@ -24,12 +24,6 @@ pub const fn is_special(c: c_int) -> bool {
 }
 
 /// The ASCII characters the `<>` notation has names for.
-pub const BS: c_int = 0x08;
-pub const TAB: c_int = 0x09;
-pub const NL: c_int = 0x0a;
-pub const CAR: c_int = 0x0d;
-pub const ESC: c_int = 0x1b;
-pub const DEL: c_int = 0x7f;
 pub const CSI: c_int = 0x9b;
 
 /// The C0 control characters, named after the key that types them

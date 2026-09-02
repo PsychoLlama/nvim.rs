@@ -82,6 +82,9 @@ use crate::register::{
 use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
+use crate::types::CAR;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::{
     Callback, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType, OpType, OptInt, StrCharInfo,
     VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, colnr_T, dict_T, int32_t,
@@ -224,7 +227,3 @@ pub const EOL_DOS: ::core::ffi::c_int = 1;
 
 /// 'comments' flag: this leader ends a three-part comment.
 pub const COM_END: ::core::ffi::c_int = 'e' as ::core::ffi::c_int;
-
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;

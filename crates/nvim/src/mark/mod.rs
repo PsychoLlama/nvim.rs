@@ -42,6 +42,7 @@ use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
 use crate::types::AutoEvent;
 use crate::types::Failed;
+use crate::types::TAB;
 use crate::types::*;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int};
@@ -73,7 +74,6 @@ pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 use store::{Fmark, GlobalMarks, NO_VIEW, NUL_BYTE, Xfmark, mark_name};
 
-pub const TAB: c_int = '\t' as c_int;
 pub const GETF_SETMARK: getf_values = 1;
 pub const AUGROUP_ALL: c_int = -3;
 pub const BUF_HAS_QF_ENTRY: c_int = 1;

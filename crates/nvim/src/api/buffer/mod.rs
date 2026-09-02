@@ -12,6 +12,7 @@ use crate::change::changed_lines;
 use crate::cursor::{check_cursor_col, check_cursor_lnum, check_visual_pos};
 use crate::ex_cmds::rename_buffer;
 use crate::extmark::extmark_splice;
+use crate::types::NL;
 
 use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
@@ -84,7 +85,6 @@ pub const KEYSET_OPTIDX_buf_attach__on_lines: ::core::ffi::c_int = 3 as ::core::
 pub const KEYSET_OPTIDX_buf_attach__on_detach: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_buf_attach__on_reload: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_buf_attach__on_changedtick: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const BUF_UPDATE_CALLBACKS_INIT: BufUpdateCallbacks = BufUpdateCallbacks {
     on_lines: LUA_NOREF,
     on_bytes: LUA_NOREF,

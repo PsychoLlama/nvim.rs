@@ -35,6 +35,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CAR;
+use crate::types::NL;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -53,7 +55,7 @@ use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptValType, OptionSetFlags,
+    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptionSetFlags,
     StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, StlFlag, Vv, WinSplit, WinStyle,
     hlf_T, linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
 };
@@ -78,7 +80,6 @@ pub const kStlClickDisabled: StlClickDefinition_type_0 = 0;
 pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
-pub const kOptValTypeString: OptValType = 2;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
 pub const STL_CLICK_FUNC: StlFlag = 64;
@@ -153,8 +154,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;

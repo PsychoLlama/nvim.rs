@@ -89,18 +89,19 @@ use crate::terminal::{
     terminal_running, terminal_set_streamed_paste,
 };
 use crate::types::AutoEvent;
+use crate::types::NL;
 use crate::types::{
     AdditionalData, Arena, Array, ArrayBuilder, Boolean, Buffer, Channel, ChannelStreamType,
     Context, Dict, Error, Float, HlAttrs, HlMessage, Integer, KeyDict_complete_set,
     KeyDict_context, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
-    MotionType, NS, Object, OptScope, OptVal, OptValType, RemapValues, SignTextAttrs, String_0,
-    StringBuilder, Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T,
-    dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, linenr_T,
-    mpack_token_type_t, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
-    uint64_t, varnumber_T, win_T, yankreg_T,
+    MotionType, NS, Object, OptScope, OptVal, RemapValues, SignTextAttrs, String_0, StringBuilder,
+    Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T, dobuf_action_values,
+    dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, linenr_T, mpack_token_type_t,
+    ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t, uint64_t, varnumber_T,
+    win_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
@@ -137,7 +138,6 @@ pub use self::statusline::*;
 pub use self::term::*;
 pub use self::vars::*;
 pub const kMessageTypeNotification: MessageType = 2;
-pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeBuf: OptScope = 2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
@@ -198,7 +198,6 @@ pub const KEYSET_OPTIDX_redraw__win: ::core::ffi::c_int = 2 as ::core::ffi::c_in
 pub const KEYSET_OPTIDX_redraw__flush: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__range: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_redraw__valid: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const CONTEXT_INIT: Context = Context {
     regs: String_0::NULL,
     jumps: String_0::NULL,

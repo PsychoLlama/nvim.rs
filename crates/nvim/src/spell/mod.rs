@@ -32,6 +32,7 @@
 
 use crate::cstr;
 use crate::semsg;
+use crate::types::TAB;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::change::inserted_bytes;
@@ -84,7 +85,6 @@ pub use slang::{
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
 
-pub const kOptValTypeBoolean: crate::types::OptValType = 0;
 pub const kEqualFiles: file_comparison = 1;
 
 /// The longest word, in bytes, that any of this can handle. Every word
@@ -168,8 +168,6 @@ pub type CharType = c_int;
 pub const CHAR_OTHER: CharType = 0;
 pub const CHAR_UPPER: CharType = 1;
 pub const CHAR_DIGIT: CharType = 2;
-
-pub const TAB: c_int = '\t' as c_int;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;

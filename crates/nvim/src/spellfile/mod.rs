@@ -19,10 +19,11 @@ use crate::semsg;
 use crate::spell::{WordFlags, did_set_spelltab, spell_enc, spelltab};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
+use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, OptValType, SPL_FNAME_TMPL, SpellAddType,
-    XDGVarType, buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashtab_T, regprog_T,
-    size_t, spelltab_T, time_t, vimconv_T,
+    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, SPL_FNAME_TMPL, SpellAddType, XDGVarType,
+    buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashtab_T, regprog_T, size_t,
+    spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -53,7 +54,6 @@ use wordtree::{
 };
 use write::write_vim_spell;
 pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const kOptValTypeString: OptValType = 2;
 pub const ETYPE_SPELL: etype_T = 9;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kEqualFiles: file_comparison = 1;
@@ -272,7 +272,6 @@ impl compitem_T {
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const EOF: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const SEEK_SET: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const SPL_FNAME_ADD: &::core::ffi::CStr = c".add.";
 pub const SPL_FNAME_ASCII: &::core::ffi::CStr = c".ascii.";

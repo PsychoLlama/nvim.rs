@@ -22,14 +22,19 @@ pub mod userfunc;
 pub mod vars;
 pub mod window;
 use crate::global_cell::GlobalCell;
+use crate::types::BS;
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 // Named here so the expression tree and `list.rs` can reach it by one
 // path; it belongs to `main`.
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object,
-    OptValType, blob_T, dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T,
-    partial_T, size_t, timer_T, typval_T, uint64_t,
+    Array, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object, blob_T,
+    dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T, partial_T, size_t,
+    timer_T, typval_T, uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -92,8 +97,6 @@ pub(crate) type Lv = Live<lval_T>;
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeNil: OptValType = -1;
 pub const kMarkAll: MarkGet = 1;
 pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const STR2NR_ALL: c_uint = 15;
@@ -145,12 +148,7 @@ pub const KV_INITIAL_VALUE: Array = Array {
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const VARNUMBER_MAX: c_long = INT64_MAX;
 pub const VARNUMBER_MIN: c_long = INT64_MIN;
-pub const BS: c_int = '\u{8}' as c_int;
-pub const TAB: c_int = '\t' as c_int;
-pub const NL: c_int = '\n' as c_int;
 pub const FF: c_int = '\u{c}' as c_int;
-pub const CAR: c_int = '\r' as c_int;
-pub const ESC: c_int = '\u{1b}' as c_int;
 pub const NOTDONE: c_int = 2 as c_int;
 
 /// What a parser that is allowed to *decline* answers, in the shape `?`

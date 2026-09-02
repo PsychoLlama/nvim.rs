@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::NL;
 use core::ffi::CStr;
 
 use crate::api::private::converter::object_to_vim_take_luaref;
@@ -153,7 +154,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
 };
 pub const KEYSET_OPTIDX_keymap__desc: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const KEYSET_OPTIDX_keymap__callback: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
 pub const FC_LUAREF: ::core::ffi::c_int = 0x800 as ::core::ffi::c_int;

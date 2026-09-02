@@ -315,6 +315,3 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 fn stack_top(stack: &[*mut *mut ExprASTNode], back: usize) -> *mut *mut ExprASTNode {
     stack[stack.len() - 1 - back]
 }
-
-pub const TAB: ::core::ffi::c_int = 9;
-pub const NL: ::core::ffi::c_int = 10;

@@ -85,6 +85,11 @@ use crate::runtime::estack_sfile;
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;
+use crate::types::BS;
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
@@ -172,11 +177,6 @@ pub const FLUSH_MINIMAL: flush_buffers_T = 0;
 pub const DLG_HOTKEY_CHAR: c_uint = 38;
 pub const DLG_BUTTON_SEP: c_uint = 10;
 pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
-pub const BS: ::core::ffi::c_int = 8;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = 10;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = 27;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false);
 static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =

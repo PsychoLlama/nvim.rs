@@ -14,6 +14,10 @@
 
 #![forbid(unsafe_code)]
 
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use core::ffi::c_int;
 use core::iter;
 

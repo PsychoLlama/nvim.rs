@@ -23,6 +23,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{State, disable_fold_update, got_int, need_diff_redraw};
 use crate::memory::xfree;
 use crate::plines::plines_win_nofold;
+use crate::types::TAB;
 use crate::types::*;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -56,7 +57,6 @@ use level::fold_update_computed;
 use list::{FLine, Fold, FoldList};
 use open_close::check_closed;
 
-pub const TAB: c_int = '\t' as c_int;
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     size: 0,
     capacity: 0,

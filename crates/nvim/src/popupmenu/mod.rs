@@ -1,5 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::api::buffer::nvim_buf_set_lines;
@@ -54,10 +57,10 @@ use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, OptValType,
-    String_0, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T,
-    float_T, handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, linenr_T, lpos_T, pumitem_T, sattr_T,
-    schar_T, size_t, tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
+    AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, String_0, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T, float_T, handle_T,
+    hlf_T, kBoolVarFalse, kBoolVarTrue, linenr_T, lpos_T, pumitem_T, sattr_T, schar_T, size_t,
+    tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -87,7 +90,6 @@ pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexCmdlinePopupMenu: c_uint = 250;
 pub const kZIndexPopupMenu: c_uint = 100;
 pub const kZIndexFloatDefault: c_uint = 50;
-pub const kOptValTypeString: OptValType = 2;
 pub const ECMD_ONE: c_int = 1;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
@@ -97,9 +99,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const NL: c_int = '\n' as c_int;
-pub const CAR: c_int = '\r' as c_int;
-pub const ESC: c_int = '\u{1b}' as c_int;
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement

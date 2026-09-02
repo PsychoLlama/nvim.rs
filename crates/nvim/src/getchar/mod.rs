@@ -63,6 +63,11 @@ use crate::state::{
     state_no_longer_safe,
 };
 use crate::strings::vim_strchr;
+use crate::types::CAR;
+use crate::types::DEL;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, colnr_T, flush_buffers_T,
@@ -150,11 +155,6 @@ pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 fn is_internal_call(channel_id: uint64_t) -> bool {
     channel_id & INTERNAL_CALL_MASK != 0
 }
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
-pub const DEL: ::core::ffi::c_int = 0x7f as ::core::ffi::c_int;
 static curscript: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
 /// Streams to read script (`-s` / `:source!`) input from, innermost last.
 static scriptin: GlobalCell<[FileDescriptor; NSCRIPT as usize]> =

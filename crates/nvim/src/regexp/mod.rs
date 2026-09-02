@@ -18,6 +18,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
+use crate::types::CAR;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::{
     MarkGet, buf_T, colnr_T, int16_t, int64_t, linenr_T, lpos_T, magic_T, proftime_T, regengine,
     regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
@@ -254,10 +258,6 @@ pub(crate) struct regbehind_S {
 pub const BACKTRACKING_ENGINE: c_uint = 1;
 pub const NFA_ENGINE: c_uint = 2;
 pub const INT32_MAX: c_int = 2147483647;
-pub const TAB: c_int = '\t' as c_int;
-pub const NL: c_int = '\n' as c_int;
-pub const CAR: c_int = '\r' as c_int;
-pub const ESC: c_int = '\u{1b}' as c_int;
 pub const REGMAGIC: c_int = 0o234;
 pub const MAX_LIMIT: c_int = 32767 << 16;
 const E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN: &CStr =

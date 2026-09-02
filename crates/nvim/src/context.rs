@@ -36,12 +36,10 @@ use crate::shada::{
 };
 use crate::types::{
     Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptValType, OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone,
-    key_value_pair, size_t, typval_T, typval_vval_union, uint8_t,
+    OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone, key_value_pair,
+    size_t, typval_T, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-
-pub const kOptValTypeString: OptValType = 2;
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;

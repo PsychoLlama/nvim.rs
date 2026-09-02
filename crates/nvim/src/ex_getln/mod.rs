@@ -128,14 +128,18 @@ use crate::state::{
 };
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::AutoEvent;
+use crate::types::CAR;
 use crate::types::CmdIdx;
+use crate::types::ESC;
+use crate::types::NL;
+use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
     Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
-    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, OptValType, ParserHighlight,
+    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues, Set_ptr_t,
     String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T,
     cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
@@ -200,7 +204,6 @@ pub const OPTION_MAGIC_ON: optmagic_T = 1;
 pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
-pub const kOptValTypeString: OptValType = 2;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
@@ -443,10 +446,6 @@ unsafe fn set_put_ptr_t(
     }
     status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
 }
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
-pub const CAR: ::core::ffi::c_int = '\r' as ::core::ffi::c_int;
-pub const ESC: ::core::ffi::c_int = '\u{1b}' as ::core::ffi::c_int;
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

@@ -70,6 +70,7 @@ use crate::syntax::{
     SynFlags, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };
 use crate::terminal::terminal_get_line_attributes;
+use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, NUL, RgbValue,
     SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T,
@@ -106,7 +107,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 /// The most negative `int`, which `draw_virt_text` uses as "this virtual
 /// text has no column yet".
 pub const INT_MIN: ::core::ffi::c_int = ::core::ffi::c_int::MIN;
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
 pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// Draw one buffer line, and answer the window row after it.
 ///

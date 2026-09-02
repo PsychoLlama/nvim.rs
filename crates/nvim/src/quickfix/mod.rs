@@ -110,14 +110,15 @@ use crate::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat};
 use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;
+use crate::types::TAB;
 use crate::types::builders::static_cstring;
 use crate::types::{
     Callback, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptVal,
-    OptValType, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType, aco_save_T, bln_values,
-    buf_T, cleanup_T, colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T, getf_values,
-    linenr_T, list_T, listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T,
-    qfltype_T, regmatch_T, regmmatch_T, regprog_T, scid_T, size_t, time_t, typval_T,
-    typval_vval_union, varnumber_T, vimconv_T,
+    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, VarType, aco_save_T, bln_values, buf_T, cleanup_T,
+    colnr_T, dict_T, dictitem_T, dobuf_action_values, exarg_T, getf_values, linenr_T, list_T,
+    listitem_T, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T, qfline_T, qfltype_T, regmatch_T,
+    regmmatch_T, regprog_T, scid_T, size_t, time_t, typval_T, typval_vval_union, varnumber_T,
+    vimconv_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
@@ -209,8 +210,6 @@ impl From<KeyTaken> for QfError {
     }
 }
 
-pub const kOptValTypeString: OptValType = 2;
-pub const kOptValTypeBoolean: OptValType = 0;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const GETF_SWITCH: getf_values = 4;
 pub const GETF_SETMARK: getf_values = 1;
@@ -247,7 +246,6 @@ pub const QF_GETLIST_NR: c_uint = 4;
 pub const QF_GETLIST_TITLE: c_uint = 1;
 pub const QF_GETLIST_ALL: c_uint = 4095;
 pub const CMDBUFFSIZE: c_int = 1024;
-pub const TAB: c_int = '\t' as c_int;
 pub const INVALID_QFIDX: c_int = -1;
 pub const INVALID_QFBUFNR: c_int = 0;
 /// Messages more than one child reports.

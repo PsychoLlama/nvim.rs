@@ -20,7 +20,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::{AlignTextPos, CharsOption, OptValType, WinSplit, WinStyle};
+use crate::types::{AlignTextPos, CharsOption, WinSplit, WinStyle};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
@@ -46,7 +46,6 @@ pub const kAlignLeft: AlignTextPos = 0;
 pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 pub const kZIndexFloatDefault: c_uint = 50;
-pub const kOptValTypeString: OptValType = 2;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;

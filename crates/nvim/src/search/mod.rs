@@ -77,6 +77,7 @@ use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regexec_multi,
 use crate::state::MODE_SHOWMATCH;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::AutoEvent;
+use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Direction, EvalFuncData, FILE, MotionType, SearchOffset, SearchPattern, cmdarg_T, colnr_T,
@@ -146,4 +147,3 @@ pub const SEARCH_STAT_DEF_TIMEOUT: ::core::ffi::c_int = 40;
 pub const SEARCH_STAT_BUF_LEN: ::core::ffi::c_int = 16;
 pub const LSIZE: ::core::ffi::c_uint = 512;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;

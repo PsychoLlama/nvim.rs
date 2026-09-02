@@ -88,11 +88,12 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::types::AutoEvent;
+use crate::types::NL;
 use crate::types::{
     CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
-    OptValType, String_0, aco_save_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T,
-    exarg_T, garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T,
-    win_T, xdemitcb_t, xdemitconf_t, xpparam_t,
+    String_0, aco_save_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T,
+    garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T,
+    xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
@@ -136,7 +137,6 @@ pub(crate) use self::refine::*;
 pub use self::scroll::*;
 pub use self::update::*;
 pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const kOptValTypeString: OptValType = 2;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
@@ -191,7 +191,6 @@ pub struct linemap_entry_T {
     pub lineoff: ::core::ffi::c_int,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const NL: ::core::ffi::c_int = '\n' as ::core::ffi::c_int;
 pub const DB_COUNT: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 static diff_busy: GlobalCell<bool> = GlobalCell::new(false);
 static diff_need_update: GlobalCell<bool> = GlobalCell::new(false);
