@@ -35,10 +35,8 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_ui_send(lstate: *mut lua_State) ->
             *err_param = c"content".as_ptr().cast_mut();
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         nvim_ui_send(LUA_INTERNAL_CALL, arg_1);
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_ui_send", 1, 0, convert) }

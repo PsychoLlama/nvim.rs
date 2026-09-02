@@ -19,6 +19,8 @@
 //!   callees did to the counter, which is deliberate at the sites that use
 //!   it (a `:silent` that ends at a prompt, an autocmd window that must
 //!   redraw regardless of nesting).
+//! - [`Restore`] — [`Saved`] over a cell that holds something other than an
+//!   `int`: the running Lua state, a window, an option's string.
 //!
 //! Neither constructor is public. The vocabulary is the named constructors
 //! on [`Suppress`], [`Allow`], [`Lock`] and [`Keys`], which is what makes
@@ -76,6 +78,29 @@
 //! Everything else — every counter whose release is the arithmetic inverse
 //! of its bump, taken and released inside one body — is a guard, and the
 //! ratchet's job is to keep it that way.
+//!
+//! # The save/restore pairs, and what the audit found
+//!
+//! `let save = cell.get(); cell.set(x); … cell.set(save)` is the other
+//! shape, and there are ~220 of them with both halves in one body. Every
+//! one was checked for an exit between the overwrite and the restore that
+//! the restore does not cover; three came back, and none of the three is a
+//! bug this crate introduced:
+//!
+//! - **`ops::shift_block`** returns on `bd.is_short` with `State` and
+//!   `p_ri` still overwritten, so one blockwise `<` over ragged lines
+//!   switches the user's `'revins'` off. Upstream does the same and
+//!   restoring it is a user-visible change, so it stays (p24-7).
+//! - **`ex_getln::command_line_insert_reg`** abandons `new_cmdpos` at its
+//!   "no position asked for" value when `aborting()` cuts the register
+//!   insert short, exactly as upstream does. The command line it belonged
+//!   to is being thrown away on that path.
+//! - **`mouse::ins_mousescroll`** returns without putting `curwin` back —
+//!   under a test that has just established `curwin` *is* what was saved.
+//!
+//! The one family where the shape had really leaked was the generated Lua
+//! bindings' `active_lstate`, 181 of them, each repeating the restore in
+//! its failed-call arm; `tools/apigen` emits a [`Restore`] instead.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -159,6 +184,44 @@ impl Saved {
 }
 
 impl Drop for Saved {
+    fn drop(&mut self) {
+        self.cell.set(self.saved);
+    }
+}
+
+/// [`Saved`] over a cell holding something other than an `int`.
+///
+/// The named constructors below exist because a counter's *direction* is
+/// what a reader needs told: `emsg_off += 1` and `msg_silent = 0` are both
+/// "one line of arithmetic on a global" until something says which way they
+/// point. A cell that holds a value rather than a level has no direction to
+/// document -- `Restore::of(&active_lstate, lstate)` already says what it
+/// does -- so this one is used directly, as [`Lock::held`] and
+/// [`Suppress::counter`] are for a counter private to one module.
+///
+/// The save/restore shape is the one where a missed exit is easiest to
+/// write: the value is put back on one line at the bottom of a body that
+/// may also `return` in the middle. Every generated Lua binding had exactly
+/// that shape around `active_lstate`, with the restore repeated in the
+/// failed-call arm.
+#[must_use = "the old value is restored as soon as the guard is dropped"]
+pub struct Restore<T: Copy + 'static> {
+    cell: &'static GlobalCell<T>,
+    saved: T,
+}
+
+impl<T: Copy + 'static> Restore<T> {
+    /// Overwrite `cell` with `value`, and put back what it held when the
+    /// guard is dropped.
+    pub fn of(cell: &'static GlobalCell<T>, value: T) -> Self {
+        Restore {
+            cell,
+            saved: cell.replace(value),
+        }
+    }
+}
+
+impl<T: Copy + 'static> Drop for Restore<T> {
     fn drop(&mut self) {
         self.cell.set(self.saved);
     }

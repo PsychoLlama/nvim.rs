@@ -35,15 +35,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_clear_autocmds(lstate: *mut lua_St
         if err.is_set() {
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         if let Err(e) = unsafe { nvim_clear_autocmds(&raw mut arg_1.dict, arena) } {
-            active_lstate.set(saved_lstate);
             *err = e;
-            return;
         }
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_clear_autocmds", 1, 0, convert) }
@@ -83,21 +79,18 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_create_augroup(lstate: *mut lua_St
             *err_param = c"name".as_ptr().cast_mut();
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         let ret =
             match unsafe { nvim_create_augroup(LUA_INTERNAL_CALL, arg_1, &raw mut arg_2.dict) } {
                 Ok(ret) => ret,
                 Err(e) => {
-                    active_lstate.set(saved_lstate);
                     *err = e;
                     return;
                 }
             };
         // SAFETY: as above.
         unsafe { nlua_push_integer(lstate, ret, PUSH_SPECIAL) };
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_create_augroup", 2, 1, convert) }
@@ -140,22 +133,19 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_create_autocmd(lstate: *mut lua_St
         // SAFETY: the conversion took the references and nothing else
         // releases them.
         let arg_1 = unsafe { ObjectArg::new(arg_1) };
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         let ret = match unsafe {
             nvim_create_autocmd(LUA_INTERNAL_CALL, arg_1.value, &raw mut arg_2.dict, arena)
         } {
             Ok(ret) => ret,
             Err(e) => {
-                active_lstate.set(saved_lstate);
                 *err = e;
                 return;
             }
         };
         // SAFETY: as above.
         unsafe { nlua_push_integer(lstate, ret, PUSH_SPECIAL) };
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_create_autocmd", 2, 1, convert) }
@@ -189,15 +179,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_augroup_by_id(lstate: *mut lua
             *err_param = c"id".as_ptr().cast_mut();
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         if let Err(e) = unsafe { nvim_del_augroup_by_id(arg_1) } {
-            active_lstate.set(saved_lstate);
             *err = e;
-            return;
         }
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_del_augroup_by_id", 1, 0, convert) }
@@ -231,15 +217,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_augroup_by_name(lstate: *mut l
             *err_param = c"name".as_ptr().cast_mut();
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         if let Err(e) = unsafe { nvim_del_augroup_by_name(arg_1) } {
-            active_lstate.set(saved_lstate);
             *err = e;
-            return;
         }
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_del_augroup_by_name", 1, 0, convert) }
@@ -273,15 +255,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_autocmd(lstate: *mut lua_State
             *err_param = c"id".as_ptr().cast_mut();
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         if let Err(e) = unsafe { nvim_del_autocmd(arg_1) } {
-            active_lstate.set(saved_lstate);
             *err = e;
-            return;
         }
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_del_autocmd", 1, 0, convert) }
@@ -324,15 +302,11 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec_autocmds(lstate: *mut lua_Sta
         // SAFETY: the conversion took the references and nothing else
         // releases them.
         let arg_1 = unsafe { ObjectArg::new(arg_1) };
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         if let Err(e) = unsafe { nvim_exec_autocmds(arg_1.value, &raw mut arg_2.dict, arena) } {
-            active_lstate.set(saved_lstate);
             *err = e;
-            return;
         }
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_exec_autocmds", 2, 0, convert) }
@@ -366,20 +340,17 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_autocmds(lstate: *mut lua_Stat
         if err.is_set() {
             return;
         }
-        let saved_lstate = active_lstate.get();
-        active_lstate.set(lstate);
+        let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         let ret = match unsafe { nvim_get_autocmds(&raw mut arg_1.dict, arena) } {
             Ok(ret) => ret,
             Err(e) => {
-                active_lstate.set(saved_lstate);
                 *err = e;
                 return;
             }
         };
         // SAFETY: as above.
         unsafe { nlua_push_array(lstate, ret, PUSH_SPECIAL) };
-        active_lstate.set(saved_lstate);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_get_autocmds", 1, 1, convert) }

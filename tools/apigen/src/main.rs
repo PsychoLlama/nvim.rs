@@ -2906,9 +2906,13 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         false => format!("{name}({args})"),
     };
     // The API function may reach back into Lua; while it runs, this is the
-    // state it reaches into.
-    writeln!(out, "        let saved_lstate = active_lstate.get();").unwrap();
-    writeln!(out, "        active_lstate.set(lstate);").unwrap();
+    // state it reaches into. The guard puts the previous one back on every
+    // way out, including the failed call below.
+    writeln!(
+        out,
+        "        let _lstate = Restore::of(&active_lstate, lstate);"
+    )
+    .unwrap();
     let by_pointer = matches!(f.ret, RetType::Object | RetType::KeyDict(_));
     if f.is_unsafe {
         writeln!(
@@ -2920,8 +2924,8 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let bind = if by_pointer { "mut ret" } else { "ret" };
     if f.fallible {
         // A failed call has no result to hand back and nothing left to
-        // release, so it restores the state it borrowed and leaves the error
-        // for `run` to raise.
+        // release, so it leaves the error for `run` to raise; the guard
+        // above puts the Lua state back.
         match f.ret {
             RetType::Void => writeln!(out, "        if let Err(e) = {call} {{").unwrap(),
             _ => {
@@ -2935,9 +2939,13 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         } else {
             "        "
         };
-        writeln!(out, "        {indent}active_lstate.set(saved_lstate);").unwrap();
         writeln!(out, "        {indent}*err = e;").unwrap();
-        writeln!(out, "        {indent}return;").unwrap();
+        // A void binding has nothing after the block, so the `return` that
+        // used to jump past the restore would now be the body's last
+        // statement -- which clippy calls needless, and is.
+        if f.ret != RetType::Void {
+            writeln!(out, "        {indent}return;").unwrap();
+        }
         match f.ret {
             RetType::Void => writeln!(out, "        }}").unwrap(),
             _ => {
@@ -2980,7 +2988,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(out, "        {push}").unwrap();
     }
-    writeln!(out, "        active_lstate.set(saved_lstate);").unwrap();
     if spec.ret_alloc {
         let free = match &f.ret {
             RetType::String => "api_free_string",
@@ -3338,6 +3345,7 @@ fn generate_lua(
         referenced_names(&["e_fast_api_disabled", "e_textlock", "textlock"]).join(", ")
     ));
     uses.push("use crate::global_cell::ConstTable;".into());
+    uses.push("use crate::guard::Restore;".into());
     uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());
     let types: Vec<String> = referenced_names(&[
         "Arena",
