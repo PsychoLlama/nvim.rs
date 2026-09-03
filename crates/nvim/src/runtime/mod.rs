@@ -26,7 +26,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    arena_array, arena_dict, arena_string, array_add, cstr_as_string, cstr_to_string, dict_put,
+    arena_array, arena_dict, arena_string, array_add, cstr_as_string, dict_put,
 };
 use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
@@ -55,7 +55,6 @@ use crate::main::{
     e_argreq, e_interr, e_invarg, e_norange, ex_nesting_level, global_busy, got_int, listcmd_busy,
     msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
-use crate::map::{map_put_ref_string_int, map_ref_string_int, mh_get_string, mh_put_string};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{
@@ -86,16 +85,16 @@ use crate::profile::{
     time_pop, time_push,
 };
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
+use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
-    EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, MHPutStatus,
-    Map_String_int, MapHash, Object, OptVal, Set_String, String_0, UV_MUTEX_INIT, VAR_DICT,
-    VarLock, XDGVarType, dict_T, estack_T, estack_arg_T, etype_T, exarg_T, expand_T,
-    funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse, linenr_T, list_T, optset_T,
-    proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T,
-    typval_vval_union, ufunc_T, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
+    EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, Object, OptVal,
+    String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_arg_T,
+    etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse, linenr_T,
+    list_T, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
+    ssize_t, typval_T, typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
@@ -120,7 +119,6 @@ pub use self::script::*;
 pub use self::search::*;
 pub use self::source::*;
 
-pub const kMHExisting: MHPutStatus = 0;
 /// `:finish` as a pending control-flow reason, for `report_make_pending`.
 pub const CSTP_FINISH: ::core::ffi::c_int = 32;
 /// `globpath` flags.
@@ -252,71 +250,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_String = Set_String {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<String_0>(),
-};
-pub const MAP_INIT: Map_String_int = Map_String_int {
-    set: SET_INIT,
-    values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe fn set_has_string(mut set: *mut Set_String, mut key: String_0) -> bool {
-    unsafe { mh_get_string(set, key) != MH_TOMBSTONE as uint32_t }
-}
-#[inline]
-unsafe fn set_put_string(
-    mut set: *mut Set_String,
-    mut key: String_0,
-    mut key_alloc: *mut *mut String_0,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = unsafe { mh_put_string(set, key, &raw mut status) };
-    if !key_alloc.is_null() {
-        unsafe { *key_alloc = (*set).keys.offset(k as isize) };
-    }
-    status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-}
-#[inline]
-unsafe fn map_put_string_int(
-    mut map: *mut Map_String_int,
-    mut key: String_0,
-    mut value: ::core::ffi::c_int,
-) {
-    let mut val: *mut ::core::ffi::c_int = unsafe {
-        map_put_ref_string_int(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut String_0>(),
-            ::core::ptr::null_mut::<bool>(),
-        )
-    };
-    unsafe { *val = value };
-}
-#[inline]
-unsafe fn map_get_string_int(
-    mut map: *mut Map_String_int,
-    mut key: String_0,
-) -> ::core::ffi::c_int {
-    // The absent value is `value_init_int`, a `static int` upstream never
-    // writes: zero.
-    let mut k: uint32_t = unsafe { mh_get_string(&raw mut (*map).set, key) };
-    if k == MH_TOMBSTONE as uint32_t {
-        0
-    } else {
-        unsafe { *(*map).values.offset(k as isize) }
-    }
-}
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;

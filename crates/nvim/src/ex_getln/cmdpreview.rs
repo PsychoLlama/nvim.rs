@@ -190,7 +190,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         }};
     }
 
-    let mut saved_bufs: Set_ptr_t = SET_INIT;
+    let mut saved_bufs: IdSet<*mut buf_T> = id_set();
 
     cpinfo.buf_info = CP_INFO_INIT.buf_info;
     cpinfo.win_info = CP_INFO_INIT.win_info;
@@ -204,9 +204,8 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             continue;
         }
 
-        // SAFETY: `saved_bufs` is this frame's set, and the key is a pointer
-        // value the set only ever compares.
-        let seen = unsafe { set_has_ptr_t(&raw mut saved_bufs, buf.raw() as ptr_t) };
+        // The key is a pointer value the set only ever compares.
+        let seen = saved_bufs.contains(&buf.raw());
         if !seen {
             let mut cp_bufinfo = CP_BUF_INFO_INIT;
             cp_bufinfo.buf = buf.raw();
@@ -218,14 +217,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             cp_bufinfo.save_changedtick = buf_get_changedtick(buf);
             cmdpreview_save_undo(&mut cp_bufinfo.undo_info, buf);
             kv_push!(cpinfo.buf_info, cp_bufinfo);
-            // SAFETY: as the `set_has_ptr_t` above.
-            unsafe {
-                set_put_ptr_t(
-                    &raw mut saved_bufs,
-                    buf.raw() as ptr_t,
-                    ::core::ptr::null_mut::<*mut ptr_t>(),
-                )
-            };
+            saved_bufs.insert(buf.raw());
 
             // SAFETY: `buf` is a live buffer of the current tab page.
             u_clearall(buf);
@@ -248,11 +240,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         win.w_onebuf_opt.wo_cuc = 0;
     }
 
-    // C's set_destroy. Its trailing `= SET_INIT` is a dead store on a
-    // local that is never read again, and is left out.
-    // SAFETY: both are `saved_bufs`' own allocations.
-    unsafe { xfree(saved_bufs.keys as *mut ::core::ffi::c_void) };
-    unsafe { xfree(saved_bufs.h.hash as *mut ::core::ffi::c_void) };
+    drop(saved_bufs);
 
     cpinfo.save_hls = p_hls.get() != 0;
     cpinfo.save_cmdmod = cmdmod.with(Clone::clone);

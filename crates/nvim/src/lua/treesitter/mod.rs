@@ -12,16 +12,15 @@ use crate::lua::ffi::{
     luaL_newmetatable, luaL_ref, luaL_register, luaL_unref,
 };
 use crate::main::tslua_query_parse_count;
-use crate::map::{map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, mh_get_cstr_t};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrdup, xstrlcpy};
+use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrlcpy};
 use crate::os::cshim::{__ctype_b_loc, snprintf, strchr};
 use crate::os::time::os_hrtime;
+use crate::registry::{IdMap, id_map};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    LuaRef, Map_cstr_t_ptr_t, MapHash, Set_cstr_t, buf_T, cstr_t, handle_T, int32_t, linenr_T,
-    lua_Integer, lua_Number, lua_State, luaL_Reg, ptr_t, size_t, uint8_t, uint16_t, uint32_t,
-    uint64_t, uv_lib_t,
+    LuaRef, buf_T, handle_T, int32_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
+    size_t, uint8_t, uint16_t, uint32_t, uint64_t, uv_lib_t,
 };
 use ::libc::abort;
 
@@ -358,56 +357,11 @@ pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const TREE_SITTER_LANGUAGE_VERSION: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
 pub const TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION: ::core::ffi::c_int =
     13 as ::core::ffi::c_int;
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_cstr_t = Set_cstr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<cstr_t>(),
-};
-pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
-    set: SET_INIT,
-    values: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe fn set_has_cstr_t(mut set: *mut Set_cstr_t, mut key: cstr_t) -> bool {
-    unsafe { mh_get_cstr_t(set, key) != MH_TOMBSTONE as uint32_t }
-}
-#[inline]
-unsafe fn map_put_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t, mut value: ptr_t) {
-    unsafe {
-        let mut val: *mut ptr_t = map_put_ref_cstr_t_ptr_t(
-            map,
-            key,
-            ::core::ptr::null_mut::<*mut cstr_t>(),
-            ::core::ptr::null_mut::<bool>(),
-        );
-        *val = value;
-    }
-}
-#[inline]
-unsafe fn map_get_cstr_t_ptr_t(mut map: *mut Map_cstr_t_ptr_t, mut key: cstr_t) -> ptr_t {
-    unsafe {
-        let mut k: uint32_t = mh_get_cstr_t(&raw mut (*map).set, key);
-        if k == MH_TOMBSTONE as uint32_t {
-            value_init_ptr_t.get()
-        } else {
-            *(*map).values.offset(k as isize)
-        }
-    }
-}
 pub const TS_META_PARSER: &::core::ffi::CStr = c"treesitter_parser";
 pub const TS_META_TREE: &::core::ffi::CStr = c"treesitter_tree";
 pub const TS_META_NODE: &::core::ffi::CStr = c"treesitter_node";
 pub const TS_META_QUERY: &::core::ffi::CStr = c"treesitter_query";
 pub const TS_META_QUERYCURSOR: &::core::ffi::CStr = c"treesitter_querycursor";
 pub const TS_META_QUERYMATCH: &::core::ffi::CStr = c"treesitter_querymatch";
-static langs: GlobalCell<Map_cstr_t_ptr_t> = GlobalCell::new(MAP_INIT);
+/// The loaded parsers, by language name. Asked, never walked.
+static langs: GlobalCell<IdMap<Box<[u8]>, *mut TSLanguage>> = GlobalCell::new(id_map());

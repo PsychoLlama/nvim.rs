@@ -71,7 +71,6 @@ use crate::main::{
     redrawing_cmdline, restart_edit, search_first_line, search_last_line, search_match_endcol,
     search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing, wim_flags,
 };
-use crate::map::{mh_get_ptr_t, mh_put_ptr_t};
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -115,6 +114,7 @@ use crate::register::{
     cmdline_paste_reg, get_expr_line, get_expr_register, get_spec_reg, is_literal_register,
     valid_yank_reg,
 };
+use crate::registry::{IdSet, id_set};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
     do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,
@@ -138,14 +138,13 @@ use crate::types::{
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
     Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
-    Integer, MHPutStatus, MapHash, MotionType, Object, OptInt, OptVal, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues, Set_ptr_t,
-    String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T,
-    cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
-    expand_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
-    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
-    searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t, uint32_t,
-    uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    Integer, MotionType, Object, OptInt, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
+    ParserPosition, ParserState, RemapValues, String_0, TryState, UndoLink, UndoObjectType,
+    VimState, aco_save_T, buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
+    dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, handle_T, hashtab_T,
+    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T,
+    proftime_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
+    typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -195,7 +194,6 @@ mod prompt;
 pub use self::prompt::*;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
-pub const kMHExisting: MHPutStatus = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
 pub const OPTION_MAGIC_OFF: optmagic_T = 2;
@@ -413,37 +411,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_ptr_t = Set_ptr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe fn set_has_ptr_t(mut set: *mut Set_ptr_t, mut key: ptr_t) -> bool {
-    unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE as uint32_t }
-}
-#[inline]
-unsafe fn set_put_ptr_t(
-    mut set: *mut Set_ptr_t,
-    mut key: ptr_t,
-    mut key_alloc: *mut *mut ptr_t,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = unsafe { mh_put_ptr_t(set, key, &raw mut status) };
-    if !key_alloc.is_null() {
-        unsafe { *key_alloc = (*set).keys.offset(k as isize) };
-    }
-    status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-}
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

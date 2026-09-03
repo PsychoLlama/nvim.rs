@@ -10,12 +10,22 @@
 
 use super::*;
 
-/// The loaded parsers, by language name.
+/// The key a language is registered under: its name plus the terminator.
 ///
-/// The address, because every `map_*`/`set_*` operation the tree has takes
-/// one; it stays a khash (F-P21-9).
-fn lang_map() -> *mut Map_cstr_t_ptr_t {
-    langs.ptr()
+/// # Safety
+/// `name` must be NUL-terminated.
+unsafe fn lang_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
+    // SAFETY: the caller's NUL-terminated name.
+    unsafe { ::core::ffi::CStr::from_ptr(name) }.to_bytes_with_nul()
+}
+
+/// Whether a parser for `name` is loaded.
+///
+/// # Safety
+/// `name` must be NUL-terminated.
+unsafe fn lang_loaded(name: *const ::core::ffi::c_char) -> bool {
+    // SAFETY: the caller's NUL-terminated name.
+    langs.with(|loaded| loaded.contains_key(unsafe { lang_key(name) }))
 }
 
 pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
@@ -27,10 +37,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
         );
-        lua_pushboolean(
-            L,
-            set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t) as ::core::ffi::c_int,
-        );
+        lua_pushboolean(L, lang_loaded(lang_name) as ::core::ffi::c_int);
         1 as ::core::ffi::c_int
     }
 }
@@ -140,7 +147,7 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
                 ::core::ptr::null_mut::<size_t>(),
             );
         }
-        if set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t) {
+        if lang_loaded(lang_name) {
             lua_pushboolean(L, 1);
             return 1 as ::core::ffi::c_int;
         }
@@ -162,11 +169,8 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
                 lang_version,
             );
         }
-        map_put_cstr_t_ptr_t(
-            lang_map(),
-            xstrdup(lang_name) as cstr_t,
-            lang as *mut TSLanguage as ptr_t,
-        );
+        let key: Box<[u8]> = lang_key(lang_name).into();
+        langs.with_mut(|loaded| loaded.insert(key, lang.cast_mut()));
         lua_pushboolean(L, 1);
         1 as ::core::ffi::c_int
     }
@@ -181,12 +185,11 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
         );
-        let mut present: bool = set_has_cstr_t(&raw mut (*lang_map()).set, lang_name as cstr_t);
-        if present {
-            let mut key: cstr_t = ::core::ptr::null::<::core::ffi::c_char>();
-            map_del_cstr_t_ptr_t(lang_map(), lang_name as cstr_t, &raw mut key);
-            xfree(key as *mut ::core::ffi::c_void);
-        }
+        // The name the table owns goes with the entry; the `TSLanguage`
+        // belongs to the library it was loaded from.
+        let present = langs
+            .with_mut(|loaded| loaded.remove(lang_key(lang_name)))
+            .is_some();
         lua_pushboolean(L, present as ::core::ffi::c_int);
         1 as ::core::ffi::c_int
     }
@@ -199,8 +202,9 @@ pub(crate) unsafe fn lang_check(
     unsafe {
         let mut lang_name: *const ::core::ffi::c_char =
             luaL_checklstring(L, index, ::core::ptr::null_mut::<size_t>());
-        let mut lang: *mut TSLanguage =
-            map_get_cstr_t_ptr_t(lang_map(), lang_name as cstr_t) as *mut TSLanguage;
+        let lang = langs
+            .with(|loaded| loaded.get(lang_key(lang_name)).copied())
+            .unwrap_or(::core::ptr::null_mut());
         if lang.is_null() {
             luaL_error(L, c"no such language: %s".as_ptr(), lang_name);
         }

@@ -236,28 +236,32 @@ pub(crate) unsafe fn do_in_cached_path(
     if did_one { OK } else { FAIL }
 }
 
+/// The directories already in the search path, by their bytes: the dedup
+/// `runtime_search_path_build` walks with. Membership only.
+type PathSet = IdSet<Box<[u8]>>;
+
 /// Add `entry` to the search path unless it is already there.
 ///
-/// The set owns the string; the item's `path` borrows it, which is why the
-/// key is upgraded from a borrowed [`cstr_as_string`] to an owned
-/// [`cstr_to_string`] on the way in.
+/// The set holds a copy of the directory only to answer "already seen";
+/// the item's `path` is its own allocation, which the caller frees with
+/// [`runtime_search_path_free`].
 ///
 /// # Safety
-/// `entry` must be NUL-terminated; `search_path` and `rtp_used` must be live.
+/// `entry` must be NUL-terminated and `search_path` must be live.
 unsafe fn push_path(
     search_path: *mut RuntimeSearchPath,
-    rtp_used: *mut Set_String,
+    rtp_used: &mut PathSet,
     entry: *mut c_char,
     after: bool,
     pos_in_rtp: size_t,
 ) -> bool {
-    let mut key_alloc: *mut String_0 = ptr::null_mut();
-    // SAFETY: the caller's live set and vector; `set_put_string` fills
-    // `key_alloc` in with the slot it claimed.
-    if !unsafe { set_put_string(rtp_used, cstr_as_string(entry), &raw mut key_alloc) } {
+    // SAFETY: the caller's NUL-terminated entry.
+    let key: Box<[u8]> = unsafe { CStr::from_ptr(entry) }.to_bytes().into();
+    if !rtp_used.insert(key) {
         return false;
     }
-    unsafe { *key_alloc = cstr_to_string(entry) };
+    // SAFETY: as above.
+    let path = unsafe { xstrdup(entry) };
     let slot = unsafe {
         kv_pushp(
             &mut (*search_path).size,
@@ -267,7 +271,7 @@ unsafe fn push_path(
     };
     unsafe {
         slot.write(SearchPathItem {
-            path: (*key_alloc).data(),
+            path,
             after,
             pack_inserted: false,
             has_lua: None,
@@ -284,13 +288,13 @@ unsafe fn push_path(
 /// As [`push_path`].
 unsafe fn expand_rtp_entry(
     search_path: *mut RuntimeSearchPath,
-    rtp_used: *mut Set_String,
+    rtp_used: &mut PathSet,
     entry: *mut c_char,
     after: bool,
     pos_in_rtp: size_t,
 ) {
-    // SAFETY: the caller's NUL-terminated entry and live set.
-    if unsafe { set_has_string(rtp_used, cstr_as_string(entry)) } {
+    // SAFETY: the caller's NUL-terminated entry.
+    if rtp_used.contains(unsafe { CStr::from_ptr(entry) }.to_bytes()) {
         return;
     }
     if unsafe { *entry } == 0 {
@@ -334,7 +338,7 @@ const START_PATTERNS: [&CStr; 2] = [c"/pack/*/start/*", c"/start/*"];
 /// three vectors must be live.
 unsafe fn expand_pack_entry(
     search_path: *mut RuntimeSearchPath,
-    rtp_used: *mut Set_String,
+    rtp_used: &mut PathSet,
     after_path: *mut CharVec,
     pack_entry: *mut c_char,
     pack_entry_len: size_t,
@@ -423,8 +427,8 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         capacity: 0,
         items: ptr::null_mut(),
     };
-    let mut pack_used: Map_String_int = MAP_INIT;
-    let mut rtp_used: Set_String = SET_INIT;
+    let mut pack_used: IdMap<Box<[u8]>, c_int> = id_map();
+    let mut rtp_used: PathSet = id_set();
     let mut search_path = RuntimeSearchPath {
         size: 0,
         capacity: 0,
@@ -464,7 +468,8 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             )
             .write(the_entry)
         };
-        unsafe { map_put_string_int(&raw mut pack_used, the_entry, 0) };
+        // SAFETY: `the_entry` names `buflen` bytes of 'packpath'.
+        pack_used.insert(unsafe { the_entry.as_bytes() }.into(), 0);
     }
 
     // 'runtimepath' up to its first `after/` entry.
@@ -494,27 +499,21 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         unsafe {
             expand_rtp_entry(
                 &raw mut search_path,
-                &raw mut rtp_used,
+                &mut rtp_used,
                 buf.as_mut_ptr(),
                 false,
                 pos_in_rtp,
             )
         };
-        let h = unsafe {
-            map_ref_string_int(
-                &raw mut pack_used,
-                cstr_as_string(buf.as_ptr()),
-                ptr::null_mut(),
-            )
-        }
-        .cast::<handle_T>();
-        if !h.is_null() {
+        // SAFETY: `buf` is NUL-terminated.
+        let seen = pack_used.get_mut(unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes());
+        if let Some(seen) = seen {
             // Mark this 'packpath' entry as already covered.
-            unsafe { *h += 1 };
+            *seen += 1;
             unsafe {
                 expand_pack_entry(
                     &raw mut search_path,
-                    &raw mut rtp_used,
+                    &mut rtp_used,
                     &raw mut after_path,
                     buf.as_mut_ptr(),
                     buflen,
@@ -533,11 +532,17 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
     for i in 0..pack_entries.size {
         // SAFETY: the frame's own kvec and index.
         let item = unsafe { *pack_entries.items.add(i) };
-        if unsafe { map_get_string_int(&raw mut pack_used, item) } == 0 {
+        // SAFETY: `item` names its own bytes of 'packpath'.
+        if pack_used
+            .get(unsafe { item.as_bytes() })
+            .copied()
+            .unwrap_or(0)
+            == 0
+        {
             unsafe {
                 expand_pack_entry(
                     &raw mut search_path,
-                    &raw mut rtp_used,
+                    &mut rtp_used,
                     &raw mut after_path,
                     item.data(),
                     item.len(),
@@ -554,7 +559,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         unsafe {
             expand_rtp_entry(
                 &raw mut search_path,
-                &raw mut rtp_used,
+                &mut rtp_used,
                 dir,
                 true,
                 sentinel_pos_in_rtp,
@@ -580,7 +585,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         unsafe {
             expand_rtp_entry(
                 &raw mut search_path,
-                &raw mut rtp_used,
+                &mut rtp_used,
                 buf.as_mut_ptr(),
                 path_is_after(buf.as_mut_ptr(), buflen),
                 pos_in_rtp,
@@ -588,9 +593,10 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         };
     }
 
-    // The strings in `pack_entries` are not owned; `rtp_used`'s keys were
-    // handed to `search_path`'s items, which is what the caller gets.
-    // SAFETY: all four are this frame's own allocations.
+    // The strings in `pack_entries` are not owned, and the two tables hold
+    // only copies -- `search_path`'s items own theirs, which is what the
+    // caller gets.
+    // SAFETY: both kvecs are this frame's own allocations.
     unsafe {
         kv_destroy(
             &mut pack_entries.size,
@@ -605,14 +611,6 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             &mut after_path.items,
         )
     };
-    unsafe { xfree(pack_used.set.keys.cast()) };
-    unsafe { xfree(pack_used.set.h.hash.cast()) };
-    pack_used.set = SET_INIT;
-    unsafe { xfree(pack_used.values.cast()) };
-    pack_used.values = ptr::null_mut();
-    unsafe { xfree(rtp_used.keys.cast()) };
-    unsafe { xfree(rtp_used.h.hash.cast()) };
-
     search_path
 }
 
