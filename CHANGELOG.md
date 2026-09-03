@@ -25,6 +25,13 @@ and this project adheres to [CalVer](https://calver.org/).
   lists. `:args`, `:argadd`, `:argdelete`, `:diffupdate` with
   `'diffopt'`+=`inline:`, `:loadkeymap`, `:profile`, `:source`, `q:` and
   `:breaklist` all behave as before, in the same order.
+- Rewrote the hash tables the editor files objects in by name or by id:
+  namespaces, autocommand groups, the loaded treesitter parsers, the
+  'runtimepath'/'packpath' search path, the ShaDa file's marks, variables
+  and buffer memos, a buffer's extmark namespaces, a window's visible ones,
+  and the marktree's mark index. `nvim_get_namespaces()` and `:augroup`
+  still list in creation order, and a ShaDa write still cuts the same files
+  at `'shada'`'s `'N`.
 
 ## [2026.09.02-bc9e0f515a]
 
