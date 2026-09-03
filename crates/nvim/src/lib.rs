@@ -61,7 +61,7 @@ pub(crate) mod file_search;
 pub mod fileio;
 pub(crate) mod flags;
 pub mod fold;
-pub(crate) mod fuzzy;
+pub mod fuzzy;
 pub mod garray;
 pub mod getchar;
 pub mod global_cell;

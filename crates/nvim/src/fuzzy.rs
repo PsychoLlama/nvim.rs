@@ -55,9 +55,9 @@ use crate::types::{
 
 /// The most characters of a pattern or a candidate that are looked at, and
 /// so the most match positions that can be reported.
-pub(crate) const FUZZY_MATCH_MAX_LEN: usize = 1024;
+pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
 /// The score of a candidate the pattern does not match at all.
-pub(crate) const FUZZY_SCORE_NONE: c_int = c_int::MIN;
+pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
 const TV_UNKNOWN: typval_T = typval_T {
@@ -403,7 +403,7 @@ fn fuzzy_match_words(
 /// # Safety
 /// `str` and `pat_arg` must be NUL-terminated strings, and `matches` must
 /// point at `max_matches` writable entries.
-pub(crate) unsafe fn fuzzy_match(
+pub unsafe fn fuzzy_match(
     str: *const c_char,
     pat_arg: *const c_char,
     matchseq: bool,

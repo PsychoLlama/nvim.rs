@@ -22,6 +22,7 @@ mod fileio_names;
 mod fold;
 mod fpconv;
 mod fs;
+mod fuzzy;
 mod garray;
 mod hashtab;
 mod indent;

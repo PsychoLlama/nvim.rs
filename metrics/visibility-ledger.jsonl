@@ -134,6 +134,9 @@
 {"path":"neovim::fileio::vim_tempname","kind":"fn","file":"crates/nvim/src/fileio/tempfile.rs","tests":["crates/nvim/tests/unit/tempfile.rs"]}
 {"path":"neovim::fold::fold_T","kind":"struct","file":"crates/nvim/src/fold/mod.rs","tests":["crates/nvim/tests/unit/fold.rs"]}
 {"path":"neovim::fold::adjust::fold_mark_adjust_recurse","kind":"fn","file":"crates/nvim/src/fold/adjust.rs","tests":["crates/nvim/tests/unit/fold.rs"]}
+{"path":"neovim::fuzzy::FUZZY_MATCH_MAX_LEN","kind":"const","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}
+{"path":"neovim::fuzzy::FUZZY_SCORE_NONE","kind":"const","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}
+{"path":"neovim::fuzzy::fuzzy_match","kind":"fn","file":"crates/nvim/src/fuzzy.rs","tests":["crates/nvim/tests/unit/fuzzy.rs"]}
 {"path":"neovim::garray::ga_append","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs"]}
 {"path":"neovim::garray::ga_clear","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/spellfile.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::garray::ga_clear_strings","kind":"fn","file":"crates/nvim/src/garray.rs","tests":["crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/users.rs"]}
