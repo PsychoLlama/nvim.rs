@@ -122,7 +122,7 @@ use crate::mbyte::{
     utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{gchar_pos, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
-use crate::memory::{strnequal, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{strnequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, msg_check_for_delay};
 use crate::mouse::{ins_mouse, ins_mousescroll, setmouse};
 use crate::r#move::{
@@ -172,7 +172,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
     PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, colnr_T, int32_t,
-    int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, ssize_t, uint8_t, varnumber_T,
+    int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, uint8_t, varnumber_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -239,22 +239,12 @@ pub(crate) struct InsertState {
     pub replaceState: ::core::ffi::c_int,
     pub nomove: bool,
 }
-pub(crate) struct ReplaceStack {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut ::core::ffi::c_char,
-}
 pub(crate) const MSCR_RIGHT: ::core::ffi::c_int = -2;
 pub(crate) const MSCR_LEFT: ::core::ffi::c_int = -1;
 pub(crate) const MSCR_UP: ::core::ffi::c_int = 1;
 pub(crate) const MSCR_DOWN: ::core::ffi::c_int = 0;
 pub(crate) const YREG_PASTE: ::core::ffi::c_int = 0;
 pub(crate) const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub(crate) const REPLACE_STACK_EMPTY: ReplaceStack = ReplaceStack {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
 pub(crate) const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub(crate) const TAB: ::core::ffi::c_int = '\t' as ::core::ffi::c_int;
@@ -301,7 +291,12 @@ pub(crate) enum KeepUndo {
 
 static dont_sync_undo: GlobalCell<KeepUndo> = GlobalCell::new(KeepUndo::No);
 static o_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static replace_stack: GlobalCell<ReplaceStack> = GlobalCell::new(REPLACE_STACK_EMPTY);
+/// The Replace-mode stack of overwritten bytes -- see [`replace`].
+///
+/// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only thing
+/// the kvec provided, every operation on it is an insert or a removal in the
+/// middle, and nothing outside [`replace`] may touch it.
+static replace_stack: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 /// What the last `edit_putchar` did to the screen cell it wrote over, and so
 /// how `edit_unputchar` has to take it back.
 #[derive(Copy, Clone, PartialEq, Eq)]

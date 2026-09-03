@@ -144,9 +144,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
     stop_redo_ins();
 
     // Abandon the replace stack (this reinitialises it).
-    // SAFETY: the replace stack is a live global that owns its `items`.
-    unsafe { xfree((*replace_stack_ref()).items.cast()) };
-    unsafe { *replace_stack_ref() = REPLACE_STACK_EMPTY };
+    replace_stack_clear();
 
     // Save the inserted text for a later `.`/CTRL-@/CTRL-A.  Not when
     // `restart_edit` was set and nothing was inserted, or `CTRL-O w`

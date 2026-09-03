@@ -315,7 +315,7 @@ fn tab_spaces_to_tabs() {
             // Each deleted space had an entry on the replace stack.
             if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
                 for _ in 0..i {
-                    unsafe { replace_join(repl_off) };
+                    replace_join(repl_off);
                 }
             }
         }

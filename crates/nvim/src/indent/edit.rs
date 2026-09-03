@@ -441,7 +441,7 @@ unsafe fn fix_replace_stack(mut start_col: c_int) {
     // SAFETY: the caller's contract.
     let win = curwin.get();
     while start_col > unsafe { (*win).w_cursor.col } as c_int {
-        unsafe { replace_join(0) }; // remove a NUL from the replace stack
+        replace_join(0); // remove a NUL from the replace stack
         start_col -= 1;
     }
     while start_col < unsafe { (*win).w_cursor.col } as c_int {
