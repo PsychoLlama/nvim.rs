@@ -7,6 +7,16 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the growable buffers the editor builds text and match lists in:
+  `:execute`/`:echomsg`/`:echoerr`, `string()`, `json_encode()`, `:echo` of
+  a container, `substitute()`, `tr()`, `state()`, `winrestcmd()`, the
+  `assert_*()` messages appended to `v:errors`, `print()` from Lua, the
+  `@:` and `<Cmd>` replay paths, and the completion of shell commands,
+  mappings, user functions and `:s` patterns. Every one of them answers the
+  same bytes, in the same order, as before.
+
 ## [2026.09.02-bc9e0f515a]
 
 ### Changed
