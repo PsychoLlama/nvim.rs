@@ -20,37 +20,29 @@ use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// Whether `mp`'s LHS is exactly the `len` bytes at `word`, in a mode that is
+/// Whether `mp`'s LHS is exactly the bytes at `word`, in a mode that is
 /// current.
 ///
 /// The stored LHS may carry `K_SPECIAL` escapes, which the text in the buffer
 /// does not, so it is unescaped into a scratch copy first.
-///
-/// # Safety
-/// `mp` must be a live mapblock and `word` `len` readable bytes.
-unsafe fn abbr_matches(mp: Mb, word: *const c_char, len: c_int) -> bool {
-    let keys = mp.m_keys;
-    let mut qlen = mp.m_keylen;
-    let mut q = keys;
-    // SAFETY: `m_keys` is NUL-terminated; the unescaped copy is freed below.
-    if !unsafe { strchr(keys, K_SPECIAL) }.is_null() {
-        // SAFETY: as above.
-        unsafe {
-            q = xstrdup(keys);
-            vim_unescape_ks(q);
-            qlen = cstr::bytes_at(q).len() as c_int;
-        }
+fn abbr_matches(mp: Mb, word: &[u8]) -> bool {
+    if mp.m_mode & State.get() == 0 {
+        return false;
     }
-    // SAFETY: the caller's promise — `word` is readable for `len` bytes — and
-    // `q` is NUL-terminated, so `strncmp` stops inside both.
-    let matched = mp.m_mode & State.get() != 0
-        && qlen == len
-        && unsafe { cstr::prefix_eq(q, word, len as size_t) };
-    if q != keys {
-        // SAFETY: the scratch copy made above, freed once.
-        unsafe { xfree(q.cast()) };
+    let keys = mp.keys();
+    if !keys.contains(&(K_SPECIAL as u8)) {
+        return keys == word;
     }
-    matched
+    // `vim_unescape_ks` rewrites in place and only ever shortens, so a
+    // NUL-terminated copy is enough room.
+    let mut scratch = mp.m_keys.as_bytes_with_nul().to_vec();
+    // SAFETY: `scratch` is NUL-terminated and outlives the call, which only
+    // rewrites what is already there.
+    let unescaped = unsafe {
+        vim_unescape_ks(scratch.as_mut_ptr().cast());
+        cstr::bytes_at(scratch.as_ptr().cast())
+    };
+    unescaped == word
 }
 
 /// Check for an abbreviation before `ptr[col]` and, if there is one, feed its
@@ -85,26 +77,27 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     // all of them must not be, but never white space; if it ends in a
     // non-keyword character anything but white space is accepted.
     let mut clen = 1; // length of the word in characters
-    let mut scol; // starting column of the abbreviation
-    // SAFETY: the caller's promise — `ptr` is readable for `col` bytes, and
-    // `mb_prevptr`/`utfc_ptr2len` stay inside `ptr..ptr+col` given that.
-    unsafe {
-        let mut is_id = true;
-        let mut p = mb_prevptr(ptr, ptr.offset(col as isize));
-        let vim_abbr = !vim_iswordp(p);
-        if !vim_abbr && p > ptr {
-            is_id = vim_iswordp(mb_prevptr(ptr, p));
-        }
-        while p > ptr.offset(mincol as isize) {
-            p = mb_prevptr(ptr, p);
-            if ascii_isspace(c_int::from(*p)) || (!vim_abbr && is_id != vim_iswordp(p)) {
-                p = p.offset(utfc_ptr2len(p) as isize);
-                break;
-            }
-            clen += 1;
-        }
-        scol = p.offset_from(ptr) as c_int;
+    // SAFETY (every region below): the caller's promise — `ptr` is readable
+    // for `col` bytes, and `mb_prevptr`/`utfc_ptr2len`/`vim_iswordp` stay
+    // inside `ptr..ptr+col` given that.
+    let start = unsafe { ptr.offset(mincol as isize) };
+    let mut p = unsafe { mb_prevptr(ptr, ptr.offset(col as isize)) };
+    let vim_abbr = !unsafe { vim_iswordp(p) };
+    let mut is_id = true;
+    if !vim_abbr && p > ptr {
+        is_id = unsafe { vim_iswordp(mb_prevptr(ptr, p)) };
     }
+    while p > start {
+        p = unsafe { mb_prevptr(ptr, p) };
+        let stop = unsafe { ascii_isspace(c_int::from(*p)) }
+            || (!vim_abbr && is_id != unsafe { vim_iswordp(p) });
+        if stop {
+            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+            break;
+        }
+        clen += 1;
+    }
+    let mut scol = unsafe { p.offset_from(ptr) } as c_int;
     if scol < mincol {
         scol = mincol;
     }
@@ -119,10 +112,10 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     let mut found = None;
     // SAFETY: `curbuf` is set from startup to exit.
     let cur = unsafe { Buf::current() };
-    let matches = |mp: Mb| {
-        // SAFETY: `word` names the `len` bytes located just above.
-        unsafe { abbr_matches(mp, word, len) }.then_some(mp)
-    };
+    // SAFETY: `mincol <= scol < col`, so this names `len` bytes of the
+    // caller's text.
+    let word = unsafe { core::slice::from_raw_parts(word.cast::<u8>(), len as usize) };
+    let matches = |mp: Mb| abbr_matches(mp, word).then_some(mp);
     for table in [MapTable::Buffer(cur), MapTable::Global] {
         // SAFETY: the abbrlists are live, and `abbr_matches` only reads them.
         let hit = unsafe { map_walk(table, true, matches) };
@@ -168,19 +161,17 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
                 let newlen = utf_char2bytes(c, at) as usize;
                 tb[j + newlen] = NUL as u8;
                 // Need to escape K_SPECIAL.
-                let escaped = vim_strsave_escape_ks(at);
-                if !escaped.is_null() {
-                    let newlen = cstr::bytes_at(escaped).len();
-                    ptr::copy(escaped.cast::<u8>(), tb.as_mut_ptr().add(j), newlen);
-                    j += newlen;
-                    xfree(escaped.cast());
+                let escaped = COwned::new(vim_strsave_escape_ks(at));
+                if let Some(bytes) = escaped.as_bytes() {
+                    tb[j..j + bytes.len()].copy_from_slice(bytes);
+                    j += bytes.len();
                 }
             }
         }
         tb[j] = NUL as u8;
         // Insert the last typed char.
         let keys = tb.as_mut_ptr().cast();
-        let silent = mp.m_silent != 0;
+        let silent = mp.m_silent;
         // SAFETY: `tb` is NUL-terminated at `j` and outlives the call, which
         // copies out of it.
         let _ = unsafe { ins_typebuf(keys, 1, 0, true, silent) };
@@ -188,26 +179,31 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
 
     // Copy the values out here: eval_map_expr() may make "mp" invalid.
     let noremap = mp.m_noremap;
-    let silent = mp.m_silent != 0;
-    let expr = mp.m_expr != 0;
+    let silent = mp.m_silent;
+    let expr = mp.m_expr;
 
-    let s = if expr {
+    // The RHS bundle is held across the insert: an `<expr>` evaluation can
+    // redefine the abbreviation, and the `Rc` is what makes the stored text
+    // outlive that.
+    let rhs = Rc::clone(&mp.m_rhs);
+    let evaluated = if expr {
         // SAFETY: `mp` is still linked — nothing above can have run Vimscript.
         unsafe { eval_map_expr(mp, c) }
     } else {
-        mp.m_str
+        None
     };
-    if !s.is_null() {
+    if let Some(s) = if expr {
+        evaluated.as_ref()
+    } else {
+        Some(&rhs.str)
+    } {
         // Insert the "to" string.
-        // SAFETY: `s` is NUL-terminated, either the mapping's own RHS or the
-        // allocation `eval_map_expr` handed back, freed just below.
+        // SAFETY: `s` is NUL-terminated by `MapStr`'s own invariant and
+        // outlives the call, which copies out of it.
         unsafe {
-            let _ = ins_typebuf(s, noremap, 0, true, silent);
+            let _ = ins_typebuf(s.as_mut_ptr(), noremap, 0, true, silent);
             // No abbreviation for these chars.
-            typeahead().add_no_abbr_cnt(cstr::bytes_at(s).len() as c_int + j as c_int + 1);
-            if expr {
-                xfree(s.cast());
-            }
+            typeahead().add_no_abbr_cnt(s.len() as c_int + j as c_int + 1);
         }
     }
 
@@ -230,21 +226,14 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
 ///
 /// # Safety
 /// `mp` must be a live mapblock, and `curwin` a live window.
-pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
-    let luaref = mp.m_luaref;
+pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
+    let luaref = mp.luaref();
     // Remove the escaping of K_SPECIAL: `m_str` is in the format used for
-    // typeahead, not the one the expression is written in.
-    let expr = if luaref == LUA_NOREF {
-        // SAFETY: the caller's promise — `mp` is a live mapblock, so `m_str`
-        // is its NUL-terminated RHS.  The copy is freed below.
-        unsafe {
-            let expr = xstrdup(mp.m_str);
-            vim_unescape_ks(expr);
-            expr
-        }
-    } else {
-        ptr::null_mut()
-    };
+    // typeahead, not the one the expression is written in.  `vim_unescape_ks`
+    // rewrites in place and only shortens, so the copy is room enough.
+    let mut expr = mp.m_rhs.str.as_bytes_with_nul().to_vec();
+    // SAFETY: `expr` is this frame's own NUL-terminated buffer.
+    unsafe { vim_unescape_ks(expr.as_mut_ptr().cast()) };
     let replace_keycodes = mp.m_replace_keycodes;
 
     // Forbid changing text or using ":normal", which rules out most of the bad
@@ -257,8 +246,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();
 
-    let mut p: *mut c_char = ptr::null_mut();
-    if luaref != LUA_NOREF {
+    let answer = if luaref != LUA_NOREF {
         let mut err = Error::none();
         // SAFETY: `luaref` is the mapping's own reference, and `err` is a
         // live, initialised slot for the call's error.
@@ -272,12 +260,16 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
                 &mut err,
             )
         };
-        if let Object::String(s) = ret {
-            // SAFETY: the string the call handed back.
-            p = unsafe { string_to_cstr(s) };
-        }
-        // SAFETY: the object is ours to release once its string is copied.
-        unsafe { api_free_object(ret) };
+        // SAFETY: the string the call handed back, then the object it came
+        // out of, which is ours to release.
+        let answer = unsafe {
+            let answer = match ret {
+                Object::String(s) => COwned::new(string_to_cstr(s)),
+                _ => COwned::new(ptr::null_mut()),
+            };
+            api_free_object(ret);
+            answer
+        };
         if err.is_set() {
             // SAFETY: `err.msg` is the NUL-terminated text the call set.
             unsafe {
@@ -285,13 +277,12 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
                 err.clear();
             }
         }
+        answer
     } else {
-        // SAFETY: `expr` is the unescaped copy made above, freed here.
-        unsafe {
-            p = eval_to_string(expr, false, false);
-            xfree(expr.cast());
-        }
-    }
+        // SAFETY: `expr` is the unescaped copy made above, and the answer is
+        // the evaluation's own allocation.
+        unsafe { COwned::new(eval_to_string(expr.as_mut_ptr().cast(), false, false)) }
+    };
 
     drop(locked);
     // SAFETY: `curwin` is live again — the evaluation above cannot close the
@@ -300,28 +291,34 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> *mut c_char {
     msg_col.set(save_msg_col);
     msg_row.set(save_msg_row);
 
-    if p.is_null() {
-        return ptr::null_mut();
-    }
-
-    let mut res: *mut c_char = ptr::null_mut();
-    if replace_keycodes {
-        let out = &raw mut res;
-        let cpo = p_cpo.get();
-        let dolt = REPTERM_DO_LT as c_int;
-        let simplify = ptr::null_mut();
-        // SAFETY: `p` is the NUL-terminated result of the evaluation, and
-        // `res` a live slot for the allocation `replace_termcodes` makes.
-        unsafe {
-            let len = cstr::bytes_at(p).len();
-            replace_termcodes(p, len, out, 0, dolt, simplify, cpo);
-        }
-    } else {
+    let bytes = answer.as_bytes()?;
+    if !replace_keycodes {
         // Escape K_SPECIAL so the result can be used as typeahead.
-        // SAFETY: as above — `p` is NUL-terminated.
-        res = unsafe { vim_strsave_escape_ks(p) };
+        // SAFETY: `answer` is the evaluation's NUL-terminated result, and the
+        // escaped copy is the guard's.
+        let escaped =
+            unsafe { COwned::new(vim_strsave_escape_ks(bytes.as_ptr().cast_mut().cast())) };
+        return escaped.to_map_str();
     }
-    // SAFETY: `p` is the evaluation's own allocation, freed once.
-    unsafe { xfree(p.cast()) };
-    res
+    let mut res: *mut c_char = ptr::null_mut();
+    let out = &raw mut res;
+    let cpo = p_cpo.get();
+    let dolt = REPTERM_DO_LT as c_int;
+    let simplify = ptr::null_mut();
+    // SAFETY: as above; `res` is a live slot for the allocation
+    // `replace_termcodes` makes, which the guard releases.
+    let replaced = unsafe {
+        let at = replace_termcodes(
+            bytes.as_ptr().cast(),
+            bytes.len(),
+            out,
+            0,
+            dolt,
+            simplify,
+            cpo,
+        );
+        let _owned = COwned::new(res);
+        MapStr::new(cstr::bytes_at(at))
+    };
+    Some(replaced)
 }

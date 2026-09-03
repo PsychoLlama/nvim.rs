@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str_len;
 use crate::swmsg;
 use crate::types::NUL;
@@ -65,24 +66,6 @@ pub(crate) fn langmap_init() {
     LANGMAP_MULTIBYTE.with_mut(Vec::clear);
 }
 
-/// Advance `p` past one character, honouring a `\` escape.
-///
-/// # Safety
-/// `p` must point into a NUL-terminated string, at a byte that is not the NUL.
-unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
-    // SAFETY: the caller's promise -- `p` is on a non-NUL byte of a
-    // NUL-terminated string, so the byte after it is readable, and
-    // `utfc_ptr2len` never steps past the NUL.
-    unsafe {
-        let p = if *p == b'\\' as c_char && *p.add(1) != 0 {
-            p.add(1)
-        } else {
-            p
-        };
-        p.add(utfc_ptr2len(p) as usize)
-    }
-}
-
 /// Called when the `'langmap'` option is set; the language map can be changed
 /// at any time.
 ///
@@ -90,91 +73,115 @@ unsafe fn skip_escaped_char(p: *mut c_char) -> *mut c_char {
 /// `aAbBcC` names them one after the other, and `abc;ABC` gives all the
 /// `from` characters and then all the `to` characters.
 ///
+/// Upstream walks the option with two `char *`; here they are two indices
+/// into the same slice, and the three pointer primitives it needs are the
+/// closures below — the whole unchecked surface of the parse.
+///
 /// # Safety
 /// The frame's `os_errbuf` must have room for `os_errbuflen` bytes.
 pub unsafe fn did_set_langmap(args: &mut optset_T) -> Option<&CStr> {
     let opts = &*args;
     langmap_init(); // back to a one-to-one map
-    let mut p = p_langmap.get();
-    // SAFETY (this body): `p` and `p2` walk `'langmap'`, which is a live
-    // NUL-terminated option string; every step below is guarded by the byte
-    // it just read being non-NUL, so neither pointer leaves the string.
-    loop {
-        if unsafe { *p } == 0 {
-            break;
-        }
-        // Find the ';' of an "abc;ABC" pair, if this comma-separated
-        // group has one; p2 then walks the second half alongside p.
-        let mut p2 = p;
-        loop {
-            let c = unsafe { *p2 };
-            if c == 0 || c == b',' as c_char || c == b';' as c_char {
-                break;
-            }
-            p2 = unsafe { skip_escaped_char(p2) };
-        }
-        p2 = if unsafe { *p2 } == b';' as c_char {
-            unsafe { p2.add(1) } // "abcd;ABCD" form, p2 points at A
+    let base = p_langmap.get();
+    // SAFETY: `p_langmap` holds the live, NUL-terminated `'langmap'`.
+    let opt = unsafe { cstr::bytes_at(base) };
+    // The byte at `at`, with the option's own NUL past the end.
+    let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
+    // SAFETY: `at` is an index inside the option, so `base.add(at)` is a byte
+    // of it and both callees stop at the NUL.
+    let char_at = |at: usize| unsafe { utf_ptr2char(base.add(at)) };
+    // SAFETY: as above.
+    let len_at = |at: usize| unsafe { utfc_ptr2len(base.add(at)) } as usize;
+    // Advance past one character, honouring a `\` escape.
+    let skip = |at: usize| {
+        let at = if byte(at) == b'\\' && byte(at + 1) != 0 {
+            at + 1
         } else {
-            core::ptr::null_mut() // "aAbBcCdD" form
+            at
         };
+        at + len_at(at)
+    };
+    let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
+    // The error texts, which both render into the caller's `os_errbuf`.
+    //
+    // # Safety
+    // `fmt` must hold exactly one `%s`, which `arg` fills.
+    let fail = |fmt: &'static CStr, arg: *const c_char| {
+        // SAFETY: the caller's promise — `os_errbuf` has room for `os_errbuflen`
+        // bytes — the closure's, that the format's one conversion is `arg`, and
+        // `snprintf` terminates what it wrote.
+        Some(unsafe {
+            snprintf(errbuf, errlen, gettext(fmt).as_ptr(), arg);
+            CStr::from_ptr(errbuf)
+        })
+    };
+
+    let mut at = 0;
+    while byte(at) != 0 {
+        // Find the ';' of an "abc;ABC" pair, if this comma-separated
+        // group has one; `alt` then walks the second half alongside `at`.
+        let mut end = at;
+        while !matches!(byte(end), 0 | b',' | b';') {
+            end = skip(end);
+        }
+        let mut alt = (byte(end) == b';').then(|| end + 1);
 
         loop {
-            let c = unsafe { *p };
-            if c == 0 {
+            if byte(at) == 0 {
                 break;
             }
-            if c == b',' as c_char {
-                p = unsafe { p.add(1) };
+            if byte(at) == b',' {
+                at += 1;
                 break;
             }
-            if c == b'\\' as c_char && unsafe { *p.add(1) } != 0 {
-                p = unsafe { p.add(1) };
+            if byte(at) == b'\\' && byte(at + 1) != 0 {
+                at += 1;
             }
-            let from = unsafe { utf_ptr2char(p) };
-            let from_ptr: *const c_char = p;
+            let (from, from_at) = (char_at(at), at);
             let mut to = NUL;
-            let mut to_ptr: *const c_char = c"".as_ptr();
-            if p2.is_null() {
-                p = unsafe { p.add(utfc_ptr2len(p) as usize) };
-                if unsafe { *p } != b',' as c_char {
-                    if unsafe { *p } == b'\\' as c_char {
-                        p = unsafe { p.add(1) };
+            let mut to_at = None;
+            match alt {
+                None => {
+                    at += len_at(at);
+                    if byte(at) != b',' {
+                        if byte(at) == b'\\' {
+                            at += 1;
+                        }
+                        to_at = Some(at);
+                        to = char_at(at);
                     }
-                    to_ptr = p;
-                    to = unsafe { utf_ptr2char(to_ptr) };
                 }
-            } else if unsafe { *p2 } != b',' as c_char {
-                if unsafe { *p2 } == b'\\' as c_char {
-                    p2 = unsafe { p2.add(1) };
+                Some(mut second) if byte(second) != b',' => {
+                    if byte(second) == b'\\' {
+                        second += 1;
+                        alt = Some(second);
+                    }
+                    to_at = Some(second);
+                    to = char_at(second);
                 }
-                to_ptr = p2;
-                to = unsafe { utf_ptr2char(to_ptr) };
+                Some(_) => {}
             }
             if to == NUL {
-                let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
-                let fmt = gettext(c"E357: 'langmap': Matching character missing for %s");
-                // SAFETY: `os_errbuf` has room for `os_errbuflen` bytes, the
-                // format's one conversion is the rendering below it, and
-                // `snprintf` terminates what it wrote.
-                return Some(unsafe {
-                    snprintf(errbuf, errlen, fmt.as_ptr(), transchar(from).as_ptr());
-                    CStr::from_ptr(errbuf)
-                });
+                let missing = c"E357: 'langmap': Matching character missing for %s";
+                // SAFETY: `transchar` answers a NUL-terminated rendering that
+                // outlives the call.
+                return fail(missing, unsafe { transchar(from) }.as_ptr());
             }
 
             if from >= 256 {
                 langmap_set_entry(from, to);
             } else {
                 if to > UCHAR_MAX {
+                    let to_at = to_at.unwrap_or(from_at);
                     // SAFETY: both `%.*s` pairs are a length and the bytes it
                     // counts, taken off the option string itself.
                     unsafe {
+                        let (a, b) = (base.add(from_at), base.add(to_at));
                         swmsg!(
                             true,
                             "'langmap': Mapping from {} to {} will not work properly",
-                            c_str_len(from_ptr, utf_ptr2len(from_ptr) as usize),
-                            c_str_len(to_ptr, utf_ptr2len(to_ptr) as usize)
+                            c_str_len(a, utf_ptr2len(a) as usize),
+                            c_str_len(b, utf_ptr2len(b) as usize)
                         );
                     }
                 }
@@ -183,28 +190,24 @@ pub unsafe fn did_set_langmap(args: &mut optset_T) -> Option<&CStr> {
             }
 
             // Advance to the next pair.
-            p = unsafe { p.add(utfc_ptr2len(p) as usize) };
-            if p2.is_null() {
-                continue;
-            }
-            p2 = unsafe { p2.add(utfc_ptr2len(p2) as usize) };
-            if unsafe { *p } != b';' as c_char {
+            at += len_at(at);
+            let Some(second) = alt else { continue };
+            let second = second + len_at(second);
+            alt = Some(second);
+            if byte(at) != b';' {
                 continue;
             }
             // The first half is exhausted; the rest of this group is
-            // whatever p2 has left, which must be a comma or the end.
-            p = p2;
-            if unsafe { *p } != 0 {
-                if unsafe { *p } != b',' as c_char {
-                    let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
-                    let fmt = gettext(c"E358: 'langmap': Extra characters after semicolon: %s");
-                    // SAFETY: as the `E357` message above.
-                    return Some(unsafe {
-                        snprintf(errbuf, errlen, fmt.as_ptr(), p);
-                        CStr::from_ptr(errbuf)
-                    });
+            // whatever the second half has left, which must be a comma or
+            // the end.
+            at = second;
+            if byte(at) != 0 {
+                if byte(at) != b',' {
+                    let extra = c"E358: 'langmap': Extra characters after semicolon: %s";
+                    // SAFETY: `at` is an index inside the option string.
+                    return fail(extra, unsafe { base.add(at) });
                 }
-                p = unsafe { p.add(1) };
+                at += 1;
             }
             break;
         }

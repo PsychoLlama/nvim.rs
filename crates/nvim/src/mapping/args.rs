@@ -13,13 +13,9 @@ use super::*;
 use crate::cstr;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, NUL};
+use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
 use core::ptr;
-
-/// Size of a [`MapArguments`] LHS buffer: `MAXMAPLEN` characters plus a NUL.
-const MAXMAPLEN_BUF: size_t = MAXMAPLEN as size_t + 1;
 
 /// The modes `:map!` covers.
 const MASK_BANG: c_int = MODE_INSERT | MODE_CMDLINE;
@@ -77,18 +73,18 @@ pub(crate) fn map_mode_to_chars(mode: c_int) -> [c_char; 7] {
 }
 
 /// Replace termcodes in `orig_lhs` and `orig_rhs` and store the results in
-/// `mapargs`.
+/// `args`.
 ///
-/// `rhs` and `orig_rhs` both come back pointing at fresh allocations.  If the
-/// final LHS is longer than `MAXMAPLEN`, `lhs_len` holds the larger original
-/// length and `lhs` is truncated, which is how the caller detects it.
+/// If the final LHS is longer than `MAXMAPLEN`, `lhs_len` holds the larger
+/// original length and `lhs` is truncated, which is how the caller detects
+/// it.
 ///
 /// If `<C-H>`-style simplification happened, `alt_lhs` holds the
 /// unsimplified spelling and `alt_lhs_len` is non-zero; otherwise
 /// `alt_lhs_len` is 0.
 ///
 /// # Safety
-/// The three input strings must be live, and `mapargs` writable.
+/// The three input strings must be live.
 pub(crate) unsafe fn set_maparg_lhs_rhs(
     orig_lhs: *const c_char,
     orig_lhs_len: size_t,
@@ -96,12 +92,8 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     orig_rhs_len: size_t,
     rhs_lua: LuaRef,
     cpo_val: *const c_char,
-    mapargs: *mut MapArguments,
+    args: &mut MapArguments,
 ) -> bool {
-    // SAFETY: the caller's promise — `mapargs` is a writable `MapArguments`.
-    let mut args = unsafe { Ma::new(mapargs) };
-    args.rhs_lua = rhs_lua;
-
     // If the mapping was given as ^V<C_UP>, replace the term codes with the
     // appropriate two bytes; if it is a shifted special key, unshift it too,
     // giving another two. `replace_termcodes` may answer with `lhs_buf` or
@@ -119,54 +111,57 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
     // SAFETY: the caller's promise — `orig_lhs` is `orig_lhs_len` live bytes
     // and `cpo_val` a NUL-terminated `'cpoptions'`.  `lhs_buf` outlives both
-    // calls, which is where `replace_termcodes` may leave its answer.
-    let mut replaced =
-        unsafe { replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, flags, simplify, cpo_val) };
-    if replaced.is_null() {
-        return false;
-    }
-    // SAFETY: `replace_termcodes` answers a NUL-terminated string.
-    args.lhs_len = unsafe { cstr::bytes_at(replaced) }.len();
-    let lhs = args.field_ptr(offset_of!(MapArguments, lhs));
-    // SAFETY: the field's own address, and `MAXMAPLEN_BUF` is its size.
-    unsafe { xstrlcpy(lhs, replaced, MAXMAPLEN_BUF) };
-    if did_simplify {
-        // SAFETY: as the first call.
-        replaced =
-            unsafe { replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, nosimp, plain, cpo_val) };
-        if replaced.is_null() {
+    // calls, which is where `replace_termcodes` may leave its answer, and its
+    // answer is NUL-terminated.
+    let replaced = unsafe {
+        let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, flags, simplify, cpo_val);
+        if at.is_null() {
             return false;
         }
-        // SAFETY: as above.
-        args.alt_lhs_len = unsafe { cstr::bytes_at(replaced) }.len();
-        let alt = args.field_ptr(offset_of!(MapArguments, alt_lhs));
-        // SAFETY: as the `lhs` copy above.
-        unsafe { xstrlcpy(alt, replaced, MAXMAPLEN_BUF) };
+        cstr::bytes_at(at)
+    };
+    args.lhs_len = replaced.len();
+    args.lhs = MapStr::new(&replaced[..replaced.len().min(MAXMAPLEN as size_t)]);
+    if did_simplify {
+        // SAFETY: as the first call.
+        let alt = unsafe {
+            let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, nosimp, plain, cpo_val);
+            if at.is_null() {
+                return false;
+            }
+            cstr::bytes_at(at)
+        };
+        args.alt_lhs_len = alt.len();
+        args.alt_lhs = MapStr::new(&alt[..alt.len().min(MAXMAPLEN as size_t)]);
     } else {
         args.alt_lhs_len = 0;
     }
 
-    // SAFETY: as above — the caller's live strings and `MapArguments`.
-    unsafe { set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo_val, mapargs) };
+    // SAFETY: as above — the caller's live strings.
+    unsafe { set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo_val, args) };
     true
 }
 
 /// The `rhs` half of [`set_maparg_lhs_rhs`], also used on its own by
 /// `mapset()`, which brings its own already-parsed LHS.
 ///
+/// This is where `args` stops being a parse and becomes an owner: the three
+/// RHS strings and the Lua reference are bundled into the one [`MapRhs`] every
+/// mapblock the parse goes on to create will share.  `args.desc` is folded in
+/// here, so a caller that wants a `desc` must set it *first*.
+///
 /// # Safety
-/// `orig_rhs` and `cpo_val` must be live, and `mapargs` writable.
+/// `orig_rhs` and `cpo_val` must be live.
 pub(crate) unsafe fn set_maparg_rhs(
     orig_rhs: *const c_char,
     orig_rhs_len: size_t,
     rhs_lua: LuaRef,
     sid: scid_T,
     cpo_val: *const c_char,
-    mapargs: *mut MapArguments,
+    args: &mut MapArguments,
 ) {
-    // SAFETY: the caller's promise — `mapargs` is a writable `MapArguments`.
-    let mut args = unsafe { Ma::new(mapargs) };
-    args.rhs_lua = rhs_lua;
+    debug_assert!(args.rhs.is_none(), "an RHS is parsed once");
+    let desc = args.desc.take();
 
     if rhs_lua != LUA_NOREF {
         // orig_rhs is not used for Lua mappings, but still has to be a
@@ -176,73 +171,69 @@ pub(crate) unsafe fn set_maparg_rhs(
         let cap = (tmp_buf.len() - 1) as size_t;
         let fmt = c"%c%c%c%d\r".as_ptr();
         // SAFETY: `tmp_buf` is 64 bytes and `cap` leaves room for the NUL; the
-        // format string names exactly the four arguments that follow it.
-        unsafe {
-            args.orig_rhs = xcalloc(1, size_of::<c_char>()).cast();
-            args.orig_rhs_len = 0;
+        // format string names exactly the four arguments that follow it, and
+        // the answer is NUL-terminated.
+        let str = unsafe {
             let ke_lua = KE_LUA as c_int;
-            let n = vim_snprintf(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
-            args.rhs_len = n as size_t;
-            args.rhs = xstrdup(tmp_buf.as_ptr());
-        }
+            vim_snprintf(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
+            MapStr::new(cstr::bytes_at(at))
+        };
+        args.rhs = Some(Rc::new(MapRhs {
+            str,
+            orig_str: MapStr::empty(),
+            desc,
+            luaref: rhs_lua,
+        }));
         return;
     }
 
-    args.orig_rhs_len = orig_rhs_len;
-    // SAFETY: the caller's promise — `orig_rhs` is `orig_rhs_len` live bytes,
-    // which is exactly what the fresh allocation has room for plus a NUL.
-    unsafe {
-        args.orig_rhs = xcalloc(orig_rhs_len + 1, size_of::<c_char>()).cast();
-        xmemcpyz(args.orig_rhs.cast(), orig_rhs.cast(), orig_rhs_len);
-    }
+    // SAFETY: the caller's promise — `orig_rhs` is `orig_rhs_len` live bytes.
+    let orig_str =
+        unsafe { MapStr::new(core::slice::from_raw_parts(orig_rhs.cast(), orig_rhs_len)) };
     // SAFETY: `orig_rhs` is NUL-terminated.
-    if unsafe { strcasecmp(orig_rhs, c"<nop>".as_ptr()) } == 0 {
+    let str = if unsafe { strcasecmp(orig_rhs, c"<nop>".as_ptr()) } == 0 {
         // "<Nop>" means nothing.
-        // SAFETY: a one-byte zeroed allocation is a single NUL char.
-        args.rhs = unsafe { xcalloc(1, size_of::<c_char>()) }.cast();
-        args.rhs_len = 0;
-        args.rhs_is_noop = true;
+        MapStr::empty()
     } else {
         let mut rhs_buf: *mut c_char = ptr::null_mut();
         let buf = &raw mut rhs_buf;
         let dolt = REPTERM_DO_LT as c_int;
         let plain = ptr::null_mut();
         // SAFETY: as above, plus `cpo_val` NUL-terminated; `rhs_buf` is only a
-        // scratch slot `replace_termcodes` may take over.
-        let replaced =
-            unsafe { replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo_val) };
-        // SAFETY: `replace_termcodes` answers a NUL-terminated string.
-        args.rhs_len = unsafe { cstr::bytes_at(replaced) }.len();
-        // replace_termcodes may produce an empty string even when orig_rhs is
-        // not empty -- a single ^V, see :h map-empty-rhs.
-        args.rhs_is_noop = orig_rhs_len != 0 && args.rhs_len == 0;
-        args.rhs = replaced;
-    }
+        // scratch slot `replace_termcodes` may take over, which the guard
+        // releases once the answer has been copied out of it.
+        unsafe {
+            let at = replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo_val);
+            let _owned = COwned::new(rhs_buf);
+            MapStr::new(cstr::bytes_at(at))
+        }
+    };
+    // "<Nop>" is a noop, and so is a single ^V: `replace_termcodes` may
+    // produce an empty string even when `orig_rhs` is not -- see
+    // :h map-empty-rhs.
+    args.rhs_is_noop = orig_rhs_len != 0 && str.is_empty();
+    args.rhs = Some(Rc::new(MapRhs {
+        str,
+        orig_str,
+        desc,
+        luaref: LUA_NOREF,
+    }));
 }
 
 /// If `to_parse` starts with `word`, step it past `word` and the whitespace
 /// after it.
-///
-/// # Safety
-/// `*to_parse` must be live and NUL-terminated.
-pub(crate) unsafe fn take_map_arg(to_parse: &mut *mut c_char, word: &[u8]) -> bool {
-    // SAFETY: the caller's promise — `*to_parse` is NUL-terminated, so the
-    // comparison stops inside it, and on a match the `word.len()` bytes it
-    // just matched are there to step over.
-    unsafe {
-        if !(cstr::prefix_eq(*to_parse, word.as_ptr().cast(), word.len() as size_t)) {
-            return false;
-        }
-        *to_parse = skipwhite(to_parse.add(word.len()));
-    }
+pub(crate) fn take_map_arg(to_parse: &mut &[u8], word: &[u8]) -> bool {
+    let Some(rest) = to_parse.strip_prefix(word) else {
+        return false;
+    };
+    *to_parse = skip_white(rest);
     true
 }
 
 /// Parse a string of `:map-arguments` into a [`MapArguments`].
 ///
 /// Termcodes, backslashes and CTRL-Vs inside the extracted `{lhs}` and
-/// `{rhs}` are replaced by [`set_maparg_lhs_rhs`].  `rhs` and `orig_rhs` come
-/// back either null or owning, and must be freed even on failure.
+/// `{rhs}` are replaced by [`set_maparg_lhs_rhs`].
 ///
 /// `is_unmap` makes everything right of the last map argument the `{lhs}`,
 /// spaces included: `:unmap` has no separate `{rhs}`.
@@ -250,69 +241,60 @@ pub(crate) unsafe fn take_map_arg(to_parse: &mut *mut c_char, word: &[u8]) -> bo
 /// Answers 0 on success and 1 if the arguments are invalid.
 ///
 /// # Safety
-/// `strargs` must be live and NUL-terminated, and `mapargs` writable.
+/// `strargs` must be live and NUL-terminated.
 pub(crate) unsafe fn str_to_mapargs(
     strargs: *const c_char,
     is_unmap: bool,
-    mapargs: *mut MapArguments,
+    args: &mut MapArguments,
 ) -> c_int {
-    // SAFETY: the caller's promise — `strargs` is NUL-terminated and
-    // `mapargs` a writable `MapArguments`, which this zeroes before filling.
-    let mut to_parse = unsafe { skipwhite(strargs) };
-    // SAFETY: as above.
-    unsafe { mapargs.write_bytes(0, 1) };
-    let mut args = unsafe { Ma::new(mapargs) };
+    // SAFETY: the caller's promise — `strargs` is NUL-terminated, and so is
+    // whatever `skipwhite` leaves inside it.
+    let (base, all) = unsafe {
+        let base = skipwhite(strargs);
+        (base, cstr::bytes_at(base))
+    };
+    let mut rest = all;
 
     // Accept <buffer>, <nowait>, <silent>, <expr>, <script> and <unique>
     // in any order.
     loop {
-        // SAFETY: `to_parse` walks the caller's NUL-terminated string.
-        unsafe {
-            if take_map_arg(&mut to_parse, b"<buffer>") {
-                args.buffer = true;
-            } else if take_map_arg(&mut to_parse, b"<nowait>") {
-                args.nowait = true;
-            } else if take_map_arg(&mut to_parse, b"<silent>") {
-                args.silent = true;
-            } else if take_map_arg(&mut to_parse, b"<special>") {
-                // Obsolete modifier, accepted and ignored.
-            } else if take_map_arg(&mut to_parse, b"<script>") {
-                args.script = true;
-            } else if take_map_arg(&mut to_parse, b"<expr>") {
-                args.expr = true;
-            } else if take_map_arg(&mut to_parse, b"<unique>") {
-                args.unique = true;
-            } else {
-                break;
-            }
+        if take_map_arg(&mut rest, b"<buffer>") {
+            args.buffer = true;
+        } else if take_map_arg(&mut rest, b"<nowait>") {
+            args.nowait = true;
+        } else if take_map_arg(&mut rest, b"<silent>") {
+            args.silent = true;
+        } else if take_map_arg(&mut rest, b"<special>") {
+            // Obsolete modifier, accepted and ignored.
+        } else if take_map_arg(&mut rest, b"<script>") {
+            args.script = true;
+        } else if take_map_arg(&mut rest, b"<expr>") {
+            args.expr = true;
+        } else if take_map_arg(&mut rest, b"<unique>") {
+            args.unique = true;
+        } else {
+            break;
         }
     }
+    let consumed = all.len() - rest.len();
 
     // The next whitespace character ends {lhs} -- unless it is preceded
     // by a CTRL-V, or by a backslash when 'cpoptions' has no 'B'.
-    let mut lhs_end = to_parse;
     let do_backslash = !cpo_has(CpoFlag::BSLASH);
-    loop {
-        // SAFETY: `lhs_end` walks the same NUL-terminated string, and the loop
-        // stops at its NUL.
-        let ch = unsafe { *lhs_end };
-        if ch == 0 || (!is_unmap && ascii_iswhite(c_int::from(ch))) {
+    let mut at = 0;
+    while let Some(&ch) = rest.get(at) {
+        if !is_unmap && ascii_iswhite(c_int::from(ch)) {
             break;
         }
-        let escape = c_int::from(ch) == Ctrl_V || (do_backslash && ch == b'\\' as c_char);
-        // SAFETY: `lhs_end` is on a non-NUL byte, so the byte after it is
-        // readable and stepping over it stays inside the string.
-        unsafe {
-            if escape && c_int::from(*lhs_end.add(1)) != NUL {
-                lhs_end = lhs_end.add(1); // skip CTRL-V or backslash
-            }
-            lhs_end = lhs_end.add(1);
+        let escape = c_int::from(ch) == Ctrl_V || ch == b'\\' && do_backslash;
+        // Skip the CTRL-V or backslash *and* whatever it escapes, unless the
+        // escape is the last byte.
+        if escape && rest.get(at + 1).is_some_and(|&next| next != 0) {
+            at += 1;
         }
+        at += 1;
     }
-    // SAFETY: `lhs_end` is inside the same NUL-terminated string, and both
-    // pointers come from it, so the difference is its `{lhs}` length.
-    let (rhs_start, orig_lhs_len) =
-        unsafe { (skipwhite(lhs_end), lhs_end.offset_from(to_parse) as size_t) };
+    let orig_lhs_len = at;
 
     // The given {lhs} may be longer than MAXMAPLEN before termcodes are
     // replaced ("<Space>" is longer than ' '), so copy it out first.
@@ -320,26 +302,23 @@ pub(crate) unsafe fn str_to_mapargs(
         return 1;
     }
     let mut lhs_to_replace = [0 as c_char; 256];
-    let dst = lhs_to_replace.as_mut_ptr().cast();
-    // SAFETY: `orig_lhs_len` is below 256, the size of `lhs_to_replace`, and
-    // is the length of the `{lhs}` at `to_parse`.
-    unsafe { xmemcpyz(dst, to_parse.cast(), orig_lhs_len) };
+    for (slot, &byte) in lhs_to_replace.iter_mut().zip(&rest[..orig_lhs_len]) {
+        *slot = byte as c_char;
+    }
 
-    let lhs = lhs_to_replace.as_ptr();
-    let cpo = p_cpo.get();
-    // SAFETY: `rhs_start` is inside the caller's NUL-terminated string, `lhs`
-    // names the local copy just made, and `mapargs` is the caller's struct.
+    // SAFETY: `consumed + orig_lhs_len` is an index inside `base`'s own
+    // NUL-terminated bytes, and `lhs` names the local copy just made.
     let ok = unsafe {
+        let rhs_start = skipwhite(base.add(consumed + orig_lhs_len));
         let orig_rhs_len = cstr::bytes_at(rhs_start).len();
-        let rhs = rhs_start;
         set_maparg_lhs_rhs(
-            lhs,
+            lhs_to_replace.as_ptr(),
             orig_lhs_len,
-            rhs,
+            rhs_start,
             orig_rhs_len,
             LUA_NOREF,
-            cpo,
-            mapargs,
+            p_cpo.get(),
+            args,
         )
     };
     if !ok {
@@ -400,27 +379,15 @@ pub(crate) unsafe fn get_map_mode(cmdp: *mut *mut c_char, forceit: bool) -> c_in
 /// every bit of it lies inside a single one of those two sets; an
 /// abbreviation may only ask for Insert and Cmdline.
 ///
-/// # Safety
-/// `mode_string` must be live and NUL-terminated.
-pub(crate) unsafe fn get_map_mode_string(mode_string: *const c_char, abbr: bool) -> c_int {
-    let mut p = mode_string;
-    // SAFETY: the caller's promise — `mode_string` is NUL-terminated.
-    if c_int::from(unsafe { *p }) == NUL {
-        p = c" ".as_ptr(); // compatibility
-    }
+pub(crate) fn get_map_mode_string(mode_string: &[u8], abbr: bool) -> c_int {
+    let chars = if mode_string.is_empty() {
+        b" ".as_slice() // compatibility
+    } else {
+        mode_string
+    };
 
     let mut mode = 0;
-    loop {
-        // SAFETY: `p` walks a NUL-terminated string and the loop stops on the
-        // NUL, so the step past it never happens twice.
-        let modec = unsafe {
-            let modec = *p as u8;
-            p = p.add(1);
-            modec
-        };
-        if modec == 0 {
-            break;
-        }
+    for &modec in chars {
         mode |= match modec {
             b'i' => MODE_INSERT,
             b'l' => MODE_LANGMAP,

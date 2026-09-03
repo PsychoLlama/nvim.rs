@@ -31,13 +31,16 @@ static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
 /// # Safety
 /// `mp` must be a live mapblock.
 pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
-    let (keys, str, desc) = (mp.m_keys, mp.m_str, mp.m_desc);
-    // SAFETY: the three strings a live mapblock owns are NUL-terminated, and
-    // `m_desc` is either null or one of them.
+    let rhs = &mp.m_rhs;
+    // SAFETY: the three strings a live mapblock owns are NUL-terminated by
+    // `MapStr`'s own invariant.
     let filtered = unsafe {
-        message_filtered(keys)
-            && message_filtered(str)
-            && (desc.is_null() || message_filtered(desc))
+        message_filtered(mp.m_keys.as_ptr())
+            && message_filtered(rhs.str.as_ptr())
+            && rhs
+                .desc
+                .as_ref()
+                .is_none_or(|desc| message_filtered(desc.as_ptr()))
     };
     if filtered {
         return;
@@ -51,12 +54,12 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
         }
     }
 
-    let mut mapchars = map_mode_to_chars(mp.m_mode);
+    let mapchars = map_mode_to_chars(mp.m_mode);
     // SAFETY: `map_mode_to_chars` answers a NUL-terminated seven-byte array
     // that lives until the end of this body.
     let mut len = unsafe {
         msg_puts(mapchars.as_ptr());
-        cstr::bytes_at(mapchars.as_mut_ptr()).len()
+        cstr::bytes_at(mapchars.as_ptr()).len()
     };
     len += 1;
     while len <= 3 {
@@ -67,7 +70,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
 
     // Display the LHS, and pad to at least twelve columns.
     // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS.
-    len = unsafe { msg_outtrans_special(keys, true, 0) } as size_t;
+    len = unsafe { msg_outtrans_special(mp.m_keys.as_ptr(), true, 0) } as size_t;
     loop {
         // SAFETY: as above.
         unsafe { msg_putchar(c_int::from(b' ')) };
@@ -92,27 +95,24 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
 
     // `false` below would show only things like <Up> as such on the rhs
     // and not M-x etc; `true` gets both -- webb
-    if mp.m_luaref != LUA_NOREF {
-        // SAFETY: the mapping's own reference; the rendering is ours to free.
-        unsafe {
-            let text = nlua_funcref_str(mp.m_luaref, ptr::null_mut());
-            msg_puts_hl(text, HLF_8, false);
-            xfree(text.cast());
-        }
-    // SAFETY: `m_str` is the mapping's own NUL-terminated RHS.
-    } else if unsafe { c_int::from(*str) } == NUL {
+    if rhs.luaref != LUA_NOREF {
+        // SAFETY: the mapping's own reference; the rendering is the guard's.
+        let text = unsafe { COwned::new(nlua_funcref_str(rhs.luaref, ptr::null_mut())) };
+        // SAFETY: a NUL-terminated rendering that outlives the call.
+        unsafe { msg_puts_hl(text.as_c_ptr(), HLF_8, false) };
+    } else if rhs.str.is_empty() {
         // SAFETY: a static NUL-terminated marker.
         unsafe { msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false) };
     } else {
-        // SAFETY: as above.
-        unsafe { msg_outtrans_special(str, false, 0) };
+        // SAFETY: `m_str` is the mapping's own NUL-terminated RHS.
+        unsafe { msg_outtrans_special(rhs.str.as_ptr(), false, 0) };
     }
 
-    if !desc.is_null() {
+    if let Some(desc) = &rhs.desc {
         // SAFETY: a static text, then the mapping's own NUL-terminated `desc`.
         unsafe {
             msg_puts(c"\n                 ".as_ptr()); // shift to the rhs column
-            msg_puts(desc);
+            msg_puts(desc.as_ptr());
         }
     }
     if p_verbose.get() > 0 {
@@ -126,61 +126,45 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
 /// Translate a mapping's internal LHS into the external form `:map` and
 /// `:abbrev` accept, which is what command-line completion offers.
 ///
-/// The answer can be wider than the original, so it is built in a growarray;
-/// the caller owns the string that comes back.
+/// The answer can be wider than the original, so it is built in a `Vec`.
 ///
 /// # Safety
-/// Both strings must be live and NUL-terminated.
-pub(crate) unsafe fn translate_mapping(
-    str_in: *const c_char,
-    cpo_val: *const c_char,
-) -> *mut c_char {
-    let gap = &mut Vec::<u8>::new();
+/// `cpo_val` must be live and NUL-terminated.
+pub(crate) unsafe fn translate_mapping(str_in: &[u8], cpo_val: *const c_char) -> Vec<u8> {
+    let mut out = Vec::<u8>::new();
 
     // SAFETY: the caller's promise — `cpo_val` is NUL-terminated.
     let cpo_bslash = !unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
-    let mut str = str_in.cast::<u8>();
-    loop {
-        // SAFETY: the caller's promise — `str_in` is NUL-terminated — and the
-        // walk stops here at its NUL, so `str` is always inside the string.
-        let mut c = c_int::from(unsafe { *str });
-        if c == 0 {
-            break;
-        }
+    let mut at = 0;
+    while at < str_in.len() {
+        let mut c = c_int::from(str_in[at]);
+        // A `K_SPECIAL` escape is three bytes; upstream's tests spell that as
+        // "the two bytes after this one are not the NUL".
+        let three_at =
+            |at: usize| matches!(str_in.get(at + 1..at + 3), Some([a, b]) if *a != 0 && *b != 0);
         'next: {
-            // SAFETY: `str` is on a non-NUL byte, so `add(1)` is readable, and
-            // `add(2)` only once `add(1)` is itself known non-NUL.
-            if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
+            if c == K_SPECIAL && three_at(at) {
                 let mut modifiers = ModMask::NONE;
-                // SAFETY: as above.
-                if c_int::from(unsafe { *str.add(1) }) == KS_MODIFIER {
-                    // SAFETY: `str[1]` and `str[2]` are both non-NUL, so both
-                    // steps land on a byte of the same string.
-                    unsafe {
-                        str = str.add(2);
-                        modifiers = ModMask::from_bits(c_int::from(*str));
-                        str = str.add(1);
-                        c = c_int::from(*str);
-                    }
+                if c_int::from(str_in[at + 1]) == KS_MODIFIER {
+                    at += 2;
+                    modifiers = ModMask::from_bits(c_int::from(str_in[at]));
+                    at += 1;
+                    c = c_int::from(str_in[at]);
                 }
 
-                // SAFETY: as the first test — `c` is what `str` points at, so
-                // a non-`K_SPECIAL` `c` stops the reads before they run.
-                if c == K_SPECIAL && unsafe { *str.add(1) != 0 && *str.add(2) != 0 } {
-                    // SAFETY: as above.
-                    c = unsafe { key_unescape(*str.add(1), *str.add(2)) };
+                if c == K_SPECIAL && three_at(at) {
+                    c = key_unescape(str_in[at + 1], str_in[at + 2]);
                     if c == Key::Zero.code() {
                         c = NUL; // display <Nul> as ^@
                     }
-                    // SAFETY: as above.
-                    str = unsafe { str.add(2) };
+                    at += 2;
                 }
                 if c < 0 || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
                     // SAFETY: `name` is a NUL-terminated rendering that
                     // outlives the call.
-                    gap.extend_from_slice(unsafe { cstr::bytes_at(name.as_ptr()) });
+                    out.extend_from_slice(unsafe { cstr::bytes_at(name.as_ptr()) });
                     break 'next;
                 }
             }
@@ -193,16 +177,15 @@ pub(crate) unsafe fn translate_mapping(
                 || (c == c_int::from(b'\\') && !cpo_bslash)
             {
                 let escape = if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8;
-                gap.push(escape);
+                out.push(escape);
             }
             if c != 0 {
-                gap.push(c as u8);
+                out.push(c as u8);
             }
         }
-        // SAFETY: `str` is on a non-NUL byte, so the next one is in the string.
-        str = unsafe { str.add(1) };
+        at += 1;
     }
-    owned_cstr(core::mem::take(gap))
+    out
 }
 
 /// The `:map-arguments` that may precede the `{lhs}` on a completed command
@@ -258,11 +241,12 @@ pub unsafe fn set_context_in_map_cmd(
     EXPAND_BUFFER.set(false);
 
     // Skip the map arguments; only `<buffer>` changes what is offered.
+    // SAFETY: the caller's promise — `arg` is NUL-terminated.
+    let all = unsafe { cstr::bytes_at(arg) };
+    let mut rest = all;
     'skip: loop {
         for (i, word) in CONTEXT_ARGS.into_iter().enumerate() {
-            // SAFETY: the caller's promise — `arg` is NUL-terminated, and
-            // stays so as it is stepped forward.
-            if unsafe { take_map_arg(&mut arg, word) } {
+            if take_map_arg(&mut rest, word) {
                 if i == CONTEXT_ARG_BUFFER {
                     EXPAND_BUFFER.set(true);
                 }
@@ -271,7 +255,8 @@ pub unsafe fn set_context_in_map_cmd(
         }
         break;
     }
-    xp.xp_pattern = arg;
+    // SAFETY: `rest` is a tail of `arg`'s own bytes.
+    xp.xp_pattern = unsafe { arg.add(all.len() - rest.len()) };
 
     ptr::null_mut()
 }
@@ -349,9 +334,13 @@ pub unsafe fn expand_mappings(
         }
         let p = word.as_ptr().cast_mut();
         if let Some(score) = matched(p) {
-            // SAFETY: `p` is a static NUL-terminated word; the copy is owned
-            // by the growarray from here on.
-            push(&mut scored, &mut plain, unsafe { xstrdup(p) }, score);
+            // The copy is owned by the growarray from here on.
+            push(
+                &mut scored,
+                &mut plain,
+                owned_cstr(word.to_bytes().to_vec()),
+                score,
+            );
         }
     }
 
@@ -366,19 +355,20 @@ pub unsafe fn expand_mappings(
         MapTable::Global
     };
     let collect = |mp: Mb| {
-        if mp.m_simplified != 0 || mp.m_mode & EXPAND_MAPMODES.get() == 0 {
+        if mp.m_simplified || mp.m_mode & EXPAND_MAPMODES.get() == 0 {
             return None;
         }
-        // SAFETY: `m_keys` and `'cpoptions'` are both NUL-terminated; the
-        // rendering is owned by the growarray from here on, or freed here.
-        let p = unsafe { translate_mapping(mp.m_keys, p_cpo.get()) };
-        if p.is_null() {
-            return None;
+        // SAFETY: `'cpoptions'` is NUL-terminated.
+        let mut rendering = unsafe { translate_mapping(mp.keys(), p_cpo.get()) };
+        if rendering.is_empty() {
+            return None; // nothing to match against
         }
-        match matched(p) {
-            Some(score) => push(&mut scored, &mut plain, p, score),
-            // SAFETY: the rendering nothing took ownership of.
-            None => unsafe { xfree(p.cast()) },
+        // Matched as a C string out of this frame's own buffer, and only
+        // handed to the growarray -- which owns it from then on -- if it hit.
+        rendering.push(0);
+        if let Some(score) = matched(rendering.as_mut_ptr().cast()) {
+            rendering.pop();
+            push(&mut scored, &mut plain, owned_cstr(rendering), score);
         }
         None
     };
@@ -413,7 +403,10 @@ pub unsafe fn expand_mappings(
             if !fuzzy {
                 sort_strings(*matches, count);
             }
-            // Remove duplicate entries, keeping the first of each run.
+            // Remove duplicate entries, keeping the first of each run.  The
+            // one `xfree` this module still makes: past the handover above the
+            // array and its strings belong to the *caller*, and `xfree` is the
+            // release its own code will use on the rest of them.
             let items = core::slice::from_raw_parts_mut(*matches, count as usize);
             let mut kept = 0;
             for read in 1..items.len() {

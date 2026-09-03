@@ -9,14 +9,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
 use crate::types::MB_MAXCHAR;
+use crate::types::MapStr;
 use crate::types::{Failed, MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
+use std::rc::Rc;
 
 /// C's `LANGMAP_ADJUST`: map `c` through `'langmap'` when `condition` holds
 /// and the key is one `'langmap'` applies to.
@@ -264,7 +265,7 @@ unsafe fn search_maphash(
             // Only consider an entry whose first character matches and
             // that is for the current state. Skip `:lmap` mappings when
             // keys were mapped.
-            if c_int::from(unsafe { *mp.m_keys } as u8) != tb_c1
+            if mp.keys().first().copied().map(c_int::from) != Some(tb_c1)
                 || mp.m_mode & local_state == 0
                 || (mp.m_mode & MODE_LANGMAP != 0 && typeahead().maplen() != 0)
             {
@@ -302,7 +303,10 @@ unsafe fn search_maphash(
                     modifiers = ModMask::NONE;
                     modifier_next = false;
                 }
-                if c_int::from(unsafe { *mp.m_keys.offset(mlen as isize) } as u8) != c2 {
+                // The stored LHS is read *with* its NUL, which is what keeps
+                // this byte-exact with upstream's pointer walk: nothing in the
+                // typeahead is a NUL, so the terminator ends the run.
+                if mp.m_keys.as_bytes_with_nul().get(mlen as usize).copied() != Some(c2 as u8) {
                     break;
                 }
                 mlen += 1;
@@ -311,7 +315,7 @@ unsafe fn search_maphash(
             // Don't allow mapping the first byte(s) of a multibyte
             // character, which happens after mapping <M-a> and then
             // changing 'encoding'. Beware that 0x80 is escaped.
-            let mut p1: *const c_char = mp.m_keys;
+            let mut p1: *const c_char = mp.m_keys.as_ptr();
             let p2 = unsafe { mb_unescape(&raw mut p1, &mut ch) };
             if !p2.is_null()
                 && c_int::from(utf8len_tab[tb_c1 as usize]) > unsafe { utfc_ptr2len(p2) }
@@ -321,7 +325,7 @@ unsafe fn search_maphash(
 
             // A full match is `mlen == keylen`; a partial one is the
             // whole typeahead agreeing with a longer mapping.
-            found.keylen = mp.m_keylen;
+            found.keylen = c_int::try_from(mp.keys().len()).expect("an LHS fits MAXMAPLEN");
             if mlen != found.keylen && !(mlen == tb.len() && tb.len() < found.keylen) {
                 // No match; a termcode may still match at the next
                 // character, so remember how far this one agreed.
@@ -331,11 +335,11 @@ unsafe fn search_maphash(
 
             // When only script-local mappings are allowed, the mapping
             // has to start with K_SNR.
-            if tb.noremap(0) == RM_SCRIPT as c_int
-                && (c_int::from(unsafe { *mp.m_keys } as u8) != K_SPECIAL
-                    || c_int::from(unsafe { *mp.m_keys.add(1) } as u8) != KS_EXTRA
-                    || c_int::from(unsafe { *mp.m_keys.add(2) }) != KE_SNR as c_int)
-            {
+            let snr = matches!(mp.keys(), [a, b, c, ..]
+                if c_int::from(*a) == K_SPECIAL
+                    && c_int::from(*b) == KS_EXTRA
+                    && c_int::from(*c as c_char) == KE_SNR as c_int);
+            if tb.noremap(0) == RM_SCRIPT as c_int && !snr {
                 break 'entry;
             }
 
@@ -369,7 +373,7 @@ unsafe fn search_maphash(
                 // ways -- see the divergence docket, O-B13-1.
                 // SAFETY: the caller's promise — `timedout` is readable.
                 let waited = unsafe { *timedout };
-                if !waited && !mp_match.is_some_and(|m| m.m_nowait != 0) {
+                if !waited && !mp_match.is_some_and(|m| m.m_nowait) {
                     // Stop at a partial match and wait for more input.
                     found.keylen = KEYLEN_PART_MAP;
                     found.mp = Some(mp);
@@ -463,21 +467,20 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     // Copy the fields of *mp that are used below: evaluating an <expr>
     // mapping can invoke a function that redefines the mapping, which
     // frees *mp.
-    let save_m_expr = mp.m_expr != 0;
+    let save_m_expr = mp.m_expr;
     let save_m_noremap = mp.m_noremap;
-    let save_m_silent = mp.m_silent != 0;
-    let mut save_m_keys: *mut c_char = ptr::null_mut();
-    let mut save_alt_m_keys: *mut c_char = ptr::null_mut();
+    let save_m_silent = mp.m_silent;
     let alt = mp.m_alt;
-    let save_alt_m_keylen = if alt.is_null() {
-        0
-    } else {
-        // SAFETY: a non-null `m_alt` is this mapping's live twin.
-        unsafe { (*alt).m_keylen }
-    };
+    // The RHS bundle is held across the evaluation below, which can redefine
+    // — and so free — the mapping; the `Rc` is what makes reading the stored
+    // text afterwards safe.
+    let rhs = Rc::clone(&mp.m_rhs);
+    // The two LHS spellings are copied for the same reason.  Upstream keeps
+    // them for the `strncmp`s at the end.
+    let mut save_keys: Vec<Vec<u8>> = Vec::new();
 
     // `:map <expr>`: the RHS is an expression to evaluate.
-    let map_str = if save_m_expr {
+    let evaluated = if save_m_expr {
         let save_vgetc_busy = vgetc_busy.get();
         let save_may_garbage_collect = may_garbage_collect.get();
         let prev_did_emsg = did_emsg.get();
@@ -485,24 +488,20 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         vgetc_busy.set(0);
         may_garbage_collect.set(false);
 
-        // SAFETY: `m_keys` is the mapping's own LHS, `m_keylen` bytes long;
-        // the copies outlive the evaluation and are freed at the end.
-        save_m_keys = unsafe { xmemdupz(mp.m_keys.cast(), mp.m_keylen as usize) }.cast();
+        save_keys.push(mp.keys().to_vec());
         if !alt.is_null() {
-            save_alt_m_keys =
-                // SAFETY: as above, for the twin's own LHS.
-                unsafe { xmemdupz((*alt).m_keys.cast(), save_alt_m_keylen as usize) }
-                    .cast();
+            // SAFETY: a non-null `m_alt` is this mapping's live twin.
+            save_keys.push(unsafe { (*alt).keys() }.to_vec());
         }
+        // SAFETY: `mp` is still linked -- nothing above evaluated Vimscript.
         let mut map_str = unsafe { eval_map_expr(mp, NUL) };
 
-        if map_str.is_null() || c_int::from(unsafe { *map_str }) == NUL {
+        if map_str.as_ref().is_none_or(MapStr::is_empty) {
             if prev_did_emsg != did_emsg.get() {
                 // An error was displayed and the expression answered
                 // nothing: generate a <Nop> so that a redraw can happen.
-                unsafe { xfree(map_str.cast()) };
                 let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
-                map_str = unsafe { xmemdupz(nop.as_ptr().cast(), 3) }.cast();
+                map_str = Some(MapStr::new(&nop));
                 if State.get() & MODE_CMDLINE != 0 {
                     // Redraw the command below the error.
                     msg_didout.set(true);
@@ -519,19 +518,22 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         may_garbage_collect.set(save_may_garbage_collect);
         map_str
     } else {
-        mp.m_str
+        None
+    };
+    let map_str = if save_m_expr {
+        evaluated.as_ref()
+    } else {
+        Some(&rhs.str)
     };
 
     // Insert the RHS into the typeahead. When the LHS is a prefix of the
     // RHS the first character is not remapped (but abbreviations still
     // apply); when m_noremap says so, none of it is.
-    let inserted = if map_str.is_null() {
-        Err(Failed)
-    } else {
+    let inserted = if let Some(map_str) = map_str {
         // A LANGMAP mapping's keys were not recorded above, so they are
         // recorded here instead.
         if keylen > tb.maplen() && mp.m_mode & MODE_LANGMAP != 0 {
-            unsafe { gotchars(map_str.cast(), cstr::bytes_at(map_str).len()) };
+            unsafe { gotchars(map_str.as_ptr().cast(), map_str.len()) };
         }
 
         // Whether the RHS starts with the LHS, which is what decides
@@ -539,23 +541,25 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         // as a closure rather than a `let`, because upstream only
         // evaluates it for a `:map` -- for a `:noremap` the two
         // `strncmp`s are skipped, and `mapresolve` notices.
+        let starts_with = |lhs: &[u8]| {
+            let rhs = map_str.as_bytes_with_nul();
+            lhs.len() <= rhs.len() && rhs[..lhs.len()] == *lhs
+        };
+        // Upstream compares `keylen` bytes, which is never more than the LHS
+        // it matched.
+        let matched = |lhs: &[u8]| lhs.len().min(keylen as usize);
         let starts_with_lhs = || {
             if save_m_expr {
-                let alt_len = save_alt_m_keylen as usize;
-                unsafe {
-                    cstr::prefix_eq(map_str, save_m_keys, keylen as usize)
-                        || (!save_alt_m_keys.is_null()
-                            && cstr::prefix_eq(map_str, save_alt_m_keys, alt_len))
-                }
+                let lhs = &save_keys[0];
+                starts_with(&lhs[..matched(lhs)])
+                    || save_keys.get(1).is_some_and(|alt| starts_with(alt))
             } else {
-                // SAFETY: `m_keys` and the twin's are NUL-terminated LHSs, and
-                // `map_str` the RHS about to be inserted; the mapping is still
-                // linked here, because nothing above evaluated Vimscript.
-                unsafe {
-                    cstr::prefix_eq(map_str, mp.m_keys, keylen as usize)
-                        || (!alt.is_null()
-                            && cstr::prefix_eq(map_str, (*alt).m_keys, (*alt).m_keylen as usize))
-                }
+                // SAFETY: `m_keys` and the twin's are the two LHS spellings;
+                // the mapping is still linked here, because nothing above
+                // evaluated Vimscript.
+                let lhs = mp.keys();
+                starts_with(&lhs[..matched(lhs)])
+                    || (!alt.is_null() && starts_with(unsafe { (*alt).keys() }))
             }
         };
         let noremap = if save_m_noremap != REMAP_YES {
@@ -566,15 +570,18 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
             REMAP_YES
         };
 
-        let inserted =
-            unsafe { ins_typebuf(map_str, noremap, 0, true, cmd_silent.get() || save_m_silent) };
-        if save_m_expr {
-            unsafe { xfree(map_str.cast()) };
+        unsafe {
+            ins_typebuf(
+                map_str.as_mut_ptr(),
+                noremap,
+                0,
+                true,
+                cmd_silent.get() || save_m_silent,
+            )
         }
-        inserted
+    } else {
+        Err(Failed)
     };
-    unsafe { xfree(save_m_keys.cast()) };
-    unsafe { xfree(save_alt_m_keys.cast()) };
 
     if inserted.is_err() {
         map_result_fail as c_int

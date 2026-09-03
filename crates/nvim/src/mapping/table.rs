@@ -10,9 +10,14 @@
 //! The functions here create ([`map_add`]), destroy ([`mapblock_free`],
 //! [`map_clear_mode`]) and search ([`check_map`], [`map_to_exists_mode`])
 //! those lists.  A read-only whole-table walk is [`map_walk`]; the two
-//! functions that *delete* while walking keep their own loop, because they
-//! need the address of the previous entry's `m_next` and an iterator cannot
-//! hand that out.
+//! functions that *delete* while walking hold a [`Cursor`], which owns the
+//! link arithmetic an iterator cannot hand out — the address of the previous
+//! entry's `m_next`, so that removing and re-hashing are ordinary calls.
+//!
+//! The entries themselves are `Box`es the lists hold by raw pointer; see the
+//! parent module's ownership note.  `impl Drop for MapRhs` lives here rather
+//! than beside the struct because releasing a Lua reference is the one part
+//! of an RHS that is not plain memory.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -22,7 +27,65 @@ use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
+use core::mem::offset_of;
 use core::ptr;
+
+/// A NUL-terminated string an FFI callee allocated and handed back.
+///
+/// Nothing in `mapping/` is freed by hand; this is the one seam where the
+/// *other* allocator's memory crosses back into the module — what the survey
+/// calls an ABI-crossing free — and giving it a destructor is what keeps the
+/// `xfree` out of the code that reads the answer.  `replace_termcodes`,
+/// `eval_to_string`, `vim_strsave_escape_ks` and `nlua_funcref_str` all
+/// answer this way.
+pub(crate) struct COwned(*mut c_char);
+
+impl COwned {
+    /// # Safety
+    /// `p` must be null, or a NUL-terminated allocation this takes over.
+    pub(crate) unsafe fn new(p: *mut c_char) -> Self {
+        Self(p)
+    }
+
+    /// The bytes, or `None` when the callee answered null.
+    pub(crate) fn as_bytes(&self) -> Option<&[u8]> {
+        // SAFETY: the constructor's promise -- a NUL-terminated allocation
+        // this value owns, so it is live for the borrow.
+        (!self.0.is_null()).then(|| unsafe { cstr::bytes_at(self.0) })
+    }
+
+    /// The pointer, for a callee that reads it straight back; null when the
+    /// answer was null.
+    pub(crate) fn as_c_ptr(&self) -> *const c_char {
+        self.0
+    }
+
+    /// An owned copy, or `None` when the callee answered null.
+    pub(crate) fn to_map_str(&self) -> Option<MapStr> {
+        self.as_bytes().map(MapStr::new)
+    }
+}
+
+impl Drop for COwned {
+    fn drop(&mut self) {
+        // SAFETY: the constructor's promise -- this value owns the block, and
+        // `xfree` accepts a null pointer.
+        unsafe { xfree(self.0.cast()) };
+    }
+}
+
+/// Releasing an RHS releases its Lua callback, once, when the last of a
+/// simplified pair lets go of it.
+impl Drop for MapRhs {
+    fn drop(&mut self) {
+        if self.luaref != LUA_NOREF {
+            // SAFETY: a reference this bundle owns, and nothing else can hold
+            // an `Rc` to it any more -- this is the last one dropping.
+            unsafe { api_free_luaref(self.luaref) };
+            self.luaref = LUA_NOREF;
+        }
+    }
+}
 
 /// The global abbreviation list; `b_first_abbr` is its per-buffer twin.
 pub(crate) static FIRST_ABBR: GlobalCell<*mut mapblock_T> = GlobalCell::new(ptr::null_mut());
@@ -137,62 +200,113 @@ pub(crate) unsafe fn map_walk<T>(
 /// `mpp` is the address of the *previous* entry's `m_next` field (or of the
 /// list head), which is how the entry is unlinked without walking again.
 ///
-/// A simplified mapping and its unsimplified twin share one RHS, held by
-/// whichever of the pair is freed second: `m_alt` non-null means the twin is
-/// still alive and owns the strings.
+/// The entry's strings go with it: the LHS is its own, and the RHS bundle is
+/// released only when its twin has let go too.
 ///
 /// # Safety
 /// `mpp` must point at a non-null entry of a live list.
 pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
-    // SAFETY: the caller's promise — `mpp` names a live link, and the entry it
-    // holds is live until this function frees it.  `mpp` itself is the
-    // *previous* entry's field, so writing through `mp` cannot disturb it.
-    let mut mp = unsafe { Mb::new(*mpp) };
-    // SAFETY: `m_keys` is this entry's own `xstrdup`, freed once.
-    unsafe { xfree(mp.m_keys.cast()) };
+    // SAFETY: the caller's promise -- `mpp` names a live link holding a live
+    // entry, which this unlinks and then takes back into its `Box`.  `mpp` is
+    // the *previous* entry's field, so the write cannot disturb it.
+    let mp = unsafe {
+        let mp = Box::from_raw(*mpp);
+        *mpp = mp.m_next;
+        mp
+    };
     let alt = mp.m_alt;
     if !alt.is_null() {
-        // SAFETY: a non-null `m_alt` is the live twin that shares this RHS;
-        // clearing its back-link leaves it owning the strings.
+        // SAFETY: a non-null `m_alt` is the live twin; clear its back-link so
+        // it does not name this entry once the `Box` below is gone.
         unsafe { (*alt).m_alt = ptr::null_mut() };
-    } else {
-        if mp.m_luaref != LUA_NOREF {
-            // SAFETY: a reference this entry owns, released once.
-            unsafe { api_free_luaref(mp.m_luaref) };
-            mp.m_luaref = LUA_NOREF;
-        }
-        let (str, orig, desc) = (mp.m_str, mp.m_orig_str, mp.m_desc);
-        // SAFETY: the three strings this entry owns once its twin is gone.
-        unsafe {
-            xfree(str.cast());
-            xfree(orig.cast());
-            xfree(desc.cast());
-        }
     }
-    let next = mp.m_next;
-    // SAFETY: `mpp` is the live link that held `mp`; unlink, then free.
-    unsafe {
-        *mpp = next;
-        xfree(mp.raw().cast());
+    drop(mp);
+}
+
+/// A position in one mapping list: the address of the link that holds the
+/// current entry.
+///
+/// The delete-walks need what an iterator cannot give them — a handle that
+/// survives *removing* what it points at, because upstream's `continue`
+/// resumes at `*mpp` rather than at the next entry.  Holding the link rather
+/// than the entry is what makes that work, and it is also why a `Cursor` may
+/// point into `b_maphash` itself: taking a `&mut buf_T` while one is live
+/// would invalidate it, so every table this walks is reached through one raw
+/// pointer.
+///
+/// Construction is the unsafe step, once; every method after it is ordinary
+/// checked code.
+pub(crate) struct Cursor(*mut *mut mapblock_T);
+
+impl Cursor {
+    /// # Safety
+    /// `link` must be the address of a live list head or of a live entry's
+    /// `m_next`, and must stay live for as long as the cursor is used.
+    pub(crate) unsafe fn at(link: *mut *mut mapblock_T) -> Self {
+        Self(link)
+    }
+
+    /// The entry this link holds, or `None` at the end of the list.
+    pub(crate) fn entry(&self) -> Option<Mb> {
+        // SAFETY: the constructor's promise -- a live link, whose entry is
+        // live until this cursor removes it.
+        let mp = unsafe { *self.0 };
+        // SAFETY: as above.
+        (!mp.is_null()).then(|| unsafe { Mb::new(mp) })
+    }
+
+    /// Step past the current entry, which must exist.
+    pub(crate) fn advance(&mut self) {
+        let mp = self
+            .entry()
+            .expect("advance past the end of a mapping list");
+        self.0 = mp.field_ptr(offset_of!(mapblock_T, m_next));
+    }
+
+    /// Unlink and free the current entry; the cursor stays put, now holding
+    /// whatever followed it.
+    pub(crate) fn remove(&mut self) {
+        // SAFETY: the constructor's promise -- a live link holding a live
+        // entry, which `mapblock_free` unlinks through this same link.
+        unsafe { mapblock_free(self.0) };
+    }
+
+    /// Move the current entry to the front of the list at `head`; the cursor
+    /// stays put, now holding whatever followed it.
+    ///
+    /// This is the re-hash a `:unmap` of some of an entry's modes forces, and
+    /// pushing to the front is what upstream does — `:map`'s listing order is
+    /// Vim-visible, so it is reproduced exactly.
+    ///
+    /// # Safety
+    /// `head` must be the address of a live list head.
+    pub(crate) unsafe fn relink_to(&mut self, head: *mut *mut mapblock_T) {
+        let mut mp = self.entry().expect("re-hash at the end of a mapping list");
+        // SAFETY: the two promises -- this cursor's link and the caller's
+        // head are both live, and `mp` is the entry both will hold.
+        unsafe {
+            *self.0 = mp.m_next;
+            mp.m_next = *head;
+            *head = mp.raw();
+        }
     }
 }
 
 /// Put a new mapping at the front of its list and return it.
 ///
-/// `args` supplies `rhs`, `rhs_lua`, `orig_rhs`, `expr`, `silent`, `nowait`,
-/// `replace_keycodes` and `desc`; the three string fields are *taken*, not
-/// copied, so the caller must not free them afterwards.  `sid` of 0 means
-/// "use `current_sctx`".
+/// `args` supplies the right-hand side and the flags; the RHS bundle is
+/// *shared* with the parse, not copied, which is how a simplified mapping and
+/// its twin come to hold one `Rc`.  `sid` of 0 means "use `current_sctx`".
 ///
 /// # Safety
-/// Every pointer argument must be live, and `keys` NUL-terminated.
+/// Both table pointers must name live storage.
 #[allow(clippy::too_many_arguments)] // upstream's; the caller has no struct to pass
 pub(crate) unsafe fn map_add(
     buf: Buf,
     map_table: *mut *mut mapblock_T,
     abbr_table: *mut *mut mapblock_T,
-    keys: *const c_char,
-    args: *mut MapArguments,
+    keys: &[u8],
+    args: &MapArguments,
     noremap: c_int,
     mode: c_int,
     is_abbr: bool,
@@ -204,15 +318,41 @@ pub(crate) unsafe fn map_add(
     // through `Buf`'s `DerefMut`: `map_table` already points into
     // `b_maphash`, and a fresh `&mut buf_T` would invalidate it.
     let buf = buf.raw();
-    // SAFETY: `xcalloc` never returns null, and the zeroed block is a valid
-    // `mapblock_T` that this function goes on to fill in and link.
-    let mut mp = unsafe { Mb::new(xcalloc(1, size_of::<mapblock_T>()).cast()) };
+    // A given `sid` is upstream's "the block was `xcalloc`ed and only these
+    // two fields were filled in", not a tweak of `current_sctx`.
+    let script_ctx = if sid != 0 {
+        sctx_T {
+            sc_sid: sid,
+            sc_lnum: lnum,
+            ..sctx_T::NONE
+        }
+    } else {
+        let mut ctx = current_sctx.get();
+        ctx.sc_lnum += sourcing_lnum();
+        // SAFETY: `ctx` is this frame's own, and `nlua_set_sctx` only rewrites
+        // the script id in place.
+        unsafe { nlua_set_sctx(&raw mut ctx) };
+        ctx
+    };
+    let mut mp = Box::new(mapblock_T {
+        m_next: ptr::null_mut(),
+        m_alt: ptr::null_mut(),
+        m_keys: MapStr::new(keys),
+        m_rhs: Rc::clone(args.rhs()),
+        m_mode: mode,
+        m_simplified: simplified,
+        m_noremap: noremap,
+        m_silent: args.silent,
+        m_nowait: args.nowait,
+        m_expr: args.expr,
+        m_script_ctx: script_ctx,
+        m_replace_keycodes: args.replace_keycodes,
+    });
 
     // If CTRL-C has been mapped, don't always use it for Interrupting.
-    // SAFETY: `keys` is the caller's NUL-terminated string, and `buf` a live
-    // buffer.
-    if unsafe { c_int::from(*keys) } == Ctrl_C {
-        // SAFETY: a live buffer's own field address; no read happens.
+    if keys.first().copied().map(c_int::from) == Some(Ctrl_C) {
+        // SAFETY: `Buf`'s promise -- a live buffer's own field address; no
+        // read happens.
         if map_table == unsafe { &raw mut (*buf).b_maphash }.cast() {
             // SAFETY: as above.
             unsafe { (*buf).b_mapped_ctrl_c |= mode };
@@ -221,52 +361,21 @@ pub(crate) unsafe fn map_add(
         }
     }
 
-    // SAFETY: `keys` is NUL-terminated and `args` a live `MapArguments`; the
-    // three string fields move into the new entry, which now owns them.
-    let args = unsafe { Live::new(args) };
-    // SAFETY: as above.
-    mp.m_keys = unsafe { xstrdup(keys) };
-    mp.m_str = args.rhs;
-    mp.m_orig_str = args.orig_rhs;
-    mp.m_luaref = args.rhs_lua;
-    // SAFETY: the `xstrdup` just above.
-    mp.m_keylen = unsafe { cstr::bytes_at(mp.m_keys) }.len() as c_int;
-    mp.m_noremap = noremap;
-    mp.m_nowait = args.nowait as c_char;
-    mp.m_silent = args.silent as c_char;
-    mp.m_mode = mode;
-    mp.m_simplified = c_int::from(simplified);
-    mp.m_expr = args.expr as c_char;
-    mp.m_replace_keycodes = args.replace_keycodes;
-    if sid != 0 {
-        mp.m_script_ctx.sc_sid = sid;
-        mp.m_script_ctx.sc_lnum = lnum;
-    } else {
-        mp.m_script_ctx = current_sctx.get();
-        mp.m_script_ctx.sc_lnum += sourcing_lnum();
-        // Off `raw()`, not off a `Deref`: the address has to outlive the
-        // borrow that produced it.
-        let sctx = mp.field_ptr(core::mem::offset_of!(mapblock_T, m_script_ctx));
-        // SAFETY: the entry's own field, and `mp` is live.
-        unsafe { nlua_set_sctx(sctx) };
-    }
-    mp.m_desc = args.desc;
-
     // Add the new entry in front of the abbrlist or of its maphash bucket.
-    if is_abbr {
-        // SAFETY: the caller's promise — `abbr_table` names a live link.
-        mp.m_next = unsafe { *abbr_table };
-        unsafe { *abbr_table = mp.raw() };
-    } else {
-        // SAFETY: `m_keys` is the NUL-terminated copy made above, so its first
-        // byte is readable, and `map_table` has `MAX_MAPHASH` entries.
-        let n = map_hash(mp.m_mode, c_int::from(unsafe { *mp.m_keys } as u8));
-        unsafe {
-            mp.m_next = *map_table.add(n);
-            *map_table.add(n) = mp.raw();
-        }
+    // SAFETY: the caller's promise -- both tables name live storage, and
+    // `map_table` has `MAX_MAPHASH` entries.
+    unsafe {
+        let head = if is_abbr {
+            abbr_table
+        } else {
+            let first = keys.first().copied().unwrap_or(0);
+            map_table.add(map_hash(mode, c_int::from(first)))
+        };
+        mp.m_next = *head;
+        let raw = Box::into_raw(mp);
+        *head = raw;
+        raw
     }
-    mp.raw()
 }
 
 /// Clear all mappings (or abbreviations) in `mode`.
@@ -295,47 +404,28 @@ pub unsafe fn map_clear_mode(buf: Buf, mode: c_int, local: bool, abbr: bool) {
         (global_abbr_head(), global_map_heads())
     };
     for hash in 0..if abbr { 1 } else { MAX_MAPHASH } {
-        // SAFETY: `hash` is below `MAX_MAPHASH`, the length of both tables.
-        let mut mpp = if abbr {
-            abbr_head
-        } else {
-            unsafe { map_heads.add(hash) }
-        };
-        loop {
-            // SAFETY: the caller's promise — nothing else reaches these lists
-            // while this runs, so `mpp` and everything it links to are live.
-            let mp = unsafe { *mpp };
-            if mp.is_null() {
-                break;
-            }
-            // SAFETY: as above.
-            let m_mode = unsafe { (*mp).m_mode };
+        // SAFETY: `hash` is below `MAX_MAPHASH`, the length of both tables,
+        // and the caller has promised nothing else reaches these lists.
+        let mut at = unsafe { Cursor::at(if abbr { abbr_head } else { map_heads.add(hash) }) };
+        while let Some(mut mp) = at.entry() {
+            let m_mode = mp.m_mode;
             if m_mode & mode != 0 {
                 let left = m_mode & !mode;
-                // SAFETY: as above.
-                unsafe { (*mp).m_mode = left };
+                mp.m_mode = left;
                 if left == 0 {
-                    // SAFETY: as above; `mpp` holds the entry being deleted.
-                    unsafe { mapblock_free(mpp) };
-                    continue; // continue with *mpp
+                    at.remove();
+                    continue;
                 }
                 // May need to put this entry into another hash list.
-                // SAFETY: `m_keys` is NUL-terminated, so byte 0 is readable.
-                let first = unsafe { *(*mp).m_keys } as u8;
+                let first = mp.keys().first().copied().unwrap_or(0);
                 let new_hash = map_hash(left, c_int::from(first));
                 if !abbr && new_hash != hash {
-                    // SAFETY: as above; `new_hash` is below `MAX_MAPHASH`.
-                    unsafe {
-                        *mpp = (*mp).m_next;
-                        let head = map_heads.add(new_hash);
-                        (*mp).m_next = *head;
-                        *head = mp;
-                    }
-                    continue; // continue with *mpp
+                    // SAFETY: `new_hash` is below `MAX_MAPHASH`.
+                    unsafe { at.relink_to(map_heads.add(new_hash)) };
+                    continue;
                 }
             }
-            // SAFETY: `mp`'s own field; `&raw` reads nothing.
-            mpp = unsafe { &raw mut (*mp).m_next };
+            at.advance();
         }
     }
 }
@@ -369,10 +459,12 @@ pub(crate) unsafe fn map_to_exists(
     let dolt = REPTERM_DO_LT as c_int;
     let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
-    // allocation `replace_termcodes` may leave in `buf` is freed below.
-    let len = unsafe { cstr::bytes_at(str) }.len();
-    // SAFETY: as above.
-    let rhs = unsafe { replace_termcodes(str, len, out, 0, dolt, simplify, cpo) };
+    // allocation `replace_termcodes` may leave in `buf` is the guard's.
+    let (rhs, _owned) = unsafe {
+        let len = cstr::bytes_at(str).len();
+        let rhs = replace_termcodes(str, len, out, 0, dolt, simplify, cpo);
+        (rhs, COwned::new(buf))
+    };
 
     let mut mode = 0;
     for (ch, flags) in MODE_CHARS {
@@ -383,10 +475,16 @@ pub(crate) unsafe fn map_to_exists(
     }
 
     // SAFETY: `rhs` is `replace_termcodes`'s NUL-terminated answer, and `buf`
-    // its allocation, freed once.
-    let retval = unsafe { map_to_exists_mode(rhs, mode, abbr) };
-    unsafe { xfree(buf.cast()) };
-    retval
+    // its allocation, which the guard releases.
+    unsafe { map_to_exists_mode(rhs, mode, abbr) }
+}
+
+/// C's `strstr`, over slices: whether `haystack` contains `needle`.
+///
+/// The empty needle matches, as `strstr`'s does.
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    needle.is_empty()
+        || (haystack.len() >= needle.len() && haystack.windows(needle.len()).any(|at| at == needle))
 }
 
 /// Whether any mapping in `mode` has `rhs` as a substring of its RHS.
@@ -399,10 +497,11 @@ pub unsafe fn map_to_exists_mode(rhs: *const c_char, mode: c_int, abbr: bool) ->
     // SAFETY: the caller's promise — `curbuf` is a live buffer.
     let cur = unsafe { Buf::current() };
     // Do it twice: once for global maps and once for local maps.
+    // SAFETY: the caller's promise — `rhs` is live and NUL-terminated.
+    let needle = unsafe { cstr::bytes_at(rhs) };
     for table in [MapTable::Global, MapTable::Buffer(cur)] {
         let visit = |mp: Mb| {
-            // SAFETY: `m_str` and `rhs` are both NUL-terminated.
-            let hit = mp.m_mode & mode != 0 && !unsafe { strstr(mp.m_str, rhs) }.is_null();
+            let hit = mp.m_mode & mode != 0 && contains(mp.rhs(), needle);
             hit.then_some(())
         };
         // SAFETY: the tables are live and `visit` only reads.
@@ -419,10 +518,6 @@ pub(crate) struct MapMatch {
     pub mp: *mut mapblock_T,
     /// Whether it came from the buffer-local table.
     pub local: bool,
-    /// Its RHS, or null when the mapping is a Lua callback.
-    pub rhs: *mut c_char,
-    /// Its Lua callback, or `LUA_NOREF`.
-    pub rhs_lua: LuaRef,
 }
 
 /// Check `keys` against the LHS of every mapping in `mode`.
@@ -435,7 +530,7 @@ pub(crate) struct MapMatch {
 /// # Safety
 /// `keys` must be live and NUL-terminated, and `curbuf` a live buffer.
 pub(crate) unsafe fn check_map(
-    keys: *mut c_char,
+    keys: *const c_char,
     mode: c_int,
     exact: bool,
     ign_mod: bool,
@@ -443,44 +538,28 @@ pub(crate) unsafe fn check_map(
 ) -> Option<MapMatch> {
     // SAFETY: the caller's promise — `keys` is NUL-terminated, and `curbuf` a
     // live buffer.
-    let len = unsafe { cstr::bytes_at(keys) }.len() as c_int;
+    let keys = unsafe { cstr::bytes_at(keys) };
     // SAFETY: as above.
     let cur = unsafe { Buf::current() };
     let visit = |local: bool| {
         move |mp: Mb| {
             // Skip entries with the wrong mode, the wrong length, and the
             // ones that do not match.
-            if mp.m_mode & mode == 0 || (exact && mp.m_keylen != len) {
+            if mp.m_mode & mode == 0 || (exact && mp.keys().len() != keys.len()) {
                 return None;
             }
-            let mut s = mp.m_keys;
-            let mut keylen = mp.m_keylen;
-            // SAFETY: `m_keys` is NUL-terminated and `m_keylen` is its length,
-            // so the two leading bytes a modifier escape needs are there
-            // whenever `keylen >= 3`, and so is the `s.add(3)` tail.
-            let modifier = keylen >= 3
-                && unsafe {
-                    c_int::from(*s as u8) == K_SPECIAL
-                        && c_int::from(*s.add(1) as u8) == KS_MODIFIER
-                };
+            let mut lhs = mp.keys();
+            // A three-byte modifier escape at the front of the stored LHS is
+            // skipped when the caller asked for it.
+            let modifier = matches!(lhs, [a, b, _, ..]
+                if c_int::from(*a) == K_SPECIAL && c_int::from(*b) == KS_MODIFIER);
             if ign_mod && modifier {
-                // SAFETY: as above.
-                s = unsafe { s.add(3) };
-                keylen -= 3;
+                lhs = &lhs[3..];
             }
-            let minlen = keylen.min(len);
-            // SAFETY: both strings are NUL-terminated and `minlen` is no
-            // longer than either.
-            let hit = unsafe { cstr::prefix_eq(s, keys, minlen as size_t) };
-            hit.then(|| MapMatch {
+            let minlen = lhs.len().min(keys.len());
+            (lhs[..minlen] == keys[..minlen]).then(|| MapMatch {
                 mp: mp.raw(),
                 local,
-                rhs: if mp.m_luaref == LUA_NOREF {
-                    mp.m_str
-                } else {
-                    ptr::null_mut()
-                },
-                rhs_lua: mp.m_luaref,
             })
         }
     };

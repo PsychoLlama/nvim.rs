@@ -6,11 +6,23 @@
 //! struct every `:map` command is parsed into, and the six error texts.  The
 //! children reach all of it through `use super::*`; the two tables
 //! themselves live in [`table`].
+//!
+//! # Ownership
+//!
+//! Nothing in this module is freed by hand.  A mapping's four strings are
+//! owned: the LHS is a [`MapStr`] on the entry itself, and the three RHS ones
+//! plus the Lua reference are a [`MapRhs`] behind an [`Rc`], because a
+//! `<C-H>`-style mapping and its unsimplified twin *share* one right-hand
+//! side.  Upstream leaves that share to `m_alt` ("the other one still owns
+//! them"); here `m_alt` is only the twin's address and the refcount decides.
+//! The entry itself is a `Box` its list holds by raw pointer, so a mapping
+//! keeps the stable address `getchar`'s match loop and the delete-walk need,
+//! and [`mapblock_free`] is `Box::from_raw` plus one unlink.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::types::NL;
-use core::ffi::CStr;
+use crate::types::{NL, sctx_T};
+use core::ffi::{CStr, c_int};
 
 use crate::api::private::converter::object_to_vim_take_luaref;
 use crate::api::private::helpers::{
@@ -45,19 +57,17 @@ use crate::main::{
     State, curbuf, current_sctx, curwin, e_invarg, e_noabbr, e_nomap, got_int, langmap_mapchar,
     mapped_ctrl_c, msg_col, msg_row, msg_silent, no_abbr, p_cpo, p_langmap, p_verbose, secure,
 };
+
 use crate::mbyte::{
-    mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
+    cluster_len, mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::memory::{
-    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xcalloc, xfree, xmemcpyz, xstrdup,
-    xstrlcpy,
-};
+use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::message::{
     emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
     msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, str2special_arena,
     str2special_save,
 };
-use crate::os::cshim::{gettext, putc, snprintf, strchr, strstr};
+use crate::os::cshim::{gettext, putc, snprintf, strchr};
 use crate::regexp::vim_regexec;
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
@@ -66,12 +76,13 @@ use crate::state::{
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
-    LuaRef, LuaRetMode, Object, RemapValues, String_0, dict_T, exarg_T, expand_T, fuzmatch_str_T,
-    key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t,
-    typval_T, typval_vval_union, uint64_t, varnumber_T,
+    LuaRef, LuaRetMode, MapRhs, MapStr, Object, RemapValues, String_0, dict_T, exarg_T, expand_T,
+    fuzmatch_str_T, key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t, regmatch_T, scid_T,
+    size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strpbrk};
+use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};
+use std::rc::Rc;
 
 // The carve of the transpiled module; see each child's docs.
 mod table;
@@ -106,20 +117,19 @@ pub const kRetObject: LuaRetMode = 0;
 /// The promise is discharged by the mapping tables: an entry lives until
 /// [`mapblock_free`] takes it off its list, so a handle derived during a walk
 /// is good until the walk unlinks something.  The two functions that *delete*
-/// while walking keep raw pointers instead — they hold the address of an
-/// entry's own `m_next`, and [`Live`]'s `DerefMut` would invalidate it.
+/// while walking hold a [`Cursor`] instead — the address of an entry's own
+/// `m_next`, which [`Live`]'s `DerefMut` would invalidate.
 pub(crate) type Mb = Live<mapblock_T>;
 
-/// The `:map` arguments being parsed, whose caller has promised the struct
-/// outlives the value.
+/// The `:map` arguments being parsed, and the owner of everything a parse
+/// allocates.
 ///
-/// Every parse writes into one `MapArguments` its caller owns — a local of
-/// `do_map`, of `do_exmap` or of an API entry point — so the promise is
-/// discharged by that frame outliving the call.
-pub(crate) type Ma = Live<MapArguments>;
-
-pub type MapArguments = map_arguments;
-pub struct map_arguments {
+/// Nothing here is freed by hand.  The two LHS spellings are [`MapStr`]s; the
+/// right-hand side is the [`MapRhs`] bundle every mapblock this parse creates
+/// will *share*, so `map_add` clones the [`Rc`] rather than taking a pointer
+/// and the caller no longer has to null its own fields out afterwards.  If no
+/// mapping is created, dropping the struct releases the Lua reference too.
+pub(crate) struct MapArguments {
     pub buffer: bool,
     pub expr: bool,
     pub noremap: bool,
@@ -128,18 +138,76 @@ pub struct map_arguments {
     pub silent: bool,
     pub unique: bool,
     pub replace_keycodes: bool,
-    pub lhs: [::core::ffi::c_char; 51],
+    /// The LHS after `replace_termcodes`, truncated to `MAXMAPLEN` bytes.
+    pub lhs: MapStr,
+    /// How long the LHS was *before* that truncation, which is how a caller
+    /// detects an over-long one.
     pub lhs_len: size_t,
-    pub alt_lhs: [::core::ffi::c_char; 51],
+    /// The unsimplified spelling of a `<C-H>`-style LHS; empty when the LHS
+    /// did not simplify.
+    pub alt_lhs: MapStr,
+    /// How long `alt_lhs` was before truncation, or 0 for "did not simplify".
     pub alt_lhs_len: size_t,
-    pub rhs: *mut ::core::ffi::c_char,
-    pub rhs_len: size_t,
-    pub rhs_lua: LuaRef,
+    /// The right-hand side, once [`set_maparg_rhs`] has built it.
+    pub rhs: Option<Rc<MapRhs>>,
+    /// Whether the RHS came out empty from a non-empty spelling, which is
+    /// what `<Nop>` and a lone CTRL-V both mean.
     pub rhs_is_noop: bool,
-    pub orig_rhs: *mut ::core::ffi::c_char,
-    pub orig_rhs_len: size_t,
-    pub desc: *mut ::core::ffi::c_char,
+    /// `:map <desc>`'s text.  Set *before* [`set_maparg_rhs`], which folds it
+    /// into the [`MapRhs`] it builds.
+    pub desc: Option<MapStr>,
 }
+
+impl Default for MapArguments {
+    fn default() -> Self {
+        Self {
+            buffer: false,
+            expr: false,
+            noremap: false,
+            nowait: false,
+            script: false,
+            silent: false,
+            unique: false,
+            replace_keycodes: false,
+            lhs: MapStr::empty(),
+            lhs_len: 0,
+            alt_lhs: MapStr::empty(),
+            alt_lhs_len: 0,
+            rhs: None,
+            rhs_is_noop: false,
+            desc: None,
+        }
+    }
+}
+
+/// `skipwhite` over a slice: `bytes` without its leading spaces and tabs.
+pub(crate) fn skip_white(bytes: &[u8]) -> &[u8] {
+    let at = bytes
+        .iter()
+        .position(|&byte| !ascii_iswhite(c_int::from(byte)))
+        .unwrap_or(bytes.len());
+    &bytes[at..]
+}
+
+impl MapArguments {
+    /// The RHS bundle, which every path that reads one has already built.
+    pub(crate) fn rhs(&self) -> &Rc<MapRhs> {
+        self.rhs
+            .as_ref()
+            .expect("the RHS is parsed before it is read")
+    }
+
+    /// The Lua callback this parse holds, or `LUA_NOREF`.
+    pub(crate) fn rhs_lua(&self) -> LuaRef {
+        self.rhs.as_ref().map_or(LUA_NOREF, |rhs| rhs.luaref)
+    }
+
+    /// How long the RHS is in typeahead form.
+    pub(crate) fn rhs_len(&self) -> size_t {
+        self.rhs.as_ref().map_or(0, |rhs| rhs.str.len())
+    }
+}
+
 pub const MAPTYPE_UNMAP: ::core::ffi::c_uint = 1;
 pub const MAPTYPE_NOREMAP: ::core::ffi::c_uint = 2;
 pub const MAPTYPE_UNMAP_LHS: ::core::ffi::c_uint = 3;
@@ -172,28 +240,6 @@ pub const E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT: &CStr =
     c"E460: Entries missing in mapset() dict argument";
 pub const E_ILLEGAL_MAP_MODE_STRING_STR: &CStr = c"E1276: Illegal map mode string: '%s'";
 
-/// A `MapArguments` with nothing set, which is what every parse starts from.
-pub const MAP_ARGUMENTS_INIT: MapArguments = map_arguments {
-    buffer: false,
-    expr: false,
-    noremap: false,
-    nowait: false,
-    script: false,
-    silent: false,
-    unique: false,
-    replace_keycodes: false,
-    lhs: [0; 51],
-    lhs_len: 0,
-    alt_lhs: [0; 51],
-    alt_lhs_len: 0,
-    rhs: ::core::ptr::null_mut(),
-    rhs_len: 0,
-    rhs_lua: LUA_NOREF,
-    rhs_is_noop: false,
-    orig_rhs: ::core::ptr::null_mut(),
-    orig_rhs_len: 0,
-    desc: ::core::ptr::null_mut(),
-};
 /// The largest value a `'langmap'` pair's target can have and still fit in
 /// `langmap_mapchar`.
 pub const UCHAR_MAX: ::core::ffi::c_int = 255;

@@ -53,41 +53,24 @@ const MODE_COMMANDS: [(c_int, &[u8]); 20] = [
 /// The bytes that force `'cpoptions'` to be reset around the written
 /// mappings: `K_SPECIAL` and a newline both read back differently under a
 /// non-default `'cpo'`.
-const CPO_FORCING: [c_char; 3] = [K_SPECIAL as u8 as c_char, NL as c_char, NUL as c_char];
+const CPO_FORCING: [u8; 2] = [K_SPECIAL as u8, NL as u8];
 
 /// Whether `mp` is a mapping `:mkexrc` can write out at all.
 ///
 /// Script-local and Lua mappings are skipped, as is anything whose RHS
 /// mentions `<SNR>`: none of the three would work when read back.
-///
-/// # Safety
-/// `mp` must be a live mapblock.
-unsafe fn is_writable_map(mp: Mb) -> bool {
-    if mp.m_noremap == REMAP_SCRIPT || mp.m_luaref != LUA_NOREF {
+fn is_writable_map(mp: Mb) -> bool {
+    if mp.m_noremap == REMAP_SCRIPT || mp.luaref() != LUA_NOREF {
         return false;
     }
-    let mut p = mp.m_str;
-    loop {
-        // SAFETY: `m_str` is the mapping's own NUL-terminated RHS, and the
-        // walk stops at its NUL.
-        let c = unsafe { *p };
-        if c_int::from(c) == NUL {
-            break;
-        }
-        let snr = c_int::from(c as u8) == K_SPECIAL
-            // SAFETY: a `K_SPECIAL` escape is three bytes, so the two after
-            // it are inside the same string.
-            && unsafe {
-                c_int::from(*p.add(1) as u8) == KS_EXTRA
-                    && c_int::from(*p.add(2)) == KE_SNR as c_int
-            };
-        if snr {
-            return false;
-        }
-        // SAFETY: `p` is on a non-NUL byte, so the next one is in the string.
-        p = unsafe { p.add(1) };
-    }
-    true
+    // A `<SNR>` in the RHS is the three-byte escape `K_SPECIAL KS_EXTRA
+    // KE_SNR`; the pointer form read past the end of a two-byte tail, which
+    // the windows below simply do not produce.
+    !mp.rhs().windows(3).any(|at| {
+        c_int::from(at[0]) == K_SPECIAL
+            && c_int::from(at[1]) == KS_EXTRA
+            && c_int::from(at[2] as c_char) == KE_SNR as c_int
+    })
 }
 
 /// The session or `.exrc` file being written, whose caller has promised the
@@ -164,8 +147,7 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
     // Do the loop twice: once for mappings, once for abbreviations.
     for abbr in [false, true] {
         let write = |mp: Mb| {
-            // SAFETY: `mp` is a live entry of the table being walked.
-            if !unsafe { is_writable_map(mp) } {
+            if !is_writable_map(mp) {
                 return None;
             }
 
@@ -192,17 +174,10 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
                 // When writing the <> form, 'cpo' has to be the Vim
                 // default; say so once, the first time it can matter.
                 if !did_cpo {
-                    // SAFETY: `m_str` and `m_keys` are the mapping's own
-                    // NUL-terminated strings, and `CPO_FORCING` is a
-                    // NUL-terminated set of bytes.
-                    let forcing = unsafe {
-                        !strpbrk(mp.m_str, CPO_FORCING.as_ptr()).is_null()
-                            || !strpbrk(mp.m_keys, CPO_FORCING.as_ptr()).is_null()
-                    };
-                    // SAFETY: as above.
-                    if unsafe { c_int::from(*mp.m_str) } == NUL {
+                    let forcing = |bytes: &[u8]| bytes.iter().any(|b| CPO_FORCING.contains(b));
+                    if mp.rhs().is_empty() {
                         did_cpo = true; // will use <Nop>
-                    } else if forcing {
+                    } else if forcing(mp.rhs()) || forcing(mp.keys()) {
                         did_cpo = true;
                     }
                     if did_cpo
@@ -227,13 +202,13 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
                 if buf.is_some() && !out.puts(c" <buffer>") {
                     return Some(Failed);
                 }
-                if mp.m_nowait != 0 && !out.puts(c" <nowait>") {
+                if mp.m_nowait && !out.puts(c" <nowait>") {
                     return Some(Failed);
                 }
-                if mp.m_silent != 0 && !out.puts(c" <silent>") {
+                if mp.m_silent && !out.puts(c" <silent>") {
                     return Some(Failed);
                 }
-                if mp.m_expr != 0 && !out.puts(c" <expr>") {
+                if mp.m_expr && !out.puts(c" <expr>") {
                     return Some(Failed);
                 }
 
@@ -241,9 +216,9 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
                 // NUL-terminated strings and `out` an open stream.
                 let wrote = unsafe {
                     out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_keys, EscTarget::MapLhs).is_ok()
+                        && put_escstr(fd, mp.m_keys.as_ptr(), EscTarget::MapLhs).is_ok()
                         && out.putc(c_int::from(b' '))
-                        && put_escstr(fd, mp.m_str, EscTarget::MapRhs).is_ok()
+                        && put_escstr(fd, mp.m_rhs.str.as_ptr(), EscTarget::MapRhs).is_ok()
                         && out.eol()
                 };
                 if !wrote {

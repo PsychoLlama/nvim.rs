@@ -80,7 +80,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     }
 
     // SAFETY: `which` is a NUL-terminated mode string.
-    let mode = unsafe { get_map_mode_string(which, is_abbr) };
+    let mode = get_map_mode_string(unsafe { cstr::bytes_at(which) }, is_abbr);
     if mode == 0 {
         // SAFETY: a static format whose one conversion is `which`.
         let which = unsafe { c_str(which) };
@@ -123,50 +123,43 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         return;
     }
 
-    // SAFETY: `d` is a live dict.
-    let mut noremap = if unsafe { tv_dict_get_number(d, c"noremap".as_ptr()) } != 0 {
+    // The dict is read a dozen times; the promise that `d` is live is made
+    // once, here, and every read after it is ordinary checked code.
+    // SAFETY: `d` is the live dict taken off the argument above, and every
+    // key is NUL-terminated by its type.
+    let number = |key: &CStr| unsafe { tv_dict_get_number(d, key.as_ptr()) };
+
+    let mut noremap = if number(c"noremap") != 0 {
         REMAP_NONE
     } else {
         0
     };
-    // SAFETY: as above.
-    if unsafe { tv_dict_get_number(d, c"script".as_ptr()) } != 0 {
+    if number(c"script") != 0 {
         noremap = REMAP_SCRIPT;
     }
 
-    // Upstream's designated initialiser, which leaves everything it does not
-    // name zeroed -- including `rhs_lua`, which `set_maparg_rhs` overwrites
-    // below.  `MAP_ARGUMENTS_INIT` cannot stand in on its own: it seeds
-    // `rhs_lua` with `LUA_NOREF`, which is not zero.
+    // SAFETY: as above; the `desc` allocation is copied out of and released
+    // by the guard.
+    let desc = unsafe { COwned::new(tv_dict_get_string_alloc(d, c"desc".as_ptr())) };
     let mut args = MapArguments {
-        rhs_lua: 0,
-        ..MAP_ARGUMENTS_INIT
+        expr: number(c"expr") != 0,
+        silent: number(c"silent") != 0,
+        nowait: number(c"nowait") != 0,
+        replace_keycodes: number(c"replace_keycodes") != 0,
+        desc: desc.to_map_str(),
+        ..MapArguments::default()
     };
-    // SAFETY: `d` is a live dict; the `desc` allocation becomes the mapping's.
-    unsafe {
-        args.expr = tv_dict_get_number(d, c"expr".as_ptr()) != 0;
-        args.silent = tv_dict_get_number(d, c"silent".as_ptr()) != 0;
-        args.nowait = tv_dict_get_number(d, c"nowait".as_ptr()) != 0;
-        args.replace_keycodes = tv_dict_get_number(d, c"replace_keycodes".as_ptr()) != 0;
-        args.desc = tv_dict_get_string_alloc(d, c"desc".as_ptr());
-    }
 
-    // SAFETY: as above.
-    let (sid, lnum, buffer) = unsafe {
-        (
-            tv_dict_get_number(d, c"sid".as_ptr()) as scid_T,
-            tv_dict_get_number(d, c"lnum".as_ptr()) as linenr_T,
-            tv_dict_get_number(d, c"buffer".as_ptr()) != 0,
-        )
-    };
+    let sid = number(c"sid") as scid_T;
+    let lnum = number(c"lnum") as linenr_T;
+    let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.
 
     let cpo = p_cpo.get();
-    let parsed = &raw mut args;
-    // SAFETY: `orig_rhs` is NUL-terminated and `args` this frame's own struct.
+    // SAFETY: `orig_rhs` is NUL-terminated.
     unsafe {
         let rhs_len = cstr::bytes_at(orig_rhs).len();
-        set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo, parsed);
+        set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo, &mut args);
     }
 
     // SAFETY: `curbuf` is set from startup to exit; `&raw` reads nothing, and
@@ -186,39 +179,48 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     };
 
     // Delete any existing mapping for this lhs and mode.
-    let mut unmap_args = MAP_ARGUMENTS_INIT;
-    let unmap = &raw mut unmap_args;
-    // SAFETY: `lhs` is NUL-terminated and `unmap_args` this frame's struct.
+    let mut unmap_args = MapArguments::default();
+    // SAFETY: `lhs` is NUL-terminated.
     unsafe {
         let lhs_len = cstr::bytes_at(lhs).len();
-        set_maparg_lhs_rhs(lhs, lhs_len, c"".as_ptr(), 0, LUA_NOREF, cpo, unmap);
+        set_maparg_lhs_rhs(
+            lhs,
+            lhs_len,
+            c"".as_ptr(),
+            0,
+            LUA_NOREF,
+            cpo,
+            &mut unmap_args,
+        );
     }
     unmap_args.buffer = buffer;
     let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
-    // SAFETY: `curbuf` is live, and `unmap_args` is this frame's struct.
-    unsafe {
-        let cur = Buf::current();
-        buf_do_map(unmap_lhs, unmap, mode, is_abbr, cur);
-        xfree(unmap_args.rhs.cast());
-        xfree(unmap_args.orig_rhs.cast());
-    }
+    // SAFETY: `curbuf` is live.
+    let cur = unsafe { Buf::current() };
+    // SAFETY: as above.
+    unsafe { buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur) };
+    drop(unmap_args);
 
     let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
-    // SAFETY: `curbuf` is set from startup to exit.
-    let cur = unsafe { Buf::current() };
-    let add = |keys, simplified| {
-        // SAFETY: both tables name live storage, `keys` is one of the dict's
-        // NUL-terminated LHS strings, and `args` is this frame's struct.
+    let add = |keys: &[u8], simplified| {
+        // SAFETY: both tables name live storage.
         unsafe {
             let (m, a) = (map_table, abbr_table);
             map_add(
-                cur, m, a, keys, parsed, noremap, mode, is_abbr, sid, lnum, simplified,
+                cur, m, a, keys, &args, noremap, mode, is_abbr, sid, lnum, simplified,
             )
         }
     };
+    // SAFETY: both are the dict's own NUL-terminated LHS strings.
+    let (lhsraw, lhsrawalt) = unsafe {
+        (
+            cstr::bytes_at(lhsraw),
+            (!lhsrawalt.is_null()).then(|| cstr::bytes_at(lhsrawalt)),
+        )
+    };
     mp_result[0] = add(lhsraw, false);
-    if !lhsrawalt.is_null() {
-        mp_result[1] = add(lhsrawalt, true);
+    if let Some(alt) = lhsrawalt {
+        mp_result[1] = add(alt, true);
     }
 
     if !mp_result[0].is_null() && !mp_result[1].is_null() {
@@ -265,26 +267,25 @@ pub unsafe fn modify_keymap(
     // below.
     let sctx = api_set_sctx(channel_id);
 
-    let mut parsed_args = MAP_ARGUMENTS_INIT;
+    let mut parsed_args = MapArguments::default();
     if !opts.is_null() {
         // SAFETY: the caller's promise -- a non-null `opts` is a live keyset,
         // whose `desc` string this copies and whose `callback` it takes over.
-        unsafe {
-            let mut o = Live::new(opts);
-            parsed_args.nowait = o.nowait;
-            parsed_args.noremap = o.noremap;
-            parsed_args.silent = o.silent;
-            parsed_args.script = o.script;
-            parsed_args.expr = o.expr;
-            parsed_args.unique = o.unique;
-            parsed_args.replace_keycodes = o.replace_keycodes;
-            if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__callback != 0 {
-                lua_funcref = o.callback;
-                o.callback = LUA_NOREF;
-            }
-            if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__desc != 0 {
-                parsed_args.desc = string_to_cstr(o.desc);
-            }
+        let mut o = unsafe { Live::new(opts) };
+        parsed_args.nowait = o.nowait;
+        parsed_args.noremap = o.noremap;
+        parsed_args.silent = o.silent;
+        parsed_args.script = o.script;
+        parsed_args.expr = o.expr;
+        parsed_args.unique = o.unique;
+        parsed_args.replace_keycodes = o.replace_keycodes;
+        if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__callback != 0 {
+            lua_funcref = o.callback;
+            o.callback = LUA_NOREF;
+        }
+        if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__desc != 0 {
+            // SAFETY: the keyset's own API string, which this copies out of.
+            parsed_args.desc = unsafe { COwned::new(string_to_cstr(o.desc)) }.to_map_str();
         }
     }
     parsed_args.buffer = !global;
@@ -295,14 +296,12 @@ pub unsafe fn modify_keymap(
             break 'fail_and_free;
         }
 
-        let parsed = &raw mut parsed_args;
         let cpo = p_cpo.get();
-        // SAFETY: `lhs` and `rhs` are live API strings, and `parsed_args` is
-        // this frame's own struct.
+        // SAFETY: `lhs` and `rhs` are live API strings.
         let ok = unsafe {
             let (l, ll) = (lhs.data(), lhs.len());
             let (r, rl) = (rhs.data(), rhs.len());
-            set_maparg_lhs_rhs(l, ll, r, rl, lua_funcref, cpo, parsed)
+            set_maparg_lhs_rhs(l, ll, r, rl, lua_funcref, cpo, &mut parsed_args)
         };
         if !ok
             || parsed_args.lhs_len > MAXMAPLEN as size_t
@@ -342,7 +341,7 @@ pub unsafe fn modify_keymap(
 
         if !is_unmap
             && lua_funcref == LUA_NOREF
-            && parsed_args.rhs_len == 0
+            && parsed_args.rhs_len() == 0
             && !parsed_args.rhs_is_noop
         {
             if rhs.is_empty() {
@@ -352,12 +351,12 @@ pub unsafe fn modify_keymap(
                 // SAFETY: `abort` never returns and reads nothing of ours.
                 unsafe { abort() }; // should never happen
             }
-        } else if is_unmap && (parsed_args.rhs_len != 0 || parsed_args.rhs_lua != LUA_NOREF) {
+        } else if is_unmap && (parsed_args.rhs_len() != 0 || parsed_args.rhs_lua() != LUA_NOREF) {
             // SAFETY: `parsed_args.rhs` is this frame's own NUL-terminated
             // string, and `err` the caller's slot.
             unsafe {
-                *err = if parsed_args.rhs_len != 0 {
-                    let rhs = c_str(parsed_args.rhs);
+                *err = if parsed_args.rhs_len() != 0 {
+                    let rhs = c_str(parsed_args.rhs().str.as_ptr());
                     api_error!(
                         kErrorTypeValidation,
                         "Gave nonempty RHS in unmap command: {rhs}"
@@ -379,10 +378,10 @@ pub unsafe fn modify_keymap(
         };
 
         // SAFETY: `target_buf` is the live buffer `find_buffer_by_handle`
-        // answered, and `parsed_args` is this frame's struct.
+        // answered.
         let answer = unsafe {
             let target = Buf::new(target_buf);
-            buf_do_map(maptype_val, parsed, mode_val, is_abbrev, target)
+            buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target)
         };
         // The four "already exists" texts hold a `%s`, so their literals are
         // written out here rather than shared with `domap`'s copies, which
@@ -416,16 +415,13 @@ pub unsafe fn modify_keymap(
     }
 
     drop(sctx);
-    if parsed_args.rhs_lua != LUA_NOREF {
+    if parsed_args.rhs.is_none() && lua_funcref != LUA_NOREF {
+        // The parse never got as far as building an RHS, so nothing adopted
+        // the callback.
         // SAFETY: a reference this frame took over and nothing else owns.
-        unsafe { api_free_luaref(parsed_args.rhs_lua) };
-        parsed_args.rhs_lua = LUA_NOREF;
+        unsafe { api_free_luaref(lua_funcref) };
     }
-    // SAFETY: the three allocations this frame made; whatever a mapblock took
-    // ownership of was nulled out by `buf_do_map`.
-    unsafe {
-        xfree(parsed_args.rhs.cast());
-        xfree(parsed_args.orig_rhs.cast());
-        xfree(parsed_args.desc.cast());
-    }
+    // Everything else goes with `parsed_args`: the two strings are its own,
+    // and whatever a mapblock took is holding its own share of the `Rc`.
+    drop(parsed_args);
 }

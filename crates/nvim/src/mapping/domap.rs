@@ -25,63 +25,49 @@ use core::ptr;
 /// If it ends in a keyword character, everything before it must be all
 /// keyword characters or all non-keyword ones -- `#i` for `#include` is the
 /// point of the rule -- and it may never contain white space.
-///
-/// # Safety
-/// `lhs` must be readable for `len` bytes.
-unsafe fn abbrev_lhs_ok(lhs: *const c_char, len: c_int) -> bool {
-    let mut same = -1; // count of characters of the same type at the start
-    // SAFETY: the caller's promise — `lhs` is readable for `len` bytes, which
-    // is where both walks below stop.
-    let first = c_int::from(unsafe { vim_iswordp(lhs) });
+fn abbrev_lhs_ok(lhs: &MapStr) -> bool {
+    // Whether the character starting at `at` is a keyword character.
+    // SAFETY: `at` is a character boundary inside the NUL-terminated LHS.
+    let is_word = |at: usize| c_int::from(unsafe { vim_iswordp(lhs.as_ptr().add(at)) });
+
+    let bytes = lhs.as_bytes();
+    let first = is_word(0);
     let mut last = first;
-    // SAFETY: as above.
-    let (end, mut p) = unsafe {
-        (
-            lhs.offset(len as isize),
-            lhs.offset(utfc_ptr2len(lhs) as isize),
-        )
-    };
+    let mut same = -1; // count of characters of the same type at the start
     let mut n = 1; // number of (multi-byte) characters
-    while p < end {
+    let mut at = cluster_len(bytes);
+    while at < bytes.len() {
         n += 1;
-        // SAFETY: `p` is still below `end`, so it names a byte of `lhs`.
-        last = c_int::from(unsafe { vim_iswordp(p) }); // type of the last character
+        last = is_word(at); // type of the last character
         if same == -1 && last != first {
             same = n - 1;
         }
-        // SAFETY: as above.
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+        at += cluster_len(&bytes[at..]).max(1);
     }
     if last != 0 && n > 2 && same >= 0 && same < n - 1 {
         return false;
     }
     // An abbreviation cannot contain white space.
-    for n in 0..len {
-        // SAFETY: `n` is below `len`, the caller's promised length.
-        if ascii_iswhite(c_int::from(unsafe { *lhs.offset(n as isize) })) {
-            return false;
-        }
-    }
-    true
+    !bytes
+        .iter()
+        .any(|&byte| ascii_iswhite(c_int::from(byte as c_char)))
 }
 
-/// Whether a *global* mapping already claims exactly these `len` keys in any
-/// of `mode`, which is what makes a new `<unique>` buffer-local one fail.
+/// Whether a *global* mapping already claims exactly these keys in any of
+/// `mode`, which is what makes a new `<unique>` buffer-local one fail.
 ///
 /// # Safety
-/// `lhs` must be readable for `len` bytes.
-unsafe fn global_map_exists(mode: c_int, lhs: *const c_char, len: c_int, is_abbrev: bool) -> bool {
+/// The global tables must be live.
+unsafe fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
     let clashes = |mp: Mb| {
         if got_int.get() {
             return Some(false);
         }
         // Check entries with the same mode.
-        // SAFETY: `m_keys` is NUL-terminated and the caller's promise makes
-        // `lhs` readable for `len` bytes, so the comparison stays in both.
-        let same = mp.m_keylen == len && unsafe { cstr::prefix_eq(mp.m_keys, lhs, len as size_t) };
+        let same = mp.keys() == lhs;
         (mp.m_mode & mode != 0 && same).then_some(true)
     };
-    // SAFETY: the global tables are live and `clashes` only reads them.
+    // SAFETY: the caller's promise, and `clashes` only reads.
     unsafe { map_walk(MapTable::Global, is_abbrev, clashes) }.unwrap_or(false)
 }
 
@@ -92,12 +78,11 @@ unsafe fn global_map_exists(mode: c_int, lhs: *const c_char, len: c_int, is_abbr
 /// whose LHS and `lhs` agree as far as the shorter of the two.
 ///
 /// # Safety
-/// `lhs` must be readable for `len` bytes.
+/// `buf` must be a live buffer.
 unsafe fn show_buffer_local(
     buf: Buf,
     mode: c_int,
-    lhs: *const c_char,
-    len: c_int,
+    lhs: &[u8],
     has_lhs: bool,
     is_abbrev: bool,
 ) -> bool {
@@ -106,18 +91,12 @@ unsafe fn show_buffer_local(
         if got_int.get() {
             return Some(()); // 'q' typed at the MORE prompt
         }
-        if mp.m_simplified == 0 && mp.m_mode & mode != 0 {
-            let show = !has_lhs || {
-                let n = mp.m_keylen;
-                // SAFETY: `m_keys` is NUL-terminated and `lhs` is readable for
-                // `len` bytes by the caller's promise.
-                unsafe { cstr::prefix_eq(mp.m_keys, lhs, n.min(len) as size_t) }
-            };
-            if show {
-                // SAFETY: `mp` is an entry of the buffer's live table.
-                unsafe { showmap(mp, true) };
-                did_local = true;
-            }
+        let show =
+            !mp.m_simplified && mp.m_mode & mode != 0 && (!has_lhs || agrees(mp.keys(), lhs));
+        if show {
+            // SAFETY: `mp` is an entry of the buffer's live table.
+            unsafe { showmap(mp, true) };
+            did_local = true;
         }
         None
     };
@@ -126,60 +105,52 @@ unsafe fn show_buffer_local(
     did_local
 }
 
+/// Whether two keys agree as far as the shorter of the two, which is the
+/// `strncmp(a, b, MIN(alen, blen))` every listing and `:unmap` match uses.
+fn agrees(a: &[u8], b: &[u8]) -> bool {
+    let minlen = a.len().min(b.len());
+    a[..minlen] == b[..minlen]
+}
+
 /// Give `mp` the right-hand side and flags in `args`, reusing the block a
 /// `:map` of an existing LHS would otherwise have to allocate.
 ///
+/// The old RHS bundle is released here — by the assignment, not by hand — and
+/// the twin link is cut, because the pair is no longer two spellings of one
+/// mapping.
+///
 /// # Safety
-/// `mp` must be a live mapblock whose mode bits are already cleared, and
-/// `args` a live [`MapArguments`] whose three owning fields this takes.
+/// `mp` must be a live mapblock whose mode bits are already cleared.
 unsafe fn reuse_mapblock(
     mp: Mb,
-    args: *mut MapArguments,
+    args: &MapArguments,
     noremap: c_int,
     mode: c_int,
     simplified: bool,
 ) {
     let mut mp = mp;
-    // SAFETY: the caller's promise — `args` is a live `MapArguments` whose
-    // three owning fields move into `mp` here.
-    let args = unsafe { Live::new(args) };
     let alt = mp.m_alt;
     if !alt.is_null() {
-        // SAFETY: a non-null `m_alt` is the live twin that shares this RHS.
+        // SAFETY: a non-null `m_alt` is the live twin, which keeps the old
+        // RHS alive on its own once this entry lets go of it below.
         unsafe { (*alt).m_alt = ptr::null_mut() };
         mp.m_alt = ptr::null_mut();
-    } else {
-        if mp.m_luaref != LUA_NOREF {
-            // SAFETY: a reference this entry owns, released once.
-            unsafe { api_free_luaref(mp.m_luaref) };
-            mp.m_luaref = LUA_NOREF;
-        }
-        let (str, orig, desc) = (mp.m_str, mp.m_orig_str, mp.m_desc);
-        // SAFETY: the three strings this entry owns once its twin is gone.
-        unsafe {
-            xfree(str.cast());
-            xfree(orig.cast());
-            xfree(desc.cast());
-        }
     }
-    mp.m_str = args.rhs;
-    mp.m_orig_str = args.orig_rhs;
-    mp.m_luaref = args.rhs_lua;
+    mp.m_rhs = Rc::clone(args.rhs());
     mp.m_noremap = noremap;
-    mp.m_nowait = args.nowait as c_char;
-    mp.m_silent = args.silent as c_char;
+    mp.m_nowait = args.nowait;
+    mp.m_silent = args.silent;
     mp.m_mode = mode;
-    mp.m_simplified = c_int::from(simplified);
-    mp.m_expr = args.expr as c_char;
+    mp.m_simplified = simplified;
+    mp.m_expr = args.expr;
     mp.m_replace_keycodes = args.replace_keycodes;
     mp.m_script_ctx = current_sctx.get();
     mp.m_script_ctx.sc_lnum += sourcing_lnum();
     // Off `raw()`, not off a `Deref`: the address has to outlive the borrow
     // that produced it.
-    let sctx = mp.field_ptr(core::mem::offset_of!(mapblock_T, m_script_ctx));
+    let sctx = mp.field_ptr(offset_of!(mapblock_T, m_script_ctx));
     // SAFETY: the entry's own field, and `mp` is live.
     unsafe { nlua_set_sctx(sctx) };
-    mp.m_desc = args.desc;
 }
 
 /// Set or remove a mapping or abbreviation in `buf`, or display matching
@@ -187,17 +158,18 @@ unsafe fn reuse_mapblock(
 ///
 /// `maptype` is one of the `MAPTYPE_*` values and `args` is already parsed
 /// and termcode-replaced: whitespace, `<` and `>` in the two halves are
-/// literal by the time this sees them.
+/// literal by the time this sees them.  Any mapping created *shares* the
+/// parse's right-hand side, so `args` needs nothing done to it afterwards.
 ///
 /// Answers 0 on success, or 1 for invalid arguments, 2 for no match, 5 for a
 /// `<unique>` clash and 6 for a buffer-local `<unique>` entry clashing with a
 /// global one.
 ///
 /// # Safety
-/// `args` must be live.
+/// `buf` must be a live buffer.
 pub(crate) unsafe fn buf_do_map(
     mut maptype: c_int,
-    args: *mut MapArguments,
+    args: &MapArguments,
     mode: c_int,
     is_abbrev: bool,
     buf: Buf,
@@ -215,14 +187,12 @@ pub(crate) unsafe fn buf_do_map(
     let buf_table: *mut *mut mapblock_T = unsafe { &raw mut (*bufp).b_maphash }.cast();
     // SAFETY: as above.
     let buf_abbrs: *mut *mut mapblock_T = unsafe { &raw mut (*bufp).b_first_abbr };
-    // SAFETY: the caller's promise — `args` is a live `MapArguments`.
-    let mut margs = unsafe { Ma::new(args) };
-    let map_table = if margs.buffer {
+    let map_table = if args.buffer {
         buf_table
     } else {
         global_map_heads()
     };
-    let abbr_table = if margs.buffer {
+    let abbr_table = if args.buffer {
         buf_abbrs
     } else {
         global_abbr_head()
@@ -236,7 +206,7 @@ pub(crate) unsafe fn buf_do_map(
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
 
     // For ":noremap" don't remap, otherwise do remap.
-    let noremap = if margs.script {
+    let noremap = if args.script {
         REMAP_SCRIPT
     } else if maptype == MAPTYPE_NOREMAP as c_int {
         REMAP_NONE
@@ -244,12 +214,8 @@ pub(crate) unsafe fn buf_do_map(
         REMAP_YES
     };
 
-    let has_lhs = c_int::from(margs.lhs[0]) != NUL;
-    // SAFETY: `rhs` is either a NUL-terminated allocation the parse made or
-    // unread, because `rhs_lua` short-circuits the test.
-    let has_rhs = margs.rhs_lua != LUA_NOREF
-        || unsafe { c_int::from(*margs.rhs) } != NUL
-        || margs.rhs_is_noop;
+    let has_lhs = !args.lhs.is_empty();
+    let has_rhs = args.rhs_lua() != LUA_NOREF || args.rhs_len() != 0 || args.rhs_is_noop;
     let do_print = !has_lhs || (!is_unmap && !has_rhs);
     if do_print {
         // SAFETY: a static NUL-terminated kind name.
@@ -263,45 +229,38 @@ pub(crate) unsafe fn buf_do_map(
             break 'theend;
         }
 
-        // Both LHS buffers are fields of the caller's struct, so their
-        // addresses are taken off `raw()` rather than off a `Deref`.
-        let plain_lhs: *const c_char = margs.field_ptr(offset_of!(MapArguments, lhs));
-        let alt_lhs: *const c_char = margs.field_ptr(offset_of!(MapArguments, alt_lhs));
-        let mut lhs = plain_lhs;
-        let did_simplify = margs.alt_lhs_len != 0;
+        let did_simplify = args.alt_lhs_len != 0;
 
         // The following is done twice if we have two versions of the keys.
         for keyround in 1..=2 {
             let mut did_it = false;
             let mut did_local = false;
             let keyround1_simplified = keyround == 1 && did_simplify;
-            let mut len = margs.lhs_len as c_int;
 
-            if keyround == 2 {
-                if !did_simplify {
-                    break;
-                }
-                lhs = alt_lhs;
-                len = margs.alt_lhs_len as c_int;
-            } else if did_simplify && do_print {
-                // When printing always use the not-simplified map.
-                lhs = alt_lhs;
-                len = margs.alt_lhs_len as c_int;
+            if keyround == 2 && !did_simplify {
+                break;
             }
+            // Which spelling of the LHS this round works on.  Printing always
+            // uses the not-simplified one.
+            let (lhs, lhs_len) = if keyround == 2 || (did_simplify && do_print) {
+                (&args.alt_lhs, args.alt_lhs_len)
+            } else {
+                (&args.lhs, args.lhs_len)
+            };
 
             // Check arguments and translate function keys.
             if has_lhs {
-                if len > MAXMAPLEN as c_int {
+                if lhs_len > MAXMAPLEN as size_t {
                     retval = 1;
                     break 'theend;
                 }
-                // SAFETY: `lhs` names one of the struct's own LHS buffers,
-                // whose `len` bytes the parse filled in.
-                if is_abbrev && !is_unmap && !unsafe { abbrev_lhs_ok(lhs, len) } {
+                if is_abbrev && !is_unmap && !abbrev_lhs_ok(lhs) {
                     retval = 1;
                     break 'theend;
                 }
             }
+            // Past the length check the truncated copy *is* the whole LHS.
+            let lhs = lhs.as_bytes();
 
             if has_lhs && has_rhs && is_abbrev {
                 // We are adding an abbreviation, so reset the flag that
@@ -316,15 +275,13 @@ pub(crate) unsafe fn buf_do_map(
 
             // Check that a new local mapping was not already defined
             // globally.
-            // SAFETY: as above — `lhs` is `len` readable bytes.
-            let clash = margs.unique
+            let clash = args.unique
                 && map_table == buf_table
                 && has_lhs
                 && has_rhs
                 && !is_unmap
-                // SAFETY (this body): the caller's promise -- `args` is a live
-                // `MapArguments` and `buf` a live buffer.
-                && unsafe { global_map_exists(mode, lhs, len, is_abbrev) };
+                // SAFETY: the global tables are live.
+                && unsafe { global_map_exists(mode, lhs, is_abbrev) };
             if clash {
                 retval = 6;
                 break 'theend;
@@ -332,8 +289,8 @@ pub(crate) unsafe fn buf_do_map(
 
             // When listing global mappings, also list buffer-local ones.
             if map_table != buf_table && !has_rhs && !is_unmap {
-                // SAFETY: as above, and `buf` is live.
-                did_local = unsafe { show_buffer_local(buf, mode, lhs, len, has_lhs, is_abbrev) };
+                // SAFETY: `buf` is live.
+                did_local = unsafe { show_buffer_local(buf, mode, lhs, has_lhs, is_abbrev) };
             }
 
             // Find a matching entry. For :unmap we may loop twice: once
@@ -349,47 +306,45 @@ pub(crate) unsafe fn buf_do_map(
                     let start = if is_abbrev {
                         0
                     } else {
-                        // SAFETY: `lhs` is a filled-in LHS buffer, so its
-                        // first byte is there.
-                        map_hash(mode, c_int::from(unsafe { *lhs } as u8))
+                        map_hash(mode, c_int::from(lhs.first().copied().unwrap_or(0)))
                     };
                     (start, start + 1)
                 } else {
                     (0, MAX_MAPHASH)
                 };
 
-                let mut hash = hash_start;
-                while hash < hash_end && !got_int.get() {
+                for hash in hash_start..hash_end {
+                    if got_int.get() {
+                        break;
+                    }
                     // SAFETY: `hash` is below `MAX_MAPHASH`, the length of the
-                    // mapping table.
-                    let mut mpp: *mut *mut mapblock_T = if is_abbrev {
-                        abbr_table
-                    } else {
-                        unsafe { map_table.add(hash) }
+                    // mapping table, and both heads are live.
+                    let mut at = unsafe {
+                        Cursor::at(if is_abbrev {
+                            abbr_table
+                        } else {
+                            map_table.add(hash)
+                        })
                     };
-                    // SAFETY: the list heads are live and hold live entries.
-                    let mut mp = unsafe { *mpp };
                     // Upstream's two `break`s leave *this* loop and
                     // resume at the next hash bucket, not at the next
                     // round.
-                    'entries: while !mp.is_null() && !got_int.get() {
-                        // Whether to step `mpp` past this entry before
-                        // reading the next one: upstream's bare
-                        // `continue` resumes at `*mpp` instead, because
-                        // the entry it was pointing at is gone.
+                    'entries: while let Some(mut entry) = at.entry() {
+                        if got_int.get() {
+                            break;
+                        }
+                        // Whether to step past this entry before reading the
+                        // next one: upstream's bare `continue` resumes at
+                        // `*mpp` instead, because the entry it was pointing at
+                        // is gone or has moved.
                         let mut advance = true;
-                        // SAFETY: `mp` is a non-null entry of the live list
-                        // `mpp` walks, and stays live until this body frees
-                        // it.  Its `m_next` address is taken off the raw
-                        // pointer at the tail, never off a `Deref`.
-                        let entry = unsafe { Mb::new(mp) };
                         'entry: {
                             if entry.m_mode & mode == 0 {
                                 break 'entry; // skip the wrong mode
                             }
                             if !has_lhs {
                                 // Show all entries.
-                                if entry.m_simplified == 0 {
+                                if !entry.m_simplified {
                                     // SAFETY: `entry` is a live mapblock.
                                     unsafe { showmap(entry, map_table != global_map_heads()) };
                                     did_it = true;
@@ -399,71 +354,61 @@ pub(crate) unsafe fn buf_do_map(
 
                             // Do we have a match? On the second round,
                             // try to unmap the "rhs" string.
-                            // SAFETY: `m_str` and `m_keys` are the entry's own
-                            // NUL-terminated strings.
-                            let (n, p) = if round != 0 {
-                                (
-                                    unsafe { cstr::bytes_at(entry.m_str) }.len() as c_int,
-                                    entry.m_str,
-                                )
+                            let keys = if round != 0 {
+                                entry.rhs()
                             } else {
-                                (entry.m_keylen, entry.m_keys)
+                                entry.keys()
                             };
-                            // SAFETY: as above, and `lhs` is `len` bytes.
-                            if !unsafe { cstr::prefix_eq(p, lhs, n.min(len) as size_t) } {
+                            if !agrees(keys, lhs) {
                                 break 'entry;
                             }
+                            let n = keys.len();
 
                             if is_unmap {
                                 // Delete the entry, but only on a full
                                 // match. For abbreviations we ignore
                                 // trailing space when matching the "lhs",
                                 // since an abbreviation cannot have any.
-                                // SAFETY: `n <= len` guards the step, and the
-                                // LHS buffer is NUL-terminated.
-                                let trailing = n <= len
-                                    && unsafe { c_int::from(*skipwhite(lhs.add(n as usize))) }
-                                        == NUL;
-                                if n != len && !(is_abbrev && round == 0 && trailing) {
+                                let trailing = n <= lhs.len()
+                                    && lhs[n..].iter().all(|&b| ascii_iswhite(c_int::from(b)));
+                                if n != lhs.len() && !(is_abbrev && round == 0 && trailing) {
                                     break 'entry;
                                 }
                                 // In the keyround for simplified keys,
                                 // don't unmap a mapping without the
                                 // m_simplified flag.
-                                if keyround1_simplified && entry.m_simplified == 0 {
+                                if keyround1_simplified && !entry.m_simplified {
                                     break 'entries;
                                 }
                                 // Reset the indicated mode bits; if
                                 // nothing is left the entry is deleted
                                 // below.
-                                // SAFETY: a live entry of the list.
-                                unsafe { (*mp).m_mode &= !mode };
+                                entry.m_mode &= !mode;
                                 did_it = true;
                             } else if !has_rhs {
                                 // Show the matching entry.
-                                if entry.m_simplified == 0 {
+                                if !entry.m_simplified {
                                     // SAFETY: `entry` is a live mapblock.
                                     unsafe { showmap(entry, map_table != global_map_heads()) };
                                     did_it = true;
                                 }
-                            } else if n != len {
+                            } else if n != lhs.len() {
                                 break 'entry; // the new entry is ambiguous
-                            } else if keyround1_simplified && entry.m_simplified == 0 {
+                            } else if keyround1_simplified && !entry.m_simplified {
                                 // In the keyround for simplified keys,
                                 // don't replace a mapping without the
                                 // m_simplified flag.
                                 did_it = true;
                                 break 'entries;
-                            } else if margs.unique {
+                            } else if args.unique {
                                 retval = 5;
                                 break 'theend;
                             } else {
                                 // A new rhs for an existing entry.
-                                // SAFETY: a live entry of the list.
-                                unsafe { (*mp).m_mode &= !mode }; // remove mode bits
+                                entry.m_mode &= !mode; // remove mode bits
                                 if entry.m_mode == 0 && !did_it {
-                                    // SAFETY: as above, and `args` is the
-                                    // caller's live `MapArguments`.
+                                    // SAFETY: `entry` is a live mapblock whose
+                                    // mode bits were just cleared.
                                     unsafe {
                                         reuse_mapblock(
                                             entry,
@@ -473,47 +418,31 @@ pub(crate) unsafe fn buf_do_map(
                                             keyround1_simplified,
                                         );
                                     }
-                                    mp_result[keyround - 1] = mp;
+                                    mp_result[keyround - 1] = entry.raw();
                                     did_it = true;
                                 }
                             }
 
                             if entry.m_mode == 0 {
-                                // SAFETY: `mpp` holds this entry, which is
-                                // unlinked and freed here.
-                                unsafe { mapblock_free(mpp) }; // the entry can go
+                                at.remove(); // the entry can go
                                 advance = false;
                                 break 'entry;
                             }
 
                             // May need to put this entry into another
                             // hash list.
-                            // SAFETY: `m_keys` is NUL-terminated, so byte 0 is
-                            // readable.
-                            let first = unsafe { *entry.m_keys } as u8;
+                            let first = entry.keys().first().copied().unwrap_or(0);
                             let new_hash = map_hash(entry.m_mode, c_int::from(first));
                             if !is_abbrev && new_hash != hash {
-                                // SAFETY: `new_hash` is below `MAX_MAPHASH`,
-                                // and `mpp` is the link holding this entry.
-                                unsafe {
-                                    *mpp = (*mp).m_next;
-                                    let head = map_table.add(new_hash);
-                                    (*mp).m_next = *head;
-                                    *head = mp;
-                                }
+                                // SAFETY: `new_hash` is below `MAX_MAPHASH`.
+                                unsafe { at.relink_to(map_table.add(new_hash)) };
                                 advance = false;
                             }
                         }
-                        // SAFETY: `mp` is still linked when `advance` holds,
-                        // and `mpp` always names a live link.
-                        unsafe {
-                            if advance {
-                                mpp = &raw mut (*mp).m_next;
-                            }
-                            mp = *mpp;
+                        if advance {
+                            at.advance();
                         }
                     }
-                    hash += 1;
                 }
                 round += 1;
             }
@@ -523,8 +452,7 @@ pub(crate) unsafe fn buf_do_map(
                     if !keyround1_simplified {
                         retval = 2; // no match
                     }
-                // SAFETY: `lhs` names a filled-in LHS buffer.
-                } else if unsafe { c_int::from(*lhs) } == Ctrl_C {
+                } else if lhs.first().copied().map(c_int::from) == Some(Ctrl_C) {
                     // CTRL-C has been unmapped, reuse it for Interrupting.
                     if map_table == buf_table {
                         // SAFETY: `Buf`'s promise — a live buffer.
@@ -556,8 +484,7 @@ pub(crate) unsafe fn buf_do_map(
 
             // Get here when adding a new entry to the maphash list or the
             // abbrlist.
-            // SAFETY: `buf` is live, both tables name live storage, `lhs` is
-            // the NUL-terminated LHS buffer and `args` the caller's struct.
+            // SAFETY: `buf` is live and both tables name live storage.
             mp_result[keyround - 1] = unsafe {
                 map_add(
                     buf,
@@ -584,13 +511,6 @@ pub(crate) unsafe fn buf_do_map(
         }
     }
 
-    // Whatever was stored in a mapblock is now owned by it.
-    if !mp_result[0].is_null() || !mp_result[1].is_null() {
-        margs.rhs = ptr::null_mut();
-        margs.orig_rhs = ptr::null_mut();
-        margs.rhs_lua = LUA_NOREF;
-        margs.desc = ptr::null_mut();
-    }
     retval
 }
 
@@ -617,21 +537,13 @@ pub(crate) unsafe fn buf_do_map(
 /// # Safety
 /// `arg` must be a live, writable, NUL-terminated string.
 pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: bool) -> c_int {
-    let mut parsed_args = MAP_ARGUMENTS_INIT;
-    let parsed = &raw mut parsed_args;
+    let mut args = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
-    // SAFETY: the caller's promise — `arg` is live and NUL-terminated — and
-    // `parsed_args` is this frame's own struct, which outlives both calls.
-    let mut result = unsafe { str_to_mapargs(arg, is_unmap, parsed) };
+    // SAFETY: the caller's promise — `arg` is live and NUL-terminated.
+    let mut result = unsafe { str_to_mapargs(arg, is_unmap, &mut args) };
     if result == 0 {
-        // SAFETY: as above.
-        result = unsafe { buf_do_map(maptype, parsed, mode, is_abbrev, cur_buf()) };
-    }
-    // SAFETY: whatever a mapblock took ownership of was nulled out by
-    // `buf_do_map`; the rest is this frame's to free.
-    unsafe {
-        xfree(parsed_args.rhs.cast());
-        xfree(parsed_args.orig_rhs.cast());
+        // SAFETY: `curbuf` is live.
+        result = unsafe { buf_do_map(maptype, &args, mode, is_abbrev, cur_buf()) };
     }
     result
 }
@@ -661,25 +573,19 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
 /// # Safety
 /// `lhs` and `rhs` must be live, NUL-terminated strings.
 pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: bool) {
-    let mut args = MAP_ARGUMENTS_INIT;
-    let parsed = &raw mut args;
+    let mut args = MapArguments::default();
     let cpo = p_cpo.get();
     let noremap = MAPTYPE_NOREMAP as c_int;
     // SAFETY: the caller's promise — both strings are live and
-    // NUL-terminated — and `args` is this frame's own struct.
+    // NUL-terminated.
     unsafe {
         let (lhs_len, rhs_len) = (cstr::bytes_at(lhs).len(), cstr::bytes_at(rhs).len());
-        set_maparg_lhs_rhs(lhs, lhs_len, rhs, rhs_len, LUA_NOREF, cpo, parsed);
+        set_maparg_lhs_rhs(lhs, lhs_len, rhs, rhs_len, LUA_NOREF, cpo, &mut args);
     }
     args.buffer = buffer;
 
-    // SAFETY: as above; `curbuf` is live.
-    unsafe { buf_do_map(noremap, parsed, mode, false, cur_buf()) };
-    // SAFETY: whatever the mapping took ownership of was nulled out.
-    unsafe {
-        xfree(args.rhs.cast());
-        xfree(args.orig_rhs.cast());
-    }
+    // SAFETY: `curbuf` is live.
+    unsafe { buf_do_map(noremap, &args, mode, false, cur_buf()) };
 }
 
 /// `:map`, `:abbrev` and every prefixed variant of either, from the command
@@ -702,53 +608,35 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
         b'u' => MAPTYPE_UNMAP as c_int,
         _ => MAPTYPE_MAP as c_int,
     };
-    let mut parsed_args = MAP_ARGUMENTS_INIT;
-    let parsed = &raw mut parsed_args;
+    let mut args = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
-    // SAFETY: `arg` is the command's own NUL-terminated argument, and
-    // `parsed_args` is this frame's struct.
-    if unsafe { str_to_mapargs(eap.arg, is_unmap, parsed) } != 0 {
+    // SAFETY: `arg` is the command's own NUL-terminated argument.
+    if unsafe { str_to_mapargs(eap.arg, is_unmap, &mut args) } != 0 {
         emsg(gettext(e_invarg)); // invalid arguments
-    } else {
-        let lhs = (&raw mut parsed_args.lhs).cast::<c_char>();
-        // SAFETY: as above; `curbuf` is live.
-        let answer = unsafe { buf_do_map(maptype, parsed, mode, isabbrev, cur_buf()) };
-        {
-            match answer {
-                1 => {
-                    emsg(gettext(e_invarg));
-                }
-                2 => {
-                    emsg(gettext(if isabbrev { e_noabbr } else { e_nomap }));
-                }
-                5 => {
-                    let which = if isabbrev {
-                        E_ABBREVIATION_ALREADY_EXISTS_FOR_STR
-                    } else {
-                        E_MAPPING_ALREADY_EXISTS_FOR_STR
-                    };
-                    // SAFETY: the mapping's NUL-terminated left-hand side.
-                    let lhs = unsafe { c_str(lhs) };
-                    emsg_text(tr_c!(which, lhs));
-                }
-                6 => {
-                    let which = if isabbrev {
-                        E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR
-                    } else {
-                        E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR
-                    };
-                    // SAFETY: the mapping's NUL-terminated left-hand side.
-                    let lhs = unsafe { c_str(lhs) };
-                    emsg_text(tr_c!(which, lhs));
-                }
-                _ => {}
-            }
-        }
+        return;
     }
-    // SAFETY: whatever a mapblock took ownership of was nulled out.
-    unsafe {
-        xfree(parsed_args.rhs.cast());
-        xfree(parsed_args.orig_rhs.cast());
+    // SAFETY: `curbuf` is live.
+    let answer = unsafe { buf_do_map(maptype, &args, mode, isabbrev, cur_buf()) };
+    let lhs = args.lhs.as_ptr();
+    match answer {
+        1 => {
+            emsg(gettext(e_invarg));
+        }
+        2 => {
+            emsg(gettext(if isabbrev { e_noabbr } else { e_nomap }));
+        }
+        5 | 6 => {
+            let which = match (answer, isabbrev) {
+                (5, true) => E_ABBREVIATION_ALREADY_EXISTS_FOR_STR,
+                (5, false) => E_MAPPING_ALREADY_EXISTS_FOR_STR,
+                (_, true) => E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR,
+                (_, false) => E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR,
+            };
+            // SAFETY: the parse's own NUL-terminated left-hand side.
+            let lhs = unsafe { c_str(lhs) };
+            emsg_text(tr_c!(which, lhs));
+        }
+        _ => {}
     }
 }
 

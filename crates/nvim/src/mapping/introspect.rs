@@ -11,6 +11,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
+use crate::memory::handoff::owned_cstr;
 use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown};
 use crate::winlayer::Buf;
@@ -20,6 +21,45 @@ use core::ptr;
 /// Size of the scratch buffer `tv_get_string_buf` may answer with.
 const NUMBUFLEN: usize = 65;
 
+/// A Vimscript argument vector, whose caller has promised it is live and
+/// terminated by a `VAR_UNKNOWN` slot.
+///
+/// The whole convention is "read slot `n` only once every earlier slot held a
+/// value", which upstream spells as a staircase of `v_type != VAR_UNKNOWN`
+/// tests around the reads.  Finding the terminator once, at construction,
+/// turns the staircase into an `Option` and every argument read after it into
+/// ordinary checked code.
+pub(crate) struct Argv {
+    at: *mut typval_T,
+    len: usize,
+}
+
+impl Argv {
+    /// # Safety
+    /// `argvars` must be a live argument vector terminated by `VAR_UNKNOWN`.
+    pub(crate) unsafe fn new(argvars: *mut typval_T) -> Self {
+        // SAFETY: the caller's promise — the vector runs to a `VAR_UNKNOWN`,
+        // so the walk stops inside it.
+        let len = (0..)
+            .find(|&n| unsafe { (*argvars.add(n)).v_type } == VAR_UNKNOWN)
+            .expect("a Vimscript argument vector is terminated");
+        Self { at: argvars, len }
+    }
+
+    /// Argument `n`, or `None` when the call did not give one.
+    pub(crate) fn get(&self, n: usize) -> Option<*mut typval_T> {
+        // SAFETY: `n` is below the terminator's index, so the slot is one the
+        // caller's vector holds.
+        (n < self.len).then(|| unsafe { self.at.add(n) })
+    }
+
+    /// Argument `n` as a number, or `None` when the call did not give one.
+    pub(crate) fn number(&self, n: usize) -> Option<varnumber_T> {
+        // SAFETY: `get` answers a slot of the caller's live vector.
+        self.get(n).map(|at| unsafe { tv_get_number(at) })
+    }
+}
+
 /// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
 /// RHS.
 ///
@@ -28,23 +68,16 @@ const NUMBUFLEN: usize = 65;
 pub unsafe fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
-    let mut abbr = false;
-    // SAFETY: the Vimscript call convention — `argvars` names at least the
-    // three slots read here, terminated by a `VAR_UNKNOWN`, and `buf` is the
-    // scratch `tv_get_string_buf` may answer with.
-    let (name, mode) = unsafe {
-        let name = numbuf.string(argvars);
-        let mode = if (*argvars.add(1)).v_type == VAR_UNKNOWN as _ {
-            c"nvo".as_ptr()
-        } else {
-            let mode = tv_get_string_buf(argvars.add(1), buf.as_mut_ptr());
-            if (*argvars.add(2)).v_type != VAR_UNKNOWN as _ {
-                abbr = tv_get_number(argvars.add(2)) != 0;
-            }
-            mode
-        };
-        (name, mode)
+    // SAFETY: the Vimscript call convention — `argvars` is a live argument
+    // vector, and `numbuf` outlives the string it lends back.
+    let (argv, name) = unsafe { (Argv::new(argvars), numbuf.string(argvars)) };
+    let mode = match argv.get(1) {
+        // SAFETY: a slot the vector holds, and `buf` is the scratch
+        // `tv_get_string_buf` may answer with.
+        Some(at) => unsafe { tv_get_string_buf(at, buf.as_mut_ptr()) },
+        None => c"nvo".as_ptr(),
     };
+    let abbr = argv.number(2).is_some_and(|n| n != 0);
     // SAFETY: both strings are NUL-terminated, and `rettv` is the caller's
     // writable answer slot.
     unsafe {
@@ -104,7 +137,7 @@ impl Filling {
 /// `mp` must be a live mapblock and `arena` a live arena.
 pub(crate) unsafe fn mapblock_fill_dict(
     mp: Mb,
-    lhsrawalt: *const c_char,
+    lhsrawalt: Option<&MapStr>,
     buffer_value: c_int,
     abbr: bool,
     compatible: bool,
@@ -115,11 +148,12 @@ pub(crate) unsafe fn mapblock_fill_dict(
     // writable bytes, which is the width `map_mode_to_chars` fills.
     let (dict, lhs, mapmode) = unsafe {
         let dict = arena_dict(arena, MAPARG_DICT_KEYS);
-        let lhs = str2special_arena(mp.m_keys, compatible, !compatible, arena);
+        let lhs = str2special_arena(mp.m_keys.as_ptr(), compatible, !compatible, arena);
         let mapmode: *mut c_char = arena_alloc(arena, 7, false).cast();
         mapmode.copy_from_nonoverlapping(map_mode_to_chars(mp.m_mode).as_ptr(), 7);
         (dict, lhs, mapmode)
     };
+    let rhs = &mp.m_rhs;
     // SAFETY: `arena_dict` just reserved `MAPARG_DICT_KEYS` entries.
     let mut out = unsafe { Filling::new(dict) };
 
@@ -133,37 +167,37 @@ pub(crate) unsafe fn mapblock_fill_dict(
         c_int::from(mp.m_noremap != 0)
     };
 
-    if mp.m_luaref != LUA_NOREF {
+    if rhs.luaref != LUA_NOREF {
         // SAFETY: the mapping's own reference, of which this takes a new one
         // for the caller to own.
-        let luaref = unsafe { api_new_luaref(mp.m_luaref) };
+        let luaref = unsafe { api_new_luaref(rhs.luaref) };
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
-        // SAFETY: `m_orig_str` and `m_str` are the mapping's own
-        // NUL-terminated strings, and `arena` is live.
-        let rhs = unsafe {
+        // SAFETY: `orig_str` and `str` are the mapping's own NUL-terminated
+        // strings, and `arena` is live.
+        let text = unsafe {
             cstr_as_string(if compatible {
-                mp.m_orig_str
+                rhs.orig_str.as_ptr()
             } else {
-                str2special_arena(mp.m_str, false, true, arena)
+                str2special_arena(rhs.str.as_ptr(), false, true, arena)
             })
         };
-        out.put(c"rhs", Object::string(rhs));
+        out.put(c"rhs", Object::string(text));
     }
-    if !mp.m_desc.is_null() {
-        // SAFETY: a non-null `m_desc` is the mapping's own NUL-terminated text.
-        let desc = unsafe { cstr_as_string(mp.m_desc) };
+    if let Some(desc) = &rhs.desc {
+        // SAFETY: the mapping's own NUL-terminated text.
+        let desc = unsafe { cstr_as_string(desc.as_ptr()) };
         out.put(c"desc", Object::string(desc));
     }
     // SAFETY: `lhs` is `str2special_arena`'s answer and `m_keys` the mapping's
     // own LHS; both are NUL-terminated.
-    let (lhs, lhsraw) = unsafe { (cstr_as_string(lhs), cstr_as_string(mp.m_keys)) };
+    let (lhs, lhsraw) = unsafe { (cstr_as_string(lhs), cstr_as_string(mp.m_keys.as_ptr())) };
     out.put(c"lhs", Object::string(lhs));
     out.put(c"lhsraw", Object::string(lhsraw));
-    if !lhsrawalt.is_null() {
+    if let Some(alt) = lhsrawalt {
         // Also add the value for the simplified entry.
-        // SAFETY: the caller's promise — a NUL-terminated alternative LHS.
-        let alt = unsafe { cstr_as_string(lhsrawalt) };
+        // SAFETY: a `MapStr` is NUL-terminated by its own invariant.
+        let alt = unsafe { cstr_as_string(alt.as_ptr()) };
         out.put(c"lhsrawalt", Object::string(alt));
     }
     out.put(c"noremap", Object::integer(noremap_value.into()));
@@ -171,8 +205,8 @@ pub(crate) unsafe fn mapblock_fill_dict(
         c"script",
         Object::integer(Integer::from(mp.m_noremap == REMAP_SCRIPT)),
     );
-    out.put(c"expr", Object::integer(Integer::from(mp.m_expr != 0)));
-    out.put(c"silent", Object::integer(Integer::from(mp.m_silent != 0)));
+    out.put(c"expr", Object::integer(Integer::from(mp.m_expr)));
+    out.put(c"silent", Object::integer(Integer::from(mp.m_silent)));
     out.put(c"sid", Object::integer(mp.m_script_ctx.sc_sid.into()));
     out.put(c"scriptversion", Object::integer(1));
     out.put(c"lnum", Object::integer(mp.m_script_ctx.sc_lnum.into()));
@@ -180,7 +214,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
     if !compatible {
         out.put(c"buf", Object::integer(buffer_value.into()));
     }
-    out.put(c"nowait", Object::integer(Integer::from(mp.m_nowait != 0)));
+    out.put(c"nowait", Object::integer(Integer::from(mp.m_nowait)));
     out.put(
         c"replace_keycodes",
         Object::integer(Integer::from(mp.m_replace_keycodes)),
@@ -215,23 +249,15 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
     }
 
     let mut buf = [0 as c_char; NUMBUFLEN];
-    let mut abbr = false;
-    let mut get_dict = false;
-    // SAFETY: as above — the vector runs to a `VAR_UNKNOWN`, so every slot
-    // tested here is there, and `buf` is `tv_get_string_buf_chk`'s scratch.
-    let mut which: *mut c_char = unsafe {
-        if (*argvars.add(1)).v_type != VAR_UNKNOWN as _ {
-            let which = tv_get_string_buf_chk(argvars.add(1), buf.as_mut_ptr());
-            if (*argvars.add(2)).v_type != VAR_UNKNOWN as _ {
-                abbr = tv_get_number(argvars.add(2)) != 0;
-                if (*argvars.add(3)).v_type != VAR_UNKNOWN as _ {
-                    get_dict = tv_get_number(argvars.add(3)) != 0;
-                }
-            }
-            which.cast_mut()
-        } else {
-            c"".as_ptr().cast_mut()
-        }
+    // SAFETY: as above — a live argument vector.
+    let argv = unsafe { Argv::new(argvars) };
+    let abbr = argv.number(2).is_some_and(|n| n != 0);
+    let get_dict = argv.number(3).is_some_and(|n| n != 0);
+    let mut which: *mut c_char = match argv.get(1) {
+        // SAFETY: a slot the vector holds, and `buf` is
+        // `tv_get_string_buf_chk`'s scratch.
+        Some(at) => unsafe { tv_get_string_buf_chk(at, buf.as_mut_ptr()) }.cast_mut(),
+        None => c"".as_ptr().cast_mut(),
     };
     if which.is_null() {
         return;
@@ -251,59 +277,61 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
     let mode = unsafe { get_map_mode(&raw mut which, false) };
 
     // SAFETY: `keys` is NUL-terminated, and both `*_buf` slots are locals that
-    // outlive the calls; the allocations they take over are freed below.
-    let (keys_simplified, mut found) = unsafe {
+    // outlive the calls; the allocations they take over are the guards'.
+    let (keys_simplified, _owned, mut found) = unsafe {
         let len = cstr::bytes_at(keys).len();
         let simplified = replace_termcodes(keys, len, out, 0, flags, simplify, cpo);
-        (simplified, check_map(simplified, mode, exact, false, abbr))
+        let owned = COwned::new(keys_buf);
+        let found = check_map(simplified, mode, exact, false, abbr);
+        (simplified, owned, found)
     };
-    if did_simplify {
-        // When the lhs is being simplified the not-simplified keys are
-        // preferred for printing, like in do_map(). Upstream leaves the
-        // previous `mp` in place when this second look-up fails, but it
-        // clears both `rhs` and `rhs_lua`, and every reader of `mp` is
-        // behind a test on one of those -- so dropping the whole match
-        // is the same answer.
-        // SAFETY: as above.
-        found = unsafe {
+    // SAFETY: as above.
+    let _alt_owned = unsafe {
+        if did_simplify {
+            // When the lhs is being simplified the not-simplified keys are
+            // preferred for printing, like in do_map(). Upstream leaves the
+            // previous `mp` in place when this second look-up fails, but it
+            // clears both `rhs` and `rhs_lua`, and every reader of `mp` is
+            // behind a test on one of those -- so dropping the whole match
+            // is the same answer.
             let len = cstr::bytes_at(keys).len();
             replace_termcodes(keys, len, alt_out, 0, nosimp, plain, cpo);
-            check_map(alt_keys_buf, mode, exact, false, abbr)
-        };
-    }
+            found = check_map(alt_keys_buf, mode, exact, false, abbr);
+        }
+        COwned::new(alt_keys_buf)
+    };
 
+    // SAFETY: a match names a still-linked mapping.
+    let found = found.map(|found| (unsafe { Mb::new(found.mp) }, found.local));
     if !get_dict {
         // Return a string.
-        if let Some(found) = &found {
-            if !found.rhs.is_null() {
-                // SAFETY: `rhs` is the matching mapping's NUL-terminated RHS.
-                ret.vval.v_string = unsafe {
-                    if c_int::from(*found.rhs) == NUL {
-                        xstrdup(c"<Nop>".as_ptr())
-                    } else {
-                        str2special_save(found.rhs, false, false)
-                    }
-                };
-            } else if found.rhs_lua != LUA_NOREF {
+        if let Some((mp, _)) = found {
+            let rhs = &mp.m_rhs;
+            ret.vval.v_string = if rhs.luaref != LUA_NOREF {
                 // SAFETY: `mp` is the matching mapping, still linked.
-                ret.vval.v_string =
-                    unsafe { nlua_funcref_str((*found.mp).m_luaref, ptr::null_mut()) };
-            }
+                unsafe { nlua_funcref_str(rhs.luaref, ptr::null_mut()) }
+            } else if rhs.str.is_empty() {
+                owned_cstr(b"<Nop>".to_vec())
+            } else {
+                // SAFETY: the matching mapping's NUL-terminated RHS.
+                unsafe { str2special_save(rhs.str.as_ptr(), false, false) }
+            };
         }
-    } else if let Some(found) = found.filter(|f| !f.rhs.is_null() || f.rhs_lua != LUA_NOREF) {
+    } else if let Some((mp, local)) = found {
         // Return a dictionary.
         let mut arena = ARENA_EMPTY;
-        let alt = if did_simplify {
-            keys_simplified
-        } else {
-            ptr::null_mut()
-        };
-        // SAFETY: `found.mp` is still linked, `arena` is this frame's own, and
-        // `rettv` is the caller's writable slot.
+        // SAFETY: `keys_simplified` is `replace_termcodes`'s NUL-terminated
+        // answer, `arena` is this frame's own, and `rettv` the caller's slot.
         unsafe {
-            let mp = Mb::new(found.mp);
-            let local = c_int::from(found.local);
-            let dict = mapblock_fill_dict(mp, alt, local, abbr, true, &raw mut arena);
+            let alt = did_simplify.then(|| MapStr::new(cstr::bytes_at(keys_simplified)));
+            let dict = mapblock_fill_dict(
+                mp,
+                alt.as_ref(),
+                c_int::from(local),
+                abbr,
+                true,
+                &raw mut arena,
+            );
             let mut obj = Object::dict(dict);
             object_to_vim_take_luaref(&raw mut obj, rettv, true);
             arena_mem_free(arena_finish(&raw mut arena));
@@ -312,12 +340,6 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
         // Return an empty dictionary.
         // SAFETY: the caller's writable answer slot.
         unsafe { tv_dict_alloc_ret(rettv) };
-    }
-
-    // SAFETY: the two allocations `replace_termcodes` may have made above.
-    unsafe {
-        xfree(keys_buf.cast());
-        xfree(alt_keys_buf.cast());
     }
 }
 
@@ -330,7 +352,10 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let cpo = p_cpo.get();
     // SAFETY: the Vimscript call convention — `argvars` is a live argument
     // vector and `rettv` the writable answer slot.
-    let abbr = unsafe { (*argvars).v_type != VAR_UNKNOWN as _ && tv_get_bool(argvars) != 0 };
+    let abbr = unsafe { Argv::new(argvars) }
+        .get(0)
+        // SAFETY: a slot the vector holds.
+        .is_some_and(|at| unsafe { tv_get_bool(at) } != 0);
     // SAFETY: as above.
     unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t) };
     // SAFETY: `curbuf` is set from startup to exit.
@@ -339,7 +364,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // Do it twice: once for global maps and once for local maps.
     for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(cur))] {
         let collect = |mp: Mb| {
-            if mp.m_simplified != 0 {
+            if mp.m_simplified {
                 return None;
             }
             let mut keys_buf: *mut c_char = ptr::null_mut();
@@ -349,19 +374,17 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
             let mut arena = ARENA_EMPTY;
             // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS, and
-            // `arena`, `keys_buf` and `did_simplify` are this frame's locals.
-            let lhs = unsafe { str2special_arena(mp.m_keys, true, false, &raw mut arena) };
-            // SAFETY: as above.
-            unsafe {
+            // `arena`, `keys_buf` and `did_simplify` are this frame's locals;
+            // the allocation `keys_buf` takes over is the guard's.
+            let (alt, _owned) = unsafe {
+                let lhs = str2special_arena(mp.m_keys.as_ptr(), true, false, &raw mut arena);
                 let len = cstr::bytes_at(lhs).len();
                 replace_termcodes(lhs, len, out, 0, flags, simplify, cpo);
-            }
-
-            let alt = if did_simplify {
-                keys_buf
-            } else {
-                ptr::null_mut()
+                let alt = (did_simplify && !keys_buf.is_null())
+                    .then(|| MapStr::new(cstr::bytes_at(keys_buf)));
+                (alt, COwned::new(keys_buf))
             };
+
             let mut d = typval_T {
                 v_type: VAR_UNKNOWN,
                 v_lock: VarLock::Unlocked,
@@ -370,13 +393,13 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             // SAFETY: `mp` is a live entry of the table being walked, `arena`
             // is this frame's own, and `rettv`'s list was allocated above.
             unsafe {
-                let dict = mapblock_fill_dict(mp, alt, buffer_local, abbr, true, &raw mut arena);
+                let dict =
+                    mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true, &raw mut arena);
                 let mut obj = Object::dict(dict);
                 object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
                 debug_assert_eq!(d.v_type, VAR_DICT);
                 tv_list_append_dict((*rettv).vval.v_list, d.vval.v_dict);
                 arena_mem_free(arena_finish(&raw mut arena));
-                xfree(keys_buf.cast());
             }
             None
         };
@@ -465,18 +488,15 @@ pub unsafe fn keymap_array(mode: String_0, buf: Option<Buf>, arena: *mut Arena) 
         );
         items.init();
         let collect = |mp: Mb| {
-            if mp.m_simplified != 0 || int_mode & mp.m_mode == 0 {
+            if mp.m_simplified || int_mode & mp.m_mode == 0 {
                 return None;
             }
             let alt = mp.m_alt;
             // SAFETY: a non-null `m_alt` is the live twin of this entry, whose
-            // `m_keys` is its own NUL-terminated LHS; `arena` is the caller's.
+            // `m_keys` is its own LHS; `arena` is the caller's.
             let dict = unsafe {
-                let lhsrawalt = if alt.is_null() {
-                    ptr::null_mut()
-                } else {
-                    (*alt).m_keys
-                };
+                let twin = (!alt.is_null()).then(|| Mb::new(alt));
+                let lhsrawalt = twin.as_ref().map(|twin| &twin.m_keys);
                 mapblock_fill_dict(mp, lhsrawalt, buffer_value, is_abbrev, false, arena)
             };
             items.push(Object::dict(dict));
