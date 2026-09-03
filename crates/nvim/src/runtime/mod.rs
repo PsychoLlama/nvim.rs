@@ -57,9 +57,7 @@ use crate::main::{
 };
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
-use crate::memory::{
-    strequal, try_malloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
-};
+use crate::memory::{strequal, try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::{
     emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
     verbose_enter, verbose_leave,
@@ -94,7 +92,7 @@ use crate::types::{
     String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_arg_T,
     etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse, linenr_T,
     list_T, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
+    typval_T, typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
@@ -230,16 +228,6 @@ pub struct SearchPathItem {
     pub pack_inserted: bool,
     pub has_lua: Option<bool>,
     pub pos_in_rtp: size_t,
-}
-pub struct CharVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut *mut ::core::ffi::c_char,
-}
-pub struct StringVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut String_0,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

@@ -298,44 +298,13 @@ unsafe fn splice_rtp(
     })
 }
 
-/// Shift the tail of the cached search path up to make room for one entry
-/// belonging at byte offset `pos`, and write `item` into the slot it frees.
+/// Where an entry belonging at byte offset `pos` goes in `path`.
 ///
-/// Entries whose own `pos_in_rtp` is at or past `pos` move up by `gap` slots
-/// and gain `shift` bytes of offset; the first one that is not is where the
-/// new entry belongs.  `gap` is 2 while an `after/` entry is still to be
-/// placed below the one being inserted, and 1 once it is.  Answers the next
-/// free index.
-///
-/// # Safety
-/// `path` must have `gap` free slots above `i`, and `i` must be at least
-/// `gap - 1`.
-unsafe fn shift_up_and_insert(
-    path: &mut RuntimeSearchPath,
-    mut i: ssize_t,
-    gap: ssize_t,
-    shift: size_t,
-    pos: size_t,
-    item: SearchPathItem,
-) -> ssize_t {
-    // SAFETY: every index touched is below `size`, which the caller grew.
-    while i >= gap - 1 {
-        let prev = i - gap;
-        if i > gap - 1 && unsafe { (*path.items.offset(prev)).pos_in_rtp } >= pos {
-            let moved = unsafe { *path.items.offset(prev) };
-            unsafe {
-                *path.items.offset(i) = SearchPathItem {
-                    pos_in_rtp: moved.pos_in_rtp + shift,
-                    ..moved
-                }
-            };
-            i -= 1;
-            continue;
-        }
-        unsafe { *path.items.offset(i) = item };
-        return i - 1;
-    }
-    i
+/// `pos_in_rtp` is monotonic across the path, so this is a partition point;
+/// upstream found the same index by walking down from the top, copying each
+/// entry two slots up as it went.
+fn insert_at(path: &[SearchPathItem], pos: size_t) -> usize {
+    path.partition_point(|item| item.pos_in_rtp < pos)
 }
 
 /// Splice a newly added package into the cached search path.
@@ -358,47 +327,56 @@ unsafe fn splice_cached_path(
 ) {
     runtime_search_path_valid.set(true);
     runtime_search_path_valid_thread.set(false);
-    runtime_search_path.with_mut(|path| {
-        // SAFETY: the two `kv_pushp`s below make the slots the shifting needs,
-        // and nothing here reenters the cell.
-        unsafe { kv_pushp(&mut path.size, &mut path.capacity, &mut path.items) };
-        let mut i = path.size as ssize_t - 1;
-        if afterlen > 0 {
-            unsafe { kv_pushp(&mut path.size, &mut path.capacity, &mut path.items) };
-            i += 1;
-            i = unsafe {
-                shift_up_and_insert(
-                    path,
-                    i,
-                    2,
-                    addlen + afterlen,
-                    after_pos,
-                    SearchPathItem {
-                        path: xstrdup(afterdir),
-                        after: true,
-                        pack_inserted: true,
-                        has_lua: None,
-                        pos_in_rtp: after_pos + addlen,
-                    },
-                )
-            };
+    runtime_search_path.with_mut(|cached| {
+        // SAFETY: the cache, taken back for the two insertions and handed
+        // straight back. Nothing here reenters the cell, and the borrow slot
+        // in `runtime_search_path_get_cached` is what says no reader holds
+        // the buffer this may reallocate.
+        let mut path = unsafe { cached.into_vec() };
+
+        // Both indices are found against the path as it stands: the
+        // `after/` entry belongs above the other, and the entries between
+        // them gain only the first entry's length. With no `after/` entry
+        // there is no split, and `after_pos` is not even set.
+        let after_at = if afterlen > 0 {
+            insert_at(&path, after_pos)
+        } else {
+            path.len()
+        };
+        let first_at = insert_at(&path[..after_at], first_pos);
+        for item in &mut path[after_at..] {
+            item.pos_in_rtp += addlen + afterlen;
         }
-        unsafe {
-            shift_up_and_insert(
-                path,
-                i,
-                1,
-                addlen,
-                first_pos,
+        for item in &mut path[first_at..after_at] {
+            item.pos_in_rtp += addlen;
+        }
+
+        // The higher index first, so the lower one still means what it did.
+        if afterlen > 0 {
+            path.insert(
+                after_at,
                 SearchPathItem {
-                    path: xstrdup(fname),
-                    after: false,
+                    // SAFETY: the caller's NUL-terminated directory.
+                    path: unsafe { xstrdup(afterdir) },
+                    after: true,
                     pack_inserted: true,
                     has_lua: None,
-                    pos_in_rtp: first_pos,
+                    pos_in_rtp: after_pos + addlen,
                 },
-            )
-        };
+            );
+        }
+        path.insert(
+            first_at,
+            SearchPathItem {
+                // SAFETY: as above.
+                path: unsafe { xstrdup(fname) },
+                after: false,
+                pack_inserted: true,
+                has_lua: None,
+                pos_in_rtp: first_pos,
+            },
+        );
+        *cached = RuntimeSearchPath::from_vec(path);
     });
 }
 

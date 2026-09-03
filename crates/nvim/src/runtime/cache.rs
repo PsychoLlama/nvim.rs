@@ -52,26 +52,58 @@ pub unsafe fn runtime_init() {
     unsafe { uv_mutex_init(search_path_mutex()) };
 }
 
-/// A `kv_push`-shaped grow: double the capacity when it is full, starting at
-/// eight, and answer the slot the caller is about to write.
-///
-/// # Safety
-/// `size`/`capacity`/`items` must describe one kvec whose items are `T`.
-pub(crate) unsafe fn kv_pushp<T>(
-    size: &mut size_t,
-    capacity: &mut size_t,
-    items: &mut *mut T,
-) -> *mut T {
-    if *size == *capacity {
-        *capacity = if *capacity != 0 { *capacity << 1 } else { 8 };
-        // SAFETY: the kvec's buffer is either null or an `xrealloc`able block
-        // of `capacity` items.
-        *items = unsafe { xrealloc(items.cast(), size_of::<T>() * *capacity) }.cast();
+impl RuntimeSearchPath {
+    /// Hand a built path over to the cache.
+    ///
+    /// The three fields *are* a `Vec`'s: the struct stays because the cache
+    /// is shared by a hand-rolled borrow slot and by a second copy the
+    /// worker threads read, neither of which a `Vec` can express. Everything
+    /// that builds or walks one goes through here.
+    ///
+    /// An empty `Vec`'s pointer is dangling rather than heap, so an empty
+    /// path is stored as the null [`runtime_search_path_free`] accepts.
+    pub(crate) fn from_vec(path: Vec<SearchPathItem>) -> Self {
+        if path.capacity() == 0 {
+            return RuntimeSearchPath {
+                size: 0,
+                capacity: 0,
+                items: ptr::null_mut(),
+            };
+        }
+        let mut path = core::mem::ManuallyDrop::new(path);
+        RuntimeSearchPath {
+            size: path.len(),
+            capacity: path.capacity(),
+            items: path.as_mut_ptr(),
+        }
     }
-    let slot = *size;
-    *size += 1;
-    // SAFETY: `size` is now within the capacity just ensured.
-    unsafe { items.add(slot) }
+
+    /// The path's items, as a slice.
+    ///
+    /// # Safety
+    /// The path must be the live cache or a copy nothing has freed.
+    pub(crate) unsafe fn as_slice<'a>(&self) -> &'a [SearchPathItem] {
+        if self.items.is_null() {
+            // `from_raw_parts` rejects a null base even for an empty slice.
+            return &[];
+        }
+        // SAFETY: the caller's path, `size` items long.
+        unsafe { core::slice::from_raw_parts(self.items, self.size) }
+    }
+
+    /// Take a path back, to grow or to free it.
+    ///
+    /// # Safety
+    /// Nothing else may still be walking this path -- the borrow slot in
+    /// [`runtime_search_path_get_cached`] is what decides that.
+    pub(crate) unsafe fn into_vec(self) -> Vec<SearchPathItem> {
+        if self.items.is_null() {
+            return Vec::new();
+        }
+        // SAFETY: the caller's path, which only `from_vec` above ever
+        // filled, so the three fields are a `Vec`'s own.
+        unsafe { Vec::from_raw_parts(self.items, self.size, self.capacity) }
+    }
 }
 
 /// Borrow the cached search path, validating it first.
@@ -103,23 +135,17 @@ pub(crate) unsafe fn runtime_search_path_get_cached(ref_0: *mut c_int) -> Runtim
 /// # Safety
 /// `src` must be a live search path.
 unsafe fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath {
-    let mut dst = RuntimeSearchPath {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
-    for j in 0..src.size {
-        // SAFETY: `src` holds `size` live items, each with its own string.
-        let item = unsafe { *src.items.add(j) };
-        let slot = unsafe { kv_pushp(&mut dst.size, &mut dst.capacity, &mut dst.items) };
-        unsafe {
-            slot.write(SearchPathItem {
-                path: xstrdup(item.path),
-                ..item
-            })
-        };
+    // SAFETY: the caller's live path.
+    let src = unsafe { src.as_slice() };
+    let mut dst = Vec::with_capacity(src.len());
+    for &item in src {
+        // SAFETY: each item owns its own NUL-terminated directory.
+        dst.push(SearchPathItem {
+            path: unsafe { xstrdup(item.path) },
+            ..item
+        });
     }
-    dst
+    RuntimeSearchPath::from_vec(dst)
 }
 
 /// Release a borrow taken by [`runtime_search_path_get_cached`], freeing the
@@ -249,7 +275,7 @@ type PathSet = IdSet<Box<[u8]>>;
 /// # Safety
 /// `entry` must be NUL-terminated and `search_path` must be live.
 unsafe fn push_path(
-    search_path: *mut RuntimeSearchPath,
+    search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
     entry: *mut c_char,
     after: bool,
@@ -262,22 +288,13 @@ unsafe fn push_path(
     }
     // SAFETY: as above.
     let path = unsafe { xstrdup(entry) };
-    let slot = unsafe {
-        kv_pushp(
-            &mut (*search_path).size,
-            &mut (*search_path).capacity,
-            &mut (*search_path).items,
-        )
-    };
-    unsafe {
-        slot.write(SearchPathItem {
-            path,
-            after,
-            pack_inserted: false,
-            has_lua: None,
-            pos_in_rtp,
-        })
-    };
+    search_path.push(SearchPathItem {
+        path,
+        after,
+        pack_inserted: false,
+        has_lua: None,
+        pos_in_rtp,
+    });
     true
 }
 
@@ -287,7 +304,7 @@ unsafe fn push_path(
 /// # Safety
 /// As [`push_path`].
 unsafe fn expand_rtp_entry(
-    search_path: *mut RuntimeSearchPath,
+    search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
     entry: *mut c_char,
     after: bool,
@@ -337,9 +354,9 @@ const START_PATTERNS: [&CStr; 2] = [c"/pack/*/start/*", c"/start/*"];
 /// `pack_entry` must be NUL-terminated and `pack_entry_len` its length; the
 /// three vectors must be live.
 unsafe fn expand_pack_entry(
-    search_path: *mut RuntimeSearchPath,
+    search_path: &mut Vec<SearchPathItem>,
     rtp_used: &mut PathSet,
-    after_path: *mut CharVec,
+    after_path: &mut Vec<Vec<u8>>,
     pack_entry: *mut c_char,
     pack_entry_len: size_t,
     pos_in_rtp: size_t,
@@ -363,18 +380,10 @@ unsafe fn expand_pack_entry(
 
         // The `after/` directories go in one block at the end of the
         // build, so they sort behind every non-`after` entry.
-        let after_size = unsafe { cstr::bytes_at(buf.as_ptr()) }.len() + 7;
-        let after = unsafe { xmallocz(after_size) }.cast::<c_char>();
-        unsafe { xstrlcpy(after, buf.as_ptr(), after_size) };
-        unsafe { xstrlcat(after, c"/after".as_ptr(), after_size) };
-        let slot = unsafe {
-            kv_pushp(
-                &mut (*after_path).size,
-                &mut (*after_path).capacity,
-                &mut (*after_path).items,
-            )
-        };
-        unsafe { slot.write(after) };
+        // SAFETY: `buf` was NUL-terminated by the two copies above.
+        let mut after = unsafe { cstr::bytes_at(buf.as_ptr()) }.to_vec();
+        after.extend_from_slice(b"/after\0");
+        after_path.push(after);
     }
 }
 
@@ -391,18 +400,6 @@ pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
     buflen >= 5
         && (buflen < 6 || vim_ispathsep(unsafe { *buf.add(buflen - 6) } as c_int))
         && unsafe { cstr::eq_bytes(buf.add(buflen - 5), b"after") }
-}
-
-/// Free a kvec's buffer and reset it to empty.
-///
-/// # Safety
-/// `items` must be the kvec's own allocation.
-unsafe fn kv_destroy<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *mut T) {
-    // SAFETY: the caller's own buffer, not referenced afterwards.
-    unsafe { xfree(items.cast()) };
-    *size = 0;
-    *capacity = 0;
-    *items = ptr::null_mut();
 }
 
 /// Build the ordered search path from 'runtimepath' and 'packpath'.
@@ -422,23 +419,11 @@ unsafe fn kv_destroy<T>(size: &mut size_t, capacity: &mut size_t, items: &mut *m
 /// offset of the comma before its `after/` tail, which keeps the sequence
 /// monotonic. [`add_pack_dir_to_rtp`] splices new entries by comparing it.
 unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
-    let mut pack_entries = StringVec {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
+    let mut pack_entries: Vec<String_0> = Vec::new();
     let mut pack_used: IdMap<Box<[u8]>, c_int> = id_map();
     let mut rtp_used: PathSet = id_set();
-    let mut search_path = RuntimeSearchPath {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
-    let mut after_path = CharVec {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
+    let mut search_path: Vec<SearchPathItem> = Vec::new();
+    let mut after_path: Vec<Vec<u8>> = Vec::new();
     let mut buf = [0 as c_char; MAXPATHL as usize];
 
     // 'packpath' first, only to record which entries exist: they are matched
@@ -458,16 +443,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             )
         };
         let the_entry = String_0::from_raw_parts(cur_entry, buflen);
-        // SAFETY: `pack_entries` is this frame's own kvec, `pack_used` its
-        // index; both are freed below.
-        unsafe {
-            kv_pushp(
-                &mut pack_entries.size,
-                &mut pack_entries.capacity,
-                &mut pack_entries.items,
-            )
-            .write(the_entry)
-        };
+        pack_entries.push(the_entry);
         // SAFETY: `the_entry` names `buflen` bytes of 'packpath'.
         pack_used.insert(unsafe { the_entry.as_bytes() }.into(), 0);
     }
@@ -498,7 +474,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         // SAFETY: the frame's own vectors, and `buf` is NUL-terminated.
         unsafe {
             expand_rtp_entry(
-                &raw mut search_path,
+                &mut search_path,
                 &mut rtp_used,
                 buf.as_mut_ptr(),
                 false,
@@ -512,9 +488,9 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             *seen += 1;
             unsafe {
                 expand_pack_entry(
-                    &raw mut search_path,
+                    &mut search_path,
                     &mut rtp_used,
-                    &raw mut after_path,
+                    &mut after_path,
                     buf.as_mut_ptr(),
                     buflen,
                     pos_in_rtp,
@@ -529,9 +505,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
     let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(p_rtp.get()) } as size_t;
     sentinel_pos_in_rtp -= usize::from(sentinel_pos_in_rtp > 0);
 
-    for i in 0..pack_entries.size {
-        // SAFETY: the frame's own kvec and index.
-        let item = unsafe { *pack_entries.items.add(i) };
+    for &item in &pack_entries {
         // SAFETY: `item` names its own bytes of 'packpath'.
         if pack_used
             .get(unsafe { item.as_bytes() })
@@ -541,9 +515,9 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         {
             unsafe {
                 expand_pack_entry(
-                    &raw mut search_path,
+                    &mut search_path,
                     &mut rtp_used,
-                    &raw mut after_path,
+                    &mut after_path,
                     item.data(),
                     item.len(),
                     sentinel_pos_in_rtp,
@@ -553,19 +527,17 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
     }
 
     // The packages' `after/` directories.
-    for i in 0..after_path.size {
-        // SAFETY: each entry is an `xmallocz`ed string this frame owns.
-        let dir = unsafe { *after_path.items.add(i) };
+    for dir in &mut after_path {
+        // SAFETY: each entry is this frame's own NUL-terminated buffer.
         unsafe {
             expand_rtp_entry(
-                &raw mut search_path,
+                &mut search_path,
                 &mut rtp_used,
-                dir,
+                dir.as_mut_ptr().cast(),
                 true,
                 sentinel_pos_in_rtp,
             )
         };
-        unsafe { xfree(dir.cast()) };
     }
 
     // The `after/` tail of 'runtimepath'.
@@ -584,7 +556,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) } as size_t;
         unsafe {
             expand_rtp_entry(
-                &raw mut search_path,
+                &mut search_path,
                 &mut rtp_used,
                 buf.as_mut_ptr(),
                 path_is_after(buf.as_mut_ptr(), buflen),
@@ -593,25 +565,10 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
         };
     }
 
-    // The strings in `pack_entries` are not owned, and the two tables hold
-    // only copies -- `search_path`'s items own theirs, which is what the
-    // caller gets.
-    // SAFETY: both kvecs are this frame's own allocations.
-    unsafe {
-        kv_destroy(
-            &mut pack_entries.size,
-            &mut pack_entries.capacity,
-            &mut pack_entries.items,
-        )
-    };
-    unsafe {
-        kv_destroy(
-            &mut after_path.size,
-            &mut after_path.capacity,
-            &mut after_path.items,
-        )
-    };
-    search_path
+    // The strings in `pack_entries` are not owned, the `after_path` ones go
+    // with the frame, and the two tables hold only copies
+    // -- `search_path`'s items own theirs, which is what the caller gets.
+    RuntimeSearchPath::from_vec(search_path)
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
@@ -625,12 +582,11 @@ pub unsafe fn did_set_runtimepackpath(_args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// Nothing may still refer to `path`.
 unsafe fn runtime_search_path_free(path: RuntimeSearchPath) {
-    for j in 0..path.size {
-        // SAFETY: `path` holds `size` items, each owning its own string.
-        unsafe { xfree((*path.items.add(j)).path.cast()) };
+    // SAFETY: the caller's contract; the vector is dropped with the frame.
+    for item in unsafe { path.into_vec() } {
+        // SAFETY: each item owns its own string.
+        unsafe { xfree(item.path.cast()) };
     }
-    // SAFETY: the vector's own buffer.
-    unsafe { xfree(path.items.cast()) };
 }
 
 /// Rebuild the cached search path if it has been invalidated.
