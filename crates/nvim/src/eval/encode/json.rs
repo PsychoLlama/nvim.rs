@@ -1,6 +1,6 @@
 //! `json_encode()`: a typval as JSON text.
 //!
-//! One [`TypvalSink`] over the output [`Gap`], replacing the
+//! One [`TypvalSink`] over an output `Vec<u8>`, replacing the
 //! `TYPVAL_ENCODE_NAME json` instantiation of `typval_encode.c.h`.  Its
 //! punctuation is upstream's `string()` sink's — JSON and Vimscript spell
 //! lists and dictionaries alike — and what it overrides is everything JSON

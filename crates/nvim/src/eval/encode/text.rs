@@ -1,7 +1,7 @@
 //! `string()` and `:echo`: a typval as the Vimscript source text that would
 //! rebuild it.
 //!
-//! One [`TypvalSink`] over the output [`Gap`], replacing *two* instantiations
+//! One [`TypvalSink`] over an output `Vec<u8>`, replacing *two* instantiations
 //! of `typval_encode.c.h` — `TYPVAL_ENCODE_NAME string` and
 //! `TYPVAL_ENCODE_NAME echo`.  Upstream includes the header twice with one
 //! macro changed between them, `TYPVAL_ENCODE_CONV_RECURSE`, so the two
