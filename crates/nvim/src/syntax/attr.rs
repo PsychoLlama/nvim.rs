@@ -12,7 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
 use crate::pos::MAXCOL;
@@ -128,8 +128,8 @@ pub(crate) unsafe fn syn_current_attr(
     let mut zero_width: Vec<c_int> = Vec::new();
 
     // Use the `syntax iskeyword` option while matching.
-    let mut buf_chartab: [c_char; 32] = [0; 32];
-    unsafe { save_chartab(&raw mut buf_chartab as *mut c_char) };
+    let mut buf_chartab = [0u64; 4];
+    save_chartab(&mut buf_chartab);
 
     let mut cur_extmatch: *mut reg_extmatch_T = ::core::ptr::null_mut();
     let mut zero_width_next_list = false;
@@ -226,7 +226,7 @@ pub(crate) unsafe fn syn_current_attr(
         }
     }
 
-    unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
+    restore_chartab(&buf_chartab);
 
     let sip = pick_current_attr(cur_si);
     if !can_spell.is_null() {

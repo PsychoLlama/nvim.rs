@@ -123,14 +123,14 @@ pub(crate) unsafe fn find_endpos(
     unsafe { unref_extmatch(re_extmatch_in.get()) };
     re_extmatch_in.set(unsafe { ref_extmatch(start_ext) });
 
-    let mut buf_chartab: [c_char; 32] = [0; 32];
-    unsafe { save_chartab(&raw mut buf_chartab as *mut c_char) };
+    let mut buf_chartab = [0u64; 4];
+    save_chartab(&mut buf_chartab);
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
     let answer = unsafe { find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol) };
 
-    unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
+    restore_chartab(&buf_chartab);
     unsafe { unref_extmatch(re_extmatch_in.get()) };
     re_extmatch_in.set(::core::ptr::null_mut());
     answer

@@ -12,7 +12,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::optionstr::is_empty_option;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::eval::typval::NumBuf;
@@ -173,39 +173,42 @@ pub(crate) fn syn_cmd_iskeyword(eap: &mut exarg_T, _syncing: c_int) {
             unsafe { msg_outtrans(gettext(c"syntax iskeyword not set").as_ptr(), 0, false) };
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
-        let chartab: *mut [uint8_t; 32] = syn_field!(cur_syn_block(), b_syn_chartab);
-        // SAFETY: the editor's current buffer.
-        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
-        // SAFETY: both tables are 32 bytes wide.
-        unsafe { chartab.cast::<u8>().copy_from(src.cast(), 32) };
+        cur_syn_block().b_syn_chartab = buf_chartab();
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     } else {
-        let mut save_chartab: [c_char; 32] = [0; 32];
-        let dst = (&raw mut save_chartab).cast::<c_void>();
-        // SAFETY: the editor's current buffer.
-        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
-        // SAFETY: both tables are 32 bytes wide.
-        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
+        // Run the value through `'iskeyword'`'s own parser on the current
+        // buffer and keep the table it produces, putting the buffer's own
+        // option and table back afterwards.
+        let saved = buf_chartab();
         let save_isk = unsafe { (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = xstrdup(arg) };
 
         unsafe { buf_init_chartab(curbuf.get(), false) };
-        let dst: *mut [uint8_t; 32] = syn_field!(cur_syn_block(), b_syn_chartab);
-        let dst = dst.cast::<c_void>();
-        // SAFETY: the editor's current buffer.
-        let src = unsafe { &raw const (*curbuf.get()).b_chartab }.cast::<c_void>();
-        // SAFETY: both tables are 32 bytes wide.
-        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
-        // SAFETY: the editor's current buffer.
-        let dst = unsafe { &raw mut (*curbuf.get()).b_chartab }.cast::<c_void>();
-        let src = (&raw const save_chartab).cast::<c_void>();
-        // SAFETY: both tables are 32 bytes wide.
-        unsafe { dst.cast::<u8>().copy_from(src.cast(), 32) };
+        cur_syn_block().b_syn_chartab = buf_chartab();
+        set_buf_chartab(saved);
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
         unsafe { cur_syn_block().b_syn_isk = (*curbuf.get()).b_p_isk };
         unsafe { (*curbuf.get()).b_p_isk = save_isk };
     }
     unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
+}
+
+/// The current buffer's character table, as the 32 bytes a syntax block
+/// stores it in. The buffer declares it as four `uint64_t`s.
+fn buf_chartab() -> [uint8_t; 32] {
+    // SAFETY: the editor's current buffer.
+    let words = unsafe { (*curbuf.get()).b_chartab };
+    ::core::array::from_fn(|i| words[i / 8].to_ne_bytes()[i % 8])
+}
+
+/// Put `table` back as the current buffer's character table.
+fn set_buf_chartab(table: [uint8_t; 32]) {
+    // SAFETY: the editor's current buffer.
+    unsafe {
+        (*curbuf.get()).b_chartab = ::core::array::from_fn(|i| {
+            uint64_t::from_ne_bytes(table[i * 8..i * 8 + 8].try_into().unwrap())
+        });
+    };
 }
 
 /// `:syntax on` / `:syntax enable`.

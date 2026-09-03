@@ -294,35 +294,26 @@ unsafe fn scan_for_sync_point(
 ///
 /// A no-op when the syntax has no `iskeyword` of its own, in which case
 /// [`restore_chartab`] is a no-op too and the saved buffer is never read.
-pub(crate) unsafe fn save_chartab(chartab: *mut c_char) {
+pub(crate) fn save_chartab(chartab: &mut [uint64_t; 4]) {
     if is_empty_option(syn_block().b_syn_isk) {
         return;
     }
-    let into = chartab.cast::<u8>();
-    unsafe {
-        into.copy_from(
-            (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t).cast(),
-            32,
-        )
-    };
-    unsafe {
-        (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t)
-            .cast::<u8>()
-            .copy_from(
-                (&raw mut (*(*syn_win.get()).w_s).b_syn_chartab as *mut uint8_t).cast(),
-                32,
-            )
-    };
+    // The two tables are the same 32 bytes, one typed as four `uint64_t`
+    // and one as `uint8_t[32]`.
+    let installed: [uint8_t; 32] = syn_block().b_syn_chartab;
+    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
+    let buf_chartab = unsafe { &mut (*syn_buf.get()).b_chartab };
+    *chartab = *buf_chartab;
+    *buf_chartab = ::core::array::from_fn(|i| {
+        uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
+    });
 }
 
 /// Put back what [`save_chartab`] saved.
-pub(crate) unsafe fn restore_chartab(chartab: *mut c_char) {
-    if !is_empty_option(unsafe { (*(*syn_win.get()).w_s).b_syn_isk }) {
-        unsafe {
-            (&raw mut (*syn_buf.get()).b_chartab as *mut uint64_t)
-                .cast::<u8>()
-                .copy_from(chartab.cast(), 32)
-        };
+pub(crate) fn restore_chartab(chartab: &[uint64_t; 4]) {
+    if !is_empty_option(syn_block().b_syn_isk) {
+        // SAFETY: as [`save_chartab`].
+        unsafe { (*syn_buf.get()).b_chartab = *chartab };
     }
 }
 
@@ -332,8 +323,8 @@ pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
     if syn_block().b_syn_linecont_prog.is_null() {
         return false;
     }
-    let mut buf_chartab: [c_char; 32] = [0; 32];
-    unsafe { save_chartab(&raw mut buf_chartab as *mut c_char) };
+    let mut buf_chartab = [0u64; 4];
+    save_chartab(&mut buf_chartab);
 
     let mut regmatch = regmmatch_T {
         regprog: syn_block().b_syn_linecont_prog,
@@ -348,7 +339,7 @@ pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
     let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time) };
     syn_block().b_syn_linecont_prog = regmatch.regprog;
 
-    unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
+    restore_chartab(&buf_chartab);
     r
 }
 
