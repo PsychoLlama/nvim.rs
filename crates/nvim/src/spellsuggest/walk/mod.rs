@@ -259,12 +259,12 @@ pub(crate) struct Walk<'a> {
     /// postponed prefix, `word_tree` otherwise.
     pub tree: &'a WordTree,
 
-    /// The bad word, case-folded, as the caller's buffer. `REP` items
+    /// The bad word, case-folded, in the caller's buffer. `REP` items
     /// rewrite stretches of it in place and undo the change on the way
-    /// back up, which is why it stays a pointer: a replacement that grows
-    /// the word shifts the tail along and the C let that run to the end of
-    /// the buffer.
-    pub fword: *mut c_char,
+    /// back up, which is why the whole buffer is here and not just the
+    /// word: a replacement that grows the word shifts the tail along, and
+    /// the buffer's own end is what bounds that.
+    pub fword: &'a mut [u8],
     /// How many bytes `REP` items have added to `fword` so far. The
     /// suggestion has to be told how much of the *original* bad word it
     /// replaces, which is the position in `fword` less this.
@@ -325,6 +325,11 @@ impl Walk<'_> {
         fword: *mut c_char,
         soundfold: bool,
     ) -> Walk<'static> {
+        // SAFETY: the caller promises `MAXWLEN` bytes there, and this is
+        // the only handle on them for the walk's lifetime. Every read and
+        // write below goes through the slice, so the buffer's end is
+        // checked rather than argued about.
+        let fword = unsafe { core::slice::from_raw_parts_mut(fword.cast::<u8>(), MAXWLEN) };
         // SAFETY: the caller guarantees the pointers, so the language
         // beside `lp` is one of the loaded ones. It stays loaded for as
         // long as the walk, which is what the borrows below stand on.
@@ -499,24 +504,21 @@ impl Walk<'_> {
     /// all against unsigned ones, so widening has to be unsigned or every
     /// byte from 0x80 up would compare wrong.
     ///
-    /// # Safety
-    ///
-    /// `at` must be within the bad word's buffer.
     #[inline]
-    unsafe fn fword_at(&self, at: usize) -> c_int {
-        // SAFETY: the caller guarantees the index.
-        unsafe { *self.fword.add(at) as u8 as c_int }
+    fn fword_at(&self, at: usize) -> c_int {
+        c_int::from(self.fword[at])
+    }
+
+    /// The bad word from `at` to the end of its buffer.
+    #[inline]
+    fn fword_from(&mut self, at: usize) -> &mut [u8] {
+        &mut self.fword[at..]
     }
 
     /// A pointer into the bad word, for the helpers that take one.
-    ///
-    /// # Safety
-    ///
-    /// `at` must be within the bad word's buffer.
     #[inline]
-    unsafe fn fword_ptr(&self, at: usize) -> *mut c_char {
-        // SAFETY: the caller guarantees the index.
-        unsafe { self.fword.add(at) }
+    fn fword_ptr(&mut self, at: usize) -> *mut c_char {
+        self.fword[at..].as_mut_ptr().cast()
     }
 
     /// The length of the word currently in `preword`.

@@ -55,7 +55,7 @@ impl Walk<'_> {
         // first-byte index is a 256-entry table indexed by an unsigned
         // byte of it. `lp_replang` is non-null here unless this is the
         // sound-fold walk -- that is what the test above just settled.
-        let first_byte = unsafe { self.fword_at(self.stack[level].bad_idx as usize) } as usize;
+        let first_byte = self.fword_at(self.stack[level].bad_idx as usize) as usize;
         self.stack[level].child = if self.soundfold {
             unsafe { (*self.slang).sl_repsal_first[first_byte] }
         } else {
@@ -86,7 +86,7 @@ impl Walk<'_> {
         let level = self.depth as usize;
         // SAFETY: `bad_idx` is a position inside the bad word, and the
         // language is valid by the contract above.
-        let p = unsafe { self.fword_ptr(self.stack[level].bad_idx as usize) };
+        let p = self.fword_ptr(self.stack[level].bad_idx as usize);
         let gap = unsafe { self.rep_items() };
 
         // SAFETY: `gap` is the language's own garray, so its length is
@@ -159,7 +159,7 @@ impl Walk<'_> {
 
         let from_len = unsafe { cstr::bytes_at((*item).ft_from) }.len() as c_int;
         let to_len = unsafe { cstr::bytes_at((*item).ft_to) }.len() as c_int;
-        let p = unsafe { self.fword_ptr(self.stack[level].bad_idx as usize) };
+        let p = self.fword_ptr(self.stack[level].bad_idx as usize);
         if from_len != to_len {
             unsafe { move_tail(p, to_len, from_len) };
             self.repextra -= to_len - from_len;

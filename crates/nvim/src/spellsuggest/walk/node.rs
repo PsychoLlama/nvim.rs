@@ -145,7 +145,7 @@ impl Walk<'_> {
         // out of it, so both offsets stay inside it.
         let prefix_flags = unsafe {
             let prefix_len = nofold_len(
-                self.fword,
+                self.fword.as_mut_ptr().cast(),
                 self.stack[level].bad_idx as c_int,
                 (*self.su).su_badptr,
             );
@@ -405,22 +405,19 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// The walk's bad word must be valid.
-    unsafe fn nobreak_previous_word_matches(&self) -> bool {
+    unsafe fn nobreak_previous_word_matches(&mut self) -> bool {
         let level = self.depth as usize;
         let taken = self.stack[level].bad_idx as c_int - self.stack[level].split_bad_idx as c_int;
+        if taken != self.stack[level].good_len as c_int - self.stack[level].split_off as c_int {
+            return false;
+        }
+        let split_off = self.stack[level].split_off as usize;
+        let split_bad_idx = self.stack[level].split_bad_idx as usize;
+        let bad = self.fword_ptr(split_bad_idx);
         // SAFETY: both stretches compared are inside this walk's buffers,
-        // and the `&&` is what holds the comparison to a length that both
-        // of them have.
-        taken == self.stack[level].good_len as c_int - self.stack[level].split_off as c_int
-            && unsafe {
-                cstr::prefix_eq(
-                    self.fword_ptr(self.stack[level].split_bad_idx as usize),
-                    self.tword
-                        .as_ptr()
-                        .add(self.stack[level].split_off as usize),
-                    taken as size_t,
-                )
-            }
+        // and the test above is what holds the comparison to a length that
+        // both of them have.
+        unsafe { cstr::prefix_eq(bad, self.tword.as_ptr().add(split_off), taken as size_t) }
     }
 
     /// For a `NOBREAK` language whose previous word was already correct:
@@ -674,8 +671,8 @@ impl Walk<'_> {
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, and it is not zero -- tested just above -- so there is a
         // character before it to step back over.
-        let mut p = unsafe { self.fword_ptr(self.stack[level].bad_idx as usize) };
-        p = unsafe { Walk::char_back(self.fword, p) };
+        let mut p = self.fword_ptr(self.stack[level].bad_idx as usize);
+        p = unsafe { Walk::char_back(self.fword.as_ptr().cast(), p) };
         // SAFETY: `p` is a character of the bad word; the `&&` only saves
         // the work of measuring an empty `preword`.
         if !unsafe { spell_iswordp(p, curwin.get()) } && self.preword[0] != NUL as c_char {

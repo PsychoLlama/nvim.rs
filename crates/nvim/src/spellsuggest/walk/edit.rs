@@ -70,7 +70,7 @@ impl Walk<'_> {
 
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        if unsafe { self.fword_at(self.stack[level].bad_idx as usize) } == NUL
+        if self.fword_at(self.stack[level].bad_idx as usize) == NUL
             && self.stack[level].char_len == 0
         {
             // The bad word ends, so there is no byte to match against.
@@ -124,7 +124,7 @@ impl Walk<'_> {
         //
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        let newscore = if byte == unsafe { self.fword_at(bad_idx) }
+        let newscore = if byte == self.fword_at(bad_idx)
             || (self.stack[level].char_len > 0 && self.stack[level].diff != DIFF_NONE)
         {
             0
@@ -139,7 +139,7 @@ impl Walk<'_> {
         // SAFETY: `del_idx` is a bad-word position too, and the `&&` is
         // what keeps it from being read before a delete has set it.
         let undoing_a_delete = self.stack[level].flags & FLAG_DID_DEL != 0
-            && byte == unsafe { self.fword_at(self.stack[level].del_idx as usize) };
+            && byte == self.fword_at(self.stack[level].del_idx as usize);
         let allowed = newscore == 0
             || (self.stack[level].bad_idx >= self.stack[level].change_from && !undoing_a_delete);
         // SAFETY: `su` is the caller's suggestion state.
@@ -152,7 +152,7 @@ impl Walk<'_> {
         let child = self.depth as usize;
 
         // SAFETY: a bad-word position again, as above.
-        if unsafe { self.fword_at(self.stack[child].bad_idx as usize) } != NUL {
+        if self.fword_at(self.stack[child].bad_idx as usize) != NUL {
             self.stack[child].bad_idx += 1;
         }
         self.tword[self.stack[child].good_len as usize] = byte as c_char;
@@ -284,7 +284,7 @@ impl Walk<'_> {
         // word, the caller's NUL-terminated buffer.
         let newscore = if self.soundfold
             && self.stack[level].bad_idx == 0
-            && unsafe { self.fword_at(bad_idx) } == SOUND_VOWEL
+            && self.fword_at(bad_idx) == SOUND_VOWEL
         {
             // Deleting a leading vowel counts less; `soundalike_score`
             // charges the same.
@@ -294,7 +294,7 @@ impl Walk<'_> {
         };
 
         // SAFETY: as above, and `su` is the caller's suggestion state.
-        if !(unsafe { self.fword_at(bad_idx) } != NUL && unsafe { self.try_deeper(newscore) }) {
+        if !(self.fword_at(bad_idx) != NUL && unsafe { self.try_deeper(newscore) }) {
             // SAFETY: the walk's trees are valid by the contract above.
             unsafe { self.ins_prep() };
             return;
@@ -414,7 +414,7 @@ impl Walk<'_> {
         //
         // SAFETY: `bad_idx` is a position inside the bad word, and `su` is
         // the caller's suggestion state.
-        if byte == unsafe { self.fword_at(self.stack[level].bad_idx as usize) }
+        if byte == self.fword_at(self.stack[level].bad_idx as usize)
             || !unsafe { self.try_deeper(newscore) }
         {
             return;

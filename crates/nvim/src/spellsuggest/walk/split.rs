@@ -158,7 +158,7 @@ impl Walk<'_> {
         // word, so both offsets stay inside it.
         unsafe {
             let consumed = nofold_len(
-                self.fword,
+                self.fword.as_mut_ptr().cast(),
                 self.stack[child].bad_idx as c_int,
                 (*self.su).su_badptr,
             );
@@ -296,7 +296,7 @@ impl Walk<'_> {
         let replacing_nonword =
             !try_compound && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), curwin.get()) };
         if !((replacing_nonword || bad_word_ends)
-            && unsafe { self.fword_at(bad_idx) } != NUL
+            && self.fword_at(bad_idx) != NUL
             && good_word_ends)
         {
             return;
