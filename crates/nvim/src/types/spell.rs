@@ -28,16 +28,23 @@ pub struct langp_T {
     pub lp_region: ::core::ffi::c_int,
 }
 pub type salfirst_T = ::core::ffi::c_int;
-#[derive(Copy, Clone)]
+/// One `SAL` sound-folding rule.
+///
+/// Only the wide forms are kept: the narrow `sm_lead`/`sm_oneof`/`sm_to`
+/// the file stores existed to be widened, and nothing but the reader ever
+/// looked at them. `sm_rules` stays narrow because it is a run of ASCII
+/// flag characters.
 pub struct salitem_T {
-    pub sm_lead: *mut ::core::ffi::c_char,
+    /// The characters this rule matches, terminated by a `NUL`.
+    pub sm_lead_w: Box<[::core::ffi::c_int]>,
+    /// How many of them there are.
     pub sm_leadlen: ::core::ffi::c_int,
-    pub sm_oneof: *mut ::core::ffi::c_char,
-    pub sm_rules: *mut ::core::ffi::c_char,
-    pub sm_to: *mut ::core::ffi::c_char,
-    pub sm_lead_w: *mut ::core::ffi::c_int,
-    pub sm_oneof_w: *mut ::core::ffi::c_int,
-    pub sm_to_w: *mut ::core::ffi::c_int,
+    /// The optional `(abc)` set: any one of these may follow the lead.
+    pub sm_oneof_w: Option<Box<[::core::ffi::c_int]>>,
+    /// The flag characters after the lead, terminated by a `NUL`.
+    pub sm_rules: Box<[u8]>,
+    /// What the match is replaced by.
+    pub sm_to_w: Option<Box<[::core::ffi::c_int]>>,
 }
 pub struct slang_S {
     pub sl_next: *mut slang_T,
@@ -70,7 +77,14 @@ pub struct slang_S {
     pub sl_prefprog: *mut *mut regprog_T,
     pub sl_rep: garray_T,
     pub sl_rep_first: [int16_t; 256],
-    pub sl_sal: garray_T,
+    /// The `SAL` rules, grouped by the low byte of their first character.
+    pub sl_sal: Vec<salitem_T>,
+    /// `SOFOFROM`/`SOFOTO`'s table for characters at or above 256: one
+    /// list of `from, to` pairs per low byte, each ending in a zero. 256
+    /// entries while the scheme is in force, none otherwise.
+    pub sl_sofo_map: Vec<Box<[::core::ffi::c_int]>>,
+    /// For `SAL`, the first rule for each low byte, or -1. For `SOFO`, the
+    /// direct mapping of every character below 256.
     pub sl_sal_first: [salfirst_T; 256],
     pub sl_followup: bool,
     pub sl_collapse: bool,
@@ -91,6 +105,17 @@ pub struct slang_S {
     pub sl_sounddone: hashtab_T,
 }
 pub type slang_T = slang_S;
+
+impl slang_S {
+    /// Whether this language can sound-fold at all, under either scheme.
+    pub(crate) fn has_soundfold(&self) -> bool {
+        if self.sl_sofo {
+            !self.sl_sofo_map.is_empty()
+        } else {
+            !self.sl_sal.is_empty()
+        }
+    }
+}
 pub type smt_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub struct spelltab_T {

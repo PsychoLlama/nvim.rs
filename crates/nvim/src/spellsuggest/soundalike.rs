@@ -75,7 +75,7 @@ const SFT_WORD_OFF: usize = mem::offset_of!(sftword_T, sft_word);
 /// `slang` must be a loaded language.
 unsafe fn has_sound_tree(slang: *mut slang_T) -> bool {
     // SAFETY: the caller guarantees the language.
-    unsafe { (*slang).sl_sal.ga_len > 0 && !(*slang).sl_sound_tree.is_empty() }
+    unsafe { (*slang).has_soundfold() && !(*slang).sl_sound_tree.is_empty() }
 }
 
 /// Prepare the per-language table of soundfolds already handled.

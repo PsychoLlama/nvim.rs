@@ -35,8 +35,8 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    NUL, OK, buf_T, fromto_T, garray_T, hash_T, regprog_T, salitem_T, size_t, slang_T, uint8_t,
-    uint16_t, wordcount_T,
+    NUL, OK, buf_T, fromto_T, garray_T, hash_T, regprog_T, size_t, slang_T, uint8_t, uint16_t,
+    wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
@@ -73,6 +73,8 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
         core::ptr::write(&raw mut (*lp).sl_keep_tree, WordTree::default());
         core::ptr::write(&raw mut (*lp).sl_prefix_tree, WordTree::default());
         core::ptr::write(&raw mut (*lp).sl_sound_tree, WordTree::default());
+        core::ptr::write(&raw mut (*lp).sl_sal, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_sofo_map, Vec::new());
     }
 
     if !lang.is_null() {
@@ -101,16 +103,6 @@ pub unsafe fn slang_free(lp: *mut slang_T) {
     unsafe { xfree(lp as *mut c_void) };
 }
 
-/// Free one sound-folding rule.
-unsafe fn free_salitem(smp: *mut salitem_T) {
-    unsafe { xfree((*smp).sm_lead as *mut c_void) };
-    // sm_oneof and sm_rules point into sm_lead, so they are already gone.
-    unsafe { xfree((*smp).sm_to as *mut c_void) };
-    unsafe { xfree((*smp).sm_lead_w as *mut c_void) };
-    unsafe { xfree((*smp).sm_oneof_w as *mut c_void) };
-    unsafe { xfree((*smp).sm_to_w as *mut c_void) };
-}
-
 /// Free one REP or REPSAL pair.
 unsafe fn free_fromto(ftp: *mut fromto_T) {
     unsafe { xfree((*ftp).ft_from as *mut c_void) };
@@ -130,13 +122,10 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
     unsafe { ga_deep_clear(&raw mut (*lp).sl_rep, free_fromto) };
     unsafe { ga_deep_clear(&raw mut (*lp).sl_repsal, free_fromto) };
 
-    let gap = unsafe { &raw mut (*lp).sl_sal };
-    if unsafe { (*lp).sl_sofo } {
-        // The SOFO table sets ga_len to 1 without adding an item for
-        // latin1, so its entries are bare pointers.
-        unsafe { ga_deep_clear::<*mut c_void>(gap, xfree_ptr) };
-    } else {
-        unsafe { ga_deep_clear(gap, free_salitem) };
+    // SAFETY: the caller's language. Assigning drops what was there.
+    unsafe {
+        (*lp).sl_sal = Vec::new();
+        (*lp).sl_sofo_map = Vec::new();
     }
 
     for i in 0..unsafe { (*lp).sl_prefixcnt } {
@@ -170,11 +159,6 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
     unsafe { (*lp).sl_compminlen = 0 };
     unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
     unsafe { (*lp).sl_regions[0] = NUL as c_char };
-}
-
-/// Free one bare pointer held in a garray.
-unsafe fn xfree_ptr(p: *mut *mut c_void) {
-    unsafe { xfree(*p) }
 }
 
 /// Drop what the `.sug` file contributed, so it can be read again.

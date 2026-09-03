@@ -29,7 +29,7 @@ use crate::fileio::{get2c, read_string};
 use crate::garray::{ga_grow, ga_init};
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
 use crate::mbyte::{
-    mb_charlen, mb_cptr2char_adv, mb_ptr2char_adv, utf_char2bytes, utf_char2len, utf_ptr2len,
+    char_at, char_len, mb_cptr2char_adv, mb_ptr2char_adv, utf_char2bytes, utf_char2len,
 };
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
@@ -263,127 +263,100 @@ pub(super) unsafe fn read_sal_section(fd: *mut FILE, slang: *mut slang_T) -> c_i
     if cnt < 0 {
         return SP_TRUNCERROR;
     }
-    let gap = unsafe { &raw mut (*slang).sl_sal };
-    unsafe { ga_init(gap, size_of::<salitem_T>() as c_int, 10) };
-    // One spare for the terminating entry appended below.
-    unsafe { ga_grow(gap, cnt + 1) };
+    let mut rules: Vec<salitem_T> = Vec::with_capacity(cnt as usize + 1);
 
-    while unsafe { (*gap).ga_len } < cnt {
-        let smp = unsafe {
-            (*gap)
-                .ga_data
-                .cast::<salitem_T>()
-                .offset((*gap).ga_len as isize)
-        };
-        let mut ccnt = unsafe { getc(fd) };
+    while (rules.len() as c_int) < cnt {
+        let ccnt = unsafe { getc(fd) };
         if ccnt < 0 {
             return SP_TRUNCERROR;
         }
-        let mut p = unsafe { xmalloc((ccnt as size_t) + 2) }.cast::<c_char>();
-        unsafe { (*smp).sm_lead = p };
-
-        // The lead: everything up to the first rule character.
-        let mut c = NUL;
-        let mut i = 0;
-        while i < ccnt {
-            c = unsafe { getc(fd) };
-            if !unsafe { vim_strchr(c"0123456789(-<^$".as_ptr(), c) }.is_null() {
-                break;
+        // The whole item arrives as `ccnt` bytes: the lead, then an
+        // optional "(abc)" set, then the flag characters.
+        let mut item = Vec::with_capacity(ccnt as usize);
+        for _ in 0..ccnt {
+            let c = unsafe { getc(fd) };
+            if c < 0 {
+                return SP_TRUNCERROR;
             }
-            unsafe { *p = c as uint8_t as c_char };
-            p = unsafe { p.add(1) };
-            i += 1;
+            item.push(c as u8);
         }
-        unsafe { (*smp).sm_leadlen = p.offset_from((*smp).sm_lead) as c_int };
-        unsafe { *p = NUL as c_char };
-        p = unsafe { p.add(1) };
 
-        // An optional "(abc)" set of characters any of which may
-        // follow the lead.
-        if c == b'(' as c_int {
-            unsafe { (*smp).sm_oneof = p };
-            i += 1;
-            while i < ccnt {
-                c = unsafe { getc(fd) };
-                if c == b')' as c_int {
-                    break;
-                }
-                unsafe { *p = c as uint8_t as c_char };
-                p = unsafe { p.add(1) };
-                i += 1;
-            }
-            unsafe { *p = NUL as c_char };
-            p = unsafe { p.add(1) };
-            i += 1;
-            if i < ccnt {
-                c = unsafe { getc(fd) };
+        // The lead is everything up to the first rule character.
+        let lead_len = item
+            .iter()
+            .position(|b| b"0123456789(-<^$".contains(b))
+            .unwrap_or(item.len());
+        // A NUL inside the item ends whichever string it lands in, as it
+        // did when the three were one C string.
+        let lead = &item[..lead_len];
+        let lead = &lead[..lead.iter().position(|&b| b == 0).unwrap_or(lead.len())];
+
+        // An optional "(abc)" set of characters any of which may follow
+        // the lead; whatever is left after it is the rule.
+        let (oneof, rest) = if item.get(lead_len) == Some(&b'(') {
+            let close = item[lead_len + 1..]
+                .iter()
+                .position(|&b| b == b')')
+                .map(|at| lead_len + 1 + at);
+            match close {
+                Some(at) => (
+                    Some(&item[lead_len + 1..at]),
+                    &item[(at + 1).min(item.len())..],
+                ),
+                None => (Some(&item[lead_len + 1..]), &item[item.len()..]),
             }
         } else {
-            unsafe { (*smp).sm_oneof = core::ptr::null_mut() };
-        }
+            (None, &item[lead_len..])
+        };
 
-        // Whatever is left is the rule.
-        unsafe { (*smp).sm_rules = p };
-        if i < ccnt {
-            unsafe { *p = c as uint8_t as c_char };
-            p = unsafe { p.add(1) };
+        // The tail past the first flag character is where the file may
+        // not put a NUL: the flags are a string.
+        if rest.len() > 1 && rest[1..].contains(&0) {
+            return SP_FORMERROR;
         }
-        i += 1;
-        if i < ccnt {
-            if let Err(e) = unsafe { read_nonnul_bytes(fd, p, (ccnt - i) as usize) } {
-                unsafe { xfree((*smp).sm_lead.cast()) };
-                return e;
-            }
-            p = unsafe { p.offset((ccnt - i) as isize) };
-        }
-        unsafe { *p = NUL as c_char };
+        let mut sm_rules = rest.to_vec();
+        sm_rules.push(NUL as u8);
 
-        unsafe { (*smp).sm_to = read_cnt_string(fd, 1, &raw mut ccnt) };
+        let mut ccnt = 0;
+        // SAFETY: `fd` is positioned at the replacement's length byte.
+        let to = unsafe { read_cnt_string(fd, 1, &raw mut ccnt) };
         if ccnt < 0 {
-            unsafe { xfree((*smp).sm_lead.cast()) };
             return ccnt;
         }
+        // SAFETY: `read_cnt_string` answers a NUL-terminated string or
+        // null; the copy is taken before it is freed.
+        let sm_to_w = if to.is_null() {
+            None
+        } else {
+            let wide = unsafe { str2wide(to) };
+            unsafe { xfree(to.cast()) };
+            Some(wide)
+        };
 
-        // Wide copies, since sound folding works in characters.
-        unsafe { (*smp).sm_lead_w = mb_str2wide((*smp).sm_lead) };
-        unsafe { (*smp).sm_leadlen = mb_charlen((*smp).sm_lead) };
-        let oneof = unsafe { (*smp).sm_oneof };
-        let wide = if oneof.is_null() {
-            core::ptr::null_mut()
-        } else {
-            unsafe { mb_str2wide(oneof) }
-        };
-        unsafe { (*smp).sm_oneof_w = wide };
-        let to = unsafe { (*smp).sm_to };
-        let wide = if to.is_null() {
-            core::ptr::null_mut()
-        } else {
-            unsafe { mb_str2wide(to) }
-        };
-        unsafe { (*smp).sm_to_w = wide };
-        unsafe { (*gap).ga_len += 1 };
+        let sm_lead_w = bytes2wide(lead);
+        rules.push(salitem_T {
+            sm_leadlen: sm_lead_w.len() as c_int - 1,
+            sm_lead_w,
+            sm_oneof_w: oneof.map(|set| {
+                bytes2wide(&set[..set.iter().position(|&b| b == 0).unwrap_or(set.len())])
+            }),
+            sm_rules: sm_rules.into_boxed_slice(),
+            sm_to_w,
+        });
     }
 
-    if unsafe { (*gap).ga_len } > 0 {
+    if !rules.is_empty() {
         // A final empty rule, so the search always has one to stop on.
-        let smp = unsafe {
-            (*gap)
-                .ga_data
-                .cast::<salitem_T>()
-                .offset((*gap).ga_len as isize)
-        };
-        let p = unsafe { xmalloc(1) }.cast::<c_char>();
-        unsafe { *p = NUL as c_char };
-        unsafe { (*smp).sm_lead = p };
-        unsafe { (*smp).sm_lead_w = mb_str2wide(p) };
-        unsafe { (*smp).sm_leadlen = 0 };
-        unsafe { (*smp).sm_oneof = core::ptr::null_mut() };
-        unsafe { (*smp).sm_oneof_w = core::ptr::null_mut() };
-        unsafe { (*smp).sm_rules = p };
-        unsafe { (*smp).sm_to = core::ptr::null_mut() };
-        unsafe { (*smp).sm_to_w = core::ptr::null_mut() };
-        unsafe { (*gap).ga_len += 1 };
+        rules.push(salitem_T {
+            sm_lead_w: Box::new([NUL]),
+            sm_leadlen: 0,
+            sm_oneof_w: None,
+            sm_rules: Box::new([NUL as u8]),
+            sm_to_w: None,
+        });
     }
+    // SAFETY: the caller's language.
+    unsafe { (*slang).sl_sal = rules };
 
     unsafe { set_sal_first(slang) };
     0
@@ -635,66 +608,51 @@ pub(super) unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_in
 ///
 /// `from` and `to` must be NUL-terminated strings.
 unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> c_int {
-    // SAFETY: the caller promises the strings; the second pass writes
-    // exactly as many pairs as the first pass counted.
-    let gap = unsafe { &raw mut (*lp).sl_sal };
-    unsafe { ga_init(gap, size_of::<*mut c_int>() as c_int, 1) };
-    unsafe { ga_grow(gap, 256) };
-    unsafe {
-        (*gap)
-            .ga_data
-            .cast::<u8>()
-            .write_bytes(0, size_of::<*mut c_int>() * 256)
-    };
-    unsafe { (*gap).ga_len = 256 };
-
-    // First pass: how many high characters share each low byte.
-    let mut p = from;
-    let mut s = to;
-    while unsafe { *p } as c_int != NUL && unsafe { *s } as c_int != NUL {
-        let c = unsafe { mb_cptr2char_adv(&raw mut p) };
-        s = unsafe { s.offset(utf_ptr2len(s) as isize) };
-        if c >= 256 {
-            unsafe { (*lp).sl_sal_first[(c & 0xff) as usize] += 1 };
-        }
-    }
+    // SAFETY: the caller promises the strings.
+    let (from, to) = unsafe { (str2wide(from), str2wide(to)) };
     // The two strings must describe the same number of characters.
-    if unsafe { *p } as c_int != NUL || unsafe { *s } as c_int != NUL {
+    if from.len() != to.len() {
         return SP_FORMERROR;
     }
 
-    for i in 0..256 {
-        if unsafe { (*lp).sl_sal_first[i] } > 0 {
-            // Room for each pair plus a zero terminator.
-            let n = unsafe { (*lp).sl_sal_first[i] } as size_t * 2 + 1;
-            let list = unsafe { xmalloc(size_of::<c_int>() * n) }.cast::<c_int>();
-            unsafe { *(*gap).ga_data.cast::<*mut c_int>().add(i) = list };
-            unsafe { *list = 0 };
-        }
-    }
-    let first = unsafe { &raw mut (*lp).sl_sal_first };
-    let into = first.cast::<u8>();
-    unsafe { into.write_bytes(0, size_of::<salfirst_T>() * 256) };
-
-    // Second pass: fill the lists and the direct table.
-    let mut p = from;
-    let mut s = to;
-    while unsafe { *p } as c_int != NUL && unsafe { *s } as c_int != NUL {
-        let c = unsafe { mb_cptr2char_adv(&raw mut p) };
-        let to_c = unsafe { mb_cptr2char_adv(&raw mut s) };
+    // Characters below 256 map straight through `sl_sal_first`. Wider ones
+    // go in the list their low byte selects, as `from, to` pairs ending in
+    // a zero.
+    let mut sizes = [0usize; 256];
+    for &c in from.iter().take(from.len() - 1) {
         if c >= 256 {
-            let lists = unsafe { (*gap).ga_data.cast::<*mut c_int>() };
-            let mut inp = unsafe { *lists.offset((c & 0xff) as isize) };
-            while unsafe { *inp } != 0 {
-                inp = unsafe { inp.add(1) };
-            }
-            unsafe { *inp = c };
-            unsafe { *inp.add(1) = to_c };
-            unsafe { *inp.add(2) = NUL };
-        } else {
-            unsafe { (*lp).sl_sal_first[c as usize] = to_c as salfirst_T };
+            sizes[(c & 0xff) as usize] += 1;
         }
     }
+    let mut map: Vec<Box<[c_int]>> = sizes
+        .iter()
+        .map(|&n| {
+            if n == 0 {
+                Box::default()
+            } else {
+                vec![NUL; n * 2 + 1].into_boxed_slice()
+            }
+        })
+        .collect();
+    let mut filled = [0usize; 256];
+
+    // SAFETY: the caller's language.
+    let first = unsafe { &mut (*lp).sl_sal_first };
+    first.fill(0);
+    for (&c, &to_c) in from.iter().zip(to.iter()).take(from.len() - 1) {
+        if c >= 256 {
+            let low = (c & 0xff) as usize;
+            let at = filled[low];
+            map[low][at] = c;
+            map[low][at + 1] = to_c;
+            map[low][at + 2] = NUL;
+            filled[low] += 2;
+        } else {
+            first[c as usize] = to_c as salfirst_T;
+        }
+    }
+    // SAFETY: as above.
+    unsafe { (*lp).sl_sofo_map = core::mem::take(&mut map) };
     0
 }
 
@@ -706,35 +664,27 @@ unsafe fn set_sofo(lp: *mut slang_T, from: *const c_char, to: *const c_char) -> 
 ///
 /// `lp` must hold a filled `sl_sal`.
 unsafe fn set_sal_first(lp: *mut slang_T) {
-    // SAFETY: `sl_sal` holds `ga_len` items with wide lead strings.
-    let gap = unsafe { &raw mut (*lp).sl_sal };
-    let sfirst = (unsafe { &raw mut (*lp).sl_sal_first }).cast::<salfirst_T>();
-    for i in 0..256 {
-        unsafe { *sfirst.offset(i) = -1 as salfirst_T };
-    }
+    // SAFETY: the caller's language.
+    let sfirst = unsafe { &mut (*lp).sl_sal_first };
+    sfirst.fill(-1);
+    let rules = unsafe { &mut (*lp).sl_sal };
 
-    let smp = unsafe { (*gap).ga_data }.cast::<salitem_T>();
     let mut i = 0;
-    while i < unsafe { (*gap).ga_len } {
-        let c = unsafe { *(*smp.offset(i as isize)).sm_lead_w } & 0xff;
-        if unsafe { *sfirst.offset(c as isize) } == -1 {
-            unsafe { *sfirst.offset(c as isize) = i as salfirst_T };
+    while i < rules.len() {
+        let c = (rules[i].sm_lead_w[0] & 0xff) as usize;
+        if sfirst[c] == -1 {
+            sfirst[c] = i as salfirst_T;
             // Skip the run that is already together.
-            while i + 1 < unsafe { (*gap).ga_len }
-                && unsafe { *(*smp.offset((i + 1) as isize)).sm_lead_w } & 0xff == c
-            {
+            while i + 1 < rules.len() && (rules[i + 1].sm_lead_w[0] & 0xff) as usize == c {
                 i += 1;
             }
             // Pull any later rule with the same low byte up to join it.
             let mut n = 1;
-            while i + n < unsafe { (*gap).ga_len } {
-                if unsafe { *(*smp.offset((i + n) as isize)).sm_lead_w } & 0xff == c {
+            while i + n < rules.len() {
+                if (rules[i + n].sm_lead_w[0] & 0xff) as usize == c {
                     i += 1;
                     n -= 1;
-                    let tsal = unsafe { *smp.offset((i + n) as isize) };
-                    let from = unsafe { smp.offset(i as isize) };
-                    unsafe { core::ptr::copy(from, from.add(1), n as usize) };
-                    unsafe { *smp.offset(i as isize) = tsal };
+                    rules[i..=i + n].rotate_right(1);
                 }
                 n += 1;
             }
@@ -748,18 +698,21 @@ unsafe fn set_sal_first(lp: *mut slang_T) {
 /// # Safety
 ///
 /// `s` must be a NUL-terminated string.
-unsafe fn mb_str2wide(s: *const c_char) -> *mut c_int {
-    // SAFETY: the array is sized from the string's character count.
-    let res =
-        unsafe { xmalloc((mb_charlen(s) as size_t + 1) * size_of::<c_int>()) }.cast::<c_int>();
-    let mut i = 0;
-    let mut p = s;
-    while unsafe { *p } as c_int != NUL {
-        unsafe { *res.offset(i) = mb_ptr2char_adv(&raw mut p) };
-        i += 1;
+unsafe fn str2wide(s: *const c_char) -> Box<[c_int]> {
+    // SAFETY: the caller promises a NUL-terminated string.
+    bytes2wide(unsafe { cstr::bytes_at(s) })
+}
+
+/// The same, for bytes that carry their own end.
+fn bytes2wide(bytes: &[u8]) -> Box<[c_int]> {
+    let mut out = Vec::with_capacity(bytes.len() + 1);
+    let mut at = 0;
+    while at < bytes.len() {
+        out.push(char_at(&bytes[at..]));
+        at += char_len(&bytes[at..]);
     }
-    unsafe { *res.offset(i) = NUL };
-    res
+    out.push(NUL);
+    out.into_boxed_slice()
 }
 
 /// `SN_MAP`: `/`-separated groups whose members count as near-equivalent

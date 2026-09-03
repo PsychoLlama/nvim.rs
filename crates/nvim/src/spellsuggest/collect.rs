@@ -164,7 +164,7 @@ pub(super) unsafe fn add_suggestion(
                 new_score = stp.st_score;
                 new_altscore = stp.st_altscore;
                 new_had_bonus = stp.st_had_bonus;
-            } else if !slang.is_null() && unsafe { (*slang).sl_sal.ga_len } > 0 {
+            } else if !slang.is_null() && unsafe { (*slang).has_soundfold() } {
                 let (word, wordlen) = {
                     let stp = &unsafe { &*gap }[at];
                     (stp.word(), stp.st_wordlen)
@@ -320,7 +320,7 @@ pub(super) unsafe fn rescore_one(su: *mut suginfo_T, gap: *mut Vec<suggest_T>, a
     //
     // SAFETY: `st_slang` is either null -- which the `||` tests first -- or
     // a loaded language that outlives the suggestion list.
-    if slang.is_null() || unsafe { (*slang).sl_sal.ga_len } <= 0 || had_bonus {
+    if slang.is_null() || !unsafe { (*slang).has_soundfold() } || had_bonus {
         return;
     }
     let (word, wordlen, orglen, score) = (stp.word(), stp.st_wordlen, stp.st_orglen, stp.st_score);
@@ -454,7 +454,7 @@ pub(super) unsafe fn score_comp_sal(su: *mut suginfo_T) {
     let langs = unsafe { window_langs() };
     let Some(lp) = langs
         .iter()
-        .find(|lp| unsafe { (*lp.lp_slang).sl_sal.ga_len } > 0)
+        .find(|lp| unsafe { (*lp.lp_slang).has_soundfold() })
     else {
         return;
     };
@@ -518,7 +518,7 @@ pub(super) unsafe fn score_combine(su: *mut suginfo_T) {
     let langs = unsafe { window_langs() };
     if let Some(lp) = langs
         .iter()
-        .find(|lp| unsafe { (*lp.lp_slang).sl_sal.ga_len } > 0)
+        .find(|lp| unsafe { (*lp.lp_slang).has_soundfold() })
     {
         slang = lp.lp_slang;
         let fbadword = unsafe { &raw mut (*su).su_fbadword } as *mut c_char;

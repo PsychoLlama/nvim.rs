@@ -503,13 +503,13 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
             // suffix past them does not have to match.
             let lang = unsafe { (*(*lp).lp_slang).sl_name };
 
-            if unsafe { (*(*lp).lp_slang).sl_sal.ga_len } > 0 {
+            if unsafe { (*(*lp).lp_slang).has_soundfold() } {
                 unsafe { (*lp).lp_sallang = (*lp).lp_slang };
             } else {
                 for j in 0..ga.ga_len {
                     let lp2 = unsafe { entries.offset(j as isize) };
                     let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
-                    if unsafe { (*(*lp2).lp_slang).sl_sal.ga_len } > 0
+                    if unsafe { (*(*lp2).lp_slang).has_soundfold() }
                         && unsafe { cstr::prefix_eq(lang, lang2, 2) }
                     {
                         unsafe { (*lp).lp_sallang = (*lp2).lp_slang };

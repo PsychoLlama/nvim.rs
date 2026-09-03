@@ -307,7 +307,7 @@ fn the_shipped_english_language_loads_with_its_sections() {
         // SN_SOFO is absent and SN_SAL present, which is what makes
         // sound-folding fall to the `SAL` rules.
         assert!(!(*lp).sl_sofo);
-        assert!((*lp).sl_sal.ga_len > 0, "SN_SAL");
+        assert!(!(*lp).sl_sal.is_empty(), "SN_SAL");
         assert!((*lp).sl_rep.ga_len > 0, "SN_REP");
         assert!((*lp).sl_repsal.ga_len > 0, "SN_REPSAL");
         assert!((*lp).sl_has_map, "SN_MAP");

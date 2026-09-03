@@ -28,9 +28,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
-use crate::os::cshim::strstr;
-use crate::strings::vim_strchr;
-use crate::types::{MB_MAXBYTES, NUL, langp_T, salitem_T, slang_T};
+use crate::types::{MB_MAXBYTES, NUL, langp_T, slang_T};
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
@@ -45,7 +43,7 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
         let langp = unsafe { &(*(*win).w_s).b_langp };
         for lpi in 0..langp.ga_len {
             let lp = unsafe { (langp.ga_data as *mut langp_T).offset(lpi as isize) };
-            if unsafe { (*(*lp).lp_slang).sl_sal.ga_len } > 0 {
+            if unsafe { (*(*lp).lp_slang).has_soundfold() } {
                 let mut sound = [0 as c_char; MAXWLEN];
                 let slang = unsafe { (*lp).lp_slang };
                 let out = sound.as_mut_ptr();
@@ -87,8 +85,8 @@ pub unsafe fn spell_soundfold(
 /// character.
 ///
 /// Characters below 256 are looked up in the flat `sl_sal_first` table.
-/// Wider ones hash to `sl_sal` by their low byte, where the reader left a
-/// NUL-terminated list of from/to pairs to scan.
+/// Wider ones select a list by their low byte, where the reader left a
+/// zero-terminated run of from/to pairs to scan.
 unsafe fn spell_soundfold_sofo(slang: *mut slang_T, inword: *const c_char, res: *mut c_char) {
     let mut ri = 0;
     let mut prevc = 0;
@@ -100,24 +98,16 @@ unsafe fn spell_soundfold_sofo(slang: *mut slang_T, inword: *const c_char, res: 
         } else if c < 256 {
             c = unsafe { (*slang).sl_sal_first[c as usize] };
         } else {
-            let mut ip = unsafe {
-                *((*slang).sl_sal.ga_data as *mut *mut c_int).offset((c & 0xff) as isize)
-            };
-            if ip.is_null() {
-                c = NUL;
-            } else {
-                loop {
-                    if unsafe { *ip } == 0 {
-                        c = NUL;
-                        break;
-                    }
-                    if unsafe { *ip } == c {
-                        c = unsafe { *ip.offset(1) };
-                        break;
-                    }
-                    ip = unsafe { ip.offset(2) };
-                }
-            }
+            // SAFETY: the caller's language; the scheme's table has one
+            // entry per low byte, and each list ends in a zero.
+            let list = &unsafe { &(*slang).sl_sofo_map }[(c & 0xff) as usize];
+            c = list
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .take_while(|pair| pair[0] != 0)
+                .find(|pair| pair[0] == c)
+                .map_or(NUL, |pair| pair[1]);
         }
 
         if c != NUL && c != prevc {
@@ -191,7 +181,8 @@ unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: 
     }
     word[wordlen] = NUL;
 
-    let smp = unsafe { (*slang).sl_sal.ga_data } as *mut salitem_T;
+    // SAFETY: the caller's language, which stays loaded for the fold.
+    let smp = unsafe { &(*slang).sl_sal };
     let mut wres = [0 as c_int; MAXWLEN];
     let mut reslen = 0usize;
 
@@ -216,81 +207,70 @@ unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: 
 
         if n >= 0 {
             'rules: loop {
-                let mut ws = unsafe { *smp.offset(n as isize) }.sm_lead_w;
-                if !(unsafe { *ws } & 0xff == c & 0xff && unsafe { *ws } != NUL) {
+                let ws = &smp[n as usize].sm_lead_w;
+                if !(ws[0] & 0xff == c & 0xff && ws[0] != NUL) {
                     break 'rules;
                 }
                 'next_rule: {
                     // Most leads are one or two characters; check the
                     // cheap cases before the loop.
-                    if c != unsafe { *ws } {
+                    if c != ws[0] {
                         break 'next_rule;
                     }
-                    k = unsafe { *smp.offset(n as isize) }.sm_leadlen as usize;
+                    k = smp[n as usize].sm_leadlen as usize;
                     if k > 1 {
-                        if word[i + 1] != unsafe { *ws.offset(1) } {
+                        if word[i + 1] != ws[1] {
                             break 'next_rule;
                         }
-                        if k > 2 {
-                            let mut j = 2;
-                            while j < k {
-                                if word[i + j] != unsafe { *ws.add(j) } {
-                                    break;
-                                }
-                                j += 1;
-                            }
-                            if j < k {
-                                break 'next_rule;
-                            }
+                        if k > 2 && word[i + 2..i + k] != ws[2..k] {
+                            break 'next_rule;
                         }
                     }
 
                     // The character after the lead must be one of
                     // "sm_oneof", and counts towards the match.
-                    let mut pf = unsafe { *smp.offset(n as isize) }.sm_oneof_w;
-                    if !pf.is_null() {
-                        while unsafe { *pf } != NUL && unsafe { *pf } != word[i + k] {
-                            pf = unsafe { pf.offset(1) };
-                        }
-                        if unsafe { *pf } == NUL {
+                    if let Some(oneof) = &smp[n as usize].sm_oneof_w {
+                        if !oneof
+                            .iter()
+                            .take_while(|&&ch| ch != NUL)
+                            .any(|&ch| ch == word[i + k])
+                        {
                             break 'next_rule;
                         }
                         k += 1;
                     }
 
-                    let mut rules = unsafe { *smp.offset(n as isize) }.sm_rules;
+                    let mut rules = &smp[n as usize].sm_rules[..];
                     let mut pri = 5;
 
-                    p0 = unsafe { *rules } as u8 as c_int;
+                    p0 = c_int::from(rules[0]);
                     let mut k0 = k;
-                    while unsafe { *rules } == b'-' as c_char && k > 1 {
+                    while rules[0] == b'-' && k > 1 {
                         k -= 1;
-                        rules = unsafe { rules.offset(1) };
+                        rules = &rules[1..];
                     }
-                    if unsafe { *rules } == b'<' as c_char {
-                        rules = unsafe { rules.offset(1) };
+                    if rules[0] == b'<' {
+                        rules = &rules[1..];
                     }
-                    if ascii_isdigit(unsafe { *rules } as c_int) {
-                        pri = unsafe { *rules } as u8 as c_int - '0' as c_int;
-                        rules = unsafe { rules.offset(1) };
+                    if ascii_isdigit(c_int::from(rules[0])) {
+                        pri = c_int::from(rules[0]) - '0' as c_int;
+                        rules = &rules[1..];
                     }
-                    if unsafe { *rules } == b'^' as c_char
-                        && unsafe { *rules.offset(1) } == b'^' as c_char
-                    {
-                        rules = unsafe { rules.offset(1) };
+                    if rules[0] == b'^' && rules[1] == b'^' {
+                        rules = &rules[1..];
                     }
 
-                    let at_word_start = unsafe { *rules } == b'^' as c_char
+                    let at_word_start = rules[0] == b'^'
                         && (i == 0
                             || !(word[i - 1] == ' ' as c_int
                                 || unsafe { spell_iswordp_w(&word[i - 1..], curwin.get()) }))
-                        && (unsafe { *rules.offset(1) } != b'$' as c_char
+                        && (rules[1] != b'$'
                             || !unsafe { spell_iswordp_w(&word[i + k0..], curwin.get()) });
-                    let at_word_end = unsafe { *rules } == b'$' as c_char
+                    let at_word_end = rules[0] == b'$'
                         && i > 0
                         && unsafe { spell_iswordp_w(&word[i - 1..], curwin.get()) }
                         && !unsafe { spell_iswordp_w(&word[i + k0..], curwin.get()) };
-                    if !(unsafe { *rules } == NUL as c_char || at_word_start || at_word_end) {
+                    if !(rules[0] == NUL as u8 || at_word_start || at_word_end) {
                         break 'next_rule;
                     }
 
@@ -305,66 +285,63 @@ unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: 
                         && word[i + k] != NUL
                     {
                         'followups: loop {
-                            ws = unsafe { *smp.offset(n0 as isize) }.sm_lead_w;
-                            if unsafe { *ws } & 0xff != c0 & 0xff {
+                            // The outer loop stops on the sentinel rule,
+                            // whose lead is NUL; this one only compares low
+                            // bytes, so a `c0` whose low byte is zero --
+                            // U+0100, U+0200, ... -- matches the sentinel
+                            // too and walks off the end. The C read past
+                            // the array there; this stops.
+                            let Some(followup) = smp.get(n0 as usize) else {
+                                break 'followups;
+                            };
+                            let ws = &followup.sm_lead_w;
+                            if ws[0] & 0xff != c0 & 0xff {
                                 break 'followups;
                             }
                             'next_followup: {
-                                if c0 != unsafe { *ws } {
+                                if c0 != ws[0] {
                                     break 'next_followup;
                                 }
-                                k0 = unsafe { *smp.offset(n0 as isize) }.sm_leadlen as usize;
+                                k0 = followup.sm_leadlen as usize;
                                 if k0 > 1 {
-                                    if word[i + k] != unsafe { *ws.offset(1) } {
+                                    if word[i + k] != ws[1] {
                                         break 'next_followup;
                                     }
-                                    if k0 > 2 {
-                                        let mut at = i + k + 1;
-                                        let mut j = 2;
-                                        while j < k0 {
-                                            let ch = word[at];
-                                            at += 1;
-                                            if ch != unsafe { *ws.add(j) } {
-                                                break;
-                                            }
-                                            j += 1;
-                                        }
-                                        if j < k0 {
-                                            break 'next_followup;
-                                        }
+                                    if k0 > 2 && word[i + k + 1..i + k + k0 - 1] != ws[2..k0] {
+                                        break 'next_followup;
                                     }
                                 }
                                 k0 += k - 1;
 
-                                pf = unsafe { *smp.offset(n0 as isize) }.sm_oneof_w;
-                                if !pf.is_null() {
-                                    while unsafe { *pf } != NUL && unsafe { *pf } != word[i + k0] {
-                                        pf = unsafe { pf.offset(1) };
-                                    }
-                                    if unsafe { *pf } == NUL {
+                                if let Some(oneof) = &followup.sm_oneof_w {
+                                    if !oneof
+                                        .iter()
+                                        .take_while(|&&ch| ch != NUL)
+                                        .any(|&ch| ch == word[i + k0])
+                                    {
                                         break 'next_followup;
                                     }
                                     k0 += 1;
                                 }
 
                                 p0 = 5;
-                                let mut frules = unsafe { *smp.offset(n0 as isize) }.sm_rules;
+                                let mut frules = &followup.sm_rules[..];
                                 // "k0" is deliberately not reduced here:
                                 // the "k0 == k" test below depends on it.
-                                while unsafe { *frules } == b'-' as c_char {
-                                    frules = unsafe { frules.offset(1) };
+                                while frules[0] == b'-' {
+                                    frules = &frules[1..];
                                 }
-                                if unsafe { *frules } == b'<' as c_char {
-                                    frules = unsafe { frules.offset(1) };
+                                if frules[0] == b'<' {
+                                    frules = &frules[1..];
                                 }
-                                if ascii_isdigit(unsafe { *frules } as c_int) {
-                                    p0 = unsafe { *frules } as u8 as c_int - '0' as c_int;
-                                    frules = unsafe { frules.offset(1) };
+                                if ascii_isdigit(c_int::from(frules[0])) {
+                                    p0 = c_int::from(frules[0]) - '0' as c_int;
+                                    frules = &frules[1..];
                                 }
 
                                 // A '^' rule never cuts the current match.
-                                if unsafe { *frules } == NUL as c_char
-                                    || (unsafe { *frules } == b'$' as c_char
+                                if frules[0] == NUL as u8
+                                    || (frules[0] == b'$'
                                         && !unsafe {
                                             spell_iswordp_w(&word[i + k0..], curwin.get())
                                         })
@@ -380,34 +357,35 @@ unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: 
                         }
 
                         if p0 >= pri
-                            && unsafe { *(*smp.offset(n0 as isize)).sm_lead_w } & 0xff == c0 & 0xff
+                            && smp
+                                .get(n0 as usize)
+                                .is_some_and(|f| f.sm_lead_w[0] & 0xff == c0 & 0xff)
                         {
                             break 'next_rule;
                         }
                     }
 
                     // The rule applies: substitute "sm_to_w".
-                    ws = unsafe { *smp.offset(n as isize) }.sm_to_w;
-                    rules = unsafe { *smp.offset(n as isize) }.sm_rules;
-                    p0 = i32::from(!unsafe { vim_strchr(rules, '<' as c_int) }.is_null());
+                    let to = smp[n as usize].sm_to_w.as_deref();
+                    let rules = &smp[n as usize].sm_rules[..];
+                    p0 = c_int::from(rules.contains(&b'<'));
                     if p0 == 1 && z == 0 {
                         // A '<' rule writes back into the word so the
                         // replacement is matched again.
+                        let first = to.map_or(NUL, |t| t[0]);
                         if reslen > 0
-                            && !ws.is_null()
-                            && unsafe { *ws } != NUL
-                            && (wres[reslen - 1] == c || wres[reslen - 1] == unsafe { *ws })
+                            && first != NUL
+                            && (wres[reslen - 1] == c || wres[reslen - 1] == first)
                         {
                             reslen -= 1;
                         }
                         z0 = 1;
                         z = 1;
                         k0 = 0;
-                        if !ws.is_null() {
-                            while unsafe { *ws } != NUL && word[i + k0] != NUL {
-                                word[i + k0] = unsafe { *ws };
+                        if let Some(to) = to {
+                            while to[k0] != NUL && word[i + k0] != NUL {
+                                word[i + k0] = to[k0];
                                 k0 += 1;
-                                ws = unsafe { ws.offset(1) };
                             }
                         }
                         if k > k0 {
@@ -420,20 +398,18 @@ unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: 
                         // The last character of the replacement is left
                         // for the tail of the loop to emit, so that the
                         // collapse test sees it.
-                        if !ws.is_null() {
-                            while unsafe { *ws } != NUL
-                                && unsafe { *ws.offset(1) } != NUL
-                                && reslen < MAXWLEN
-                            {
-                                if reslen == 0 || wres[reslen - 1] != unsafe { *ws } {
-                                    wres[reslen] = unsafe { *ws };
+                        let mut at = 0;
+                        if let Some(to) = to {
+                            while to[at] != NUL && to[at + 1] != NUL && reslen < MAXWLEN {
+                                if reslen == 0 || wres[reslen - 1] != to[at] {
+                                    wres[reslen] = to[at];
                                     reslen += 1;
                                 }
-                                ws = unsafe { ws.offset(1) };
+                                at += 1;
                             }
                         }
-                        c = if ws.is_null() { NUL } else { unsafe { *ws } };
-                        if !unsafe { strstr(rules, c"^^".as_ptr()) }.is_null() {
+                        c = to.map_or(NUL, |t| t[at]);
+                        if rules.windows(2).any(|w| w == b"^^") {
                             if c != NUL && reslen < MAXWLEN {
                                 wres[reslen] = c;
                                 reslen += 1;
