@@ -675,10 +675,6 @@ unsafe fn next_buffered_line(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> bo
     true
 }
 
-/// How much one `fgets` reads at a time, terminator included: upstream grew
-/// its buffer by at least this much before every read.
-const SOURCE_CHUNK: usize = 120;
-
 /// `fgets` one chunk onto the end of `line`, retrying when a signal
 /// interrupts. Answers whether the read used every byte it was offered --
 /// which is how a line longer than one chunk announces itself -- or `None`
@@ -688,6 +684,12 @@ const SOURCE_CHUNK: usize = 120;
 ///
 /// `sp` must be a file-backed source cookie.
 unsafe fn read_file_chunk(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> Option<bool> {
+    /// How much one `fgets` reads at a time, terminator included: upstream
+    /// grew its buffer by at least this much before every read. Function-
+    /// local so it stays out of the unit lane's generated cdefs, which
+    /// publish every module-level `const`.
+    const SOURCE_CHUNK: usize = 120;
+
     let filled = line.len();
     line.reserve(SOURCE_CHUNK);
     loop {
