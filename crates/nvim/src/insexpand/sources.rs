@@ -809,3 +809,161 @@ fn cur_win() -> Win {
     // SAFETY: `curwin` is set from startup to exit.
     unsafe { Win::current() }
 }
+
+// ---------------------------------------------------------------------------
+// Finding a fuzzy match inside a line, and then inside a buffer.
+//
+// These two sat in `fuzzy.rs` and reached back into this module for
+// `find_line_end`/`find_word_start`/`find_word_end` — the scorer importing
+// its caller. Nothing else in the tree calls either of them, so they live
+// with the completion source that does.
+/// Split the line at `*ptr` into words and fuzzy match `pat` against each.
+/// On a match `*ptr` points at the matched word, `*len` is its length and
+/// `*score` its score; otherwise `*ptr` is left at the end of the line.
+///
+/// # Safety
+/// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
+/// be writable — a word is terminated in place while it is scored.
+pub(super) unsafe fn fuzzy_match_str_in_line(
+    ptr: *mut *mut c_char,
+    pat: *const c_char,
+    len: *mut c_int,
+    current_pos: *mut pos_T,
+    score: *mut c_int,
+) -> bool {
+    let line = unsafe { *ptr };
+    if line.is_null() || pat.is_null() {
+        return false;
+    }
+    let line_end = unsafe { find_line_end(line) };
+    let mut str = line;
+    while str < line_end {
+        let start = unsafe { find_word_start(str) };
+        if unsafe { *start } == 0 {
+            break;
+        }
+        let end = unsafe { find_word_end(start) };
+        let save_end = unsafe { *end };
+        unsafe { *end = 0 };
+        unsafe { *score = fuzzy_match_str(cstr::at(start), cstr::at(pat)) };
+        unsafe { *end = save_end };
+        if unsafe { *score } != FUZZY_SCORE_NONE {
+            unsafe { *len = end.offset_from(start) as c_int };
+            unsafe { *ptr = start };
+            if !current_pos.is_null() {
+                unsafe { (*current_pos).col += end.offset_from(line) as c_int };
+            }
+            return true;
+        }
+
+        // Carry on after the word just tried.
+        str = end;
+        while unsafe { *str } != 0 && !unsafe { vim_iswordp(str) } {
+            str = unsafe { str.offset(utfc_ptr2len(str) as isize) };
+        }
+    }
+    unsafe { *ptr = line_end };
+    false
+}
+
+/// Where a fuzzy match was found in a buffer line: its start inside the
+/// line's own buffer, its length in bytes, and its score — missing for a
+/// whole-line match, where upstream leaves the caller's score alone.
+pub(super) struct LineMatch {
+    pub ptr: *mut c_char,
+    pub len: c_int,
+    pub score: Option<c_int>,
+}
+
+/// Search `buf` for the next fuzzy match of `pattern`, starting at `pos` and
+/// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
+/// `pos` is left on the match. In whole-line mode (`CTRL-X CTRL-L`) whole
+/// lines are matched rather than words.
+///
+/// # Safety
+/// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
+/// point at valid positions in `buf`.
+pub(super) unsafe fn search_for_fuzzy_match(
+    buf: *mut buf_T,
+    pos: *mut pos_T,
+    pattern: *const c_char,
+    dir: c_int,
+    start_pos: *const pos_T,
+) -> Option<LineMatch> {
+    let whole_line = ctrl_x_mode_whole_line();
+    let mut current_pos = unsafe { *pos };
+
+    // Where the search has come full circle. Another buffer is walked
+    // from wherever it is to its end rather than back to the start.
+    let circly_end = if buf == curbuf.get() {
+        unsafe { *start_pos }
+    } else {
+        pos_T {
+            lnum: unsafe { (*buf).b_ml.ml_line_count },
+            col: 0,
+            coladd: 0,
+        }
+    };
+    if whole_line && unsafe { (*start_pos).lnum } != unsafe { (*pos).lnum } {
+        current_pos.lnum += dir as linenr_T;
+    }
+    let mut looped_around = false;
+    loop {
+        if looped_around
+            && (if whole_line {
+                current_pos.lnum == circly_end.lnum
+            } else {
+                equalpos(current_pos, circly_end)
+            })
+        {
+            return None;
+        }
+        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buf).b_ml.ml_line_count } {
+            let line = unsafe { ml_get_buf(buf, current_pos.lnum) };
+            let mut ptr = if whole_line {
+                line
+            } else {
+                unsafe { line.offset(current_pos.col as isize) }
+            };
+            if !ptr.is_null() && unsafe { *ptr } != 0 {
+                if whole_line {
+                    if unsafe { fuzzy_match_str(cstr::at(ptr), cstr::at(pattern)) }
+                        != FUZZY_SCORE_NONE
+                    {
+                        unsafe { *pos = current_pos };
+                        return Some(LineMatch {
+                            ptr,
+                            len: unsafe { ml_get_buf_len(buf, current_pos.lnum) } as c_int,
+                            score: None,
+                        });
+                    }
+                } else {
+                    let (mut len, mut score) = (0, 0);
+                    let (at, n) = (&raw mut ptr, &raw mut len);
+                    let (here, out) = (&raw mut current_pos, &raw mut score);
+                    if unsafe { fuzzy_match_str_in_line(at, pattern, n, here, out) } {
+                        unsafe { *pos = current_pos };
+                        let score = Some(score);
+                        return Some(LineMatch { ptr, len, score });
+                    }
+                    if looped_around && current_pos.lnum == circly_end.lnum {
+                        return None;
+                    }
+                }
+            }
+        }
+
+        // On to the next line, or round to the far end of the buffer
+        // if `'wrapscan'` allows it.
+        let last = unsafe { (*buf).b_ml.ml_line_count };
+        current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
+        if !(1..=last).contains(&current_pos.lnum) {
+            if p_ws.get() == 0 {
+                return None;
+            }
+            current_pos.lnum = if dir == FORWARD { 1 } else { last };
+            looped_around = true;
+        }
+        current_pos.col = 0;
+    }
+}

@@ -336,7 +336,9 @@ pub(crate) unsafe fn expand_user_defined(
         let matched = if unsafe { *xp.xp_pattern } as c_int == NUL {
             true // match everything
         } else if fuzzy {
-            score = unsafe { fuzzy_match_str(s, pat) };
+            // SAFETY: `s` was just NUL-terminated at `e`, and `pat` is the
+            // caller's NUL-terminated pattern.
+            score = unsafe { fuzzy_match_str(cstr::at(s), cstr::at(pat)) };
             score != FUZZY_SCORE_NONE
         } else {
             unsafe { vim_regexec(regmatch, s, 0) }

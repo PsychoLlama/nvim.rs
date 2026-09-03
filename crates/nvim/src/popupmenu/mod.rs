@@ -18,7 +18,6 @@ use crate::drawscreen::{
 use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_float, tv_dict_add_nr};
 use crate::ex_cmds::{do_ecmd, prepare_tagpreview};
 use crate::fuzzy::fuzzy_match_str_with_pos;
-use crate::garray::ga_clear;
 use crate::getchar::{vgetc, vungetc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{

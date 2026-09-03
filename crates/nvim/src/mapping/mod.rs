@@ -20,6 +20,7 @@ use crate::api::private::helpers::{
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::{skipwhite, transchar, vim_iswordp};
 use crate::cmdexpand::cmdline_fuzzy_complete;
+use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::eval::typval::{
     tv_check_for_dict_arg, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string_alloc, tv_get_bool, tv_get_number, tv_get_string_buf, tv_get_string_buf_chk,
@@ -30,7 +31,7 @@ use crate::eval::vars::set_vim_var_char;
 use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
 use crate::ex_session::put_eol_unchecked;
-use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::getchar::{ins_typebuf, noremap_keys};
 use crate::global_cell::GlobalCell;

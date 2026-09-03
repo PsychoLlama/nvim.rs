@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::cmdexpand::Expanded;
+use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, buffers};
@@ -461,7 +462,10 @@ pub(crate) unsafe fn get_next_filename_completion() {
             .set(unsafe { xmalloc(size_of::<c_int>() * num_matches as size_t) } as *mut c_int);
 
         for i in 0..num_matches {
-            let score = unsafe { fuzzy_match_str(*matches.offset(i as isize), leader) };
+            // SAFETY: `matches` holds `num_matches` NUL-terminated strings,
+            // and `leader` is NUL-terminated.
+            let candidate = unsafe { cstr::at(*matches.offset(i as isize)) };
+            let score = fuzzy_match_str(candidate, unsafe { cstr::at(leader) });
             if score != FUZZY_SCORE_NONE {
                 unsafe { ga_grow(&raw mut fuzzy_indices, 1) };
                 unsafe {

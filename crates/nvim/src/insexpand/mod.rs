@@ -44,7 +44,7 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::tilde_replace;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::fileio::vim_fgets;
-use crate::fuzzy::{fuzzy_match_str, fuzzy_match_str_in_line, search_for_fuzzy_match};
+use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::{
     append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,

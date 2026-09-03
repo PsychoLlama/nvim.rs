@@ -339,22 +339,12 @@ unsafe fn match_buflines(
             // positions past its own length, which is what upstream does.
             let mut positions = [0u32; FUZZY_MATCH_MAX_LEN as usize];
             loop {
-                let mut score: c_int = 0;
-                let str = unsafe { line.offset(col as isize) };
-                let spat2 = search.spat;
-                let out_score = &raw mut score;
-                let max_matches = positions.len() as c_int;
-                let matched = unsafe {
-                    fuzzy_match(
-                        str,
-                        spat2,
-                        false,
-                        out_score,
-                        positions.as_mut_ptr(),
-                        max_matches,
-                    )
-                };
-                if !matched {
+                // SAFETY: `col` is within the line, which is
+                // NUL-terminated, and `spat` is the caller's pattern.
+                let (str, pat) =
+                    unsafe { (cstr::at(line.offset(col as isize)), cstr::at(search.spat)) };
+                let (_, filled) = fuzzy_match(str, pat, false, &mut positions);
+                if filled == 0 {
                     break;
                 }
 

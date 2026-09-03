@@ -637,7 +637,8 @@ pub(crate) unsafe fn set_fuzzy_score() {
             pattern = unsafe { get_leader_for_startcol(comp, true) }.data();
         }
         // SAFETY: both strings are NUL-terminated.
-        comp.cp_score = unsafe { fuzzy_match_str(comp.cp_str.data(), pattern) };
+        let (str, pattern) = unsafe { (cstr::at(comp.cp_str.data()), cstr::at(pattern)) };
+        comp.cp_score = fuzzy_match_str(str, pattern);
     }
 }
 

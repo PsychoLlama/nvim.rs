@@ -27,12 +27,67 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod tables;
 
 pub use self::tables::*;
+
+/// The characters of a NUL-terminated string, as `MB_PTR_ADV` steps over
+/// them: one item per base character, with any composing characters folded
+/// into the step, as `(byte offset, codepoint)`.
+///
+/// This is the safe spelling of the `while (*p) { c = utf_ptr2char(p);
+/// MB_PTR_ADV(p); }` loop. The pointer forms it wraps ask their caller for a
+/// NUL-terminated string and an offset before the NUL; a [`CStr`] is the
+/// first and the iterator's own bookkeeping is the second, so a caller that
+/// has the string rather than a pointer needs no `unsafe` of its own.
+pub struct Chars<'a> {
+    str: &'a CStr,
+    /// Bytes before the NUL, measured once.
+    len: usize,
+    /// Byte offset of the next character.
+    at: usize,
+}
+
+impl<'a> Chars<'a> {
+    fn new(str: &'a CStr) -> Self {
+        Chars {
+            str,
+            len: str.to_bytes().len(),
+            at: 0,
+        }
+    }
+}
+
+/// The characters of `s`; see [`Chars`].
+pub fn chars(s: &CStr) -> Chars<'_> {
+    Chars::new(s)
+}
+
+impl Iterator for Chars<'_> {
+    /// The byte offset the character starts at, and its codepoint.
+    type Item = (usize, c_int);
+
+    fn next(&mut self) -> Option<(usize, c_int)> {
+        if self.at >= self.len {
+            return None;
+        }
+        let at = self.at;
+        // SAFETY: `at` is a character boundary before the NUL of a
+        // NUL-terminated string, which is what both of these want. Neither
+        // reads past the NUL.
+        let (c, len) = unsafe {
+            let p = self.str.as_ptr().add(at);
+            (utf_ptr2char(p), utfc_ptr2len(p) as usize)
+        };
+        // Zero is the answer only at the NUL, which `at` never points at.
+        debug_assert!(len > 0, "utfc_ptr2len stalled mid-string");
+        self.at = at + len;
+        Some((at, c))
+    }
+}
 
 /// A grapheme-break state that has seen nothing yet.
 pub const GRAPHEME_STATE_INIT: c_int = 0;

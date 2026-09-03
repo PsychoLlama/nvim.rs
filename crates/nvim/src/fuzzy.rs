@@ -3,10 +3,12 @@
 //! The scorer is a port of [fzy](https://github.com/jhawthorn/fzy) extended
 //! to multibyte characters — [`match_positions`] fills a dynamic-programming
 //! table and reads back both the score and where each pattern character
-//! landed. Around it sit the entry points the editor uses:
-//! [`fuzzy_match_str`] to score a candidate, [`fuzzy_match_str_with_pos`] for
-//! the popup menu's highlighting, [`search_for_fuzzy_match`] for
-//! `'completeopt'=fuzzy`, and [`f_matchfuzzy`]/[`f_matchfuzzypos`].
+//! landed. Around it sit the three questions the editor asks:
+//! [`fuzzy_match`] for a score and the positions behind it,
+//! [`fuzzy_match_str`] for a score alone, and [`fuzzy_match_str_with_pos`]
+//! for the popup menu's highlighting. `matchfuzzy()`/`matchfuzzypos()` live
+//! with the rest of the `match*()` family in `eval::funcs::regexp`, and
+//! completion's buffer walk with its caller in `insexpand::sources`.
 //!
 //! A pattern is matched word by word (whitespace separated) unless the caller
 //! asks for `matchseq`, in which case the whole pattern including its spaces
@@ -21,50 +23,32 @@
 //! infinities become `c_int::MAX` and `c_int::MIN + 1`, leaving
 //! [`FUZZY_SCORE_NONE`] (`c_int::MIN`) to mean "no match at all".
 //!
+//! # Characters, not bytes
+//!
+//! Every step of the scoring is over *characters*: the tables are indexed by
+//! character, a reported position is a character index, and the whitespace a
+//! multi-word pattern splits on is a character too. So each string is decoded
+//! once on the way in ([`chars`]) and nothing below ever looks at a byte
+//! again — which is also what makes the file safe, since the decode is the
+//! only thing here that ever wanted a pointer.
+//!
 //! Portions of this file are adapted from fzy. Original code: Copyright (c)
 //! 2014 John Hawthorn, MIT licensed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unsafe_code)]
 
-use crate::message_fmt::c_str;
-use crate::semsg;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 use crate::ascii::ascii_iswhite;
-use crate::charset::{vim_iswordc, vim_iswordp};
-use crate::eval::callback_call;
-use crate::eval::typval::{
-    NumBuf, callback_free, tv_check_for_nonnull_dict_arg, tv_clear, tv_dict_find,
-    tv_dict_get_callback, tv_dict_has_key, tv_dict_unref, tv_get_number_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_list, tv_list_append_number, tv_list_append_tv, tv_list_find,
-};
-use crate::garray::{ga_grow, ga_init};
-use crate::insexpand::{ctrl_x_mode_whole_line, find_line_end, find_word_end, find_word_start};
-use crate::main::{curbuf, p_ws};
-use crate::mbyte::{mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_ptr2char, utfc_ptr2len};
-use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{xfree, xmalloc};
-use crate::pos::equalpos;
-use crate::search::FORWARD;
-use crate::types::{
-    Callback, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    buf_T, dict_T, fuzmatch_str_T, garray_T, kListLenMayKnow, kListLenUnknown, linenr_T, list_T,
-    listitem_T, pos_T, typval_T, typval_vval_union, varnumber_T,
-};
+use crate::charset::is_word_char;
+use crate::mbyte::{chars as decode, mb_islower, mb_isupper, mb_tolower, mb_toupper};
 
 /// The most characters of a pattern or a candidate that are looked at, and
 /// so the most match positions that can be reported.
 pub const FUZZY_MATCH_MAX_LEN: usize = 1024;
 /// The score of a candidate the pattern does not match at all.
 pub const FUZZY_SCORE_NONE: c_int = c_int::MIN;
-
-/// An unset typval, as `VAR_UNKNOWN` spells it.
-const TV_UNKNOWN: typval_T = typval_T {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
 
 /// fzy's score, before it is scaled to an `int`.
 type Score = f64;
@@ -85,47 +69,26 @@ const SCORE_MATCH_WORD: Score = 0.8;
 const SCORE_MATCH_CAPITAL: Score = 0.7;
 const SCORE_MATCH_DOT: Score = 0.6;
 
-/// The characters of a string, as `MB_PTR_ADV` steps over them: one item per
-/// base character, with any composing characters folded into the step.
-struct Chars<'a> {
-    str: &'a CStr,
-    /// Bytes before the NUL, worked out once.
-    len: usize,
-    /// Byte offset of the next character.
-    at: usize,
+/// The codepoints of `s`, as `MB_PTR_ADV` steps over them — one per base
+/// character, with any composing characters folded into the step.
+fn chars(s: &CStr) -> Vec<c_int> {
+    decode(s).map(|(_, c)| c).collect()
 }
 
-impl<'a> Chars<'a> {
-    fn new(str: &'a CStr) -> Self {
-        Chars {
-            str,
-            len: str.to_bytes().len(),
-            at: 0,
-        }
-    }
+/// The whitespace-separated words of a pattern. An empty pattern, and one
+/// that is nothing but separators, has none — which is how a candidate ends
+/// up with a score of zero rather than a rejection.
+fn words(pattern: &[c_int]) -> impl Iterator<Item = &[c_int]> {
+    let separator = |&c: &c_int| c == b' ' as c_int || c == b'\t' as c_int;
+    pattern.split(separator).filter(|word| !word.is_empty())
 }
 
-impl Iterator for Chars<'_> {
-    /// The byte offset the character starts at, and its codepoint.
-    type Item = (usize, c_int);
-
-    fn next(&mut self) -> Option<(usize, c_int)> {
-        if self.at >= self.len {
-            return None;
-        }
-        let at = self.at;
-        // SAFETY: `at` is a character boundary before the NUL of a
-        // NUL-terminated string, which is what both of these want. Neither
-        // reads past the NUL.
-        let (c, len) = unsafe {
-            let p = self.str.as_ptr().add(at);
-            (utf_ptr2char(p), utfc_ptr2len(p) as usize)
-        };
-        // Zero is the answer only at the NUL, which `at` never points at.
-        debug_assert!(len > 0, "fuzzy: utfc_ptr2len stalled mid-string");
-        self.at = at + len;
-        Some((at, c))
-    }
+/// How many of `pattern`'s characters can take part in a match, and so how
+/// many positions a successful match reports: all of them under `matchseq`,
+/// and everything but the word separators without it.
+pub(crate) fn matched_char_count(pattern: &CStr, matchseq: bool) -> usize {
+    let counted = decode(pattern).filter(|&(_, c)| matchseq || !ascii_iswhite(c));
+    counted.count().min(FUZZY_MATCH_MAX_LEN)
 }
 
 /// C's `MAX` on scores: `a` only when strictly greater, so a NaN answers `b`.
@@ -137,12 +100,14 @@ fn max_score(a: Score, b: Score) -> Score {
 ///
 /// A lowercase pattern character also matches its uppercase form, which is
 /// what makes fuzzy matching case-insensitive in one direction only.
-fn has_match(needle: &CStr, haystack: &CStr) -> bool {
-    if needle.to_bytes().is_empty() {
+fn has_match(needle: &[c_int], haystack: &[c_int]) -> bool {
+    if needle.is_empty() {
         return false;
     }
-    let mut haystack = Chars::new(haystack);
-    Chars::new(needle).all(|(_, n)| haystack.any(|(_, h)| n == h || mb_toupper(n) == h))
+    let mut haystack = haystack.iter();
+    needle
+        .iter()
+        .all(|&n| haystack.any(|&h| n == h || mb_toupper(n) == h))
 }
 
 /// What a haystack character earns for the character in front of it: the
@@ -152,8 +117,7 @@ fn compute_bonus(last_c: c_int, c: c_int) -> Score {
     // A codepoint outside ASCII is not alphanumeric, as C's ASCII_ISALNUM
     // classifies them.
     let alnum = u8::try_from(c).is_ok_and(|b| b.is_ascii_alphanumeric());
-    // SAFETY: the other three read only the character-class tables.
-    if !(alnum || unsafe { vim_iswordc(c) }) {
+    if !(alnum || is_word_char(c)) {
         return 0.0;
     }
     match u8::try_from(last_c) {
@@ -175,23 +139,23 @@ struct Match {
 }
 
 impl Match {
-    fn new(needle: &CStr, haystack: &CStr) -> Self {
-        let lower_needle = Chars::new(needle)
-            .take(FUZZY_MATCH_MAX_LEN)
-            .map(|(_, c)| mb_tolower(c))
-            .collect();
-        let mut lower_haystack = Vec::new();
-        let mut match_bonus = Vec::new();
+    fn new(needle: &[c_int], haystack: &[c_int]) -> Self {
+        let fold = |s: &[c_int]| -> Vec<c_int> {
+            s.iter()
+                .take(FUZZY_MATCH_MAX_LEN)
+                .map(|&c| mb_tolower(c))
+                .collect()
+        };
         // The first character is treated as if a path separator preceded it.
         let mut last_c = b'/' as c_int;
-        for (_, c) in Chars::new(haystack).take(FUZZY_MATCH_MAX_LEN) {
-            lower_haystack.push(mb_tolower(c));
+        let mut match_bonus = Vec::with_capacity(haystack.len().min(FUZZY_MATCH_MAX_LEN));
+        for &c in haystack.iter().take(FUZZY_MATCH_MAX_LEN) {
             match_bonus.push(compute_bonus(last_c, c));
             last_c = c;
         }
         Match {
-            lower_needle,
-            lower_haystack,
+            lower_needle: fold(needle),
+            lower_haystack: fold(haystack),
             match_bonus,
         }
     }
@@ -251,8 +215,8 @@ fn match_row(
 /// writes one entry per needle character with no bound at all, overrunning
 /// the caller's array once two pattern words together have more characters
 /// than it holds.
-fn match_positions(needle: &CStr, haystack: &CStr, positions: &mut [u32]) -> Score {
-    if needle.to_bytes().is_empty() {
+fn match_positions(needle: &[c_int], haystack: &[c_int], positions: &mut [u32]) -> Score {
+    if needle.is_empty() {
         return SCORE_MIN;
     }
     let mtch = Match::new(needle, haystack);
@@ -344,612 +308,52 @@ fn add_score(total: c_int, score: c_int) -> c_int {
 ///
 /// Answers the summed score and how many positions were filled — zero, with
 /// a score of [`FUZZY_SCORE_NONE`], when the candidate is rejected.
-fn fuzzy_match_words(
+pub fn fuzzy_match(
     haystack: &CStr,
     pattern: &CStr,
     matchseq: bool,
     positions: &mut [u32],
 ) -> (c_int, usize) {
     let rejected = (FUZZY_SCORE_NONE, 0);
+    let (haystack, pattern) = (chars(haystack), chars(pattern));
     if matchseq {
-        if !has_match(pattern, haystack) {
+        if !has_match(&pattern, &haystack) {
             return rejected;
         }
-        let score = scale(match_positions(pattern, haystack, positions));
-        return (add_score(0, score), Chars::new(pattern).count());
+        let score = scale(match_positions(&pattern, &haystack, positions));
+        return (add_score(0, score), pattern.len());
     }
 
-    // Upstream terminates each word in a copy of the pattern; the copy is
-    // what makes a word a string in its own right.
-    let mut buf = pattern.to_bytes_with_nul().to_vec();
-    let mut at = 0;
-    let mut total = 0;
-    let mut filled = 0;
-    loop {
-        while buf[at] == b' ' || buf[at] == b'\t' {
-            at += 1;
-        }
-        if buf[at] == 0 {
-            break;
-        }
-        let start = at;
-        while buf[at] != 0 && buf[at] != b' ' && buf[at] != b'\t' {
-            at += 1;
-        }
-        let complete = buf[at] == 0;
-        buf[at] = 0;
-        let word = CStr::from_bytes_with_nul(&buf[start..=at]).expect("fuzzy: word is terminated");
-        if !has_match(word, haystack) {
+    let (mut total, mut filled) = (0, 0);
+    for word in words(&pattern) {
+        if !has_match(word, &haystack) {
             return rejected;
         }
-        total = add_score(
-            total,
-            scale(match_positions(word, haystack, &mut positions[filled..])),
-        );
-        filled += Chars::new(word).count();
-        if complete || filled >= positions.len() {
+        let score = scale(match_positions(word, &haystack, &mut positions[filled..]));
+        total = add_score(total, score);
+        filled += word.len();
+        if filled >= positions.len() {
             break;
         }
-        // Step over the NUL that ended the word.
-        at += 1;
     }
     (total, filled)
 }
 
-/// Fuzzy match `pat_arg` in `str`, reporting the score in `out_score` and the
-/// matching character positions in `matches`. With `matchseq` the words of a
-/// multi-word pattern have to match in sequence rather than independently.
-///
-/// # Safety
-/// `str` and `pat_arg` must be NUL-terminated strings, and `matches` must
-/// point at `max_matches` writable entries.
-pub unsafe fn fuzzy_match(
-    str: *const c_char,
-    pat_arg: *const c_char,
-    matchseq: bool,
-    out_score: *mut c_int,
-    matches: *mut u32,
-    max_matches: c_int,
-) -> bool {
-    let (score, filled) = fuzzy_match_words(
-        unsafe { CStr::from_ptr(str) },
-        unsafe { CStr::from_ptr(pat_arg) },
-        matchseq,
-        unsafe { core::slice::from_raw_parts_mut(matches, max_matches as usize) },
-    );
-    unsafe { *out_score = score };
-    filled != 0
+/// Fuzzy match `pat` in `str`, as one sequence. Answers
+/// [`FUZZY_SCORE_NONE`] when there is no match.
+pub(crate) fn fuzzy_match_str(str: &CStr, pat: &CStr) -> c_int {
+    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+    fuzzy_match(str, pat, true, &mut matches).0
 }
 
-/// Fuzzy match `pat` in `str`, as one sequence. Answers 0 for a missing
-/// string, [`FUZZY_SCORE_NONE`] for no match.
-///
-/// # Safety
-/// Both arguments must be NUL-terminated strings or NULL.
-pub(crate) unsafe fn fuzzy_match_str(str: *const c_char, pat: *const c_char) -> c_int {
-    if str.is_null() || pat.is_null() {
-        return 0;
-    }
+/// Where `pat` matches in `str`, as one character position per pattern
+/// character that took part — i.e. everything but the whitespace between the
+/// words — or `None` when there is no match.
+pub(crate) fn fuzzy_match_str_with_pos(str: &CStr, pat: &CStr) -> Option<Vec<u32>> {
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    // SAFETY: the caller's promise, plus a big enough array.
-    unsafe { fuzzy_match_words(CStr::from_ptr(str), CStr::from_ptr(pat), true, &mut matches).0 }
-}
-
-/// Where `pat` matches in `str`, as a garray of character positions, or NULL
-/// when there is no match. The array is the caller's to free.
-///
-/// # Safety
-/// Both arguments must be NUL-terminated strings or NULL.
-pub(crate) unsafe fn fuzzy_match_str_with_pos(
-    str: *const c_char,
-    pat: *const c_char,
-) -> *mut garray_T {
-    if str.is_null() || pat.is_null() {
-        return core::ptr::null_mut();
-    }
-    let (str, pat) = (unsafe { CStr::from_ptr(str) }, unsafe {
-        CStr::from_ptr(pat)
-    });
-    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    let (score, filled) = fuzzy_match_words(str, pat, false, &mut matches);
+    let (score, filled) = fuzzy_match(str, pat, false, &mut matches);
     if filled == 0 || score == FUZZY_SCORE_NONE {
-        return core::ptr::null_mut();
+        return None;
     }
-
-    // One position per pattern character that took part in the match,
-    // i.e. everything but the whitespace between the words.
-    let placed: Vec<u32> = Chars::new(pat)
-        .filter(|&(_, c)| !ascii_iswhite(c))
-        .zip(matches)
-        .map(|(_, at)| at)
-        .collect();
-    let positions: *mut garray_T = unsafe { xmalloc(size_of::<garray_T>()) }.cast();
-    unsafe { ga_init(positions, size_of::<u32>() as c_int, 10) };
-    unsafe { ga_grow(positions, placed.len() as c_int) };
-    let into = unsafe { (*positions).ga_data }.cast::<u32>();
-    unsafe { core::ptr::copy_nonoverlapping(placed.as_ptr(), into, placed.len()) };
-    unsafe { (*positions).ga_len = placed.len() as c_int };
-    positions
-}
-
-/// Split the line at `*ptr` into words and fuzzy match `pat` against each.
-/// On a match `*ptr` points at the matched word, `*len` is its length and
-/// `*score` its score; otherwise `*ptr` is left at the end of the line.
-///
-/// # Safety
-/// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
-/// be writable — a word is terminated in place while it is scored.
-pub(crate) unsafe fn fuzzy_match_str_in_line(
-    ptr: *mut *mut c_char,
-    pat: *const c_char,
-    len: *mut c_int,
-    current_pos: *mut pos_T,
-    score: *mut c_int,
-) -> bool {
-    let line = unsafe { *ptr };
-    if line.is_null() || pat.is_null() {
-        return false;
-    }
-    let line_end = unsafe { find_line_end(line) };
-    let mut str = line;
-    while str < line_end {
-        let start = unsafe { find_word_start(str) };
-        if unsafe { *start } == 0 {
-            break;
-        }
-        let end = unsafe { find_word_end(start) };
-        let save_end = unsafe { *end };
-        unsafe { *end = 0 };
-        unsafe { *score = fuzzy_match_str(start, pat) };
-        unsafe { *end = save_end };
-        if unsafe { *score } != FUZZY_SCORE_NONE {
-            unsafe { *len = end.offset_from(start) as c_int };
-            unsafe { *ptr = start };
-            if !current_pos.is_null() {
-                unsafe { (*current_pos).col += end.offset_from(line) as c_int };
-            }
-            return true;
-        }
-
-        // Carry on after the word just tried.
-        str = end;
-        while unsafe { *str } != 0 && !unsafe { vim_iswordp(str) } {
-            str = unsafe { str.offset(utfc_ptr2len(str) as isize) };
-        }
-    }
-    unsafe { *ptr = line_end };
-    false
-}
-
-/// Where a fuzzy match was found in a buffer line: its start inside the
-/// line's own buffer, its length in bytes, and its score — missing for a
-/// whole-line match, where upstream leaves the caller's score alone.
-pub(crate) struct LineMatch {
-    pub ptr: *mut c_char,
-    pub len: c_int,
-    pub score: Option<c_int>,
-}
-
-/// Search `buf` for the next fuzzy match of `pattern`, starting at `pos` and
-/// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
-/// `pos` is left on the match. In whole-line mode (`CTRL-X CTRL-L`) whole
-/// lines are matched rather than words.
-///
-/// # Safety
-/// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
-/// point at valid positions in `buf`.
-pub(crate) unsafe fn search_for_fuzzy_match(
-    buf: *mut buf_T,
-    pos: *mut pos_T,
-    pattern: *const c_char,
-    dir: c_int,
-    start_pos: *const pos_T,
-) -> Option<LineMatch> {
-    let whole_line = ctrl_x_mode_whole_line();
-    let mut current_pos = unsafe { *pos };
-
-    // Where the search has come full circle. Another buffer is walked
-    // from wherever it is to its end rather than back to the start.
-    let circly_end = if buf == curbuf.get() {
-        unsafe { *start_pos }
-    } else {
-        pos_T {
-            lnum: unsafe { (*buf).b_ml.ml_line_count },
-            col: 0,
-            coladd: 0,
-        }
-    };
-    if whole_line && unsafe { (*start_pos).lnum } != unsafe { (*pos).lnum } {
-        current_pos.lnum += dir as linenr_T;
-    }
-    let mut looped_around = false;
-    loop {
-        if looped_around
-            && (if whole_line {
-                current_pos.lnum == circly_end.lnum
-            } else {
-                equalpos(current_pos, circly_end)
-            })
-        {
-            return None;
-        }
-        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buf).b_ml.ml_line_count } {
-            let line = unsafe { ml_get_buf(buf, current_pos.lnum) };
-            let mut ptr = if whole_line {
-                line
-            } else {
-                unsafe { line.offset(current_pos.col as isize) }
-            };
-            if !ptr.is_null() && unsafe { *ptr } != 0 {
-                if whole_line {
-                    if unsafe { fuzzy_match_str(ptr, pattern) } != FUZZY_SCORE_NONE {
-                        unsafe { *pos = current_pos };
-                        return Some(LineMatch {
-                            ptr,
-                            len: unsafe { ml_get_buf_len(buf, current_pos.lnum) } as c_int,
-                            score: None,
-                        });
-                    }
-                } else {
-                    let (mut len, mut score) = (0, 0);
-                    let (at, n) = (&raw mut ptr, &raw mut len);
-                    let (here, out) = (&raw mut current_pos, &raw mut score);
-                    if unsafe { fuzzy_match_str_in_line(at, pattern, n, here, out) } {
-                        unsafe { *pos = current_pos };
-                        let score = Some(score);
-                        return Some(LineMatch { ptr, len, score });
-                    }
-                    if looped_around && current_pos.lnum == circly_end.lnum {
-                        return None;
-                    }
-                }
-            }
-        }
-
-        // On to the next line, or round to the far end of the buffer
-        // if `'wrapscan'` allows it.
-        let last = unsafe { (*buf).b_ml.ml_line_count };
-        current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
-        if !(1..=last).contains(&current_pos.lnum) {
-            if p_ws.get() == 0 {
-                return None;
-            }
-            current_pos.lnum = if dir == FORWARD { 1 } else { last };
-            looped_around = true;
-        }
-        current_pos.col = 0;
-    }
-}
-
-/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
-/// `fuzmatch` itself. With `funcsort`, `<SNR>` functions sort to the end.
-///
-/// # Safety
-/// `fuzmatch` must be an allocated array of `count` entries naming allocated
-/// strings, and `matches` must be writable.
-pub(crate) unsafe fn fuzzymatches_to_strmatches(
-    fuzmatch: *mut fuzmatch_str_T,
-    matches: *mut *mut *mut c_char,
-    count: c_int,
-    funcsort: bool,
-) {
-    if count > 0 {
-        let count = count as usize;
-        let found = unsafe { core::slice::from_raw_parts_mut(fuzmatch, count) };
-        // Best score first, `idx` breaking ties — and with `funcsort`,
-        // `<SNR>` functions after everything else whatever they scored.
-        // Callers number `idx` as they fill the array, so no two entries
-        // compare equal and the sort needs no stability of its own.
-        let snr = |m: &fuzmatch_str_T| funcsort && unsafe { *m.str } == b'<' as c_char;
-        found.sort_by(|a, b| {
-            snr(a)
-                .cmp(&snr(b))
-                .then(b.score.cmp(&a.score))
-                .then(a.idx.cmp(&b.idx))
-        });
-        let strings: *mut *mut c_char = unsafe { xmalloc(count * size_of::<*mut c_char>()) }.cast();
-        for (i, m) in found.iter().enumerate() {
-            unsafe { *strings.add(i) = m.str };
-        }
-        unsafe { *matches = strings };
-    }
-    unsafe { xfree(fuzmatch.cast()) };
-}
-
-/// Where the string to match comes from: the list items are strings, and a
-/// dict item then contributes nothing — or they are dicts, to look a key up
-/// in or to hand to a callback.
-enum Source {
-    Item,
-    Key(*const c_char),
-    Callback(*mut Callback),
-}
-
-/// What one `matchfuzzy()`/`matchfuzzypos()` call was asked for: the pattern,
-/// where each item's string comes from, whether the words of a multi-word
-/// pattern have to match in sequence, whether the matching positions are
-/// wanted too (that is `matchfuzzypos()`), and how many matches are enough.
-struct Request {
-    pattern: *const c_char,
-    source: Source,
-    matchseq: bool,
-    retmatchpos: bool,
-    limit: c_int,
-}
-
-/// One list item that matched.
-struct FuzzyItem {
-    /// Where it sat in the input list, which is how ties are broken.
-    idx: usize,
-    /// The item itself, copied to the result list as it is.
-    item: *mut listitem_T,
-    score: c_int,
-    /// Whether the pattern occurs literally at the first matched position.
-    exact: bool,
-    /// The matching positions, for `matchfuzzypos()`.
-    positions: Option<*mut list_T>,
-}
-
-/// The item's string, as `Request::source` says to find it. A callback's
-/// answer lands in `rettv`, which the caller clears; the string is only
-/// borrowed until then.
-unsafe fn item_string(
-    request: &Request,
-    tv: *const typval_T,
-    rettv: *mut typval_T,
-    numbuf: &mut NumBuf,
-) -> *const c_char {
-    if unsafe { (*tv).v_type } == VAR_STRING {
-        return unsafe { (*tv).vval.v_string };
-    }
-    if unsafe { (*tv).v_type } != VAR_DICT {
-        return core::ptr::null();
-    }
-    match request.source {
-        Source::Item => core::ptr::null(),
-        Source::Key(key) => unsafe { numbuf.dict_string((*tv).vval.v_dict, key) },
-        Source::Callback(cb) => {
-            // The callback is handed the dict, which it must not be able
-            // to free out from under this loop.
-            unsafe { (*(*tv).vval.v_dict).dv_refcount.retain() };
-            let mut argv = [
-                typval_T {
-                    v_type: VAR_DICT,
-                    v_lock: VarLock::Unlocked,
-                    vval: typval_vval_union {
-                        v_dict: unsafe { (*tv).vval.v_dict },
-                    },
-                },
-                TV_UNKNOWN,
-            ];
-            let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), rettv) };
-            unsafe { tv_dict_unref((*tv).vval.v_dict) };
-            if called && unsafe { (*rettv).v_type } == VAR_STRING {
-                unsafe { (*rettv).vval.v_string }
-            } else {
-                core::ptr::null()
-            }
-        }
-    }
-}
-
-/// The list held by item `idx` of `list`, which the caller has just built.
-unsafe fn nested_list(list: *mut list_T, idx: c_int) -> *mut list_T {
-    let li = unsafe { tv_list_find(list, idx) };
-    debug_assert!(!li.is_null(), "fuzzy: result list is short");
-    let nested = unsafe { (*li).li_tv.vval.v_list };
-    debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
-    nested
-}
-
-/// Fuzzy match `request`'s pattern against the strings of `list`, appending
-/// the matches to `fmatchlist` in descending score order. For `matchfuzzy()`
-/// that is a list of strings; for `matchfuzzypos()` `fmatchlist` already
-/// holds three lists — the matched strings, the matching positions of each,
-/// and the scores — which are filled in turn.
-unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: *mut list_T) {
-    let mut numbuf = NumBuf::new();
-    let pattern = unsafe { CStr::from_ptr(request.pattern) };
-    let mut found: Vec<FuzzyItem> = Vec::new();
-    let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    let mut li = unsafe { (*list).lv_first };
-    while !li.is_null() {
-        if request.limit > 0 && found.len() >= request.limit as usize {
-            break;
-        }
-        let mut rettv = TV_UNKNOWN;
-        let itemstr =
-            unsafe { item_string(request, &raw const (*li).li_tv, &raw mut rettv, &mut numbuf) };
-        if !itemstr.is_null() {
-            let itemstr = unsafe { CStr::from_ptr(itemstr) };
-            let (score, filled) =
-                fuzzy_match_words(itemstr, pattern, request.matchseq, &mut matches);
-            if filled != 0 {
-                // Upstream reads the string at the first *character*
-                // position as if it were a byte offset. Preserved: it is
-                // only a tie-break between two equally scored items.
-                let at = matches[0] as usize;
-                let exact = itemstr
-                    .to_bytes()
-                    .get(at..)
-                    .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
-                let positions = request.retmatchpos.then(|| {
-                    let positions = unsafe { tv_list_alloc(kListLenMayKnow as isize) };
-                    // One position per pattern character that took part
-                    // in the match, i.e. all but the word separators.
-                    let placed =
-                        Chars::new(pattern).filter(|&(_, c)| request.matchseq || !ascii_iswhite(c));
-                    for (at, _) in placed.enumerate().take(FUZZY_MATCH_MAX_LEN) {
-                        unsafe { tv_list_append_number(positions, matches[at] as varnumber_T) };
-                    }
-                    positions
-                });
-                found.push(FuzzyItem {
-                    idx: found.len(),
-                    item: li,
-                    score,
-                    exact,
-                    positions,
-                });
-            }
-        }
-        unsafe { tv_clear(&raw mut rettv) };
-        li = unsafe { (*li).li_next };
-    }
-    if found.is_empty() {
-        return;
-    }
-
-    // Best score first; an exact match wins a tie, and the input order
-    // settles the rest. No two items share an `idx`, so this is a total
-    // order and the sort needs no stability of its own.
-    found.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
-            .then(b.exact.cmp(&a.exact))
-            .then(a.idx.cmp(&b.idx))
-    });
-
-    // matchfuzzy() answers just the strings; matchfuzzypos() answers
-    // them in the first of its three lists.
-    let strings = if request.retmatchpos {
-        unsafe { nested_list(fmatchlist, 0) }
-    } else {
-        fmatchlist
-    };
-    for item in &found {
-        unsafe { tv_list_append_tv(strings, &raw mut (*item.item).li_tv) };
-    }
-    if request.retmatchpos {
-        let positions = unsafe { nested_list(fmatchlist, -2) };
-        for item in &mut found {
-            let list = item.positions.take().expect("fuzzy: positions were kept");
-            unsafe { tv_list_append_list(positions, list) };
-        }
-        let scores = unsafe { nested_list(fmatchlist, -1) };
-        for item in &found {
-            unsafe { tv_list_append_number(scores, item.score as varnumber_T) };
-        }
-    }
-}
-
-/// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
-unsafe fn do_fuzzymatch(argvars: *const typval_T, rettv: *mut typval_T, retmatchpos: bool) {
-    let mut numbuf = NumBuf::new();
-    let mut numbuf2 = NumBuf::new();
-    let mut numbuf3 = NumBuf::new();
-    let mut numbuf4 = NumBuf::new();
-    let list = unsafe { &*argvars };
-    if list.v_type != VAR_LIST || unsafe { list.vval.v_list }.is_null() {
-        let who = if retmatchpos {
-            c"matchfuzzypos()".as_ptr()
-        } else {
-            c"matchfuzzy()".as_ptr()
-        };
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let who = unsafe { c_str(who) };
-        semsg!("E686: Argument of {who} must be a List");
-        return;
-    }
-    let pat = unsafe { &*argvars.add(1) };
-    if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(numbuf.string(pat)) };
-        semsg!("E475: Invalid argument: {arg0}");
-        return;
-    }
-
-    // The optional third argument says where to find the string of a
-    // dict item, and how much of the list to bother with.
-    let mut cb = Callback::None;
-    let mut key = core::ptr::null();
-    let mut matchseq = false;
-    let mut limit = 0;
-    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) }.is_err() {
-            return;
-        }
-        let d: *mut dict_T = unsafe { (*argvars.add(2)).vval.v_dict };
-        let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
-        if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_STRING
-                || unsafe { (*di).di_tv.vval.v_string }.is_null()
-                || unsafe { *(*di).di_tv.vval.v_string } == 0
-            {
-                let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let got = unsafe { c_str(got) };
-                semsg!("E475: Invalid value for argument {}: {got}", "key");
-                return;
-            }
-            key = unsafe { numbuf3.string(&raw const (*di).di_tv) };
-        } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
-            semsg!("E475: Invalid value for argument {}", "text_cb");
-            return;
-        }
-        let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
-        if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
-                semsg!("E475: Invalid value for argument {}", "limit");
-                return;
-            }
-            limit = unsafe { tv_get_number_chk(&raw const (*di).di_tv, core::ptr::null_mut()) }
-                as c_int;
-        }
-        matchseq = unsafe { tv_dict_has_key(d, c"matchseq".as_ptr()) };
-    }
-
-    // matchfuzzypos() answers three lists: the matching strings, their
-    // matching positions, and their scores.
-    let len = if retmatchpos {
-        3
-    } else {
-        kListLenUnknown as isize
-    };
-    let result = unsafe { tv_list_alloc_ret(rettv, len) };
-    if retmatchpos {
-        for _ in 0..3 {
-            unsafe { tv_list_append_list(result, tv_list_alloc(kListLenUnknown as isize)) };
-        }
-    }
-    let request = Request {
-        pattern: unsafe { numbuf4.string(pat) },
-        source: if !key.is_null() {
-            Source::Key(key)
-        } else if cb.is_set() {
-            Source::Callback(&raw mut cb)
-        } else {
-            Source::Item
-        },
-        matchseq,
-        retmatchpos,
-        limit,
-    };
-    unsafe { fuzzy_match_in_list(list.vval.v_list, &request, result) };
-    unsafe { callback_free(&raw mut cb) };
-}
-
-/// `matchfuzzy()`: the items of a list that fuzzy match a pattern.
-///
-/// # Safety
-/// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzy(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
-    unsafe { do_fuzzymatch(argvars, rettv, false) }
-}
-
-/// `matchfuzzypos()`: as [`f_matchfuzzy`], plus where each match landed and
-/// what it scored.
-///
-/// # Safety
-/// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzypos(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
-    unsafe { do_fuzzymatch(argvars, rettv, true) }
+    Some(matches[..matched_char_count(pat, false)].to_vec())
 }

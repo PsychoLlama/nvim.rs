@@ -164,12 +164,10 @@ unsafe fn pum_compute_text_attrs(
     };
     // The fuzzy matcher answers the character positions it matched, or
     // null when the item does not match at all.
-    let ga = if in_fuzzy {
-        let ga = unsafe { fuzzy_match_str_with_pos(text, leader) };
-        if ga.is_null() {
-            return None;
-        }
-        Some(ga)
+    let matched_chars = if in_fuzzy {
+        // SAFETY: two NUL-terminated strings that outlive the call.
+        let (text, leader) = unsafe { (cstr::at(text), cstr::at(leader)) };
+        Some(fuzzy_match_str_with_pos(text, leader)?)
     } else {
         None
     };
@@ -202,13 +200,9 @@ unsafe fn pum_compute_text_attrs(
 
     while unsafe { *ptr } != 0 {
         let mut new_attr = unsafe { win_hl_attr(win, hlf as c_int) };
-        if let Some(ga) = ga {
-            let positions = unsafe { (*ga).ga_data }.cast::<uint32_t>();
-            for i in 0..unsafe { (*ga).ga_len } {
-                if char_pos == unsafe { *positions.offset(i as isize) } {
-                    new_attr = matched_attr(win);
-                    break;
-                }
+        if let Some(positions) = &matched_chars {
+            if positions.contains(&char_pos) {
+                new_attr = matched_attr(win);
             }
         } else {
             if matched_len < 0 && unsafe { mb_strnicmp(ptr, leader, leader_len) } == 0 {
@@ -235,10 +229,6 @@ unsafe fn pum_compute_text_attrs(
         char_pos += 1;
     }
 
-    if let Some(ga) = ga {
-        unsafe { ga_clear(ga) };
-        unsafe { xfree(ga.cast()) };
-    }
     Some(attrs)
 }
 

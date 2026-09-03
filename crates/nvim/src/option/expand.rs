@@ -18,8 +18,9 @@ use core::slice;
 use std::ffi::CString;
 
 use crate::cmdexpand::cmdline_fuzzy_complete;
+use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::cstr;
-use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::get_special_key_code;
@@ -452,7 +453,7 @@ unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -
         }
         return true;
     }
-    let score = unsafe { fuzzy_match_str(str, m.fuzzystr) };
+    let score = unsafe { fuzzy_match_str(cstr::at(str), cstr::at(m.fuzzystr)) };
     if score == FUZZY_SCORE_NONE {
         return false;
     }

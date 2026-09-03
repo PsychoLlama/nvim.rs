@@ -333,7 +333,7 @@ pub unsafe fn expand_mappings(
     let matched = |p: *mut c_char| -> Option<c_int> {
         if fuzzy {
             // SAFETY: `p` and `pat` are both live and NUL-terminated.
-            let score = unsafe { fuzzy_match_str(p, pat) };
+            let score = unsafe { fuzzy_match_str(cstr::at(p), cstr::at(pat)) };
             (score != FUZZY_SCORE_NONE).then_some(score)
         } else {
             // SAFETY: the caller's promise — `regmatch` is a live, compiled

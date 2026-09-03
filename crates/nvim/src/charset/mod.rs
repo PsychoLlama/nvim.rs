@@ -470,6 +470,20 @@ pub unsafe fn vim_iswordc(c: c_int) -> bool {
     unsafe { vim_iswordc_buf(c, curbuf.get()) }
 }
 
+/// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
+/// own to state a precondition about.
+///
+/// `curbuf` is a live buffer from the first `buflist_new` onwards, which is
+/// before anything that can ask this question runs — the null it starts out
+/// as exists only for the span of `early_init`. So the pointer form's
+/// precondition is not one a caller here could get wrong, and spelling it as
+/// a `# Safety` section would only push an `unsafe` block into every caller
+/// to discharge an obligation none of them can influence.
+pub fn is_word_char(c: c_int) -> bool {
+    // SAFETY: `curbuf` is live for the whole of the editor's run.
+    unsafe { vim_iswordc(c) }
+}
+
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
 /// Characters past U+00FF are decided by their Unicode class instead.
 ///

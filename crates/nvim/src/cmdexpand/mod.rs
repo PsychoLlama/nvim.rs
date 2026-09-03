@@ -30,7 +30,7 @@ use crate::ex_getln::{
     cmd_screencol, cursorcmd, escape_fname, get_cmdline_last_prompt_id, parse_pattern_and_range,
     put_on_cmdline, realloc_cmdbuff, redrawcmd, tilde_replace, vim_strsave_fnameescape,
 };
-use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init};
 use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
@@ -115,7 +115,7 @@ use crate::usercmd::{
 use crate::window::{global_stl_height, last_status};
 use crate::winlayer::{Cc, Live};
 use ::libc::{qsort, strcpy, strncpy};
-use core::ffi::CStr;
+use core::ffi::{CStr, c_char, c_int};
 
 // The carve of the transpiled module; see each child's docs.
 mod escape;
@@ -306,3 +306,44 @@ pub(crate) enum FiletypeWhat {
 static filetype_expand_what: GlobalCell<FiletypeWhat> = GlobalCell::new(FiletypeWhat::All);
 static breakpt_expand_what: GlobalCell<BreakpointExpandKind> = GlobalCell::new(EXP_BREAKPT_ADD);
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
+
+// ---------------------------------------------------------------------------
+// Handing a scored candidate list to the expansion machinery.
+//
+// This sat in `fuzzy.rs`, which knows nothing about `fuzmatch_str_T` beyond
+// its score field; every caller is an expansion, and four of the five are in
+// this module's own family.
+/// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
+/// `fuzmatch` itself. With `funcsort`, `<SNR>` functions sort to the end.
+///
+/// # Safety
+/// `fuzmatch` must be an allocated array of `count` entries naming allocated
+/// strings, and `matches` must be writable.
+pub(crate) unsafe fn fuzzymatches_to_strmatches(
+    fuzmatch: *mut fuzmatch_str_T,
+    matches: *mut *mut *mut c_char,
+    count: c_int,
+    funcsort: bool,
+) {
+    if count > 0 {
+        let count = count as usize;
+        let found = unsafe { core::slice::from_raw_parts_mut(fuzmatch, count) };
+        // Best score first, `idx` breaking ties — and with `funcsort`,
+        // `<SNR>` functions after everything else whatever they scored.
+        // Callers number `idx` as they fill the array, so no two entries
+        // compare equal and the sort needs no stability of its own.
+        let snr = |m: &fuzmatch_str_T| funcsort && unsafe { *m.str } == b'<' as c_char;
+        found.sort_by(|a, b| {
+            snr(a)
+                .cmp(&snr(b))
+                .then(b.score.cmp(&a.score))
+                .then(a.idx.cmp(&b.idx))
+        });
+        let strings: *mut *mut c_char = unsafe { xmalloc(count * size_of::<*mut c_char>()) }.cast();
+        for (i, m) in found.iter().enumerate() {
+            unsafe { *strings.add(i) = m.str };
+        }
+        unsafe { *matches = strings };
+    }
+    unsafe { xfree(fuzmatch.cast()) };
+}

@@ -73,24 +73,12 @@ const fn case(
 /// caller says were filled — `fuzzy_match` reports how many only through the
 /// pattern, so the expected list's length is what is read back.
 fn scored(pat: &str, hay: &str, matchseq: bool, positions: usize) -> (bool, c_int, Vec<u32>) {
+    // The editor lock is held for the keyword table `compute_bonus` reads.
     let _sandbox = Sandbox::globals();
     let (hay, pat) = (cstr(hay), cstr(pat));
-    let mut out = FUZZY_SCORE_NONE;
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    // SAFETY: two NUL-terminated strings that outlive the call, and an array
-    // of exactly the length passed. The editor lock is held for the keyword
-    // table `compute_bonus` reads.
-    let matched = unsafe {
-        fuzzy_match(
-            hay.as_ptr(),
-            pat.as_ptr(),
-            matchseq,
-            &raw mut out,
-            matches.as_mut_ptr(),
-            FUZZY_MATCH_MAX_LEN as c_int,
-        )
-    };
-    (matched, out, matches[..positions].to_vec())
+    let (score, filled) = fuzzy_match(&hay, &pat, matchseq, &mut matches);
+    (filled != 0, score, matches[..positions].to_vec())
 }
 
 #[test]
@@ -589,20 +577,10 @@ fn positions_are_bounded_by_the_array_the_caller_gave() {
     // all; two words that together outrun the caller's array overrun it.
     let _sandbox = Sandbox::globals();
     let (hay, pat) = (cstr("abcdef"), cstr("abc def"));
-    let mut out = FUZZY_SCORE_NONE;
     let mut matches = [0u32; 8];
-    // SAFETY: as `score`, with an array deliberately shorter than the
-    // pattern's six matching characters would need.
-    let matched = unsafe {
-        fuzzy_match(
-            hay.as_ptr(),
-            pat.as_ptr(),
-            false,
-            &raw mut out,
-            matches.as_mut_ptr(),
-            4,
-        )
-    };
-    assert!(matched);
+    // An array deliberately shorter than the pattern's six matching
+    // characters would need.
+    let (_, filled) = fuzzy_match(&hay, &pat, false, &mut matches[..4]);
+    assert!(filled != 0);
     assert_eq!(matches[4..], [0; 4], "wrote past the caller's four entries");
 }

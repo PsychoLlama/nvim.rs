@@ -287,7 +287,9 @@ pub unsafe fn expand_generic(
         let matched = if unsafe { *xp.xp_pattern } == 0 {
             true
         } else if fuzzy {
-            score = unsafe { fuzzy_match_str(str, pat) };
+            // SAFETY: both are NUL-terminated: `str` is a generated
+            // candidate and `pat` the caller's pattern.
+            score = unsafe { fuzzy_match_str(cstr::at(str), cstr::at(pat)) };
             score != FUZZY_SCORE_NONE
         } else {
             unsafe { vim_regexec(regmatch, str, 0) }

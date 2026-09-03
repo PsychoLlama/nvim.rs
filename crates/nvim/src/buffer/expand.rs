@@ -17,8 +17,10 @@ use core::{ptr, slice};
 
 use super::*;
 use crate::cmdexpand::cmdline_fuzzy_complete;
+use crate::cmdexpand::fuzzymatches_to_strmatches;
+use crate::cstr;
 use crate::diff::diff_mode_buf;
-use crate::fuzzy::{fuzzy_match_str, fuzzymatches_to_strmatches};
+use crate::fuzzy::fuzzy_match_str;
 use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
@@ -94,9 +96,12 @@ fn home_replaced(buf: *mut buf_T, name: *const c_char) -> *mut c_char {
 }
 
 fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated name (`fuzzy_match_str` tests for null
-    // itself) and pattern.
-    unsafe { fuzzy_match_str(name, pat) }
+    // An unnamed buffer has neither a short nor a full name. Upstream
+    // answered 0 for a null string — not the sentinel — and left the caller
+    // to reject the candidate on the null pointer instead, which it does.
+    // SAFETY: a NUL-terminated name or null, and a NUL-terminated pattern.
+    let (name, pat) = unsafe { (cstr::at_opt(name), cstr::at(pat)) };
+    name.map_or(0, |name| fuzzy_match_str(name, pat))
 }
 
 fn diff_mode(mut buf: Buf) -> bool {

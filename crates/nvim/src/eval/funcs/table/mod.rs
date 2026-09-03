@@ -58,13 +58,13 @@ use crate::eval::funcs::{
     f_inputlist, f_inputrestore, f_inputsave, f_inputsecret, f_interrupt, f_invert, f_isinf,
     f_islocked, f_isnan, f_jobpid, f_jobresize, f_jobstart, f_jobstop, f_jobwait, f_json_decode,
     f_json_encode, f_keytrans, f_len, f_libcall, f_libcallnr, f_line, f_line2byte, f_localtime,
-    f_luaeval, f_match, f_matchbufline, f_matchend, f_matchlist, f_matchstr, f_matchstrlist,
-    f_matchstrpos, f_max, f_menu_get, f_min, f_mode, f_msgpackdump, f_msgpackparse, f_nextnonblank,
-    f_nr2char, f_or, f_perleval, f_pow, f_prevnonblank, f_printf, f_prompt_getinput,
-    f_prompt_getprompt, f_pum_getpos, f_pumvisible, f_py3eval, f_rand, f_range, f_reduce,
-    f_reg_executing, f_reg_recorded, f_reg_recording, f_reltime, f_reltimefloat, f_reltimestr,
-    f_repeat, f_rpcnotify, f_rpcrequest, f_rubyeval, f_screenattr, f_screenchar, f_screenchars,
-    f_screencol, f_screenrow, f_screenstring, f_search, f_searchdecl, f_searchpair,
+    f_luaeval, f_match, f_matchbufline, f_matchend, f_matchfuzzy, f_matchfuzzypos, f_matchlist,
+    f_matchstr, f_matchstrlist, f_matchstrpos, f_max, f_menu_get, f_min, f_mode, f_msgpackdump,
+    f_msgpackparse, f_nextnonblank, f_nr2char, f_or, f_perleval, f_pow, f_prevnonblank, f_printf,
+    f_prompt_getinput, f_prompt_getprompt, f_pum_getpos, f_pumvisible, f_py3eval, f_rand, f_range,
+    f_reduce, f_reg_executing, f_reg_recorded, f_reg_recording, f_reltime, f_reltimefloat,
+    f_reltimestr, f_repeat, f_rpcnotify, f_rpcrequest, f_rubyeval, f_screenattr, f_screenchar,
+    f_screenchars, f_screencol, f_screenrow, f_screenstring, f_search, f_searchdecl, f_searchpair,
     f_searchpairpos, f_searchpos, f_serverlist, f_serverstart, f_serverstop, f_setcharpos,
     f_setcharsearch, f_setcursorcharpos, f_setenv, f_setfperm, f_setpos, f_setreg, f_settagstack,
     f_sha256, f_shellescape, f_shiftwidth, f_sockconnect, f_soundfold, f_spellbadword,
@@ -101,7 +101,6 @@ use crate::ex_getln::{
     f_getcmdscreenpos, f_getcmdtype, f_setcmdline, f_setcmdpos, f_wildtrigger,
 };
 use crate::fold::{f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult};
-use crate::fuzzy::{f_matchfuzzy, f_matchfuzzypos};
 use crate::getchar::{f_getchar, f_getcharmod, f_getcharstr};
 use crate::global_cell::ConstTable;
 use crate::indent::expr::{f_indent, f_lispindent};
