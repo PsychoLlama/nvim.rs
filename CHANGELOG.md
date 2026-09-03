@@ -16,6 +16,15 @@ and this project adheres to [CalVer](https://calver.org/).
   `@:` and `<Cmd>` replay paths, and the completion of shell commands,
   mappings, user functions and `:s` patterns. Every one of them answers the
   same bytes, in the same order, as before.
+- Rewrote the growable arrays the editor keeps _state_ in, as opposed to the
+  ones it builds a single answer in: the argument list, a diff block's
+  inline changes and a diff run's hunks, a buffer's `:loadkeymap` entries, a
+  profiled script's per-line counters, the lines `:source` reads from a
+  buffer or a string, the window sizes the command-line window and the
+  `:substitute` preview save and put back, and the `:breakadd`/`:profile`
+  lists. `:args`, `:argadd`, `:argdelete`, `:diffupdate` with
+  `'diffopt'`+=`inline:`, `:loadkeymap`, `:profile`, `:source`, `q:` and
+  `:breaklist` all behave as before, in the same order.
 
 ## [2026.09.02-bc9e0f515a]
 
