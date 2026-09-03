@@ -218,22 +218,22 @@ pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affen
 ///
 /// `compflags` must be NUL-terminated and `aff` live.
 pub(super) unsafe fn process_compflags(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     aff: *mut afffile_T,
     compflags: *mut c_char,
 ) {
     // SAFETY: the destination is sized for the old pattern, a separator and
     // the new one, and each flag turns into at most one byte.
     let mut len = unsafe { cstr::bytes_at(compflags) }.len() + 1;
-    if !unsafe { (*spin).si_compflags }.is_null() {
-        len += unsafe { cstr::bytes_at((*spin).si_compflags) }.len() + 1;
+    if !spin.si_compflags.is_null() {
+        len += unsafe { cstr::bytes_at(spin.si_compflags) }.len() + 1;
     }
-    let dest = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
-    if !unsafe { (*spin).si_compflags }.is_null() {
-        unsafe { strcpy(dest, (*spin).si_compflags) };
+    let dest = spin.si_arena.alloc_bytes(len, false);
+    if !spin.si_compflags.is_null() {
+        unsafe { strcpy(dest, spin.si_compflags) };
         unsafe { strcat(dest, c"/".as_ptr()) };
     }
-    unsafe { (*spin).si_compflags = dest };
+    spin.si_compflags = dest;
 
     let mut tp = unsafe { dest.cast::<uint8_t>().add(cstr::bytes_at(dest).len()) };
     let mut p = compflags;
@@ -261,15 +261,15 @@ pub(super) unsafe fn process_compflags(
             let id = if hi.is_kept() {
                 unsafe { (*compitem_T::of_key(hi.hi_key)).ci_newID }
             } else {
-                let ci = unsafe { (*spin).si_arena.alloc::<compitem_T>() };
+                let ci = spin.si_arena.alloc::<compitem_T>();
                 unsafe { strcpy(compitem_T::key(ci), key.as_mut_ptr()) };
                 unsafe { (*ci).ci_flag = flag };
                 // Ids count downwards, skipping any byte that would be
                 // meaningful in the pattern this becomes.
                 let id = loop {
                     unsafe { check_renumber(spin) };
-                    let id = unsafe { (*spin).si_newcompID };
-                    unsafe { (*spin).si_newcompID -= 1 };
+                    let id = spin.si_newcompID;
+                    spin.si_newcompID -= 1;
                     if unsafe { vim_strchr(c"/?*+[]\\-^".as_ptr(), id) }.is_null() {
                         break id;
                     }
@@ -297,13 +297,11 @@ pub(super) unsafe fn process_compflags(
 /// # Safety
 ///
 /// `spin` must be live.
-pub(super) unsafe fn check_renumber(spin: *mut spellinfo_T) {
+pub(super) unsafe fn check_renumber(spin: &mut spellinfo_T) {
     // SAFETY: the caller promises `spin`.
-    if unsafe { (*spin).si_newprefID } == unsafe { (*spin).si_newcompID }
-        && unsafe { (*spin).si_newcompID } < 128
-    {
-        unsafe { (*spin).si_newprefID = 127 };
-        unsafe { (*spin).si_newcompID = 255 };
+    if spin.si_newprefID == spin.si_newcompID && spin.si_newcompID < 128 {
+        spin.si_newprefID = 127;
+        spin.si_newcompID = 255;
     }
 }
 

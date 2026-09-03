@@ -25,7 +25,6 @@ use crate::message_fmt::c_str;
 use crate::smsg;
 use core::ffi::{c_char, c_int};
 
-use crate::garray::ga_append_via_ptr;
 use crate::hashtab::{hash_add, hash_find};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
@@ -35,7 +34,7 @@ use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{NUL, hashtab_T, size_t};
 use ::libc::{atoi, strcpy};
 
-use super::aff::{AffState, str_equal};
+use super::aff::AffState;
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
@@ -50,7 +49,7 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_header(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     aff: *mut afffile_T,
     st: &mut AffState,
     items: &[*mut c_char],
@@ -88,7 +87,7 @@ pub(super) unsafe fn handle_affix_header(
             smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
         }
     } else {
-        st.cur_aff = unsafe { (*spin).si_arena.alloc::<affheader_T>() };
+        st.cur_aff = spin.si_arena.alloc::<affheader_T>();
         unsafe { (*st.cur_aff).ah_flag = affitem2flag((*aff).af_flagtype, items[1], fname, lnum) };
         // An unusable name is fatal: the key would not fit, or the
         // flag could not be read.
@@ -146,8 +145,8 @@ pub(super) unsafe fn handle_affix_header(
     if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 {
         if unsafe { (*st.cur_aff).ah_newID } == 0 {
             unsafe { check_renumber(spin) };
-            unsafe { (*spin).si_newprefID += 1 };
-            unsafe { (*st.cur_aff).ah_newID = (*spin).si_newprefID };
+            spin.si_newprefID += 1;
+            unsafe { (*st.cur_aff).ah_newID = spin.si_newprefID };
             // Nothing has used the id yet; it is given back at the end
             // of the block if nothing does.
             st.did_postpone_prefix = false;
@@ -165,7 +164,7 @@ pub(super) unsafe fn handle_affix_header(
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_entry(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     aff: *mut afffile_T,
     st: &mut AffState,
     items: &[*mut c_char],
@@ -186,12 +185,12 @@ pub(super) unsafe fn handle_affix_entry(
     }
     st.aff_todo -= 1;
 
-    let entry = unsafe { (*spin).si_arena.alloc::<affentry_T>() };
+    let entry = spin.si_arena.alloc::<affentry_T>();
     if unsafe { !cstr::eq_bytes(items[2], b"0") } {
-        unsafe { (*entry).ae_chop = (*spin).si_arena.save_str(items[2]) };
+        unsafe { (*entry).ae_chop = spin.si_arena.save_str(items[2]) };
     }
     if unsafe { !cstr::eq_bytes(items[3], b"0") } {
-        unsafe { (*entry).ae_add = (*spin).si_arena.save_str(items[3]) };
+        unsafe { (*entry).ae_add = spin.si_arena.save_str(items[3]) };
         // Flags the added form itself carries follow a "/".
         unsafe { (*entry).ae_flags = vim_strchr((*entry).ae_add, b'/' as c_int) };
         if !unsafe { (*entry).ae_flags }.is_null() {
@@ -202,7 +201,7 @@ pub(super) unsafe fn handle_affix_entry(
     }
 
     // With 'ascii' set, an affix that needs more than ASCII is dropped.
-    if unsafe { (*spin).si_ascii } != 0
+    if spin.si_ascii != 0
         && (unsafe { has_non_ascii((*entry).ae_chop) } || unsafe { has_non_ascii((*entry).ae_add) })
     {
         return;
@@ -213,7 +212,7 @@ pub(super) unsafe fn handle_affix_entry(
 
     let is_prefix = unsafe { *items[0] } as c_int == b'P' as c_int;
     if unsafe { !cstr::eq_bytes(items[4], b".") } {
-        unsafe { (*entry).ae_cond = (*spin).si_arena.save_str(items[4]) };
+        unsafe { (*entry).ae_cond = spin.si_arena.save_str(items[4]) };
         let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
         // A prefix condition anchors at the start, a suffix at the end.
         let pattern = if is_prefix { c"^%s" } else { c"%s$" };
@@ -241,7 +240,7 @@ pub(super) unsafe fn handle_affix_entry(
 ///
 /// As [`handle_affix_entry`].
 pub(super) unsafe fn postpone_prefix(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     st: &mut AffState,
     entry: *mut affentry_T,
     items: &[*mut c_char],
@@ -281,7 +280,7 @@ pub(super) unsafe fn postpone_prefix(
                     // The condition has to match the capitalised form.
                     let mut buf: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
                     unsafe { onecap_copy(items[4], buf.as_mut_ptr(), true) };
-                    unsafe { (*entry).ae_cond = (*spin).si_arena.save_str(buf.as_mut_ptr()) };
+                    unsafe { (*entry).ae_cond = spin.si_arena.save_str(buf.as_mut_ptr()) };
                     if !unsafe { (*entry).ae_cond }.is_null() {
                         let out = buf.as_mut_ptr();
                         let cond = unsafe { (*entry).ae_cond };
@@ -303,7 +302,7 @@ pub(super) unsafe fn postpone_prefix(
 
     // Nothing in the block was postponed after all; give the id back.
     if st.aff_todo == 0 && !st.did_postpone_prefix {
-        unsafe { (*spin).si_newprefID -= 1 };
+        spin.si_newprefID -= 1;
         unsafe { (*st.cur_aff).ah_newID = 0 };
     }
 }
@@ -314,35 +313,32 @@ pub(super) unsafe fn postpone_prefix(
 ///
 /// As [`postpone_prefix`].
 pub(super) unsafe fn file_postponed_prefix(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     st: &mut AffState,
     entry: *mut affentry_T,
     upper: bool,
 ) {
     // SAFETY: the caller promises the entry.
     // Conditions are shared: the tree stores an index into si_prefcond.
-    let mut idx = unsafe { (*spin).si_prefcond.ga_len } - 1;
-    while idx >= 0 {
-        let conds = unsafe { (*spin).si_prefcond.ga_data.cast::<*mut c_char>() };
-        let p = unsafe { *conds.offset(idx as isize) };
-        if unsafe { str_equal(p, (*entry).ae_cond) } {
-            break;
+    // SAFETY: the caller promises the entry's condition string.
+    let cond = unsafe { (*entry).ae_cond };
+    let want: Option<&[u8]> = if cond.is_null() {
+        None
+    } else {
+        // SAFETY: as above.
+        Some(unsafe { cstr::bytes_at(cond) })
+    };
+    let found = spin
+        .si_prefcond
+        .iter()
+        .rposition(|held| held.as_deref() == want);
+    let idx = match found {
+        Some(at) => at as c_int,
+        None => {
+            spin.si_prefcond.push(want.map(Into::into));
+            spin.si_prefcond.len() as c_int - 1
         }
-        idx -= 1;
-    }
-    if idx < 0 {
-        idx = unsafe { (*spin).si_prefcond.ga_len };
-        let pp =
-            unsafe { ga_append_via_ptr(&raw mut (*spin).si_prefcond, size_of::<*mut c_char>()) }
-                .cast::<*mut c_char>();
-        let cond = unsafe { (*entry).ae_cond };
-        let saved = if cond.is_null() {
-            core::ptr::null_mut()
-        } else {
-            unsafe { (*spin).si_arena.save_str(cond) }
-        };
-        unsafe { *pp = saved };
-    }
+    };
 
     let added = if unsafe { (*entry).ae_add }.is_null() {
         c"".as_ptr().cast_mut()
@@ -362,7 +358,7 @@ pub(super) unsafe fn file_postponed_prefix(
     if unsafe { (*entry).ae_compforbid } != 0 {
         n |= WFP_COMPFORBID as c_int;
     }
-    let prefroot = unsafe { (*spin).si_prefroot };
+    let prefroot = spin.si_prefroot;
     let newID = unsafe { (*st.cur_aff).ah_newID };
     let _ = unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, newID) };
     st.did_postpone_prefix = true;

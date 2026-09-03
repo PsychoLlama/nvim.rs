@@ -16,13 +16,9 @@ use crate::spell::{WordTree, syl_item_T};
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
 
 pub type SpellAddType = ::core::ffi::c_uint;
-pub struct fromto_T {
-    pub ft_from: *mut ::core::ffi::c_char,
-    pub ft_to: *mut ::core::ffi::c_char,
-}
-/// One `REP`/`REPSAL` item as a loaded language holds it: text to look
-/// for, and what to put in its place. (`:mkspell`'s side of the same
-/// section is still [`fromto_T`], whose two strings the writer sorts.)
+/// One `REP`/`REPSAL` item: text to look for, and what to put in its
+/// place. Both ends of the format hold it — the loaded language's tables
+/// and `:mkspell`'s, whose copies the writer sorts.
 pub struct RepItem {
     pub from: Box<[u8]>,
     pub to: Box<[u8]>,

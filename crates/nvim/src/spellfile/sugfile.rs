@@ -35,30 +35,30 @@ use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int, c_uint};
+use std::ffi::OsStr;
+use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 
-use crate::fileio::{put_bytes, put_time};
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::main::{e_write, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, putc};
-use crate::os::fs::os_fopen;
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
-    FILE, Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T,
-    uint16_t, uintmax_t,
+    Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint16_t,
 };
-use ::libc::{fclose, fwrite};
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
-use super::write::{clear_node, put_node};
+use super::write::{SplWriter, clear_node, put_node};
 use super::{
-    EOF, FAIL, MAXWLEN, OK, VIMSUGMAGIC, VIMSUGMAGICL, VIMSUGVERSION, kEqualFiles, spell_load_file,
-    spell_message, spell_message_fmt, spellinfo_T,
+    FAIL, MAXWLEN, OK, VIMSUGMAGIC, VIMSUGVERSION, kEqualFiles, spell_load_file, spell_message,
+    spell_message_fmt, spellinfo_T,
 };
 
 /// Read the just-written `.spl` back and turn it into a `.sug`.
@@ -355,63 +355,70 @@ fn offset2bytes(nr: c_int, buf: &mut [u8; 4]) -> usize {
 ///
 /// `fname` must be a NUL-terminated path.
 unsafe fn sug_write(spin: &mut spellinfo_T, fname: *mut c_char) {
-    // SAFETY: `fname` is a valid path; the tree and the scratch buffer are
-    // both built by now.
-    let fd = unsafe { os_fopen(fname, c"w".as_ptr()) };
-    if fd.is_null() {
+    // SAFETY: the caller promises the path.
+    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname) }));
+    let Ok(file) = File::create(path) else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E484: Can't open file {fname}");
         return;
-    }
+    };
+    // SAFETY: as above.
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
-    if unsafe { fwrite(VIMSUGMAGIC.as_ptr().cast(), VIMSUGMAGICL as size_t, 1, fd) } != 1 {
+    let mut w = SplWriter::new(file);
+    w.bytes(VIMSUGMAGIC.to_bytes());
+    if !w.landed() {
         emsg(gettext(e_write));
-        unsafe { fclose(fd) };
         return;
     }
-    unsafe { putc(VIMSUGVERSION, fd) };
+    w.byte(VIMSUGVERSION);
     // The same timestamp the `.spl` carries, so a stale pair is
     // detectable.
-    unsafe { put_time(fd, spin.si_sugtime) };
+    w.bytes(&spin.si_sugtime.to_be_bytes());
 
     spin.si_memtot = 0;
+    // SAFETY: the fold tree is built and compressed by now.
     let tree = unsafe { (*spin.si_foldroot).wn_sibling };
+    // SAFETY: as above.
     unsafe { clear_node(tree) };
-    let nodecount = unsafe { put_node(core::ptr::null_mut::<FILE>(), tree, 0, 0, false) } as usize;
-    unsafe { put_bytes(fd, nodecount as uintmax_t, 4) };
+    // SAFETY: as above.
+    let nodecount = unsafe { put_node(None, tree, 0, 0, false) } as usize;
+    w.u32(nodecount);
     debug_assert!(nodecount + nodecount * size_of::<c_int>() < c_int::MAX as usize);
     spin.si_memtot += (nodecount + nodecount * size_of::<c_int>()) as c_int;
-    unsafe { put_node(fd, tree, 0, 0, false) };
+    // SAFETY: as above.
+    unsafe { put_node(Some(&mut w), tree, 0, 0, false) };
 
+    // SAFETY: the scratch buffer holds one line per word end.
     let wcount = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count };
     debug_assert!(wcount >= 0);
-    unsafe { put_bytes(fd, wcount as uintmax_t, 4) };
+    w.u32(wcount as usize);
 
-    let mut failed = false;
     for lnum in 1..=wcount {
-        let line = unsafe { ml_get_buf(spin.si_spellbuf, lnum) };
-        // The stored terminator goes out with the line.
-        let len = unsafe { ml_get_buf_len(spin.si_spellbuf, lnum) } + 1;
-        if unsafe { fwrite(line.cast(), len as size_t, 1, fd) } == 0 {
+        // SAFETY: `lnum` is inside the buffer, and the line is
+        // NUL-terminated: the stored terminator goes out with it.
+        let line = unsafe {
+            let at = ml_get_buf(spin.si_spellbuf, lnum);
+            let len = ml_get_buf_len(spin.si_spellbuf, lnum) + 1;
+            core::slice::from_raw_parts(at.cast::<u8>(), len as usize)
+        };
+        w.bytes(line);
+        if !w.landed() {
             emsg(gettext(e_write));
-            failed = true;
-            break;
+            return;
         }
-        spin.si_memtot += len;
+        spin.si_memtot += line.len() as c_int;
     }
 
-    if !failed {
-        if unsafe { putc(0, fd) } == EOF {
-            emsg(gettext(e_write));
-        }
-        let used = spin.si_memtot;
-        spell_message_fmt(
-            spin,
-            format_args!("Estimated runtime memory use: {used} bytes"),
-        );
+    w.byte(0);
+    if !w.finish() {
+        emsg(gettext(e_write));
     }
-    unsafe { fclose(fd) };
+    let used = spin.si_memtot;
+    spell_message_fmt(
+        spin,
+        format_args!("Estimated runtime memory use: {used} bytes"),
+    );
 }

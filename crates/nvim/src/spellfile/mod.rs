@@ -4,7 +4,6 @@ use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
-use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
 use crate::main::{e_exists, e_invarg, got_int, p_msm, p_verbose};
@@ -21,9 +20,9 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, SPL_FNAME_TMPL, SpellAddType, XDGVarType,
-    buf_T, etype_T, exarg_T, file_comparison, fromto_T, garray_T, hashtab_T, regprog_T, size_t,
-    spelltab_T, time_t, vimconv_T,
+    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, RepItem, SPL_FNAME_TMPL, SpellAddType,
+    XDGVarType, buf_T, etype_T, exarg_T, file_comparison, hashtab_T, regprog_T, size_t, spelltab_T,
+    time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -126,9 +125,12 @@ pub struct spellinfo_T {
     pub si_info: *mut ::core::ffi::c_char,
     pub si_region_count: ::core::ffi::c_int,
     pub si_region_name: [::core::ffi::c_char; 17],
-    pub si_rep: garray_T,
-    pub si_repsal: garray_T,
-    pub si_sal: garray_T,
+    /// `REP` pairs, sorted by the writer.
+    pub si_rep: Vec<RepItem>,
+    /// `REPSAL` pairs, likewise.
+    pub si_repsal: Vec<RepItem>,
+    /// `SAL` rules, which keep the order the affix file gave.
+    pub si_sal: Vec<RepItem>,
     pub si_sofofr: *mut ::core::ffi::c_char,
     pub si_sofoto: *mut ::core::ffi::c_char,
     pub si_nosugfile: ::core::ffi::c_int,
@@ -139,17 +141,21 @@ pub struct spellinfo_T {
     pub si_commonwords: hashtab_T,
     pub si_sugtime: time_t,
     pub si_rem_accents: ::core::ffi::c_int,
-    pub si_map: garray_T,
+    /// `MAP` groups, `/`-separated, as the section's payload.
+    pub si_map: Vec<u8>,
     pub si_midword: *mut ::core::ffi::c_char,
     pub si_compmax: ::core::ffi::c_int,
     pub si_compminlen: ::core::ffi::c_int,
     pub si_compsylmax: ::core::ffi::c_int,
     pub si_compoptions: ::core::ffi::c_int,
-    pub si_comppat: garray_T,
+    /// `CHECKCOMPOUNDPATTERN`'s strings, in pairs.
+    pub si_comppat: Vec<Box<[u8]>>,
     pub si_compflags: *mut ::core::ffi::c_char,
     pub si_nobreak: ::core::ffi::c_char,
     pub si_syllable: *mut ::core::ffi::c_char,
-    pub si_prefcond: garray_T,
+    /// One condition per postponed-prefix id; `None` where an id has
+    /// none, which the writer emits as a zero length and no payload.
+    pub si_prefcond: Vec<Option<Box<[u8]>>>,
     pub si_newprefID: ::core::ffi::c_int,
     pub si_newcompID: ::core::ffi::c_int,
 }
@@ -297,13 +303,6 @@ impl spellinfo_T {
     /// empty `Vec`'s pointer is dangling-but-aligned rather than null, so
     /// `memset`ing over one leaves it invalid.
     fn new() -> Self {
-        const NO_GARRAY: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ::core::ptr::null_mut(),
-        };
         Self {
             si_foldroot: ::core::ptr::null_mut(),
             si_foldwcount: 0,
@@ -333,9 +332,9 @@ impl spellinfo_T {
             si_info: ::core::ptr::null_mut(),
             si_region_count: 0,
             si_region_name: [0; 17],
-            si_rep: NO_GARRAY,
-            si_repsal: NO_GARRAY,
-            si_sal: NO_GARRAY,
+            si_rep: Vec::new(),
+            si_repsal: Vec::new(),
+            si_sal: Vec::new(),
             si_sofofr: ::core::ptr::null_mut(),
             si_sofoto: ::core::ptr::null_mut(),
             si_nosugfile: 0,
@@ -346,17 +345,17 @@ impl spellinfo_T {
             si_commonwords: hashtab_T::new(),
             si_sugtime: 0,
             si_rem_accents: 0,
-            si_map: NO_GARRAY,
+            si_map: Vec::new(),
             si_midword: ::core::ptr::null_mut(),
             si_compmax: 0,
             si_compminlen: 0,
             si_compsylmax: 0,
             si_compoptions: 0,
-            si_comppat: NO_GARRAY,
+            si_comppat: Vec::new(),
             si_compflags: ::core::ptr::null_mut(),
             si_nobreak: 0,
             si_syllable: ::core::ptr::null_mut(),
-            si_prefcond: NO_GARRAY,
+            si_prefcond: Vec::new(),
             si_newprefID: 0,
             si_newcompID: 0,
         }
@@ -485,14 +484,6 @@ pub unsafe fn mkspell(
 
     // SAFETY: the caller promises the paths; `wfname` and `fname` are
     // MAXPATHL buffers, which is the bound every writer below is given.
-    let entry_size = ::core::mem::size_of::<fromto_T>() as ::core::ffi::c_int;
-    unsafe { ga_init(&raw mut spin.si_rep, entry_size, 20) };
-    unsafe { ga_init(&raw mut spin.si_repsal, entry_size, 20) };
-    unsafe { ga_init(&raw mut spin.si_sal, entry_size, 20) };
-    unsafe { ga_init(&raw mut spin.si_map, 1, 100) };
-    let ptr_size = ::core::mem::size_of::<*mut ::core::ffi::c_char>() as ::core::ffi::c_int;
-    unsafe { ga_init(&raw mut spin.si_comppat, ptr_size, 20) };
-    unsafe { ga_init(&raw mut spin.si_prefcond, ptr_size, 50) };
     unsafe { hash_init(&raw mut spin.si_commonwords) };
     spin.si_newcompID = 127;
 
@@ -556,12 +547,12 @@ pub unsafe fn mkspell(
             }
         }
 
-        unsafe { ga_clear(&raw mut spin.si_rep) };
-        unsafe { ga_clear(&raw mut spin.si_repsal) };
-        unsafe { ga_clear(&raw mut spin.si_sal) };
-        unsafe { ga_clear(&raw mut spin.si_map) };
-        unsafe { ga_clear(&raw mut spin.si_comppat) };
-        unsafe { ga_clear(&raw mut spin.si_prefcond) };
+        spin.si_rep = Vec::new();
+        spin.si_repsal = Vec::new();
+        spin.si_sal = Vec::new();
+        spin.si_map = Vec::new();
+        spin.si_comppat = Vec::new();
+        spin.si_prefcond = Vec::new();
         unsafe { hash_clear_all(&raw mut spin.si_commonwords, 0) };
         for aff in afile.iter().take(incount as usize) {
             if !aff.is_null() {

@@ -73,7 +73,7 @@ use super::{
 /// `fname` must be a NUL-terminated path and `affile` the affix file that
 /// goes with it.
 pub(super) unsafe fn spell_read_dic(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     fname: *mut c_char,
     affile: *mut afffile_T,
 ) -> Result<(), Failed> {
@@ -89,13 +89,10 @@ pub(super) unsafe fn spell_read_dic(
 
     let mut ht = hashtab_T::init();
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
-    spell_message_fmt(
-        unsafe { &*spin },
-        format_args!("Reading dictionary file {name}..."),
-    );
+    spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
 
     // Force the first progress message.
-    unsafe { (*spin).si_msg_count = 999999 };
+    spin.si_msg_count = 999999;
 
     let mut line: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
     // The first line is a word count, which is only checked, not used.
@@ -133,8 +130,8 @@ pub(super) unsafe fn spell_read_dic(
         line[l] = NUL as c_char;
 
         let mut pc: *mut c_char = core::ptr::null_mut();
-        let w = if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
-            let conv = unsafe { &raw mut (*spin).si_conv };
+        let w = if spin.si_conv.vc_type != CONV_NONE {
+            let conv = &raw mut spin.si_conv;
             pc = unsafe { string_convert(conv, line.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -170,20 +167,20 @@ pub(super) unsafe fn spell_read_dic(
             p = unsafe { p.add(utfc_ptr2len(p) as usize) };
         }
 
-        if unsafe { (*spin).si_ascii } != 0 && unsafe { has_non_ascii(w) } {
+        if spin.si_ascii != 0 && unsafe { has_non_ascii(w) } {
             non_ascii += 1;
             unsafe { xfree(pc.cast()) };
             continue;
         }
 
         // Progress, at most once a second.
-        if unsafe { (*spin).si_verbose } != 0 && unsafe { (*spin).si_msg_count } > 10000 {
-            unsafe { (*spin).si_msg_count = 0 };
+        if spin.si_verbose != 0 && spin.si_msg_count > 10000 {
+            spin.si_msg_count = 0;
             if os_time() > last_msg_time {
                 last_msg_time = os_time();
                 let (buf, room) = (message.as_mut_ptr(), size_of_val(&message));
                 let fmt = gettext(c"line %6d, word %6d - %s");
-                let count = unsafe { (*spin).si_foldwcount + (*spin).si_keepwcount };
+                let count = spin.si_foldwcount + spin.si_keepwcount;
                 unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
                 unsafe { msg_start() };
                 unsafe { msg_outtrans_long(message.as_mut_ptr(), 0) };
@@ -196,7 +193,7 @@ pub(super) unsafe fn spell_read_dic(
 
         // The word is kept in the arena so the duplicate table can
         // point at it for the rest of the run.
-        let dw = unsafe { (*spin).si_arena.save_str(w) };
+        let dw = unsafe { spin.si_arena.save_str(w) };
         if dw.is_null() {
             retval = Err(Failed);
             unsafe { xfree(pc.cast()) };
@@ -238,13 +235,13 @@ pub(super) unsafe fn spell_read_dic(
             if unsafe { (*affile).af_pfxpostpone } != 0 {
                 pfxlen = unsafe { get_pfxlist(affile, afflist, store_afflist.as_mut_ptr()) };
             }
-            if !unsafe { (*spin).si_compflags }.is_null() {
+            if !spin.si_compflags.is_null() {
                 let at = unsafe { store_afflist.as_mut_ptr().offset(pfxlen as isize) };
                 unsafe { get_compflags(affile, afflist, at) };
             }
         }
 
-        let region = unsafe { (*spin).si_region };
+        let region = spin.si_region;
         let afx = store_afflist.as_ptr();
         let stored = unsafe { store_word(&mut *spin, dw, flags, region, afx, need_affix) };
         if stored.is_err() {
@@ -257,7 +254,6 @@ pub(super) unsafe fn spell_read_dic(
             let suff = unsafe { &raw mut (*affile).af_suff };
             let pref = unsafe { &raw mut (*affile).af_pref };
             let mut call = AffWord {
-                spin,
                 word: dw,
                 afflist,
                 affile,
@@ -268,12 +264,12 @@ pub(super) unsafe fn spell_read_dic(
                 pfxlist: store_afflist.as_mut_ptr(),
                 pfxlen,
             };
-            if unsafe { store_aff_word(call) }.is_err() {
+            if unsafe { store_aff_word(spin, call) }.is_err() {
                 retval = Err(Failed);
             }
             call.ht = pref;
             call.xht = core::ptr::null_mut();
-            if unsafe { store_aff_word(call) }.is_err() {
+            if unsafe { store_aff_word(spin, call) }.is_err() {
                 retval = Err(Failed);
             }
         }
@@ -285,7 +281,7 @@ pub(super) unsafe fn spell_read_dic(
         let fname = unsafe { c_str(fname) };
         smsg!(0, "{} duplicate word(s) in {fname}", duplicate);
     }
-    if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
+    if spin.si_ascii != 0 && non_ascii > 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         smsg!(
@@ -406,8 +402,6 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
 /// tried on top of it.
 #[derive(Copy, Clone)]
 pub(super) struct AffWord {
-    /// The word list being built.
-    pub spin: *mut spellinfo_T,
     /// The stem to affix, and the flags it declared.
     pub word: *mut c_char,
     pub afflist: *mut c_char,
@@ -437,9 +431,8 @@ pub(super) struct AffWord {
 ///
 /// `word` and `afflist` must be NUL-terminated; `ht` and `affile` live;
 /// `pfxlist`, when given, must have room past `pfxlen` for more ids.
-pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
+pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Result<(), Failed> {
     let AffWord {
-        spin,
         word,
         afflist,
         affile,
@@ -508,8 +501,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                                 need_affix = true;
                             }
                         }
-                        if unsafe { (*affile).af_pfxpostpone } != 0
-                            || !unsafe { (*spin).si_compflags }.is_null()
+                        if unsafe { (*affile).af_pfxpostpone } != 0 || !spin.si_compflags.is_null()
                         {
                             let ae_flags = unsafe { (*ae).ae_flags };
                             let afx = store_afflist.as_mut_ptr();
@@ -538,7 +530,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                             }
 
                             // The compound ids follow the prefix ids.
-                            if !unsafe { (*spin).si_compflags }.is_null() {
+                            if !spin.si_compflags.is_null() {
                                 let flags = unsafe { (*ae).ae_flags };
                                 let at = unsafe { use_pfxlist.offset(use_pfxlen as isize) };
                                 unsafe { get_compflags(affile, flags, at) };
@@ -573,8 +565,8 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                         use_pfxlist = pfx_pfxlist.as_mut_ptr();
                     }
 
-                    if !unsafe { (*spin).si_prefroot }.is_null()
-                        && !unsafe { (*(*spin).si_prefroot).wn_sibling }.is_null()
+                    if !spin.si_prefroot.is_null()
+                        && !unsafe { (*spin.si_prefroot).wn_sibling }.is_null()
                     {
                         use_flags |= WordFlags::HAS_AFF;
                         // A non-combinable affix keeps only the
@@ -583,9 +575,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                             use_pfxlist = unsafe { use_pfxlist.offset(use_pfxlen as isize) };
                         }
                     }
-                    if !unsafe { (*spin).si_compflags }.is_null()
-                        && unsafe { (*ae).ae_comppermit } == 0
-                    {
+                    if !spin.si_compflags.is_null() && unsafe { (*ae).ae_comppermit } == 0 {
                         use_flags |= if xht.is_null() {
                             WordFlags::NOCOMPBEF
                         } else {
@@ -593,7 +583,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                         };
                     }
 
-                    let region = unsafe { (*spin).si_region };
+                    let region = spin.si_region;
                     let nw = newword.as_mut_ptr();
                     let stored = unsafe {
                         store_word(&mut *spin, nw, use_flags, region, use_pfxlist, need_affix)
@@ -606,7 +596,6 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                     if condit & CONDIT_SUF != 0 && !unsafe { (*ae).ae_flags }.is_null() {
                         let deeper = use_condit & if xht.is_null() { !0 } else { !CONDIT_SUF };
                         let deep = AffWord {
-                            spin,
                             word: newword.as_mut_ptr(),
                             afflist: unsafe { (*ae).ae_flags },
                             affile,
@@ -617,7 +606,7 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                             pfxlist: use_pfxlist,
                             pfxlen,
                         };
-                        if unsafe { store_aff_word(deep) }.is_err() {
+                        if unsafe { store_aff_word(spin, deep) }.is_err() {
                             retval = Err(Failed);
                         }
                     }
@@ -626,7 +615,6 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                     // the suffix is combinable.
                     if !xht.is_null() && unsafe { (*ah).ah_combine } != 0 {
                         let mut cross = AffWord {
-                            spin,
                             word: newword.as_mut_ptr(),
                             afflist,
                             affile,
@@ -637,11 +625,11 @@ pub(super) unsafe fn store_aff_word(call: AffWord) -> Result<(), Failed> {
                             pfxlist: use_pfxlist,
                             pfxlen,
                         };
-                        let a = unsafe { store_aff_word(cross) };
+                        let a = unsafe { store_aff_word(spin, cross) };
                         cross.afflist = unsafe { (*ae).ae_flags };
                         if a.is_err()
                             || (!cross.afflist.is_null()
-                                && unsafe { store_aff_word(cross) }.is_err())
+                                && unsafe { store_aff_word(spin, cross) }.is_err())
                         {
                             retval = Err(Failed);
                         }

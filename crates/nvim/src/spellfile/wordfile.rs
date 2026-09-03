@@ -35,7 +35,7 @@ use super::{MAXLINELEN, MAXREGIONS, spell_message_fmt, spellinfo_T};
 ///
 /// `fname` must be a NUL-terminated path.
 pub(super) unsafe fn spell_read_wordfile(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     fname: *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
@@ -48,10 +48,7 @@ pub(super) unsafe fn spell_read_wordfile(
         return Err(Failed);
     }
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
-    spell_message_fmt(
-        unsafe { &*spin },
-        format_args!("Reading word file {name}..."),
-    );
+    spell_message_fmt(&*spin, format_args!("Reading word file {name}..."));
 
     let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
     let mut pc: *mut c_char = core::ptr::null_mut();
@@ -77,8 +74,8 @@ pub(super) unsafe fn spell_read_wordfile(
 
         unsafe { xfree(pc.cast()) };
         pc = core::ptr::null_mut();
-        let mut line = if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
-            let conv = unsafe { &raw mut (*spin).si_conv };
+        let mut line = if spin.si_conv.vc_type != CONV_NONE {
+            let conv = &raw mut spin.si_conv;
             pc = unsafe { string_convert(conv, rline.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -103,7 +100,7 @@ pub(super) unsafe fn spell_read_wordfile(
 
         // A word, with optional flags after a "/".
         let mut flags = WordFlags::NONE;
-        let mut regionmask = unsafe { (*spin).si_region };
+        let mut regionmask = spin.si_region;
         let mut p = unsafe { vim_strchr(line, b'/' as c_int) };
         if !p.is_null() {
             unsafe { *p = NUL as c_char };
@@ -121,7 +118,7 @@ pub(super) unsafe fn spell_read_wordfile(
                         }
                         flags |= WordFlags::REGION;
                         let n = (d - b'0') as c_int;
-                        if n == 0 || n > unsafe { (*spin).si_region_count } {
+                        if n == 0 || n > spin.si_region_count {
                             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                             let (fname, p) = unsafe { (c_str(fname), c_str(p)) };
                             smsg!(0, "Invalid region nr in {fname} line {}: {p}", lnum);
@@ -141,7 +138,7 @@ pub(super) unsafe fn spell_read_wordfile(
         }
 
         let none = core::ptr::null();
-        if unsafe { (*spin).si_ascii } != 0 && unsafe { has_non_ascii(line) } {
+        if spin.si_ascii != 0 && unsafe { has_non_ascii(line) } {
             non_ascii += 1;
         } else if unsafe { store_word(&mut *spin, line, flags, regionmask, none, false) }.is_err() {
             retval = Err(Failed);
@@ -153,9 +150,9 @@ pub(super) unsafe fn spell_read_wordfile(
 
     unsafe { xfree(pc.cast()) };
     unsafe { fclose(fd) };
-    if unsafe { (*spin).si_ascii } != 0 && non_ascii > 0 {
+    if spin.si_ascii != 0 && non_ascii > 0 {
         spell_message_fmt(
-            unsafe { &*spin },
+            &*spin,
             format_args!("Ignored {non_ascii} words with non-ASCII characters"),
         );
     }
@@ -170,7 +167,7 @@ pub(super) unsafe fn spell_read_wordfile(
 ///
 /// `line` and `fname` must be NUL-terminated.
 unsafe fn read_wordfile_header(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     mut line: *mut c_char,
     fname: *mut c_char,
     lnum: linenr_T,
@@ -179,7 +176,7 @@ unsafe fn read_wordfile_header(
     // SAFETY: the caller promises the strings; the region name is copied
     // only after its length has been checked against the array.
     if unsafe { cstr::starts_with(line, b"encoding=") } {
-        if unsafe { (*spin).si_conv.vc_type } != CONV_NONE {
+        if spin.si_conv.vc_type != CONV_NONE {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
             smsg!(
@@ -198,8 +195,8 @@ unsafe fn read_wordfile_header(
         } else {
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
-            if unsafe { (*spin).si_ascii } == 0
-                && unsafe { convert_setup(&raw mut (*spin).si_conv, enc, p_enc.get()) }.is_err()
+            if spin.si_ascii == 0
+                && unsafe { convert_setup(&raw mut spin.si_conv, enc, p_enc.get()) }.is_err()
             {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, line, arg2) =
@@ -210,10 +207,10 @@ unsafe fn read_wordfile_header(
                 );
             }
             unsafe { xfree(enc.cast()) };
-            unsafe { (*spin).si_conv.vc_fail = true };
+            spin.si_conv.vc_fail = true;
         }
     } else if unsafe { cstr::starts_with(line, b"regions=") } {
-        if unsafe { (*spin).si_region_count } > 1 {
+        if spin.si_region_count > 1 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
             smsg!(
@@ -228,9 +225,10 @@ unsafe fn read_wordfile_header(
                 let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
                 smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
             } else {
-                unsafe { (*spin).si_region_count = cstr::bytes_at(line).len() as c_int / 2 };
-                unsafe { strcpy((&raw mut (*spin).si_region_name).cast::<c_char>(), line) };
-                unsafe { (*spin).si_region = (1 << (*spin).si_region_count) - 1 };
+                // SAFETY: the caller's NUL-terminated line.
+                spin.si_region_count = unsafe { cstr::bytes_at(line) }.len() as c_int / 2;
+                unsafe { strcpy((&raw mut spin.si_region_name).cast::<c_char>(), line) };
+                spin.si_region = (1 << spin.si_region_count) - 1;
             }
         }
     } else {

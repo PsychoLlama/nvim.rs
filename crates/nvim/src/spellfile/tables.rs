@@ -15,14 +15,13 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 
-use crate::garray::{ga_append, ga_append_via_ptr, ga_concat, ga_grow};
 use crate::main::curwin;
-use crate::mbyte::{mb_ptr2char_adv, utfc_ptr2len};
+use crate::mbyte::{char_at, char_len, mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, fromto_T, garray_T};
+use crate::types::{NUL, RepItem};
 use ::libc::{strcat, strcpy};
 
 use super::aff::{AffState, is_digit_byte};
@@ -33,27 +32,31 @@ use super::{MAXWLEN, spellinfo_T};
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn append_info(spin: &mut spellinfo_T, items: &[*mut c_char]) {
     // SAFETY: the buffer is sized for the old text, a newline, both items
     // and a space, plus the terminator.
-    let old = if unsafe { (*spin).si_info }.is_null() {
+    let old = if spin.si_info.is_null() {
         0
     } else {
-        unsafe { cstr::bytes_at((*spin).si_info) }.len()
+        // SAFETY: `si_info` is a NUL-terminated arena string.
+        unsafe { cstr::bytes_at(spin.si_info) }.len()
     };
     let len = old
         + unsafe { cstr::bytes_at(items[0]) }.len()
         + unsafe { cstr::bytes_at(items[1]) }.len()
         + 3;
-    let p = unsafe { (*spin).si_arena.alloc_bytes(len, false) };
-    if !unsafe { (*spin).si_info }.is_null() {
-        unsafe { strcpy(p, (*spin).si_info) };
-        unsafe { strcat(p, c"\n".as_ptr()) };
+    let p = spin.si_arena.alloc_bytes(len, false);
+    // SAFETY: `p` is `len` bytes, which is what the pieces below need.
+    unsafe {
+        if !spin.si_info.is_null() {
+            strcpy(p, spin.si_info);
+            strcat(p, c"\n".as_ptr());
+        }
+        strcat(p, items[0]);
+        strcat(p, c" ".as_ptr());
+        strcat(p, items[1]);
     }
-    unsafe { strcat(p, items[0]) };
-    unsafe { strcat(p, c" ".as_ptr()) };
-    unsafe { strcat(p, items[1]) };
-    unsafe { (*spin).si_info = p };
+    spin.si_info = p;
 }
 
 /// `CHECKCOMPOUNDPATTERN`: a pair of strings that may not meet at a
@@ -62,28 +65,18 @@ pub(super) unsafe fn append_info(spin: *mut spellinfo_T, items: &[*mut c_char]) 
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) {
-    // SAFETY: `ga_grow(2)` makes room for the pair appended below.
-    let gap = unsafe { &raw mut (*spin).si_comppat };
-    let mut i = 0;
-    while i < unsafe { (*gap).ga_len } - 1 {
-        let entries = unsafe { (*gap).ga_data }.cast::<*mut c_char>();
-        if unsafe { cstr::eq(*entries.offset(i as isize), items[1]) }
-            && unsafe { cstr::eq(*entries.offset(i as isize + 1), items[2]) }
-        {
-            break;
-        }
-        i += 2;
-    }
-    if i >= unsafe { (*gap).ga_len } {
-        unsafe { ga_grow(gap, 2) };
-        for item in &items[1..3] {
-            let entries = unsafe { (*gap).ga_data }.cast::<*mut c_char>();
-            unsafe {
-                *entries.offset((*gap).ga_len as isize) = (*spin).si_arena.save_str(*item);
-            };
-            unsafe { (*gap).ga_len += 1 };
-        }
+pub(super) unsafe fn add_comppat(spin: &mut spellinfo_T, items: &[*mut c_char]) {
+    // SAFETY: the caller promises the items.
+    let (a, b) = unsafe { (cstr::bytes_at(items[1]), cstr::bytes_at(items[2])) };
+    let pats = &mut spin.si_comppat;
+    let known = pats
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .any(|pair| &*pair[0] == a && &*pair[1] == b);
+    if !known {
+        pats.push(a.into());
+        pats.push(b.into());
     }
 }
 
@@ -93,7 +86,7 @@ pub(super) unsafe fn add_comppat(spin: *mut spellinfo_T, items: &[*mut c_char]) 
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn add_rep_entry(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     st: &AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -120,12 +113,13 @@ pub(super) unsafe fn add_rep_entry(
             p = unsafe { p.add(utfc_ptr2len(p) as usize) };
         }
     }
-    let gap = if is_sal {
-        unsafe { &raw mut (*spin).si_repsal }
+    let out = if is_sal {
+        &mut spin.si_repsal
     } else {
-        unsafe { &raw mut (*spin).si_rep }
+        &mut spin.si_rep
     };
-    unsafe { add_fromto(spin, gap, items[1], items[2]) };
+    // SAFETY: the caller promises the items.
+    unsafe { add_fromto(out, items[1], items[2]) };
 }
 
 /// `MAP`: a group of characters that count as near-equivalent.
@@ -134,7 +128,7 @@ pub(super) unsafe fn add_rep_entry(
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_map(
-    spin: *mut spellinfo_T,
+    spin: &mut spellinfo_T,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -159,17 +153,28 @@ pub(super) unsafe fn handle_map(
     let mut p = items[1];
     while unsafe { *p } as c_int != NUL {
         let c = unsafe { mb_ptr2char_adv((&raw mut p).cast::<*const c_char>()) };
-        if (unsafe { (*spin).si_map.ga_len } > 0
-            && !unsafe { vim_strchr((*spin).si_map.ga_data.cast::<c_char>(), c) }.is_null())
-            || !unsafe { vim_strchr(p, c) }.is_null()
-        {
+        // The groups collected so far are bytes rather than a C string now,
+        // so the membership test decodes them instead of `vim_strchr`.
+        if chars_of(&spin.si_map).any(|seen| seen == c) || !unsafe { vim_strchr(p, c) }.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "Duplicate character in MAP in {fname} line {}", lnum);
         }
     }
-    unsafe { ga_concat(&raw mut (*spin).si_map, items[1]) };
-    unsafe { ga_append(&raw mut (*spin).si_map, b'/') };
+    // SAFETY: the caller promises the item.
+    spin.si_map
+        .extend_from_slice(unsafe { cstr::bytes_at(items[1]) });
+    spin.si_map.push(b'/');
+}
+
+/// The characters `bytes` spells, in order.
+fn chars_of(bytes: &[u8]) -> impl Iterator<Item = c_int> + '_ {
+    let mut at = 0;
+    core::iter::from_fn(move || {
+        let rest = bytes.get(at..).filter(|r| !r.is_empty())?;
+        at += char_len(rest);
+        Some(char_at(rest))
+    })
 }
 
 /// `SAL`: either a sound-folding setting or one folding rule.
@@ -177,20 +182,20 @@ pub(super) unsafe fn handle_map(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn handle_sal(spin: &mut spellinfo_T, items: &[*mut c_char]) {
     // SAFETY: the caller promises the items.
-    let settings: [(&CStr, *mut c_int); 3] = [
-        (c"followup", unsafe { &raw mut (*spin).si_followup }),
-        (c"collapse_result", unsafe { &raw mut (*spin).si_collapse }),
-        (c"remove_accents", unsafe {
-            &raw mut (*spin).si_rem_accents
-        }),
-    ];
-    for (name, slot) in settings {
-        if unsafe { cstr::eq(items[1], name.as_ptr()) } {
-            unsafe { *slot = sal_to_bool(items[2]) as c_int };
-            return;
-        }
+    // SAFETY: the caller promises the items.
+    let name = unsafe { cstr::bytes_at(items[1]) };
+    let slot = match name {
+        b"followup" => Some(&mut spin.si_followup),
+        b"collapse_result" => Some(&mut spin.si_collapse),
+        b"remove_accents" => Some(&mut spin.si_rem_accents),
+        _ => None,
+    };
+    if let Some(slot) = slot {
+        // SAFETY: as above.
+        *slot = unsafe { sal_to_bool(items[2]) } as c_int;
+        return;
     }
     // "_" means the rule deletes what it matched.
     let to = if unsafe { cstr::eq_bytes(items[2], b"_") } {
@@ -198,32 +203,28 @@ pub(super) unsafe fn handle_sal(spin: *mut spellinfo_T, items: &[*mut c_char]) {
     } else {
         items[2]
     };
-    unsafe { add_fromto(spin, &raw mut (*spin).si_sal, items[1], to) };
+    unsafe { add_fromto(&mut spin.si_sal, items[1], to) };
 }
 
 /// Add a case-folded from/to pair to one of the substitution tables.
 ///
 /// # Safety
 ///
-/// `from` and `to` must be NUL-terminated and `gap` a `fromto_T` array.
-pub(super) unsafe fn add_fromto(
-    spin: *mut spellinfo_T,
-    gap: *mut garray_T,
-    from: *mut c_char,
-    to: *mut c_char,
-) {
-    // SAFETY: `word` is MAXWLEN, the bound spell_casefold is given.
-    let ftp = unsafe { ga_append_via_ptr(gap, size_of::<fromto_T>()) }.cast::<fromto_T>();
-    let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
-
-    let (win, out) = (curwin.get(), word.as_mut_ptr());
-    let len = unsafe { cstr::bytes_at(from) }.len() as c_int;
-    let _ = unsafe { spell_casefold(win, from, len, out, MAXWLEN as c_int) };
-    unsafe { (*ftp).ft_from = (*spin).si_arena.save_str(word.as_mut_ptr()) };
-    let (win, out) = (curwin.get(), word.as_mut_ptr());
-    let len = unsafe { cstr::bytes_at(to) }.len() as c_int;
-    let _ = unsafe { spell_casefold(win, to, len, out, MAXWLEN as c_int) };
-    unsafe { (*ftp).ft_to = (*spin).si_arena.save_str(word.as_mut_ptr()) };
+/// `from` and `to` must be NUL-terminated.
+pub(super) unsafe fn add_fromto(out: &mut Vec<RepItem>, from: *mut c_char, to: *mut c_char) {
+    // SAFETY: the caller promises the strings; `word` is MAXWLEN, the
+    // bound `spell_casefold` is given.
+    let folded = |s: *mut c_char| -> Box<[u8]> {
+        let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
+        let (win, buf) = (curwin.get(), word.as_mut_ptr());
+        let len = unsafe { cstr::bytes_at(s) }.len() as c_int;
+        let _ = unsafe { spell_casefold(win, s, len, buf, MAXWLEN as c_int) };
+        unsafe { cstr::bytes_at(word.as_ptr()) }.into()
+    };
+    out.push(RepItem {
+        from: folded(from),
+        to: folded(to),
+    });
 }
 
 /// `1` and `true` are the affirmative values a `SAL` setting takes.
