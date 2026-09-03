@@ -72,9 +72,9 @@ const kXDGStateHome: XDGVarType = 3;
 /// bound `expand_env`/`xstrlcpy` truncate the path to.
 const LOG_PATH_SIZE: usize = 4096 + 1;
 /// What `char name[32]` held: 31 bytes and a terminator.
-const NAME_SIZE: usize = 31;
+const INSTANCE_NAME_SIZE: usize = 31;
 /// The `%-10s` the instance name is printed in.
-const NAME_COLUMNS: usize = 10;
+const INSTANCE_NAME_COLUMNS: usize = 10;
 const ENV_LOGFILE: &CStr = c"NVIM_LOG_FILE";
 const ENV_LOGFILE_REF: &CStr = c"$NVIM_LOG_FILE";
 const ENV_LOGFILE_WANT: &CStr = c"__NVIM_LOG_FILE_WANT";
@@ -473,7 +473,7 @@ fn regen_name(ui: bool) {
         let who = if ui { "ui" } else { "?" };
         format!("{who}.{:<5}", os_get_pid()).into_bytes()
     };
-    name.truncate(NAME_SIZE);
+    name.truncate(INSTANCE_NAME_SIZE);
     NAME.set(name);
 }
 
@@ -534,7 +534,7 @@ fn line_prefix(
     let _ = write!(prefix, "{tag} {date_time}.{millis:03} ");
     NAME.with(|name| {
         // `%-10s`: padded out to ten columns, and never cut down to them.
-        let padding = NAME_COLUMNS.saturating_sub(name.len());
+        let padding = INSTANCE_NAME_COLUMNS.saturating_sub(name.len());
         prefix.extend_from_slice(name);
         prefix.resize(prefix.len() + padding, b' ');
     });
