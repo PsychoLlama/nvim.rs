@@ -42,7 +42,7 @@ use crate::memfile::{
     mf_need_trans, mf_new, mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty,
     mf_set_fnames, mf_sync, mf_trans_del,
 };
-use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstpcpy, xstrdup, xstrlcpy};
+use crate::memory::{xfree, xmalloc, xmemdupz, xstpcpy, xstrdup, xstrlcpy};
 use crate::message::{
     do_dialog, emsg_ptr, iemsg_ptr, msg, msg_end, msg_ext_set_kind, msg_home_replace,
     msg_multiline, msg_outnum, msg_outtrans, msg_ptr, msg_putchar, msg_puts, msg_puts_hl,
@@ -70,13 +70,13 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::spell::spell_delete_wordlist;
 use crate::statusline::get_trans_bufname;
-use crate::strings::{kv_do_printf, vim_strchr, xstrnsave};
+use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, Failed, FileInfo, NUL, OptVal, String_0, StringBuilder, Timestamp, bhdr_T,
-    blocknr_T, buf_T, colnr_T, dict_T, file_comparison, flush_buffers_T, infoptr_T, int16_t,
-    int64_t, linenr_T, list_T, memfile_T, off_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t,
-    uint64_t, uv_uid_t, varnumber_T,
+    CmdModFlags, Failed, FileInfo, NUL, OptVal, String_0, Timestamp, bhdr_T, blocknr_T, buf_T,
+    colnr_T, dict_T, file_comparison, flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T,
+    list_T, memfile_T, off_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -197,11 +197,6 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;
 pub const SEEK_END: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KV_INITIAL_VALUE: StringBuilder = StringBuilder {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-};
 pub const ML_CHNK_ADDLINE: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

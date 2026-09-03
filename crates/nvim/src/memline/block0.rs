@@ -308,7 +308,7 @@ unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
 /// Describe a swap file in the ATTENTION message and in `:recover`'s listing.
 ///
 /// Returns the swap file's own timestamp, or 0 if it could not be stat'ed.
-pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder) -> time_t {
+pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: &mut Vec<u8>) -> time_t {
     debug_assert!(!fname.is_null());
     let mut x: time_t = 0;
 
@@ -325,88 +325,89 @@ pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: *mut StringBuilder
         }
         .is_ok()
         {
-            unsafe {
-                kv_do_printf(
-                    msg,
-                    c"%s%s".as_ptr(),
-                    tr(c"          owned by: "),
-                    uname.as_ptr(),
-                )
-            };
-            unsafe { kv_puts(msg, c"   dated: ") };
+            push_tr(msg, c"          owned by: ");
+            msg.extend_from_slice(cstr::in_chars(&uname).to_bytes());
+            push_tr(msg, c"   dated: ");
         } else {
-            unsafe { kv_puts(msg, c"             dated: ") };
+            push_tr(msg, c"             dated: ");
         }
         x = file_info.stat.st_mtim.tv_sec as time_t;
         // Hopefully enough for every language.
         let mut ctime_buf: [c_char; 100] = [0; 100];
-        unsafe { kv_do_printf(msg, c"%s".as_ptr(), os_ctime_r(x, &mut ctime_buf, true)) };
+        os_ctime_r(x, &mut ctime_buf, true);
+        msg.extend_from_slice(cstr::in_chars(&ctime_buf).to_bytes());
     }
 
     // What the swap file says about the file it belongs to.
     match unsafe { ZeroBlock::read(fname) } {
-        Err(NoBlock::CannotOpen) => unsafe { kv_puts(msg, c"         [cannot be opened]") },
-        Err(NoBlock::CannotRead) => unsafe { kv_puts(msg, c"         [cannot be read]") },
+        Err(NoBlock::CannotOpen) => push_tr(msg, c"         [cannot be opened]"),
+        Err(NoBlock::CannotRead) => push_tr(msg, c"         [cannot be read]"),
         Ok(b0) if unsafe { cstr::starts_with(b0.b0_version.as_ptr(), b"VIM 3.0") } => {
-            unsafe { kv_puts(msg, c"         [from Vim version 3.0]") };
+            push_tr(msg, c"         [from Vim version 3.0]");
         }
         Ok(b0) if !ml_check_b0_id(&b0) => {
-            unsafe { kv_puts(msg, c"         [does not look like a Nvim swap file]") };
+            push_tr(msg, c"         [does not look like a Nvim swap file]");
         }
         Ok(b0) if !ml_check_b0_strings(&b0) => {
-            unsafe { kv_puts(msg, c"         [garbled strings (not nul terminated)]") };
+            push_tr(msg, c"         [garbled strings (not nul terminated)]");
         }
         Ok(b0) => {
-            unsafe { kv_puts(msg, c"         file name: ") };
+            // Every string below is terminated inside its own field:
+            // `ml_check_b0_strings` above is what proves it.
+            push_tr(msg, c"         file name: ");
             if b0.b0_fname[0] as c_int == NUL {
-                unsafe { kv_puts(msg, c"[No Name]") };
+                push_tr(msg, c"[No Name]");
             } else {
-                unsafe { kv_do_printf(msg, c"%s".as_ptr(), b0.b0_fname.as_ptr()) };
+                msg.extend_from_slice(cstr::in_chars(&b0.b0_fname).to_bytes());
             }
 
-            unsafe { kv_puts(msg, c"\n          modified: ") };
-            unsafe { kv_puts(msg, if b0.dirty() { c"YES" } else { c"no" }) };
+            push_tr(msg, c"\n          modified: ");
+            push_tr(msg, if b0.dirty() { c"YES" } else { c"no" });
 
             if b0.b0_uname[0] as c_int != NUL {
-                unsafe { kv_puts(msg, c"\n         user name: ") };
-                unsafe { kv_do_printf(msg, c"%s".as_ptr(), b0.b0_uname.as_ptr()) };
+                push_tr(msg, c"\n         user name: ");
+                msg.extend_from_slice(cstr::in_chars(&b0.b0_uname).to_bytes());
             }
 
             if b0.b0_hname[0] as c_int != NUL {
                 // Only the second of the two gets a line of its own.
                 if b0.b0_uname[0] as c_int != NUL {
-                    unsafe { kv_puts(msg, c"   host name: ") };
+                    push_tr(msg, c"   host name: ");
                 } else {
-                    unsafe { kv_puts(msg, c"\n         host name: ") };
+                    push_tr(msg, c"\n         host name: ");
                 }
-                unsafe { kv_do_printf(msg, c"%s".as_ptr(), b0.b0_hname.as_ptr()) };
+                msg.extend_from_slice(cstr::in_chars(&b0.b0_hname).to_bytes());
             }
 
             if b0.pid() != 0 {
-                unsafe { kv_puts(msg, c"\n        process ID: ") };
-                unsafe { kv_do_printf(msg, c"%d".as_ptr(), b0.pid() as c_int) };
+                push_tr(msg, c"\n        process ID: ");
+                // `%d`, so the same 32-bit truncation upstream printed.
+                msg.extend_from_slice((b0.pid() as c_int).to_string().as_bytes());
                 // Read back by `findswapname` to decide whether this
                 // is a crash to recover from or a live second editor.
                 proc_running.set(swapfile_proc_running(&b0, fname));
                 if proc_running.get() != 0 {
-                    unsafe { kv_puts(msg, c" (STILL RUNNING)") };
+                    push_tr(msg, c" (STILL RUNNING)");
                 }
             }
 
             if b0_magic_wrong(&b0) {
-                unsafe { kv_puts(msg, c"\n         [not usable on this computer]") };
+                push_tr(msg, c"\n         [not usable on this computer]");
             }
         }
     }
-    unsafe { kv_puts(msg, c"\n") };
+    msg.push(b'\n');
     x
 }
 
-/// Append a translated message. Upstream hands it to `kv_printf` as the
-/// format string, so a `%` in a translation is a directive there too;
-/// preserved.
-pub(crate) unsafe fn kv_puts(msg: *mut StringBuilder, text: &'static CStr) {
-    unsafe { kv_do_printf(msg, gettext(text).as_ptr()) };
+/// Append a translated message.
+///
+/// Upstream hands the *translated* text to `kv_printf` as the format
+/// string, so a `%` a translator wrote is a directive there and reads an
+/// argument that was never passed. Not reproduced: the text is appended as
+/// it stands.
+pub(crate) fn push_tr(msg: &mut Vec<u8>, text: &'static CStr) {
+    msg.extend_from_slice(gettext(text).to_bytes());
 }
 
 /// Whether this swap file can be deleted without losing anything: it is

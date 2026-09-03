@@ -24,7 +24,7 @@ use ::libc::{EINVAL, ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{CmdModFlags, Failed, MAXPATHL, NUL, ShmFlag, Vv};
+use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
 
 /// Rename the swap file after the buffer's file name changed.
 ///
@@ -283,54 +283,54 @@ unsafe fn attention_message(
     buf: *mut buf_T,
     fname: *mut c_char,
     fhname: *mut c_char,
-    msg: *mut StringBuilder,
+    msg: &mut Vec<u8>,
 ) {
     debug_assert!(!unsafe { (*buf).b_fname.is_null() });
 
     complain(c"E325: ATTENTION");
-    unsafe { kv_puts(msg, c"Found a swap file by the name \"") };
-    unsafe { kv_do_printf(msg, c"%s\"\n".as_ptr(), fhname) };
+    push_tr(msg, c"Found a swap file by the name \"");
+    // SAFETY: both names are NUL-terminated strings the caller holds.
+    msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
+    msg.extend_from_slice(b"\"\n");
     let swap_mtime = unsafe { swapfile_info(fname, msg) };
-    unsafe { kv_puts(msg, c"While opening file \"") };
-    unsafe { kv_do_printf(msg, c"%s\"\n".as_ptr(), (*buf).b_fname) };
+    push_tr(msg, c"While opening file \"");
+    msg.extend_from_slice(unsafe { cstr::bytes_at((*buf).b_fname) });
+    msg.extend_from_slice(b"\"\n");
 
     let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
     if !unsafe { os_fileinfo((*buf).b_fname, &raw mut file_info) } {
-        unsafe { kv_puts(msg, c"      CANNOT BE FOUND") };
+        push_tr(msg, c"      CANNOT BE FOUND");
     } else {
-        unsafe { kv_puts(msg, c"             dated: ") };
+        push_tr(msg, c"             dated: ");
         let x = file_info.stat.st_mtim.tv_sec as time_t;
         let mut ctime_buf: [c_char; 50] = [0; 50];
-        unsafe { kv_do_printf(msg, c"%s".as_ptr(), os_ctime_r(x, &mut ctime_buf, true)) };
+        os_ctime_r(x, &mut ctime_buf, true);
+        msg.extend_from_slice(cstr::in_chars(&ctime_buf).to_bytes());
         if swap_mtime != 0 && x > swap_mtime {
-            unsafe { kv_puts(msg, c"      NEWER than swap file!\n") };
+            push_tr(msg, c"      NEWER than swap file!\n");
         }
     }
 
     // Some of these are long, to leave room for translation.
-    unsafe {
-        kv_puts(
+    push_tr(
         msg,
         c"\n(1) Another program may be editing the same file.  If this is the case,\n    be careful not to end up with two different instances of the same\n    file when making changes.  Quit, or continue with caution.\n",
-    )
-    };
-    unsafe { kv_puts(msg, c"(2) An edit session for this file crashed.\n") };
-    unsafe {
-        kv_puts(
-            msg,
-            c"    If this is the case, use \":recover\" or \"nvim -r ",
-        )
-    };
-    unsafe { kv_do_printf(msg, c"%s".as_ptr(), (*buf).b_fname) };
-    unsafe {
-        kv_puts(
-            msg,
-            c"\"\n    to recover the changes (see \":help recovery\").\n",
-        )
-    };
-    unsafe { kv_puts(msg, c"    If you did this already, delete the swap file \"") };
-    unsafe { kv_do_printf(msg, c"%s".as_ptr(), fname) };
-    unsafe { kv_puts(msg, c"\"\n    to avoid this message.\n") };
+    );
+    push_tr(msg, c"(2) An edit session for this file crashed.\n");
+    push_tr(
+        msg,
+        c"    If this is the case, use \":recover\" or \"nvim -r ",
+    );
+    // SAFETY: the buffer's own name, NUL-terminated.
+    msg.extend_from_slice(unsafe { cstr::bytes_at((*buf).b_fname) });
+    push_tr(
+        msg,
+        c"\"\n    to recover the changes (see \":help recovery\").\n",
+    );
+    push_tr(msg, c"    If you did this already, delete the swap file \"");
+    // SAFETY: the caller's swap file name, NUL-terminated.
+    msg.extend_from_slice(unsafe { cstr::bytes_at(fname) });
+    push_tr(msg, c"\"\n    to avoid this message.\n");
 }
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
@@ -440,13 +440,12 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
 
-    // kv_resize(msg, IOSIZE): a screenful before the first realloc.
-    let mut msg: StringBuilder = KV_INITIAL_VALUE;
-    msg.capacity = 1024 + 1;
-    msg.items = unsafe { xrealloc(msg.items.cast(), msg.capacity) }.cast();
+    // Upstream's `kv_resize(msg, IOSIZE)`: a screenful before the first
+    // reallocation. Only a size hint -- nothing reads the capacity.
+    let mut msg: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
 
     let fhname = unsafe { home_replace_save(core::ptr::null_mut(), fname) };
-    unsafe { attention_message(buf, fname, fhname, &raw mut msg) };
+    unsafe { attention_message(buf, fname, fhname, &mut msg) };
 
     // A 'q' typed at the more-prompt must not interrupt loading the
     // file, and a "simalt ~x" in the vimrc must not answer the prompt
@@ -455,9 +454,10 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
     unsafe { flush_buffers(FLUSH_TYPEAHEAD) };
 
     if swap_exists_action.get() != SEA_NONE {
-        unsafe { kv_puts(&raw mut msg, c"Swap file \"") };
-        unsafe { kv_do_printf(&raw mut msg, c"%s".as_ptr(), fhname) };
-        unsafe { kv_puts(&raw mut msg, c"\" already exists!") };
+        push_tr(&mut msg, c"Swap file \"");
+        // SAFETY: the home-replaced name, NUL-terminated.
+        msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
+        push_tr(&mut msg, c"\" already exists!");
         // "Delete it" is not offered while the owning process is alive.
         let run_but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
         let but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
@@ -465,7 +465,12 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
         let buttons = if running { run_but } else { but };
         let (title, warn) = (tr(c"VIM - ATTENTION"), VIM_WARNING as c_int);
         let none = core::ptr::null();
-        choice = unsafe { do_dialog(warn, title, msg.items, buttons, 1, none, 0) } as sea_choice_T;
+        // `do_dialog` reads the message as a C string; the vector's own
+        // terminator is what the `vsnprintf` behind `kv_printf` used to
+        // leave there.
+        msg.push(NUL as u8);
+        let text = msg.as_mut_ptr().cast::<c_char>();
+        choice = unsafe { do_dialog(warn, title, text, buttons, 1, none, 0) } as sea_choice_T;
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add((running && choice >= 4) as sea_choice_T);
         // Pretend the screen did not scroll; it needs a redraw anyway.
@@ -473,13 +478,12 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
     } else {
         let mut need_clear = false;
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
-        let text = String_0::from_raw_parts(msg.items, msg.size);
+        let text = String_0::from_raw_parts(msg.as_mut_ptr().cast::<c_char>(), msg.len());
         let clear = &raw mut need_clear;
         unsafe { msg_multiline(text, 0, false, false, clear) };
     }
 
     drop(no_prompt);
-    unsafe { xfree(msg.items.cast()) }; // kv_destroy(msg)
     unsafe { xfree(fhname.cast()) };
     choice
 }
@@ -796,17 +800,14 @@ pub unsafe fn recover_names(
                     unsafe { msg_puts(path_tail(*files.offset(i as isize))) };
                     unsafe { msg_putchar('\n' as c_int) };
 
-                    // kv_resize(msg, IOSIZE)
-                    let mut msg_buf = KV_INITIAL_VALUE;
-                    msg_buf.capacity = 1024 + 1;
-                    msg_buf.items =
-                        unsafe { xrealloc(msg_buf.items.cast(), msg_buf.capacity) }.cast();
-                    unsafe { swapfile_info(*files.offset(i as isize), &raw mut msg_buf) };
+                    // Upstream's `kv_resize(msg, IOSIZE)`: a size hint.
+                    let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
+                    unsafe { swapfile_info(*files.offset(i as isize), &mut msg_buf) };
                     let mut need_clear = false;
-                    let text = String_0::from_raw_parts(msg_buf.items, msg_buf.size);
+                    let data = msg_buf.as_mut_ptr().cast::<c_char>();
+                    let text = String_0::from_raw_parts(data, msg_buf.len());
                     let clear = &raw mut need_clear;
                     unsafe { msg_multiline(text, 0, false, false, clear) };
-                    unsafe { xfree(msg_buf.items.cast()) }; // kv_destroy(msg)
                 }
             }
             unsafe { ui_flush() };
