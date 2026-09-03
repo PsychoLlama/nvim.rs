@@ -21,18 +21,17 @@ use crate::garray::{ga_clear, ga_init};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::main::{capture_ga, curbuf, msg_col, redir_off};
 use crate::mbyte::mb_islower;
-use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree, xrealloc};
+use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree};
 use crate::os::cshim::snprintf;
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
-use crate::strings::kv_do_printf;
 use crate::types::{
     Arena, Array, Buffer, CmdAddr, CmdModFlags, CmdParseInfo, Dict, Direction, Error, Integer,
     KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts,
-    KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, LuaRef, Object, String_0,
-    StringBuilder, TryState, buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeLuaRef,
-    kObjectTypeString, linenr_T, size_t, ucmd_T, uint8_t, uint64_t,
+    KeyDict_empty, KeyDict_get_commands, KeyDict_user_command, LuaRef, Object, String_0, TryState,
+    buf_T, cmdmod_T, exarg_T, expand_T, garray_T, int64_t, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, linenr_T, size_t, ucmd_T, uint8_t,
+    uint64_t,
 };
 use crate::usercmd::{
     Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,

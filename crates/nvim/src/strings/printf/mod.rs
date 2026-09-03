@@ -4,10 +4,10 @@
 //! either a C `va_list` or an array of `typval_T` -- the latter being how
 //! Vimscript's `printf()` passes its arguments, and the reason
 //! `tv_nr`/`tv_str`/`tv_ptr`/`tv_float` exist: they read one argument out of
-//! that array with the type checking C's varargs cannot do.  `kv_do_printf`
-//! and `arena_printf` are the two spellings that format into a growable
-//! buffer rather than a fixed one, and they go through the *libc* `vsnprintf`
-//! rather than through this file's formatter.
+//! that array with the type checking C's varargs cannot do.  `arena_printf`
+//! is the one spelling that formats into a growable buffer rather than a
+//! fixed one, and it goes through the *libc* `vsnprintf` rather than through
+//! this file's formatter.
 //!
 //! The variadic entry points stay variadic: turning a variadic call site into
 //! a macro is phase 16's tree-wide sweep, and it has to stay mechanical.
@@ -21,12 +21,11 @@ use core::ptr;
 use super::given;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
-use crate::memory::{arena_alloc, arena_alloc_block, xrealloc};
+use crate::memory::{arena_alloc, arena_alloc_block};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
 use crate::types::{
-    Arena, String_0, StringBuilder, VAR_FLOAT, VAR_NUMBER, VAR_STRING, float_T, size_t, typval_T,
-    varnumber_T,
+    Arena, String_0, VAR_FLOAT, VAR_NUMBER, VAR_STRING, float_T, size_t, typval_T, varnumber_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -198,54 +197,6 @@ pub(crate) fn infinity_str(
 
 /// The scratch buffer `vim_vsnprintf_typval` renders one conversion into.
 const TMP_LEN: c_int = 350;
-
-/// `vsnprintf` into a `StringBuilder`, growing it to fit.
-///
-/// The first attempt formats straight into whatever room is left, so the
-/// common case is one pass; only if it does not fit is the buffer grown
-/// and the format run a second time.
-pub unsafe extern "C" fn kv_do_printf(
-    str: *mut StringBuilder,
-    fmt: *const c_char,
-    mut args: ...
-) -> c_int {
-    let remaining = unsafe { (*str).capacity } - unsafe { (*str).size };
-    let tail = if unsafe { (*str).items }.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { (*str).items.add((*str).size) }
-    };
-    let mut printed = unsafe { vsnprintf(tail, remaining, fmt, args.clone()) };
-    if printed < 0 {
-        return -1;
-    }
-
-    if printed as size_t >= remaining {
-        // `kv_ensure_space`, with room for the terminator.
-        let wanted = unsafe { (*str).size } + printed as size_t + 1;
-        if unsafe { (*str).capacity } < wanted {
-            // Round up to a power of two.
-            let mut capacity = wanted - 1;
-            for shift in [1, 2, 4, 8, 16] {
-                capacity |= capacity >> shift;
-            }
-            unsafe { (*str).capacity = capacity + 1 };
-            unsafe {
-                (*str).items = xrealloc((*str).items as *mut c_void, (*str).capacity) as *mut c_char
-            };
-        }
-        debug_assert!(!unsafe { (*str).items }.is_null());
-        let tail = unsafe { (*str).items.add((*str).size) };
-        let room = unsafe { (*str).capacity - (*str).size };
-        printed = unsafe { vsnprintf(tail, room, fmt, args.clone()) };
-        if printed < 0 {
-            return -1;
-        }
-    }
-
-    unsafe { (*str).size += printed as size_t };
-    printed
-}
 
 /// `vsnprintf` into an arena.
 ///

@@ -11,6 +11,7 @@
 use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 use crate::types::ExArgt;
 use crate::winlayer::Ea;
 use core::ffi::{CStr, c_char, c_int};
@@ -31,58 +32,35 @@ pub(crate) unsafe fn string_iswhite(str: String_0) -> bool {
     true
 }
 
-/// Append `len` bytes to a [`StringBuilder`], growing it to the next power
-/// of two when they do not fit: upstream's `kv_concat_len(cmdline, src,
-/// len)`.  c2rust expanded that macro at all twenty-four of
-/// [`build_cmdline_str`]'s call sites, ~40 lines apiece.
+/// Append `len` bytes: upstream's `kv_concat_len(cmdline, src, len)`, which
+/// c2rust expanded at all twenty-four of [`build_cmdline_str`]'s call sites,
+/// ~40 lines apiece.
 ///
 /// # Safety
 /// `src` must point at `len` readable bytes.
-unsafe fn cmdline_concat(cmdline: &mut StringBuilder, src: *const c_char, len: size_t) {
+unsafe fn cmdline_concat(cmdline: &mut Vec<u8>, src: *const c_char, len: size_t) {
     if len == 0 {
         return;
     }
-    if cmdline.capacity < cmdline.size + len {
-        let mut capacity = cmdline.size + len - 1;
-        capacity |= capacity >> 1;
-        capacity |= capacity >> 2;
-        capacity |= capacity >> 4;
-        capacity |= capacity >> 8;
-        capacity |= capacity >> 16;
-        cmdline.capacity = capacity + 1;
-        // SAFETY: `items` is null with a zero capacity, or the allocation
-        // this function made last time.
-        cmdline.items = unsafe { xrealloc(cmdline.items.cast(), cmdline.capacity) }.cast();
-    }
-    debug_assert!(!cmdline.items.is_null());
-    let dest = cmdline.items;
-    let size = cmdline.size;
-    // SAFETY: the grow above left room for `len` bytes past `size`, and the
-    // caller promised `src` holds that many.
-    let into = unsafe { dest.add(size) }.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(src.cast(), len) };
-    cmdline.size += len;
+    // SAFETY: the caller's bytes, which are not part of `cmdline`.
+    cmdline.extend_from_slice(unsafe { core::slice::from_raw_parts(src.cast::<u8>(), len) });
 }
 
 /// [`cmdline_concat`] for a string literal: upstream's `kv_concat`.
-fn cmdline_concat_str(cmdline: &mut StringBuilder, s: &CStr) {
-    // SAFETY: a `CStr` holds exactly `count_bytes` readable bytes.
-    unsafe { cmdline_concat(cmdline, s.as_ptr(), s.count_bytes()) };
+fn cmdline_concat_str(cmdline: &mut Vec<u8>, s: &CStr) {
+    cmdline.extend_from_slice(s.to_bytes());
 }
 
 /// Write out the `:silent`/`:vertical`/... prefixes in the order upstream
 /// parses them back.
-fn concat_cmdmods(cmdline: &mut StringBuilder, cmdmod: &cmdmod_T) {
+fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &cmdmod_T) {
     if cmdmod.cmod_tab != 0 {
         let tab = cmdmod.cmod_tab - 1;
-        // SAFETY: `cmdline` is the caller's builder; the format takes the
-        // one integer it is given.
-        unsafe { kv_do_printf(cmdline, c"%dtab ".as_ptr(), tab) };
+        cmdline.extend_from_slice(format!("{tab}tab ").as_bytes());
     }
     if cmdmod.cmod_verbose > 0 {
         let verbose = cmdmod.cmod_verbose - 1;
-        // SAFETY: as above.
-        unsafe { kv_do_printf(cmdline, c"%dverbose ".as_ptr(), verbose) };
+        cmdline.extend_from_slice(format!("{verbose}verbose ").as_bytes());
     }
     if cmdmod.cmod_flags.has(CmdModFlags::ERRSILENT) {
         cmdline_concat_str(cmdline, c"silent! ");
@@ -140,14 +118,8 @@ pub(crate) unsafe fn build_cmdline_str(
     // is live for the call.
     let mut eap = unsafe { Ea::new(eap) };
     let argc: size_t = args.size;
-    // SAFETY: a null pointer with a zero size asks `xrealloc` for a fresh
-    // allocation.
-    let items = unsafe { xrealloc(ptr::null_mut(), 32) }.cast::<c_char>();
-    let mut cmdline: StringBuilder = StringBuilder {
-        size: 0,
-        capacity: 32,
-        items,
-    };
+    // Upstream's `kv_resize(cmdline, 32)`: a size hint, nothing more.
+    let mut cmdline: Vec<u8> = Vec::with_capacity(32);
     // SAFETY: `cmdinfo` is the caller's, live for the call.
     let cmdmod = unsafe { &(*cmdinfo).cmdmod };
     concat_cmdmods(&mut cmdline, cmdmod);
@@ -155,17 +127,15 @@ pub(crate) unsafe fn build_cmdline_str(
     if eap.argt.has(ExArgt::RANGE) {
         if eap.addr_count == 1 {
             let line2 = eap.line2;
-            // SAFETY: the format takes the one integer it is given.
-            unsafe { kv_do_printf(&mut cmdline, c"%d".as_ptr(), line2) };
+            cmdline.extend_from_slice(format!("{line2}").as_bytes());
         } else if eap.addr_count > 1 {
             let (line1, line2) = (eap.line1, eap.line2);
-            // SAFETY: the format takes the two integers it is given.
-            unsafe { kv_do_printf(&mut cmdline, c"%d,%d".as_ptr(), line1, line2) };
+            cmdline.extend_from_slice(format!("{line1},{line2}").as_bytes());
             // Only two of them made it into the string.
             eap.addr_count = 2;
         }
     }
-    let cmdname_idx: size_t = cmdline.size;
+    let cmdname_idx: size_t = cmdline.len();
     let cmd = eap.cmd;
     // SAFETY: `eap.cmd` is the command name, NUL-terminated.
     unsafe { cmdline_concat(&mut cmdline, cmd, cstr::bytes_at(cmd).len()) };
@@ -173,9 +143,9 @@ pub(crate) unsafe fn build_cmdline_str(
         cmdline_concat_str(&mut cmdline, c"!");
     }
     if eap.argt.has(ExArgt::REGSTR) && eap.regname != 0 {
-        let regname = eap.regname;
-        // SAFETY: the format takes the one character it is given.
-        unsafe { kv_do_printf(&mut cmdline, c" %c".as_ptr(), regname) };
+        // `%c`: the low byte of the register name, not its UTF-8 encoding.
+        cmdline.push(b' ');
+        cmdline.push(eap.regname as u8);
     }
 
     // Each argument is preceded by one space, which is what lets the
@@ -187,7 +157,7 @@ pub(crate) unsafe fn build_cmdline_str(
     } else {
         ptr::null_mut::<size_t>()
     };
-    let argstart_idx: size_t = cmdline.size;
+    let argstart_idx: size_t = cmdline.len();
     let arglens = eap.arglens;
     for i in 0..argc {
         // SAFETY: `i` is below `size`, so the object is inside `items`.
@@ -200,12 +170,15 @@ pub(crate) unsafe fn build_cmdline_str(
         // SAFETY: `s` names its own bytes.
         unsafe { cmdline_concat(&mut cmdline, s.data(), s.len()) };
     }
-    // The NUL is part of `size`, so that `arg` below can point at it.
-    // SAFETY: the literal's terminator is the one byte being copied.
-    unsafe { cmdline_concat(&mut cmdline, c"".as_ptr(), 1) };
+    // Handed to the caller, who releases it with `xfree`; every pointer
+    // below is into it, so it is taken over before any of them are made.
+    // The terminator `owned_cstr` appends is where `arg` points when there
+    // are no arguments.
+    let end_idx = cmdline.len();
+    let items = owned_cstr(cmdline);
 
     // SAFETY: `cmdname_idx` is an offset into the buffer just built.
-    eap.cmd = unsafe { cmdline.items.add(cmdname_idx) };
+    eap.cmd = unsafe { items.add(cmdname_idx) };
     eap.args = if argc > 0 {
         // SAFETY: `xcalloc` answers `argc` zeroed slots.
         unsafe { xcalloc(argc, size_of::<*mut c_char>()) }.cast::<*mut c_char>()
@@ -219,7 +192,7 @@ pub(crate) unsafe fn build_cmdline_str(
         // SAFETY: both arrays have `argc` slots, and `offset` is inside the
         // buffer the arguments were written into.
         unsafe {
-            *eap_args.add(i) = cmdline.items.add(offset);
+            *eap_args.add(i) = items.add(offset);
             offset += *arglens.add(i);
         }
     }
@@ -227,11 +200,11 @@ pub(crate) unsafe fn build_cmdline_str(
         // SAFETY: `args` has at least one slot, filled in above.
         unsafe { *eap_args }
     } else {
-        // SAFETY: `size` counts the terminator written above.
-        unsafe { cmdline.items.add(cmdline.size - 1) }
+        // SAFETY: `end_idx` is where the terminator went.
+        unsafe { items.add(end_idx) }
     };
     // SAFETY: `cmdlinep` is the caller's slot, which takes the buffer over.
-    unsafe { *cmdlinep = cmdline.items };
+    unsafe { *cmdlinep = items };
 
     // `:make`/`:grep` rewrite their own argument, and the rewrite has no
     // relation to the `args` array that was just built.
