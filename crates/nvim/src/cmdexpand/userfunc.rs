@@ -10,14 +10,15 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::types::{
     ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
     VAR_UNKNOWN, VarLock,
 };
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
 use core::ptr;
+use std::ffi::{CStr, CString};
 
 /// A `:command -complete=custom,…` callback: `f(arg, argc, argv)`.
 ///
@@ -32,8 +33,10 @@ const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
 /// Expand shell command matches in one directory of `$PATH`.
 ///
 /// `pathed_pattern` is the fully pathed pattern and `pathlen` the length of
-/// its path portion (0 if there is no path).  New names are appended to `gap`
-/// and remembered in `ht` so a later directory cannot offer them again.
+/// its path portion (0 if there is no path).  New names are appended to
+/// `found` and remembered in `ht` so a later directory cannot offer them
+/// again -- the `ht` entries borrow `found`'s strings, so the table must not
+/// outlive it.
 pub(crate) unsafe fn expand_shellcmd_onedir(
     pathed_pattern: *mut c_char,
     pathlen: size_t,
@@ -41,7 +44,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
     numMatches: *mut c_int,
     flags: ExpandFlags,
     ht: *mut hashtab_T,
-    gap: *mut garray_T,
+    found: &mut Vec<CString>,
 ) {
     let mut pathed_pattern = pathed_pattern;
     if unsafe { expand_wildcards(1, &raw mut pathed_pattern, numMatches, matches, flags) }.is_err()
@@ -49,7 +52,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
         return;
     }
 
-    unsafe { ga_grow(gap, *numMatches) };
+    found.reserve(usize::try_from(unsafe { *numMatches }).unwrap_or(0));
 
     for i in 0..unsafe { *numMatches } {
         let mut name = unsafe { *(*matches).offset(i as isize) };
@@ -63,13 +66,13 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
                 // Remove the path that was prepended (+1 for the NUL).
                 let into = name.cast::<u8>();
                 unsafe { into.copy_from(name.add(pathlen).cast(), namelen - pathlen + 1) };
-                unsafe {
-                    ((*gap).ga_data as *mut *mut c_char)
-                        .offset((*gap).ga_len as isize)
-                        .write(name)
-                };
-                unsafe { (*gap).ga_len += 1 };
-                unsafe { hash_add_item(ht, hi, name, hash) };
+                // SAFETY: `expand_wildcards` answers owned, NUL-terminated
+                // strings, and this is the only reference to this one.
+                let owned = unsafe { CString::from_raw(name) };
+                // The key borrows the string `found` now owns: the address
+                // an `xmalloc` block has does not change when the `Vec` does.
+                unsafe { hash_add_item(ht, hi, owned.as_ptr().cast_mut(), hash) };
+                found.push(owned);
                 name = ptr::null_mut();
             }
         }
@@ -138,16 +141,9 @@ pub(crate) unsafe fn expand_shellcmd(
     }
 
     // Go over all directories in $PATH.  Expand matches in that directory
-    // and collect them in `ga`.  When "." is not in $PATH also expand for
+    // and collect them in `found`.  When "." is not in $PATH also expand for
     // the current directory, to find "subdir/cmd".
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
+    let mut found = Vec::<CString>::new();
     let mut found_ht = hashtab_T::init();
     let mut s = path;
     loop {
@@ -223,7 +219,7 @@ pub(crate) unsafe fn expand_shellcmd(
                     numMatches,
                     flags,
                     &raw mut found_ht,
-                    &raw mut ga,
+                    &mut found,
                 )
             };
         }
@@ -233,8 +229,10 @@ pub(crate) unsafe fn expand_shellcmd(
         }
         s = e;
     }
-    unsafe { *matches = ga.ga_data as *mut *mut c_char };
-    unsafe { *numMatches = ga.ga_len };
+    // The keys borrowed `found`'s strings; the table dies here, first.
+    drop(found_ht);
+    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *matches = owned_cstr_array(found) };
 
     unsafe { xfree(buf as *mut c_void) };
     unsafe { xfree(pat as *mut c_void) };
@@ -308,19 +306,9 @@ pub(crate) unsafe fn expand_user_defined(
         return Err(Failed);
     }
 
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    let itemsize = if fuzzy {
-        size_of::<fuzmatch_str_T>()
-    } else {
-        size_of::<*mut c_char>()
-    };
-    unsafe { ga_init(&raw mut ga, itemsize as c_int, 3) };
+    // Exactly one of these fills: `fuzzy` is fixed for the whole call.
+    let mut scored = Vec::<fuzmatch_str_T>::new();
+    let mut found = Vec::<CString>::new();
 
     // The answer is one match per line.
     let mut s = retstr;
@@ -350,24 +338,13 @@ pub(crate) unsafe fn expand_user_defined(
             let p =
                 unsafe { xmemdupz(s as *const c_void, e.offset_from(s) as size_t) } as *mut c_char;
 
-            unsafe { ga_grow(&raw mut ga, 1) };
             if fuzzy {
-                let scored = fuzmatch_str_T {
-                    idx: ga.ga_len,
-                    str: p,
-                    score,
-                };
-                let slot = (ga.ga_data as *mut fuzmatch_str_T).wrapping_offset(ga.ga_len as isize);
-                // SAFETY: `ga_grow` above made room for one more entry.
-                unsafe { slot.write(scored) };
+                let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
+                scored.push(fuzmatch_str_T { idx, str: p, score });
             } else {
-                unsafe {
-                    (ga.ga_data as *mut *mut c_char)
-                        .offset(ga.ga_len as isize)
-                        .write(p)
-                };
+                // SAFETY: `xmemdupz` answers a fresh NUL-terminated string.
+                found.push(unsafe { CString::from_raw(p) });
             }
-            ga.ga_len += 1;
         }
 
         if unsafe { *e } as c_int != NUL {
@@ -377,18 +354,22 @@ pub(crate) unsafe fn expand_user_defined(
     }
     unsafe { xfree(retstr as *mut c_void) };
 
-    if ga.ga_len == 0 {
+    let count = if fuzzy { scored.len() } else { found.len() };
+    if count == 0 {
         return Ok(());
     }
+    let count = c_int::try_from(count).expect("a match count fits a c_int");
 
     if fuzzy {
-        unsafe {
-            fuzzymatches_to_strmatches(ga.ga_data as *mut fuzmatch_str_T, matches, ga.ga_len, false)
-        };
+        // `fuzzymatches_to_strmatches` takes the array over and `xfree`s it,
+        // which a boxed slice may cross (`allocator.rs`).
+        let raw = Box::into_raw(scored.into_boxed_slice()).cast::<fuzmatch_str_T>();
+        // SAFETY: `count` live entries at `raw`, and the caller's slot.
+        unsafe { fuzzymatches_to_strmatches(raw, matches, count, false) };
     } else {
-        unsafe { *matches = ga.ga_data as *mut *mut c_char };
+        unsafe { *matches = owned_cstr_array(found) };
     }
-    unsafe { *numMatches = ga.ga_len };
+    unsafe { *numMatches = count };
     Ok(())
 }
 
@@ -398,14 +379,7 @@ pub(crate) unsafe fn process_user_list(
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) {
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 3) };
+    let mut found = Vec::<CString>::new();
 
     // Loop over the items in the list.
     if !retlist.is_null() {
@@ -415,22 +389,16 @@ pub(crate) unsafe fn process_user_list(
             if unsafe { (*li).li_tv.v_type } == VAR_STRING
                 && !unsafe { (*li).li_tv.vval.v_string }.is_null()
             {
-                let p = unsafe { xstrdup((*li).li_tv.vval.v_string) };
-                unsafe { ga_grow(&raw mut ga, 1) };
-                unsafe {
-                    (ga.ga_data as *mut *mut c_char)
-                        .offset(ga.ga_len as isize)
-                        .write(p)
-                };
-                ga.ga_len += 1;
+                // SAFETY: the item is a live, NUL-terminated string.
+                found.push(unsafe { CStr::from_ptr((*li).li_tv.vval.v_string) }.to_owned());
             }
             li = unsafe { (*li).li_next };
         }
     }
     unsafe { tv_list_unref(retlist) };
 
-    unsafe { *matches = ga.ga_data as *mut *mut c_char };
-    unsafe { *numMatches = ga.ga_len };
+    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *matches = owned_cstr_array(found) };
 }
 
 /// Expand names with a list returned by a function defined by the user.

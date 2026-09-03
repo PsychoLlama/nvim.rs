@@ -16,7 +16,6 @@ use crate::event::multiqueue::multiqueue_empty;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
-use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_grow};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
@@ -72,8 +71,7 @@ use crate::types::TAB;
 use crate::types::{
     Arena, Array, CharsizeArg, Error, EvalFuncData, FileDescriptor, Integer, LuaRef, LuaRetMode,
     MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, Vv, colnr_T, flush_buffers_T,
-    garray_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t, uint64_t,
-    varnumber_T,
+    oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t, uint64_t, varnumber_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;

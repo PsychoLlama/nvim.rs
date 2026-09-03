@@ -747,6 +747,7 @@ pub unsafe fn mergesort_list(
 /// `crate::memory::arena_*`, and it is the same allocation family.
 pub mod alloc_log;
 pub mod arena;
+pub(crate) mod handoff;
 pub use arena::*;
 
 #[cfg(test)]

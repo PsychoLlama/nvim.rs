@@ -12,7 +12,6 @@ use crate::guard::Keys;
 use crate::keycodes::{Key, key_unescape};
 use crate::types::NUL;
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 /// Which part of a paste stream a [`paste_store`] call is carrying.
 ///
@@ -116,13 +115,7 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
 /// # Safety
 /// Callable at any time; reads from the typeahead until `K_PASTE_END`.
 pub unsafe fn paste_repeat(count: c_int) {
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 1,
-        ga_growsize: 32,
-        ga_data: ptr::null_mut(),
-    };
+    let mut pasted = Vec::<u8>::new();
     let mut aborted = false;
 
     let unmapped = Keys::unmapped();
@@ -130,7 +123,6 @@ pub unsafe fn paste_repeat(count: c_int) {
     while !aborted {
         // SAFETY (this body): the stored paste is this module's own `Array`,
         // and the arena is this frame's.
-        unsafe { ga_grow(&raw mut ga, 32) };
         let first = unsafe { vgetorpeek(true) } as u8;
         if c_int::from(first) == K_SPECIAL {
             // Undo the escaping `paste_store` applied, except that the
@@ -140,22 +132,18 @@ pub unsafe fn paste_repeat(count: c_int) {
             let key = key_unescape(second, third);
             match Key::try_from(key) {
                 Ok(Key::PasteEnd) => break,
-                Ok(Key::Zero) => unsafe { ga_append(&raw mut ga, NUL as u8) },
-                _ if key == K_SPECIAL => unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) },
-                _ => {
-                    unsafe { ga_append(&raw mut ga, K_SPECIAL as u8) };
-                    unsafe { ga_append(&raw mut ga, second) };
-                    unsafe { ga_append(&raw mut ga, third) };
-                }
+                Ok(Key::Zero) => pasted.push(NUL as u8),
+                _ if key == K_SPECIAL => pasted.push(K_SPECIAL as u8),
+                _ => pasted.extend_from_slice(&[K_SPECIAL as u8, second, third]),
             }
         } else {
-            unsafe { ga_append(&raw mut ga, first) };
+            pasted.push(first);
         }
         aborted = got_int.get();
     }
     drop(unmapped);
 
-    let str = String_0::from_raw_parts(ga.ga_data.cast(), ga.ga_len as usize);
+    let str = String_0::from_raw_parts(pasted.as_mut_ptr().cast(), pasted.len());
     let mut arena: Arena = ARENA_EMPTY;
     let mut err = Error::none();
     let mut i = 0;
@@ -170,5 +158,4 @@ pub unsafe fn paste_repeat(count: c_int) {
     }
     err.clear();
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { ga_clear(&raw mut ga) };
 }

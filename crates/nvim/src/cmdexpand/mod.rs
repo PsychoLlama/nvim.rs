@@ -31,7 +31,7 @@ use crate::ex_getln::{
     put_on_cmdline, realloc_cmdbuff, redrawcmd, tilde_replace, vim_strsave_fnameescape,
 };
 use crate::fuzzy::fuzzy_match_str;
-use crate::garray::{ga_append, ga_clear_strings, ga_concat_len, ga_grow, ga_init};
+use crate::garray::{ga_grow, ga_init};
 use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};

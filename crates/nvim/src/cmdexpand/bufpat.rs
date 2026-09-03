@@ -9,11 +9,23 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::memory::handoff::{owned_cstr, owned_cstr_array};
 use crate::types::{FAIL, Failed, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem::size_of;
-use core::ptr;
+use core::{ptr, slice};
+use std::ffi::CString;
+
+/// A run of `len` bytes at `p`.
+///
+/// # Safety
+///
+/// `p` is readable for `len` bytes, which every `ml_get`/`ml_get_len` pair
+/// promises for as long as the memline is not disturbed.
+unsafe fn bytes<'a>(p: *const c_char, len: c_int) -> &'a [u8] {
+    // SAFETY: the caller's promise; a line length is never negative.
+    unsafe { slice::from_raw_parts(p.cast::<u8>(), usize::try_from(len).unwrap_or(0)) }
+}
 
 /// True when `'wildoptions'` carries `exacttext`, which offers the buffer text
 /// itself rather than a pattern that would match it.
@@ -43,24 +55,13 @@ pub(crate) unsafe fn copy_substring_from_pos(
 
     // A newline, spelled the way `'wildoptions'` wants it: `exacttext`
     // keeps the two-character `\n` a pattern would use.
-    let append_newline = |ga: *mut garray_T| {
-        if exacttext {
-            unsafe { ga_concat_len(ga, c"\\n".as_ptr(), 2) };
-        } else {
-            unsafe { ga_append(ga, b'\n') };
-        }
-    };
+    let newline: &[u8] = if exacttext { b"\\n" } else { b"\n" };
 
-    // Use a growable string.
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut ga, 1, 128) };
+    let mut text = Vec::<u8>::new();
 
+    // SAFETY (this body): every `ml_get`/`ml_get_len` pair describes one
+    // line of the current buffer, and nothing between the read and the copy
+    // touches the memline, so the bytes stay where they are.
     // Append start line from start->col to end.
     let start_line = ml_get(unsafe { (*start).lnum });
     let start_ptr = unsafe { start_line.offset((*start).col as isize) };
@@ -71,19 +72,17 @@ pub(crate) unsafe fn copy_substring_from_pos(
     } else {
         ml_get_len(unsafe { (*start).lnum }) - unsafe { (*start).col }
     };
-    unsafe { ga_grow(&raw mut ga, segment_len + 2) };
-    unsafe { ga_concat_len(&raw mut ga, start_ptr, segment_len as size_t) };
+    text.extend_from_slice(unsafe { bytes(start_ptr, segment_len) });
     if !is_single_line {
-        append_newline(&raw mut ga);
+        text.extend_from_slice(newline);
 
         // Append full lines between start and end.
         let mut lnum = unsafe { (*start).lnum } + 1;
         while lnum < unsafe { (*end).lnum } {
             let line = ml_get(lnum);
             let linelen = ml_get_len(lnum);
-            unsafe { ga_grow(&raw mut ga, linelen + 2) };
-            unsafe { ga_concat_len(&raw mut ga, line, linelen as size_t) };
-            append_newline(&raw mut ga);
+            text.extend_from_slice(unsafe { bytes(line, linelen) });
+            text.extend_from_slice(newline);
             lnum += 1;
         }
     }
@@ -92,25 +91,14 @@ pub(crate) unsafe fn copy_substring_from_pos(
     let end_line = ml_get(unsafe { (*end).lnum });
     let word_end = unsafe { find_word_end(end_line.offset((*end).col as isize)) };
     segment_len = unsafe { word_end.offset_from(end_line) } as c_int;
-    unsafe { ga_grow(&raw mut ga, segment_len) };
     let from = if is_single_line {
         unsafe { (*end).col }
     } else {
         0
     };
-    unsafe {
-        ga_concat_len(
-            &raw mut ga,
-            end_line.offset(from as isize),
-            (segment_len - from) as size_t,
-        )
-    };
+    text.extend_from_slice(unsafe { bytes(end_line.offset(from as isize), segment_len - from) });
 
-    // Null-terminate.
-    unsafe { ga_grow(&raw mut ga, 1) };
-    unsafe { ga_append(&raw mut ga, NUL as u8) };
-
-    unsafe { *match_out = ga.ga_data as *mut c_char };
+    unsafe { *match_out = owned_cstr(text) };
     unsafe { (*match_end).lnum = (*end).lnum };
     unsafe { (*match_end).col = segment_len as colnr_T };
 
@@ -231,15 +219,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
         | SEARCH_NFMSG
         | if has_range { SEARCH_START } else { 0 };
 
-    // A growable array of `char *`.
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
+    // The matches found so far, in the order they were found.
+    let mut found = Vec::<CString>::new();
 
     let mut end_match_pos: pos_T = unsafe { core::mem::zeroed() };
     let mut word_end_pos: pos_T = unsafe { core::mem::zeroed() };
@@ -356,24 +337,13 @@ pub(crate) unsafe fn expand_pattern_in_buf(
                 unsafe { xfree(full_match as *mut c_void) };
             }
 
+            // SAFETY: both producers answer a fresh, owned, NUL-terminated
+            // string, and this is the only reference to it.
+            let owned = unsafe { CString::from_raw(match_out) };
             // Include this match if it is not a duplicate.
-            for i in 0..ga.ga_len {
-                let kept = unsafe { *(ga.ga_data as *mut *mut c_char).offset(i as isize) };
-                if unsafe { cstr::eq(match_out, kept) } {
-                    unsafe { xfree(match_out as *mut c_void) };
-                    match_out = ptr::null_mut();
-                    break;
-                }
-            }
-            if !match_out.is_null() {
-                unsafe { ga_grow(&raw mut ga, 1) };
-                unsafe {
-                    (ga.ga_data as *mut *mut c_char)
-                        .offset(ga.ga_len as isize)
-                        .write(match_out)
-                };
-                ga.ga_len += 1;
-                if ga.ga_len > TAG_MANY {
+            if !found.contains(&owned) {
+                found.push(owned);
+                if c_int::try_from(found.len()).is_ok_and(|n| n > TAG_MANY) {
                     break;
                 }
             }
@@ -385,11 +355,10 @@ pub(crate) unsafe fn expand_pattern_in_buf(
     };
 
     if !completed {
-        unsafe { ga_clear_strings(&raw mut ga) };
         return Err(Failed);
     }
 
-    unsafe { *matches = ga.ga_data as *mut *mut c_char };
-    unsafe { *numMatches = ga.ga_len };
+    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *matches = owned_cstr_array(found) };
     Ok(())
 }
