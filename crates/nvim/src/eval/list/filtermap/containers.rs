@@ -34,21 +34,11 @@ use crate::eval::list::{
     clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string, set_key_type,
     string_bytes, string_tv,
 };
-use crate::garray::Gap;
 use crate::main::{did_emsg, e_invalblob, e_string_required};
+use crate::memory::handoff::owned_cstr;
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, Vv, garray_T,
-    typval_T, typval_vval_union, varnumber_T,
-};
-
-/// A byte-item `garray_T`, the way `ga_init(&ga, sizeof(char), 80)` leaves
-/// one: the String walk's output buffer.
-const BYTE_GARRAY: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 1,
-    ga_growsize: 80,
-    ga_data: ptr::null_mut(),
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, Vv, typval_T,
+    typval_vval_union, varnumber_T,
 };
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a Dict.
@@ -217,7 +207,7 @@ pub(crate) fn filter_map_string(
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);
 
-    let mut ga = BYTE_GARRAY;
+    let mut out = Vec::<u8>::new();
     let mut idx = 0;
     let mut at = 0;
     while at < s.len() {
@@ -244,9 +234,9 @@ pub(crate) fn filter_map_string(
                 err(e_string_required);
                 break;
             }
-            Gap(&mut ga).concat(string_bytes(&newtv));
+            out.extend_from_slice(string_bytes(&newtv));
         } else if filtermap == FilterMap::Foreach || !rem {
-            Gap(&mut ga).concat(ch);
+            out.extend_from_slice(ch);
         }
 
         clear_tv(&mut newtv);
@@ -255,8 +245,7 @@ pub(crate) fn filter_map_string(
         idx += 1;
         at += len;
     }
-    Gap(&mut ga).append(0);
-    rettv.vval.v_string = ga.ga_data.cast();
+    rettv.vval.v_string = owned_cstr(out);
 }
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a List.

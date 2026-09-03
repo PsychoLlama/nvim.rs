@@ -46,7 +46,6 @@ use crate::ex_cmds2::check_fname;
 use crate::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
-use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_init, ga_set_growsize};
 use crate::getchar::{
     append_to_redobuff_char, beep_flush, get_recorded, ins_typebuf, stuff_readbuf,
     stuff_readbuf_char, stuffescaped,
@@ -103,8 +102,8 @@ use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
     PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VarLock, bcount_t, block_def, colnr_T,
-    exarg_T, garray_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, oparg_T, pos_T,
-    ptrdiff_t, save_v_event_T, size_t, ssize_t, yankreg_T,
+    exarg_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t,
+    save_v_event_T, size_t, ssize_t, yankreg_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};

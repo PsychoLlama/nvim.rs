@@ -357,36 +357,6 @@ pub unsafe fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_
     mem.cast::<c_void>()
 }
 
-/// A byte-item `garray_T` being filled: the shape the text encoders (`json`,
-/// `string()`, `echo`) build their output in.
-///
-/// Wrapping the borrow once means the encoders themselves need no `unsafe` to
-/// write a byte — the pointer plumbing is these four one-liners.
-pub(crate) struct Gap<'a>(pub &'a mut garray_T);
-
-impl Gap<'_> {
-    /// One byte.
-    pub(crate) fn append(&mut self, c: u8) {
-        unsafe { ga_append(&raw mut *self.0, c) }
-    }
-
-    /// A run of bytes; `s` is used as-is, NUL bytes and all.
-    pub(crate) fn concat(&mut self, s: &[u8]) {
-        unsafe { ga_concat_len(&raw mut *self.0, s.as_ptr().cast::<c_char>(), s.len()) }
-    }
-
-    /// Reserve room for `n` more bytes, the way the encoders do before a run
-    /// of `append`s.
-    pub(crate) fn grow(&mut self, n: c_int) {
-        unsafe { ga_grow(&raw mut *self.0, n) }
-    }
-
-    /// The raw array, for the C-shaped helpers that still take one.
-    pub(crate) fn as_ptr(&mut self) -> *mut garray_T {
-        &raw mut *self.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

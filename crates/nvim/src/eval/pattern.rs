@@ -6,12 +6,11 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr::{copy_nonoverlapping, null_mut};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC};
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::main::{p_cpo, p_ic};
 use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
@@ -19,10 +18,8 @@ use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{
-    NUL, OptVal, OptionSetFlags, colnr_T, garray_T, regmatch_T, regprog_T, size_t, typval_T,
-};
-use ::libc::strcpy;
+use crate::types::{NUL, OptVal, OptionSetFlags, colnr_T, regmatch_T, regprog_T, size_t, typval_T};
+use core::slice;
 
 /// A `regmatch_T` with nothing in it.
 const EMPTY_REGMATCH: regmatch_T = regmatch_T {
@@ -31,15 +28,6 @@ const EMPTY_REGMATCH: regmatch_T = regmatch_T {
     endp: [null_mut::<c_char>(); 10],
     rm_matchcol: 0,
     rm_ic: false,
-};
-
-/// An empty garray, sized in bytes.
-const EMPTY_GARRAY: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: null_mut::<c_void>(),
 };
 
 /// 'cpoptions' emptied for the duration of a pattern, restored on drop.
@@ -81,14 +69,6 @@ impl Drop for QuietCpo {
         }
         unsafe { free_string_option(self.saved) };
     }
-}
-
-/// The address `at` bytes into a garray's buffer.
-///
-/// Computing it reads nothing, so it is ordinary code; what makes the byte
-/// there *writable* is the `ga_grow` each caller does first.
-fn ga_at(ga: &garray_T, at: isize) -> *mut c_char {
-    (ga.ga_data as *mut c_char).wrapping_offset(at)
 }
 
 /// Does `pat` match anywhere in `text`?
@@ -135,9 +115,11 @@ pub unsafe fn do_string_sub(
     // SAFETY: the guard is dropped at the end of this body, before
     // anything else writes 'cpoptions'.
     let _cpo = unsafe { QuietCpo::enter() };
-    let mut ga = EMPTY_GARRAY;
-    // SAFETY: `ga` is this frame's.
-    unsafe { ga_init(&raw mut ga, 1, 200) };
+    let mut out = Vec::<u8>::new();
+    // Whether anything was substituted. The garray answered this by having
+    // been allocated at all; a `Vec` cannot, and an empty result is a real
+    // answer (`substitute("x", "x", "", "")`).
+    let mut substituted = false;
     let mut regmatch = EMPTY_REGMATCH;
     regmatch.rm_ic = p_ic.get() != 0;
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
@@ -160,14 +142,11 @@ pub unsafe fn do_string_sub(
             if regmatch.startp[0] == regmatch.endp[0] {
                 if zero_width == regmatch.startp[0] {
                     // Copy one whole character across and try again.
-                    // SAFETY: `tail` is inside the subject string, and
-                    // the growth below the loop left room for one more
-                    // character past `ga_len`.
+                    // SAFETY: `tail` is inside the subject string, so its
+                    // first character's bytes are readable.
                     let i = unsafe { utfc_ptr2len(tail) };
-                    let dest = ga_at(&ga, ga.ga_len as isize);
-                    // SAFETY: as above -- `i` bytes fit at `dest`.
-                    unsafe { copy_nonoverlapping(tail, dest, i as usize) };
-                    ga.ga_len += i;
+                    let run = unsafe { slice::from_raw_parts(tail.cast(), i as usize) };
+                    out.extend_from_slice(run);
                     // SAFETY: the character just copied is inside the
                     // subject, so its end is too.
                     tail = unsafe { tail.offset(i as isize) };
@@ -182,8 +161,8 @@ pub unsafe fn do_string_sub(
             // `expr` are the caller's, and a length of 0 means "measure".
             let sublen = unsafe { vim_regsub(&raw mut regmatch, sub, expr, tail, 0, magic) };
             if sublen <= 0 {
-                // SAFETY: `ga` is this frame's.
-                unsafe { ga_clear(&raw mut ga) };
+                out.clear();
+                substituted = false;
                 break;
             }
             // SAFETY: both ends of the match are inside the subject
@@ -191,20 +170,23 @@ pub unsafe fn do_string_sub(
             let matched = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) };
             // SAFETY: as above.
             let grow = unsafe { end.offset_from(tail) + sublen as isize - matched } as c_int;
-            // SAFETY: `ga` is this frame's.
-            unsafe { ga_grow(&raw mut ga, grow) };
+            out.reserve(grow as usize);
             // SAFETY: the match starts at or after `tail`.
-            let before = unsafe { regmatch.startp[0].offset_from(tail) } as c_int;
-            let dest = ga_at(&ga, ga.ga_len as isize);
-            // SAFETY: the growth above covers the text before the match.
-            unsafe { copy_nonoverlapping(tail, dest, before as usize) };
-            let dest = ga_at(&ga, ga.ga_len as isize + before as isize);
+            let before = unsafe { regmatch.startp[0].offset_from(tail) } as usize;
             let copy = REGSUB_COPY as c_int | REGSUB_MAGIC as c_int;
-            // SAFETY: the growth above covers the `sublen` bytes the second
-            // pass writes at `dest`.
-            unsafe { vim_regsub(&raw mut regmatch, sub, expr, dest, sublen, copy) };
-            // `sublen` counts the terminator the second pass wrote.
-            ga.ga_len += before + sublen - 1;
+            let at = out.len();
+            // SAFETY: `grow` is at least `before + sublen` (the match ends
+            // no later than `end`), so both writes land in the capacity
+            // reserved just above, and `set_len` covers only what was
+            // written -- `sublen` counts the terminator the second pass
+            // wrote, which the length excludes again.
+            unsafe {
+                let dest = out.as_mut_ptr().add(at).cast::<c_char>();
+                copy_nonoverlapping(tail, dest, before);
+                vim_regsub(&raw mut regmatch, sub, expr, dest.add(before), sublen, copy);
+                out.set_len(at + before + sublen as usize - 1);
+            }
+            substituted = true;
             tail = regmatch.endp[0];
             // SAFETY: `tail` is inside the NUL-terminated subject.
             if unsafe { *tail } == NUL as c_char || !do_all {
@@ -212,29 +194,24 @@ pub unsafe fn do_string_sub(
             }
         }
 
-        if !ga.ga_data.is_null() {
-            let dest = ga_at(&ga, ga.ga_len as isize);
-            // SAFETY: the last growth covered the rest of the subject.
-            unsafe { strcpy(dest, tail) };
+        if substituted {
             // SAFETY: `tail` and `end` are both inside the subject string.
-            ga.ga_len += unsafe { end.offset_from(tail) } as c_int;
+            let rest = unsafe { end.offset_from(tail) } as usize;
+            out.extend_from_slice(unsafe { slice::from_raw_parts(tail.cast::<u8>(), rest) });
         }
         // SAFETY: nothing else owns the compiled program.
         unsafe { vim_regfree(regmatch.regprog) };
     }
 
-    // With no match at all the garray is never allocated and the input
-    // is copied through unchanged.
-    let (source, length) = if ga.ga_data.is_null() {
-        (str, len)
+    // With no match at all the input is copied through unchanged.
+    let (source, length) = if substituted {
+        (out.as_mut_ptr().cast::<c_char>(), out.len())
     } else {
-        (ga.ga_data as *mut c_char, ga.ga_len as size_t)
+        (str, len)
     };
     // SAFETY: `source` has `length` readable bytes -- either the caller's
-    // subject or the array built above.
+    // subject or the buffer built above.
     let ret = unsafe { xstrnsave(source, length) };
-    // SAFETY: `ga` is this frame's.
-    unsafe { ga_clear(&raw mut ga) };
     if !ret_len.is_null() {
         // SAFETY: the caller's promise -- a non-null `ret_len` is valid.
         unsafe { *ret_len = length };

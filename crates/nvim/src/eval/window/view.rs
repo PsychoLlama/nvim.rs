@@ -11,6 +11,7 @@
 )]
 
 use super::*;
+use crate::memory::handoff::owned_cstr;
 use crate::types::VAR_STRING;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
@@ -218,34 +219,23 @@ pub unsafe fn f_winwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// The whole thing is emitted twice: setting one window's height changes its
 /// neighbours', so a single pass cannot land on the sizes it names.
 pub unsafe fn f_winrestcmd(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    // SAFETY: `curtab` is set; `ga` and `buf` are live locals of this frame,
-    // and the growarray's buffer is handed to `rettv` at the end rather than
-    // freed.
-    let mut ga: garray_T = unsafe { mem::zeroed() };
-    // One byte per item: the answer is built as text.
-    unsafe { ga_init(&raw mut ga, 1, 70) };
-    let (mut buf, tp) = ([0 as c_char; 50], cur_tab());
-    // Scoped so the growarray it borrows is free again for the tail below.
+    // SAFETY: `curtab` is set, and `rettv` takes the text over at the end.
+    let mut cmds = Vec::<u8>::new();
+    let tp = cur_tab();
+    // Scoped so the buffer it borrows is free again for the tail below.
     {
-        let mut emit = |format: &CStr, winnr: c_int, size: c_int| {
-            // SAFETY: a NUL-terminated format with exactly the two `%d`s it
-            // is given, formatted into a live local and appended to a live
-            // growarray.
-            let (into, room, f) = (buf.as_mut_ptr(), size_of_val(&buf), format.as_ptr());
-            let len = unsafe { vim_snprintf_safelen(into, room, f, winnr, size) };
-            unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), len) };
+        let mut emit = |prefix: &str, winnr: c_int, size: c_int| {
+            cmds.extend_from_slice(format!("{prefix}{winnr}resize {size}|").as_bytes());
         };
         let numbered = || (1..).zip(windows_in_tab(tp).filter(|wp| wp.has_winnr(tp)));
         for _ in 0..2 {
             for (winnr, wp) in numbered() {
-                emit(c"%dresize %d|", winnr, wp.w_height);
-                emit(c"vert %dresize %d|", winnr, wp.w_width);
+                emit("", winnr, wp.w_height);
+                emit("vert ", winnr, wp.w_width);
             }
         }
     }
-    // SAFETY: a live growarray, whose buffer `rettv` takes over.
-    unsafe { ga_append(&raw mut ga, b'\0') };
-    unsafe { (*rettv).vval.v_string = ga.ga_data.cast::<c_char>() };
+    unsafe { (*rettv).vval.v_string = owned_cstr(cmds) };
     unsafe { (*rettv).v_type = VAR_STRING };
 }
 

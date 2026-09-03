@@ -16,8 +16,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
+use core::slice;
 
 use super::*;
 use crate::normal::visual_active;
@@ -301,16 +303,7 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
     let cmd_end = cmd_start;
 
     // Find the first line of the run.
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut(),
-    };
-    // SAFETY: `ga` is a writable local, given the item size and growth step
-    // every `ga_*` call below then works from.
-    unsafe { ga_init(&raw mut ga, ::core::mem::size_of::<c_char>() as c_int, 400) };
+    let mut joined = Vec::<u8>::new();
     loop {
         cmd_start = cmd_start.wrapping_sub(1);
         if cmd_start == 0 {
@@ -330,30 +323,19 @@ unsafe fn execreg_line_continuation(lines: *mut String_0, idx: *mut size_t) -> *
     // is NUL-terminated; `p` walks inside one of them, so the length handed
     // to `ga_concat_len` is the rest of that line.
     let mut tmp = unsafe { lines.add(cmd_start) };
-    unsafe { ga_concat_len(&raw mut ga, (*tmp).data(), (*tmp).len()) };
+    joined.extend_from_slice(unsafe { slice::from_raw_parts((*tmp).data().cast(), (*tmp).len()) });
     for j in cmd_start + 1..=cmd_end {
         tmp = unsafe { lines.add(j) };
         let mut p = unsafe { skipwhite((*tmp).data()) };
         if c_int::from(unsafe { *p }) == '\\' as c_int {
-            if ga.ga_len > 400 {
-                unsafe { ga_set_growsize(&raw mut ga, ga.ga_len.min(8000)) };
-            }
             p = unsafe { p.add(1) };
-            let rest = unsafe { (*tmp).data().add((*tmp).len()).offset_from(p) } as size_t;
-            unsafe { ga_concat_len(&raw mut ga, p, rest) };
+            let rest = unsafe { (*tmp).data().add((*tmp).len()).offset_from(p) } as usize;
+            joined.extend_from_slice(unsafe { slice::from_raw_parts(p.cast::<u8>(), rest) });
         }
     }
-    // SAFETY: `ga` holds `ga_len` bytes, which are copied out before it is
-    // released.
-    let str = unsafe {
-        ga_append(&raw mut ga, NUL as u8);
-        let str = xmemdupz(ga.ga_data, ga.ga_len as size_t) as *mut c_char;
-        ga_clear(&raw mut ga);
-        str
-    };
     // SAFETY: the caller promises a writable `idx`.
     unsafe { *idx = cmd_start };
-    str
+    owned_cstr(joined)
 }
 
 /// Whether `p` is a `"\ ` line -- a comment inside a `\`-continuation.

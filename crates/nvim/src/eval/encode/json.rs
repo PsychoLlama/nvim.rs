@@ -21,12 +21,11 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::tv_blob_get;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
-use crate::garray::Gap;
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
-use crate::types::{blob_T, dict_T, float_T, garray_T, int64_t, size_t, typval_T};
+use crate::types::{blob_T, dict_T, float_T, int64_t, size_t, typval_T};
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -41,7 +40,7 @@ const E724_SELF_REFERENCE: &CStr =
     c"E724: unable to correctly dump variable with self-referencing container";
 
 struct JsonSink<'a> {
-    gap: Gap<'a>,
+    gap: &'a mut Vec<u8>,
 }
 
 /// Raise `msg`, which carries no arguments.
@@ -61,7 +60,7 @@ impl JsonSink<'_> {
             let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), NUMBUFLEN, fmt.as_ptr(), num);
             ::core::slice::from_raw_parts(numbuf.as_ptr() as *const u8, len)
         };
-        self.gap.concat(formatted);
+        self.gap.extend_from_slice(formatted);
     }
 }
 
@@ -70,11 +69,11 @@ impl TypvalSink for JsonSink<'_> {
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_json_convert_one_value()";
 
     unsafe fn conv_nil(&mut self, _tv: *mut typval_T) {
-        self.gap.concat(b"null");
+        self.gap.extend_from_slice(b"null");
     }
 
     unsafe fn conv_bool(&mut self, _tv: *mut typval_T, num: bool) {
-        self.gap.concat(if num {
+        self.gap.extend_from_slice(if num {
             b"true".as_slice()
         } else {
             b"false".as_slice()
@@ -109,8 +108,7 @@ impl TypvalSink for JsonSink<'_> {
     /// Escaped, quoted UTF-8.  A string that is not valid UTF-8 is a failure,
     /// which is what makes this the hook JSON most often refuses on.
     unsafe fn conv_string(&mut self, _tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
-        let gap = self.gap.as_ptr();
-        if unsafe { convert_to_json_string(gap, buf, len) }.is_ok() {
+        if unsafe { convert_to_json_string(self.gap, buf, len) }.is_ok() {
             Flow::Go
         } else {
             Flow::Fail
@@ -134,17 +132,17 @@ impl TypvalSink for JsonSink<'_> {
     /// A blob becomes an array of byte values — JSON has nothing shorter.
     unsafe fn conv_blob(&mut self, _tv: *mut typval_T, blob: *const blob_T, len: c_int) {
         if len == 0 {
-            self.gap.concat(b"[]");
+            self.gap.extend_from_slice(b"[]");
             return;
         }
-        self.gap.append(b'[');
+        self.gap.push(b'[');
         for i in 0..len {
             if i > 0 {
-                self.gap.concat(b", ");
+                self.gap.extend_from_slice(b", ");
             }
             self.concat_num(c"%d", unsafe { tv_blob_get(blob, i) } as c_int);
         }
-        self.gap.append(b']');
+        self.gap.push(b']');
     }
 
     unsafe fn conv_func_start(
@@ -158,28 +156,28 @@ impl TypvalSink for JsonSink<'_> {
     }
 
     unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
-        self.gap.concat(b"[]");
+        self.gap.extend_from_slice(b"[]");
     }
 
     unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
-        self.gap.concat(b"{}");
+        self.gap.extend_from_slice(b"{}");
     }
 
     unsafe fn conv_list_start(&mut self, _tv: *mut typval_T, _len: c_int) -> Flow {
-        self.gap.append(b'[');
+        self.gap.push(b'[');
         Flow::Go
     }
 
     unsafe fn conv_list_between_items(&mut self, _tv: *mut typval_T) {
-        self.gap.concat(b", ");
+        self.gap.extend_from_slice(b", ");
     }
 
     unsafe fn conv_list_end(&mut self, _tv: *mut typval_T) {
-        self.gap.append(b']');
+        self.gap.push(b']');
     }
 
     unsafe fn conv_dict_start(&mut self, _tv: *mut typval_T, _len: size_t) -> Flow {
-        self.gap.append(b'{');
+        self.gap.push(b'{');
         Flow::Go
     }
 
@@ -194,7 +192,7 @@ impl TypvalSink for JsonSink<'_> {
     }
 
     unsafe fn conv_dict_after_key(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
-        self.gap.concat(b": ");
+        self.gap.extend_from_slice(b": ");
     }
 
     unsafe fn conv_dict_between_items(
@@ -202,11 +200,11 @@ impl TypvalSink for JsonSink<'_> {
         _tv: *mut typval_T,
         _dictp: Option<*mut *mut dict_T>,
     ) {
-        self.gap.concat(b", ");
+        self.gap.extend_from_slice(b", ");
     }
 
     unsafe fn conv_dict_end(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
-        self.gap.append(b'}');
+        self.gap.push(b'}');
     }
 
     /// Say so once per encode, then leave the value out entirely.
@@ -231,12 +229,10 @@ impl TypvalSink for JsonSink<'_> {
 /// `gap` must be a live byte-item garray, `tv` a live typval and `objname`
 /// NUL-terminated.
 pub(crate) unsafe fn encode_vim_to_json(
-    gap: *mut garray_T,
+    gap: &mut Vec<u8>,
     tv: *mut typval_T,
     objname: *const c_char,
 ) -> bool {
-    let mut sink = JsonSink {
-        gap: Gap(unsafe { &mut *gap }),
-    };
+    let mut sink = JsonSink { gap };
     unsafe { encode_typval(&mut sink, tv, objname) }
 }

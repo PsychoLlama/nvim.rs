@@ -62,7 +62,6 @@ use crate::eval::typval::{
     tv_list_append_number, tv_list_append_string,
 };
 use crate::ex_getln::text_or_buf_locked;
-use crate::garray::{ga_append, ga_concat_len, ga_init};
 use crate::main::{
     cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, p_acd, prevwin,
 };
@@ -74,7 +73,6 @@ use crate::r#move::{
 use crate::narrow::number_as_int;
 use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
-use crate::strings::vim_snprintf_safelen;
 use crate::types::*;
 use crate::winlayer::{
     Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,

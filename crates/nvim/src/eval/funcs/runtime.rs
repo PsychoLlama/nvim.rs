@@ -16,7 +16,6 @@ use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_append_number};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
-use crate::garray::{ga_append, ga_init};
 use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
@@ -27,6 +26,7 @@ use crate::main::{
     vgetc_busy, wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
+use crate::memory::handoff::owned_cstr;
 use crate::memory::xstrdup;
 use crate::menu::{get_menu_cmd_modes, menu_get};
 use crate::normal::op_pending;
@@ -38,8 +38,8 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T, garray_T,
-    kListLenMayKnow, typval_T, uint8_t, varnumber_T,
+    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T,
+    kListLenMayKnow, typval_T, varnumber_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -380,17 +380,9 @@ pub unsafe fn f_mode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    // SAFETY: the frame is live; `ga` is a local the appends below own, and
-    // `rettv` adopts its allocation at the end. `ga_grow` zero-fills what it
-    // adds, so the bytes past the last append terminate the string.
-    unsafe { ga_init(&raw mut ga, 1, 20) };
+    // SAFETY (this body): the frame is live, and `rettv` adopts the buffer
+    // at the end.
+    let mut flags = Vec::<u8>::new();
     let include = if args.has(0) {
         arg_string(&mut numbuf, args.get(0))
     } else {
@@ -398,7 +390,7 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     };
     let mut add = |c: u8| {
         if include.is_null() || !unsafe { vim_strchr(include, c as c_int) }.is_null() {
-            unsafe { ga_append(&raw mut ga, c as uint8_t) };
+            flags.push(c);
         }
     };
 
@@ -426,7 +418,13 @@ pub unsafe fn f_state(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     }
 
     rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ga.ga_data as *mut c_char;
+    // No flag at all left the garray unallocated, so `state()` answered the
+    // *null* string rather than an empty one. Keep that.
+    rettv.vval.v_string = if flags.is_empty() {
+        ptr::null_mut()
+    } else {
+        owned_cstr(flags)
+    };
 }
 
 /// `nextnonblank({lnum})` — the first line at or after `{lnum}` that is not

@@ -10,6 +10,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
@@ -44,42 +45,34 @@ pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::f
     }
     cmd = unsafe { cmd.offset(2) };
 
-    // C's `garray_T ga = { .ga_data = NULL, .ga_len = 0 }`: every other
-    // field is left zeroed, growsize included, until `ga_init` below.
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: NULL_0,
-    };
-
     let l = unsafe { heredoc_get(eap, cmd, true) };
     if l.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
 
-    if unsafe { (*eap).skip } == 0 {
-        unsafe { ga_init(&raw mut ga, 1, 0x400) };
-    }
-
+    let skip = unsafe { (*eap).skip } != 0;
+    let mut text = Vec::<u8>::new();
     let mut li: *const listitem_T = unsafe { (*l).lv_first };
     while !li.is_null() {
-        if unsafe { (*eap).skip } == 0 {
-            unsafe { ga_concat(&raw mut ga, numbuf.string(&raw const (*li).li_tv)) };
-            unsafe { ga_append(&raw mut ga, b'\n') };
+        if !skip {
+            // SAFETY: the item's rendering is NUL-terminated and outlives
+            // the copy.
+            let line = unsafe { numbuf.string(&raw const (*li).li_tv) };
+            text.extend_from_slice(unsafe { cstr::bytes_at(line) });
+            text.push(b'\n');
         }
         li = unsafe { (*li).li_next };
     }
 
-    // The length is the text without the terminator the next line adds.
-    unsafe { *lenp = ga.ga_len as size_t };
-    if unsafe { (*eap).skip } == 0 {
-        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    }
-
+    // The length is the text without the terminator `owned_cstr` adds.
+    unsafe { *lenp = text.len() as size_t };
     unsafe { tv_list_free(l) };
-    ga.ga_data as *mut ::core::ffi::c_char
+    // A skipped here-document answered a garray that was never opened, and
+    // so a null pointer.
+    if skip {
+        return ::core::ptr::null_mut::<::core::ffi::c_char>();
+    }
+    owned_cstr(text)
 }
 
 /// Drive one `input()`-family prompt and leave its answer in `rettv`.

@@ -32,14 +32,14 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::slice;
 
 use crate::eval::typval::{
-    GARRAY_EMPTY, Li, Tv, tv_dict_find, tv_list_append_allocated_string, tv_list_first,
-    tv_list_idx_of_item, tv_list_last, tv_list_len,
+    Li, Tv, tv_dict_find, tv_list_append_allocated_string, tv_list_first, tv_list_idx_of_item,
+    tv_list_last, tv_list_len,
 };
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
-use crate::garray::{Gap, ga_clear, ga_concat, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
+use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
 use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::os::cshim::{gettext, gettext_ptr};
@@ -48,7 +48,7 @@ use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
     Failed, IOSIZE, ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
-    garray_T, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
+    list_T, listitem_T, ptrdiff_t, size_t, typval_T,
 };
 use ::libc::abort;
 
@@ -84,14 +84,6 @@ pub(crate) static did_echo_string_emsg: GlobalCell<bool> = GlobalCell::new(false
 #[inline(always)]
 fn tr(msg: &'static CStr) -> *const c_char {
     gettext(msg).as_ptr()
-}
-
-/// A fresh byte `garray_T` grown 80 at a time: every text encoder's output.
-fn text_garray() -> garray_T {
-    let mut ga = GARRAY_EMPTY;
-    // SAFETY: `ga` is a local array header and `ga_init` only writes it.
-    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
-    ga
 }
 
 /// The string `li` holds; a NULL one is an empty line.
@@ -246,7 +238,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     let partial_arg_i_msg = tr(c"argument %i");
     let partial_self_msg = tr(c"partial self dictionary");
 
-    let mut msg_ga = text_garray();
+    let mut msg_ga = Vec::<u8>::new();
     // Upstream formats each part in the shared `IObuff`; the parts are
     // concatenated as they go, so one buffer of this frame's own serves.
     let mut part = [0 as c_char; IOSIZE as usize];
@@ -262,14 +254,14 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
             // format strings here are this function's own literals.
             unsafe {
                 vim_snprintf(iobuff, IOSIZE as size_t, $fmt $(, $arg)*);
-                ga_concat(&raw mut msg_ga, iobuff);
+                msg_ga.extend_from_slice(cstr::bytes_at(iobuff));
             }
         };
     }
 
     for (i, frame) in path.stack.iter().enumerate() {
         if i != 0 {
-            Gap(&mut msg_ga).concat(b", ");
+            msg_ga.extend_from_slice(b", ");
         }
         match frame.frame {
             Frame::Dict { dict, idx, .. } => {
@@ -338,7 +330,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     PartialStage::End => partial_self_msg,
                 };
                 // SAFETY: both texts are NUL-terminated translations.
-                unsafe { ga_concat(&raw mut msg_ga, text) };
+                msg_ga.extend_from_slice(unsafe { cstr::bytes_at(text) });
             }
             Frame::PartialArgs { arg, argv, .. } => {
                 // SAFETY: `arg` and `argv` point into one argument vector.
@@ -348,8 +340,9 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
         }
     }
 
+    msg_ga.push(0);
     // SAFETY: `msg` is the caller's two-`%s` format, `objname` its own name,
-    // and `msg_ga` the stack this frame just rendered.
+    // and `msg_ga` the stack this frame just rendered, NUL-terminated above.
     let (template, objname, where_0) = unsafe {
         (
             gettext_ptr(msg),
@@ -357,12 +350,11 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
             if path.stack.is_empty() {
                 c_str(tr(c"itself"))
             } else {
-                c_str(msg_ga.ga_data.cast::<c_char>())
+                c_str(msg_ga.as_ptr().cast::<c_char>())
             },
         )
     };
     emsg_text(tr_plural!(template, objname, where_0));
-    unsafe { ga_clear(&raw mut msg_ga) };
     Flow::Fail
 }
 
@@ -687,14 +679,12 @@ unsafe fn json_escaped_len(text: &Utf8) -> Option<usize> {
 /// `len` bytes — with the over-read [`Utf8`] describes.
 #[inline(always)]
 pub(crate) unsafe fn convert_to_json_string(
-    gap: *mut garray_T,
+    gap: &mut Vec<u8>,
     buf: *const c_char,
     len: size_t,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise about `gap`.
-    let mut gap = Gap(unsafe { &mut *gap });
     if buf.is_null() {
-        gap.concat(b"\"\"");
+        gap.extend_from_slice(b"\"\"");
         return Ok(());
     }
     let text = Utf8 {
@@ -705,8 +695,8 @@ pub(crate) unsafe fn convert_to_json_string(
     let Some(str_len) = (unsafe { json_escaped_len(&text) }) else {
         return Err(Failed);
     };
-    gap.append(b'"');
-    gap.grow(str_len as c_int);
+    gap.push(b'"');
+    gap.reserve(str_len);
     let mut i = 0;
     while i < text.len {
         let ch = unsafe { text.char_at(i) };
@@ -723,19 +713,19 @@ pub(crate) unsafe fn convert_to_json_string(
             "ch == 0 || shift == ((size_t)utf_ptr2len(utf_buf + i))"
         );
         if let Some(escape) = json_escape_of(ch) {
-            gap.concat(escape);
+            gap.extend_from_slice(escape);
         } else if json_encode_raw(ch) {
-            gap.concat(unsafe { text.run(i, shift) });
+            gap.extend_from_slice(unsafe { text.run(i, shift) });
         } else if ch < SURROGATE_FIRST_CHAR {
-            gap.concat(&json_unicode_escape(ch));
+            gap.extend_from_slice(&json_unicode_escape(ch));
         } else {
             let (hi, lo) = json_surrogate_pair(ch);
-            gap.concat(&json_unicode_escape(hi));
-            gap.concat(&json_unicode_escape(lo));
+            gap.extend_from_slice(&json_unicode_escape(hi));
+            gap.extend_from_slice(&json_unicode_escape(lo));
         }
         i += shift;
     }
-    gap.append(b'"');
+    gap.push(b'"');
     Ok(())
 }
 
@@ -797,14 +787,13 @@ pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
 /// asked, terminate, and hand the buffer over for the caller to free.
 ///
 /// # Safety
-/// `len` must be NULL or writable, and `ga` must be a byte garray.
-unsafe fn finish_tv2(mut ga: garray_T, len: *mut size_t) -> *mut c_char {
+/// `len` must be NULL or writable.
+unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
     if !len.is_null() {
         // SAFETY: the caller's promise about `len`.
-        unsafe { *len = ga.ga_len as size_t };
+        unsafe { *len = ga.len() as size_t };
     }
-    Gap(&mut ga).append(0);
-    ga.ga_data.cast::<c_char>()
+    owned_cstr(ga)
 }
 
 /// The string representation of `tv`, quoted so `eval()` can read it back.
@@ -812,10 +801,10 @@ unsafe fn finish_tv2(mut ga: garray_T, len: *mut size_t) -> *mut c_char {
 /// # Safety
 /// `tv` must be live; `len` must be NULL or writable.
 pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
-    let mut ga = text_garray();
+    let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`; `string()` never refuses.
     let evs_ret =
-        unsafe { encode_vim_to_string(&raw mut ga, tv, c"encode_tv2string() argument".as_ptr()) };
+        unsafe { encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument".as_ptr()) };
     debug_assert!(evs_ret);
     did_echo_string_emsg.set(false);
     // SAFETY: the caller's promise about `len`.
@@ -827,7 +816,7 @@ pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_ch
 /// # Safety
 /// As [`encode_tv2string`].
 pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
-    let mut ga = text_garray();
+    let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
     // A string or function reference echoes as its own bytes, which is
     // the whole difference between `:echo` and `string()` at the top
@@ -837,10 +826,10 @@ pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char
     if val.v_type == VAR_STRING || val.v_type == VAR_FUNC {
         let s = val.string_or_func_name();
         if !s.is_null() {
-            unsafe { ga_concat(&raw mut ga, s) };
+            ga.extend_from_slice(unsafe { cstr::bytes_at(s) });
         }
     } else {
-        let eve_ret = unsafe { encode_vim_to_echo(&raw mut ga, tv, c":echo argument".as_ptr()) };
+        let eve_ret = unsafe { encode_vim_to_echo(&mut ga, tv, c":echo argument".as_ptr()) };
         debug_assert!(eve_ret);
     }
     unsafe { finish_tv2(ga, len) }
@@ -851,13 +840,11 @@ pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char
 /// # Safety
 /// As [`encode_tv2string`].
 pub unsafe fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
-    let mut ga = text_garray();
+    let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
-    let evj_ret =
-        unsafe { encode_vim_to_json(&raw mut ga, tv, c"encode_tv2json() argument".as_ptr()) };
+    let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument".as_ptr()) };
     if !evj_ret {
-        // SAFETY: `ga` is this function's own array.
-        unsafe { ga_clear(&raw mut ga) };
+        ga.clear();
     }
     did_echo_string_emsg.set(false);
     // SAFETY: the caller's promise about `len`.

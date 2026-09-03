@@ -50,7 +50,7 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_clear;
-use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
+use crate::garray::ga_clear;
 use crate::getchar::{
     beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty,
     stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,

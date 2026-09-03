@@ -9,9 +9,11 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 use crate::types::{IOSIZE, NUL};
 use crate::winlayer::buffers;
 use crate::winlayer::{Buf, Win};
+use core::slice;
 
 /// The completed text with the case of the originally typed text inferred.
 ///
@@ -81,34 +83,37 @@ unsafe fn ins_compl_infercase_gettext(
     // Encode the wide characters back. `out` is used until a character
     // would come within six bytes of its end (five for the widest
     // sequence, one for the NUL), at which point everything written so far
-    // moves into a growarray and the rest is appended there.
+    // moves into an owned buffer and the rest is appended there.
     let iobuff = out.as_mut_ptr();
-    let mut gap = GARRAY_T_INIT;
+    let mut spilled: Option<Vec<u8>> = None;
     let mut out = iobuff;
     let mut i = 0;
-    unsafe { ga_init(&raw mut gap, 1, 500) };
     while i < char_len {
-        if !gap.ga_data.is_null() {
-            unsafe { ga_grow(&raw mut gap, 10) };
-            debug_assert!(!gap.ga_data.is_null());
-            out = unsafe { gap.ga_data.cast::<c_char>().offset(gap.ga_len as isize) };
-            gap.ga_len += unsafe { utf_char2bytes(wca[i as usize], out) };
+        if let Some(buf) = spilled.as_mut() {
+            // Room for the widest sequence, then cut back to what was
+            // written -- the shape `ga_grow(10)` plus `ga_len +=` had.
+            let at = buf.len();
+            buf.resize(at + 10, 0);
+            // SAFETY: `utf_char2bytes` writes at most six bytes, and ten
+            // were just made available at `at`.
+            let n = unsafe { utf_char2bytes(wca[i as usize], buf.as_mut_ptr().add(at).cast()) };
+            buf.truncate(at + n as usize);
             i += 1;
         } else if unsafe { out.offset_from(iobuff) } + 6 >= IOSIZE as isize {
             // Add the character in the next round.
-            unsafe { ga_grow(&raw mut gap, IOSIZE) };
-            unsafe { *out = NUL as c_char };
-            unsafe { strcpy(gap.ga_data.cast::<c_char>(), iobuff) };
-            gap.ga_len = unsafe { out.offset_from(iobuff) } as c_int;
+            // SAFETY: `iobuff` holds the bytes written so far.
+            let used = unsafe { out.offset_from(iobuff) } as usize;
+            spilled = Some(unsafe { slice::from_raw_parts(iobuff.cast::<u8>(), used) }.to_vec());
         } else {
             out = unsafe { out.offset(utf_char2bytes(wca[i as usize], out) as isize) };
             i += 1;
         }
     }
 
-    if !gap.ga_data.is_null() {
-        unsafe { *tofree = gap.ga_data.cast::<c_char>() };
-        return gap.ga_data.cast::<c_char>();
+    if let Some(buf) = spilled {
+        let owned = owned_cstr(buf);
+        unsafe { *tofree = owned };
+        return owned;
     }
     unsafe { *out = NUL as c_char };
     iobuff
