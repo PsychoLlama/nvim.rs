@@ -44,6 +44,7 @@ mod regexp;
 mod search;
 mod sha256;
 mod shell;
+mod spellfile;
 mod statusline;
 mod strings;
 mod tempfile;

@@ -459,10 +459,15 @@ pub unsafe fn ex_mkspell(eap: *mut exarg_T) {
 /// `fnames[0]` names the output; the rest are inputs, one per region. A
 /// single name is both the input stem and, with a suffix, the output.
 ///
+/// `pub` for `crates/nvim/tests/unit/spellfile.rs`: the `.spl` byte golden
+/// drives the writer directly rather than through `:mkspell`, so that a
+/// change to the format fails a test that names the format rather than one
+/// that happens to spell-check a word.
+///
 /// # Safety
 ///
 /// `fnames` must hold `fcount` NUL-terminated paths.
-unsafe fn mkspell(
+pub unsafe fn mkspell(
     fcount: ::core::ffi::c_int,
     fnames: *mut *mut ::core::ffi::c_char,
     ascii: bool,

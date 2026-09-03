@@ -1,6 +1,6 @@
 {
   "internal_exports": 0,
-  "test_reached_pub": 636,
+  "test_reached_pub": 645,
   "cell_ptr_keepers": 25,
   "cell_ptr_accessors": 57,
   "cell_copy_owner": 33,
@@ -957,7 +957,7 @@
     "crates/nvim/src/spellfile/affix.rs": {"unsafe_lines": 116},
     "crates/nvim/src/spellfile/dic.rs": {"unsafe_lines": 189},
     "crates/nvim/src/spellfile/flags.rs": {"unsafe_lines": 86},
-    "crates/nvim/src/spellfile/mod.rs": {"pub_items": 84, "unsafe_lines": 86},
+    "crates/nvim/src/spellfile/mod.rs": {"pub_items": 85, "unsafe_lines": 86},
     "crates/nvim/src/spellfile/read.rs": {"missing_safety_doc": 1, "pub_items": 2, "unsafe_lines": 143},
     "crates/nvim/src/spellfile/sections.rs": {"unsafe_lines": 258},
     "crates/nvim/src/spellfile/sugfile.rs": {"missing_safety_doc": 1, "unsafe_lines": 78},
