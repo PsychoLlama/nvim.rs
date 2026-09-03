@@ -36,7 +36,6 @@ use crate::eval::{eval_expr, typval_compare, typval_tostring};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{getcmdline_prompt, getexline};
 use crate::fileio::file_pat_to_reg_pat;
-use crate::garray::{ga_clear, ga_grow};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
@@ -59,8 +58,8 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T, estack_arg_T, exarg_T, garray_T, int32_t,
-    int64_t, linenr_T, regprog_T, size_t, tasave_T, typval_T, uint8_t,
+    Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T, estack_arg_T, exarg_T, int32_t, int64_t,
+    linenr_T, regprog_T, size_t, tasave_T, typval_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -96,6 +95,23 @@ pub struct debuggy {
     pub dbg_level: c_int,
 }
 
+impl debuggy {
+    /// An entry the parser is about to fill in. It owns nothing yet, so
+    /// dropping it on a parse error frees nothing.
+    fn new() -> Self {
+        Self {
+            dbg_nr: 0,
+            dbg_type: 0,
+            dbg_name: ptr::null_mut(),
+            dbg_prog: ptr::null_mut(),
+            dbg_lnum: 0,
+            dbg_forceit: 0,
+            dbg_val: ptr::null_mut(),
+            dbg_level: 0,
+        }
+    }
+}
+
 pub const DBG_FUNC: c_int = 1;
 pub const DBG_FILE: c_int = 2;
 pub const DBG_EXPR: c_int = 3;
@@ -107,21 +123,13 @@ static debug_greedy: GlobalCell<bool> = GlobalCell::new(false);
 static debug_oldval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static debug_newval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-static dbg_breakp: GlobalCell<garray_T> = GlobalCell::new(EMPTY_LIST);
-static prof_ga: GlobalCell<garray_T> = GlobalCell::new(EMPTY_LIST);
+static dbg_breakp: GlobalCell<Vec<debuggy>> = GlobalCell::new(Vec::new());
+static prof_ga: GlobalCell<Vec<debuggy>> = GlobalCell::new(Vec::new());
 /// Number of the last breakpoint defined; `:breakadd` hands out the next.
 static last_breakp: GlobalCell<c_int> = GlobalCell::new(0);
 /// Whether any `dbg_breakp` entry is a `DBG_EXPR`, so that `do_one_cmd` can
 /// skip the per-command expression evaluation when none is.
 static has_expr_breakpoint: GlobalCell<bool> = GlobalCell::new(false);
-
-const EMPTY_LIST: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: ::core::mem::size_of::<debuggy>() as c_int,
-    ga_growsize: 4,
-    ga_data: NULL,
-};
 
 /// Which of the two lists of [`debuggy`] entries a command works on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -146,47 +154,46 @@ impl BreakList {
         }
     }
 
-    fn cell(self) -> &'static GlobalCell<garray_T> {
+    fn cell(self) -> &'static GlobalCell<Vec<debuggy>> {
         match self {
             Self::Debug => &dbg_breakp,
             Self::Profiling => &prof_ga,
         }
     }
 
-    /// How many entries are in use. The slot at this index is the scratch one
-    /// [`dbg_parsearg`] fills; it only counts once its caller commits it.
+    /// How many entries the list holds.
     fn len(self) -> c_int {
-        self.cell().with(|ga| ga.ga_len)
+        self.cell().with(|entries| entries.len() as c_int)
     }
 
     fn is_empty(self) -> bool {
-        self.len() <= 0
+        self.cell().with(Vec::is_empty)
     }
 
     /// The `idx`th entry.
     ///
-    /// Recomputed from `ga_data` on every call rather than cached, because a
-    /// `DBG_EXPR` entry's expression runs arbitrary Vimscript and anything it
-    /// does -- including another `:breakadd` -- can grow the array and move
-    /// every entry with it.
+    /// Recomputed on every call rather than cached, because a `DBG_EXPR`
+    /// entry's expression runs arbitrary Vimscript and anything it does --
+    /// including another `:breakadd` -- can grow the list and move every
+    /// entry with it.
     ///
     /// # Safety
-    /// `idx` must be within the array's *reserved* length, which is one past
-    /// `ga_len` while [`dbg_parsearg`] is filling the scratch slot.
+    /// `idx` must be below [`BreakList::len`], and the pointer must not be
+    /// held across anything that can add to the list.
     unsafe fn entry(self, idx: c_int) -> *mut debuggy {
-        // SAFETY: caller contract; `ga_data` is sized for `ga_maxlen`.
         self.cell()
-            .with(|ga| unsafe { ga.ga_data.cast::<debuggy>().offset(idx as isize) })
+            .with_mut(|entries| entries.as_mut_ptr().wrapping_offset(idx as isize))
     }
 
-    /// The scratch entry just past the end, which is where the parser builds
-    /// a new one before anybody decides to keep it.
-    ///
-    /// # Safety
-    /// `ga_grow` must have reserved it.
-    unsafe fn scratch(self) -> *mut debuggy {
-        // SAFETY: caller contract.
-        unsafe { self.entry(self.len()) }
+    /// Keep a parsed entry, which takes over whatever it owns.
+    fn push(self, entry: debuggy) {
+        self.cell().with_mut(|entries| entries.push(entry));
+    }
+
+    /// Take the `idx`th entry out of the list, leaving the caller to release
+    /// what it owns.
+    fn remove(self, idx: c_int) -> debuggy {
+        self.cell().with_mut(|entries| entries.remove(idx as usize))
     }
 }
 
@@ -302,23 +309,27 @@ unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
     unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) }
 }
 
-/// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into the
-/// scratch entry just past the end of `list`.
+/// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a
+/// fresh entry, which the caller keeps or discards.
 ///
-/// `dbg_name` comes out allocated. `Err` means nothing was written that the
-/// caller has to clean up.
+/// `dbg_name` comes out allocated. `Err` means nothing was allocated that
+/// the caller has to clean up.
+///
+/// The entry is built *outside* the list on purpose: a `DBG_EXPR` argument
+/// is evaluated here, and the Vimscript that runs can reach `:breakadd`
+/// itself. Upstream's scratch slot lived one past `ga_len`, so the inner
+/// command would build over the outer's half-finished entry and then commit
+/// it as its own.
 ///
 /// # Safety
 /// `arg` must be NUL-terminated.
-unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<(), Failed> {
-    // SAFETY: growing by one reserves the scratch slot every branch writes.
-    list.cell().with_mut(|ga| unsafe { ga_grow(ga, 1) });
-    // SAFETY: just reserved.
-    let bp = unsafe { list.scratch() };
+unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<debuggy, Failed> {
+    let mut entry = debuggy::new();
+    let bp = &raw mut entry;
     let debugger = list == BreakList::Debug;
 
     // SAFETY: caller contract; every read below stays inside `arg`, and `bp`
-    // is the scratch entry nothing else can reach.
+    // is this frame's entry, which nothing else can reach.
     let (kind, here) = unsafe {
         if cstr::starts_with(arg, b"func") {
             (DBG_FUNC, false)
@@ -418,9 +429,13 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<(), Failed> 
             }
         }
     };
-    // SAFETY: `bp` is the scratch entry; `name` is owned or null.
+    // SAFETY: `bp` is this frame's entry; `name` is owned or null.
     unsafe { (*bp).dbg_name = name };
-    if name.is_null() { Err(Failed) } else { Ok(()) }
+    if name.is_null() {
+        Err(Failed)
+    } else {
+        Ok(entry)
+    }
 }
 
 /// `:breakadd`, and `:profile func`/`:profile file`.
@@ -431,26 +446,15 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
     // SAFETY: caller contract.
     let (list, arg, forceit) = unsafe { (BreakList::of(&*eap), (*eap).arg, (*eap).forceit) };
     // SAFETY: `arg` is the NUL-terminated argument.
-    if unsafe { dbg_parsearg(arg, list) }.is_err() {
+    let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
         return;
-    }
-
-    // Re-read the scratch entry rather than reusing the parser's pointer:
-    // a `DBG_EXPR` entry evaluated an expression, which can have grown the
-    // array.
-    // SAFETY: `dbg_parsearg` succeeded, so the slot is reserved and filled.
-    let bp = unsafe { list.scratch() };
-    // SAFETY: as above.
-    let kind = unsafe {
-        (*bp).dbg_forceit = forceit;
-        (*bp).dbg_type
     };
+    bp.dbg_forceit = forceit;
 
-    if kind == DBG_EXPR {
+    if bp.dbg_type == DBG_EXPR {
         last_breakp.set(last_breakp.get() + 1);
-        // SAFETY: as above.
-        unsafe { (*bp).dbg_nr = last_breakp.get() };
-        list.cell().with_mut(|ga| ga.ga_len += 1);
+        bp.dbg_nr = last_breakp.get();
+        list.push(bp);
         debug_tick.set(debug_tick.get() + 1);
         if list == BreakList::Debug {
             has_expr_breakpoint.set(true);
@@ -462,33 +466,31 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
     // *.c` would be, not as a regexp the user wrote.
     // SAFETY: `dbg_name` is the owned NUL-terminated name the parser left.
     let compiled = unsafe {
-        let pat = file_pat_to_reg_pat((*bp).dbg_name, ptr::null(), ptr::null_mut(), 0);
+        let pat = file_pat_to_reg_pat(bp.dbg_name, ptr::null(), ptr::null_mut(), 0);
         if !pat.is_null() {
-            (*bp).dbg_prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
+            bp.dbg_prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
             xfree(pat.cast());
         }
-        !pat.is_null() && !(*bp).dbg_prog.is_null()
+        !pat.is_null() && !bp.dbg_prog.is_null()
     };
     if !compiled {
         // SAFETY: the name is this function's to free; the entry is dropped.
-        unsafe { xfree((*bp).dbg_name.cast()) };
+        unsafe { xfree(bp.dbg_name.cast()) };
         return;
     }
 
-    // SAFETY: as above.
-    if unsafe { (*bp).dbg_lnum } == 0 as linenr_T {
+    if bp.dbg_lnum == 0 as linenr_T {
         // The default line number is the first.
-        unsafe { (*bp).dbg_lnum = 1 as linenr_T };
+        bp.dbg_lnum = 1 as linenr_T;
     }
     // A profiling point is not numbered and does not bump `debug_tick`:
     // nothing lists or deletes it by number.
     if list == BreakList::Debug {
         last_breakp.set(last_breakp.get() + 1);
-        // SAFETY: as above.
-        unsafe { (*bp).dbg_nr = last_breakp.get() };
+        bp.dbg_nr = last_breakp.get();
         debug_tick.set(debug_tick.get() + 1);
     }
-    list.cell().with_mut(|ga| ga.ga_len += 1);
+    list.push(bp);
 }
 
 /// Recompute [`has_expr_breakpoint`] after the list changed.
@@ -522,26 +524,23 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
         del_all = true;
         Some(0)
     } else {
-        // `:breakdel {func|file|expr} [lnum] {name}` -- parse it into the
-        // scratch entry and look for the closest match.
+        // `:breakdel {func|file|expr} [lnum] {name}` -- parse it and look
+        // for the closest match.
         // SAFETY: `arg` is NUL-terminated.
-        if unsafe { dbg_parsearg(arg, list) }.is_err() {
+        let Ok(bp) = (unsafe { dbg_parsearg(arg, list) }) else {
             return;
-        }
-        // SAFETY: the parser filled the scratch slot; it is re-read here for
-        // the same reason `ex_breakadd` re-reads it.
-        let bp = unsafe { list.scratch() };
+        };
         let mut best_lnum = 0 as linenr_T;
         let mut found = None;
         for i in 0..list.len() {
-            // SAFETY: `i` is below `ga_len`, and `bp` is the scratch entry
-            // past it; both names are owned and NUL-terminated.
+            // SAFETY: `i` is below the list's length, and `bp` is this
+            // frame's; both names are owned and NUL-terminated.
             let matches = unsafe {
                 let bpi = list.entry(i);
-                (*bp).dbg_type == (*bpi).dbg_type
-                    && cstr::eq((*bp).dbg_name, (*bpi).dbg_name)
-                    && ((*bp).dbg_lnum == (*bpi).dbg_lnum
-                        || ((*bp).dbg_lnum == 0 as linenr_T
+                bp.dbg_type == (*bpi).dbg_type
+                    && cstr::eq(bp.dbg_name, (*bpi).dbg_name)
+                    && (bp.dbg_lnum == (*bpi).dbg_lnum
+                        || (bp.dbg_lnum == 0 as linenr_T
                             && (best_lnum == 0 as linenr_T || (*bpi).dbg_lnum < best_lnum)))
             };
             if matches {
@@ -550,8 +549,8 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
                 best_lnum = unsafe { (*list.entry(i)).dbg_lnum };
             }
         }
-        // SAFETY: the scratch entry is discarded either way.
-        unsafe { xfree((*bp).dbg_name.cast()) };
+        // SAFETY: the parsed entry is discarded either way.
+        unsafe { xfree(bp.dbg_name.cast()) };
         found
     };
 
@@ -563,28 +562,16 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
     };
 
     while !list.is_empty() {
-        // SAFETY: `todel` is below `ga_len`; the entry owns its name, its
-        // compiled pattern and (for a watch) its last value.
-        let bp = unsafe { list.entry(todel) };
-        unsafe { xfree((*bp).dbg_name.cast()) };
-        if unsafe { (*bp).dbg_type } == DBG_EXPR && !unsafe { (*bp).dbg_val }.is_null() {
-            unsafe { tv_free((*bp).dbg_val) };
+        // `todel` is below the list's length, and the entry taken out of it
+        // owns its name, its compiled pattern and (for a watch) its last
+        // value.
+        let bp = list.remove(todel);
+        // SAFETY: all three are this entry's own allocations.
+        unsafe { xfree(bp.dbg_name.cast()) };
+        if bp.dbg_type == DBG_EXPR && !bp.dbg_val.is_null() {
+            unsafe { tv_free(bp.dbg_val) };
         }
-        unsafe { vim_regfree((*bp).dbg_prog) };
-        let len = list.cell().with_mut(|ga| {
-            ga.ga_len -= 1;
-            ga.ga_len
-        });
-        if todel < len {
-            // SAFETY: both ranges are inside the array, and the entries are
-            // plain aggregates.
-            unsafe {
-                list.entry(todel).cast::<u8>().copy_from(
-                    (list.entry(todel + 1)).cast(),
-                    ((len - todel) as size_t) * ::core::mem::size_of::<debuggy>(),
-                )
-            };
-        }
+        unsafe { vim_regfree(bp.dbg_prog) };
         // `:profdel` is not something `:breaklist` shows, so it does not
         // invalidate anybody's cached view.
         if cmdidx == CmdIdx::breakdel {
@@ -595,9 +582,13 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
         }
     }
 
-    if list.is_empty() {
-        list.cell().with_mut(|ga| unsafe { ga_clear(ga) });
-    }
+    list.cell().with_mut(|entries| {
+        if entries.is_empty() {
+            // Upstream freed the array once the last entry went; a vector
+            // would keep the capacity for a list that may never grow again.
+            *entries = Vec::new();
+        }
+    });
     if list == BreakList::Debug {
         update_has_expr_breakpoint();
     }
