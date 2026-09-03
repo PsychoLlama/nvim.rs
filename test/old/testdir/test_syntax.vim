@@ -181,6 +181,56 @@ func Test_syntax_list()
   bd
 endfunc
 
+" The listing of the id lists: `contains=`, `containedin=` and `nextgroup=`
+" are shared between the START patterns of one region, and clusters nest.
+func Test_syntax_list_id_lists()
+  new
+  syntax on
+  syntax clear
+  syn cluster Inner contains=iOne,iTwo
+  syn cluster Outer contains=@Inner,oThree
+  syn cluster Outer add=oFour
+  syn cluster Outer remove=iOne
+  syn keyword iOne alpha beta containedin=@Outer nextgroup=iTwo skipwhite skipnl skipempty
+  syn keyword iTwo gamma contained
+  syn match oThree /\<x\+\>/ contains=ALLBUT,@Outer,iTwo nextgroup=@Inner skipwhite
+  syn region oFour matchgroup=Delim start=/</ start=/{/ skip=/\\./ end=/>/ end=/}/
+        \ contains=@Inner,oThree containedin=oThree fold keepend extend
+  syn region oFive start=/\[/ end=/\]/ contains=TOP,oFour
+
+  let exp = [
+        \ '',
+        \ '--- Syntax items ---',
+        \ 'iOne           xxx containedin=@Outer  nextgroup=iTwo  skipnl skipwhite skipempty alpha',
+        \ '                   containedin=@Outer  nextgroup=iTwo  skipnl skipwhite skipempty beta',
+        \ 'iTwo           xxx contained gamma',
+        \ 'oThree         xxx match /\<x\+\>/  contains=ALLBUT,@Outer,iTwo nextgroup=@Inner skipwhite ',
+        \ 'oFour          xxx matchgroup=Delim start=/{/ start=/</ skip=/\\./ end=/}/ end=/>/  keepend extend fold contains=@Inner,oThree containedin=oThree ',
+        \ 'oFive          xxx start=/\[/ end=/\]/  contains=TOP,oFour ',
+        \ 'Inner          cluster=iOne,iTwo ',
+        \ 'Outer          cluster=oThree,oFour,@Inner ']
+  call assert_equal(exp, split(execute('syntax list'), "\n", 1))
+
+  " One group only, and one cluster only.
+  call assert_equal(
+        \ ['', '--- Syntax items ---', exp[6]],
+        \ split(execute('syntax list oFour'), "\n", 1))
+  call assert_equal(
+        \ ['', '--- Syntax items ---', exp[9]],
+        \ split(execute('syntax list @Outer'), "\n", 1))
+
+  " Emptying a cluster keeps its id; clearing a group drops all its patterns,
+  " which is the last-to-first free of the shared lists.
+  syn clear @Outer
+  syn clear oFour
+  let a = split(execute('syntax list'), "\n", 1)
+  call assert_equal('Outer          cluster=NONE', a[-1])
+  call assert_notmatch('oFour \+xxx', join(a, "\n"))
+
+  syntax clear
+  bwipe!
+endfunc
+
 func Test_syntax_completion()
   call feedkeys(":syn \<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"syn case clear cluster conceal enable foldlevel include iskeyword keyword list manual match off on region reset spell sync', @:)
