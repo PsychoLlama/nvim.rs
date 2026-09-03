@@ -20,7 +20,6 @@ use crate::eval::typval::{
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
-use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::getchar::plain_vgetc;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
@@ -37,8 +36,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, buf_T,
-    exarg_T, garray_T, int16_t, list_T, typval_T, varnumber_T, win_T,
+    BoolVarValue, EvalFuncData, KeymapEntry, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING,
+    VAR_UNKNOWN, buf_T, exarg_T, int16_t, list_T, typval_T, varnumber_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -659,13 +658,6 @@ const KMAP_LLEN: usize = 200;
 const MAPTYPE_MAP: c_int = 0;
 const MAPTYPE_UNMAP: c_int = 1;
 
-/// One `:loadkeymap` entry: heap C strings owned by the buffer's
-/// `b_kmap_ga` (freed by [`keymap_ga_clear`]).
-struct kmap_T {
-    from: *mut c_char,
-    to: *mut c_char,
-}
-
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Option<&'static CStr> {
@@ -734,12 +726,12 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
     // SAFETY: curbuf is valid and `keymap_unload` left its keymap garray
     // cleared.
     unsafe { (*buf).b_kmap_state = 0 };
-    unsafe { ga_init(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>() as c_int, 20) };
+    unsafe { (*buf).b_kmap_ga.clear() };
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: caller contract; the line getter was just checked to be the
-    // sourcing one, and `buf`'s garray was just initialised for `kmap_T`.
+    // sourcing one, and `buf`'s entry list was just emptied.
     unsafe { read_keymap_entries(eap, buf) };
     // SAFETY: the entries just read own two NUL-terminated strings each.
     unsafe { apply_keymap_entries(buf) };
@@ -750,14 +742,14 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
 }
 
 /// Read `{from} {to}` pairs from the file being sourced into `buf`'s keymap
-/// garray, until the line getter runs out. Blank lines and `"` comments are
+/// entries, until the line getter runs out. Blank lines and `"` comments are
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
 ///
 /// # Safety
 ///
 /// `eap` must be a live command block whose line getter is the sourcing one,
-/// and `buf` a valid buffer whose `b_kmap_ga` is initialised for `kmap_T`.
+/// and `buf` a valid buffer.
 unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
@@ -778,16 +770,13 @@ unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
                     crate::semsg!("E791: Empty keymap entry");
                 }
             } else {
-                // SAFETY: the garray is sized for `kmap_T`, so the appended
-                // slot is one; `xmemdupz` copies both slices out of `line`.
-                let kp =
-                    unsafe { ga_append_via_ptr(&raw mut (*buf).b_kmap_ga, size_of::<kmap_T>()) }
-                        as *mut kmap_T;
+                // SAFETY: the caller's buffer; both slices are copied out of
+                // `line`, which is freed below.
                 unsafe {
-                    (*kp).from = xmemdupz(from.as_ptr() as *const c_void, from.len()) as *mut c_char
-                };
-                unsafe {
-                    (*kp).to = xmemdupz(to.as_ptr() as *const c_void, to.len()) as *mut c_char
+                    (*buf).b_kmap_ga.push(KeymapEntry {
+                        from: from.to_vec(),
+                        to: to.to_vec(),
+                    });
                 };
             }
         }
@@ -796,20 +785,20 @@ unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
     }
 }
 
-/// Make every entry of `buf`'s keymap garray a buffer-local language mapping.
+/// Make every entry of `buf`'s keymap a buffer-local language mapping.
 ///
 /// # Safety
 ///
-/// `buf` must be a valid buffer whose `b_kmap_ga` holds live `kmap_T`s.
+/// `buf` must be a valid buffer.
 unsafe fn apply_keymap_entries(buf: *mut buf_T) {
-    // SAFETY: caller contract; the garray holds `ga_len` entries with
-    // NUL-terminated strings, and `do_map` only reads the command it is
-    // given.
-    for i in 0..unsafe { (*buf).b_kmap_ga.ga_len } {
-        let kp = unsafe { ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize) };
-        let from = unsafe { CStr::from_ptr((*kp).from) }.to_bytes();
-        let to = unsafe { CStr::from_ptr((*kp).to) }.to_bytes();
-        let mut cmd = keymap_map_cmd(from, Some(to));
+    // SAFETY: the caller's buffer. The commands are built before any of them
+    // runs, so `do_map` cannot be reading the list it is driven by.
+    let cmds: Vec<Vec<u8>> = unsafe { &(*buf).b_kmap_ga }
+        .iter()
+        .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
+        .collect();
+    for mut cmd in cmds {
+        // SAFETY: `do_map` only reads the NUL-terminated command it is given.
         unsafe {
             do_map(
                 MAPTYPE_MAP,
@@ -835,22 +824,6 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
     cmd
 }
 
-/// Free the string entries of a keymap garray (the garray itself is the
-/// caller's to clear).
-///
-/// # Safety
-///
-/// `kmap_ga` must be a valid keymap garray (`buf_T::b_kmap_ga`).
-pub unsafe fn keymap_ga_clear(kmap_ga: *mut garray_T) {
-    // SAFETY: caller contract; the garray holds `ga_len` live entries, and
-    // each owns its two strings.
-    for i in 0..unsafe { (*kmap_ga).ga_len } {
-        let kp = unsafe { ((*kmap_ga).ga_data as *mut kmap_T).offset(i as isize) };
-        unsafe { xfree((*kp).from as *mut c_void) };
-        unsafe { xfree((*kp).to as *mut c_void) };
-    }
-}
-
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
     let buf = curbuf.get();
@@ -861,11 +834,14 @@ fn keymap_unload() {
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
-    // SAFETY: the garray holds `ga_len` entries with NUL-terminated strings;
-    // `do_map` only reads the command, and the entries own what is freed.
-    for i in 0..unsafe { (*buf).b_kmap_ga.ga_len } {
-        let kp = unsafe { ((*buf).b_kmap_ga.ga_data as *mut kmap_T).offset(i as isize) };
-        let mut cmd = keymap_map_cmd(unsafe { CStr::from_ptr((*kp).from) }.to_bytes(), None);
+    // SAFETY: curbuf is valid. The commands are built before any of them
+    // runs, so `do_map` cannot be reading the list it is driven by.
+    let cmds: Vec<Vec<u8>> = unsafe { &(*buf).b_kmap_ga }
+        .iter()
+        .map(|entry| keymap_map_cmd(&entry.from, None))
+        .collect();
+    for mut cmd in cmds {
+        // SAFETY: `do_map` only reads the NUL-terminated command it is given.
         unsafe {
             do_map(
                 MAPTYPE_UNMAP,
@@ -875,10 +851,9 @@ fn keymap_unload() {
             )
         };
     }
-    unsafe { keymap_ga_clear(&raw mut (*buf).b_kmap_ga) };
     p_cpo.set(save_cpo);
-    // SAFETY: the garray's entries were just freed, so clearing it is safe.
-    unsafe { ga_clear(&raw mut (*buf).b_kmap_ga) };
+    // SAFETY: curbuf is valid; the entries own their two strings.
+    unsafe { (*buf).b_kmap_ga = Vec::new() };
     unsafe { (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t) };
     unsafe { status_redraw_curbuf() };
 }

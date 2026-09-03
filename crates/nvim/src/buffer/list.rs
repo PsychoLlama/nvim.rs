@@ -22,7 +22,6 @@ use crate::allocator::Owned;
 use crate::autocmd::apply_autocmds;
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
-use crate::digraph::keymap_ga_clear;
 use crate::eval::typval::{callback_free, tv_dict_alloc};
 use crate::eval::vars::init_var_dict;
 use crate::ex_cmds::getfile;
@@ -30,7 +29,6 @@ use crate::ex_docmd::tabpage_new;
 use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::fileio::file_pat_to_reg_pat;
-use crate::garray::ga_clear;
 use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
@@ -52,8 +50,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::semsg;
 use crate::types::{
     AdditionalData, Callback, Failed, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
-    fmark_T, fmarkv_T, garray_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T, size_t,
-    uint64_t,
+    fmark_T, fmarkv_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -131,16 +128,6 @@ fn clear_opt(slot: &mut *mut c_char) {
 fn clear_callback(cb: &mut Callback) {
     // SAFETY: a callback slot inside a live buffer.
     unsafe { callback_free(cb) };
-}
-
-fn clear_garray(ga: &mut garray_T) {
-    // SAFETY: a growable array inside a live buffer.
-    unsafe { ga_clear(ga) };
-}
-
-fn keymap_clear(ga: &mut garray_T) {
-    // SAFETY: the buffer's own keymap array.
-    unsafe { keymap_ga_clear(ga) };
 }
 
 fn clear_cpt(callbacks: &mut *mut Callback, count: c_int) {
@@ -418,6 +405,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     // SAFETY: both are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_ml).write(memline_T::closed()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
@@ -544,8 +532,7 @@ pub unsafe fn free_buf_options(mut buf: Buf, free_p_ff: bool) {
     clear_opt(&mut buf.b_p_vts);
     xfree_clear(&mut buf.b_p_vts_array);
     clear_opt(&mut buf.b_p_keymap);
-    keymap_clear(&mut buf.b_kmap_ga);
-    clear_garray(&mut buf.b_kmap_ga);
+    buf.b_kmap_ga = Vec::new();
     clear_opt(&mut buf.b_p_com);
     clear_opt(&mut buf.b_p_cms);
     clear_opt(&mut buf.b_p_nf);

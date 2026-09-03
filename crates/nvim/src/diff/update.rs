@@ -146,11 +146,9 @@ unsafe fn clear_diffin(din: *mut diffin_T) {
 /// `dout` must be a live output side of a diff run.
 pub(crate) unsafe fn clear_diffout(dout: *mut diffout_T) {
     // SAFETY: the caller's output side.
-    let dout = unsafe { Live::<diffout_T>::new(dout) };
+    let mut dout = unsafe { Live::<diffout_T>::new(dout) };
     if dout.dout_fname.is_null() {
-        let ga = dout.field_ptr(offset_of!(diffout_T, dout_ga));
-        // SAFETY: the hunk array is `dout`'s own field.
-        unsafe { ga_clear(ga) };
+        dout.dout_ga = Vec::new();
     } else {
         // SAFETY: one of this module's own temp file names.
         unsafe { os_remove(dout.dout_fname) };
@@ -345,10 +343,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
     let mut anchors = [[0 as linenr_T; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
         if dio.dio_internal != 0 {
-            let ga = dio.field_ptr(offset_of!(diffio_T, dio_diff.dout_ga));
-            let item = ::core::mem::size_of::<diffhunk_T>() as c_int;
-            // SAFETY: the hunk array is `dio`'s own field.
-            unsafe { ga_init(ga, item, 100) };
+            dio.dio_diff.dout_ga.clear();
         } else {
             // SAFETY: the editor exists, for all three names.
             dio.dio_orig.din_fname = unsafe { vim_tempname() };
@@ -542,7 +537,7 @@ pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
             dio_new: DIFFIN_INIT,
             dio_diff: diffout_T {
                 dout_fname: ::core::ptr::null_mut(),
-                dout_ga: GA_EMPTY_INIT_VALUE,
+                dout_ga: Vec::new(),
             },
             dio_internal: internal,
         };

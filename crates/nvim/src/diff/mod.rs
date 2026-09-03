@@ -54,7 +54,7 @@ use crate::fileio::{buf_check_timestamp, shorten_fnames, vim_fgets, vim_gettempd
 use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
-use crate::garray::{ga_clear, ga_grow, ga_init};
+
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
@@ -69,7 +69,7 @@ use crate::mbyte::{
     utf_ptr2char, utfc_ptr2len,
 };
 use crate::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
-use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xstrdup};
+use crate::memory::{memchrsub, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting,
@@ -92,8 +92,8 @@ use crate::types::NL;
 use crate::types::{
     CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
     String_0, aco_save_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T,
-    garray_T, hlf_T, linenr_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T,
-    xdemitcb_t, xdemitconf_t, xpparam_t,
+    hlf_T, linenr_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t,
+    xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};
@@ -140,15 +140,6 @@ pub const _ISdigit: ::core::ffi::c_uint = 2048;
 pub const kOptScopeWin: OptScope = 1;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-/// An empty growable array, the shape c2rust wrote out at every site.
-pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ::core::ptr::null_mut(),
-};
-
 /// An empty memory image: no bytes, no allocation.
 pub(crate) const MMFILE_INIT: mmfile_t = mmfile_t {
     ptr: ::core::ptr::null_mut(),
@@ -170,7 +161,9 @@ pub struct diffio_T {
 }
 pub struct diffout_T {
     pub dout_fname: *mut ::core::ffi::c_char,
-    pub dout_ga: garray_T,
+    /// The hunks the internal engine produced; empty when the run went
+    /// through a temp file named by `dout_fname` instead.
+    pub dout_ga: Vec<diffhunk_T>,
 }
 pub struct diffin_T {
     pub din_fname: *mut ::core::ffi::c_char,

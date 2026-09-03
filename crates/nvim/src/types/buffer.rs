@@ -108,7 +108,24 @@ pub struct diffblock_S {
     pub df_count: [linenr_T; 8],
     pub is_linematched: bool,
     pub has_changes: bool,
-    pub df_changes: garray_T,
+    /// The block's inline changes, cached by `diff_find_change_inline_diff`
+    /// and windowed per line by `diff_find_change`.
+    pub df_changes: Vec<diffline_change_T>,
+}
+
+impl diffblock_S {
+    /// A block with no ranges and no cached changes -- `xcalloc`'s answer,
+    /// which is what every caller wanted from it.
+    pub fn new(df_next: *mut diff_T) -> Self {
+        Self {
+            df_next,
+            df_lnum: [0; 8],
+            df_count: [0; 8],
+            is_linematched: false,
+            has_changes: false,
+            df_changes: Vec::new(),
+        }
+    }
 }
 #[derive(Default)]
 pub struct diffline_S {
@@ -152,6 +169,13 @@ pub struct fcs_chars_T {
     pub trunc: schar_T,
     pub truncrl: schar_T,
 }
+/// One `:loadkeymap` entry: the two sides of a buffer-local language
+/// mapping, each without its terminator. Owned by the buffer's `b_kmap_ga`.
+pub(crate) struct KeymapEntry {
+    pub(crate) from: Vec<u8>,
+    pub(crate) to: Vec<u8>,
+}
+
 /// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
 /// The registry holds a buffer as an `allocator::Owned<buf_T>`, so this
 /// struct is dropped rather than `xfree`d and a field with a destructor
@@ -243,7 +267,7 @@ pub struct file_buffer {
     pub b_p_iminsert: OptInt,
     pub b_p_imsearch: OptInt,
     pub b_kmap_state: int16_t,
-    pub b_kmap_ga: garray_T,
+    pub(crate) b_kmap_ga: Vec<KeymapEntry>,
     pub b_p_initialized: bool,
     pub b_p_script_ctx: [sctx_T; 92],
     pub b_p_ac: ::core::ffi::c_int,

@@ -45,10 +45,12 @@ unsafe fn extract_hunk_internal(
     hunk: *mut diffhunk_T,
     line_idx: &mut c_int,
 ) -> bool {
-    if *line_idx >= unsafe { (*dout).dout_ga.ga_len } {
+    // SAFETY: the caller's output side; the index is checked against it.
+    let hunks = unsafe { &(*dout).dout_ga };
+    let Some(&next) = hunks.get(*line_idx as usize) else {
         return true;
-    }
-    unsafe { *hunk = *((*dout).dout_ga.ga_data as *mut diffhunk_T).offset(*line_idx as isize) };
+    };
+    unsafe { *hunk = next };
     *line_idx += 1;
     false
 }

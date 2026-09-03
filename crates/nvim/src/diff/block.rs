@@ -22,8 +22,9 @@ use std::ffi::CStr;
 
 /// Free one block, its cached inline changes included.
 pub(crate) unsafe fn clear_diffblock(dp: *mut diff_T) {
-    unsafe { ga_clear(&raw mut (*dp).df_changes) };
-    unsafe { xfree(dp.cast()) };
+    // SAFETY: the caller's block, which nothing else points at; its cached
+    // changes go with it.
+    drop(unsafe { Box::from_raw(dp) });
 }
 
 /// Take `buf` out of every tabpage's diff.
@@ -369,22 +370,12 @@ pub(crate) unsafe fn diff_alloc_new(
     dprev: *mut diff_T,
     dp: *mut diff_T,
 ) -> *mut diff_T {
-    let dnew = unsafe { xcalloc(1, ::core::mem::size_of::<diff_T>()) } as *mut diff_T;
-    unsafe { (*dnew).is_linematched = false };
-    unsafe { (*dnew).has_changes = false };
-    unsafe { (*dnew).df_next = dp };
+    let dnew = Box::into_raw(Box::new(diff_T::new(dp)));
     if dprev.is_null() {
         tp.tp_first_diff = dnew;
     } else {
         unsafe { (*dprev).df_next = dnew };
     }
-    unsafe {
-        ga_init(
-            &raw mut (*dnew).df_changes,
-            ::core::mem::size_of::<diffline_change_T>() as c_int,
-            20,
-        )
-    };
     dnew
 }
 

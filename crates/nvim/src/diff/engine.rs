@@ -223,16 +223,14 @@ unsafe extern "C" fn xdiff_out(
     priv_0: *mut ::core::ffi::c_void,
 ) -> c_int {
     let dout = priv_0 as *mut diffout_T;
-    unsafe { ga_grow(&raw mut (*dout).dout_ga, 1) };
+    // SAFETY: `priv_0` is the output side `xdl_diff` was started with.
     unsafe {
-        *((*dout).dout_ga.ga_data as *mut diffhunk_T).offset((*dout).dout_ga.ga_len as isize) =
-            diffhunk_T {
-                lnum_orig: start_a + 1,
-                count_orig: count_a,
-                lnum_new: start_b + 1,
-                count_new: count_b,
-            }
+        (*dout).dout_ga.push(diffhunk_T {
+            lnum_orig: start_a + 1,
+            count_orig: count_a,
+            lnum_new: start_b + 1,
+            count_new: count_b,
+        });
     };
-    unsafe { (*dout).dout_ga.ga_len += 1 };
     0
 }

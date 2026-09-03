@@ -31,7 +31,7 @@ pub unsafe fn diff_update_line(lnum: linenr_T) {
     let idx = idx as usize;
     if let Some(mut dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) {
         dp.has_changes = false;
-        dp.df_changes.ga_len = 0;
+        dp.df_changes.clear();
     }
 }
 
@@ -226,7 +226,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_
         return false;
     }
     // The first block this line is not already past.
-    let Some(dp) = diff_blocks(tp).find(|dp| lnum < dp.end(idx as usize)) else {
+    let Some(mut dp) = diff_blocks(tp).find(|dp| lnum < dp.end(idx as usize)) else {
         return false;
     };
     if !dp.is_sane(tp) {
@@ -270,8 +270,8 @@ pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_
     }
     // The changes are stored for the whole block; this line's window into
     // them is the run whose line-offset span covers `off`.
-    let changes = dp.df_changes.ga_data as *mut diffline_change_T;
-    let len = dp.df_changes.ga_len;
+    let changes = dp.df_changes.as_mut_ptr();
+    let len = dp.df_changes.len() as c_int;
     let mut first = ::core::ptr::null_mut::<diffline_change_T>();
     let mut num_changes = 0;
     let mut change_idx = 0;

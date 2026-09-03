@@ -395,17 +395,10 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
         dio_new: DIFFIN_INIT,
         dio_diff: diffout_T {
             dout_fname: ::core::ptr::null_mut(),
-            dout_ga: GA_EMPTY_INIT_VALUE,
+            dout_ga: Vec::new(),
         },
         // The inline diff only supports the internal algorithm.
         dio_internal: 1,
-    };
-    unsafe {
-        ga_init(
-            &raw mut dio.dio_diff.dout_ga,
-            ::core::mem::size_of::<diffhunk_T>() as c_int,
-            1000,
-        )
     };
     // Always slide diff splits along whitespace.
     diff_algorithm.set(save_diff_algorithm | XDF_INDENT_HEURISTIC);
@@ -424,7 +417,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
 
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
-            dio.dio_diff.dout_ga.ga_len = 0;
+            dio.dio_diff.dout_ga.clear();
             let buf = tp.tp_diffbuf[i];
             if buf.is_null() || unsafe { (*buf).b_ml.ml_mfp }.is_null() {
                 continue; // not loaded
@@ -484,16 +477,11 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
             }
         }
 
-        unsafe { (*dp).df_changes.ga_len = 0 }; // already zero
+        unsafe { (*dp).df_changes.clear() }; // already empty
         let mut new_diff = head;
         while !new_diff.is_null() {
             let change = change_for(unsafe { &*new_diff }, &linemap);
-            unsafe { ga_grow(&raw mut (*dp).df_changes, 1) };
-            unsafe {
-                *((*dp).df_changes.ga_data as *mut diffline_change_T)
-                    .offset((*dp).df_changes.ga_len as isize) = change
-            };
-            unsafe { (*dp).df_changes.ga_len += 1 };
+            unsafe { (*dp).df_changes.push(change) };
             new_diff = unsafe { (*new_diff).df_next };
         }
     }
