@@ -404,10 +404,10 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
-pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
-    let mut arg_start = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
+    let mut arg_start = eap.arg;
     if ends_excmd(unsafe { *arg_start } as c_int) != 0 {
-        unsafe { syn_cmd_list(eap, 1) };
+        syn_cmd_list(eap, 1);
         return;
     }
 
@@ -422,12 +422,12 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
         key = unsafe { vim_strnsave_up(arg_start, arg_end.offset_from(arg_start) as size_t) };
 
         if unsafe { cstr::eq_bytes(key, b"CCOMMENT") } {
-            if unsafe { (*eap).skip } == 0 {
+            if eap.skip == 0 {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
             if ends_excmd(unsafe { *next_arg } as c_int) == 0 {
                 arg_end = unsafe { skiptowhite(next_arg) };
-                if unsafe { (*eap).skip } == 0 {
+                if eap.skip == 0 {
                     unsafe {
                         cur_syn_block().b_syn_sync_id =
                             syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
@@ -435,7 +435,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                     };
                 }
                 next_arg = unsafe { skipwhite(arg_end) };
-            } else if unsafe { (*eap).skip } == 0 {
+            } else if eap.skip == 0 {
                 unsafe {
                     cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
                 };
@@ -449,7 +449,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                 break;
             }
             let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
-            if unsafe { (*eap).skip } == 0 {
+            if eap.skip == 0 {
                 let mut block = cur_syn_block();
                 match count.field {
                     SyncField::MinLines => block.b_syn_sync_minlines = n,
@@ -458,7 +458,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
                 }
             }
         } else if unsafe { cstr::eq_bytes(key, b"FROMSTART") } {
-            if unsafe { (*eap).skip } == 0 {
+            if eap.skip == 0 {
                 cur_syn_block().b_syn_sync_minlines = MAXLNUM as linenr_T;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
@@ -477,13 +477,13 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
         } else {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
-            unsafe { (*eap).arg = next_arg };
+            eap.arg = next_arg;
             if unsafe { cstr::eq_bytes(key, b"MATCH") } {
-                unsafe { syn_cmd_match(eap, 1) };
+                syn_cmd_match(eap, 1);
             } else if unsafe { cstr::eq_bytes(key, b"REGION") } {
-                unsafe { syn_cmd_region(eap, 1) };
+                syn_cmd_region(eap, 1);
             } else if unsafe { cstr::eq_bytes(key, b"CLEAR") } {
-                unsafe { syn_cmd_clear(eap, 1) };
+                syn_cmd_clear(eap, 1);
             } else {
                 illegal = true;
             }
@@ -499,7 +499,7 @@ pub(crate) unsafe fn syn_cmd_sync(eap: *mut exarg_T, _syncing: c_int) {
         let arg_start = unsafe { c_str(arg_start) };
         semsg!("E404: Illegal arguments: {arg_start}");
     } else if !finished {
-        unsafe { (*eap).nextcmd = check_nextcmd(arg_start) };
+        eap.nextcmd = unsafe { check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);
         unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all syntax.
     }
@@ -526,7 +526,7 @@ enum LineContError {
 ///
 /// Answers what follows the pattern.
 unsafe fn sync_linecont(
-    eap: *mut exarg_T,
+    eap: &exarg_T,
     next_arg: *mut c_char,
 ) -> Result<*mut c_char, LineContError> {
     if unsafe { *next_arg } as c_int == NUL {
@@ -543,7 +543,7 @@ unsafe fn sync_linecont(
         return Err(LineContError::Illegal); // end delimiter not found
     }
 
-    if unsafe { (*eap).skip } == 0 {
+    if eap.skip == 0 {
         let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.
@@ -556,7 +556,7 @@ unsafe fn sync_linecont(
         p_cpo.set(empty_option());
         unsafe { block.b_syn_linecont_prog = vim_regcomp(block.b_syn_linecont_pat, RE_MAGIC) };
         p_cpo.set(cpo_save);
-        unsafe { syn_clear_time(&mut block.b_syn_linecont_time) };
+        syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_null() {
             unsafe { xfree(block.b_syn_linecont_pat as *mut ::core::ffi::c_void) };

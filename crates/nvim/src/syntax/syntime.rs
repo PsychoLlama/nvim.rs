@@ -30,7 +30,7 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
 }
 
 /// Forget everything one pattern's timer accumulated.
-pub(crate) unsafe fn syn_clear_time(st: &mut syn_time_T) {
+pub(crate) fn syn_clear_time(st: &mut syn_time_T) {
     st.total = profile_zero();
     st.slowest = profile_zero();
     st.count = 0;

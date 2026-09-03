@@ -227,14 +227,14 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
 }
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
-pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
-    let arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_keyword(eap: &mut exarg_T, _syncing: c_int) {
+    let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut conceal_char: c_int = NUL;
 
     let mut rest = unsafe { get_group_name(arg, &mut group_name_end) };
     if !rest.is_null() {
-        let syn_id = if unsafe { (*eap).skip } != 0 {
+        let syn_id = if eap.skip != 0 {
             -1
         } else {
             unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) }
@@ -259,7 +259,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
             let mut cnt = 0;
             let mut p = keyword_copy;
             while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
-                rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, (*eap).skip) };
+                rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
                 if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) != 0 {
                     break;
                 }
@@ -281,7 +281,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
             }
 
             // Pass 2: an entry per keyword.
-            if unsafe { (*eap).skip } == 0 {
+            if eap.skip == 0 {
                 unsafe { syn_incl_toplevel(syn_id, &mut opt.flags) };
                 let def = KeywordDef {
                     id: syn_id,
@@ -311,7 +311,7 @@ pub(crate) unsafe fn syn_cmd_keyword(eap: *mut exarg_T, _syncing: c_int) {
         let arg = unsafe { c_str(arg) };
         semsg!("E475: Invalid argument: {arg}");
     } else {
-        unsafe { (*eap).nextcmd = check_nextcmd(rest) };
+        eap.nextcmd = unsafe { check_nextcmd(rest) };
     }
 
     redraw_curbuf_later(UPD_SOME_VALID);

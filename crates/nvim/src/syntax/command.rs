@@ -33,17 +33,18 @@ unsafe fn word_index(arg: *const c_char, next: *const c_char, names: &[&CStr]) -
 }
 
 /// Common prologue: record the next command, and answer whether to go on.
-unsafe fn mode_cmd_start(eap: *mut exarg_T) -> bool {
-    unsafe { (*eap).nextcmd = find_nextcmd((*eap).arg) };
-    unsafe { (*eap).skip == 0 }
+fn mode_cmd_start(eap: &mut exarg_T) -> bool {
+    // SAFETY: `arg` is the caller's command line, a NUL-terminated string.
+    eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
+    eap.skip == 0
 }
 
 /// `:syntax conceal [on|off]`.
-pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
-    if !unsafe { mode_cmd_start(eap) } {
+pub(crate) fn syn_cmd_conceal(eap: &mut exarg_T, _syncing: c_int) {
+    if !mode_cmd_start(eap) {
         return;
     }
-    let arg = unsafe { (*eap).arg };
+    let arg = eap.arg;
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
         let state = if cur_syn_block().b_syn_conceal != 0 {
@@ -62,11 +63,11 @@ pub(crate) unsafe fn syn_cmd_conceal(eap: *mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax case [match|ignore]`.
-pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
-    if !unsafe { mode_cmd_start(eap) } {
+pub(crate) fn syn_cmd_case(eap: &mut exarg_T, _syncing: c_int) {
+    if !mode_cmd_start(eap) {
         return;
     }
-    let arg = unsafe { (*eap).arg };
+    let arg = eap.arg;
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
         let state = if cur_syn_block().b_syn_ic != 0 {
@@ -85,11 +86,11 @@ pub(crate) unsafe fn syn_cmd_case(eap: *mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax foldlevel [start|minimum]`.
-pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
-    if !unsafe { mode_cmd_start(eap) } {
+pub(crate) fn syn_cmd_foldlevel(eap: &mut exarg_T, _syncing: c_int) {
+    if !mode_cmd_start(eap) {
         return;
     }
-    let arg = unsafe { (*eap).arg };
+    let arg = eap.arg;
     if unsafe { *arg } as c_int == NUL {
         // A block whose foldlevel is neither of the two reports nothing.
         if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
@@ -122,11 +123,11 @@ pub(crate) unsafe fn syn_cmd_foldlevel(eap: *mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax spell [toplevel|notoplevel|default]`.
-pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
-    if !unsafe { mode_cmd_start(eap) } {
+pub(crate) fn syn_cmd_spell(eap: &mut exarg_T, _syncing: c_int) {
+    if !mode_cmd_start(eap) {
         return;
     }
-    let arg = unsafe { (*eap).arg };
+    let arg = eap.arg;
     let next = unsafe { skiptowhite(arg) };
     if unsafe { *arg } as c_int == NUL {
         let state = match cur_syn_block().b_syn_spell {
@@ -159,11 +160,11 @@ pub(crate) unsafe fn syn_cmd_spell(eap: *mut exarg_T, _syncing: c_int) {
 /// The value is installed by running it through `'iskeyword'`'s own parser on
 /// the current buffer and keeping the character table that produces, so the
 /// buffer's own table has to be saved and put back around the call.
-pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
-    if unsafe { (*eap).skip } != 0 {
+pub(crate) fn syn_cmd_iskeyword(eap: &mut exarg_T, _syncing: c_int) {
+    if eap.skip != 0 {
         return;
     }
-    let arg = unsafe { skipwhite((*eap).arg) };
+    let arg = unsafe { skipwhite(eap.arg) };
     if unsafe { *arg } as c_int == NUL {
         unsafe { msg_puts(c"\n".as_ptr()) };
         if !is_empty_option(cur_syn_block().b_syn_isk) {
@@ -209,33 +210,33 @@ pub(crate) unsafe fn syn_cmd_iskeyword(eap: *mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax on` / `:syntax enable`.
-pub(crate) unsafe fn syn_cmd_on(eap: *mut exarg_T, _syncing: c_int) {
-    unsafe { syn_cmd_onoff(eap, c"syntax") }
+pub(crate) fn syn_cmd_on(eap: &mut exarg_T, _syncing: c_int) {
+    syn_cmd_onoff(eap, c"syntax")
 }
 
 /// `:syntax reset`. It actually resets highlighting, not syntax.
-pub(crate) unsafe fn syn_cmd_reset(eap: *mut exarg_T, _syncing: c_int) {
-    unsafe { (*eap).nextcmd = check_nextcmd((*eap).arg) };
-    if unsafe { (*eap).skip } == 0 {
+pub(crate) fn syn_cmd_reset(eap: &mut exarg_T, _syncing: c_int) {
+    eap.nextcmd = unsafe { check_nextcmd(eap.arg) };
+    if eap.skip == 0 {
         unsafe { init_highlight(true, true) };
     }
 }
 
 /// `:syntax manual`.
-pub(crate) unsafe fn syn_cmd_manual(eap: *mut exarg_T, _syncing: c_int) {
-    unsafe { syn_cmd_onoff(eap, c"manual") }
+pub(crate) fn syn_cmd_manual(eap: &mut exarg_T, _syncing: c_int) {
+    syn_cmd_onoff(eap, c"manual")
 }
 
 /// `:syntax off`.
-pub(crate) unsafe fn syn_cmd_off(eap: *mut exarg_T, _syncing: c_int) {
-    unsafe { syn_cmd_onoff(eap, c"nosyntax") }
+pub(crate) fn syn_cmd_off(eap: &mut exarg_T, _syncing: c_int) {
+    syn_cmd_onoff(eap, c"nosyntax")
 }
 
 /// Source `$VIMRUNTIME/syntax/{name}.vim`, which is what all four of the
 /// on/off commands amount to.
-unsafe fn syn_cmd_onoff(eap: *mut exarg_T, name: &CStr) {
-    unsafe { (*eap).nextcmd = check_nextcmd((*eap).arg) };
-    if unsafe { (*eap).skip } != 0 {
+fn syn_cmd_onoff(eap: &mut exarg_T, name: &CStr) {
+    eap.nextcmd = unsafe { check_nextcmd(eap.arg) };
+    if eap.skip != 0 {
         return;
     }
     did_syntax_onoff.set(true);
@@ -258,18 +259,18 @@ pub(crate) unsafe fn syn_maybe_enable() {
             skip: 0,
             ..Default::default()
         };
-        unsafe { syn_cmd_on(&raw mut ea, 0) };
+        syn_cmd_on(&mut ea, 0);
     }
 }
 
 /// One `:syntax` subcommand.
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
-    func: unsafe fn(*mut exarg_T, c_int),
+    func: fn(&mut exarg_T, c_int),
 }
 
 /// A `const fn` constructor keeps each entry on one line under rustfmt.
-const fn sub(name: &'static CStr, func: unsafe fn(*mut exarg_T, c_int)) -> SubCommand {
+const fn sub(name: &'static CStr, func: fn(&mut exarg_T, c_int)) -> SubCommand {
     SubCommand { name, func }
 }
 
@@ -299,8 +300,11 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
 pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
-    let arg = unsafe { (*eap).arg };
-    syn_cmdlinep.set(unsafe { (*eap).cmdlinep });
+    // SAFETY: the command table's promise -- the argument block of the
+    // `:` command being run, which nothing else holds while it runs.
+    let eap = unsafe { &mut *eap };
+    let arg = eap.arg;
+    syn_cmdlinep.set(eap.cmdlinep);
 
     // Isolate the subcommand name.
     let mut subcmd_end = arg;
@@ -310,14 +314,14 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
     let subcmd_name = unsafe { xstrnsave(arg, subcmd_end.offset_from(arg) as size_t) };
 
     // Skip the error messages of every subcommand too.
-    let _skipping = (unsafe { (*eap).skip } != 0).then(Suppress::emsg_skip);
+    let _skipping = (eap.skip != 0).then(Suppress::emsg_skip);
     match SUBCOMMANDS
         .iter()
         .find(|sub| unsafe { cstr::eq(subcmd_name, sub.name.as_ptr()) })
     {
         Some(sub) => {
-            unsafe { (*eap).arg = skipwhite(subcmd_end) };
-            unsafe { (sub.func)(eap, 0) };
+            eap.arg = unsafe { skipwhite(subcmd_end) };
+            (sub.func)(eap, 0);
         }
         None => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -332,6 +336,8 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
 ///
 /// Upstream marks this `@deprecated`.
 pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
+    // SAFETY: the command table's promise, as `ex_syntax`'s.
+    let eap = unsafe { &mut *eap };
     let mut numbuf = NumBuf::new();
     if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
         unsafe {
@@ -358,8 +364,9 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buf = curbuf.get();
-    // SAFETY: the caller's command and the editor's current buffer.
-    let (arg, fname) = unsafe { ((*eap).arg, (*buf).b_fname) };
+    // SAFETY: the editor's current buffer.
+    let fname = unsafe { (*buf).b_fname };
+    let arg = eap.arg;
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, buf) };
 
     // Move the value of b:current_syntax to w:current_syntax.

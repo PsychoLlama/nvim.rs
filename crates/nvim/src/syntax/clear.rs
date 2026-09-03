@@ -143,10 +143,10 @@ unsafe fn syn_clear_cluster(mut block: SynBlock, i: c_int) {
 }
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
-pub(crate) unsafe fn syn_cmd_clear(eap: *mut exarg_T, syncing: c_int) {
-    let mut arg = unsafe { (*eap).arg };
-    unsafe { (*eap).nextcmd = find_nextcmd(arg) };
-    if unsafe { (*eap).skip } != 0 {
+pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
+    let mut arg = eap.arg;
+    eap.nextcmd = unsafe { find_nextcmd(arg) };
+    if eap.skip != 0 {
         return;
     }
 

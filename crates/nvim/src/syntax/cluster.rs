@@ -218,13 +218,13 @@ unsafe fn cluster_op(rest: *const c_char) -> Option<(c_int, c_int)> {
 }
 
 /// `:syntax cluster {name} [contains=..] [add=..] [remove=..]`.
-pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
-    let arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_cluster(eap: &mut exarg_T, _syncing: c_int) {
+    let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut got_clstr = false;
 
-    unsafe { (*eap).nextcmd = find_nextcmd(arg) };
-    if unsafe { (*eap).skip } != 0 {
+    eap.nextcmd = unsafe { find_nextcmd(arg) };
+    if eap.skip != 0 {
         return;
     }
 
@@ -242,9 +242,7 @@ pub(crate) unsafe fn syn_cmd_cluster(eap: *mut exarg_T, _syncing: c_int) {
 
         while let Some((opt_len, list_op)) = unsafe { cluster_op(rest) } {
             let mut clstr_list = ::core::ptr::null_mut::<int16_t>();
-            if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, (*eap).skip != 0) }
-                .is_err()
-            {
+            if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, eap.skip != 0) }.is_err() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let rest = unsafe { c_str(rest) };
                 semsg!("E475: Invalid argument: {rest}");

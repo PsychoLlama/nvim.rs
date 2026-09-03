@@ -19,11 +19,11 @@ const LIST_HL: c_int = HLF_D;
 
 /// `:syntax [list] [{group}|@{cluster}] ..` and `:syntax sync` with no
 /// argument.
-pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
-    let mut arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
+    let mut arg = eap.arg;
 
-    unsafe { (*eap).nextcmd = find_nextcmd(arg) };
-    if unsafe { (*eap).skip } != 0 {
+    eap.nextcmd = unsafe { find_nextcmd(arg) };
+    if eap.skip != 0 {
         return;
     }
 
@@ -78,7 +78,7 @@ pub(crate) unsafe fn syn_cmd_list(eap: *mut exarg_T, syncing: c_int) {
             arg = unsafe { skipwhite(arg_end) };
         }
     }
-    unsafe { (*eap).nextcmd = check_nextcmd(arg) };
+    eap.nextcmd = unsafe { check_nextcmd(arg) };
 }
 
 /// The `:syntax sync` half of the listing: how this buffer synchronises.

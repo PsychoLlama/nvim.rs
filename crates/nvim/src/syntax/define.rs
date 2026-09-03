@@ -43,12 +43,12 @@ pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
 }
 
 /// `:syntax include [@{cluster}] {file}`.
-pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
-    let mut arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_include(eap: &mut exarg_T, _syncing: c_int) {
+    let mut arg = eap.arg;
     let mut sgl_id = 1;
 
-    unsafe { (*eap).nextcmd = find_nextcmd(arg) };
-    if unsafe { (*eap).skip } != 0 {
+    eap.nextcmd = unsafe { find_nextcmd(arg) };
+    if eap.skip != 0 {
         return;
     }
 
@@ -65,18 +65,18 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
             return;
         }
         // `separate_nextcmd` and `expand_filename` depend on this.
-        unsafe { (*eap).arg = rest };
+        eap.arg = rest;
     }
 
     // Everything left, up to the next command, is the file to include.
-    unsafe { (*eap).argt |= ExArgt::XFILE | ExArgt::NOSPC };
+    eap.argt |= ExArgt::XFILE | ExArgt::NOSPC;
     unsafe { separate_nextcmd(eap) };
 
     // An absolute path, "$VIM/.." or "<sfile>.." is `:source`d, which needs
     // the name expanded first; everything else goes through `:runtime!`.
-    let source = unsafe { *(*eap).arg } as c_int == '<' as c_int
-        || unsafe { *(*eap).arg } as c_int == '$' as c_int
-        || unsafe { path_is_absolute((*eap).arg) };
+    let source = unsafe { *eap.arg } as c_int == '<' as c_int
+        || unsafe { *eap.arg } as c_int == '$' as c_int
+        || unsafe { path_is_absolute(eap.arg) };
     if source {
         let mut errormsg = None;
         if unsafe { expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) }.is_err() {
@@ -101,16 +101,16 @@ pub(crate) unsafe fn syn_cmd_include(eap: *mut exarg_T, _syncing: c_int) {
     cur_syn_block().b_syn_topgrp = sgl_id;
 
     // SAFETY: the caller's command.
-    let arg = unsafe { (*eap).arg };
+    let arg = eap.arg;
     let failed = if source {
         // SAFETY: sourcing the file the user named.
         unsafe { do_source(arg, false, DOSO_NONE as c_int, ::core::ptr::null_mut()) == FAIL }
     } else {
-        unsafe { source_runtime((*eap).arg, RuntimeOpts::ALL) }.is_err()
+        unsafe { source_runtime(eap.arg, RuntimeOpts::ALL) }.is_err()
     };
     if failed {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str((*eap).arg) };
+        let arg = unsafe { c_str(eap.arg) };
         semsg!("E484: Can't open file {arg}");
     }
 
@@ -158,8 +158,8 @@ unsafe fn free_opt_lists(opt: &syn_opt_arg_T) {
 
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
-pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
-    let arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
+    let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut sync_idx: c_int = 0;
     let mut conceal_char: c_int = NUL;
@@ -174,20 +174,20 @@ pub(crate) unsafe fn syn_cmd_match(eap: *mut exarg_T, syncing: c_int) {
     });
 
     // Options before the pattern, the pattern, then options after it.
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, (*eap).skip) };
+    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
     unsafe { init_syn_patterns() };
     let mut item = unsafe { empty_synpat() };
     rest = unsafe { get_syn_pattern(rest, &mut item) };
     if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
         opt.flags |= SynFlags::HAS_EOL;
     }
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, (*eap).skip) };
+    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
 
     let mut stored = false;
     if !rest.is_null() {
         // Check for a trailing command and illegal trailing arguments.
-        unsafe { (*eap).nextcmd = check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || unsafe { (*eap).skip } != 0 {
+        eap.nextcmd = unsafe { check_nextcmd(rest) };
+        if ends_excmd(unsafe { *rest } as c_int) == 0 || eap.skip != 0 {
             rest = ::core::ptr::null_mut();
         } else {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
@@ -281,7 +281,7 @@ unsafe fn region_item(key: *const c_char) -> Option<c_int> {
 }
 
 /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
-unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
+fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
     let mut out = RegionArgs {
         pats: [Vec::new(), Vec::new(), Vec::new()],
         opt: item_opt(::core::ptr::null_mut()),
@@ -295,7 +295,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
 
     while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
         // Options may appear anywhere between the patterns.
-        rest = unsafe { get_syn_options(rest, &mut out.opt, &mut out.conceal_char, (*eap).skip) };
+        rest = unsafe { get_syn_options(rest, &mut out.opt, &mut out.conceal_char, eap.skip) };
         if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) != 0 {
             break;
         }
@@ -322,7 +322,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
         if unsafe { *rest } as c_int != '=' as c_int {
             rest = ::core::ptr::null_mut();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str((*eap).arg) };
+            let arg = unsafe { c_str(eap.arg) };
             semsg!("E398: Missing '=': {arg}");
             break;
         }
@@ -335,7 +335,7 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
         if item == ITEM_MATCHGROUP {
             let p = unsafe { skiptowhite(rest) };
             if (unsafe { p.offset_from(rest) } == 4 && unsafe { cstr::starts_with(rest, b"NONE") })
-                || unsafe { (*eap).skip } != 0
+                || eap.skip != 0
             {
                 matchgroup_id = 0;
             } else {
@@ -375,15 +375,15 @@ unsafe fn parse_region_args(eap: *mut exarg_T, mut rest: *mut c_char) -> RegionA
 
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
 /// end={pat} .. [{options}]`.
-pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
-    let arg = unsafe { (*eap).arg };
+pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
+    let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
 
     // Isolate the group name, check for validity.
     let rest = unsafe { get_group_name(arg, &mut group_name_end) };
     unsafe { init_syn_patterns() };
 
-    let mut args = unsafe { parse_region_args(eap, rest) };
+    let mut args = parse_region_args(eap, rest);
     let mut rest = args.rest;
 
     // Must have a "start" and an "end" pattern.
@@ -397,8 +397,8 @@ pub(crate) unsafe fn syn_cmd_region(eap: *mut exarg_T, syncing: c_int) {
     let mut success = false;
     if !rest.is_null() {
         // Check for trailing garbage or a command; if OK, add the item.
-        unsafe { (*eap).nextcmd = check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || unsafe { (*eap).skip } != 0 {
+        eap.nextcmd = unsafe { check_nextcmd(rest) };
+        if ends_excmd(unsafe { *rest } as c_int) == 0 || eap.skip != 0 {
             rest = ::core::ptr::null_mut();
         } else {
             let pat_count: c_int = args.pats.iter().map(|v| v.len() as c_int).sum();
@@ -508,7 +508,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
         return ::core::ptr::null_mut();
     }
     ci.sp_ic = cur_syn_block().b_syn_ic;
-    unsafe { syn_clear_time(&mut ci.sp_time) };
+    syn_clear_time(&mut ci.sp_time);
 
     let end = unsafe { read_pattern_offsets(ci, end.add(1)) };
     if ends_excmd(unsafe { *end } as c_int) == 0 && !ascii_iswhite(unsafe { *end } as c_int) {
