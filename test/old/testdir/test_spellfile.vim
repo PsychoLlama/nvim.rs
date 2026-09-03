@@ -1036,6 +1036,62 @@ func Test_spellfile_COMMON()
   call delete('XtestCOMMON-utf8.spl')
 endfunc
 
+" Test that the three 'spellsuggest' methods each keep their own order.
+"
+" 'best' rescores the edit-distance suggestions by how they sound, 'double'
+" interleaves the two rankings without rescoring either, and 'fast' skips the
+" sound-a-like search altogether. The three therefore disagree about order,
+" and 'double' is the only thing that fills su_sga -- nothing else in the
+" suite sets it, so without this the interleave is unobserved.
+func Test_spellsuggest_sps_methods()
+  call writefile(['8',
+        \         'thousand',
+        \         'the',
+        \         'their',
+        \         'there',
+        \         'those',
+        \         'that',
+        \         'them',
+        \         'then'], 'XtestSps.dic', 'D')
+  call writefile(['SAL AH(AEIOUY)-^  *H',
+        \         'SAL AR(AEIOUY)-^  *R',
+        \         'SAL A^               *',
+        \         'SAL TH               _',
+        \         'SAL T                T',
+        \         'SAL H                _',
+        \         'SAL E                _',
+        \         'SAL O                _',
+        \         'SAL U                _',
+        \         'SAL I                _',
+        \         'SAL S                S',
+        \         'SAL N                N',
+        \         'SAL M                M',
+        \         'SAL D                D',
+        \         'SAL R                R'], 'XtestSps.aff', 'D')
+
+  mkspell! XtestSps-utf8.spl XtestSps
+  set spell spelllang=XtestSps-utf8.spl
+
+  set spellsuggest=best
+  call assert_equal(['them', 'the', 'that', 'then'], spellsuggest('thm', 4))
+  call assert_equal(['their', 'there', 'them', 'then'], spellsuggest('ther', 4))
+  call assert_equal(['them', 'the', 'then', 'that'], spellsuggest('tem', 4))
+
+  " Interleaved, so the two lists together may be shorter than the count.
+  set spellsuggest=double
+  call assert_equal(['them', 'that', 'then'], spellsuggest('thm', 4))
+  call assert_equal(['their', 'there', 'them', 'then'], spellsuggest('ther', 4))
+  call assert_equal(['them', 'the', 'that', 'then'], spellsuggest('tem', 4))
+
+  set spellsuggest=fast
+  call assert_equal(['the', 'them', 'that', 'then'], spellsuggest('thm', 4))
+  call assert_equal(['them', 'then', 'the', 'their'], spellsuggest('ther', 4))
+  call assert_equal(['them', 'the', 'then', 'that'], spellsuggest('tem', 4))
+
+  set spell& spelllang& spellsuggest&
+  call delete('XtestSps-utf8.spl')
+endfunc
+
 " Test NOSUGGEST (see :help spell-COMMON)
 func Test_spellfile_NOSUGGEST()
   call writefile(['2', 'foo/X', 'fog'], 'XtestNOSUGGEST.dic', 'D')
