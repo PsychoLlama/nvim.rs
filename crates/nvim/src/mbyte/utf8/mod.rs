@@ -30,8 +30,10 @@ use super::*;
 use core::ffi::{CStr, c_char, c_int};
 
 // The carve of the transpiled module; see each child's docs.
+mod slice;
 mod tables;
 
+pub use self::slice::{char_at, char_len, encode_char};
 pub use self::tables::*;
 
 /// The characters of a NUL-terminated string, as `MB_PTR_ADV` steps over
@@ -489,6 +491,34 @@ pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
     len
 }
 
+/// How many bytes the grapheme cluster at the start of `bytes` occupies --
+/// the base character plus every composing character following it -- or 0 if
+/// `bytes` is empty.
+///
+/// The slice form of [`utfc_ptr2len`], and the cluster twin of
+/// [`char_len`]. The bound the slice carries does the work the pointer
+/// form's NUL did, so the answer is never larger than `bytes.len()`; a
+/// composing character only partly inside the slice is left out, because the
+/// rest of it may still arrive.
+///
+/// Unlike its siblings in [`slice`] this one is not itself safe code: it
+/// delegates to [`utfc_ptr2len_len`], whose composing-character rules are
+/// pointer-shaped all the way down into `utf_composinglike`. The one
+/// difference the slice forms carry is applied here rather than inherited --
+/// a NUL is a byte, one character long, not the end of the string.
+pub fn cluster_len(bytes: &[u8]) -> usize {
+    let Some(&first) = bytes.first() else {
+        return 0;
+    };
+    if first == 0 {
+        return 1; // an embedded NUL is an ordinary byte here
+    }
+    let size = c_int::try_from(bytes.len()).unwrap_or(c_int::MAX);
+    // SAFETY: `size` readable bytes at the pointer, which is the slice.
+    let len = unsafe { utfc_ptr2len_len(bytes.as_ptr().cast::<c_char>(), size) };
+    usize::try_from(len).expect("utfc_ptr2len_len answers a length")
+}
+
 /// How many bytes `c` encodes to.
 pub fn utf_char2len(c: c_int) -> c_int {
     if c < 0x80 {
@@ -513,18 +543,9 @@ pub fn utf_char2len(c: c_int) -> c_int {
 /// `buf` must have room for [`utf_char2len`] bytes — up to `MB_MAXCHAR`.
 pub unsafe fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int {
     let len = utf_char2len(c) as usize;
-    if len == 1 {
-        unsafe { *buf = c as c_char };
-        return 1;
-    }
-    let u = c as u32;
-    // The lead byte carries the top bits under its `1..10` prefix; every
-    // continuation byte carries six more under `10`.
-    unsafe { *buf = (LEAD_PREFIX[len] | (u >> (6 * (len - 1)))) as c_char };
-    for i in 1..len {
-        unsafe { *buf.add(i) = (0x80 | ((u >> (6 * (len - 1 - i))) & 0x3f)) as c_char };
-    }
-    len as c_int
+    // SAFETY: the caller's promise, spelled as the slice it describes.
+    let out = unsafe { core::slice::from_raw_parts_mut(buf.cast::<u8>(), len) };
+    encode_char(c, out) as c_int
 }
 
 /// The codepoint at `p` and the number of bytes it occupies. An invalid

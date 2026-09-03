@@ -44,6 +44,7 @@ use crate::types::{
 use ::libc::{__errno_location, abort};
 
 pub mod display;
+pub mod skip;
 pub mod str2nr;
 pub use str2nr::Str2NrBases;
 pub mod transchar;
@@ -589,8 +590,7 @@ pub unsafe fn skipwhite(p: *const c_char) -> *mut c_char {
 pub unsafe fn skipwhite_len(p: *const c_char, len: size_t) -> *mut c_char {
     // SAFETY: the caller guarantees `len` readable bytes at `p`.
     let bytes = unsafe { core::slice::from_raw_parts(p as *const uint8_t, len) };
-    let white = bytes.iter().take_while(|&&byte| is_white(byte)).count();
-    p.wrapping_add(white) as *mut c_char
+    p.wrapping_add(skip::white(bytes)) as *mut c_char
 }
 
 /// The indent of the cursor's line, in bytes.

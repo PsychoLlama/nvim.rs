@@ -1,9 +1,13 @@
-//! Port of `test/unit/charset/vim_str2nr_spec.lua`.
+//! Port of `test/unit/charset/vim_str2nr_spec.lua`, plus the `skip` family's
+//! agreement with the pointer skippers it replaces.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 use std::ptr;
 
-use neovim::charset::{Str2NrBases, vim_str2nr};
+use neovim::charset::{
+    Str2NrBases, skip, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite, skiptowhite_esc,
+    skipwhite, vim_str2nr,
+};
 use neovim::types::typval::{uvarnumber_T, varnumber_T};
 
 use crate::support::cstr;
@@ -604,6 +608,70 @@ mod getdigits {
             assert_eq!((got, used), (i32::MAX, 10));
             let (got, used) = read("42:", |p| getdigits_int(p, false, 7));
             assert_eq!((got, used), (42, 2));
+        }
+    }
+}
+
+/// Every fixture the skippers are asked about: leading and trailing runs of
+/// each class, an empty string, and the escapes only `skiptowhite_esc` sees.
+const SKIP_CASES: &[&[u8]] = &[
+    b"",
+    b" ",
+    b"   ",
+    b"\t \tx  ",
+    b"x  y",
+    b"0x1Fg",
+    b"90210abc",
+    b"1012",
+    b"abc123",
+    b"a\\ b c",
+    b"a\\",
+    b"\x16 z",
+    b"nowhitespaceatall",
+];
+
+/// `charset::skip`'s offsets name the same byte the pointer skippers do.
+///
+/// This is the contract the `&[u8]` rewrites lean on: `s[skip::white(s)..]`
+/// starts where `skipwhite(s)` pointed, so a walk converted from a pointer to
+/// an index looks at the same bytes. The pointer forms need a NUL to stop at,
+/// so the fixtures carry none inside; that difference is stated in
+/// `charset/skip.rs`'s own tests.
+#[test]
+fn the_slice_skippers_stop_where_the_pointer_skippers_stop() {
+    for case in SKIP_CASES {
+        let owned: Vec<c_char> = case
+            .iter()
+            .map(|&b| b as c_char)
+            .chain(std::iter::once(0))
+            .collect();
+        let base = owned.as_ptr();
+        // SAFETY: `owned` is NUL-terminated, which is all these forms ask
+        // for; `skiphex`/`skiptodigit` want a `*mut`, and nothing writes.
+        let want = unsafe {
+            [
+                skipwhite(base).cast_const(),
+                skiptowhite(base).cast_const(),
+                skiptowhite_esc(base).cast_const(),
+                skipdigits(base).cast_const(),
+                skiphex(base.cast_mut()).cast_const(),
+                skipbin(base),
+                skiptodigit(base.cast_mut()).cast_const(),
+            ]
+        };
+        let got = [
+            skip::white(case),
+            skip::to_white(case),
+            skip::to_white_esc(case),
+            skip::digits(case),
+            skip::hex(case),
+            skip::bin(case),
+            skip::to_digit(case),
+        ];
+        for (n, (&stopped, offset)) in want.iter().zip(got).enumerate() {
+            // SAFETY: both pointers are into `owned`.
+            let want_offset = unsafe { stopped.offset_from(base) };
+            assert_eq!(offset as isize, want_offset, "skipper {n} on {case:x?}");
         }
     }
 }

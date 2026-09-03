@@ -18,8 +18,8 @@ use neovim::charset::{vim_iswordc, vim_iswordp};
 use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::main::p_arshape;
 use neovim::mbyte::{
-    utf_char2bytes, utf_cp_bounds_len, utf_fold, utf_head_off, utf_ptr2char, utfc_ptr2len,
-    utfc_ptr2schar,
+    char_at, char_len, cluster_len, encode_char, utf_char2bytes, utf_char2len, utf_cp_bounds_len,
+    utf_fold, utf_head_off, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2schar,
 };
 
 use crate::support::editor_lock;
@@ -510,4 +510,79 @@ fn folding_leaves_everything_it_has_no_entry_for_alone() {
     // ...and still folds what it does have an entry for.
     assert_eq!(utf_fold(i32::from(b'A')), i32::from(b'a'));
     assert_eq!(utf_fold(0x00c0), 0x00e0, "À folds to à");
+}
+
+/// Byte strings covering every shape the decoders distinguish: ASCII, each
+/// sequence length, an overlong form, a truncated one, a bad continuation
+/// byte, a bare continuation byte, `0xFE`/`0xFF`, the five- and six-byte
+/// sequences only the original UTF-8 had, and a composing pair.
+const SLICE_CASES: &[&[u8]] = &[
+    b"",
+    b"a",
+    b"\x7f",
+    b"\xc3\xa9",
+    b"\xe2\x82\xac",
+    b"\xf0\x9f\x92\xa9",
+    b"\xf8\x88\x80\x80\x80",
+    b"\xfc\x84\x80\x80\x80\x80",
+    b"\xc0\x80",
+    b"\xc3",
+    b"\xe2\x82",
+    b"\xc3z",
+    b"\x80",
+    b"\xfe",
+    b"\xff",
+    b"\xe4\xb8\xad\xe6\x96\x87",
+    b"e\xcc\x81",
+    b"\xe0\xae\xb9\xe0\xaf\x8di",
+];
+
+/// The `&[u8]` codec answers what the pointer codec answers for the same
+/// bytes. This is the whole contract phase 26's rewrites lean on: a walk
+/// converted from `*const c_char` to a slice and an index decodes text the
+/// same way, so the conversion cannot change what the editor displays.
+///
+/// The pointer forms need a NUL to stop at and the slice forms need only
+/// their length, so the fixtures below carry no embedded NUL; that one
+/// deliberate difference is stated in `mbyte/utf8/slice.rs`'s own tests.
+#[test]
+fn the_slice_codec_answers_what_the_pointer_codec_answers() {
+    let _editor = editor_lock();
+    for case in SLICE_CASES {
+        let buf = cbuf(case);
+        // SAFETY: `buf` is NUL-terminated, which is all these forms ask for.
+        let (want_len, want_char, want_cluster) = unsafe {
+            (
+                utf_ptr2len(buf.as_ptr()),
+                utf_ptr2char(buf.as_ptr()),
+                utfc_ptr2len(buf.as_ptr()),
+            )
+        };
+        assert_eq!(char_len(case), want_len as usize, "char_len {case:x?}");
+        assert_eq!(char_at(case), want_char, "char_at {case:x?}");
+        assert_eq!(
+            cluster_len(case),
+            want_cluster as usize,
+            "cluster_len {case:x?}"
+        );
+    }
+}
+
+/// `encode_char` writes the bytes `utf_char2bytes` writes, over the whole
+/// range the codec covers -- including the five- and six-byte sequences
+/// nothing but this port's ancestor still encodes.
+#[test]
+fn the_slice_encoder_writes_what_the_pointer_encoder_writes() {
+    let _editor = editor_lock();
+    let mut want = [0 as c_char; 8];
+    let mut got = [0u8; 8];
+    for c in (0..0x11000_i32).chain([0x1f_ffff, 0x20_0000, 0x3ff_ffff, 0x400_0000, 0x7fff_ffff]) {
+        // SAFETY: eight bytes is more than `MB_MAXCHAR`.
+        let len = unsafe { utf_char2bytes(c, want.as_mut_ptr()) };
+        assert_eq!(encode_char(c, &mut got), len as usize, "length of {c:#x}");
+        assert_eq!(len, utf_char2len(c), "utf_char2len of {c:#x}");
+        for i in 0..len as usize {
+            assert_eq!(got[i], want[i] as u8, "byte {i} of {c:#x}");
+        }
+    }
 }

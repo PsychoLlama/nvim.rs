@@ -43,6 +43,96 @@ pub unsafe fn ml_get_buf_mut(buf: *mut buf_T, lnum: linenr_T) -> *mut ::core::ff
     unsafe { ml_get_buf_impl(buf, lnum, true) }
 }
 
+/// A buffer's one-line cache, borrowed.
+///
+/// `ml_get` answers a pointer *into* the data block holding the line — or
+/// into the buffer a pending `ml_replace` left — and the memline keeps
+/// exactly one line unpacked per buffer. Reading a *different* line flushes
+/// that pending write, releases the locked block and locks another, so the
+/// bytes the previous read answered may have moved or been freed. Upstream's
+/// rule is "use the line before you ask for another one", and until now it
+/// was written down nowhere.
+///
+/// This is where it is written down, and as much of it as the compiler can
+/// hold is held: [`line`](Self::line) borrows the handle **mutably** and the
+/// slice it answers keeps that borrow alive, so holding one line while
+/// asking for the next does not compile. That is the whole of the cache's
+/// one-line limit, expressed as a lifetime.
+///
+/// What the compiler still cannot see is a call *out* of here that reads
+/// another line behind the handle's back — `ml_replace`, `ml_append`,
+/// `ml_delete`, or anything that redraws. Not one of them takes a borrow
+/// this handle could conflict with, so that half of the contract is the
+/// caller's, which is why acquiring the handle is `unsafe` and reading
+/// through it is not.
+///
+/// The slices are the line's bytes **without** the terminating NUL, which is
+/// the length `ml_get_len` reports and the length every caller wants.
+/// [`Buf::line`] is the same read as a raw pointer, for callers that still
+/// want one.
+pub struct Lines(Buf);
+
+impl Lines {
+    /// Borrow the current buffer's line cache.
+    ///
+    /// # Safety
+    /// While the handle is live, nothing may read or change another line of
+    /// this buffer: no `ml_replace`/`ml_append`/`ml_delete`, no `ml_get` for
+    /// a second line, and nothing that redraws (a redraw reads lines). Keep
+    /// the handle's life to the walk that needs it.
+    pub unsafe fn current() -> Self {
+        Lines(cur_buf())
+    }
+
+    /// Borrow `buf`'s line cache.
+    ///
+    /// # Safety
+    /// As [`Lines::current`], and `buf` must stay live and have a memline
+    /// for as long as the handle does.
+    pub unsafe fn in_buffer(buf: Buf) -> Self {
+        Lines(buf)
+    }
+
+    /// Line `lnum`, without its NUL.
+    ///
+    /// Out-of-range line numbers answer the `???` placeholder [`ml_get`]
+    /// hands back, and complain the same way; there is no failure case here
+    /// that the pointer form does not have.
+    pub fn line(&mut self, lnum: linenr_T) -> &[u8] {
+        let buf = self.0.raw();
+        // SAFETY: a live buffer. `ml_get_buf` never answers NULL, and the
+        // second call is a cache hit on the line the first one just read, so
+        // it is that line's length: the slice is the line. The borrow of
+        // `self` is what keeps the next read from invalidating it.
+        unsafe {
+            let text = ml_get_buf(buf, lnum).cast::<u8>();
+            ::core::slice::from_raw_parts(text, to_len(ml_get_buf_len(buf, lnum)))
+        }
+    }
+
+    /// Line `lnum`, writable in place.
+    ///
+    /// Exactly as limited as [`ml_get_buf_mut`]: the bytes already there can
+    /// be rewritten and nothing else, which is what a slice of the line's own
+    /// length says. Use `ml_replace` to change a line's length.
+    pub fn line_mut(&mut self, lnum: linenr_T) -> &mut [u8] {
+        let buf = self.0.raw();
+        // SAFETY: as [`Lines::line`] -- the first call marks the line dirty
+        // and the second is a cache hit on it -- and the borrow is
+        // exclusive, so no shared slice of the same cache can be alive.
+        unsafe {
+            let text = ml_get_buf_mut(buf, lnum).cast::<u8>();
+            ::core::slice::from_raw_parts_mut(text, to_len(ml_get_buf_len(buf, lnum)))
+        }
+    }
+}
+
+/// A line length as a slice length. `ml_get_buf_len` answers 0 for an empty
+/// line and never less, so the clamp is a formality the type asks for.
+fn to_len(len: colnr_T) -> usize {
+    usize::try_from(len).unwrap_or(0)
+}
+
 /// A pointer to position `pos` of the current buffer.
 ///
 /// # Safety

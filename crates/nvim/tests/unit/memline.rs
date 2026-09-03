@@ -32,8 +32,8 @@ use neovim::buffer::{BLN_LISTED, DOBUF_WIPE, buflist_new, close_buffer};
 use neovim::main::p_dir;
 use neovim::memline::{
     B0_FNAME_SIZE_CRYPT, B0_FNAME_SIZE_NOCRYPT, B0_FNAME_SIZE_ORG, B0_HNAME_SIZE, B0_MAGIC_CHAR,
-    B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, ZeroBlock,
-    ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
+    B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
+    ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
 use neovim::types::{buf_T, colnr_T, linenr_T};
 use neovim::winlayer::Buf;
@@ -406,4 +406,51 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
         })
         .collect();
     assert_eq!(lines, LINES);
+}
+
+/// `Lines` reads the same bytes the pointer form does, and writes through
+/// the line the memline already holds.
+///
+/// The slice's length is the one thing a `*mut c_char` cannot carry, so this
+/// is where it is checked against `ml_get_buf_len` and against the text the
+/// buffer was built from. The in-place write then goes back out through
+/// `ml_get_buf`, which is the path every other reader in the tree takes: a
+/// `line_mut` that wrote somewhere else would show up here as an unchanged
+/// line.
+#[test]
+fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
+    let swapped = Swapped::new("lines-handle");
+    // SAFETY: the fixture's buffer is live and has a memline; nothing below
+    // reads a line except through the handle.
+    let mut lines = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
+
+    for (n, want) in LINES.iter().enumerate() {
+        let lnum = n as linenr_T + 1;
+        assert_eq!(lines.line(lnum), want.as_bytes(), "line {lnum}");
+        // SAFETY: a line of this buffer.
+        let len = unsafe { neovim::memline::ml_get_buf_len(swapped.buf, lnum) };
+        assert_eq!(
+            lines.line(lnum).len(),
+            len as usize,
+            "length of line {lnum}"
+        );
+    }
+
+    // Rewrite the bytes already there -- the only change `line_mut` allows.
+    let last = LINES.len() as linenr_T;
+    lines.line_mut(last).make_ascii_uppercase();
+    assert_eq!(
+        lines.line(last),
+        LINES[LINES.len() - 1].to_uppercase().as_bytes()
+    );
+
+    // ... and the pointer form sees it, so the write landed in the memline
+    // and not in a copy.
+    // SAFETY: a line of this buffer, NUL-terminated as `ml_get_buf` promises.
+    let through_pointer = unsafe {
+        std::ffi::CStr::from_ptr(ml_get_buf(swapped.buf, last))
+            .to_string_lossy()
+            .into_owned()
+    };
+    assert_eq!(through_pointer, LINES[LINES.len() - 1].to_uppercase());
 }
