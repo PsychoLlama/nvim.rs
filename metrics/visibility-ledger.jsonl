@@ -1,3 +1,6 @@
+{"path":"neovim::api::extmark::describe_ns","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
+{"path":"neovim::api::extmark::nvim_create_namespace","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
+{"path":"neovim::api::extmark::nvim_get_namespaces","kind":"fn","file":"crates/nvim/src/api/extmark/ns.rs","tests":["crates/nvim/tests/unit/namespace.rs"]}
 {"path":"neovim::api::private::converter::vim_to_object","kind":"fn","file":"crates/nvim/src/api/private/converter.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::api::private::helpers::api_free_object","kind":"fn","file":"crates/nvim/src/api/private/helpers/value.rs","tests":["crates/nvim/tests/unit/api_converter.rs"]}
 {"path":"neovim::arglist::split_one_arg","kind":"fn","file":"crates/nvim/src/arglist/mod.rs","tests":["crates/nvim/tests/unit/arglist.rs"]}
@@ -565,7 +568,7 @@
 {"path":"neovim::types::Set_cstr_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::Set_uint32_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::Set_uint64_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::types::String_0","kind":"struct","file":"crates/nvim/src/types/api_string.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
+{"path":"neovim::types::String_0","kind":"struct","file":"crates/nvim/src/types/api_string.rs","tests":["crates/nvim/tests/unit/namespace.rs","crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::TermKey","kind":"struct","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
 {"path":"neovim::types::TermKeyCsiParam","kind":"struct","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}
 {"path":"neovim::types::TermKeyFormat","kind":"type","file":"crates/nvim/src/types/termkey.rs","tests":["crates/nvim/tests/unit/termkey.rs"]}

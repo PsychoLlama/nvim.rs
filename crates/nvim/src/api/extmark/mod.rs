@@ -1,7 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::api::private::helpers::{
-    api_typename, arena_array, arena_dict, copy_string, cstr_as_string, find_buffer_by_handle,
+    api_typename, arena_array, arena_dict, cstr_as_string, find_buffer_by_handle,
     find_window_by_handle, has_key, object_to_hl_id, string_to_cstr,
 };
 use crate::charset::{transstr, vim_isprintc};
@@ -15,13 +15,9 @@ use crate::decoration::{
 use crate::decoration_provider::{decor_provider_clear, get_decor_provider, kDecorProviderActive};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
-use crate::global_cell::GlobalCell;
 use crate::grid::schar_high;
 use crate::main::{namespace_ids, namespace_localscope, next_namespace_id};
-use crate::map::{
-    map_put_ref_string_int, mh_delete_uint32_t, mh_get_ptr_t, mh_get_string, mh_put_ptr_t,
-    mh_put_uint32_t, set_has_uint32_t,
-};
+use crate::map::{mh_delete_uint32_t, mh_put_uint32_t, set_has_uint32_t};
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
@@ -30,16 +26,17 @@ use crate::mbyte::{mb_string2cells, utfc_ptr2schar};
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
+use crate::registry::{IdSet, id_set};
 use crate::sign::init_sign_text;
 use crate::types::{
     Arena, Array, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline, DecorInlineData,
     DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Dict,
     Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks,
     KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef,
-    MHPutStatus, MTKey, MTPair, Map_String_int, Map_uint32_t_uint32_t, MapHash, NS, Object,
-    OptionalKeys, Set_ptr_t, Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText,
-    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray,
-    linenr_T, ptr_t, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    MHPutStatus, MTKey, MTPair, Map_uint32_t_uint32_t, MapHash, NS, Object, OptionalKeys,
+    Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T,
+    colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray, linenr_T, schar_T, size_t,
+    uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -109,7 +106,6 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,

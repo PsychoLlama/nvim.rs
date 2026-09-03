@@ -59,11 +59,31 @@
     clippy::ptr_as_ptr
 )]
 
+use core::borrow::Borrow;
 use core::hash::{BuildHasherDefault, Hash, Hasher};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::allocator::Owned;
 use crate::types::handle_T;
+
+/// A `HashMap` on [`IdHasher`]: `const`-constructible, so one can be a
+/// `static` or a field with a `const` initializer, which
+/// `std::collections::HashMap`'s randomly seeded default cannot.
+pub(crate) type IdMap<K, V> = HashMap<K, V, BuildHasherDefault<IdHasher>>;
+
+/// The set half of [`IdMap`].
+pub(crate) type IdSet<K> = HashSet<K, BuildHasherDefault<IdHasher>>;
+
+/// An empty [`IdMap`]. The editor hands out its own keys, so there is
+/// nothing for a randomly seeded hasher to defend against.
+pub(crate) const fn id_map<K, V>() -> IdMap<K, V> {
+    HashMap::with_hasher(BuildHasherDefault::new())
+}
+
+/// An empty [`IdSet`]. See [`id_map`].
+pub(crate) const fn id_set<K>() -> IdSet<K> {
+    HashSet::with_hasher(BuildHasherDefault::new())
+}
 
 /// A registry: values found by id, iterated in khash's order.
 ///
@@ -73,7 +93,7 @@ pub(crate) struct SlotTable<K, V> {
     /// The slots, in iteration order. `swap_remove` keeps it dense.
     slots: Vec<(K, V)>,
     /// Key to its position in `slots`.
-    index: HashMap<K, usize, BuildHasherDefault<IdHasher>>,
+    index: IdMap<K, usize>,
 }
 
 impl<K, V> SlotTable<K, V> {
@@ -81,7 +101,7 @@ impl<K, V> SlotTable<K, V> {
     pub(crate) const fn new() -> Self {
         SlotTable {
             slots: Vec::new(),
-            index: HashMap::with_hasher(BuildHasherDefault::new()),
+            index: id_map(),
         }
     }
 }
@@ -92,7 +112,27 @@ impl<K, V> Default for SlotTable<K, V> {
     }
 }
 
-impl<K: Copy + Eq + Hash, V> SlotTable<K, V> {
+impl<K: Eq + Hash, V> SlotTable<K, V> {
+    /// How many entries the table holds.
+    pub(crate) fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    /// The slots, borrowed, in khash's order.
+    ///
+    /// The exception to the no-borrow rule in the module docs, for the two
+    /// tables that are *interned names* rather than registries: the
+    /// namespace map and the augroup map hand out `*const c_char`s into
+    /// their own keys, which a clone would dangle. Nothing reachable from
+    /// walking either one starts or stops an entry, so the borrow is a
+    /// leaf. A registry whose walk fires a callback uses
+    /// [`Self::snapshot_keys`]/[`Self::snapshot_values`] instead.
+    pub(crate) fn entries(&self) -> &[(K, V)] {
+        &self.slots
+    }
+}
+
+impl<K: Eq + Hash + Clone, V> SlotTable<K, V> {
     /// File `value` under `key`.
     ///
     /// A key that is already present keeps its place in the order and has
@@ -103,18 +143,22 @@ impl<K: Copy + Eq + Hash, V> SlotTable<K, V> {
         match self.index.get(&key) {
             Some(&i) => self.slots[i].1 = value,
             None => {
-                self.index.insert(key, self.slots.len());
+                self.index.insert(key.clone(), self.slots.len());
                 self.slots.push((key, value));
             }
         }
     }
 
     /// Take `key` out, moving the last slot into the hole it leaves.
-    pub(crate) fn remove(&mut self, key: K) -> Option<V> {
-        let i = self.index.remove(&key)?;
+    pub(crate) fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        let i = self.index.remove(key)?;
         let (_, value) = self.slots.swap_remove(i);
-        if let Some(&(moved, _)) = self.slots.get(i) {
-            self.index.insert(moved, i);
+        if let Some((moved, _)) = self.slots.get(i) {
+            self.index.insert(moved.clone(), i);
         }
         Some(value)
     }
@@ -122,14 +166,18 @@ impl<K: Copy + Eq + Hash, V> SlotTable<K, V> {
     /// Every key, in order, as an owned `Vec` — see the module docs on
     /// reentrancy. Callers walk this, never the table.
     pub(crate) fn snapshot_keys(&self) -> Vec<K> {
-        self.slots.iter().map(|&(key, _)| key).collect()
+        self.slots.iter().map(|(key, _)| key.clone()).collect()
     }
 }
 
-impl<K: Copy + Eq + Hash, V: Copy> SlotTable<K, V> {
+impl<K: Eq + Hash, V: Copy> SlotTable<K, V> {
     /// The value registered under `key`, if any.
-    pub(crate) fn get(&self, key: K) -> Option<V> {
-        let i = *self.index.get(&key)?;
+    pub(crate) fn get<Q>(&self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        let i = *self.index.get(key)?;
         Some(self.slots[i].1)
     }
 
@@ -423,7 +471,7 @@ impl<V> PendingFree<V> {
 /// hash spreads badly and SipHash costs too much for. As
 /// `memfile::BlockNrHasher`, whose keys have the same shape.
 #[derive(Default)]
-struct IdHasher(u64);
+pub(crate) struct IdHasher(u64);
 
 impl IdHasher {
     fn mix(&mut self, n: u64) {
@@ -456,12 +504,17 @@ impl Hasher for IdHasher {
         self.mix(n as u64);
     }
 
-    /// The fallback, for a key that is not one of the integers above. No
-    /// registry uses one; it is here so the type is a total `Hasher`.
+    /// The byte path, for the interned-name tables whose key is a
+    /// `Box<[u8]>`. FNV-1a over the bytes, folded into whatever the length
+    /// prefix already mixed in: cheap, `const`-constructible (which
+    /// `RandomState` is not, and these tables are `static`s), and good
+    /// enough for keys the editor itself hands out.
     fn write(&mut self, bytes: &[u8]) {
+        let mut h = self.0 ^ 0xcbf2_9ce4_8422_2325;
         for &b in bytes {
-            self.mix(self.0.wrapping_mul(31).wrapping_add(u64::from(b)));
+            h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
         }
+        self.0 = h;
     }
 
     fn finish(&self) -> u64 {
@@ -482,7 +535,7 @@ mod tests {
         let values = table.snapshot_values();
         assert_eq!(values.len(), expected.len());
         for (i, &key) in expected.iter().enumerate() {
-            assert_eq!(table.get(key), Some(u32::try_from(key).unwrap() * 10));
+            assert_eq!(table.get(&key), Some(u32::try_from(key).unwrap() * 10));
             assert_eq!(values[i], u32::try_from(key).unwrap() * 10);
         }
     }
@@ -498,7 +551,7 @@ mod tests {
     #[test]
     fn empty_table_answers_nothing() {
         let table: SlotTable<u64, u32> = SlotTable::new();
-        assert_eq!(table.get(1), None);
+        assert_eq!(table.get(&1), None);
         assert!(table.snapshot_keys().is_empty());
         assert!(table.snapshot_values().is_empty());
     }
@@ -513,22 +566,22 @@ mod tests {
     #[test]
     fn removal_swaps_the_last_slot_into_the_hole() {
         let mut table = filled(&[10, 20, 30, 40]);
-        assert_eq!(table.remove(20), Some(200));
+        assert_eq!(table.remove(&20), Some(200));
         check(&table, &[10, 40, 30]);
-        assert_eq!(table.get(20), None);
+        assert_eq!(table.get(&20), None);
     }
 
     #[test]
     fn removing_the_last_slot_leaves_the_rest_alone() {
         let mut table = filled(&[10, 20, 30]);
-        assert_eq!(table.remove(30), Some(300));
+        assert_eq!(table.remove(&30), Some(300));
         check(&table, &[10, 20]);
     }
 
     #[test]
     fn removing_an_absent_key_is_a_no_op() {
         let mut table = filled(&[10, 20]);
-        assert_eq!(table.remove(99), None);
+        assert_eq!(table.remove(&99), None);
         check(&table, &[10, 20]);
     }
 
@@ -537,14 +590,14 @@ mod tests {
         let mut table = filled(&[10, 20, 30]);
         table.insert(20, 7);
         assert_eq!(table.snapshot_keys(), [10, 20, 30]);
-        assert_eq!(table.get(20), Some(7));
+        assert_eq!(table.get(&20), Some(7));
         assert_eq!(table.snapshot_values(), [100, 7, 300]);
     }
 
     #[test]
     fn a_removed_key_can_come_back_at_the_end() {
         let mut table = filled(&[10, 20, 30]);
-        table.remove(10);
+        table.remove(&10);
         check(&table, &[30, 20]);
         table.insert(10, 100);
         check(&table, &[30, 20, 10]);
@@ -566,7 +619,7 @@ mod tests {
             if live.len() > 3 && rng.is_multiple_of(3) {
                 let victim = live[usize::try_from(rng >> 33).unwrap() % live.len()];
                 assert_eq!(
-                    table.remove(victim),
+                    table.remove(&victim),
                     Some(u32::try_from(victim).unwrap() * 10)
                 );
                 // The model: swap the last live key into the hole.
@@ -576,9 +629,42 @@ mod tests {
             check(&table, &live);
         }
         for key in live.clone() {
-            table.remove(key);
+            table.remove(&key);
         }
         assert!(table.snapshot_keys().is_empty());
+    }
+
+    /// The interned-name shape: an owned, unhashable-by-`IdHasher`-integer
+    /// key, looked up by a borrowed slice. `namespace_ids` and the augroup
+    /// map are this, and their user-visible order is this order.
+    #[test]
+    fn an_owned_key_is_found_by_a_borrowed_one() {
+        let mut table: SlotTable<Box<[u8]>, i32> = SlotTable::new();
+        for (i, name) in [&b"alpha"[..], b"beta", b"gamma"].iter().enumerate() {
+            table.insert((*name).into(), i32::try_from(i).unwrap() + 1);
+        }
+        assert_eq!(table.len(), 3);
+        assert_eq!(table.get(&b"gamma"[..]), Some(3));
+        assert_eq!(table.get(&b"delta"[..]), None);
+        let names: Vec<&[u8]> = table.entries().iter().map(|(k, _)| &**k).collect();
+        assert_eq!(names, [&b"alpha"[..], b"beta", b"gamma"], "iteration order");
+        assert_eq!(table.remove(&b"alpha"[..]), Some(1));
+        let names: Vec<&[u8]> = table.entries().iter().map(|(k, _)| &**k).collect();
+        assert_eq!(names, [&b"gamma"[..], b"beta"], "swap-remove order");
+    }
+
+    /// A key's bytes never move while it is in the table: `describe_ns`
+    /// hands out a `*const c_char` into one and the caller reads it after
+    /// the table has grown.
+    #[test]
+    fn a_keys_bytes_stay_put_while_the_table_grows() {
+        let mut table: SlotTable<Box<[u8]>, i32> = SlotTable::new();
+        table.insert(b"first\0"[..].into(), 1);
+        let addr = table.entries()[0].0.as_ptr();
+        for i in 0..64i32 {
+            table.insert(format!("n{i}\0").into_bytes().into(), i);
+        }
+        assert_eq!(table.entries()[0].0.as_ptr(), addr);
     }
 
     // -- HandleRegistry ----------------------------------------------------

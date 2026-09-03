@@ -39,6 +39,7 @@ mod message;
 mod r#move;
 mod msgpack;
 mod multiqueue;
+mod namespace;
 mod optionstr;
 mod packer;
 mod parser;

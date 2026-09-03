@@ -31,7 +31,7 @@
 //! to-free list that [`decor_check_to_be_deleted`] drains once the redraw is
 //! over.
 
-use crate::api::extmark::local_scopes;
+use crate::api::extmark::ns_is_local;
 use crate::change::changed_lines_invalidate_buf;
 use crate::decoration_provider::decor_provider_running;
 use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
@@ -233,7 +233,7 @@ pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
 ///
 #[inline]
 pub fn ns_in_win(ns_id: uint32_t, mut wp: Win) -> bool {
-    if !local_scopes().contains(ns_id) {
+    if !ns_is_local(ns_id) {
         return true;
     }
     // SAFETY: a live window's `w_ns_set` is one of its own fields.

@@ -57,7 +57,7 @@ fn timer_snapshot() -> Vec<*mut timer_T> {
 /// The timer with this id, or null.
 pub fn find_timer_by_nr(id: varnumber_T) -> *mut timer_T {
     timers
-        .with(|map| map.get(id as uint64_t))
+        .with(|map| map.get(&(id as uint64_t)))
         .unwrap_or(null_mut())
 }
 
@@ -260,7 +260,7 @@ pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     // SAFETY: `cb` is the timer's own callback.
     unsafe { callback_free(cb) };
     let id = timer.timer_id as uint64_t;
-    let _ = timers.with_mut(|map| map.remove(id));
+    let _ = timers.with_mut(|map| map.remove(&id));
     // SAFETY: this hands back the map's reference.
     unsafe { timer_decref(timer.raw()) };
 }

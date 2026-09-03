@@ -11,20 +11,20 @@ use crate::options::{
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
 use crate::profile::time_msg;
-use crate::registry::SlotTable;
+use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, DecorState, EstackInfo, FILE,
-    Loop, LuaRef, LuaRetMode, MTNode, MTPos, Map_String_int, MapHash, MarkTreeIter, MarkTreeIter_s,
-    MultiQueue, NS, Object, OptInt, Proc, Refcount, RgbValue, ScreenGrid, Set_String, Set_uint32_t,
-    StlClickDefinition, StlSyntax, String_0, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType,
-    alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T,
-    estack_T, etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T,
-    hlf_T, int16_t, int32_t, int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t,
-    nvim_stats_s, optmagic_T, pos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, sctx_T, size_t, tabpage_T, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue,
-    uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
-    uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u,
-    uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T, xfmark_T,
+    Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object,
+    OptInt, Proc, Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT,
+    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
+    caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, etype_T, except_T, file_comparison,
+    fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, linenr_T,
+    lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T,
+    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
+    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
+    xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -146,33 +146,16 @@ pub(crate) const KV_INITIAL_VALUE: Array = Array {
 pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const SESSION_FILE: &CStr = c"Session.vim";
-pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
-    set: Set_String {
-        h: MapHash {
-            n_buckets: 0 as uint32_t,
-            size: 0 as uint32_t,
-            n_occupied: 0 as uint32_t,
-            upper_bound: 0 as uint32_t,
-            n_keys: 0 as uint32_t,
-            keys_capacity: 0 as uint32_t,
-            hash: ::core::ptr::null_mut::<uint32_t>(),
-        },
-        keys: ::core::ptr::null_mut::<String_0>(),
-    },
-    values: ::core::ptr::null_mut::<c_int>(),
-});
-pub static namespace_localscope: GlobalCell<Set_uint32_t> = GlobalCell::new(Set_uint32_t {
-    h: MapHash {
-        n_buckets: 0 as uint32_t,
-        size: 0 as uint32_t,
-        n_occupied: 0 as uint32_t,
-        upper_bound: 0 as uint32_t,
-        n_keys: 0 as uint32_t,
-        keys_capacity: 0 as uint32_t,
-        hash: ::core::ptr::null_mut::<uint32_t>(),
-    },
-    keys: ::core::ptr::null_mut::<uint32_t>(),
-});
+/// Namespace name -> id, in creation order.
+///
+/// khash, which this was, is insertion-ordered with a swap-remove; nothing
+/// ever removes a namespace, so the order `nvim_get_namespaces` renders and
+/// `describe_ns` searches is creation order. [`SlotTable`] keeps it.
+pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, handle_T>> =
+    GlobalCell::new(SlotTable::new());
+/// The namespaces that are window-local rather than visible everywhere.
+/// Membership only; never walked.
+pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
 pub static next_namespace_id: GlobalCell<handle_T> = GlobalCell::new(1 as handle_T);
 pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
     c"ext_cmdline".as_ptr(),

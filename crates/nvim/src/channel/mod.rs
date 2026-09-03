@@ -234,7 +234,7 @@ pub unsafe fn channel_outstream(chan: *mut Channel) -> *mut RStream {
 /// caller that runs the editor in between must look it up again.
 pub fn find_channel(id: uint64_t) -> *mut Channel {
     channels
-        .with(|chans| chans.get(id))
+        .with(|chans| chans.get(&id))
         .unwrap_or(ptr::null_mut())
 }
 
@@ -359,7 +359,9 @@ unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the one remaining reference to a channel that
     // `channel_decref` dropped to zero.
     let chan = unsafe { *argv }.cast::<Channel>();
-    let _ = channels.with_mut(|chans| chans.remove(unsafe { (*chan).id }));
+    // SAFETY: as above.
+    let id = unsafe { (*chan).id };
+    let _ = channels.with_mut(|chans| chans.remove(&id));
     unsafe { channel_destroy(chan) };
 }
 
@@ -398,7 +400,9 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
         unsafe { (*chan).id } == next_chan_id.get(),
         "channel id was not the last"
     );
-    let _ = channels.with_mut(|chans| chans.remove(unsafe { (*chan).id }));
+    // SAFETY: as above.
+    let id = unsafe { (*chan).id };
+    let _ = channels.with_mut(|chans| chans.remove(&id));
     unsafe { (*chan).id = 0 };
     let left = unsafe { (*chan).refcount.release() };
     assert!(left == 0, "channel was already referenced");
