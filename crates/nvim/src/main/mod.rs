@@ -137,7 +137,6 @@ pub struct PumWant {
     pub insert: bool,
     pub finish: bool,
 }
-pub(crate) const NULL_0: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 pub(crate) const KV_INITIAL_VALUE: Array = Array {
     size: 0 as size_t,
@@ -145,13 +144,6 @@ pub(crate) const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub(crate) const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
-    ga_len: 0 as c_int,
-    ga_maxlen: 0 as c_int,
-    ga_itemsize: 0 as c_int,
-    ga_growsize: 1 as c_int,
-    ga_data: NULL_0,
-};
 pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const SESSION_FILE: &CStr = c"Session.vim";
 pub static namespace_ids: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {

@@ -23,7 +23,8 @@ use crate::guard::Script;
 use crate::os::cshim::gettext;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::{mem, ptr, slice};
+use core::{ptr, slice};
+use std::ffi::CString;
 
 /// `:source` with `fname`, or without it when `fname` is empty.
 ///
@@ -196,18 +197,6 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut s
     si
 }
 
-/// Append an owned string to a garray of `char *`.
-///
-/// # Safety
-/// `ga` holds `char *` items and `s` is owned memory.
-unsafe fn ga_push_string(ga: *mut garray_T, s: *mut c_char) {
-    // SAFETY: `ga_grow` leaves room for one more item at `ga_len`.
-    unsafe { ga_grow(ga, 1) };
-    let len = unsafe { (*ga).ga_len } as usize;
-    unsafe { (*ga).ga_data.cast::<*mut c_char>().add(len).write(s) };
-    unsafe { (*ga).ga_len += 1 };
-}
-
 /// Collect `eap`'s range of the current buffer into `sp`, and answer the name
 /// to show for those lines: the buffer's own file name, or a synthetic
 /// `:source buffer=N` when it has none.
@@ -240,13 +229,11 @@ unsafe fn do_source_buffer_init(
         // SAFETY: the buffer's own file name.
         unsafe { xstrdup(ffname) }
     };
-    let lines = &raw mut sp.buflines;
-    // SAFETY: the cookie's own garray, and every line of the range is
-    // readable through `ml_get`.
-    unsafe { ga_init(lines, size_of::<*mut c_char>() as c_int, 100) };
-    for lnum in line1..=line2 {
-        unsafe { ga_push_string(lines, xstrdup(ml_get(lnum))) };
-    }
+    // SAFETY: every line of the range is readable through `ml_get`, and each
+    // one is copied before the next is asked for.
+    sp.buflines = (line1..=line2)
+        .map(|lnum| unsafe { CStr::from_ptr(ml_get(lnum)) }.to_owned())
+        .collect();
     sp.buf_lnum = 0;
     sp.source_from_buf_or_str = true;
     // The first line the reader hands out is `line1`, so the counter starts
@@ -260,14 +247,14 @@ unsafe fn do_source_buffer_init(
 /// # Safety
 /// `sp` is a cookie under construction and `str` is NUL-terminated.
 unsafe fn do_source_str_init(sp: &mut source_cookie_T, mut str: *const c_char) {
-    let lines = &raw mut sp.buflines;
-    // SAFETY: the cookie's own garray; `skip_to_newline` stops at the
-    // terminator, so every span copied is within the string.
-    unsafe { ga_init(lines, size_of::<*mut c_char>() as c_int, 100) };
+    // SAFETY: `skip_to_newline` stops at the terminator, so every span
+    // copied is within the string.
     while unsafe { *str } as c_int != NUL {
         let eol = unsafe { skip_to_newline(str) };
-        let line = unsafe { xmemdupz(str.cast(), eol.offset_from(str) as size_t) };
-        unsafe { ga_push_string(lines, line.cast()) };
+        let len = unsafe { eol.offset_from(str) } as usize;
+        let line = unsafe { slice::from_raw_parts(str.cast::<u8>(), len) };
+        sp.buflines
+            .push(CString::new(line).expect("a sourced line holds no NUL"));
         // Step over the newline, unless this was the last line -- which
         // ends at the terminator instead.
         str = unsafe { eol.add((*eol as c_int != NUL) as usize) };
@@ -659,7 +646,7 @@ unsafe fn execute_source(
     if req.is(Origin::Buffer)
         && (req.ex_lua || unsafe { curbuf_is_lua() } || unsafe { range_is_lua(req.eap) })
     {
-        unsafe { nlua_exec_ga(&raw mut cookie.buflines, fname_exp) };
+        unsafe { nlua_exec_lines(&cookie.buflines, fname_exp) };
         return ptr::null_mut();
     }
     if !si.is_null() && unsafe { (*si).sn_lua } {
@@ -686,9 +673,7 @@ unsafe fn finish_source(cookie: &mut source_cookie_T, firstline: *mut c_char) {
     if !cookie.fp.is_null() {
         unsafe { fclose(cookie.fp) };
     }
-    if cookie.source_from_buf_or_str {
-        unsafe { ga_clear_strings(&raw mut cookie.buflines) };
-    }
+    cookie.buflines = Vec::new();
     unsafe { xfree(cookie.nextline.cast()) };
     unsafe { xfree(firstline.cast()) };
     let _ = unsafe { convert_setup(&raw mut cookie.conv, ptr::null_mut(), ptr::null_mut()) };
@@ -885,9 +870,7 @@ unsafe fn source_bracket(
 /// The request's pointers are live for the call.
 unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
     let save_debug_break_level = debug_break_level.get();
-    // SAFETY: every field of the cookie is a pointer, an integer or a bool,
-    // for all of which all-zero is the value C's `CLEAR_FIELD` leaves behind.
-    let mut cookie: source_cookie_T = unsafe { mem::zeroed() };
+    let mut cookie = source_cookie_T::new();
     // SAFETY: the caller's contract.
     let mut fname_exp = match unsafe { source_name(req, &mut cookie) } {
         Ok(name) => name,

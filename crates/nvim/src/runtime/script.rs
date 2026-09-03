@@ -613,127 +613,115 @@ unsafe fn starts_continuation(p: *const c_char) -> bool {
 ///
 /// `sp` must be the live source cookie.
 unsafe fn get_one_sourceline(sp: *mut source_cookie_T) -> *mut c_char {
-    // Use a growarray to store the sourced line.
-    let mut ga = GA_EMPTY_INIT_VALUE;
-    // SAFETY: `ga` is a local garray, and `sp` is the caller's cookie.
-    unsafe { ga_init(&raw mut ga, 1, 250) };
+    let mut line: Vec<u8> = Vec::new();
+    // SAFETY: `sp` is the caller's cookie, throughout.
     unsafe { (*sp).sourcing_lnum += 1 };
 
     // Loop until there is a finished line (or end-of-file).
     let mut have_read = false;
     loop {
-        // Make room to read at least 120 (more) characters.
-        // SAFETY: as above.
-        let len = unsafe {
-            ga_grow(&raw mut ga, 120);
-            if (*sp).source_from_buf_or_str {
-                match next_buffered_line(sp, &raw mut ga) {
-                    Some(len) => len,
-                    None => break,
-                }
-            } else {
-                match read_file_chunk(sp, &raw mut ga) {
-                    Some(len) => len,
-                    None => break,
-                }
+        if unsafe { (*sp).source_from_buf_or_str } {
+            if !unsafe { next_buffered_line(sp, &mut line) } {
+                break;
             }
-        };
-        have_read = true;
-        ga.ga_len = len;
-        let buf = ga.ga_data.cast::<c_char>();
-
-        // If the line was longer than the buffer, read more.
-        // SAFETY: `len` bytes were just written into `buf`.
-        if ga.ga_maxlen - ga.ga_len == 1 && unsafe { *buf.add(len as usize - 1) } != b'\n' as c_char
-        {
-            continue;
-        }
-
-        // SAFETY: as above.
-        if len >= 1 && unsafe { *buf.add(len as usize - 1) } == b'\n' as c_char {
-            // SAFETY: as above.
-            if unsafe { escaped_newline(buf, len) } {
-                // SAFETY: `sp` is the caller's cookie.
-                unsafe { (*sp).sourcing_lnum += 1 };
+            // A buffer or string line is handed over whole: it cannot hold a
+            // newline, so neither the continuation test nor the escaped-NL
+            // test below can fire for one.
+            have_read = true;
+        } else {
+            let Some(filled_the_chunk) = (unsafe { read_file_chunk(sp, &mut line) }) else {
+                break;
+            };
+            have_read = true;
+            // If the line was longer than the chunk, read more.
+            if filled_the_chunk && line.last() != Some(&b'\n') {
                 continue;
             }
-            // Remove the NL.
-            // SAFETY: as above.
-            unsafe { *buf.add(len as usize - 1) = NUL as c_char };
+            if line.last() == Some(&b'\n') {
+                if escaped_newline(&line) {
+                    unsafe { (*sp).sourcing_lnum += 1 };
+                    continue;
+                }
+                // Remove the NL.
+                line.pop();
+            }
         }
 
         // Check for CTRL-C here now and then, so a recursive `:so` can be
         // broken out of.
-        // SAFETY: no arguments, main thread only.
         line_breakcheck();
         break;
     }
 
     if have_read {
-        return ga.ga_data.cast::<c_char>();
+        return owned_cstr(line);
     }
-    // SAFETY: `ga` owns whatever it grew.
-    unsafe { xfree(ga.ga_data) };
     ptr::null_mut()
 }
 
-/// Append the next line of the buffer or string being sourced, NUL included.
-///
-/// Returns the new length of `ga`, or `None` once every line is processed.
+/// Append the next line of the buffer or string being sourced. Answers
+/// whether there was one.
 ///
 /// # Safety
 ///
-/// `sp` must be a buffer- or string-backed source cookie, and `ga` the line
-/// being built.
-unsafe fn next_buffered_line(sp: *mut source_cookie_T, ga: *mut garray_T) -> Option<c_int> {
-    if unsafe { (*sp).buf_lnum } >= unsafe { (*sp).buflines.ga_len } {
-        return None;
-    }
-    let lines = unsafe { (*sp).buflines.ga_data }.cast::<*mut c_char>();
-    unsafe { ga_concat(ga, *lines.add((*sp).buf_lnum as usize)) };
+/// `sp` must be a buffer- or string-backed source cookie.
+unsafe fn next_buffered_line(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> bool {
+    // SAFETY: the caller's cookie, whose lines outlive the copy.
+    let Some(next) = unsafe { &(*sp).buflines }.get(unsafe { (*sp).buf_lnum } as usize) else {
+        return false;
+    };
+    line.extend_from_slice(next.to_bytes());
     unsafe { (*sp).buf_lnum += 1 };
-    unsafe { ga_grow(ga, 1) };
-    unsafe { *(*ga).ga_data.cast::<c_char>().add((*ga).ga_len as usize) = NUL as c_char };
-    unsafe { (*ga).ga_len += 1 };
-    Some(unsafe { (*ga).ga_len })
+    true
 }
 
-/// `fgets` one chunk onto the end of `ga`, retrying when a signal interrupts.
-///
-/// Returns the new length of `ga`, or `None` at end of file.
+/// How much one `fgets` reads at a time, terminator included: upstream grew
+/// its buffer by at least this much before every read.
+const SOURCE_CHUNK: usize = 120;
+
+/// `fgets` one chunk onto the end of `line`, retrying when a signal
+/// interrupts. Answers whether the read used every byte it was offered --
+/// which is how a line longer than one chunk announces itself -- or `None`
+/// at end of file.
 ///
 /// # Safety
 ///
-/// `sp` must be a file-backed source cookie, and `ga` the line being built.
-unsafe fn read_file_chunk(sp: *mut source_cookie_T, ga: *mut garray_T) -> Option<c_int> {
-    let filled = unsafe { (*ga).ga_len };
-    let buf = unsafe { (*ga).ga_data }.cast::<c_char>();
+/// `sp` must be a file-backed source cookie.
+unsafe fn read_file_chunk(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> Option<bool> {
+    let filled = line.len();
+    line.reserve(SOURCE_CHUNK);
     loop {
-        unsafe { *__errno_location() = 0 };
-        if !unsafe { fgets(buf.add(filled as usize), (*ga).ga_maxlen - filled, (*sp).fp) }.is_null()
-        {
-            let rest = unsafe { cstr::bytes_at(buf.add(filled as usize)) }.len();
-            return Some(filled + rest as c_int);
-        }
-        if unsafe { *__errno_location() } != EINTR {
-            return None;
-        }
+        // SAFETY: the reserve above put `SOURCE_CHUNK` writable bytes at
+        // `filled`, which is exactly what `fgets` is allowed to touch (it
+        // writes at most one fewer, plus the terminator). `sp`'s file is the
+        // caller's promise.
+        let rest = unsafe {
+            *__errno_location() = 0;
+            let dst = line.as_mut_ptr().add(filled).cast::<c_char>();
+            if fgets(dst, SOURCE_CHUNK as c_int, (*sp).fp).is_null() {
+                if *__errno_location() != EINTR {
+                    return None;
+                }
+                continue;
+            }
+            cstr::bytes_at(dst).len()
+        };
+        // SAFETY: `fgets` wrote `rest` bytes plus a terminator, all inside
+        // the reserved room.
+        unsafe { line.set_len(filled + rest) };
+        return Some(rest == SOURCE_CHUNK - 1);
     }
 }
 
-/// Is the newline at the end of `buf[..len]` escaped?
+/// Is the newline at the end of `line` escaped?
 ///
 /// It is when an odd number of CTRL-V's precede it.  Upstream compares the
-/// parity of `len` against the parity of the index just before that run, which
-/// is faster than counting the run and says the same thing.
-///
-/// # Safety
-///
-/// `buf` must hold at least `len` bytes.
-unsafe fn escaped_newline(buf: *const c_char, len: c_int) -> bool {
+/// parity of the length against the parity of the index just before that run,
+/// which is faster than counting the run and says the same thing.
+fn escaped_newline(line: &[u8]) -> bool {
+    let len = line.len() as isize;
     let mut c = len - 2;
-    // SAFETY: `c` stays inside `buf[..len]`.
-    while c >= 0 && unsafe { *buf.add(c as usize) } as c_int == Ctrl_V {
+    while c >= 0 && line[c as usize] as c_int == Ctrl_V {
         c -= 1;
     }
     (len & 1) != (c & 1)

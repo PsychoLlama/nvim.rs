@@ -8,9 +8,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use super::{
     FCERR_NONE, FCERR_OTHER, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
@@ -18,7 +18,6 @@ use super::{
 };
 use crate::api::private::helpers::arena_array;
 use crate::ex_cmds::check_secure;
-use crate::garray::ga_concat_strings;
 use crate::lua::converter::{
     kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
 };
@@ -31,8 +30,8 @@ use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
-    VAR_UNKNOWN, expand_T, garray_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
-    lua_State, size_t, typval_T, varnumber_T,
+    VAR_UNKNOWN, expand_T, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State,
+    size_t, typval_T, varnumber_T,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -218,16 +217,25 @@ unsafe fn push_typval_args(
     }
 }
 
-/// Run a `:lua` heredoc: the garray's lines joined by newlines.
+/// Run a `:lua` heredoc: `lines` joined by newlines.
 ///
 /// # Safety
-/// `ga` must be a live garray of strings.
-pub unsafe fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_char) {
+/// `name` is a NUL-terminated chunk name.
+pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
+    let mut code = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if i > 0 {
+            code.push(b'\n');
+        }
+        code.extend_from_slice(line.to_bytes());
+    }
+    let len = code.len();
+    code.push(0);
+    // SAFETY: the caller's chunk name; `code` outlives the call, and the
+    // executor is handed the length as well as the terminator.
     unsafe {
-        let code = ga_concat_strings(ga, c"\n".as_ptr());
-        let len = cstr::bytes_at(code).len();
         nlua_typval_exec(
-            code,
+            code.as_mut_ptr().cast::<c_char>(),
             len,
             name,
             ptr::null_mut::<typval_T>(),
@@ -235,8 +243,7 @@ pub unsafe fn nlua_exec_ga(ga: *mut garray_T, name: *mut c_char) {
             false,
             ptr::null_mut::<typval_T>(),
         );
-        xfree(code.cast::<c_void>());
-    }
+    };
 }
 
 /// Call a Lua function stored as a Vimscript Funcref.

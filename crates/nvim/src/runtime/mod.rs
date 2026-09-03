@@ -45,22 +45,21 @@ use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
 use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
-use crate::garray::{ga_clear_strings, ga_concat, ga_grow, ga_init, ga_remove_duplicate_strings};
+use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
-use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_ga, nlua_is_deferred_safe};
+use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::main::{
-    GA_EMPTY_INIT_VALUE, cmdmod, curbuf, current_sctx, debug_break_level, debug_tick,
-    did_source_packages, do_profiling, e_argreq, e_interr, e_invarg, e_norange, ex_nesting_level,
-    global_busy, got_int, listcmd_busy, msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose,
-    time_fd,
+    cmdmod, curbuf, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
+    e_argreq, e_interr, e_invarg, e_norange, ex_nesting_level, global_busy, got_int, listcmd_busy,
+    msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
 };
 use crate::map::{map_put_ref_string_int, map_ref_string_int, mh_get_string, mh_put_string};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{
-    strequal, try_malloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
+    strequal, try_malloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::{
     emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
@@ -100,6 +99,7 @@ use crate::types::{
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
+use std::ffi::CString;
 
 // The carve of the transpiled module; see each child's docs.
 mod cache;
@@ -173,7 +173,6 @@ crate::flag_set! {
     /// Look for both directories and files.
     const DIRFILE = 512;
 }
-#[derive(Clone)]
 pub struct source_cookie_T {
     pub fp: *mut FILE,
     pub nextline: *mut ::core::ffi::c_char,
@@ -181,12 +180,44 @@ pub struct source_cookie_T {
     pub finished: bool,
     pub source_from_buf_or_str: bool,
     pub buf_lnum: ::core::ffi::c_int,
-    pub buflines: garray_T,
+    pub buflines: Vec<CString>,
     pub breakpoint: linenr_T,
     pub fname: *mut ::core::ffi::c_char,
     pub dbg_tick: ::core::ffi::c_int,
     pub level: ::core::ffi::c_int,
     pub conv: vimconv_T,
+}
+
+impl source_cookie_T {
+    /// A cookie nothing has been loaded into yet -- what upstream's
+    /// `CLEAR_FIELD` left behind.
+    pub fn new() -> Self {
+        Self {
+            fp: ::core::ptr::null_mut(),
+            nextline: ::core::ptr::null_mut(),
+            sourcing_lnum: 0,
+            finished: false,
+            source_from_buf_or_str: false,
+            buf_lnum: 0,
+            buflines: Vec::new(),
+            breakpoint: 0,
+            fname: ::core::ptr::null_mut(),
+            dbg_tick: 0,
+            level: 0,
+            conv: vimconv_T {
+                vc_type: 0,
+                vc_factor: 0,
+                vc_fd: ::core::ptr::null_mut(),
+                vc_fail: false,
+            },
+        }
+    }
+}
+
+impl Default for source_cookie_T {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 #[derive(Copy, Clone)]
 pub struct RuntimeSearchPath {
