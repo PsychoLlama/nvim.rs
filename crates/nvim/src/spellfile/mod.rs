@@ -34,6 +34,7 @@ mod dic;
 mod flags;
 mod read;
 mod sections;
+mod spl;
 mod sugfile;
 mod tables;
 mod wordfile;
