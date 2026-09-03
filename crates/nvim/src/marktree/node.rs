@@ -38,11 +38,8 @@ use core::ffi::c_int;
 use core::ops::Range;
 use core::ptr;
 
-use crate::map::{map_put_ref_uint64_t_ptr_t, mh_get_uint64_t};
 use crate::memory::{xcalloc, xfree};
-use crate::types::{
-    MTKey, MTNode, Map_uint64_t_ptr_t, MarkTree, mtnode_inner_s, ptr_t, uint32_t, uint64_t,
-};
+use crate::types::{MTKey, MTNode, MarkTree, mtnode_inner_s, uint32_t, uint64_t};
 
 use super::intersect::IdSet;
 use super::key::{MT_BRANCH_FACTOR, MT_LOG2_BRANCH, key_cmp, mt_lookup_key};
@@ -416,14 +413,8 @@ pub unsafe fn refkey(b: *mut MarkTree, x: *mut MTNode, i: c_int) {
     // SAFETY: the caller promises `x` is a live node holding a key at `i`.
     let node = unsafe { Node::new(x) };
     let id = mt_lookup_key(node.key(i as usize));
-    // SAFETY: `b` is live, so its one-element `id2node` array is a live map.
-    let map: *mut Map_uint64_t_ptr_t = unsafe { &raw mut (*b).id2node }.cast();
-    let (init, fresh) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: `map` is a live map; the two nulls decline its optional
-    // "initial value" and "was it new" out-parameters.
-    let slot = unsafe { map_put_ref_uint64_t_ptr_t(map, id, init, fresh) };
-    // SAFETY: `map_put_ref` answers a live slot of the map it was handed.
-    unsafe { *slot = node.as_ptr() as ptr_t };
+    // SAFETY: `b` is live, so `id2node` is its own table.
+    unsafe { &mut (*b).id2node }.insert(id, node.as_ptr());
 }
 
 /// The node holding the key with this lookup handle, or null.
@@ -431,16 +422,11 @@ pub unsafe fn refkey(b: *mut MarkTree, x: *mut MTNode, i: c_int) {
 /// # Safety
 /// `b` must be a live tree.
 pub unsafe fn id2node(b: *mut MarkTree, id: uint64_t) -> *mut MTNode {
-    // SAFETY: `b` is live, so its one-element `id2node` array is a live map.
-    let map: *mut Map_uint64_t_ptr_t = unsafe { &raw mut (*b).id2node }.cast();
-    // SAFETY: `map` is live, so its `set` is the map's own live key set.
-    let k = unsafe { mh_get_uint64_t(&raw mut (*map).set, id) };
-    if k == uint32_t::MAX {
-        return ptr::null_mut();
-    }
-    // SAFETY: a hash index the set answered is in bounds of `map.values`, and
-    // every value in this map was stored by `refkey` as a node pointer.
-    unsafe { (*(*map).values.add(k as usize)).cast() }
+    // SAFETY: `b` is live, so `id2node` is its own table.
+    unsafe { &(*b).id2node }
+        .get(&id)
+        .copied()
+        .unwrap_or(ptr::null_mut())
 }
 
 /// Where key `k` belongs among `keys`, which are sorted.

@@ -36,6 +36,7 @@ use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
 use crate::option::clear_winopt;
 use crate::quickfix::qf_free_all;
+use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
@@ -60,16 +61,18 @@ fn zeroed<T>() -> *mut T {
     unsafe { xcalloc(1, size_of::<T>()) }.cast::<T>()
 }
 
-/// A fresh window, zeroed but for its grid.
+/// A fresh window, zeroed but for the two fields that own an allocation.
 ///
 /// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
-/// `Vec`s, whose pointers are never null -- so the one field that owns an
-/// allocation is written before anything can read or drop it.
+/// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
+/// a `HashSet` and carries a hasher, so both are written before anything can
+/// read or drop them.
 fn zeroed_window() -> *mut win_T {
     let wp = zeroed::<win_T>();
-    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid is
-    // overwritten, never read.
+    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid
+    // and set are overwritten, never read.
     unsafe { (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty()) };
+    unsafe { (&raw mut (*wp).w_ns_set).write(id_set()) };
     wp
 }
 
@@ -234,7 +237,6 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_viewport_invalid = true;
     new_wp.w_viewport_last_topline = 1 as linenr_T;
     new_wp.w_ns_hl = -1;
-    new_wp.w_ns_set = SET_INIT;
     new_wp.w_onebuf_opt.wo_so = -1 as OptInt;
     new_wp.w_allbuf_opt.wo_so = new_wp.w_onebuf_opt.wo_so;
     new_wp.w_onebuf_opt.wo_siso = -1 as OptInt;
@@ -282,9 +284,11 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     // Don't execute autocommands while the window is halfway deleted.
     // SAFETY: matched by the `unblock_autocmds` below.
     unsafe { block_autocmds() };
-    free(wp.w_ns_set.keys);
-    free(wp.w_ns_set.h.hash);
-    wp.w_ns_set = SET_INIT;
+    // The window's memory goes back with `free` below, which runs no
+    // destructor, so the set's own allocation is released here. `take`
+    // rather than `drop_in_place`: what is left is a valid empty set, which
+    // the deferred-free path may still be handed.
+    drop(core::mem::take(&mut wp.w_ns_set));
     clear_options(&raw mut wp.w_onebuf_opt);
     clear_options(&raw mut wp.w_allbuf_opt);
     free(wp.w_p_lcs_chars.multispace);

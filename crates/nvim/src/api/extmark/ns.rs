@@ -20,27 +20,6 @@ use crate::api::private::helpers::{Reported, array_add, dict_put_str, has_key, s
 use crate::api::private::validate::err_bad_number;
 use crate::registry::interned_key;
 use crate::winlayer::{Win, tab_windows};
-use core::ptr;
-
-#[inline]
-unsafe fn set_del_uint32_t(mut set: *mut Set_uint32_t, mut key: uint32_t) -> uint32_t {
-    unsafe { mh_delete_uint32_t(set, &raw mut key) };
-    key
-}
-
-#[inline]
-unsafe fn set_put_uint32_t(
-    mut set: *mut Set_uint32_t,
-    mut key: uint32_t,
-    mut key_alloc: *mut *mut uint32_t,
-) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let mut k: uint32_t = unsafe { mh_put_uint32_t(set, key, &raw mut status) };
-    if !key_alloc.is_null() {
-        unsafe { *key_alloc = (*set).keys.offset(k as isize) };
-    }
-    status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
-}
 
 /// The id `name` is registered under, if any.
 pub(crate) fn namespace_id_for(name: &[u8]) -> Option<handle_T> {
@@ -54,36 +33,28 @@ pub(crate) fn ns_is_local(ns_id: uint32_t) -> bool {
 
 /// Whether `win`'s buffer holds any extmark in namespace `ns_id`.
 ///
-/// `b_extmark_ns` is declared as the untyped map header, so upstream casts it
-/// to the `uint32_t -> uint32_t` instantiation before asking; the four call
-/// sites below did that inline.
 fn buffer_uses_ns(win: Win, ns_id: uint32_t) -> bool {
-    // SAFETY: a live window has a live buffer, and the map is that buffer's
-    // own field.
-    unsafe {
-        let map = &raw mut (*(*win.raw()).w_buffer).b_extmark_ns as *mut Map_uint32_t_uint32_t;
-        set_has_uint32_t(&raw mut (*map).set, ns_id)
-    }
+    // SAFETY: a live window has a live buffer, and the table is that
+    // buffer's own field.
+    unsafe { &(*(*win.raw()).w_buffer).b_extmark_ns }.contains_key(&ns_id)
 }
 
 /// Whether namespace `ns_id` is one of the ones `win` shows.
 fn window_shows_ns(win: Win, ns_id: uint32_t) -> bool {
     // SAFETY: a live window, and the set is its own field.
-    unsafe { set_has_uint32_t(&raw mut (*win.raw()).w_ns_set, ns_id) }
+    unsafe { &(*win.raw()).w_ns_set }.contains(&ns_id)
 }
 
 /// Show namespace `ns_id` in `win`.
 fn show_ns_in_window(win: Win, ns_id: uint32_t) {
     // SAFETY: `w_ns_set` is the live window's own field.
-    let set = unsafe { &raw mut (*win.raw()).w_ns_set };
-    // SAFETY: `set` is that live set.
-    unsafe { set_put_uint32_t(set, ns_id, ptr::null_mut()) };
+    unsafe { &mut (*win.raw()).w_ns_set }.insert(ns_id);
 }
 
 /// Stop showing namespace `ns_id` in `win`.
 fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
     // SAFETY: a live window, and the set is its own field.
-    unsafe { set_del_uint32_t(&raw mut (*win.raw()).w_ns_set, ns_id) };
+    unsafe { &mut (*win.raw()).w_ns_set }.remove(&ns_id);
 }
 
 /// # Safety

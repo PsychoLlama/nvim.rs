@@ -15,9 +15,9 @@ use core::ffi::c_int;
 
 use super::del::del_id;
 use super::{
-    Buf, current_buf, decor_remove, invalidate_decor_state, itr_rawkey, ns_put_ref, put_decor,
-    redraw_decor, signcols_count_range, tree_del_itr, tree_get_alt, tree_lookup, tree_lookup_ns,
-    tree_move, tree_put, tree_revise_meta,
+    Buf, current_buf, decor_remove, invalidate_decor_state, itr_rawkey, ns_counter, ns_set_counter,
+    put_decor, redraw_decor, signcols_count_range, tree_del_itr, tree_get_alt, tree_lookup,
+    tree_lookup_ns, tree_move, tree_put, tree_revise_meta,
 };
 use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
@@ -46,10 +46,9 @@ pub unsafe fn extmark_set(
     // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
     // NULL or points at a mark id.
     let mut buf = unsafe { Buf::new(buf) };
-    let ns = ns_put_ref(buf.extmark_ns(), ns_id);
-    // SAFETY: `map_put_ref` never answers NULL; it creates the slot if the
-    // namespace had none, and the map owns it until the map is destroyed.
-    let ns = unsafe { &mut *ns };
+    // Registers the namespace at 0 if it had none, which `extmark_clear`
+    // reads as "this buffer has marks in it".
+    ns_counter(buf.extmark_ns(), ns_id);
     let mut id = if idp.is_null() {
         0
     } else {
@@ -60,8 +59,8 @@ pub unsafe fn extmark_set(
     let flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
     let mut revised = false;
     if id == 0 {
-        *ns += 1;
-        id = *ns;
+        id = ns_counter(buf.extmark_ns(), ns_id) + 1;
+        ns_set_counter(buf.extmark_ns(), ns_id, id);
     } else {
         let mut itr = MarkTreeIter::default();
         let old_mark = tree_lookup_ns(buf.marktree(), ns_id, id, false, Some(&mut itr));
@@ -95,7 +94,8 @@ pub unsafe fn extmark_set(
                 }
             }
         } else {
-            *ns = (*ns).max(id);
+            let highest = ns_counter(buf.extmark_ns(), ns_id).max(id);
+            ns_set_counter(buf.extmark_ns(), ns_id, highest);
         }
     }
 

@@ -550,7 +550,7 @@
 {"path":"neovim::types::MTPos","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MapHash","kind":"struct","file":"crates/nvim/src/types/map.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::Map_cstr_t_ptr_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
-{"path":"neovim::types::Map_uint64_t_ptr_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs","crates/nvim/tests/unit/marktree.rs"]}
+{"path":"neovim::types::Map_uint64_t_ptr_t","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::MarkTree","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MarkTreeIter","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}
 {"path":"neovim::types::MarkTreeIter_s","kind":"struct","file":"crates/nvim/src/types/marktree.rs","tests":["crates/nvim/tests/unit/marktree.rs"]}

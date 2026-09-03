@@ -11,6 +11,12 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::buffer::BufFlags;
+use crate::registry::{IdMap, IdSet};
+
+/// Namespace id to the highest extmark id handed out in it: `buf_T`'s
+/// `b_extmark_ns`, which upstream declared `Map(uint32_t, uint32_t)[1]` so
+/// that it decayed to a pointer.
+pub(crate) type ExtmarkNs = IdMap<uint32_t, uint32_t>;
 use crate::r#move::WinValid;
 use crate::undo::store::UndoStore;
 use crate::winlayer::{BufId, TabId, WinId};
@@ -441,8 +447,13 @@ pub struct file_buffer {
     pub terminal: *mut Terminal,
     pub additional_data: *mut AdditionalData,
     pub b_mapped_ctrl_c: ::core::ffi::c_int,
-    pub b_marktree: [MarkTree; 1],
-    pub b_extmark_ns: [Map_uint32_t_uint32_t; 1],
+    /// Where this buffer's extmarks live. Upstream declared it `MarkTree[1]`
+    /// so that the name decayed to the pointer every `marktree.h` entry
+    /// point wants; here it is the tree itself.
+    pub b_marktree: MarkTree,
+    /// Namespace id to the highest extmark id handed out in it. Asked and
+    /// counted up; never walked.
+    pub(crate) b_extmark_ns: ExtmarkNs,
     pub b_prev_line_count: ::core::ffi::c_int,
     pub update_channels: file_buffer_update_channels,
     pub update_callbacks: file_buffer_update_callbacks,
@@ -666,7 +677,9 @@ pub struct window_S {
     pub w_ns_hl_winhl: ::core::ffi::c_int,
     pub w_ns_hl_active: ::core::ffi::c_int,
     pub w_ns_hl_attr: *mut ::core::ffi::c_int,
-    pub w_ns_set: Set_uint32_t,
+    /// The namespaces this window shows, when they are window-local.
+    /// Membership only.
+    pub(crate) w_ns_set: IdSet<uint32_t>,
     pub w_hl_id_normal: ::core::ffi::c_int,
     pub w_hl_attr_normal: ::core::ffi::c_int,
     pub w_hl_attr_normalnc: ::core::ffi::c_int,

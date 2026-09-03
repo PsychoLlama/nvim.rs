@@ -60,9 +60,9 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CdCause, Direction, Error, MapHash, MotionType, OptInt, Set_uint32_t, WinSplit,
-    WinStyle, bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T,
-    kErrorTypeException, size_t, tabpage_T, uint32_t, win_T,
+    AlignTextPos, CdCause, Direction, Error, MotionType, OptInt, WinSplit, WinStyle, bln_values,
+    buf_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T, kErrorTypeException,
+    size_t, tabpage_T, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -171,19 +171,6 @@ pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const SET_INIT: Set_uint32_t = Set_uint32_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<uint32_t>(),
-};
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
 pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
 static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";

@@ -46,9 +46,6 @@ use crate::decoration::{
     decor_redraw, decor_state_invalidate, decor_type_flags,
 };
 use crate::main::curbuf_splice_pending;
-use crate::map::{
-    map_del_uint32_t_uint32_t, map_put_ref_uint32_t_uint32_t, map_ref_uint32_t_uint32_t,
-};
 use crate::marktree::{
     marktree_clear, marktree_del_itr, marktree_get_alt, marktree_get_altpos, marktree_itr_current,
     marktree_itr_get, marktree_itr_get_ext, marktree_itr_get_overlap, marktree_itr_next,
@@ -56,12 +53,12 @@ use crate::marktree::{
     marktree_move_region, marktree_put, marktree_revise_meta, marktree_splice,
 };
 use crate::memline::ml_find_line_or_offset;
-use crate::memory::{xfree, xrealloc};
+use crate::memory::xrealloc;
+use crate::types::buffer::ExtmarkNs;
 use crate::types::{
     DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
-    MTPair, MTPos, Map_uint32_t_uint32_t, MapHash, MarkTree, MarkTreeIter, Set_uint32_t,
-    UndoObjectType, bcount_t, buf_T, colnr_T, extmark_undo_vec_t, int32_t, linenr_T, size_t,
-    u_header_T, uint16_t, uint32_t, uint64_t,
+    MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType, bcount_t, buf_T, colnr_T,
+    extmark_undo_vec_t, int32_t, linenr_T, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -90,40 +87,19 @@ pub const KV_INITIAL_VALUE: ExtmarkInfoArray = ExtmarkInfoArray {
     capacity: 0,
     items: ptr::null_mut(),
 };
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0,
-    size: 0,
-    n_occupied: 0,
-    upper_bound: 0,
-    n_keys: 0,
-    keys_capacity: 0,
-    hash: ptr::null_mut(),
-};
-pub const SET_INIT: Set_uint32_t = Set_uint32_t {
-    h: MAPHASH_INIT,
-    keys: ptr::null_mut(),
-};
-pub const MAP_INIT: Map_uint32_t_uint32_t = Map_uint32_t_uint32_t {
-    set: SET_INIT,
-    values: ptr::null_mut(),
-};
-
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer
 
 impl Buf {
     /// `buf->b_marktree`, where this buffer's marks live.
-    ///
-    /// Declared `MarkTree[1]` in C so that `buf->b_marktree` decays to the
-    /// pointer every `marktree.h` entry point wants.
     fn marktree(&mut self) -> &mut MarkTree {
-        &mut self.b_marktree[0]
+        &mut self.b_marktree
     }
 
     /// `buf->b_extmark_ns`: namespace id to the highest mark id handed out in
-    /// it. Declared `Map(uint32_t, uint32_t)[1]`, as [`Buf::marktree`] is.
-    fn extmark_ns(&mut self) -> &mut Map_uint32_t_uint32_t {
-        &mut self.b_extmark_ns[0]
+    /// it.
+    fn extmark_ns(&mut self) -> &mut ExtmarkNs {
+        &mut self.b_extmark_ns
     }
 }
 
@@ -309,34 +285,33 @@ fn signcols_count_range(buf: Buf, row1: c_int, row2: c_int, add: c_int, half: Si
     unsafe { buf_signcols_count_range(buf.raw(), row1, row2, add, half) }
 }
 
-/// `map_put_ref(uint32_t, uint32_t)`: the slot for `key`, created empty if it
-/// was not there. Never NULL.
-fn ns_put_ref(map: &mut Map_uint32_t_uint32_t, key: uint32_t) -> *mut uint32_t {
-    // SAFETY: a live map; both optional out-parameters are NULL.
-    unsafe { map_put_ref_uint32_t_uint32_t(map, key, ptr::null_mut(), ptr::null_mut()) }
+/// The highest extmark id handed out in namespace `key`, registering the
+/// namespace at 0 if it was not there -- upstream's `map_put_ref` followed by
+/// a read of the slot.
+fn ns_counter(map: &mut ExtmarkNs, key: uint32_t) -> uint32_t {
+    *map.entry(key).or_insert(0)
 }
 
-/// `map_ref(uint32_t, uint32_t)`: the slot for `key`, or NULL.
-fn ns_ref(map: &mut Map_uint32_t_uint32_t, key: uint32_t) -> *mut uint32_t {
-    // SAFETY: as [`ns_put_ref`].
-    unsafe { map_ref_uint32_t_uint32_t(map, key, ptr::null_mut()) }
+/// Store `value` as namespace `key`'s highest id.
+fn ns_set_counter(map: &mut ExtmarkNs, key: uint32_t, value: uint32_t) {
+    map.insert(key, value);
+}
+
+/// Whether the buffer holds, or has held, an extmark in namespace `key`.
+fn ns_has(map: &ExtmarkNs, key: uint32_t) -> bool {
+    map.contains_key(&key)
 }
 
 /// `map_del(uint32_t, uint32_t)`.
-fn ns_del(map: &mut Map_uint32_t_uint32_t, key: uint32_t) {
-    // SAFETY: as [`ns_put_ref`].
-    unsafe { map_del_uint32_t_uint32_t(map, key, ptr::null_mut()) };
+fn ns_del(map: &mut ExtmarkNs, key: uint32_t) {
+    map.remove(&key);
 }
 
-/// `map_destroy(uint32_t, map)` followed by the `MAP_INIT` upstream always
-/// writes over it -- the map is a `buf_T` field, so it is reset, not freed.
-fn ns_destroy(map: &mut Map_uint32_t_uint32_t) {
-    // SAFETY: the three are this map's own allocations, and nothing can read
-    // them again: the map is re-initialised before this returns.
-    unsafe { xfree(map.set.keys.cast::<c_void>()) };
-    unsafe { xfree(map.set.h.hash.cast::<c_void>()) };
-    unsafe { xfree(map.values.cast::<c_void>()) };
-    *map = MAP_INIT;
+/// Forget every namespace. The table is a `buf_T` field, so it keeps its
+/// allocation -- which is what upstream's `map_destroy` plus the `MAP_INIT`
+/// it always wrote over it amounted to.
+fn ns_destroy(map: &mut ExtmarkNs) {
+    map.clear();
 }
 
 /// `ml_find_line_or_offset(buf, lnum, NULL, true)`: the byte offset of a

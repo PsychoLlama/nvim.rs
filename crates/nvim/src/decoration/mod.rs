@@ -39,7 +39,6 @@ use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
 use crate::main::decor_state;
-use crate::map::set_has_uint32_t;
 use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
@@ -236,8 +235,7 @@ pub fn ns_in_win(ns_id: uint32_t, mut wp: Win) -> bool {
     if !ns_is_local(ns_id) {
         return true;
     }
-    // SAFETY: a live window's `w_ns_set` is one of its own fields.
-    unsafe { set_has_uint32_t(&raw mut wp.w_ns_set, ns_id) }
+    wp.w_ns_set.contains(&ns_id)
 }
 
 // ---------------------------------------------------------------------------

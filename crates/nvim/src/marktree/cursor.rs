@@ -62,7 +62,7 @@ pub struct Cursor<'a> {
 /// Safe: [`Buf`] has already promised a live buffer, and `b_marktree` is one
 /// of its own fields. Dereferencing the answer is what needs a promise.
 pub fn tree_of(mut buf: Buf) -> *mut MarkTree {
-    buf.b_marktree.as_mut_ptr()
+    &raw mut buf.b_marktree
 }
 
 /// The mark `ns`/`id` names in `buf` — the `end` half when asked for it —

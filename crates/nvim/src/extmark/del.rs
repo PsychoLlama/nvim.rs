@@ -16,7 +16,7 @@ use core::mem;
 
 use super::{
     Buf, decor_remove, free_decor, invalidate_decor_state, itr_current, itr_get, itr_next, ns_del,
-    ns_destroy, ns_ref, tree_del_itr, tree_lookup, tree_lookup_ns,
+    ns_destroy, ns_has, tree_del_itr, tree_lookup, tree_lookup_ns,
 };
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
 use crate::types::{MTKey, MarkTreeIter, buf_T, colnr_T, uint32_t};
@@ -96,12 +96,12 @@ pub unsafe fn extmark_clear(
 ) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
-    if buf.extmark_ns().set.h.size == 0 {
+    if buf.extmark_ns().is_empty() {
         return false;
     }
 
     let all_ns = ns_id == 0;
-    if !all_ns && ns_ref(buf.extmark_ns(), ns_id).is_null() {
+    if !all_ns && !ns_has(buf.extmark_ns(), ns_id) {
         // Nothing to do.
         return false;
     }

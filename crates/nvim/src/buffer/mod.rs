@@ -329,9 +329,7 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 /// The buffer's running total of one kind of extmark metadata, kept at the
 /// root of its marktree. `buffer.h` had this as a `static inline`.
 pub fn buf_meta_total(b: Buf, m: MetaIndex) -> uint32_t {
-    // SAFETY: the buffer's own marktree, read through the layout the
-    // extmark code gives it.
-    unsafe { (*(&raw const b.b_marktree as *const MarkTree)).meta_root[m as usize] }
+    b.b_marktree.meta_root[m as usize]
 }
 
 // ---------------------------------------------------------------------------

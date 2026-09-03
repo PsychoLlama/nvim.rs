@@ -365,5 +365,5 @@ pub unsafe fn nvim__buf_debug_extmarks(
     if b.is_null() {
         return String_0::NULL.reported(error);
     }
-    unsafe { mt_inspect(&mut (*b).b_marktree[0], keys, dot) }.reported(error)
+    unsafe { mt_inspect(&mut (*b).b_marktree, keys, dot) }.reported(error)
 }

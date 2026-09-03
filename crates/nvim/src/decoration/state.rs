@@ -269,7 +269,7 @@ pub unsafe fn decor_redraw_reset(wp: *mut win_T, mut state: DecorStateRef) -> bo
     state.future_begin = 0;
     state.new_range_ordering = 0;
 
-    wp.buffer().b_marktree[0].n_keys != 0
+    wp.buffer().b_marktree.n_keys != 0
 }
 
 /// Whether `decor` occupies a position of its own rather than colouring the

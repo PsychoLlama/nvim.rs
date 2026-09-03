@@ -492,7 +492,7 @@ pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: linenr_T, mut lnume: linenr_
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
-    if xtra != 0 && buf.b_marktree[0].n_keys > 0 {
+    if xtra != 0 && buf.b_marktree.n_keys > 0 {
         let lines = buf_meta_total(buf, kMTMetaLines);
         lnume += 1 + linenr_T::from(xtra < 0 && lines != 0);
     }

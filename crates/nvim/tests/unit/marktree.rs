@@ -30,9 +30,7 @@ use neovim::marktree::key::mt_end;
 use neovim::marktree::meta::META_COUNT;
 use neovim::marktree::splice::marktree_splice;
 use neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move};
-use neovim::types::{
-    MTKey, MTNode, MTPair, MTPos, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter, MarkTreeIter_s,
-};
+use neovim::types::{MTKey, MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIter_s};
 
 /// The namespace every mark in this file lives in.
 const NS: u32 = 10;
@@ -57,17 +55,12 @@ fn inline_filter() -> MetaFilter {
     filter
 }
 
-/// `MarkTree` and `MarkTreeIter` are both valid all-zero — the Lua spec relies
-/// on it too (`ffi.new` zero-initializes) — and `marktree_clear` restores that
-/// state, so a tree can be dropped by clearing it.
+/// An empty tree. `MarkTreeIter` is still valid all-zero — the Lua spec
+/// relied on it, `ffi.new` zero-initializes — but `MarkTree` is not: its
+/// `id2node` is a `HashMap` now. `marktree_clear` restores this state, so a
+/// tree can be dropped by clearing it.
 fn zeroed_tree() -> MarkTree {
-    MarkTree {
-        root: ptr::null_mut::<MTNode>(),
-        meta_root: [0; 5],
-        n_keys: 0,
-        n_nodes: 0,
-        id2node: [unsafe { std::mem::zeroed::<Map_uint64_t_ptr_t>() }; 1],
-    }
+    MarkTree::default()
 }
 
 fn zeroed_iter() -> MarkTreeIter {

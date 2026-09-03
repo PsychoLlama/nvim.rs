@@ -17,7 +17,6 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
 use crate::grid::schar_high;
 use crate::main::{namespace_ids, namespace_localscope, next_namespace_id};
-use crate::map::{mh_delete_uint32_t, mh_put_uint32_t, set_has_uint32_t};
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
@@ -33,10 +32,9 @@ use crate::types::{
     DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Dict,
     Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks,
     KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef,
-    MHPutStatus, MTKey, MTPair, Map_uint32_t_uint32_t, MapHash, NS, Object, OptionalKeys,
-    Set_uint32_t, String_0, UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, buf_T,
-    colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray, linenr_T, schar_T, size_t,
-    uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    MTKey, MTPair, NS, Object, OptionalKeys, String_0, UndoObjectType, VirtLines, VirtText,
+    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray,
+    linenr_T, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -59,7 +57,6 @@ pub const kSHUIWatchedOverlay: ::core::ffi::c_uint = 8;
 pub const kSHUIWatched: ::core::ffi::c_uint = 4;
 pub const kSHHlEol: ::core::ffi::c_uint = 2;
 pub const kSHIsSign: ::core::ffi::c_uint = 1;
-pub const kMHExisting: MHPutStatus = 0;
 pub const kExtmarkHighlight: ExtmarkType = 32;
 pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
@@ -105,15 +102,6 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
     data: DecorInlineData {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
-};
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 pub const KEYSET_OPTIDX_set_extmark__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

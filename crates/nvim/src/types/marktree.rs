@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::registry::{IdMap, id_map};
 
 #[repr(C)]
 pub struct Intersection {
@@ -44,7 +45,27 @@ pub struct MarkTree {
     pub meta_root: [uint32_t; 5],
     pub n_keys: size_t,
     pub n_nodes: size_t,
-    pub id2node: [Map_uint64_t_ptr_t; 1],
+    /// Every key's lookup handle to the node it lives in, so a mark can be
+    /// found without a walk. Asked, never iterated.
+    pub(crate) id2node: IdMap<uint64_t, *mut MTNode>,
+}
+
+impl MarkTree {
+    /// A tree with nothing in it. Upstream started one from all-zero bytes;
+    /// the table is the one field that is not a value of its type there.
+    pub const EMPTY: MarkTree = MarkTree {
+        root: ::core::ptr::null_mut(),
+        meta_root: [0; 5],
+        n_keys: 0,
+        n_nodes: 0,
+        id2node: id_map(),
+    };
+}
+
+impl Default for MarkTree {
+    fn default() -> Self {
+        MarkTree::EMPTY
+    }
 }
 /// A cursor into a [`MarkTree`].
 ///

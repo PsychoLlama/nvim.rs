@@ -30,15 +30,12 @@ use crate::marktree::meta::MetaCount;
 use crate::marktree::node::{MAX_KEYS, Node, id2node};
 use crate::marktree::pair::marktree_intersect_pair;
 use crate::memory::{xfree, xmemdup};
+use crate::registry::{IdMap, id_map};
 use crate::types::{
-    DecorInlineData, MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_ptr_t, MarkTree, MarkTreeIter,
-    Set_ptr_t, size_t, uint32_t, uint64_t,
+    DecorInlineData, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, size_t, uint32_t, uint64_t,
 };
 
-use super::{
-    MAPHASH_INIT, NULL, map_get_ptr_t_ptr_t, map_put_ptr_t_ptr_t, marktree_del_itr,
-    marktree_lookup, marktree_lookup_ns, marktree_put,
-};
+use super::{NULL, marktree_del_itr, marktree_lookup, marktree_lookup_ns, marktree_put};
 
 /// Check every invariant of the whole tree, aborting on the first violation.
 ///
@@ -49,12 +46,11 @@ pub unsafe fn marktree_check(b: &mut MarkTree) {
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         debug_assert!(b.n_keys == 0 as size_t, "b->n_keys == 0");
         debug_assert!(b.n_nodes == 0 as size_t, "b->n_nodes == 0");
-        // The C's `b->id2node == NULL` arm is dead — `id2node` is a
-        // one-element array, so its address is never null — and stays dead
-        // here for the same reason.
-        // SAFETY: `b` is live, so its `id2node` array is a live map.
+        // The C's `b->id2node == NULL` arm is dead — `id2node` was a
+        // one-element array, so its address was never null — and stays dead
+        // here, where it is a table by value.
         assert!(
-            unsafe { id2node_size(b) } == 0 as uint32_t,
+            b.id2node.is_empty(),
             "b->id2node == NULL || map_size(b->id2node) == 0"
         );
         return;
@@ -64,23 +60,16 @@ pub unsafe fn marktree_check(b: &mut MarkTree) {
     let meta_root = b.meta_root;
     let nkeys = check_node(b, root, &mut last, &mut last_right, meta_root);
     debug_assert!(b.n_keys == nkeys, "b->n_keys == nkeys");
-    // SAFETY: `b` is live, so its `id2node` array is a live map.
-    let mapped = unsafe { id2node_size(b) };
     debug_assert!(
-        b.n_keys == mapped as size_t,
+        b.n_keys == b.id2node.len(),
         "b->n_keys == map_size(b->id2node)"
     );
 }
 
-/// How many keys the tree's id map holds.
-///
-/// # Safety
-/// `b` must be a live tree.
-unsafe fn id2node_size(b: &MarkTree) -> uint32_t {
-    let map: *const Map_uint64_t_ptr_t = (&raw const b.id2node).cast();
-    // SAFETY: `b` is live, so its one-element `id2node` array is a live map.
-    unsafe { (*map).set.h.size }
-}
+/// Each node's intersection set as [`recurse_nodes`] found it: a
+/// sentinel-terminated buffer this file owns, filed under the node's
+/// address.
+type Records = IdMap<*const MTNode, *mut uint64_t>;
 
 /// Check `x`'s own invariants and its whole subtree's, and answer how many
 /// keys the subtree holds.
@@ -169,15 +158,8 @@ pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         return true;
     };
-    // klib's `MAP_INIT`: an empty map owning nothing.
-    let mut checked = Map_ptr_t_ptr_t {
-        set: Set_ptr_t {
-            h: MAPHASH_INIT,
-            keys: ptr::null_mut(),
-        },
-        values: ptr::null_mut(),
-    };
-    // SAFETY: `checked` is a live, empty map this function owns.
+    let mut checked: Records = id_map();
+    // SAFETY: `root` is a live node of `b`.
     unsafe { recurse_nodes(root, &mut checked) };
     let mut itr = MarkTreeIter::default();
     // SAFETY: `b` is a live tree and this is what positions `itr` in it.
@@ -206,10 +188,12 @@ pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
         unsafe { marktree_itr_next(b, &mut itr) };
     }
     // SAFETY: `root` is live and `checked` holds what its subtree intersected.
-    let status = unsafe { recurse_nodes_compare(root, &mut checked) };
-    // SAFETY: `checked` is the live map built above, and its values are the
-    // buffers `recurse_nodes` allocated. Nothing names it afterwards.
-    unsafe { destroy_checked(&mut checked) };
+    let status = unsafe { recurse_nodes_compare(root, &checked) };
+    // SAFETY: the values are the buffers `recurse_nodes` allocated, and
+    // nothing names them afterwards; the table itself drops here.
+    for &record in checked.values() {
+        unsafe { xfree(record.cast()) };
+    }
     status
 }
 
@@ -218,8 +202,8 @@ pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
 /// record.
 ///
 /// # Safety
-/// `checked` must be a live map.
-unsafe fn recurse_nodes(x: Node, checked: &mut Map_ptr_t_ptr_t) {
+/// `x` must be a live node.
+unsafe fn recurse_nodes(x: Node, checked: &mut Records) {
     let set = x.intersection();
     if !set.is_empty() {
         // The recorded copy is terminated with a sentinel no id can equal.
@@ -235,12 +219,11 @@ unsafe fn recurse_nodes(x: Node, checked: &mut Map_ptr_t_ptr_t) {
         // hands over the buffer it already owns.
         let heap = set.take_heap();
         let owned = if heap.is_null() { copy } else { heap };
-        // SAFETY: `checked` is a live map per the caller.
-        unsafe { map_put_ptr_t_ptr_t(checked, x.as_ptr().cast(), owned) };
+        checked.insert(x.as_ptr().cast_const(), owned.cast::<uint64_t>());
     }
     if !x.is_leaf() {
         for i in 0..=x.key_count() {
-            // SAFETY: `checked` is a live map per the caller.
+            // SAFETY: a live node's children are live.
             unsafe { recurse_nodes(x.child(i), checked) };
         }
     }
@@ -250,10 +233,12 @@ unsafe fn recurse_nodes(x: Node, checked: &mut Map_ptr_t_ptr_t) {
 /// for it? Recurses over the whole subtree.
 ///
 /// # Safety
-/// `checked` must be the live map [`recurse_nodes`] filled.
-unsafe fn recurse_nodes_compare(x: Node, checked: &mut Map_ptr_t_ptr_t) -> bool {
-    // SAFETY: `checked` is a live map per the caller.
-    let recorded = unsafe { map_get_ptr_t_ptr_t(checked, x.as_ptr().cast()) } as *mut uint64_t;
+/// `checked` must be the table [`recurse_nodes`] filled, `x` a live node.
+unsafe fn recurse_nodes_compare(x: Node, checked: &Records) -> bool {
+    let recorded = checked
+        .get(&x.as_ptr().cast_const())
+        .copied()
+        .unwrap_or(ptr::null_mut());
     let rebuilt = x.intersection();
     if recorded.is_null() {
         if !rebuilt.is_empty() {
@@ -281,32 +266,13 @@ unsafe fn recurse_nodes_compare(x: Node, checked: &mut Map_ptr_t_ptr_t) -> bool 
     }
     if !x.is_leaf() {
         for i in 0..=x.key_count() {
-            // SAFETY: `checked` is a live map per the caller.
+            // SAFETY: a live node's children are live.
             if !unsafe { recurse_nodes_compare(x.child(i), checked) } {
                 return false;
             }
         }
     }
     true
-}
-
-/// Free the record map and every buffer in it — klib's `map_destroy`, plus
-/// the values, which this file allocated itself.
-///
-/// # Safety
-/// `checked` must be a live map whose values are `xfree`-able buffers, and
-/// nothing may name it afterwards.
-unsafe fn destroy_checked(checked: &mut Map_ptr_t_ptr_t) {
-    for i in 0..checked.set.h.n_keys as usize {
-        // SAFETY: the map holds `n_keys` values, each its own buffer.
-        unsafe { xfree(*checked.values.add(i)) };
-    }
-    // SAFETY: the key array is the map's own.
-    unsafe { xfree(checked.set.keys.cast()) };
-    // SAFETY: the hash table is the map's own.
-    unsafe { xfree(checked.set.h.hash.cast()) };
-    // SAFETY: the value array is the map's own.
-    unsafe { xfree(checked.values.cast()) };
 }
 
 /// One end of a mark, as the unit suite spells it.

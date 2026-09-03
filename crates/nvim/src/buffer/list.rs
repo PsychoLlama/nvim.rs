@@ -47,6 +47,7 @@ use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
+use crate::registry::id_map;
 use crate::semsg;
 use crate::types::{
     AdditionalData, Callback, Failed, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
@@ -399,14 +400,17 @@ fn new_buffer() -> Owned<buf_T> {
 pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     let mut storage = Box::<buf_T>::new_zeroed();
     let at = storage.as_mut_ptr();
-    // The two fields a zeroed `buf_T` is *not* a valid value for -- an empty
-    // `Vec` holds a non-null dangling pointer, not a zero one -- are the
-    // user-command list and everything the memline owns.
-    // SAFETY: both are inside the block just allocated, nothing has read or
+    // The fields a zeroed `buf_T` is *not* a valid value for -- an empty
+    // `Vec` holds a non-null dangling pointer, not a zero one, and a `HashMap`
+    // holds a seeded hasher -- are the user-command list, the keymap, what
+    // the memline owns, and the two extmark tables.
+    // SAFETY: all are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_ml).write(memline_T::closed()) };
+    unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
+    unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })

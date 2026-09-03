@@ -48,8 +48,6 @@ pub mod splice;
 use core::ffi::c_int;
 use core::ptr;
 
-use crate::global_cell::GlobalCell;
-use crate::map::{map_del_uint64_t_ptr_t, map_put_ref_ptr_t_ptr_t, mh_get_ptr_t};
 pub use crate::marktree::check::*;
 pub(crate) use crate::marktree::inspect::*;
 pub use crate::marktree::iter::*;
@@ -59,17 +57,14 @@ use crate::marktree::node::*;
 pub use crate::marktree::pair::*;
 pub use crate::marktree::rebalance::*;
 pub use crate::marktree::splice::*;
-use crate::memory::xfree;
 use crate::types::{
-    MTKey, MTPos, Map_ptr_t_ptr_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,
-    MarkTree, MarkTreeIter, Set_uint64_t, ptr_t, uint32_t, uint64_t,
+    MTKey, MTPos, Map_uint64_t_MTDamagePair, MapHash, MarkTree, MarkTreeIter, uint32_t, uint64_t,
 };
 
 /// What a splice recorded about pairs whose halves crossed while it ran.
 pub type MTDamageMap = Map_uint64_t_MTDamagePair;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-static value_init_ptr_t: GlobalCell<ptr_t> = GlobalCell::new(NULL);
 pub const MAPHASH_INIT: MapHash = MapHash {
     n_buckets: 0 as uint32_t,
     size: 0 as uint32_t,
@@ -80,35 +75,6 @@ pub const MAPHASH_INIT: MapHash = MapHash {
     hash: ::core::ptr::null_mut::<uint32_t>(),
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-
-/// Store `value` under `key`, replacing whatever was there.
-///
-/// # Safety
-/// `map` must be a live map.
-#[inline]
-unsafe fn map_put_ptr_t_ptr_t(map: *mut Map_ptr_t_ptr_t, key: ptr_t, value: ptr_t) {
-    let (init, fresh) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: `map` is live; the two nulls decline its optional "initial value"
-    // and "was it new" out-parameters.
-    let slot = unsafe { map_put_ref_ptr_t_ptr_t(map, key, init, fresh) };
-    // SAFETY: `map_put_ref` answers a live slot of the map it was handed.
-    unsafe { *slot = value };
-}
-
-/// The value stored under `key`, or null.
-///
-/// # Safety
-/// `map` must be a live map.
-#[inline]
-unsafe fn map_get_ptr_t_ptr_t(map: *mut Map_ptr_t_ptr_t, key: ptr_t) -> ptr_t {
-    // SAFETY: `map` is live, so its `set` is the map's own live key set.
-    let k = unsafe { mh_get_ptr_t(&raw mut (*map).set, key) };
-    if k == MH_TOMBSTONE as uint32_t {
-        return value_init_ptr_t.get();
-    }
-    // SAFETY: a hash index the set answered is in bounds of `map.values`.
-    unsafe { *(*map).values.add(k as usize) }
-}
 
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
 /// it a range.
@@ -298,10 +264,7 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
     }
     x.set_key_count(x.key_count() - 1);
     b.n_keys = b.n_keys.wrapping_sub(1);
-    let map: *mut Map_uint64_t_ptr_t = (&raw mut b.id2node).cast();
-    // SAFETY: `map` is `b`'s own live map; the null declines the out-parameter
-    // that would report the value removed.
-    unsafe { map_del_uint64_t_ptr_t(map, id, ptr::null_mut()) };
+    b.id2node.remove(&id);
 
     // 4. Write the stolen key over the one the caller wanted gone, rebasing it
     //    onto every node between the two, and repair the covering records the
@@ -537,19 +500,10 @@ pub unsafe fn marktree_clear(b: &mut MarkTree) {
         b.root = ptr::null_mut();
     }
 
-    // `map_destroy(uint64_t, b->id2node)`.
-    let map = &mut b.id2node[0];
-    // SAFETY: the key array is the map's own, and nothing names it after this.
-    unsafe { xfree(map.set.keys.cast()) };
-    // SAFETY: as above, for the hash array.
-    unsafe { xfree(map.set.h.hash.cast()) };
-    map.set = Set_uint64_t {
-        h: MAPHASH_INIT,
-        keys: ptr::null_mut(),
-    };
-    // SAFETY: as above, for the value array.
-    unsafe { xfree(map.values.cast()) };
-    map.values = ptr::null_mut();
+    // Upstream's `map_destroy(uint64_t, b->id2node)`. The table keeps its
+    // allocation, which is what a cleared tree wants: it is about to be
+    // filled again, or it is a buffer's field on its way out.
+    b.id2node.clear();
 
     b.n_keys = 0;
     b.meta_root = [0; META_COUNT];

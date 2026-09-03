@@ -329,6 +329,7 @@ typedef unsigned int ExprComparisonType;
 typedef unsigned int ExprOptScope;
 typedef unsigned int ExprParserFlags;
 typedef unsigned int ExprVarScope;
+typedef struct ExtmarkNs ExtmarkNs;
 typedef unsigned int ExtmarkOp;
 typedef unsigned int ExtmarkType;
 typedef const KeySetLink *(*FieldHashfn)(const char *, size_t);

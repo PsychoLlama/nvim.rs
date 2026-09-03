@@ -219,7 +219,7 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
 /// @return whether a provider placed any marks in the callback.
 pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
-    let keys = unsafe { (*(*wp).w_buffer).b_marktree[0].n_keys };
+    let keys = unsafe { (*(*wp).w_buffer).b_marktree.n_keys };
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
@@ -234,7 +234,7 @@ pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_
         }
     }
     // SAFETY: `wp` is live, so its buffer and marktree are.
-    let now = unsafe { (*(*wp).w_buffer).b_marktree[0].n_keys };
+    let now = unsafe { (*(*wp).w_buffer).b_marktree.n_keys };
     now > keys
 }
 
