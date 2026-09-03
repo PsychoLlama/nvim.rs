@@ -204,7 +204,7 @@ pub(crate) fn syn_cmd_cluster(eap: &mut exarg_T, _syncing: c_int) {
 
         if got_clstr {
             redraw_curbuf_later(UPD_SOME_VALID);
-            unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
+            syn_stack_free_all(cur_syn_block()); // Need to recompute all.
         }
     }
 

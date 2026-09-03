@@ -270,13 +270,8 @@ pub(crate) unsafe fn syn_maybe_enable() {
 /// `reset_synblock`, which takes the `Box` back.
 fn empty_synblock() -> Box<synblock_T> {
     let mut storage = Box::<synblock_T>::new_zeroed();
-    let at = storage.as_mut_ptr();
-    // An empty `Vec` holds a non-null dangling pointer, not a zero one.
-    // SAFETY: both are inside the block just allocated, nothing has read or
-    // dropped them, and `write` does not drop what was there.
-    unsafe { (&raw mut (*at).b_syn_patterns).write(Vec::new()) };
-    // SAFETY: as above.
-    unsafe { (&raw mut (*at).b_syn_clusters).write(Vec::new()) };
+    // SAFETY: the block was just allocated and nothing has read it.
+    unsafe { init_synblock(storage.as_mut_ptr()) };
     // SAFETY: all-zero bytes are otherwise what upstream hands a fresh block.
     unsafe { storage.assume_init() }
 }
@@ -329,25 +324,22 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
     while (unsafe { *subcmd_end } as u8).is_ascii_alphabetic() {
         subcmd_end = unsafe { subcmd_end.add(1) };
     }
-    let subcmd_name = unsafe { xstrnsave(arg, subcmd_end.offset_from(arg) as size_t) };
+    // SAFETY: both pointers are into the command line, `arg` first.
+    let subcmd_name = unsafe { name_at(arg, subcmd_end.offset_from(arg) as usize) };
 
     // Skip the error messages of every subcommand too.
     let _skipping = (eap.skip != 0).then(Suppress::emsg_skip);
-    match SUBCOMMANDS
-        .iter()
-        .find(|sub| unsafe { cstr::eq(subcmd_name, sub.name.as_ptr()) })
-    {
+    match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
         Some(sub) => {
             eap.arg = unsafe { skipwhite(subcmd_end) };
             (sub.func)(eap, 0);
         }
         None => {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let subcmd_name = unsafe { c_str(subcmd_name) };
+            // SAFETY: `subcmd_name` is live for the whole message.
+            let subcmd_name = unsafe { c_str(subcmd_name.as_ptr()) };
             semsg!("E410: Invalid :syntax subcommand: {subcmd_name}");
         }
     }
-    unsafe { xfree(subcmd_name as *mut c_void) };
 }
 
 /// `:ownsyntax {name}` — give this window its own syntax block.
@@ -371,11 +363,12 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
     }
 
-    // Save the value of b:current_syntax.
-    let mut old_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };
-    if !old_value.is_null() {
-        old_value = unsafe { xstrdup(old_value) };
-    }
+    // Save the value of b:current_syntax; the autocommand below can change
+    // it, so the bytes have to be copied out rather than borrowed.
+    let old_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };
+    // SAFETY: a variable's value, a NUL-terminated string, live until the
+    // autocommand runs.
+    let old_value = unsafe { cstr::at_opt(old_value) }.map(CStr::to_owned);
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buf = curbuf.get();
@@ -391,10 +384,12 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
     }
 
     // Restore the value of b:current_syntax.
-    if old_value.is_null() {
-        let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
-    } else {
-        unsafe { set_internal_string_var(c"b:current_syntax".as_ptr(), old_value) };
-        unsafe { xfree(old_value as *mut c_void) };
+    match &old_value {
+        None => {
+            let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
+        }
+        Some(value) => unsafe {
+            set_internal_string_var(c"b:current_syntax".as_ptr(), value.as_ptr().cast_mut());
+        },
     }
 }

@@ -56,9 +56,8 @@ pub(crate) unsafe fn syn_stack_free_block(mut block: SynBlock) {
 ///
 /// Used when the syntax items themselves changed, so nothing cached can be
 /// trusted any more.
-pub(crate) unsafe fn syn_stack_free_all(block: *mut synblock_T) {
-    // SAFETY: the caller's promise -- a live syntax block.
-    let mut block = unsafe { SynBlock::new(block) };
+pub(crate) fn syn_stack_free_all(block: SynBlock) {
+    // SAFETY: the handle's promise -- a live syntax block.
     unsafe { syn_stack_free_block(block) };
 
     // With 'foldmethod' "syntax", every fold has to be recomputed too.

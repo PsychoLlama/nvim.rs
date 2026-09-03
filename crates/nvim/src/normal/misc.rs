@@ -32,7 +32,7 @@ use crate::normal::{
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
-use crate::syntax::syn_stack_free_all;
+use crate::syntax::{cur_syn_block, syn_stack_free_all};
 use crate::types::{LineGetter, NUL, OpType, cmdarg_T, linenr_T};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
@@ -161,7 +161,7 @@ pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
     if check_clear_op(ca.op()) {
         return;
     }
-    unsafe { syn_stack_free_all(cur_win().w_s) };
+    syn_stack_free_all(cur_syn_block());
     // Upstream walks `firstwin` -- the *current* tab page's windows --
     // even though the loop reads as if it might walk another one's.
     for wp in windows() {

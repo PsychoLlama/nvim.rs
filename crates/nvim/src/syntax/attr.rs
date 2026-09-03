@@ -125,16 +125,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     // Zero-width matches with a nextlist already used here, so the same one
     // cannot match twice in this column and loop forever.
-    let mut zero_width = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut(),
-    };
-    let item_size = ::core::mem::size_of::<c_int>() as c_int;
-    // SAFETY: a growarray this frame owns.
-    unsafe { ga_init(&raw mut zero_width, item_size, 10) };
+    let mut zero_width: Vec<c_int> = Vec::new();
 
     // Use the `syntax iskeyword` option while matching.
     let mut buf_chartab: [c_char; 32] = [0; 32];
@@ -195,7 +186,7 @@ pub(crate) unsafe fn syn_current_attr(
                         current_next_flags.set(lspp.sp_flags);
                         keep_next_list = true;
                         zero_width_next_list = true;
-                        unsafe { ga_push_int(&mut zero_width, next_match_idx.get()) };
+                        zero_width.push(next_match_idx.get());
                         next_match_idx.set(-1);
                     } else {
                         cur_si = Some(unsafe { push_next_match() });
@@ -276,9 +267,6 @@ pub(crate) unsafe fn syn_current_attr(
         }
     }
 
-    if zero_width.ga_len > 0 {
-        unsafe { ga_clear(&raw mut zero_width) };
-    }
     // No longer need the external matches -- but keep next_match_extmatch.
     unsafe { unref_extmatch(re_extmatch_out.get()) };
     re_extmatch_out.set(::core::ptr::null_mut());
@@ -358,7 +346,7 @@ unsafe fn scan_patterns(
     syncing: bool,
     displaying: bool,
     cur_si: Option<Item>,
-    zero_width: &garray_T,
+    zero_width: &[c_int],
     cur_extmatch: &mut *mut reg_extmatch_T,
     try_next_column: &GlobalCell<bool>,
 ) {
@@ -633,18 +621,11 @@ unsafe fn item_can_spell(sip: Item) -> bool {
     can
 }
 
-/// Append one index to a `garray_T` of `c_int`.
-unsafe fn ga_push_int(gap: &mut garray_T, value: c_int) {
-    unsafe { ga_grow(gap, 1) };
-    unsafe { *(gap.ga_data as *mut c_int).offset(gap.ga_len as isize) = value };
-    gap.ga_len += 1;
-}
-
 /// Have we already matched pattern `idx` at the current column?
 ///
 /// Two places to look: an item already on the state stack that started here,
 /// and the list of zero-width items with a `nextgroup=` used in this column.
-pub(crate) unsafe fn did_match_already(idx: c_int, gap: &garray_T) -> bool {
+pub(crate) unsafe fn did_match_already(idx: c_int, gap: &[c_int]) -> bool {
     let mut i = state_len();
     while i > 0 {
         i -= 1;
@@ -656,12 +637,5 @@ pub(crate) unsafe fn did_match_already(idx: c_int, gap: &garray_T) -> bool {
             return true;
         }
     }
-    let mut i = gap.ga_len;
-    while i > 0 {
-        i -= 1;
-        if unsafe { *(gap.ga_data as *const c_int).offset(i as isize) } == idx {
-            return true;
-        }
-    }
-    false
+    gap.contains(&idx)
 }

@@ -18,7 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::charset::{
@@ -67,12 +67,12 @@ use crate::regexp::{
     vim_regexec_multi, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
-use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, xstrnsave};
+use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, garray_T, hashtab_T, int16_t, linenr_T,
-    lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
-    synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
+    OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, hashtab_T, int16_t, linenr_T, lpos_T,
+    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
+    synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};

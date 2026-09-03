@@ -188,7 +188,7 @@ pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
                 }
 
                 redraw_curbuf_later(UPD_SOME_VALID);
-                unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
+                syn_stack_free_all(cur_syn_block()); // Need to recompute all.
             }
         }
     }
@@ -358,7 +358,7 @@ pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
                 unsafe { syn_incl_toplevel(syn_id, &mut args.opt.flags) };
                 store_region(args, syn_id, syncing != 0);
                 redraw_curbuf_later(UPD_SOME_VALID);
-                unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
+                syn_stack_free_all(cur_syn_block()); // Need to recompute all.
                 return; // the patterns and the lists belong to the block now
             }
         }

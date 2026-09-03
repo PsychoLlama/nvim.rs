@@ -413,17 +413,25 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
 
-    let mut key = ::core::ptr::null_mut::<c_char>();
+    // The setting word, upper-cased and NUL-terminated: `sync_count_key`
+    // reads the digits of `minlines=10` straight out of it.
+    let mut key: Vec<u8> = Vec::new();
     let mut illegal = false;
     let mut finished = false;
 
     while ends_excmd(unsafe { *arg_start } as c_int) == 0 {
         let mut arg_end = unsafe { skiptowhite(arg_start) };
         let mut next_arg = unsafe { skipwhite(arg_end) };
-        unsafe { xfree(key as *mut ::core::ffi::c_void) };
-        key = unsafe { vim_strnsave_up(arg_start, arg_end.offset_from(arg_start) as size_t) };
+        key.clear();
+        // SAFETY: both pointers are into the command line, `arg_start` first.
+        key.extend_from_slice(unsafe {
+            cstr::slice_at(arg_start, arg_end.offset_from(arg_start) as usize)
+        });
+        key.make_ascii_uppercase();
+        key.push(0);
+        let word = &key[..key.len() - 1];
 
-        if unsafe { cstr::eq_bytes(key, b"CCOMMENT") } {
+        if word == b"CCOMMENT" {
             if eap.skip == 0 {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
@@ -442,14 +450,15 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
                     cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
                 };
             }
-        } else if let Some(count) = unsafe { sync_count_key(key) } {
-            let mut digits = unsafe { key.add(count.digits_at) };
-            if unsafe { *digits.offset(-1) } as c_int != '=' as c_int
-                || !ascii_isdigit(unsafe { *digits } as c_int)
+        } else if let Some(count) = sync_count_key(word) {
+            if word.get(count.digits_at - 1) != Some(&b'=')
+                || !word.get(count.digits_at).is_some_and(u8::is_ascii_digit)
             {
                 illegal = true;
                 break;
             }
+            // SAFETY: `key` is NUL-terminated and `digits_at` is inside it.
+            let mut digits = unsafe { key.as_mut_ptr().add(count.digits_at) }.cast::<c_char>();
             let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
             if eap.skip == 0 {
                 let mut block = cur_syn_block();
@@ -459,12 +468,12 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
                     SyncField::LineBreaks => block.b_syn_sync_linebreaks = n,
                 }
             }
-        } else if unsafe { cstr::eq_bytes(key, b"FROMSTART") } {
+        } else if word == b"FROMSTART" {
             if eap.skip == 0 {
                 cur_syn_block().b_syn_sync_minlines = MAXLNUM as linenr_T;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
-        } else if unsafe { cstr::eq_bytes(key, b"LINECONT") } {
+        } else if word == b"LINECONT" {
             match unsafe { sync_linecont(eap, next_arg) } {
                 Err(LineContError::Illegal) => {
                     illegal = true;
@@ -480,11 +489,11 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
             eap.arg = next_arg;
-            if unsafe { cstr::eq_bytes(key, b"MATCH") } {
+            if word == b"MATCH" {
                 syn_cmd_match(eap, 1);
-            } else if unsafe { cstr::eq_bytes(key, b"REGION") } {
+            } else if word == b"REGION" {
                 syn_cmd_region(eap, 1);
-            } else if unsafe { cstr::eq_bytes(key, b"CLEAR") } {
+            } else if word == b"CLEAR" {
                 syn_cmd_clear(eap, 1);
             } else {
                 illegal = true;
@@ -495,7 +504,6 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
         arg_start = next_arg;
     }
 
-    unsafe { xfree(key as *mut ::core::ffi::c_void) };
     if illegal {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg_start = unsafe { c_str(arg_start) };
@@ -503,15 +511,15 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
     } else if !finished {
         eap.nextcmd = unsafe { check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);
-        unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all syntax.
+        syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
     }
 }
 
 /// Which counted setting `key` names.
-unsafe fn sync_count_key(key: *const c_char) -> Option<&'static SyncCount> {
+fn sync_count_key(key: &[u8]) -> Option<&'static SyncCount> {
     SYNC_COUNTS
         .iter()
-        .find(|(name, _)| unsafe { cstr::prefix_eq(key, name.as_ptr(), name.count_bytes()) })
+        .find(|(name, _)| key.starts_with(name.to_bytes()))
         .map(|(_, count)| count)
 }
 
@@ -534,7 +542,7 @@ unsafe fn sync_linecont(
     if unsafe { *next_arg } as c_int == NUL {
         return Err(LineContError::Illegal); // missing pattern
     }
-    if !cur_syn_block().b_syn_linecont_pat.is_null() {
+    if cur_syn_block().b_syn_linecont_pat.is_some() {
         emsg(gettext(
             c"E403: syntax sync: line continuations pattern specified twice",
         ));
@@ -549,22 +557,20 @@ unsafe fn sync_linecont(
         let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.
-        unsafe {
-            block.b_syn_linecont_pat =
-                xstrnsave(next_arg.add(1), arg_end.offset_from(next_arg) as size_t - 1)
-        };
+        // SAFETY: both pointers are into the command line, `next_arg` first.
+        let pat = unsafe { name_at(next_arg.add(1), arg_end.offset_from(next_arg) as usize - 1) };
         block.b_syn_linecont_ic = block.b_syn_ic;
         let cpo_save = p_cpo.get();
         p_cpo.set(empty_option());
-        unsafe { block.b_syn_linecont_prog = vim_regcomp(block.b_syn_linecont_pat, RE_MAGIC) };
+        // SAFETY: `pat` is live across the call, which only reads it.
+        unsafe { block.b_syn_linecont_prog = vim_regcomp(pat.as_ptr().cast_mut(), RE_MAGIC) };
         p_cpo.set(cpo_save);
         syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_null() {
-            unsafe { xfree(block.b_syn_linecont_pat as *mut ::core::ffi::c_void) };
-            block.b_syn_linecont_pat = ::core::ptr::null_mut();
             return Err(LineContError::Reported);
         }
+        block.b_syn_linecont_pat = Some(pat);
     }
     Ok(unsafe { skipwhite(arg_end.add(1)) })
 }

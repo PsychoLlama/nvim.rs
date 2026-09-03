@@ -10,7 +10,7 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use super::*;
 
@@ -44,16 +44,33 @@ pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
 
     unsafe { vim_regfree(block.b_syn_linecont_prog) };
     block.b_syn_linecont_prog = ::core::ptr::null_mut();
-    unsafe { xfree(block.b_syn_linecont_pat as *mut c_void) };
-    block.b_syn_linecont_pat = ::core::ptr::null_mut();
+    block.b_syn_linecont_pat = None;
     block.b_syn_folditems = 0;
     unsafe { clear_string_option(&raw mut (*block.raw()).b_syn_isk) };
 
-    unsafe { syn_stack_free_all(block.raw()) };
+    syn_stack_free_all(block);
     invalidate_current_state();
 
     // Reset the counter for ":syntax include".
     running_syn_inc_tag.set(0);
+}
+
+/// Put the owning fields of a freshly zeroed `synblock_T` into a valid state.
+///
+/// A zeroed `Vec` is not one -- an empty `Vec` holds a dangling non-null
+/// pointer -- and `Option`'s null representation is not something to lean
+/// on. Upstream's blocks come out of `xcalloc`, so this is what stands in
+/// for the zeroing it relied on.
+///
+/// # Safety
+/// `at` must point at a zeroed block nothing has read or dropped.
+pub(crate) unsafe fn init_synblock(at: *mut synblock_T) {
+    // SAFETY: the caller's promise; `write` does not drop what was there.
+    unsafe {
+        (&raw mut (*at).b_syn_patterns).write(Vec::new());
+        (&raw mut (*at).b_syn_clusters).write(Vec::new());
+        (&raw mut (*at).b_syn_linecont_pat).write(None);
+    }
 }
 
 /// Get rid of `:ownsyntax` for window `wp`.
@@ -85,11 +102,10 @@ unsafe fn syntax_sync_clear() {
 
     unsafe { vim_regfree(block.b_syn_linecont_prog) };
     block.b_syn_linecont_prog = ::core::ptr::null_mut();
-    unsafe { xfree(block.b_syn_linecont_pat as *mut c_void) };
-    block.b_syn_linecont_pat = ::core::ptr::null_mut();
+    block.b_syn_linecont_pat = None;
     unsafe { clear_string_option(&raw mut (*block.raw()).b_syn_isk) };
 
-    unsafe { syn_stack_free_all(block.raw()) }; // Need to recompute all syntax.
+    syn_stack_free_all(block); // Need to recompute all syntax.
 }
 
 /// Remove one pattern from a block's pattern list, closing the gap.
@@ -161,7 +177,7 @@ pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
         }
     }
     redraw_curbuf_later(UPD_SOME_VALID);
-    unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all syntax.
+    syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
 }
 
 /// Clear one syntax group for the current window's block.

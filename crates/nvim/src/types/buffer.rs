@@ -600,7 +600,9 @@ pub struct synblock_T {
     pub b_syn_sync_minlines: linenr_T,
     pub b_syn_sync_maxlines: linenr_T,
     pub b_syn_sync_linebreaks: linenr_T,
-    pub b_syn_linecont_pat: *mut ::core::ffi::c_char,
+    /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
+    /// is what it compiled to.
+    pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,
     pub b_syn_linecont_prog: *mut regprog_T,
     pub b_syn_linecont_time: syn_time_T,
     pub b_syn_linecont_ic: ::core::ffi::c_int,
