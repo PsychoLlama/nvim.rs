@@ -58,6 +58,10 @@ unsafe fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c
     kinds
 }
 
+/// The loaded buffer for each file name asked about, or null when there is
+/// none. Memoises the walk of the buffer list.
+type FnameBufs = IdMap<Box<[u8]>, *mut buf_T>;
+
 /// What one pass of [`shada_read`] carries between entries.
 struct Reading {
     /// `:rshada!` — take what the file says whatever this session holds.
@@ -70,13 +74,13 @@ struct Reading {
     /// The list behind `v:oldfiles`.
     oldfiles_list: *mut list_T,
     /// The file names already in `oldfiles_list`.
-    oldfiles_set: Set_cstr_t,
+    oldfiles_set: IdSet<Box<[u8]>>,
     /// Buffers whose change list grew; the windows showing them are moved
     /// to the end of it once the whole file has been read.
-    cl_bufs: Set_ptr_t,
+    cl_bufs: IdSet<*mut buf_T>,
     /// File name to the loaded buffer for it, or null when there is none.
     /// Memoises the walk of the buffer list; the keys are owned copies.
-    fname_bufs: Map_cstr_t_ptr_t,
+    fname_bufs: FnameBufs,
     /// One merger per history type, used only when histories are wanted.
     hms: [HistoryMergerState; HIST_COUNT as usize],
 }
@@ -96,7 +100,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         return;
     }
 
-    let mut hms: [HistoryMergerState; HIST_COUNT as usize] = unsafe { core::mem::zeroed() };
+    let mut hms = [const { HistoryMergerState::EMPTY }; HIST_COUNT as usize];
     if srni_flags & kSDReadHistory != 0 {
         for (i, hms) in hms.iter_mut().enumerate() {
             unsafe { hms_init(hms, i as uint8_t, p_hi.get() as size_t, true, true) };
@@ -112,9 +116,9 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         want_marks,
         get_old_files,
         oldfiles_list,
-        oldfiles_set: SET_CSTR_INIT,
-        cl_bufs: SET_PTR_INIT,
-        fname_bufs: MAP_INIT,
+        oldfiles_set: id_set(),
+        cl_bufs: id_set(),
+        fname_bufs: id_map(),
         hms,
     };
 
@@ -268,8 +272,7 @@ impl Reading {
     /// buffer for that name is looked for first: when there is one the mark
     /// refers to it by number and the file name is dropped.
     unsafe fn apply_file_mark(&mut self, mut entry: ShadaEntry) {
-        let buf =
-            unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark().fname) };
+        let buf = unsafe { buffer_for_fname(&mut self.fname_bufs, entry.data.filemark().fname) };
         if !buf.is_null() {
             unsafe { xfree(entry.data.filemark().fname.cast()) };
             entry.data.filemark_mut().fname = core::ptr::null_mut();
@@ -303,9 +306,11 @@ impl Reading {
     /// These are also what `v:oldfiles` is built from, which is why the file
     /// name matters even when the marks themselves were not asked for.
     unsafe fn apply_buffer_mark(&mut self, mut entry: ShadaEntry) {
-        if self.get_old_files
-            && !unsafe { set_has_cstr_t(&raw mut self.oldfiles_set, entry.data.filemark().fname) }
-        {
+        // SAFETY: an entry's file name is null or NUL-terminated.
+        let seen = self
+            .oldfiles_set
+            .contains(unsafe { shada_key(entry.data.filemark().fname) });
+        if self.get_old_files && !seen {
             // The entry's own string can be handed to the list, unless
             // the mark below is still going to need it.
             let fname = if self.want_marks {
@@ -313,7 +318,8 @@ impl Reading {
             } else {
                 entry.data.filemark().fname
             };
-            unsafe { set_put_cstr_t(&raw mut self.oldfiles_set, fname, core::ptr::null_mut()) };
+            // SAFETY: `fname` is null or NUL-terminated.
+            self.oldfiles_set.insert(unsafe { shada_key(fname) }.into());
             unsafe { tv_list_append_allocated_string(self.oldfiles_list, fname) };
             if !self.want_marks {
                 entry.data.filemark_mut().fname = core::ptr::null_mut();
@@ -325,8 +331,7 @@ impl Reading {
         }
 
         // A mark on a file no buffer is holding has nowhere to go.
-        let buf =
-            unsafe { buffer_for_fname(&raw mut self.fname_bufs, entry.data.filemark().fname) };
+        let buf = unsafe { buffer_for_fname(&mut self.fname_bufs, entry.data.filemark().fname) };
         if buf.is_null() {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -344,7 +349,7 @@ impl Reading {
                 return;
             }
         } else {
-            unsafe { set_put_ptr_t(&raw mut self.cl_bufs, buf.cast(), core::ptr::null_mut()) };
+            self.cl_bufs.insert(buf);
             unsafe { insert_change(buf, fm) };
         }
         // The mark took the extra data; only the file name is left.
@@ -365,22 +370,16 @@ impl Reading {
         }
         // A window showing a buffer whose change list grew sits at the
         // end of it, as if the changes had just been made.
-        if self.cl_bufs.h.n_occupied != 0 {
+        if !self.cl_bufs.is_empty() {
             for mut wp in tab_windows() {
-                if unsafe { set_has_ptr_t(&raw mut self.cl_bufs, wp.w_buffer.cast()) } {
+                if self.cl_bufs.contains(&wp.w_buffer) {
                     wp.w_changelistidx = unsafe { (*wp.w_buffer).b_changelistlen };
                 }
             }
         }
-        unsafe { set_destroy_ptr_t(&raw mut self.cl_bufs) };
-        // The memo table owns its keys; the buffers it points at do not
-        // belong to it.
-        for i in 0..self.fname_bufs.set.h.n_keys as usize {
-            unsafe { xfree((*self.fname_bufs.set.keys.add(i)).cast_mut().cast()) };
-        }
-        unsafe { map_destroy_cstr_t_ptr_t(&raw mut self.fname_bufs) };
-        // The names in this one were given to `v:oldfiles`.
-        unsafe { set_destroy_cstr_t(&raw mut self.oldfiles_set) };
+        // The three tables own their keys and are released by `Reading`'s
+        // own drop; the buffers `fname_bufs` points at, and the names
+        // `oldfiles_set` copied, belong elsewhere.
     }
 }
 
@@ -426,26 +425,22 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: buffer_list) {
 ///
 /// Answers are memoised in `fname_bufs`, whose keys are copies this makes
 /// and the caller frees.
-unsafe fn buffer_for_fname(fname_bufs: *mut Map_cstr_t_ptr_t, fname: *const c_char) -> *mut buf_T {
-    let mut key_alloc: *mut cstr_t = core::ptr::null_mut();
-    let mut new_item = false;
-    let slot = unsafe {
-        map_put_ref_cstr_t_ptr_t(fname_bufs, fname, &raw mut key_alloc, &raw mut new_item)
+unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> *mut buf_T {
+    // SAFETY: the caller's file name, null or NUL-terminated.
+    let key = unsafe { shada_key(fname) };
+    if let Some(&memoised) = fname_bufs.get(key) {
+        return memoised;
     }
-    .cast::<*mut buf_T>();
-    if !new_item {
-        return unsafe { *slot };
-    }
-    unsafe { *key_alloc = xstrdup(fname) };
-
+    let mut found = core::ptr::null_mut();
     for buf in buffers() {
+        // SAFETY: `fname` and the buffer's own name are both C strings.
         if !buf.b_ffname.is_null() && unsafe { path_fnamecmp(fname, buf.b_ffname) } == 0 {
-            unsafe { *slot = buf.raw() };
-            return buf.raw();
+            found = buf.raw();
+            break;
         }
     }
-    unsafe { *slot = core::ptr::null_mut() };
-    core::ptr::null_mut()
+    fname_bufs.insert(key.into(), found);
+    found
 }
 
 /// Put a jump into `curwin`'s jump list, which is kept oldest first.

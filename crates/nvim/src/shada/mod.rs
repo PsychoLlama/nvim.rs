@@ -23,10 +23,6 @@ use crate::global_cell::GlobalCell;
 use crate::main::{
     curbuf, curwin, no_hlsearch, p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose,
 };
-use crate::map::{
-    map_del_cstr_t_ptr_t, map_put_ref_cstr_t_ptr_t, map_ref_cstr_t_ptr_t, mh_get_cstr_t,
-    mh_get_ptr_t, mh_put_cstr_t, mh_put_ptr_t,
-};
 use crate::mark::{
     cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
@@ -56,6 +52,7 @@ use crate::path::{
 use crate::pos::MAXLNUM;
 use crate::regexp::regtilde;
 use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
+use crate::registry::{IdMap, IdSet, SlotTable, id_map, id_set};
 use crate::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,
@@ -64,12 +61,11 @@ use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, Arena, Dict, FileDescriptor, FileInfo, HistoryType,
     Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeyValuePair, MHPutStatus, Map_cstr_t_ptr_t, MapHash, MarkGet,
-    MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, Set_cstr_t, Set_ptr_t,
-    String_0, StringArray, SubReplacementString, Timestamp, VAR_UNKNOWN, VarLock, bln_values,
-    buf_T, colnr_T, cstr_t, dictitem_T, fmark_T, fmarkv_T, int64_t, linenr_T, list_T, pos_T, ptr_t,
-    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t,
-    uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T, yankreg_T,
+    KeyDict__shada_search_pat, KeyValuePair, MarkGet, MotionType, OptionalKeys, PackerBuffer,
+    SearchOffset, SearchPattern, String_0, StringArray, SubReplacementString, Timestamp,
+    VAR_UNKNOWN, VarLock, bln_values, buf_T, colnr_T, dictitem_T, fmark_T, fmarkv_T, int64_t,
+    linenr_T, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uid_t,
+    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -92,7 +88,6 @@ mod read;
 pub use self::read::*;
 mod write;
 pub(crate) use self::write::*;
-pub const kMHExisting: MHPutStatus = 0;
 pub const kMarkBufLocal: MarkGet = 0;
 pub const BLN_LISTED: bln_values = 2;
 pub const HIST_SEARCH: HistoryType = 1;
@@ -116,7 +111,6 @@ pub type ShaDaWriteResult = ::core::ffi::c_uint;
 pub const kSDWriteIgnError: ShaDaWriteResult = 3;
 pub const kSDWriteFailed: ShaDaWriteResult = 2;
 pub const kSDWriteSuccessful: ShaDaWriteResult = 0;
-#[derive(Clone)]
 pub struct WriteMergerState {
     pub hms: [HistoryMergerState; 5],
     pub global_marks: [ShadaEntry; 26],
@@ -127,8 +121,23 @@ pub struct WriteMergerState {
     pub search_pattern: ShadaEntry,
     pub sub_search_pattern: ShadaEntry,
     pub replacement: ShadaEntry,
-    pub dumped_variables: Set_cstr_t,
-    pub file_marks: Map_cstr_t_ptr_t,
+    /// The names of the variables already written. Membership only.
+    pub(crate) dumped_variables: IdSet<Box<[u8]>>,
+    /// One file's marks, filed under its name.
+    ///
+    /// A [`SlotTable`], not a map: [`Writing::pack_file_marks`] collects the
+    /// values in this table's order and `qsort`s them by timestamp, and
+    /// `qsort` is unstable -- so for the files whose marks share a timestamp
+    /// (every file marked in the same second) the order the walk produced is
+    /// the order they go out in, and the `'N` cut takes the first N of it.
+    /// khash was insertion-ordered; this is the same order.
+    ///
+    /// The values stay raw pointers: [`Writing::file_marks_for`] hands one
+    /// out and the caller writes through it while the table is unborrowed.
+    ///
+    /// [`Writing::pack_file_marks`]: write::Writing::pack_file_marks
+    /// [`Writing::file_marks_for`]: write::Writing::file_marks_for
+    pub(crate) file_marks: SlotTable<Box<[u8]>, *mut FileMarks>,
 }
 #[derive(Copy, Clone)]
 pub struct ShadaEntry {
@@ -381,7 +390,6 @@ pub const kSDItemSearchPattern: ShadaEntryType = 2;
 pub const kSDItemHeader: ShadaEntryType = 1;
 pub const kSDItemMissing: ShadaEntryType = 0;
 pub const kSDItemUnknown: ShadaEntryType = -1;
-#[derive(Clone)]
 pub struct HistoryMergerState {
     pub hmll: HMLList,
     pub do_merge: bool,
@@ -395,7 +403,6 @@ pub struct HistoryMergerState {
     pub pending_pos: size_t,
     pub history_type: uint8_t,
 }
-#[derive(Clone)]
 pub struct HMLList {
     pub entries: *mut HMLListEntry,
     pub first: *mut HMLListEntry,
@@ -404,7 +411,8 @@ pub struct HMLList {
     pub last_free_entry: *mut HMLListEntry,
     pub size: size_t,
     pub num_entries: size_t,
-    pub contained_entries: Map_cstr_t_ptr_t,
+    /// The ring entry holding each history string. Asked, never walked.
+    pub(crate) contained_entries: IdMap<Box<[u8]>, *mut HMLListEntry>,
 }
 
 impl HMLList {
@@ -417,7 +425,7 @@ impl HMLList {
         last_free_entry: ::core::ptr::null_mut(),
         size: 0,
         num_entries: 0,
-        contained_entries: MAP_INIT,
+        contained_entries: id_map(),
     };
 }
 
@@ -447,9 +455,30 @@ impl WriteMergerState {
         search_pattern: ShadaEntry::MISSING,
         sub_search_pattern: ShadaEntry::MISSING,
         replacement: ShadaEntry::MISSING,
-        dumped_variables: SET_CSTR_INIT,
-        file_marks: MAP_INIT,
+        dumped_variables: id_set(),
+        file_marks: SlotTable::new(),
     };
+}
+
+impl WriteMergerState {
+    /// The slot one file's marks collect into, made on first use. The table
+    /// owns both the name and the slot.
+    ///
+    /// # Safety
+    /// `fname` is null or a NUL-terminated string.
+    pub(crate) unsafe fn file_marks_for(
+        &mut self,
+        fname: *const ::core::ffi::c_char,
+    ) -> *mut FileMarks {
+        // SAFETY: the caller's file name.
+        let key = unsafe { shada_key(fname) };
+        if let Some(marks) = self.file_marks.get(key) {
+            return marks;
+        }
+        let marks = shada_heap(FileMarks::EMPTY);
+        self.file_marks.insert(key.into(), marks);
+        marks
+    }
 }
 
 /// One `value` on the heap, for the aggregates the merge allocates.
@@ -517,82 +546,26 @@ pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-const SET_CSTR_INIT: Set_cstr_t = Set_cstr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<cstr_t>(),
-};
-const SET_PTR_INIT: Set_ptr_t = Set_ptr_t {
-    h: MAPHASH_INIT,
-    keys: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MAP_INIT: Map_cstr_t_ptr_t = Map_cstr_t_ptr_t {
-    set: SET_CSTR_INIT,
-    values: ::core::ptr::null_mut::<ptr_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = u32::MAX;
-#[inline]
-/// Add a key to a set, answering whether it was not already there. When
-/// `key_alloc` is given it is pointed at the set's own copy of the key,
-/// which the caller may then replace with an owned one.
-unsafe fn set_put_cstr_t(set: *mut Set_cstr_t, key: cstr_t, key_alloc: *mut *mut cstr_t) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let k = unsafe { mh_put_cstr_t(set, key, &raw mut status) };
-    if !key_alloc.is_null() {
-        unsafe { *key_alloc = (*set).keys.add(k as usize) };
+/// The buffers a ShaDa write keeps no marks for: those on a removable
+/// medium (`'shada'`'s `r` prefixes) and the scratch kinds. Membership only,
+/// keyed by address as khash's `Set_ptr_t` was.
+pub(crate) type RemovableBufs = IdSet<*const buf_T>;
+
+/// The table key for the C string `name`: its bytes plus the terminator.
+///
+/// A **null** pointer answers the empty slice, which no non-null string can
+/// produce -- and that is exactly what khash made of it here, where the key
+/// type was `cstr_t` and the comparison was `strequal`, under which null
+/// equals null and nothing else.
+///
+/// # Safety
+/// `name` is null or a NUL-terminated string, live for `'a`.
+unsafe fn shada_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
+    if name.is_null() {
+        return &[];
     }
-    status != kMHExisting
-}
-
-/// Whether a set holds a key.
-unsafe fn set_has_cstr_t(set: *mut Set_cstr_t, key: cstr_t) -> bool {
-    unsafe { mh_get_cstr_t(set, key) != MH_TOMBSTONE }
-}
-
-/// [`set_put_cstr_t`] for a set of pointers.
-unsafe fn set_put_ptr_t(set: *mut Set_ptr_t, key: ptr_t, key_alloc: *mut *mut ptr_t) -> bool {
-    let mut status: MHPutStatus = kMHExisting;
-    let k = unsafe { mh_put_ptr_t(set, key, &raw mut status) };
-    if !key_alloc.is_null() {
-        unsafe { *key_alloc = (*set).keys.add(k as usize) };
-    }
-    status != kMHExisting
-}
-
-/// [`set_has_cstr_t`] for a set of pointers.
-unsafe fn set_has_ptr_t(set: *mut Set_ptr_t, key: ptr_t) -> bool {
-    unsafe { mh_get_ptr_t(set, key) != MH_TOMBSTONE }
-}
-
-/// Free a set's own allocations, leaving it empty. What the keys point at
-/// is the caller's business.
-unsafe fn set_destroy_cstr_t(set: *mut Set_cstr_t) {
-    unsafe { xfree((*set).keys.cast()) };
-    unsafe { xfree((*set).h.hash.cast()) };
-    unsafe { *set = SET_CSTR_INIT };
-}
-
-/// [`set_destroy_cstr_t`] for a set of pointers.
-unsafe fn set_destroy_ptr_t(set: *mut Set_ptr_t) {
-    unsafe { xfree((*set).keys.cast()) };
-    unsafe { xfree((*set).h.hash.cast()) };
-    unsafe { *set = SET_PTR_INIT };
-}
-
-/// [`set_destroy_cstr_t`] for a map. Neither the keys nor the values are
-/// freed; both belong to whoever put them in.
-unsafe fn map_destroy_cstr_t_ptr_t(map: *mut Map_cstr_t_ptr_t) {
-    unsafe { set_destroy_cstr_t(&raw mut (*map).set) };
-    unsafe { xfree((*map).values.cast()) };
-    unsafe { (*map).values = ::core::ptr::null_mut() };
+    // SAFETY: the caller's NUL-terminated string.
+    unsafe { ::core::ffi::CStr::from_ptr(name) }.to_bytes_with_nul()
 }
 
 pub const NMARKS: ::core::ffi::c_int =

@@ -31,7 +31,7 @@ use crate::types::{
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
 /// file is on removable media.
-pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: *mut Set_ptr_t) -> bool {
+pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: &RemovableBufs) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     let Some(b) = (unsafe { Buf::from_raw(buf.cast_mut()) }) else {
         return true;
@@ -41,16 +41,16 @@ pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: *mut Set_ptr_
         || buf_is_quickfix(Some(b))
         || buf_is_terminal(Some(b))
         // SAFETY: the caller's set, and the buffer is only compared.
-        || unsafe { set_has_ptr_t(removable_bufs, buf as ptr_t) }
+        || removable_bufs.contains(&buf)
 }
 
 /// Collect the buffers whose files are on removable media.
-pub(crate) unsafe fn find_removable_bufs(removable_bufs: *mut Set_ptr_t) {
+pub(crate) unsafe fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, whose name is
         // only read, and the caller's set.
         if !buf.b_ffname.is_null() && unsafe { shada_removable(buf.b_ffname) } {
-            unsafe { set_put_ptr_t(removable_bufs, buf.raw() as ptr_t, core::ptr::null_mut()) };
+            removable_bufs.insert(buf.raw().cast_const());
         }
     }
 }
@@ -60,7 +60,7 @@ pub(crate) unsafe fn find_removable_bufs(removable_bufs: *mut Set_ptr_t) {
 ///
 /// `'shada'`'s `%` entry caps how many are kept; a negative cap means all
 /// of them.
-pub(crate) unsafe fn shada_get_buflist(removable_bufs: *mut Set_ptr_t) -> ShadaEntry {
+pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
     let max_bufs = unsafe { get_shada_parameter('%' as c_int) };
     let mut wanted = Vec::new();
     for buf in buffers() {
@@ -279,7 +279,7 @@ pub(crate) unsafe fn var_shada_iter(
 /// Nvim was when it exited is remembered too.
 pub(crate) unsafe fn shada_init_jumps(
     jumps: *mut ShadaEntry,
-    removable_bufs: *mut Set_ptr_t,
+    removable_bufs: &RemovableBufs,
 ) -> size_t {
     let mut jumps_size: size_t = 0;
     let mut jump_iter = core::ptr::null::<c_void>();
@@ -315,7 +315,7 @@ pub(crate) unsafe fn shada_init_jumps(
 unsafe fn jump_target(
     fm: &xfmark_T,
     jump_iter: *const c_void,
-    removable_bufs: *mut Set_ptr_t,
+    removable_bufs: &RemovableBufs,
 ) -> Option<*const c_char> {
     if fm.fmark.mark.lnum == 0 {
         // SAFETY: the caller's contract -- `curwin` is the editor's own.
@@ -361,10 +361,10 @@ pub unsafe fn shada_encode_regs() -> String_0 {
 
 /// The jump list, as msgpack.
 pub unsafe fn shada_encode_jumps() -> String_0 {
-    let mut removable_bufs = SET_PTR_INIT;
-    unsafe { find_removable_bufs(&raw mut removable_bufs) };
+    let mut removable_bufs = id_set();
+    unsafe { find_removable_bufs(&mut removable_bufs) };
     let mut jumps = [ShadaEntry::MISSING; JUMPLISTSIZE as usize];
-    let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &raw mut removable_bufs) };
+    let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &removable_bufs) };
     let mut packer = packer_string_buffer();
     for jump in &jumps[..jumps_size] {
         let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, *jump, 0) };
@@ -375,9 +375,9 @@ pub unsafe fn shada_encode_jumps() -> String_0 {
 
 /// The buffer list, as msgpack.
 pub unsafe fn shada_encode_buflist() -> String_0 {
-    let mut removable_bufs = SET_PTR_INIT;
-    unsafe { find_removable_bufs(&raw mut removable_bufs) };
-    let buflist_entry = unsafe { shada_get_buflist(&raw mut removable_bufs) };
+    let mut removable_bufs = id_set();
+    unsafe { find_removable_bufs(&mut removable_bufs) };
+    let buflist_entry = unsafe { shada_get_buflist(&removable_bufs) };
     let mut packer = packer_string_buffer();
     let written = unsafe { shada_pack_entry(&raw mut packer, buflist_entry, 0) };
     assert!(

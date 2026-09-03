@@ -72,7 +72,7 @@ struct Writing {
     wms: *mut WriteMergerState,
     /// Buffers whose file is somewhere marks are not kept for — a removable
     /// medium, or `'viewdir'`-style scratch.
-    removable_bufs: Set_ptr_t,
+    removable_bufs: RemovableBufs,
     /// The output, buffered in the file's own write buffer.
     packer: PackerBuffer,
     limits: Limits,
@@ -90,13 +90,13 @@ pub(crate) unsafe fn shada_write(
         return kSDWriteSuccessful;
     };
 
-    let wms = shada_heap(WriteMergerState::EMPTY);
+    let wms = Box::into_raw(Box::new(WriteMergerState::EMPTY));
     let histories = unsafe { init_histories(wms, !sd_reader.is_null()) };
     let srni_flags = wanted_kinds(&limits, &histories);
 
     let mut writing = Writing {
         wms,
-        removable_bufs: SET_PTR_INIT,
+        removable_bufs: id_set(),
         packer: unsafe { packer_buffer_for_file(sd_writer) },
         limits,
         histories,
@@ -108,7 +108,7 @@ pub(crate) unsafe fn shada_write(
     for wp in tab_windows() {
         unsafe { set_last_cursor(wp.raw()) };
     }
-    unsafe { find_removable_bufs(&raw mut writing.removable_bufs) };
+    unsafe { find_removable_bufs(&mut writing.removable_bufs) };
 
     let ret = unsafe { writing.run(sd_reader, srni_flags) };
     writing.finish();
@@ -236,7 +236,7 @@ impl Writing {
     /// The list of files this Nvim has buffers for, so that a later start
     /// can reopen them.
     unsafe fn write_buflist(&mut self) -> ShaDaWriteResult {
-        let entry = unsafe { shada_get_buflist(&raw mut self.removable_bufs) };
+        let entry = unsafe { shada_get_buflist(&self.removable_bufs) };
         let ret = unsafe { self.pack(entry, 0) };
         unsafe { xfree(entry.data.buffer_list().buffers.cast()) };
         ret
@@ -287,13 +287,10 @@ impl Writing {
                 return kSDWriteFailed;
             }
             if ret == kSDWriteSuccessful {
-                unsafe {
-                    set_put_cstr_t(
-                        &raw mut (*self.wms).dumped_variables,
-                        name,
-                        core::ptr::null_mut(),
-                    )
-                };
+                // SAFETY: `self.wms` is this write's own merger and `name`
+                // the variable's NUL-terminated name.
+                let key = unsafe { shada_key(name) };
+                unsafe { &mut (*self.wms).dumped_variables }.insert(key.into());
             }
             if var_iter.is_none() {
                 return kSDWriteSuccessful;
@@ -307,7 +304,7 @@ impl Writing {
             unsafe {
                 (*self.wms).jumps_size = shada_init_jumps(
                     (&raw mut (*self.wms).jumps).cast::<ShadaEntry>(),
-                    &raw mut self.removable_bufs,
+                    &self.removable_bufs,
                 )
             };
         }
@@ -413,7 +410,7 @@ impl Writing {
         let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
         if buf.is_null()
             || unsafe { (*buf).b_ffname.is_null() }
-            || unsafe { set_has_ptr_t(&raw mut self.removable_bufs, buf.cast::<c_void>()) }
+            || self.removable_bufs.contains(&buf.cast_const())
         {
             return None;
         }
@@ -427,7 +424,7 @@ impl Writing {
             return;
         }
         for buf in buffers() {
-            if !unsafe { ignore_buf(buf.raw(), &raw mut self.removable_bufs) } {
+            if !unsafe { ignore_buf(buf.raw(), &self.removable_bufs) } {
                 unsafe { self.collect_one_buffer(buf.raw()) };
             }
         }
@@ -485,33 +482,18 @@ impl Writing {
     }
 
     /// The slot one file's marks are collected into, made on first use.
-    /// The map owns both its keys and its values.
+    /// The table owns both its keys and its values.
     unsafe fn file_marks_for(&mut self, fname: *const c_char) -> *mut FileMarks {
-        let mut key_alloc: *mut cstr_t = core::ptr::null_mut();
-        let mut new_item = false;
-        let slot = unsafe {
-            map_put_ref_cstr_t_ptr_t(
-                &raw mut (*self.wms).file_marks,
-                fname,
-                &raw mut key_alloc,
-                &raw mut new_item,
-            )
-        };
-        if new_item {
-            unsafe { *key_alloc = xstrdup(fname) };
-        }
-        if unsafe { (*slot).is_null() } {
-            let marks = shada_heap(FileMarks::EMPTY).cast::<c_void>();
-            unsafe { *slot = marks };
-        }
-        unsafe { (*slot).cast::<FileMarks>() }
+        // SAFETY: `self.wms` is this write's own merger and `fname` a
+        // NUL-terminated name.
+        unsafe { (*self.wms).file_marks_for(fname) }
     }
 
     /// Put the cursor's position in at `'0`, shifting the other numbered
     /// marks down and dropping `'9`.
     unsafe fn update_numbered_marks(&mut self) {
         if !self.limits.global_marks
-            || unsafe { ignore_buf(curbuf.get(), &raw mut self.removable_bufs) }
+            || unsafe { ignore_buf(curbuf.get(), &self.removable_bufs) }
             || unsafe { (*curwin.get()).w_cursor.lnum } == 0
         {
             return;
@@ -559,11 +541,11 @@ impl Writing {
     /// Every file's marks, most recently touched file first, as many files
     /// as `'shada'` keeps.
     unsafe fn pack_file_marks(&mut self) -> ShaDaWriteResult {
-        let mut all: Vec<*mut FileMarks> = Vec::new();
-        let marks = unsafe { &(*self.wms).file_marks };
-        for i in 0..marks.set.h.n_keys as usize {
-            all.push(unsafe { (*marks.values.add(i)).cast::<FileMarks>() });
-        }
+        // The table's own order, which is the order the files were first
+        // marked in. `qsort` is unstable, so it is what decides between the
+        // files whose newest mark shares a timestamp -- and the `'N` cut
+        // below takes the front of the result.
+        let mut all: Vec<*mut FileMarks> = unsafe { &(*self.wms).file_marks }.snapshot_values();
         unsafe {
             qsort(
                 all.as_mut_ptr().cast(),
@@ -667,18 +649,16 @@ impl Writing {
                 unsafe { hms_dealloc(&raw mut (*self.wms).hms[i]) };
             }
         }
-        let marks = unsafe { &raw mut (*self.wms).file_marks };
-        for i in 0..unsafe { (*marks).set.h.n_keys } as usize {
-            unsafe { xfree((*(*marks).set.keys.add(i)).cast_mut().cast()) };
-            unsafe { xfree(*(*marks).values.add(i)) };
+        // The table owns its names; the `FileMarks` it points at are this
+        // module's own `shada_heap` allocations.
+        for &marks in &unsafe { &(*self.wms).file_marks }.snapshot_values() {
+            unsafe { xfree(marks.cast()) };
         }
-        unsafe { map_destroy_cstr_t_ptr_t(marks) };
-        unsafe { set_destroy_ptr_t(&raw mut self.removable_bufs) };
         unsafe { self.packer.packer_flush.expect("shada: no flush")(&raw mut self.packer) };
-        // Only the names were borrowed; the variables themselves went
-        // out as they were found.
-        unsafe { set_destroy_cstr_t(&raw mut (*self.wms).dumped_variables) };
-        unsafe { xfree(self.wms.cast()) };
+        // The merger's own drop takes the two tables with it -- only the
+        // variables' *names* were copied into `dumped_variables`; the
+        // variables themselves went out as they were found.
+        drop(unsafe { Box::from_raw(self.wms) });
     }
 }
 

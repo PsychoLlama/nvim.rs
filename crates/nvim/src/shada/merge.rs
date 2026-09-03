@@ -43,7 +43,7 @@ pub(crate) unsafe fn hmll_init(hmll: *mut HMLList, size: size_t) {
         last_free_entry: entries,
         size,
         num_entries: 0,
-        contained_entries: MAP_INIT,
+        contained_entries: id_map(),
     };
     unsafe { hmll.write(empty) };
 }
@@ -62,14 +62,10 @@ pub(crate) unsafe fn hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEnt
         unsafe { (*hmll).free_entry = hmll_entry };
     }
 
-    let removed = unsafe {
-        map_del_cstr_t_ptr_t(
-            &raw mut (*hmll).contained_entries,
-            (*hmll_entry).data.data.history().string,
-            core::ptr::null_mut(),
-        )
-    };
-    debug_assert!(!removed.is_null(), "shada: ring entry was not in the map");
+    // SAFETY: the entry's history string is NUL-terminated.
+    let key = unsafe { shada_key((*hmll_entry).data.data.history().string) };
+    let removed = unsafe { &mut (*hmll).contained_entries }.remove(key);
+    debug_assert!(removed.is_some(), "shada: ring entry was not in the map");
 
     if unsafe { (*hmll_entry).next.is_null() } {
         unsafe { (*hmll).last = (*hmll_entry).prev };
@@ -133,18 +129,13 @@ pub(crate) unsafe fn hmll_insert(
     };
 
     unsafe { (*target).data = data };
-    let mut new_item = false;
-    let val = unsafe {
-        map_put_ref_cstr_t_ptr_t(
-            &raw mut (*hmll).contained_entries,
-            data.data.history().string,
-            core::ptr::null_mut(),
-            &raw mut new_item,
-        )
-    };
-    if new_item {
-        unsafe { *val = target.cast::<c_void>() };
-    }
+    // SAFETY: the entry's history string is NUL-terminated. Only a key that
+    // was not there takes the new slot, which is what `map_put_ref` plus the
+    // `new_item` guard did.
+    let key = unsafe { shada_key(data.data.history().string) };
+    unsafe { &mut (*hmll).contained_entries }
+        .entry(key.into())
+        .or_insert(target);
     unsafe { (*hmll).num_entries += 1 };
 
     unsafe { (*target).prev = after };
@@ -165,12 +156,9 @@ pub(crate) unsafe fn hmll_insert(
 /// Release the ring. Whatever the entries in it hold has been given away by
 /// now — to Nvim's history, or to the file.
 pub(crate) unsafe fn hmll_dealloc(hmll: *mut HMLList) {
-    let map = unsafe { &raw mut (*hmll).contained_entries };
-    unsafe { xfree((*map).set.keys.cast::<c_void>()) };
-    unsafe { xfree((*map).set.h.hash.cast::<c_void>()) };
-    unsafe { (*map).set = SET_CSTR_INIT };
-    unsafe { xfree((*map).values.cast::<c_void>()) };
-    unsafe { (*map).values = core::ptr::null_mut() };
+    // The table owns its keys and nothing else; what the entries held has
+    // been given away, and the ring's array is this module's own.
+    unsafe { &mut (*hmll).contained_entries }.clear();
     unsafe { xfree((*hmll).entries.cast::<c_void>()) };
 }
 
@@ -231,23 +219,18 @@ pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntr
     }
 
     let hmll = unsafe { &raw mut (*hms_p).hmll };
-    let mut key_alloc: *mut cstr_t = core::ptr::null_mut();
-    let val = unsafe {
-        map_ref_cstr_t_ptr_t(
-            &raw mut (*hmll).contained_entries,
-            entry.data.history().string,
-            &raw mut key_alloc,
-        )
-    };
-    if !val.is_null() {
-        let existing = unsafe { (*val).cast::<HMLListEntry>() };
+    // SAFETY: the entry's history string is NUL-terminated.
+    let key = unsafe { shada_key(entry.data.history().string) };
+    let val = unsafe { &(*hmll).contained_entries }.get(key).copied();
+    if let Some(existing) = val {
         if entry.timestamp > unsafe { (*existing).data.timestamp } {
             unsafe { hmll_remove(hmll, existing) };
         } else if !do_iter && entry.timestamp == unsafe { (*existing).data.timestamp } {
             unsafe { shada_free_shada_entry(&raw mut (*existing).data) };
             unsafe { (*existing).data = entry };
-            // Freeing the entry above freed the key the map held.
-            unsafe { *key_alloc = entry.data.history().string };
+            // The key is the table's own copy of the same bytes now, so
+            // nothing has to be re-pointed at the new entry's string --
+            // which is what khash's borrowed `cstr_t` key needed.
             return;
         } else {
             return;
@@ -506,7 +489,9 @@ pub(crate) unsafe fn shada_read_when_writing(
             }
             ShadaEntryData::Variable(var) => {
                 // A variable this session has already written wins.
-                if !unsafe { set_has_cstr_t(&raw mut (*wms).dumped_variables, var.name) } {
+                // SAFETY: a variable's name is NUL-terminated.
+                let name = unsafe { shada_key(var.name) };
+                if !unsafe { &(*wms).dumped_variables }.contains(name) {
                     ret = unsafe { shada_pack_entry(packer, entry, 0) };
                 }
                 unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -635,19 +620,9 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
         return;
     }
 
-    let mut key: *mut cstr_t = core::ptr::null_mut();
-    let mut new_item = false;
-    let file_marks = unsafe { &raw mut (*wms).file_marks };
-    let val =
-        unsafe { map_put_ref_cstr_t_ptr_t(file_marks, fname, &raw mut key, &raw mut new_item) };
-    if new_item {
-        unsafe { *key = xstrdup(fname) };
-    }
-    if unsafe { (*val).is_null() } {
-        let marks = shada_heap(FileMarks::EMPTY).cast::<c_void>();
-        unsafe { *val = marks };
-    }
-    let filemarks = unsafe { (*val).cast::<FileMarks>() };
+    // SAFETY: `wms` is the caller's live merger and `fname` its entry's
+    // NUL-terminated name.
+    let filemarks = unsafe { (*wms).file_marks_for(fname) };
     if entry.timestamp > unsafe { (*filemarks).greatest_timestamp } {
         unsafe { (*filemarks).greatest_timestamp = entry.timestamp };
     }
@@ -690,10 +665,9 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
             return;
         }
         if unsafe { (*slot).can_free_entry } {
-            // The map's key may be the very string about to be freed.
-            if unsafe { *key } == unsafe { (*slot).data.filemark() }.fname {
-                unsafe { *key = entry.data.filemark().fname };
-            }
+            // The table's key used to be borrowed from whichever entry
+            // first named the file, so it had to be re-pointed before this
+            // free. It is an owned copy now, and this is just the free.
             unsafe { shada_free_shada_entry(slot) };
         }
     } else if unsafe { beaten_by_a_loaded_buffer(&entry) } {
