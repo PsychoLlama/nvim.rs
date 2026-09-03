@@ -381,6 +381,26 @@ plus these whole-tree metrics, which are not per-file:
                       garray_sites    `ga_grow`/`ga_init`/`ga_clear`/
                         `ga_concat`/`ga_append` — `garray_T`'s five load-
                         bearing entry points, not its whole surface.
+                      kvec_sites      `kv_*` calls plus `InitVec::new(`/
+                        `Kvec::new(`. c2rust expanded klib's kvec macros, so
+                        what is left is the `kv_puts`/`kv_do_printf`/`kv_size`
+                        family of *calls* (a macro invocation writes `kv_x!`,
+                        a function call `kv_x(` — the needle takes both) and
+                        the port's own borrowed views over a `kvec_withinit_t`,
+                        which exist only to bridge to that layout and vanish
+                        the day the struct becomes a `Vec`. Field *names*
+                        (`init_array`, `size`/`capacity`/`items`) are not
+                        counted: they are the shape, not a call site, and
+                        several belong to the api's RPC ABI, which stays.
+                      khash_sites     `Map_*`/`Set_*` — the monomorph type
+                        names c2rust produced for klib's khash. The needle is
+                        over the *types*, not the API (`map_del(` also names a
+                        `:map` function, `set_init_`/`set_has` are option and
+                        visual-mode names), which makes it unambiguous, counts
+                        the monomorphs nothing calls, and reaches zero exactly
+                        when `map/` can be deleted. It is lumpy — most of it is
+                        the two files that declare the monomorphs — and that is
+                        the point: a table converts, its type goes with it.
                       ptr_arith       `.offset`/`.add`/`.sub`/
                         `.wrapping_add`/`.wrapping_sub`/`.offset_from`.
                       t_suffix_types  *distinct* names ending in `_T` that
@@ -783,6 +803,12 @@ VOCABULARY = {
     ),
     "manual_alloc": re.compile(r"\bx(?:mallocz|malloc|calloc|realloc|free)\("),
     "garray_sites": re.compile(r"\bga_(?:grow|init|clear|concat|append)\("),
+    # `[!(]` so that both spellings of a klib entry point count: the macros
+    # c2rust could not expand are still written `kv_size!(x)`, the ones it
+    # turned into functions `kv_size(x)`. Lower case only, so a *type* named
+    # `kv_...` (there are none today) would not be mistaken for a call.
+    "kvec_sites": re.compile(r"\bkv_[a-z_0-9]+[!(]|\b(?:InitVec|Kvec)::new\("),
+    "khash_sites": re.compile(r"\b(?:Map|Set)_[A-Za-z0-9_]+\b"),
     "ptr_arith": re.compile(
         r"\.(?:offset_from|offset|add|sub|wrapping_add|wrapping_sub)\("
     ),
@@ -1824,6 +1850,8 @@ WHOLE_TREE_LABEL = {
     "derive_copy": "Copy derives on braced aggregates",
     "manual_alloc": "xmalloc/xfree-family calls",
     "garray_sites": "garray_T call sites",
+    "kvec_sites": "kvec call sites and borrowed views",
+    "khash_sites": "khash monomorph type names",
     "ptr_arith": "pointer-arithmetic method calls",
     "t_suffix_types": "distinct `_T` type declarations",
     "raw_win_buf_sigs": "raw win/buf/tabpage pointers in fn signatures",
@@ -2406,6 +2434,28 @@ SELF_TEST_VOCABULARY = [
             "    ga_clear_strings(h);\n    ga_concat_len(i, j, k);\n}\n"
         },
         {"garray_sites": 5},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    kv_size!(a);\n    kv_push(b, c);\n    kv_destroy(d);\n"
+            "    let v = InitVec::new(&mut buf);\n"
+            "    let w = Kvec::new(&mut ga);\n"
+            # Not calls: a field name, a bare mention, and a type.
+            "    e.init_array[0] = 1;\n    let _ = kv_size;\n"
+            "    let _: KvecOf<u8>;\n}\n"
+        },
+        {"kvec_sites": 5},
+    ),
+    (
+        {
+            "crates/nvim/src/a.rs": "static t: Map_String_int = f();\n"
+            "fn f() -> Map_String_int {\n"
+            "    let s: Set_cstr_t = g();\n"
+            # `Map`/`Set` on their own, and as a suffix, are not monomorphs.
+            "    let _: Map = h();\n    let _: HashSet_ish = i();\n}\n"
+        },
+        {"khash_sites": 3},
     ),
     (
         {

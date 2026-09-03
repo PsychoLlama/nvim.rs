@@ -19,6 +19,8 @@
   "derive_copy": 307,
   "manual_alloc": 1752,
   "garray_sites": 301,
+  "kvec_sites": 96,
+  "khash_sites": 265,
   "ptr_arith": 6319,
   "t_suffix_types": 214,
   "raw_win_buf_sigs": 625,
