@@ -16,44 +16,17 @@ pub struct AutoCmdVec {
     pub capacity: size_t,
     pub items: *mut AutoCmd,
 }
-/// The khash-derived maps and sets, one monomorphisation per key/value pair.
+/// The khash-derived maps and sets still in the tree: the URL set the TUI
+/// writes OSC 8 ids from, the glyph cache's variable-stride index, and the
+/// marktree's splice damage. Everything else the editor keeps is an
+/// `IdMap`/`IdSet`/`SlotTable` now (see [`crate::registry`]).
 ///
 /// None of them is `Copy`. Each owns its [`MapHash`]'s bucket table and the
 /// `keys` (and, for a map, `values`) array beside it, all of which
-/// `map_destroy`/`set_destroy` free exactly once. `Clone` stays, so the few
-/// places that really do want a second handle say so.
-#[derive(Clone)]
-pub struct Map_String_int {
-    pub set: Set_String,
-    pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Clone)]
-#[repr(C)]
-pub struct Map_cstr_t_ptr_t {
-    pub set: Set_cstr_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Clone)]
-pub struct Map_int_String {
-    pub set: Set_int,
-    pub values: *mut String_0,
-}
-#[derive(Clone)]
-pub struct Map_ptr_t_ptr_t {
-    pub set: Set_ptr_t,
-    pub values: *mut ptr_t,
-}
-pub struct Map_uint32_t_uint32_t {
-    pub set: Set_uint32_t,
-    pub values: *mut uint32_t,
-}
+/// `map_destroy`/`set_destroy` free exactly once.
 pub struct Map_uint64_t_MTDamagePair {
     pub set: Set_uint64_t,
     pub values: *mut MTDamagePair,
-}
-pub struct Map_uint64_t_ptr_t {
-    pub set: Set_uint64_t,
-    pub values: *mut ptr_t,
 }
 pub type OptIndex = ::core::ffi::c_int;
 pub struct ParserHighlight {
@@ -69,11 +42,6 @@ pub struct ScopeDictDictItem {
     pub di_key: [::core::ffi::c_char; 1],
 }
 #[derive(Clone)]
-pub struct Set_String {
-    pub h: MapHash,
-    pub keys: *mut String_0,
-}
-#[derive(Clone)]
 #[repr(C)]
 pub struct Set_cstr_t {
     pub h: MapHash,
@@ -83,21 +51,6 @@ pub struct Set_cstr_t {
 pub struct Set_glyph {
     pub h: MapHash,
     pub keys: *mut ::core::ffi::c_char,
-}
-#[derive(Clone)]
-pub struct Set_int {
-    pub h: MapHash,
-    pub keys: *mut ::core::ffi::c_int,
-}
-#[derive(Clone)]
-pub struct Set_ptr_t {
-    pub h: MapHash,
-    pub keys: *mut ptr_t,
-}
-#[derive(Clone)]
-pub struct Set_uint32_t {
-    pub h: MapHash,
-    pub keys: *mut uint32_t,
 }
 pub struct Set_uint64_t {
     pub h: MapHash,

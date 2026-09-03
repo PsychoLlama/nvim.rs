@@ -34,7 +34,7 @@ use core::slice;
 
 use super::policy;
 use crate::memory::{strequal, xcalloc, xfree, xrealloc};
-use crate::types::{MHPutStatus, MapHash, String_0, cstr_t, int64_t, ptr_t, uint32_t, uint64_t};
+use crate::types::{MHPutStatus, MapHash, String_0, cstr_t, uint32_t, uint64_t};
 
 /// The bucket slot of a key that is not in the table.
 pub const MH_TOMBSTONE: uint32_t = uint32_t::MAX;
@@ -70,15 +70,6 @@ fn mix64(k: uint64_t) -> uint32_t {
     uint32_t::from_le_bytes([a, b, c, d])
 }
 
-impl MapKey for core::ffi::c_int {
-    fn map_hash(&self) -> uint32_t {
-        self.cast_unsigned()
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
 impl MapKey for uint32_t {
     fn map_hash(&self) -> uint32_t {
         *self
@@ -94,25 +85,6 @@ impl MapKey for uint64_t {
     }
     fn map_eq(&self, other: &Self) -> bool {
         self == other
-    }
-}
-
-impl MapKey for int64_t {
-    fn map_hash(&self) -> uint32_t {
-        mix64(self.cast_unsigned())
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl MapKey for ptr_t {
-    fn map_hash(&self) -> uint32_t {
-        mix64(self.expose_provenance() as uint64_t)
-    }
-    fn map_eq(&self, other: &Self) -> bool {
-        // Address comparison, as the C's `(uint64_t)a == (uint64_t)b` was.
-        self.addr() == other.addr()
     }
 }
 
@@ -360,77 +332,6 @@ pub(super) unsafe fn put<K: MapKey>(
     pos
 }
 
-/// Remove `key`. Answers the dense index it occupied — into which the last
-/// key was moved — or `MH_TOMBSTONE` if it was absent. `key` is overwritten
-/// with the *stored* key, which the caller may own.
-///
-/// # Safety
-/// As [`find_bucket`].
-pub(super) unsafe fn delete<K: MapKey>(h: &mut MapHash, keys: *mut K, key: &mut K) -> uint32_t {
-    if h.size == 0 {
-        return MH_TOMBSTONE;
-    }
-    // SAFETY: the caller promises the table and the keys array.
-    let idx = unsafe { find_bucket(h, keys, key, false) };
-    if idx == MH_TOMBSTONE {
-        return MH_TOMBSTONE;
-    }
-    // SAFETY: as above; no other reference to the table is live.
-    let buckets = unsafe { buckets_mut(h) };
-    let k = buckets[idx as usize] - 1;
-    buckets[idx as usize] = MH_TOMBSTONE;
-    h.n_keys -= 1;
-    h.size -= 1;
-    let last = h.n_keys;
-    // SAFETY: `k` came from a live bucket, so it indexes a live key.
-    *key = unsafe { key_at(keys, k) };
-    if last != k {
-        // Move the last key into the hole and re-point its bucket, so the
-        // keys array stays dense.
-        // SAFETY: `last` was live until the decrement above.
-        let (moved, idx2) = unsafe {
-            let moved = key_at(keys, last);
-            (moved, find_bucket(h, keys, &moved, false))
-        };
-        // SAFETY: as above; the borrow from `find_bucket` has ended.
-        let buckets = unsafe { buckets_mut(h) };
-        assert!(
-            buckets[idx2 as usize] == last + 1,
-            "map: the moved key's bucket is stale"
-        );
-        buckets[idx2 as usize] = k + 1;
-        // SAFETY: `k` indexes inside the (shrunken) keys array.
-        unsafe { keys.add(k as usize).write(moved) };
-    }
-    k
-}
-
-/// A `Map`'s value for `key`, or null. `key_alloc`, when given, receives the
-/// address of the stored key.
-///
-/// # Safety
-/// As [`find_bucket`]; `values` must be as long as `keys`.
-pub(super) unsafe fn map_ref<K: MapKey, V>(
-    h: &MapHash,
-    keys: *mut K,
-    values: *mut V,
-    key: K,
-    key_alloc: *mut *mut K,
-) -> *mut V {
-    // SAFETY: the caller promises the table, the keys and the values.
-    let k = unsafe { get(h, keys, &key) };
-    if k == MH_TOMBSTONE {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: `k` indexes a live key, so it indexes a value too.
-    unsafe {
-        if !key_alloc.is_null() {
-            *key_alloc = keys.add(k as usize);
-        }
-        values.add(k as usize)
-    }
-}
-
 /// A `Map`'s slot for `key`, inserting it (with `init` as the value) if it is
 /// absent. `new_item`, when given, reports whether it was.
 ///
@@ -469,42 +370,6 @@ pub(super) unsafe fn map_put_ref<K: MapKey, V: Copy>(
         }
         values.add(k as usize)
     }
-}
-
-/// Remove `key` from a `Map` and answer its value, or `init` if it was absent.
-/// `key_alloc`, when given, receives the stored key.
-///
-/// # Safety
-/// As [`delete`]; `values` must be as long as `keys`.
-pub(super) unsafe fn map_del<K: MapKey, V: Copy>(
-    h: &mut MapHash,
-    keys: *mut K,
-    values: *mut V,
-    mut key: K,
-    init: V,
-    key_alloc: *mut K,
-) -> V {
-    // SAFETY: the caller promises the table and both arrays.
-    let k = unsafe { delete(h, keys, &mut key) };
-    if k == MH_TOMBSTONE {
-        return init;
-    }
-    // SAFETY: `key_alloc` is the caller's, and `k` indexed a live key.
-    let value = unsafe {
-        if !key_alloc.is_null() {
-            *key_alloc = key;
-        }
-        values.add(k as usize).read()
-    };
-    if k != h.n_keys {
-        // `delete` moved the last key into this hole; move its value too.
-        // SAFETY: `h.n_keys` was live until `delete` shrank it.
-        unsafe {
-            let last = values.add(h.n_keys as usize).read();
-            values.add(k as usize).write(last);
-        }
-    }
-    value
 }
 
 #[cfg(test)]

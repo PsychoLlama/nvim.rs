@@ -164,14 +164,13 @@ typedef struct MTKey MTKey;
 typedef struct mtnode_inner_s mtnode_inner_s;
 typedef struct mtnode_s mtnode_s;
 typedef struct MapHash MapHash;
-typedef struct Set_cstr_t Set_cstr_t;
-typedef struct Map_cstr_t_ptr_t Map_cstr_t_ptr_t;
 typedef struct ScopeDictDictItem ScopeDictDictItem;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
 typedef union VTermColor VTermColor;
 typedef struct ScreenPen ScreenPen;
 typedef struct ScreenCell ScreenCell;
+typedef struct Set_cstr_t Set_cstr_t;
 typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
@@ -1437,14 +1436,6 @@ struct MapHash {
   uint32_t keys_capacity;
   uint32_t *hash;
 };
-struct Set_cstr_t {
-  MapHash h;
-  cstr_t *keys;
-};
-struct Map_cstr_t_ptr_t {
-  Set_cstr_t set;
-  ptr_t *values;
-};
 struct ScopeDictDictItem {
   typval_T di_tv;
   uint8_t di_flags;
@@ -1488,6 +1479,10 @@ struct ScreenPen {
 struct ScreenCell {
   schar_T schar;
   ScreenPen pen;
+};
+struct Set_cstr_t {
+  MapHash h;
+  cstr_t *keys;
 };
 struct uv_signal_s_tree_entry {
   uv_signal_s *rbe_left;

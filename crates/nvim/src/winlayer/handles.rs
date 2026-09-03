@@ -4,7 +4,7 @@
 //! [`handle_T`] — and keeps a table from that id to the object, so that an API
 //! call, an RPC message or a Lua callback can name one without holding a
 //! pointer across the call that might free it. Upstream spells the three
-//! tables as khash `Map_int_ptr_t`s reached through a raw pointer
+//! tables as khash maps reached through a raw pointer
 //! (`window_handles`, `buffer_handles`, `tabpage_handles`); here they are
 //! owned Rust, one [`HandleRegistry`] each.
 //!

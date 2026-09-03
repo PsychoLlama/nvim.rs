@@ -576,8 +576,10 @@ mod tests {
         check(&filled(&[10, 20, 30, 40]), &[10, 20, 30, 40]);
     }
 
-    /// khash moves the last key into the hole; `tests/unit/map.rs` asserts
-    /// exactly this for `Map_uint64_t_ptr_t`, and the two must agree.
+    /// khash moved the last key into the hole. No khash table left in the
+    /// tree deletes, so this is the only place that half of the contract is
+    /// still written down — and every caller that relied on it now relies
+    /// on this type.
     #[test]
     fn removal_swaps_the_last_slot_into_the_hole() {
         let mut table = filled(&[10, 20, 30, 40]);

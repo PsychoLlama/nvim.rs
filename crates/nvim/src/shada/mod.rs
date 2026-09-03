@@ -548,7 +548,7 @@ pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
 };
 /// The buffers a ShaDa write keeps no marks for: those on a removable
 /// medium (`'shada'`'s `r` prefixes) and the scratch kinds. Membership only,
-/// keyed by address as khash's `Set_ptr_t` was.
+/// keyed by address, as the khash set it replaced was.
 pub(crate) type RemovableBufs = IdSet<*const buf_T>;
 
 /// The table key for the C string `name`: its bytes plus the terminator.
