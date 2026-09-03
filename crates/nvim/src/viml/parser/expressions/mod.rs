@@ -40,7 +40,7 @@ use strings::{parse_quoted_string, shifted_pos};
 use crate::charset::{hex2nr, vim_str2nr};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::trans_special;
-use crate::mbyte::{utf_char2bytes, utf_char2len, utfc_ptr2len_len};
+use crate::mbyte::{utf_char2len, utfc_ptr2len_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
 use crate::os::cshim::gettext;
 use crate::types::{

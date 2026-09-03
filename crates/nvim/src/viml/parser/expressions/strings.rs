@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
 use super::*;
-use crate::mbyte::utfc_ptr2len;
+use crate::mbyte::{cluster_len, encode_char};
 use crate::types::MB_MAXCHAR;
 
 #[inline(always)]
@@ -82,11 +82,13 @@ fn unknown_escape_group(is_double: bool, is_invalid: bool) -> &'static CStr {
 /// the *line*, not of the literal. Nothing is appended for a NUL, exactly as
 /// in the C, and the caller's outer scan is what makes progress from there.
 fn copy_one_char(out: &mut Vec<uint8_t>, rest: &[uint8_t]) -> size_t {
-    // SAFETY: the parser's input lines are NUL-terminated, which is what
-    // `utfc_ptr2len` needs to stop; the answer is clamped to `rest` so that a
-    // character truncated by the end of the line cannot read past it.
-    let len = unsafe { utfc_ptr2len(rest.as_ptr().cast::<c_char>()) };
-    let len = (len as size_t).min(rest.len());
+    // `cluster_len` reads a NUL as an ordinary one-byte character, because a
+    // slice's end is its own; the C stops at one, so that case is spelled out
+    // here rather than left to the measurement.
+    if rest.first().is_none_or(|&byte| byte == 0) {
+        return 0;
+    }
+    let len = cluster_len(rest);
     out.extend_from_slice(&rest[..len]);
     len
 }
@@ -94,9 +96,8 @@ fn copy_one_char(out: &mut Vec<uint8_t>, rest: &[uint8_t]) -> size_t {
 /// Append the UTF-8 encoding of `code`.
 fn append_char(out: &mut Vec<uint8_t>, code: c_int) {
     let mut buf = [0u8; MB_MAXCHAR];
-    // SAFETY: `buf` is `MB_MAXCHAR` bytes, the most `utf_char2bytes` writes.
-    let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr().cast::<c_char>()) };
-    out.extend_from_slice(&buf[..len as size_t]);
+    let len = encode_char(code, &mut buf);
+    out.extend_from_slice(&buf[..len]);
 }
 
 /// `trans_special` over a slice: how many bytes of `rest` the key name

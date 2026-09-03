@@ -10,7 +10,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
+use crate::memline::Lines;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 use crate::winlayer::Buf;
@@ -148,7 +150,11 @@ pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
 /// # Safety
 /// `lnum` must be a line of the current buffer.
 pub unsafe fn linewhite(lnum: linenr_T) -> bool {
-    unsafe { *skipwhite(ml_get(lnum)) as c_int == NUL }
+    // SAFETY: the slice is read and dropped before anything else runs, so
+    // nothing can swap the line out from under it.
+    let mut lines = unsafe { Lines::current() };
+    let line = lines.line(lnum);
+    skip::white(line) == line.len()
 }
 
 /// The buffer the editor is working in.

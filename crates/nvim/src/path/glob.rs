@@ -14,6 +14,7 @@ use std::ffi::CStr;
 
 use super::*;
 use crate::guard::{Depth, Suppress};
+use crate::mbyte::{char_at, cluster_len};
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
 use crate::types::MAXPATHL;
 
@@ -184,13 +185,14 @@ unsafe fn split_wild_component(
             // A later component; the wildcard is not in this one.
             comp = at + 1;
         } else if at >= wildoff
-            && (b"*?[{~$".contains(&pattern[at])
-                || (icase && mb_isalpha(unsafe { utf_ptr2char(pattern.as_ptr().add(at).cast()) })))
+            && (b"*?[{~$".contains(&pattern[at]) || (icase && mb_isalpha(char_at(&pattern[at..]))))
         {
             seen_wild = true;
         }
-        // A character is copied whole, however many bytes it takes.
-        let charlen = unsafe { utfc_ptr2len(pattern.as_ptr().add(at).cast()) } as usize;
+        // A character is copied whole, however many bytes it takes. The
+        // slice's own end bounds the measurement, so a sequence cut short by
+        // it is one byte and the copy below cannot reach past `pattern`.
+        let charlen = cluster_len(&pattern[at..]);
         buf[at..at + charlen].copy_from_slice(&pattern[at..at + charlen]);
         at += charlen;
     }

@@ -11,6 +11,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::charset::skip;
+use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -226,9 +228,12 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &pos_T, amount: &mut c
                 // indent plus the offset.  With the middle leader: its
                 // indent and nothing more.
                 // SAFETY: the test above says `prev` is at least 1, so it is
-                // a line of the current buffer; `ml_get` hands back a
-                // NUL-terminated one that `skipwhite` stops inside.
-                let above = unsafe { CStr::from_ptr(skipwhite(ml_get(prev))) }.to_bytes();
+                // a line of the current buffer. The handle's borrow is what
+                // keeps the second line below from being read while the
+                // first is still in hand.
+                let mut lines = unsafe { Lines::current() };
+                let above = lines.line(prev);
+                let above = &above[skip::white(above)..];
                 if ncmp_eq(above, &lead_start, lead_start_len) {
                     // SAFETY: the same line number.
                     *amount = unsafe { get_indent_lnum(prev) };
@@ -238,12 +243,13 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &pos_T, amount: &mut c
                     break;
                 } else {
                     // The opener does not match this item's start leader:
-                    // skip the item -- but `done` stays set.
-                    // SAFETY: `comment` is the position of a `/*` in this
-                    // buffer, so its column indexes inside its own line, and
-                    // what follows is still NUL-terminated.
-                    let opener = unsafe { ml_get(comment.lnum).offset(comment.col as isize) };
-                    let opener = unsafe { CStr::from_ptr(opener) }.to_bytes();
+                    // skip the item -- but `done` stays set. `comment` is the
+                    // position of a `/*` in this buffer, so its column is
+                    // inside its own line; a column past the end answers
+                    // nothing rather than reading on.
+                    let line = lines.line(comment.lnum);
+                    let at = usize::try_from(comment.col).unwrap_or(0);
+                    let opener = line.get(at..).unwrap_or_default();
                     if !ncmp_eq(opener, &lead_start, lead_start_len) {
                         continue;
                     }
