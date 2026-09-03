@@ -78,7 +78,7 @@ pub(crate) unsafe fn put_view(
             || !opts.has(kOptSsopFlagCurdir)
             || !unsafe { (*tp).tp_localdir }.is_null()
             || !unsafe { (*wp).w_localdir }.is_null();
-        if !unsafe { ses_arglist(out, c"arglocal", &raw mut (*(*wp).w_alist).al_ga, fullname) } {
+        if !unsafe { ses_arglist(out, c"arglocal", &(*(*wp).w_alist).al_ga, fullname) } {
             return false;
         }
     }
@@ -87,7 +87,7 @@ pub(crate) unsafe fn put_view(
     // when it still points at something: arguments may have been deleted.
     let mut did_next = false;
     if unsafe { (*wp).w_arg_idx } != current_arg_idx
-        && unsafe { (*wp).w_arg_idx } < unsafe { (*(*wp).w_alist).al_ga.ga_len }
+        && unsafe { (*wp).w_arg_idx } < unsafe { (*(*wp).w_alist).al_ga.len() as c_int }
         && opts.is_session()
     {
         if !out.write(format_args!(

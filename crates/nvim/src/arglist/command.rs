@@ -82,20 +82,19 @@ fn list_args() {
 /// Safe: both lists always exist -- every window has one, and the global
 /// list lives from startup to exit.
 fn copy_global_arglist() {
-    // SAFETY: `ga_grow` reserves a slot for every entry that can be copied.
     let al = win_alist(cur_win());
-    let count = alist_count(global_arglist());
-    unsafe { ga_grow(&raw mut (*al).al_ga, count) };
-    for i in 0..count {
-        let src = alist_arg(global_arglist(), i);
-        if unsafe { (*src).ae_fname.is_null() } {
-            continue;
-        }
-        let at = unsafe { (*al).al_ga.ga_len };
-        unsafe { (*alist_arg(al, at)).ae_fname = xstrdup((*src).ae_fname) };
-        unsafe { (*alist_arg(al, at)).ae_fnum = (*src).ae_fnum };
-        unsafe { (*al).al_ga.ga_len += 1 };
-    }
+    // SAFETY: both lists are live, and each name is copied into an
+    // allocation the new entry owns. The copies are collected before any of
+    // them joins the window's list, which is never the global one here.
+    let copies: Vec<aentry_T> = unsafe { &(*global_arglist()).al_ga }
+        .iter()
+        .filter(|entry| !entry.ae_fname.is_null())
+        .map(|entry| aentry_T {
+            ae_fname: unsafe { xstrdup(entry.ae_fname) },
+            ae_fnum: entry.ae_fnum,
+        })
+        .collect();
+    unsafe { (*al).al_ga.extend(copies) };
 }
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
@@ -424,16 +423,11 @@ unsafe fn delete_arg_range(eap: *mut exarg_T) {
         }
         return;
     }
-    // SAFETY: the range sits inside the list, and the `memmove` moves
-    // exactly the tail that follows it.
-    for i in line1..=line2 {
-        unsafe { xfree((*arg(i - 1)).ae_fname as *mut c_void) };
+    // SAFETY: the range sits inside the list, and every entry in it owns
+    // its name.
+    for gone in unsafe { cur_arglist() }.drain(as_count(line1 - 1)..as_count(line2)) {
+        unsafe { xfree(gone.ae_fname.cast()) };
     }
-    let dest = arg(line1 - 1) as *mut c_void;
-    let src2 = arg(line2) as *const c_void;
-    let n = ((argcount() - line2) as size_t).wrapping_mul(size_of::<aentry_T>());
-    unsafe { dest.cast::<u8>().copy_from(src2.cast(), n) };
-    set_argcount(argcount() - count);
     let idx = cur_arg_idx();
     if idx >= line2 {
         set_cur_arg_idx(idx - count);

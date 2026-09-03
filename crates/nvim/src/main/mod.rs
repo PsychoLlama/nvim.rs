@@ -669,13 +669,7 @@ pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
-    al_ga: garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<c_void>(),
-    },
+    al_ga: Vec::new(),
     al_refcount: Refcount::ZERO,
     id: 0,
 });

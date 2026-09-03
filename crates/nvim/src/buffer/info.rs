@@ -797,7 +797,7 @@ pub unsafe fn append_arg_number(wp: Win, buf: *mut c_char, buflen: size_t) -> c_
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
     // SAFETY: the current window's argument list is live.
-    let argcount = unsafe { (*current_win().w_alist).al_ga.ga_len };
+    let argcount = unsafe { (*current_win().w_alist).al_ga.len() as c_int };
     if argcount <= 1 {
         // Nothing to do.
         return 0;

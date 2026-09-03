@@ -80,8 +80,8 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, Failed, MAXPATHL, NUL, Vv, aentry_T, buf_T, exarg_T, linenr_T, ptrdiff_t, size_t,
-    ssize_t, tabpage_T, uint64_t, varnumber_T, win_T,
+    CmdModFlags, Failed, MAXPATHL, NUL, Vv, buf_T, exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t,
+    tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -812,7 +812,7 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
     // message was already given for that.
-    if unsafe { (*(*curwin.get()).w_alist).al_ga.ga_len } == 0 {
+    if unsafe { (*(*curwin.get()).w_alist).al_ga.len() as c_int } == 0 {
         return;
     }
 
@@ -829,9 +829,8 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
     // ":drop file ...": edit the first argument, jumping to an existing
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
-    let buf =
-        find_buf(unsafe { *((*(*curwin.get()).w_alist).al_ga.ga_data as *mut aentry_T) }.ae_fnum)
-            .map_or(ptr::null_mut(), |mut b| b.raw());
+    let buf = find_buf(unsafe { *((*(*curwin.get()).w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
+        .map_or(ptr::null_mut(), |mut b| b.raw());
     for (tp, wp) in tab_windows() {
         if unsafe { (*wp).w_buffer } != buf {
             continue;

@@ -255,7 +255,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
         match list {
             ListDo::Args => {
                 // Go to argument "i".
-                if i == unsafe { (*(*curwin.get()).w_alist).al_ga.ga_len } {
+                if i == unsafe { (*(*curwin.get()).w_alist).al_ga.len() as c_int } {
                     break;
                 }
                 // Don't call `do_argfile` when already there, it would

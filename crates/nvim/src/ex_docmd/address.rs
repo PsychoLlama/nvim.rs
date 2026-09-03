@@ -233,7 +233,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
 
 /// How many files are in the current window's argument list.
 fn arglist_len() -> c_int {
-    unsafe { (*cur_win().w_alist).al_ga.ga_len }
+    unsafe { (*cur_win().w_alist).al_ga.len() as c_int }
 }
 
 /// The handles of the first and last *loaded* buffers.

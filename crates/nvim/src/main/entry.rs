@@ -236,7 +236,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     let mut fname: *mut c_char = ptr::null_mut();
-    if unsafe { (*global_arglist()).al_ga.ga_len } > 0 {
+    if unsafe { (*global_arglist()).al_ga.len() as c_int } > 0 {
         fname = unsafe { get_fname(&raw mut params) };
     }
     if recoverymode.get() && fname.is_null() {

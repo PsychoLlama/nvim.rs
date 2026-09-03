@@ -17,7 +17,9 @@ pub struct aentry_T {
     pub ae_fnum: ::core::ffi::c_int,
 }
 pub struct alist_T {
-    pub al_ga: garray_T,
+    /// The entries, each owning its `ae_fname`. Not a `Drop` impl: a list is
+    /// released through `alist_unlink`, which frees the names first.
+    pub al_ga: Vec<aentry_T>,
     pub al_refcount: Refcount,
     pub id: ::core::ffi::c_int,
 }

@@ -75,7 +75,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
     CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, aentry_T, buf_T, exarg_T,
-    garray_T, size_t, win_T,
+    size_t, win_T,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy};
@@ -330,14 +330,14 @@ unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
 /// (which only happens out of memory).
 ///
 /// # Safety
-/// `gap` is a live `aentry_T` garray.
-unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, gap: *mut garray_T, fullname: bool) -> bool {
+/// Every entry's name is NUL-terminated and stays alive for the call.
+unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[aentry_T], fullname: bool) -> bool {
     if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
         return false;
     }
     // SAFETY: caller contract; each entry's name is NUL-terminated.
-    for i in 0..unsafe { (*gap).ga_len } {
-        let mut name = unsafe { alist_name(((*gap).ga_data as *mut aentry_T).offset(i as isize)) };
+    for entry in entries {
+        let mut name = unsafe { alist_name(ptr::from_ref(entry).cast_mut()) };
         if name.is_null() {
             continue;
         }

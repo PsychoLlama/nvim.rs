@@ -120,7 +120,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
         ses_arglist(
             out,
             c"argglobal",
-            &raw mut (*global_arglist()).al_ga,
+            &(*global_arglist()).al_ga,
             !opts.has(kOptSsopFlagCurdir),
         )
     } {

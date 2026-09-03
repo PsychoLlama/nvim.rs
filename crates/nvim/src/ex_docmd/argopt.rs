@@ -386,10 +386,10 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
 /// Answers `OK` when quitting is allowed. `quitmore` is what makes the
 /// second `:q` work: the refusal sets it, and `do_one_cmd` counts it down.
 pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
-    let n = unsafe { (*cur_win().w_alist).al_ga.ga_len } - cur_win().w_arg_idx - 1;
+    let n = unsafe { (*cur_win().w_alist).al_ga.len() as c_int } - cur_win().w_arg_idx - 1;
     if forceit
         || !unsafe { only_one_window() }
-        || unsafe { (*cur_win().w_alist).al_ga.ga_len } <= 1
+        || unsafe { (*cur_win().w_alist).al_ga.len() as c_int } <= 1
         || arg_had_last.get()
         || n <= 0
         || quitmore.get() != 0

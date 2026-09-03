@@ -36,14 +36,13 @@ use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::{autowrite, check_changed};
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_reg_pat;
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
     Columns, arg_had_last, cmdmod, cmdwin_type, curbuf, curtab, curwin, firstwin, global_alist,
     got_int, lastused_tabpage, lastwin, max_alist_id, p_ea, p_fic, p_tpm,
 };
 use crate::mark::{setmark, setpcmark};
-use crate::memory::{xcalloc, xfree, xmalloc, xstrdup};
+use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::magic_isset;
 use crate::os::input::os_breakcheck;
@@ -101,14 +100,11 @@ fn flag_if(cond: bool, flag: c_uint) -> c_int {
     if cond { flag as c_int } else { 0 }
 }
 
-/// A zeroed garray, ready for `ga_init`.
-const EMPTY_GARRAY: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ptr::null_mut(),
-};
+/// An entry count as an index. Every count here came out of the list
+/// itself, or out of a range already checked against it.
+fn as_count(n: c_int) -> usize {
+    usize::try_from(n).expect("an argument count is never negative")
+}
 
 // ---------------------------------------------------------------------------
 // Reaching the entries.
@@ -123,11 +119,11 @@ pub(crate) fn global_arglist() -> *mut alist_T {
 /// `AARGLIST(al)` and `ALIST_COUNT(al)`: an argument list's entries and length.
 /// The transpiler spelled these out at every use; the C had them as macros.
 fn alist_entries(al: *mut alist_T) -> (*mut aentry_T, c_int) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
-    let al = unsafe { Al::new(al) };
-    // SAFETY: every caller holds a valid argument list.
-    let ga = &al.al_ga;
-    (ga.ga_data as *mut aentry_T, ga.ga_len)
+    // SAFETY: the caller's promise -- a live `alist_T`. The pointer is
+    // derived from the vector itself on every call, so a growth between two
+    // calls cannot leave a stale one behind.
+    let entries = unsafe { &mut (*al).al_ga };
+    (entries.as_mut_ptr(), entries.len() as c_int)
 }
 
 fn alist_arg(al: *mut alist_T, n: c_int) -> *mut aentry_T {
@@ -162,10 +158,15 @@ fn argcount() -> c_int {
     wargcount(cur_win())
 }
 
-/// `ARGCOUNT` as an assignable place.
-fn set_argcount(count: c_int) {
+/// The current window's argument list, for the handful of places that
+/// change it in place.
+///
+/// # Safety
+///
+/// The borrow must not outlive a call that can replace the window's list.
+unsafe fn cur_arglist<'a>() -> &'a mut Vec<aentry_T> {
     // SAFETY: the current window always has an argument list.
-    unsafe { (*win_alist(cur_win())).al_ga.ga_len = count };
+    unsafe { &mut (*win_alist(cur_win())).al_ga }
 }
 
 /// `curwin->w_arg_idx`: which argument the current window is on. It is not
@@ -223,31 +224,27 @@ fn arglist_is_locked() -> bool {
 ///
 /// `al` must be a valid argument list.
 unsafe fn alist_clear(al: *mut alist_T) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
-    let mut al = unsafe { Al::new(al) };
     if arglist_is_locked() {
         return;
     }
-    // SAFETY: caller contract; each entry owns its `ae_fname`.
-    let (entries, len) = alist_entries(al.raw());
-    if !entries.is_null() {
-        for i in 0..len {
-            unsafe { xfree((*entries.offset(i as isize)).ae_fname as *mut c_void) };
-        }
+    // SAFETY: the caller's promise -- a live `alist_T`, each of whose
+    // entries owns its `ae_fname`.
+    let entries = unsafe { &mut (*al).al_ga };
+    for entry in entries.drain(..) {
+        unsafe { xfree(entry.ae_fname.cast()) };
     }
-    unsafe { ga_clear(&raw mut al.al_ga) };
 }
 
-/// Initialise an argument list to no entries.
+/// Empty an argument list, without freeing the names in it -- as upstream's
+/// `ga_init` over a live array leaks what it held. Only the global list,
+/// which starts out empty, reaches here.
 ///
 /// # Safety
 ///
-/// `al` must point at storage for an `alist_T`.
+/// `al` must be a live `alist_T`.
 pub unsafe fn alist_init(al: *mut alist_T) {
     // SAFETY: the caller's promise -- a live `alist_T`.
-    let mut al = unsafe { Al::new(al) };
-    // SAFETY: caller contract.
-    unsafe { ga_init(&raw mut al.al_ga, size_of::<aentry_T>() as c_int, 5) };
+    unsafe { (*al).al_ga = Vec::new() };
 }
 
 /// Drop a reference to an argument list, freeing it once no window holds it.
@@ -266,7 +263,7 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
     // reference goes.
     if al.al_refcount.release() <= 0 {
         unsafe { alist_clear(al.raw()) };
-        unsafe { xfree(al.raw().cast()) };
+        drop(unsafe { Box::from_raw(al.raw()) });
     }
 }
 
@@ -276,12 +273,13 @@ pub unsafe fn alist_unlink(al: *mut alist_T) {
 /// owned by it alone.
 fn alist_new() {
     max_alist_id.set(max_alist_id.get() + 1);
-    // SAFETY: curwin is valid; the new list starts out owned by it alone.
-    let al = unsafe { xmalloc(size_of::<alist_T>()) } as *mut alist_T;
-    cur_win().w_alist = al;
-    unsafe { (*al).al_refcount = Refcount::ONE };
-    unsafe { (*al).id = max_alist_id.get() };
-    unsafe { alist_init(al) };
+    // The new list starts out owned by the current window alone; it is
+    // released, and its box reclaimed, by `alist_unlink`.
+    cur_win().w_alist = Box::into_raw(Box::new(alist_T {
+        al_ga: Vec::new(),
+        al_refcount: Refcount::ONE,
+        id: max_alist_id.get(),
+    }));
 }
 
 /// Replace `al`'s entries with `files`, taking over the array and the names
@@ -309,7 +307,7 @@ unsafe fn alist_set(
     // SAFETY: caller contract; `ga_grow` reserves every slot the loop fills,
     // and each name is handed to the entry that takes it over.
     unsafe { alist_clear(al.raw()) };
-    unsafe { ga_grow(&raw mut al.al_ga, count) };
+    al.al_ga.reserve(as_count(count));
     for i in 0..count {
         if got_int.get() {
             // Adding many buffers can take a long time, so the user can
@@ -338,17 +336,18 @@ unsafe fn alist_set(
     }
 }
 
-/// Append `fname` to `al`, taking over the name. The caller must have grown
-/// the list. `set_fnum` 1 records the buffer number, 2 additionally lets the
-/// current buffer be re-used. May trigger `Buf*` autocommands.
+/// Append `fname` to `al`, taking over the name. `set_fnum` 1 records the
+/// buffer number, 2 additionally lets the current buffer be re-used. May
+/// trigger `Buf*` autocommands.
+///
+/// The entry is built before it joins the list, so the autocommands
+/// `buflist_add` may run see the list as it was -- which is what upstream's
+/// "fill the slot at `ga_len`, bump `ga_len` afterwards" amounted to.
 ///
 /// # Safety
 ///
-/// `al` must be a valid argument list with room for one more entry, and
-/// `fname` an owned name or null.
+/// `al` must be a valid argument list and `fname` an owned name or null.
 pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
-    let mut al = unsafe { Al::new(al) };
     if fname.is_null() {
         // Don't add NULL file names.
         return;
@@ -358,16 +357,21 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
     }
     let mut wp = cur_win();
     ARGLIST_LOCKED.set(true);
-    // SAFETY: caller contract; the slot at `ga_len` is the room the caller
-    // grew, and `buflist_add` cannot move the list while it is locked.
     wp.w_locked = true;
-    let at = al.al_ga.ga_len;
-    unsafe { (*alist_arg(al.raw(), at)).ae_fname = fname };
-    if set_fnum > 0 {
+    // SAFETY: caller contract -- `fname` is NUL-terminated, and the list
+    // cannot be changed under us while it is locked.
+    let ae_fnum = if set_fnum > 0 {
         let flags = BLN_LISTED as c_int | flag_if(set_fnum == 2, BLN_CURBUF);
-        unsafe { (*alist_arg(al.raw(), at)).ae_fnum = buflist_add(fname, flags) };
-    }
-    al.al_ga.ga_len += 1;
+        unsafe { buflist_add(fname, flags) }
+    } else {
+        0
+    };
+    unsafe {
+        (*al).al_ga.push(aentry_T {
+            ae_fname: fname,
+            ae_fnum,
+        })
+    };
     wp.w_locked = false;
     ARGLIST_LOCKED.set(false);
 }
@@ -410,36 +414,29 @@ pub fn split_one_arg(s: &mut [u8]) -> usize {
     next
 }
 
-/// Split `str` into arguments in place, collecting a pointer to each in
-/// `gap`. Without `escaped` the whole string is one argument.
+/// Split `str` into arguments in place, answering a pointer to each. The
+/// pointers are into `str` itself, so they live exactly as long as it does.
+/// Without `escaped` the whole string is one argument.
 ///
 /// # Safety
 ///
-/// `str` must be a NUL-terminated writable string that outlives `gap`, and
-/// `gap` uninitialised storage for a garray.
-unsafe fn get_arglist(gap: *mut garray_T, str: *mut c_char, escaped: bool) {
+/// `str` must be a NUL-terminated writable string that outlives the answer.
+unsafe fn get_arglist(str: *mut c_char, escaped: bool) -> Vec<*mut c_char> {
     // SAFETY: caller contract. One `strlen` up front rather than one per
     // argument: `split_one_arg` only ever shortens what it is given, so the
     // original length still bounds it.
-    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
     let total = unsafe { cstr::bytes_at(str) }.len();
     let buf = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), total + 1) };
+    let mut args = Vec::new();
     let mut at = 0;
     while at < total && buf[at] != 0 {
-        unsafe { ga_grow(gap, 1) };
-        let slot = unsafe {
-            (*gap)
-                .ga_data
-                .cast::<*mut c_char>()
-                .offset((*gap).ga_len as isize)
-        };
-        unsafe { *slot = str.add(at) };
-        unsafe { (*gap).ga_len += 1 };
+        args.push(unsafe { str.add(at) });
         if !escaped {
-            return;
+            break;
         }
         at += split_one_arg(&mut buf[at..]);
     }
+    args
 }
 
 /// Split `str` into file names and expand them into `fnamesp[fcountp]`.
@@ -465,18 +462,16 @@ pub unsafe fn get_arglist_exp(
     const EXPAND: ExpandFlags = ExpandFlags::FILE
         .or(ExpandFlags::NOTFOUND)
         .or(ExpandFlags::NOTWILD);
-    let mut ga = EMPTY_GARRAY;
-    // SAFETY: caller contract; `ga` holds pointers into `str`, which outlives
-    // the expansion, and the garray is cleared before returning.
-    unsafe { get_arglist(&raw mut ga, str, true) };
-    let names = ga.ga_data as *mut *mut c_char;
-    let result = if wig {
-        unsafe { expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND) }
+    // SAFETY: caller contract; the names point into `str`, which outlives
+    // the expansion.
+    let mut args = unsafe { get_arglist(str, true) };
+    let count = args.len() as c_int;
+    let names = args.as_mut_ptr();
+    if wig {
+        unsafe { expand_wildcards(count, names, fcountp, fnamesp, EXPAND) }
     } else {
-        unsafe { gen_expand_wildcards(ga.ga_len, names, fcountp, fnamesp, EXPAND) }
-    };
-    unsafe { ga_clear(&raw mut ga) };
-    result
+        unsafe { gen_expand_wildcards(count, names, fcountp, fnamesp, EXPAND) }
+    }
 }
 
 /// Re-check `w_arg_idx` in every window sharing the current window's list.
@@ -504,27 +499,27 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
     }
     let mut wp = cur_win();
     let flags = BLN_LISTED as c_int | flag_if(will_edit, BLN_CURBUF);
-    // SAFETY: `after` is clamped into the list, the `memmove` opens exactly
-    // the `count` slots `ga_grow` reserved, and the list cannot move while it
-    // is locked.
-    unsafe { ga_grow(&raw mut (*win_alist(wp)).al_ga, count) };
     let after = after.clamp(0, argcount());
-    if after < argcount() {
-        let al2 = arg(after + count) as *mut c_void;
-        let fname2 = arg(after) as *const c_void;
-        let set_fnum2 = ((argcount() - after) as size_t).wrapping_mul(size_of::<aentry_T>());
-        unsafe { al2.cast::<u8>().copy_from(fname2.cast(), set_fnum2) };
-    }
     ARGLIST_LOCKED.set(true);
     wp.w_locked = true;
-    for i in 0..count {
-        let name = unsafe { *files.offset(i as isize) };
-        unsafe { (*arg(after + i)).ae_fname = name };
-        unsafe { (*arg(after + i)).ae_fnum = buflist_add(name, flags) };
-    }
+    // SAFETY: caller contract -- `files` holds `count` owned names. The
+    // entries are built before any of them joins the list, so the
+    // autocommands `buflist_add` may run see the list they started with.
+    let added: Vec<aentry_T> = (0..count)
+        .map(|i| {
+            let name = unsafe { *files.offset(i as isize) };
+            aentry_T {
+                ae_fname: name,
+                ae_fnum: unsafe { buflist_add(name, flags) },
+            }
+        })
+        .collect();
     ARGLIST_LOCKED.set(false);
     wp.w_locked = false;
-    unsafe { (*win_alist(wp)).al_ga.ga_len += count };
+    // SAFETY: every window has an argument list.
+    let entries = unsafe { &mut (*win_alist(wp)).al_ga };
+    let at = as_count(after);
+    entries.splice(at..at, added);
     if old_argcount > 0 && wp.w_arg_idx >= after {
         wp.w_arg_idx += count;
     }
@@ -538,14 +533,9 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
 ///
 /// `idx` must be an entry of the current window's argument list.
 unsafe fn remove_arg(idx: c_int) {
-    // SAFETY: caller contract; the tail being moved down is
-    // `argcount() - idx - 1` entries long.
-    unsafe { xfree((*arg(idx)).ae_fname as *mut c_void) };
-    let al2 = arg(idx) as *mut c_void;
-    let fname2 = arg(idx + 1) as *const c_void;
-    let set_fnum2 = ((argcount() - idx - 1) as size_t).wrapping_mul(size_of::<aentry_T>());
-    unsafe { al2.cast::<u8>().copy_from(fname2.cast(), set_fnum2) };
-    set_argcount(argcount() - 1);
+    // SAFETY: caller contract -- `idx` names an entry, which owns its name.
+    let gone = unsafe { cur_arglist() }.remove(as_count(idx));
+    unsafe { xfree(gone.ae_fname.cast()) };
 }
 
 /// Delete every argument whose name `regmatch` matches, and report whether
@@ -575,13 +565,13 @@ unsafe fn delete_matching_args(regmatch: *mut regmatch_T) -> bool {
     didone
 }
 
-/// Delete the arguments matching each file pattern in `alist_ga`. A pattern
+/// Delete the arguments matching each file pattern in `patterns`. A pattern
 /// that matches nothing reports E480 and the rest still run.
 ///
 /// # Safety
 ///
-/// `alist_ga` must be a garray of NUL-terminated patterns.
-unsafe fn arglist_del_files(alist_ga: *mut garray_T) {
+/// Every pattern must be NUL-terminated and stay alive for the call.
+unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
     let mut regmatch = regmatch_T {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
@@ -590,16 +580,13 @@ unsafe fn arglist_del_files(alist_ga: *mut garray_T) {
         // Ignore case when 'fileignorecase' is set.
         rm_ic: p_fic.get() != 0,
     };
-    // SAFETY: caller contract; the garray holds `ga_len` NUL-terminated
-    // patterns, and nothing below changes it.
-    let (patterns, len) = unsafe { ((*alist_ga).ga_data as *mut *mut c_char, (*alist_ga).ga_len) };
-    let mut i = 0;
-    while i < len && !got_int.get() {
-        // SAFETY: `i` is in range; the translated pattern and the compiled
-        // program are freed on every path out of the body.
-        // SAFETY: caller contract -- `patterns` holds `count` names, each
-        // NUL-terminated.
-        let pattern = unsafe { *patterns.offset(i as isize) };
+    for &pattern in patterns {
+        if got_int.get() {
+            break;
+        }
+        // SAFETY: caller contract -- every pattern is NUL-terminated. The
+        // translated pattern and the compiled program are freed on every
+        // path out of the body.
         let regexp = unsafe { file_pat_to_reg_pat(pattern, ptr::null(), ptr::null_mut(), 0) };
         if regexp.is_null() {
             break;
@@ -622,11 +609,7 @@ unsafe fn arglist_del_files(alist_ga: *mut garray_T) {
             let pattern = unsafe { CStr::from_ptr(pattern) }.to_string_lossy();
             crate::semsg!("E480: No match: {pattern}");
         }
-        i += 1;
     }
-    // SAFETY: caller contract; the garray's items point into the caller's
-    // own string, so only the array itself is freed.
-    unsafe { ga_clear(alist_ga) };
 }
 
 /// What [`do_arglist`] should do with the names it parses.
@@ -664,22 +647,22 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
         arg_escaped = false;
     }
     // Collect all the file name arguments.
-    let mut new_ga = EMPTY_GARRAY;
-    // SAFETY: `str` is writable and outlives `new_ga`.
-    unsafe { get_arglist(&raw mut new_ga, str, arg_escaped) };
+    // SAFETY: `str` is writable and outlives the names taken out of it.
+    let mut new_args = unsafe { get_arglist(str, arg_escaped) };
     if op == ArgListOp::Delete {
-        // SAFETY: `new_ga` holds NUL-terminated patterns pointing into `str`.
-        unsafe { arglist_del_files(&raw mut new_ga) };
+        // SAFETY: the names are NUL-terminated patterns pointing into `str`.
+        unsafe { arglist_del_files(&new_args) };
     } else {
         let mut exp_count: c_int = 0;
         let mut exp_files: *mut *mut c_char = ptr::null_mut();
-        // SAFETY: the expansion reads `new_ga`'s names and hands back an
+        // SAFETY: the expansion reads the collected names and hands back an
         // owned array of owned names, which the arms below take over.
-        let names = new_ga.ga_data.cast::<*mut c_char>();
+        let count = new_args.len() as c_int;
+        let names = new_args.as_mut_ptr();
         let countp = &raw mut exp_count;
         let filesp = &raw mut exp_files;
-        let result = unsafe { expand_wildcards(new_ga.ga_len, names, countp, filesp, ANY_NAME) };
-        unsafe { ga_clear(&raw mut new_ga) };
+        let result = unsafe { expand_wildcards(count, names, countp, filesp, ANY_NAME) };
+        drop(new_args);
         let expanded = result.is_ok() && exp_count != 0;
         if !expanded {
             crate::semsg!("E479: No match");

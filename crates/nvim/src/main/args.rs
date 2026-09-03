@@ -29,7 +29,6 @@ use crate::diff::diffopt_horizontal;
 use crate::eval::vars::set_vim_var_string;
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::garray::ga_grow;
 use crate::guard::{SavedSctx, Script};
 use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
@@ -54,8 +53,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, aentry_T,
-    linenr_T, ptrdiff_t, scid_T, size_t,
+    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, linenr_T,
+    ptrdiff_t, scid_T, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::{atoi, fprintf, strcasecmp};
@@ -591,16 +590,15 @@ impl Scan {
         self.parm.edit_type = EDIT_FILE as c_int;
 
         let alist = global_arglist();
-        unsafe { ga_grow(&raw mut (*alist).al_ga, 1) };
         let mut path = unsafe { xstrdup(self.arg()) };
 
         // `nvim -d dir file` diffs `dir/file` against `file`.
         if self.parm.diff_mode != 0
             && unsafe { os_isdir(path) }
-            && unsafe { (*alist).al_ga.ga_len } > 0
-            && !unsafe { os_isdir(alist_name((*alist).al_ga.ga_data as *mut aentry_T)) }
+            && unsafe { (*alist).al_ga.len() as c_int } > 0
+            && !unsafe { os_isdir(alist_name((*alist).al_ga.as_mut_ptr())) }
         {
-            let first = unsafe { alist_name((*alist).al_ga.ga_data as *mut aentry_T) };
+            let first = unsafe { alist_name((*alist).al_ga.as_mut_ptr()) };
             let joined = unsafe { concat_fnames(path, path_tail(first), true) };
             unsafe { xfree(path as *mut c_void) };
             path = joined;
