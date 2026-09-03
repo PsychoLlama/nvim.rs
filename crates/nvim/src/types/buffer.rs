@@ -603,15 +603,32 @@ pub struct synblock_T {
     /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
     /// is what it compiled to.
     pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,
+    /// OWNERSHIP -- **carve-out**, the same one as `synpat_T::sp_prog`: a
+    /// compiled program is a `regexp/` object with its own allocator
+    /// discipline (`vim_regcomp` / `vim_regfree`), so it stays a raw pointer,
+    /// released by `syntax_clear`.
     pub b_syn_linecont_prog: *mut regprog_T,
     pub b_syn_linecont_time: syn_time_T,
     pub b_syn_linecont_ic: ::core::ffi::c_int,
     pub b_syn_topgrp: ::core::ffi::c_int,
     pub b_syn_conceal: ::core::ffi::c_int,
     pub b_syn_folditems: ::core::ffi::c_int,
+    /// OWNERSHIP -- **carve-out**. The parser's state cache is one slab of
+    /// `b_sst_len` `synstate_T`s, threaded into two intrusive singly-linked
+    /// lists that point *into* it: the used entries (`b_sst_first`, sorted by
+    /// line) and the recycled ones (`b_sst_firstfree`). A `Vec` cannot hold
+    /// it -- growing one moves the entries, and every `sst_next` in both
+    /// lists, plus whatever `*mut synstate_T` a caller is holding across a
+    /// re-parse, would dangle. Resizing is a copy-and-rethread
+    /// (`syn_stack_alloc`) and the slab is released by
+    /// `syn_stack_free_block`, the only `xfree` of it. Retiring it means
+    /// making the two lists indices into the slab -- a rewrite of the cache,
+    /// not of its ownership.
     pub b_sst_array: *mut synstate_T,
     pub b_sst_len: ::core::ffi::c_int,
+    /// The used entries, lowest line first. Points into [`Self::b_sst_array`].
     pub b_sst_first: *mut synstate_T,
+    /// The recycled entries. Points into [`Self::b_sst_array`].
     pub b_sst_firstfree: *mut synstate_T,
     pub b_sst_freecount: ::core::ffi::c_int,
     pub b_sst_check_lnum: linenr_T,

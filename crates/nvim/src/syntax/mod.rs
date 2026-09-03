@@ -15,6 +15,22 @@
 //! Two blocks matter and are easy to confuse: [`syn_block`] is the one being
 //! *parsed*, and [`cur_syn_block`] -- `curwin`'s -- is the one a `:syntax`
 //! command *configures*. Each has its own accessors.
+//!
+//! # Ownership
+//!
+//! Everything a syntax block holds is owned by value: `b_syn_patterns` and
+//! `b_syn_clusters` are `Vec`s of [`synpat_T`]/[`syn_cluster_T`], a pattern's
+//! text is a `CString` and its `contains=`/`containedin=`/`nextgroup=` lists
+//! are [`IdList`]s. **An `xfree` in this module is a bug** unless it is one of
+//! the three carve-outs, each of which says so at its own field:
+//!
+//! - [`keyentry`] -- one `xmalloc` block with the keyword text inside it,
+//!   which the hash tables key on by *interior address*, and the two raw id
+//!   lists [`copy_id_list`](options::copy_id_list) makes for it.
+//! - `synblock_T::b_sst_array` -- the state cache's slab, threaded into two
+//!   intrusive lists of interior pointers.
+//! - [`synpat_T::sp_prog`] and `synblock_T::b_syn_linecont_prog` -- compiled
+//!   programs, which belong to `regexp/`'s allocator discipline.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
