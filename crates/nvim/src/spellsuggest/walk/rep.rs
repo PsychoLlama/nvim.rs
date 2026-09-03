@@ -18,12 +18,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::cstr;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk};
-use crate::types::{fromto_T, garray_T};
+use crate::types::RepItem;
 use core::ffi::c_int;
-use core::ptr;
 
 impl Walk<'_> {
     /// Decide whether trying `REP` items here is worth it at all, and if
@@ -84,26 +82,22 @@ impl Walk<'_> {
     /// The walk's language and bad word must be valid.
     pub(super) unsafe fn rep(&mut self) {
         let level = self.depth as usize;
-        // SAFETY: `bad_idx` is a position inside the bad word, and the
-        // language is valid by the contract above.
-        let p = self.fword_ptr(self.stack[level].bad_idx as usize);
-        let gap = unsafe { self.rep_items() };
+        let bad_idx = self.stack[level].bad_idx as usize;
+        // SAFETY: the language is valid by the contract above and stays
+        // loaded for as long as the walk.
+        let items = unsafe { self.rep_items() };
 
-        // SAFETY: `gap` is the language's own garray, so its length is
-        // what bounds the item index, and both sides of every item are
-        // NUL-terminated strings the language owns.
-        while (self.stack[level].child as c_int) < unsafe { (*gap).ga_len } {
-            let item = unsafe {
-                ((*gap).ga_data as *mut fromto_T).offset(self.stack[level].child as isize)
-            };
+        while (self.stack[level].child as usize) < items.len() {
+            let item = &items[self.stack[level].child as usize];
             self.stack[level].child += 1;
 
-            if unsafe { *(*item).ft_from != *p } {
+            if item.from[0] != self.fword[bad_idx] {
                 // Past every item that could match.
-                self.stack[level].child = unsafe { (*gap).ga_len } as i16;
+                self.stack[level].child = items.len() as i16;
                 break;
             }
-            if !(unsafe { cstr::starts_with(p, cstr::bytes_at((*item).ft_from)) })
+            if !self.fword[bad_idx..].starts_with(&item.from)
+                // SAFETY: `su` is the caller's suggestion state.
                 || !unsafe { self.try_deeper(SCORE_REP) }
             {
                 continue;
@@ -116,26 +110,23 @@ impl Walk<'_> {
 
             // Change the "from" text into the "to" text, closing or
             // opening the gap between them first.
-            let from_len = unsafe { cstr::bytes_at((*item).ft_from) }.len() as c_int;
-            let to_len = unsafe { cstr::bytes_at((*item).ft_to) }.len() as c_int;
+            let (from_len, to_len) = (item.from.len(), item.to.len());
+            let to = item.to.clone();
             if from_len != to_len {
-                unsafe { move_tail(p, from_len, to_len) };
-                self.repextra += to_len - from_len;
+                move_tail(&mut self.fword[bad_idx..], from_len, to_len);
+                self.repextra += to_len as c_int - from_len as c_int;
             }
-            unsafe { ptr::copy((*item).ft_to, p, to_len as usize) };
+            self.fword[bad_idx..bad_idx + to_len].copy_from_slice(&to);
 
             let child = self.depth as usize;
-            self.stack[child].change_from = (self.stack[level].bad_idx as c_int + to_len) as u8;
+            self.stack[child].change_from = (bad_idx + to_len) as u8;
             self.stack[child].char_len = 0;
             break;
         }
 
         // The state test tells "the list ran out" apart from "an item
         // matched and pushed a level", which left it at `RepUndo`.
-        //
-        // SAFETY: as above.
-        if self.stack[level].child as c_int >= unsafe { (*gap).ga_len }
-            && self.stack[level].state == State::Rep
+        if self.stack[level].child as usize >= items.len() && self.stack[level].state == State::Rep
         {
             self.stack[level].state = State::Final;
         }
@@ -149,22 +140,19 @@ impl Walk<'_> {
     /// The walk's language and bad word must be valid.
     pub(super) unsafe fn rep_undo(&mut self) {
         let level = self.depth as usize;
-        // SAFETY: `child` still points just past the item that was
-        // applied, whose two sides are NUL-terminated strings the language
-        // owns, and `bad_idx` is a position inside the bad word.
-        let gap = unsafe { self.rep_items() };
-        let item = unsafe {
-            ((*gap).ga_data as *mut fromto_T).offset(self.stack[level].child as isize - 1)
-        };
+        let bad_idx = self.stack[level].bad_idx as usize;
+        // `child` still points just past the item that was applied.
+        //
+        // SAFETY: the language is valid by the contract above.
+        let item = &unsafe { self.rep_items() }[self.stack[level].child as usize - 1];
+        let (from_len, to_len) = (item.from.len(), item.to.len());
+        let from = item.from.clone();
 
-        let from_len = unsafe { cstr::bytes_at((*item).ft_from) }.len() as c_int;
-        let to_len = unsafe { cstr::bytes_at((*item).ft_to) }.len() as c_int;
-        let p = self.fword_ptr(self.stack[level].bad_idx as usize);
         if from_len != to_len {
-            unsafe { move_tail(p, to_len, from_len) };
-            self.repextra -= to_len - from_len;
+            move_tail(&mut self.fword[bad_idx..], to_len, from_len);
+            self.repextra -= to_len as c_int - from_len as c_int;
         }
-        unsafe { ptr::copy((*item).ft_from, p, from_len as usize) };
+        self.fword[bad_idx..bad_idx + from_len].copy_from_slice(&from);
 
         self.stack[level].state = State::Rep;
     }
@@ -175,14 +163,15 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// The walk's language must be valid, and `lp_replang` must be
-    /// non-null unless this is the sound-fold walk.
-    unsafe fn rep_items(&self) -> *mut garray_T {
+    /// non-null unless this is the sound-fold walk. The list must outlive
+    /// the borrow, which it does: nothing unloads a language mid-walk.
+    unsafe fn rep_items<'a>(&self) -> &'a [RepItem] {
         // SAFETY: the caller guarantees the language; `rep_ini` is what
         // establishes the `lp_replang` precondition.
         if self.soundfold {
-            unsafe { &raw mut (*self.slang).sl_repsal }
+            unsafe { &(*self.slang).sl_repsal }
         } else {
-            unsafe { &raw mut (*(*self.lp).lp_replang).sl_rep }
+            unsafe { &(*(*self.lp).lp_replang).sl_rep }
         }
     }
 }
@@ -192,11 +181,14 @@ impl Walk<'_> {
 ///
 /// # Safety
 ///
-/// `p` must point into a NUL-terminated buffer with room for the shift.
-unsafe fn move_tail(p: *mut core::ffi::c_char, from_len: c_int, to_len: c_int) {
-    // SAFETY: the caller guarantees the buffer; the regions overlap, so
-    // this has to be a move rather than a copy.
-    let src = unsafe { p.offset(from_len as isize) };
-    let src_len = unsafe { cstr::bytes_at(src) }.len();
-    unsafe { ptr::copy(src, p.offset(to_len as isize), src_len + 1) };
+fn move_tail(word: &mut [u8], from_len: usize, to_len: usize) {
+    // Everything up to and including the word's terminator moves. A
+    // replacement that grows the word can push that past the buffer,
+    // which the C let run; here the buffer's own end is the limit.
+    let tail_end = word[from_len..]
+        .iter()
+        .position(|&b| b == 0)
+        .map_or(word.len(), |n| from_len + n + 1);
+    let room = word.len().saturating_sub(to_len) + from_len;
+    word.copy_within(from_len..tail_end.min(room), to_len);
 }

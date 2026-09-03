@@ -528,7 +528,7 @@ impl Walk<'_> {
             match_checkcompoundpattern(
                 self.preword.as_mut_ptr(),
                 self.stack[level].preword_len as c_int,
-                &raw mut (*self.slang).sl_comppat,
+                &(*self.slang).sl_comppat,
             )
         };
         let mut compound_ok = !forbidden_pair;

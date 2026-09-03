@@ -49,8 +49,8 @@ use crate::spell::{
     slang_clear_sug, slang_free,
 };
 use crate::types::{
-    FILE, NUL, OptInt, colnr_T, garray_T, idx_T, int16_t, langp_T, linenr_T, size_t, slang_T,
-    time_t, uint8_t,
+    FILE, NUL, OptInt, colnr_T, garray_T, idx_T, langp_T, linenr_T, size_t, slang_T, time_t,
+    uint8_t,
 };
 use ::libc::{fclose, feof, ferror, fread, strcpy, strerror, strrchr};
 
@@ -336,16 +336,10 @@ unsafe fn read_section(
             0
         }
         SN_PREFCOND => unsafe { read_prefcond_section(fd, lp) },
-        SN_REP => {
-            let gap = unsafe { &raw mut (*lp).sl_rep };
-            let first = unsafe { &raw mut (*lp).sl_rep_first }.cast::<int16_t>();
-            unsafe { read_rep_section(fd, gap, first) }
-        }
-        SN_REPSAL => {
-            let gap = unsafe { &raw mut (*lp).sl_repsal };
-            let first = unsafe { &raw mut (*lp).sl_repsal_first }.cast::<int16_t>();
-            unsafe { read_rep_section(fd, gap, first) }
-        }
+        SN_REP => unsafe { read_rep_section(fd, &mut (*lp).sl_rep, &mut (*lp).sl_rep_first) },
+        SN_REPSAL => unsafe {
+            read_rep_section(fd, &mut (*lp).sl_repsal, &mut (*lp).sl_repsal_first)
+        },
         SN_SAL => unsafe { read_sal_section(fd, lp) },
         SN_SOFO => unsafe { read_sofo_section(fd, lp) },
         SN_MAP => {

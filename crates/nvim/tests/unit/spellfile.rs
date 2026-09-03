@@ -308,8 +308,8 @@ fn the_shipped_english_language_loads_with_its_sections() {
         // sound-folding fall to the `SAL` rules.
         assert!(!(*lp).sl_sofo);
         assert!(!(*lp).sl_sal.is_empty(), "SN_SAL");
-        assert!((*lp).sl_rep.ga_len > 0, "SN_REP");
-        assert!((*lp).sl_repsal.ga_len > 0, "SN_REPSAL");
+        assert!(!(*lp).sl_rep.is_empty(), "SN_REP");
+        assert!(!(*lp).sl_repsal.is_empty(), "SN_REPSAL");
         assert!((*lp).sl_has_map, "SN_MAP");
         assert!((*lp).sl_wordcount.ht_used > 0, "SN_WORDS (the COMMON list)");
         // SN_SUGFILE: the timestamp a `.sug` file would have to match.

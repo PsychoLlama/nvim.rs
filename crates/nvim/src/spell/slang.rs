@@ -24,7 +24,6 @@ use core::ffi::{c_char, c_int, c_void};
 
 use crate::allocator::Owned;
 use crate::buffer::alloc_unregistered_buffer;
-use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_init};
 use crate::hashtab::{
     hash_add_item, hash_clear_all, hash_hash, hash_init, hash_lookup, hash_reset,
 };
@@ -35,22 +34,10 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    NUL, OK, buf_T, fromto_T, garray_T, hash_T, regprog_T, size_t, slang_T, uint8_t, uint16_t,
-    wordcount_T,
+    NUL, OK, buf_T, hash_T, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
-
-/// Free the contents of `gap`, which holds `T` items each needing `drop`,
-/// then the array itself.
-unsafe fn ga_deep_clear<T>(gap: *mut garray_T, drop: unsafe fn(*mut T)) {
-    if !unsafe { (*gap).ga_data }.is_null() {
-        for i in 0..unsafe { (*gap).ga_len } {
-            unsafe { drop(((*gap).ga_data as *mut T).offset(i as isize)) };
-        }
-    }
-    unsafe { ga_clear(gap) };
-}
 
 /// Free `*p` and null it.
 unsafe fn xfree_clear<T>(p: *mut *mut T) {
@@ -75,13 +62,15 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
         core::ptr::write(&raw mut (*lp).sl_sound_tree, WordTree::default());
         core::ptr::write(&raw mut (*lp).sl_sal, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_sofo_map, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_rep, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_repsal, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_comppat, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_syl_items, Vec::new());
     }
 
     if !lang.is_null() {
         unsafe { (*lp).sl_name = xstrdup(lang) };
     }
-    unsafe { ga_init(&raw mut (*lp).sl_rep, size_of::<fromto_T>() as c_int, 10) };
-    unsafe { ga_init(&raw mut (*lp).sl_repsal, size_of::<fromto_T>() as c_int, 10) };
     unsafe { (*lp).sl_compmax = MAXWLEN as c_int };
     unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
     // All three tables, not just the one the caller is about to fill: a
@@ -103,12 +92,6 @@ pub unsafe fn slang_free(lp: *mut slang_T) {
     unsafe { xfree(lp as *mut c_void) };
 }
 
-/// Free one REP or REPSAL pair.
-unsafe fn free_fromto(ftp: *mut fromto_T) {
-    unsafe { xfree((*ftp).ft_from as *mut c_void) };
-    unsafe { xfree((*ftp).ft_to as *mut c_void) };
-}
-
 /// Empty a language so its file can be read again, leaving the struct
 /// itself usable and its name and chain link intact.
 pub unsafe fn slang_clear(lp: *mut slang_T) {
@@ -119,8 +102,11 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
         (*lp).sl_prefix_tree = WordTree::default();
     }
 
-    unsafe { ga_deep_clear(&raw mut (*lp).sl_rep, free_fromto) };
-    unsafe { ga_deep_clear(&raw mut (*lp).sl_repsal, free_fromto) };
+    // SAFETY: the caller's language. Assigning drops what was there.
+    unsafe {
+        (*lp).sl_rep = Vec::new();
+        (*lp).sl_repsal = Vec::new();
+    }
 
     // SAFETY: the caller's language. Assigning drops what was there.
     unsafe {
@@ -143,9 +129,9 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
     unsafe { xfree_clear(&raw mut (*lp).sl_compallflags) };
 
     unsafe { xfree_clear(&raw mut (*lp).sl_syllable) };
-    unsafe { ga_clear(&raw mut (*lp).sl_syl_items) };
+    unsafe { (*lp).sl_syl_items = Vec::new() };
 
-    unsafe { ga_clear_strings(&raw mut (*lp).sl_comppat) };
+    unsafe { (*lp).sl_comppat = Vec::new() };
 
     unsafe { hash_clear_all(&raw mut (*lp).sl_wordcount, WC_KEY_OFF as u32) };
     // SAFETY: the caller's language.
@@ -219,8 +205,9 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
 ///
 /// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
 pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
-    let items = unsafe { &raw mut (*slang).sl_syl_items };
-    unsafe { ga_init(items, size_of::<syl_item_T>() as c_int, 4) };
+    // SAFETY: the caller's language, whose `sl_syllable` is a live
+    // NUL-terminated string this splits in place.
+    let mut items: Vec<syl_item_T> = Vec::new();
     let mut p = unsafe { vim_strchr((*slang).sl_syllable, '/' as c_int) };
     while !p.is_null() {
         unsafe { *p = NUL as c_char };
@@ -231,21 +218,26 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
         let s = p;
         p = unsafe { vim_strchr(p, '/' as c_int) };
         let l = if p.is_null() {
-            unsafe { cstr::bytes_at(s).len() as c_int }
+            unsafe { cstr::bytes_at(s).len() }
         } else {
-            unsafe { p.offset_from(s) as c_int }
+            unsafe { p.offset_from(s) as usize }
         };
-        if l >= SY_MAXLEN {
+        if l >= SY_MAXLEN as usize {
             return SP_FORMERROR;
         }
 
-        let syl =
-            unsafe { ga_append_via_ptr(&raw mut (*slang).sl_syl_items, size_of::<syl_item_T>()) }
-                as *mut syl_item_T;
-        let to = unsafe { &raw mut (*syl).sy_chars } as *mut c_void;
-        unsafe { xmemcpyz(to, s as *const c_void, l as size_t) };
-        unsafe { (*syl).sy_len = l };
+        let mut syl = syl_item_T {
+            sy_chars: [0; SY_MAXLEN as usize],
+            sy_len: l as c_int,
+        };
+        // SAFETY: as above; `l` is under `SY_MAXLEN`, which is the room
+        // `sy_chars` has, and those bytes are the item's own.
+        // SAFETY: as above.
+        syl.sy_chars[..l].copy_from_slice(unsafe { &core::slice::from_raw_parts(s, l)[..l] });
+        items.push(syl);
     }
+    // SAFETY: the caller's language.
+    unsafe { (*slang).sl_syl_items = items };
     OK
 }
 
@@ -270,13 +262,13 @@ pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -
 
         // The longest matching syllable item wins.
         let mut len = 0;
-        for i in 0..unsafe { (*slang).sl_syl_items.ga_len } {
-            let syl =
-                unsafe { ((*slang).sl_syl_items.ga_data as *mut syl_item_T).offset(i as isize) };
-            if unsafe { (*syl).sy_len } > len
-                && unsafe { cstr::prefix_eq(p, (*syl).sy_chars.as_ptr(), (*syl).sy_len as size_t) }
+        for syl in unsafe { &(*slang).sl_syl_items } {
+            // SAFETY: `p` walks the caller's NUL-terminated word, and the
+            // item's own length is what is compared.
+            if syl.sy_len > len
+                && unsafe { cstr::prefix_eq(p, syl.sy_chars.as_ptr(), syl.sy_len as size_t) }
             {
-                len = unsafe { (*syl).sy_len };
+                len = syl.sy_len;
             }
         }
 

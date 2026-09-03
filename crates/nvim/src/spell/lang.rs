@@ -518,13 +518,13 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
                 }
             }
 
-            if unsafe { (*(*lp).lp_slang).sl_rep.ga_len } > 0 {
+            if unsafe { !(*(*lp).lp_slang).sl_rep.is_empty() } {
                 unsafe { (*lp).lp_replang = (*lp).lp_slang };
             } else {
                 for j in 0..ga.ga_len {
                     let lp2 = unsafe { entries.offset(j as isize) };
                     let lang2 = unsafe { (*(*lp2).lp_slang).sl_name };
-                    if unsafe { (*(*lp2).lp_slang).sl_rep.ga_len } > 0
+                    if unsafe { !(*(*lp2).lp_slang).sl_rep.is_empty() }
                         && unsafe { cstr::prefix_eq(lang, lang2, 2) }
                     {
                         unsafe { (*lp).lp_replang = (*lp2).lp_slang };

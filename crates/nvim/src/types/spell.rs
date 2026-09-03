@@ -10,7 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::spell::WordTree;
+use crate::spell::{WordTree, syl_item_T};
 
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
@@ -19,6 +19,13 @@ pub type SpellAddType = ::core::ffi::c_uint;
 pub struct fromto_T {
     pub ft_from: *mut ::core::ffi::c_char,
     pub ft_to: *mut ::core::ffi::c_char,
+}
+/// One `REP`/`REPSAL` item as a loaded language holds it: text to look
+/// for, and what to put in its place. (`:mkspell`'s side of the same
+/// section is still [`fromto_T`], whose two strings the writer sorts.)
+pub struct RepItem {
+    pub from: Box<[u8]>,
+    pub to: Box<[u8]>,
 }
 pub type idx_T = ::core::ffi::c_int;
 pub struct langp_T {
@@ -65,17 +72,18 @@ pub struct slang_S {
     pub sl_compminlen: ::core::ffi::c_int,
     pub sl_compsylmax: ::core::ffi::c_int,
     pub sl_compoptions: ::core::ffi::c_int,
-    pub sl_comppat: garray_T,
+    /// `CHECKCOMPOUNDPATTERN`'s pairs, in order.
+    pub sl_comppat: Vec<Box<[u8]>>,
     pub sl_compprog: *mut regprog_T,
     pub sl_comprules: *mut uint8_t,
     pub sl_compstartflags: *mut uint8_t,
     pub sl_compallflags: *mut uint8_t,
     pub sl_nobreak: bool,
     pub sl_syllable: *mut ::core::ffi::c_char,
-    pub sl_syl_items: garray_T,
+    pub sl_syl_items: Vec<syl_item_T>,
     pub sl_prefixcnt: ::core::ffi::c_int,
     pub sl_prefprog: *mut *mut regprog_T,
-    pub sl_rep: garray_T,
+    pub sl_rep: Vec<RepItem>,
     pub sl_rep_first: [int16_t; 256],
     /// The `SAL` rules, grouped by the low byte of their first character.
     pub sl_sal: Vec<salitem_T>,
@@ -90,7 +98,7 @@ pub struct slang_S {
     pub sl_collapse: bool,
     pub sl_rem_accents: bool,
     pub sl_sofo: bool,
-    pub sl_repsal: garray_T,
+    pub sl_repsal: Vec<RepItem>,
     pub sl_repsal_first: [int16_t; 256],
     pub sl_nosplitsugs: bool,
     pub sl_nocompoundsugs: bool,

@@ -26,7 +26,6 @@ use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::fileio::{get2c, read_string};
-use crate::garray::{ga_grow, ga_init};
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
 use crate::mbyte::{
     char_at, char_len, mb_cptr2char_adv, mb_ptr2char_adv, utf_char2bytes, utf_char2len,
@@ -37,8 +36,7 @@ use crate::os::cshim::{getc, gettext};
 use crate::spell::{ascii_spell_chartab, byte_in_str, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    FILE, NUL, fromto_T, garray_T, hash_T, int16_t, regprog_T, salfirst_T, salitem_T, size_t,
-    slang_T, uint8_t,
+    FILE, NUL, RepItem, hash_T, int16_t, regprog_T, salfirst_T, salitem_T, size_t, slang_T, uint8_t,
 };
 use ::libc::ungetc;
 
@@ -184,53 +182,66 @@ pub(super) unsafe fn read_prefcond_section(fd: *mut FILE, lp: *mut slang_T) -> c
 /// `fromto_T` array and `first` a 256-entry table.
 pub(super) unsafe fn read_rep_section(
     fd: *mut FILE,
-    gap: *mut garray_T,
-    first: *mut int16_t,
+    out: &mut Vec<RepItem>,
+    first: &mut [int16_t; 256],
 ) -> c_int {
-    // SAFETY: the caller promises the array and the table; `ga_grow` makes
-    // room for `cnt` entries before any is written.
+    // SAFETY: the caller promises the stream; each string below is a
+    // NUL-terminated answer from `read_cnt_string`, copied before it is
+    // freed.
     let cnt = unsafe { get2c(fd) };
     if cnt < 0 {
         return SP_TRUNCERROR;
     }
-    unsafe { ga_grow(gap, cnt) };
 
-    while unsafe { (*gap).ga_len } < cnt {
-        let ftp = unsafe {
-            (*gap)
-                .ga_data
-                .cast::<fromto_T>()
-                .offset((*gap).ga_len as isize)
-        };
+    let mut items: Vec<RepItem> = Vec::with_capacity(cnt as usize);
+    for _ in 0..cnt {
         let mut c: c_int = 0;
-        unsafe { (*ftp).ft_from = read_cnt_string(fd, 1, &raw mut c) };
+        let from = unsafe { read_cnt_string(fd, 1, &raw mut c) };
         if c < 0 {
             return c;
         }
         if c == 0 {
             return SP_FORMERROR;
         }
-        unsafe { (*ftp).ft_to = read_cnt_string(fd, 1, &raw mut c) };
+        let from = unsafe { owned_string(from) };
+
+        let mut c: c_int = 0;
+        let to = unsafe { read_cnt_string(fd, 1, &raw mut c) };
         if c <= 0 {
-            unsafe { xfree((*ftp).ft_from.cast()) };
             return if c < 0 { c } else { SP_FORMERROR };
         }
-        unsafe { (*gap).ga_len += 1 };
+        items.push(RepItem {
+            from,
+            to: unsafe { owned_string(to) },
+        });
     }
 
     // Entries arrive sorted, so the first index per leading byte is
     // all the search needs.
-    for i in 0..256 {
-        unsafe { *first.offset(i) = -1 };
-    }
-    for i in 0..unsafe { (*gap).ga_len } {
-        let ftp = unsafe { (*gap).ga_data.cast::<fromto_T>().offset(i as isize) };
-        let lead = unsafe { *(*ftp).ft_from } as uint8_t as isize;
-        if unsafe { *first.offset(lead) } == -1 {
-            unsafe { *first.offset(lead) = i as int16_t };
+    first.fill(-1);
+    for (i, item) in items.iter().enumerate() {
+        let lead = usize::from(item.from[0]);
+        if first[lead] == -1 {
+            first[lead] = i as int16_t;
         }
     }
+    *out = items;
     0
+}
+
+/// Take a `read_cnt_string` answer over as owned bytes and free it.
+///
+/// # Safety
+///
+/// `p` must be a NUL-terminated string `read_cnt_string` allocated, or null.
+unsafe fn owned_string(p: *mut c_char) -> Box<[u8]> {
+    if p.is_null() {
+        return Box::default();
+    }
+    // SAFETY: the caller promises the string.
+    let bytes = unsafe { cstr::bytes_at(p) }.to_vec().into_boxed_slice();
+    unsafe { xfree(p.cast()) };
+    bytes
 }
 
 /// `SN_SAL`: the sound-folding rules.
@@ -465,30 +476,32 @@ pub(super) unsafe fn read_compound(fd: *mut FILE, slang: *mut slang_T, len: c_in
         unsafe { (*slang).sl_compoptions = getc(fd) };
         todo -= 1;
 
-        let gap = unsafe { &raw mut (*slang).sl_comppat };
-        let mut cnt = unsafe { get2c(fd) };
+        let cnt = unsafe { get2c(fd) };
         if cnt < 0 {
             return SP_TRUNCERROR;
         }
         todo -= 2;
-        unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, cnt) };
-        unsafe { ga_grow(gap, cnt) };
-        while cnt > 0 {
-            cnt -= 1;
-            let slot = unsafe {
-                (*gap)
-                    .ga_data
-                    .cast::<*mut c_char>()
-                    .offset((*gap).ga_len as isize)
-            };
-            unsafe { (*gap).ga_len += 1 };
+        let mut pats: Vec<Box<[u8]>> = Vec::with_capacity(cnt as usize);
+        for _ in 0..cnt {
             let mut n: c_int = 0;
-            unsafe { *slot = read_cnt_string(fd, 1, &raw mut n) };
+            // SAFETY: `fd` is positioned at the pattern's length byte;
+            // the answer is a NUL-terminated string, or null for an
+            // empty one, and is copied before it is freed.
+            let p = unsafe { read_cnt_string(fd, 1, &raw mut n) };
             if n < 0 {
                 return n;
             }
+            pats.push(if p.is_null() {
+                Box::default()
+            } else {
+                let bytes = unsafe { cstr::bytes_at(p) }.to_vec().into_boxed_slice();
+                unsafe { xfree(p.cast()) };
+                bytes
+            });
             todo -= n + 1;
         }
+        // SAFETY: the caller's language.
+        unsafe { (*slang).sl_comppat = pats };
     }
 
     if todo < 0 {

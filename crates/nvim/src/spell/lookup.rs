@@ -52,7 +52,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, garray_T, langp_T, regprog_T, slang_T, uint8_t};
+use crate::types::{NUL, langp_T, regprog_T, slang_T, uint8_t};
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
@@ -492,7 +492,7 @@ unsafe fn compound_part_allowed(
         return false;
     }
 
-    if unsafe { match_checkcompoundpattern(ptr, wlen, &raw mut (*slang).sl_comppat) } {
+    if unsafe { match_checkcompoundpattern(ptr, wlen, &(*slang).sl_comppat) } {
         return false;
     }
 
@@ -574,23 +574,21 @@ unsafe fn compound_part_allowed(
 pub unsafe fn match_checkcompoundpattern(
     ptr: *mut c_char,
     wlen: c_int,
-    gap: *mut garray_T,
+    pats: &[Box<[u8]>],
 ) -> bool {
-    let pats = unsafe { (*gap).ga_data } as *mut *mut c_char;
-    let mut i = 0;
-    while i + 1 < unsafe { (*gap).ga_len } {
-        let second = unsafe { *pats.offset((i + 1) as isize) };
-        if unsafe { cstr::starts_with(ptr.offset(wlen as isize), cstr::bytes_at(second)) } {
-            let first = unsafe { *pats.offset(i as isize) };
-            let len = unsafe { cstr::bytes_at(first) }.len() as c_int;
-            let n = len as usize;
-            if len <= wlen
-                && unsafe { cstr::prefix_eq(ptr.offset((wlen - len) as isize), first, n) }
-            {
-                return true;
-            }
+    for pair in pats.as_chunks::<2>().0 {
+        let (first, second) = (&pair[0], &pair[1]);
+        let (len, head, n) = (first.len() as c_int, first.as_ptr().cast(), first.len());
+        // SAFETY: the caller promises `wlen` bytes of `ptr` followed by a
+        // NUL-terminated remainder, which is the whole of what the two
+        // compares read; the length test is what keeps the second inside
+        // the word so far.
+        if len <= wlen
+            && unsafe { cstr::starts_with(ptr.offset(wlen as isize), second) }
+            && unsafe { cstr::prefix_eq(ptr.offset((wlen - len) as isize), head, n) }
+        {
+            return true;
         }
-        i += 2;
     }
     false
 }
