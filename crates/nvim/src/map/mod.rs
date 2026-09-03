@@ -28,11 +28,10 @@ mod policy;
 mod table;
 
 use crate::types::{
-    MHPutStatus, MTDamage, MTDamagePair, MTNode, Map_String_int, Map_cstr_t_int, Map_cstr_t_ptr_t,
-    Map_int_String, Map_int64_t_int64_t, Map_int64_t_ptr_t, Map_ptr_t_ptr_t, Map_uint32_t_ptr_t,
-    Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_int, Map_uint64_t_ptr_t,
-    MapHash, Set_String, Set_cstr_t, Set_int, Set_int64_t, Set_ptr_t, Set_uint32_t, Set_uint64_t,
-    String_0, cstr_t, int64_t, ptr_t, uint32_t, uint64_t,
+    MHPutStatus, MTDamage, MTDamagePair, MTNode, Map_String_int, Map_cstr_t_ptr_t, Map_int_String,
+    Map_ptr_t_ptr_t, Map_uint32_t_uint32_t, Map_uint64_t_MTDamagePair, Map_uint64_t_ptr_t, MapHash,
+    Set_String, Set_cstr_t, Set_int, Set_ptr_t, Set_uint32_t, Set_uint64_t, String_0, cstr_t,
+    ptr_t, uint32_t, uint64_t,
 };
 pub use policy::grown_keys_capacity;
 pub use table::{MH_TOMBSTONE, MapKey, kMHExisting, kMHNewKeyDidFit, kMHNewKeyRealloc, probe};
@@ -91,7 +90,6 @@ set_fields! {
     Set_String => String_0,
     Set_cstr_t => cstr_t,
     Set_int => ::core::ffi::c_int,
-    Set_int64_t => int64_t,
     Set_ptr_t => ptr_t,
     Set_uint32_t => uint32_t,
     Set_uint64_t => uint64_t,
@@ -99,16 +97,11 @@ set_fields! {
 
 map_fields! {
     Map_String_int => String_0, ::core::ffi::c_int,
-    Map_cstr_t_int => cstr_t, ::core::ffi::c_int,
     Map_cstr_t_ptr_t => cstr_t, ptr_t,
-    Map_int64_t_int64_t => int64_t, int64_t,
-    Map_int64_t_ptr_t => int64_t, ptr_t,
     Map_int_String => ::core::ffi::c_int, String_0,
     Map_ptr_t_ptr_t => ptr_t, ptr_t,
-    Map_uint32_t_ptr_t => uint32_t, ptr_t,
     Map_uint32_t_uint32_t => uint32_t, uint32_t,
     Map_uint64_t_MTDamagePair => uint64_t, MTDamagePair,
-    Map_uint64_t_int => uint64_t, ::core::ffi::c_int,
     Map_uint64_t_ptr_t => uint64_t, ptr_t,
 }
 
@@ -218,12 +211,6 @@ pub unsafe fn mh_get_uint64_t(set: *mut Set_uint64_t, key: uint64_t) -> uint32_t
 }
 
 /// # Safety
-/// `set` must point at a live `Set_int64_t`.
-pub unsafe fn mh_get_int64_t(set: *mut Set_int64_t, key: int64_t) -> uint32_t {
-    unsafe { set_get(set, &key) }
-}
-
-/// # Safety
 /// `set` must point at a live `Set_uint32_t`.
 pub unsafe fn mh_get_uint32_t(set: *mut Set_uint32_t, key: uint32_t) -> uint32_t {
     unsafe { set_get(set, &key) }
@@ -308,16 +295,6 @@ pub unsafe fn map_ref_cstr_t_ptr_t(
 }
 
 /// # Safety
-/// `map` must point at a live `Map_int64_t_int64_t`; `key_alloc` is null or writable.
-pub unsafe fn map_ref_int64_t_int64_t(
-    map: *mut Map_int64_t_int64_t,
-    key: int64_t,
-    key_alloc: *mut *mut int64_t,
-) -> *mut int64_t {
-    unsafe { map_ref(map, key, key_alloc) }
-}
-
-/// # Safety
 /// `map` must point at a live `Map_uint32_t_uint32_t`; `key_alloc` is null or writable.
 pub unsafe fn map_ref_uint32_t_uint32_t(
     map: *mut Map_uint32_t_uint32_t,
@@ -343,48 +320,12 @@ pub unsafe fn map_ref_string_int(
 // See `table::map_put_ref`.
 
 /// # Safety
-/// `map` must point at a live `Map_cstr_t_int`; the out-parameters
-/// are null or writable.
-pub unsafe fn map_put_ref_cstr_t_int(
-    map: *mut Map_cstr_t_int,
-    key: cstr_t,
-    key_alloc: *mut *mut cstr_t,
-    new_item: *mut bool,
-) -> *mut ::core::ffi::c_int {
-    unsafe { map_put_ref(map, key, 0, key_alloc, new_item) }
-}
-
-/// # Safety
 /// `map` must point at a live `Map_cstr_t_ptr_t`; the out-parameters
 /// are null or writable.
 pub unsafe fn map_put_ref_cstr_t_ptr_t(
     map: *mut Map_cstr_t_ptr_t,
     key: cstr_t,
     key_alloc: *mut *mut cstr_t,
-    new_item: *mut bool,
-) -> *mut ptr_t {
-    unsafe { map_put_ref(map, key, ::core::ptr::null_mut(), key_alloc, new_item) }
-}
-
-/// # Safety
-/// `map` must point at a live `Map_int64_t_int64_t`; the out-parameters
-/// are null or writable.
-pub unsafe fn map_put_ref_int64_t_int64_t(
-    map: *mut Map_int64_t_int64_t,
-    key: int64_t,
-    key_alloc: *mut *mut int64_t,
-    new_item: *mut bool,
-) -> *mut int64_t {
-    unsafe { map_put_ref(map, key, 0, key_alloc, new_item) }
-}
-
-/// # Safety
-/// `map` must point at a live `Map_int64_t_ptr_t`; the out-parameters
-/// are null or writable.
-pub unsafe fn map_put_ref_int64_t_ptr_t(
-    map: *mut Map_int64_t_ptr_t,
-    key: int64_t,
-    key_alloc: *mut *mut int64_t,
     new_item: *mut bool,
 ) -> *mut ptr_t {
     unsafe { map_put_ref(map, key, ::core::ptr::null_mut(), key_alloc, new_item) }
@@ -427,18 +368,6 @@ pub unsafe fn map_put_ref_string_int(
 }
 
 /// # Safety
-/// `map` must point at a live `Map_uint32_t_ptr_t`; the out-parameters
-/// are null or writable.
-pub unsafe fn map_put_ref_uint32_t_ptr_t(
-    map: *mut Map_uint32_t_ptr_t,
-    key: uint32_t,
-    key_alloc: *mut *mut uint32_t,
-    new_item: *mut bool,
-) -> *mut ptr_t {
-    unsafe { map_put_ref(map, key, ::core::ptr::null_mut(), key_alloc, new_item) }
-}
-
-/// # Safety
 /// `map` must point at a live `Map_uint32_t_uint32_t`; the out-parameters
 /// are null or writable.
 pub unsafe fn map_put_ref_uint32_t_uint32_t(
@@ -447,18 +376,6 @@ pub unsafe fn map_put_ref_uint32_t_uint32_t(
     key_alloc: *mut *mut uint32_t,
     new_item: *mut bool,
 ) -> *mut uint32_t {
-    unsafe { map_put_ref(map, key, 0, key_alloc, new_item) }
-}
-
-/// # Safety
-/// `map` must point at a live `Map_uint64_t_int`; the out-parameters
-/// are null or writable.
-pub unsafe fn map_put_ref_uint64_t_int(
-    map: *mut Map_uint64_t_int,
-    key: uint64_t,
-    key_alloc: *mut *mut uint64_t,
-    new_item: *mut bool,
-) -> *mut ::core::ffi::c_int {
     unsafe { map_put_ref(map, key, 0, key_alloc, new_item) }
 }
 
@@ -500,26 +417,6 @@ pub unsafe fn map_del_cstr_t_ptr_t(
 }
 
 /// # Safety
-/// `map` must point at a live `Map_int64_t_int64_t`; `key_alloc` is null or writable.
-pub unsafe fn map_del_int64_t_int64_t(
-    map: *mut Map_int64_t_int64_t,
-    key: int64_t,
-    key_alloc: *mut int64_t,
-) -> int64_t {
-    unsafe { map_del(map, key, 0, key_alloc) }
-}
-
-/// # Safety
-/// `map` must point at a live `Map_int64_t_ptr_t`; `key_alloc` is null or writable.
-pub unsafe fn map_del_int64_t_ptr_t(
-    map: *mut Map_int64_t_ptr_t,
-    key: int64_t,
-    key_alloc: *mut int64_t,
-) -> ptr_t {
-    unsafe { map_del(map, key, ::core::ptr::null_mut(), key_alloc) }
-}
-
-/// # Safety
 /// `map` must point at a live `Map_int_String`; `key_alloc` is null or writable.
 pub unsafe fn map_del_int_string(
     map: *mut Map_int_String,
@@ -537,16 +434,6 @@ pub unsafe fn map_del_string_int(
     key_alloc: *mut String_0,
 ) -> ::core::ffi::c_int {
     unsafe { map_del(map, key, 0, key_alloc) }
-}
-
-/// # Safety
-/// `map` must point at a live `Map_uint32_t_ptr_t`; `key_alloc` is null or writable.
-pub unsafe fn map_del_uint32_t_ptr_t(
-    map: *mut Map_uint32_t_ptr_t,
-    key: uint32_t,
-    key_alloc: *mut uint32_t,
-) -> ptr_t {
-    unsafe { map_del(map, key, ::core::ptr::null_mut(), key_alloc) }
 }
 
 /// # Safety

@@ -28,24 +28,9 @@ pub struct Map_String_int {
     pub values: *mut ::core::ffi::c_int,
 }
 #[derive(Clone)]
-pub struct Map_cstr_t_int {
-    pub set: Set_cstr_t,
-    pub values: *mut ::core::ffi::c_int,
-}
-#[derive(Clone)]
 #[repr(C)]
 pub struct Map_cstr_t_ptr_t {
     pub set: Set_cstr_t,
-    pub values: *mut ptr_t,
-}
-#[derive(Clone)]
-pub struct Map_int64_t_int64_t {
-    pub set: Set_int64_t,
-    pub values: *mut int64_t,
-}
-#[derive(Clone)]
-pub struct Map_int64_t_ptr_t {
-    pub set: Set_int64_t,
     pub values: *mut ptr_t,
 }
 #[derive(Clone)]
@@ -58,11 +43,6 @@ pub struct Map_ptr_t_ptr_t {
     pub set: Set_ptr_t,
     pub values: *mut ptr_t,
 }
-#[derive(Clone)]
-pub struct Map_uint32_t_ptr_t {
-    pub set: Set_uint32_t,
-    pub values: *mut ptr_t,
-}
 pub struct Map_uint32_t_uint32_t {
     pub set: Set_uint32_t,
     pub values: *mut uint32_t,
@@ -70,10 +50,6 @@ pub struct Map_uint32_t_uint32_t {
 pub struct Map_uint64_t_MTDamagePair {
     pub set: Set_uint64_t,
     pub values: *mut MTDamagePair,
-}
-pub struct Map_uint64_t_int {
-    pub set: Set_uint64_t,
-    pub values: *mut ::core::ffi::c_int,
 }
 pub struct Map_uint64_t_ptr_t {
     pub set: Set_uint64_t,
@@ -112,11 +88,6 @@ pub struct Set_glyph {
 pub struct Set_int {
     pub h: MapHash,
     pub keys: *mut ::core::ffi::c_int,
-}
-#[derive(Clone)]
-pub struct Set_int64_t {
-    pub h: MapHash,
-    pub keys: *mut int64_t,
 }
 #[derive(Clone)]
 pub struct Set_ptr_t {
