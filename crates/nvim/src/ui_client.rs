@@ -61,7 +61,7 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T, garray_T,
+    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     proftime_T, uint16_t,
 };
@@ -93,13 +93,7 @@ fn no_reader() -> CallbackReader {
     CallbackReader {
         cb: Callback::None,
         self_0: core::ptr::null_mut::<dict_T>(),
-        buffer: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 1,
-            ga_data: core::ptr::null_mut(),
-        },
+        buffer: Vec::new(),
         eof: false,
         buffered: false,
         fwd_err: false,

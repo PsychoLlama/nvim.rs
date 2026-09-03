@@ -18,7 +18,7 @@ use crate::eval::typval::{NumBuf, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
-use crate::ex_docmd::{GA_EMPTY_INIT_VALUE, cmdmod_has, kChannelPartAll};
+use crate::ex_docmd::{cmdmod_has, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::{current_ui, e_invchan, exiting, getout};
 use crate::memory::{xcalloc, xmemdupz};
@@ -326,12 +326,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
 fn blank_reader() -> CallbackReader {
     CallbackReader {
         cb: blank_callback(),
-        self_0: ptr::null_mut(),
-        buffer: GA_EMPTY_INIT_VALUE,
-        eof: false,
-        buffered: false,
-        fwd_err: false,
-        type_0: ptr::null(),
+        ..CallbackReader::none()
     }
 }
 

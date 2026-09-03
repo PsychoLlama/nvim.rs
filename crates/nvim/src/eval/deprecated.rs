@@ -52,15 +52,7 @@ pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
 const CALLBACK_NONE: Callback = Callback::None;
 
 /// `CALLBACK_READER_INIT`: a stream nobody is listening to.
-const CALLBACK_READER_INIT: CallbackReader = CallbackReader {
-    cb: CALLBACK_NONE,
-    self_0: core::ptr::null_mut(),
-    buffer: GA_EMPTY_INIT_VALUE,
-    eof: false,
-    buffered: false,
-    fwd_err: false,
-    type_0: core::ptr::null(),
-};
+const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 
 /// The evaluator's argument vector: the declared arguments plus the
 /// `VAR_UNKNOWN` that ends them.

@@ -50,11 +50,36 @@ pub struct Unpacker {
 pub struct CallbackReader {
     pub cb: Callback,
     pub self_0: *mut dict_T,
-    pub buffer: garray_T,
+    /// What the stream has produced since the last delivery. Owned: the
+    /// reader's `Drop` releases it, and `callback_reader_free` is where a
+    /// heap-allocated owner (a `Channel`) asks for that early.
+    pub buffer: Vec<u8>,
     pub eof: bool,
     pub buffered: bool,
     pub fwd_err: bool,
     pub type_0: *const ::core::ffi::c_char,
+}
+
+impl CallbackReader {
+    /// A reader nobody is listening to: no callback, no `self` dict, no
+    /// accumulated bytes. Every reader starts here.
+    pub const fn none() -> Self {
+        Self {
+            cb: Callback::None,
+            self_0: core::ptr::null_mut(),
+            buffer: Vec::new(),
+            eof: false,
+            buffered: false,
+            fwd_err: false,
+            type_0: core::ptr::null(),
+        }
+    }
+}
+
+impl Default for CallbackReader {
+    fn default() -> Self {
+        Self::none()
+    }
 }
 pub struct Channel {
     pub id: uint64_t,

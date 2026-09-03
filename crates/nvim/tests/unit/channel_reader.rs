@@ -20,7 +20,7 @@
 //!   a list of lines carries a byte it otherwise uses as its separator.
 //!
 //! The sequence below — `callback_reader_start`, `ga_concat_len` per chunk,
-//! `reader_lines` then `ga_clear` per delivery — is exactly what
+//! `reader_lines` then clearing the buffer per delivery — is exactly what
 //! `on_channel_output` and `channel_callback_call` do around a live channel,
 //! minus the channel: a `Channel` needs a stream, a multiqueue and a
 //! `Callback` to reach the same two lines, and the event loop that drives
@@ -28,34 +28,16 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::c_int;
-use std::ptr;
-
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
 use neovim::eval::typval::{tv_list_ref, tv_list_unref};
-use neovim::garray::{ga_clear, ga_concat_len};
-use neovim::types::{Callback, CallbackReader, garray_T};
+use neovim::types::CallbackReader;
 
 use crate::support::tv::{self, Tv};
 use crate::support::{Sandbox, cstr};
 
 /// A reader with nothing in it, set up as `channel_alloc` sets one up.
 fn reader() -> CallbackReader {
-    CallbackReader {
-        cb: Callback::None,
-        self_0: ptr::null_mut(),
-        buffer: garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ptr::null_mut(),
-        },
-        eof: false,
-        buffered: false,
-        fwd_err: false,
-        type_0: ptr::null(),
-    }
+    CallbackReader::none()
 }
 
 /// Feed `chunks` to a reader and answer what each *delivery* hands the
@@ -75,14 +57,14 @@ fn delivered(chunks: &[&[u8]]) -> Vec<Tv> {
         callback_reader_start(at, stdout.as_ptr());
         for chunk in chunks {
             // `on_channel_output`: accept the bytes into the accumulator.
-            ga_concat_len(&raw mut (*at).buffer, chunk.as_ptr().cast(), chunk.len());
+            (*at).buffer.extend_from_slice(chunk);
             // `channel_callback_call`: build the list, then drop what it was
             // built from.
             let list = reader_lines(at);
             tv_list_ref(list);
             out.push(tv::read_list(list));
             tv_list_unref(list);
-            ga_clear(&raw mut (*at).buffer);
+            (*at).buffer.clear();
         }
         callback_reader_free(at);
     }
@@ -195,14 +177,14 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
     let got = unsafe {
         callback_reader_start(at, stdout.as_ptr());
         for byte in b"one\ntwo" {
-            ga_concat_len(&raw mut (*at).buffer, ptr::from_ref(byte).cast(), 1);
+            (*at).buffer.push(*byte);
         }
-        assert_eq!((*at).buffer.ga_len, "one\ntwo".len() as c_int);
+        assert_eq!((*at).buffer.len(), "one\ntwo".len());
         let list = reader_lines(at);
         tv_list_ref(list);
         let got = tv::read_list(list);
         tv_list_unref(list);
-        ga_clear(&raw mut (*at).buffer);
+        (*at).buffer.clear();
         callback_reader_free(at);
         got
     };

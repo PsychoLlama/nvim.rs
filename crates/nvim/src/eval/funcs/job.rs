@@ -2,9 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::args::frame;
-use super::{
-    GA_EMPTY_INIT_VALUE, NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty,
-};
+use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
 use crate::api::private::helpers::{cstr_as_string, dict_set_var};
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
@@ -56,15 +54,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// A cleared `CallbackReader`, which the option parser fills in.
-const NO_READER: CallbackReader = CallbackReader {
-    cb: NO_CALLBACK,
-    self_0: ptr::null_mut::<dict_T>(),
-    buffer: GA_EMPTY_INIT_VALUE,
-    eof: false,
-    buffered: false,
-    fwd_err: false,
-    type_0: ptr::null::<c_char>(),
-};
+const NO_READER: CallbackReader = CallbackReader::none();
 
 /// A cleared `Callback`.
 const NO_CALLBACK: Callback = Callback::None;

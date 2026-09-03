@@ -10,8 +10,8 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_void};
+use core::{mem, ptr, slice};
 
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
@@ -21,7 +21,6 @@ use crate::eval::typval::{
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
-use crate::garray::{ga_clear, ga_concat_len, ga_init};
 use crate::terminal::terminal_receive;
 use crate::types::{
     CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
@@ -43,13 +42,12 @@ fn unknown_tv() -> typval_T {
 /// callback and in the `self` dict.
 ///
 /// # Safety
-/// `reader` is a live, zeroed or cleared reader; `type_0` is a `'static` C
-/// string.
+/// `reader` is a live reader; `type_0` is a `'static` C string.
 pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const c_char) {
-    let elem_size = size_of::<*mut c_char>() as c_int;
-    // SAFETY: the caller's reader.
-    unsafe { ga_init(&raw mut (*reader).buffer, elem_size, 32) };
-    unsafe { (*reader).type_0 = type_0 };
+    // SAFETY: the caller's reader, borrowed once for the whole setup.
+    let reader = unsafe { &mut *reader };
+    reader.buffer.clear();
+    reader.type_0 = type_0;
 }
 
 /// # Safety
@@ -57,7 +55,9 @@ pub unsafe fn callback_reader_start(reader: *mut CallbackReader, type_0: *const 
 pub unsafe fn callback_reader_free(reader: *mut CallbackReader) {
     // SAFETY: the caller's reader.
     unsafe { callback_free(&raw mut (*reader).cb) };
-    unsafe { ga_clear(&raw mut (*reader).buffer) };
+    // The reader itself may live in `xmalloc` memory whose release never runs
+    // a destructor, so the buffer is handed back here rather than at drop.
+    drop(unsafe { mem::take(&mut (*reader).buffer) });
 }
 
 /// Whether a reader has anywhere to deliver to.
@@ -111,7 +111,10 @@ unsafe fn on_channel_output(
         unsafe { (*reader).eof = true };
     }
     if callback_reader_set(unsafe { &*reader }) {
-        unsafe { ga_concat_len(&raw mut (*reader).buffer, buf, count) };
+        // SAFETY: `buf` is `count` readable bytes that do not alias the
+        // reader's own buffer.
+        let chunk = unsafe { slice::from_raw_parts(buf.cast::<u8>(), count) };
+        unsafe { (*reader).buffer.extend_from_slice(chunk) };
         unsafe { schedule_channel_event(chan) };
     }
     count
@@ -220,7 +223,7 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
 unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
     // SAFETY: the caller's live channel and reader.
     let is_eof = unsafe { (*reader).eof };
-    if unsafe { (*reader).buffer.ga_len } > 0 {
+    if !unsafe { (*reader).buffer.is_empty() } {
         unsafe { channel_callback_call(chan, reader) };
     }
     if is_eof {
@@ -251,7 +254,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
         argv[1].v_type = VAR_LIST as _;
         argv[1].vval.v_list = unsafe { reader_lines(reader) };
         unsafe { tv_list_ref(argv[1].vval.v_list) };
-        unsafe { ga_clear(&raw mut (*reader).buffer) };
+        unsafe { (*reader).buffer.clear() };
         argv[2].vval.v_string = unsafe { (*reader).type_0 } as *mut c_char;
         unsafe { &raw mut (*reader).cb }
     };
@@ -276,9 +279,9 @@ pub unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut list_T {
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.
     unsafe { tv_list_append_string(l, c"".as_ptr(), 0) };
-    let len = unsafe { (*reader).buffer.ga_len } as size_t;
-    if len > 0 {
-        unsafe { encode_list_write(l.cast(), (*reader).buffer.ga_data.cast(), len) };
+    let buffer = unsafe { &(*reader).buffer };
+    if !buffer.is_empty() {
+        unsafe { encode_list_write(l.cast(), buffer.as_ptr().cast(), buffer.len()) };
     }
     l
 }

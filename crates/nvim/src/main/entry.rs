@@ -53,13 +53,12 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, GA_EMPTY_INIT_VALUE, NO_BUFFERS, RedrawingDisabled, Rows,
-    WRITEBIN, argv0, cb_flags, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode,
-    err_arg_missing, exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, mparm_T, msg_didout, msg_row, msg_scroll, no_wait_return,
-    p_ch, p_lpl, p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout,
-    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
-    ui_client_channel_id, ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN, argv0, cb_flags,
+    cmdline_row, curbuf, curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
+    full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T,
+    msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut,
+    recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty,
+    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -85,8 +84,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    Callback, CallbackReader, IOSIZE, NUL, OptInt, Vv, dict_T, int64_t, linenr_T, list_T,
-    qf_info_T, varnumber_T,
+    CallbackReader, IOSIZE, NUL, OptInt, Vv, int64_t, linenr_T, list_T, qf_info_T, varnumber_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -231,15 +229,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if embedded_mode.get() {
         // stdin/stdout become the RPC channel.
         let mut err: *const c_char = ptr::null();
-        let reader = CallbackReader {
-            cb: Callback::None,
-            self_0: ptr::null_mut::<dict_T>(),
-            buffer: GA_EMPTY_INIT_VALUE,
-            eof: false,
-            buffered: false,
-            fwd_err: false,
-            type_0: ptr::null(),
-        };
+        let reader = CallbackReader::none();
         if unsafe { channel_from_stdio(true, reader, &raw mut err) } == 0 {
             unsafe { abort() };
         }

@@ -17,15 +17,12 @@ use crate::channel::channel_connect;
 use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec;
 use crate::main::exit::os_exit;
-use crate::main::{
-    ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, WIN_TABS, kRetObject, mparm_T, ui_client_channel_id,
-};
+use crate::main::{ARRAY_DICT_INIT, WIN_TABS, kRetObject, mparm_T, ui_client_channel_id};
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
-    Arena, Array, Callback, CallbackReader, Dict, Error, Integer, Object, String_0, dict_T, size_t,
-    uint64_t,
+    Arena, Array, CallbackReader, Dict, Error, Integer, Object, String_0, size_t, uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -52,15 +49,7 @@ pub(crate) unsafe fn server_connect(
 
     // Nothing reads from this channel; the reply comes back through the
     // request itself.
-    let on_data = CallbackReader {
-        cb: Callback::None,
-        self_0: ptr::null_mut::<dict_T>(),
-        buffer: GA_EMPTY_INIT_VALUE,
-        eof: false,
-        buffered: false,
-        fwd_err: false,
-        type_0: ptr::null(),
-    };
+    let on_data = CallbackReader::none();
 
     let is_tcp = socket_address_is_tcp(unsafe { CStr::from_ptr(server_addr) });
     let mut error: *const c_char = ptr::null();

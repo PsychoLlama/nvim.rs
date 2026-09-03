@@ -51,8 +51,8 @@ use crate::registry::SlotTable;
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
-    Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef, MultiQueue, Proc,
-    PtyProc, RStream, RefcountSize, RpcState, Stream, size_t, uint64_t,
+    CallbackReader, Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef,
+    MultiQueue, Proc, PtyProc, RStream, RefcountSize, RpcState, Stream, size_t, uint64_t,
 };
 use ::libc::freopen;
 
@@ -275,11 +275,10 @@ fn blank_channel(id: uint64_t, type_0: ChannelStreamType, events: *mut MultiQueu
             client_type: 0,
         },
         term: ptr::null_mut(),
-        // SAFETY: a zeroed `CallbackReader`/`Callback` is the "none" state —
-        // `Callback::None` is discriminant 0 and every pointer in them is
-        // nullable.
-        on_data: unsafe { mem::zeroed() },
-        on_stderr: unsafe { mem::zeroed() },
+        on_data: CallbackReader::none(),
+        on_stderr: CallbackReader::none(),
+        // SAFETY: a zeroed `Callback` is the "none" state — `Callback::None`
+        // is discriminant 0 and every pointer in it is nullable.
         on_exit: unsafe { mem::zeroed() },
         exit_status: -1,
         callback_busy: false,

@@ -5,8 +5,8 @@
 use super::args::{Args, frame};
 use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, GA_EMPTY_INIT_VALUE, MAX_FUNC_ARGS, kChannelPartAll,
-    kChannelPartRpc, kChannelPartStderr, kChannelPartStdin, kChannelPartStdout, kRetObject,
+    ARENA_EMPTY, ARRAY_DICT_INIT, MAX_FUNC_ARGS, kChannelPartAll, kChannelPartRpc,
+    kChannelPartStderr, kChannelPartStdin, kChannelPartStdout, kRetObject,
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{arena_array, cstr_as_string};
@@ -41,23 +41,15 @@ use crate::runtime::exestack;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, Callback, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
-    String_0, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, dict_T, funccal_entry_T,
-    funccall_T, sctx_T, typval_T, uint64_t, varnumber_T,
+    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, String_0,
+    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, funccal_entry_T, funccall_T, sctx_T,
+    typval_T, uint64_t, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// A cleared `CallbackReader`, which the option parsers fill in.
-const NO_READER: CallbackReader = CallbackReader {
-    cb: Callback::None,
-    self_0: ptr::null_mut::<dict_T>(),
-    buffer: GA_EMPTY_INIT_VALUE,
-    eof: false,
-    buffered: false,
-    fwd_err: false,
-    type_0: ptr::null::<c_char>(),
-};
+const NO_READER: CallbackReader = CallbackReader::none();
 
 /// A cleared `Object`.
 /// The `{stream}` names `chanclose()` accepts.
