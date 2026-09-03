@@ -50,7 +50,7 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_header(
     spin: &mut spellinfo_T,
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -60,9 +60,9 @@ pub(super) unsafe fn handle_affix_header(
     // `xstrlcpy` is given that bound.
     let is_prefix = unsafe { *items[0] } as c_int == b'P' as c_int;
     let tp: *mut hashtab_T = if is_prefix {
-        unsafe { &raw mut (*aff).af_pref }
+        &raw mut aff.af_pref
     } else {
-        unsafe { &raw mut (*aff).af_suff }
+        &raw mut aff.af_suff
     };
 
     let mut key: [c_char; 17] = [0; 17];
@@ -88,7 +88,7 @@ pub(super) unsafe fn handle_affix_header(
         }
     } else {
         st.cur_aff = spin.si_arena.alloc::<affheader_T>();
-        unsafe { (*st.cur_aff).ah_flag = affitem2flag((*aff).af_flagtype, items[1], fname, lnum) };
+        unsafe { (*st.cur_aff).ah_flag = affitem2flag(aff.af_flagtype, items[1], fname, lnum) };
         // An unusable name is fatal: the key would not fit, or the
         // flag could not be read.
         if unsafe { (*st.cur_aff).ah_flag } == 0
@@ -97,14 +97,14 @@ pub(super) unsafe fn handle_affix_header(
             return false;
         }
         let clashes = [
-            unsafe { (*aff).af_bad },
-            unsafe { (*aff).af_rare },
-            unsafe { (*aff).af_keepcase },
-            unsafe { (*aff).af_needaffix },
-            unsafe { (*aff).af_circumfix },
-            unsafe { (*aff).af_nosuggest },
-            unsafe { (*aff).af_needcomp },
-            unsafe { (*aff).af_comproot },
+            aff.af_bad,
+            aff.af_rare,
+            aff.af_keepcase,
+            aff.af_needaffix,
+            aff.af_circumfix,
+            aff.af_nosuggest,
+            aff.af_needcomp,
+            aff.af_comproot,
         ];
         if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -129,7 +129,7 @@ pub(super) unsafe fn handle_affix_header(
         unsafe { (*st.cur_aff).ah_follows = 0 };
     }
     if items.len() > lasti
-        && !unsafe { (*aff).af_ignoreextra }
+        && !aff.af_ignoreextra
         && unsafe { *items[lasti] } as c_int != b'#' as c_int
     {
         // SAFETY: the affix file's name and the trailing item.
@@ -142,7 +142,7 @@ pub(super) unsafe fn handle_affix_header(
         smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
     }
 
-    if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 {
+    if is_prefix && aff.af_pfxpostpone != 0 {
         if unsafe { (*st.cur_aff).ah_newID } == 0 {
             unsafe { check_renumber(spin) };
             spin.si_newprefID += 1;
@@ -165,7 +165,7 @@ pub(super) unsafe fn handle_affix_header(
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_entry(
     spin: &mut spellinfo_T,
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -228,8 +228,7 @@ pub(super) unsafe fn handle_affix_entry(
         }
     }
 
-    if is_prefix && unsafe { (*aff).af_pfxpostpone } != 0 && unsafe { (*entry).ae_flags }.is_null()
-    {
+    if is_prefix && aff.af_pfxpostpone != 0 && unsafe { (*entry).ae_flags }.is_null() {
         unsafe { postpone_prefix(spin, st, entry, items) };
     }
 }

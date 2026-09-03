@@ -115,22 +115,19 @@ enum FlagField {
 }
 
 impl FlagField {
-    /// # Safety
-    ///
-    /// `aff` must be live.
-    unsafe fn slot(self, aff: *mut afffile_T) -> *mut c_uint {
-        // SAFETY: the caller promises `aff`.
+    /// The field of `aff` this keyword sets.
+    fn slot(self, aff: &mut afffile_T) -> &mut c_uint {
         match self {
-            Self::Rare => unsafe { &raw mut (*aff).af_rare },
-            Self::KeepCase => unsafe { &raw mut (*aff).af_keepcase },
-            Self::Bad => unsafe { &raw mut (*aff).af_bad },
-            Self::NeedAffix => unsafe { &raw mut (*aff).af_needaffix },
-            Self::Circumfix => unsafe { &raw mut (*aff).af_circumfix },
-            Self::NoSuggest => unsafe { &raw mut (*aff).af_nosuggest },
-            Self::NeedComp => unsafe { &raw mut (*aff).af_needcomp },
-            Self::CompRoot => unsafe { &raw mut (*aff).af_comproot },
-            Self::CompForbid => unsafe { &raw mut (*aff).af_compforbid },
-            Self::CompPermit => unsafe { &raw mut (*aff).af_comppermit },
+            Self::Rare => &mut aff.af_rare,
+            Self::KeepCase => &mut aff.af_keepcase,
+            Self::Bad => &mut aff.af_bad,
+            Self::NeedAffix => &mut aff.af_needaffix,
+            Self::Circumfix => &mut aff.af_circumfix,
+            Self::NoSuggest => &mut aff.af_nosuggest,
+            Self::NeedComp => &mut aff.af_needcomp,
+            Self::CompRoot => &mut aff.af_comproot,
+            Self::CompForbid => &mut aff.af_compforbid,
+            Self::CompPermit => &mut aff.af_comppermit,
         }
     }
 
@@ -311,10 +308,17 @@ pub(super) unsafe fn spell_read_aff(spin: &mut spellinfo_T, fname: *mut c_char) 
         do_mapline: spin.si_map.is_empty(),
     };
 
-    let aff = spin.si_arena.alloc::<afffile_T>();
-    unsafe { hash_init(&raw mut (*aff).af_pref) };
-    unsafe { hash_init(&raw mut (*aff).af_suff) };
-    unsafe { hash_init(&raw mut (*aff).af_comp) };
+    let aff_raw = spin.si_arena.alloc::<afffile_T>();
+    // SAFETY: the arena just handed this out, zeroed and aligned. Its
+    // block is a heap allocation of its own, so a reference into it stays
+    // live across the `spin` borrows below.
+    let aff = unsafe { &mut *aff_raw };
+    // SAFETY: three fresh tables in the language just allocated.
+    unsafe {
+        hash_init(&raw mut aff.af_pref);
+        hash_init(&raw mut aff.af_suff);
+        hash_init(&raw mut aff.af_comp);
+    }
 
     let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
     let mut items: [*mut c_char; MAXITEMCNT] = [core::ptr::null_mut(); MAXITEMCNT];
@@ -420,7 +424,7 @@ unsafe fn split_items(line: *mut c_char, items: &mut [*mut c_char; MAXITEMCNT]) 
 /// live.
 unsafe fn handle_line(
     spin: &mut spellinfo_T,
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -428,14 +432,15 @@ unsafe fn handle_line(
 ) -> bool {
     // SAFETY: the caller promises the items and the two structures.
     // SET must come before anything that could need converting.
-    if unsafe { is_aff_rule(items, c"SET", 2) } && unsafe { (*aff).af_enc }.is_null() {
-        unsafe { (*aff).af_enc = enc_canonize(items[1]) };
+    if unsafe { is_aff_rule(items, c"SET", 2) } && aff.af_enc.is_null() {
+        // SAFETY: the caller promises the items.
+        aff.af_enc = unsafe { enc_canonize(items[1]) };
         if spin.si_ascii == 0
-            && unsafe { convert_setup(&raw mut spin.si_conv, (*aff).af_enc, p_enc.get()) }.is_err()
+            && unsafe { convert_setup(&raw mut spin.si_conv, aff.af_enc, p_enc.get()) }.is_err()
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, af_enc, arg2) =
-                unsafe { (c_str(fname), c_str((*aff).af_enc), c_str(p_enc.get())) };
+                unsafe { (c_str(fname), c_str(aff.af_enc), c_str(p_enc.get())) };
             smsg!(
                 0,
                 "Conversion in {fname} not supported: from {af_enc} to {arg2}"
@@ -445,7 +450,7 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"FLAG", 2) } && unsafe { (*aff).af_flagtype } == AFT_CHAR {
+    if unsafe { is_aff_rule(items, c"FLAG", 2) } && aff.af_flagtype == AFT_CHAR {
         unsafe { handle_flag_type(aff, items, fname, lnum) };
         return true;
     }
@@ -469,15 +474,16 @@ unsafe fn handle_line(
         if !names.iter().any(|n| unsafe { is_aff_rule(items, n, 2) }) {
             continue;
         }
-        let slot = unsafe { field.slot(aff) };
         // A second declaration is not this arm's business; it falls
         // through and is reported as a duplicate.
-        if unsafe { *slot } != 0 {
+        if *field.slot(aff) != 0 {
             break;
         }
-        unsafe { *slot = affitem2flag((*aff).af_flagtype, items[1], fname, lnum) };
+        // SAFETY: the caller promises the items.
+        let flag = unsafe { affitem2flag(aff.af_flagtype, items[1], fname, lnum) };
+        *field.slot(aff) = flag;
         if let Some(warning) = field.warn_after_pfx()
-            && unsafe { (*aff).af_pref.ht_used } > 0
+            && aff.af_pref.ht_used > 0
         {
             // SAFETY: the affix file's own name, NUL-terminated.
             let fname = unsafe { c_str(fname) };
@@ -589,8 +595,8 @@ unsafe fn handle_line(
             Toggle::NoSplitSugs => spin.si_nosplitsugs = 1,
             Toggle::NoCompoundSugs => spin.si_nocompoundsugs = 1,
             Toggle::NoSugFile => spin.si_nosugfile = 1,
-            Toggle::PfxPostpone => unsafe { (*aff).af_pfxpostpone = 1 },
-            Toggle::IgnoreExtra => unsafe { (*aff).af_ignoreextra = true },
+            Toggle::PfxPostpone => aff.af_pfxpostpone = 1,
+            Toggle::IgnoreExtra => aff.af_ignoreextra = true,
         }
         return true;
     }
@@ -702,18 +708,18 @@ pub(super) unsafe fn is_digit_byte(c: c_char) -> bool {
 ///
 /// As [`handle_line`].
 unsafe fn handle_flag_type(
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     items: &[*mut c_char],
     fname: *mut c_char,
     lnum: c_int,
 ) {
     // SAFETY: the caller promises the items.
     if unsafe { cstr::eq_bytes(items[1], b"long") } {
-        unsafe { (*aff).af_flagtype = AFT_LONG };
+        aff.af_flagtype = AFT_LONG;
     } else if unsafe { cstr::eq_bytes(items[1], b"num") } {
-        unsafe { (*aff).af_flagtype = AFT_NUM };
+        aff.af_flagtype = AFT_NUM;
     } else if unsafe { cstr::eq_bytes(items[1], b"caplong") } {
-        unsafe { (*aff).af_flagtype = AFT_CAPLONG };
+        aff.af_flagtype = AFT_CAPLONG;
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
@@ -721,16 +727,16 @@ unsafe fn handle_flag_type(
     }
     // Anything already read used the old spelling, so it would be
     // interpreted wrongly.
-    let used = unsafe { (*aff).af_rare } != 0
-        || unsafe { (*aff).af_keepcase } != 0
-        || unsafe { (*aff).af_bad } != 0
-        || unsafe { (*aff).af_needaffix } != 0
-        || unsafe { (*aff).af_circumfix } != 0
-        || unsafe { (*aff).af_needcomp } != 0
-        || unsafe { (*aff).af_comproot } != 0
-        || unsafe { (*aff).af_nosuggest } != 0
-        || unsafe { (*aff).af_suff.ht_used } > 0
-        || unsafe { (*aff).af_pref.ht_used } > 0;
+    let used = aff.af_rare != 0
+        || aff.af_keepcase != 0
+        || aff.af_bad != 0
+        || aff.af_needaffix != 0
+        || aff.af_circumfix != 0
+        || aff.af_needcomp != 0
+        || aff.af_comproot != 0
+        || aff.af_nosuggest != 0
+        || aff.af_suff.ht_used > 0
+        || aff.af_pref.ht_used > 0;
     if used {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
@@ -746,7 +752,7 @@ unsafe fn handle_flag_type(
 /// `spin`, `aff` and the state must be live.
 unsafe fn finish_aff(
     spin: &mut spellinfo_T,
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     st: &mut AffState,
     fname: *mut c_char,
 ) {

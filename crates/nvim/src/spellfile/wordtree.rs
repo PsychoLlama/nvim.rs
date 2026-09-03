@@ -27,13 +27,33 @@
 //! build as well as at the end, whenever the arena has grown past the
 //! threshold `'mkspellmem'` sets.
 //!
-//! # Node identity is load-bearing
+//! # Ownership — the one carve-out of `spellfile/`
 //!
-//! Nodes stay raw pointers rather than indices. Their addresses feed the
-//! digest in [`node_compress`], and [`node_equal`] tests two sub-trees for
-//! equality by comparing child *pointers* — a child chain is only equal to
-//! another if compression has already made them the same object. Both fall
-//! out of the arena never moving anything it has handed out.
+//! **The node graph and its slab stay raw pointers.** Not a `Vec` of
+//! indices, not a `Box` per node, and no destructor: three reasons, each
+//! sufficient on its own.
+//!
+//! 1. **Node identity is the equality test.** A node's *address* feeds the
+//!    digest in [`node_compress`], and [`node_equal`] decides two sub-trees
+//!    are the same by comparing child pointers — a child chain is only
+//!    equal to another once compression has made them literally the same
+//!    object. Indices would have to reproduce that identity exactly.
+//! 2. **It is a reference-counted DAG, not a tree.** After the first
+//!    compression run a node is reachable from several parents
+//!    ([`wordnode_S::wn_refs`]); [`tree_add_word`] copies one before
+//!    modifying it, and [`deref_wordnode`] returns a chain to the free list
+//!    when the last reference goes. Rust ownership does not describe that
+//!    shape without an `Rc`, and an `Rc` per node is a box per node.
+//! 3. **The compression *order* is observable.** `'mkspellmem'` decides
+//!    when a run happens, from `SpellArena::block_count`; a different
+//!    allocation pattern compresses at a different point and the same words
+//!    come out as different `.spl` bytes. `crates/nvim/tests/unit/
+//!    spellfile.rs`'s golden is exactly that assertion.
+//!
+//! So [`get_wordnode`] / [`free_wordnode`] over `si_first_free` are a slab,
+//! and the arena never moves what it has handed out. Everything *else* in
+//! `spellfile/` is owned: an `xfree` outside this carve-out and the
+//! `regexp`/`hashtab` seams is a bug.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

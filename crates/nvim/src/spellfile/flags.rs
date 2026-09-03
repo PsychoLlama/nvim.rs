@@ -177,32 +177,31 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
 /// # Safety
 ///
 /// `entry` and `affile` must be live, and `ae_flags` NUL-terminated.
-pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affentry_T) {
+pub(super) unsafe fn aff_process_flags(affile: &afffile_T, entry: *mut affentry_T) {
     // SAFETY: the caller promises both; the memmove closes a gap inside one
     // string, so source and destination share an allocation.
     if unsafe { (*entry).ae_flags }.is_null()
-        || (unsafe { (*affile).af_compforbid } == 0 && unsafe { (*affile).af_comppermit } == 0)
+        || (affile.af_compforbid == 0 && affile.af_comppermit == 0)
     {
         return;
     }
     let mut p = unsafe { (*entry).ae_flags };
     while unsafe { *p } as c_int != NUL {
         let prevp = p;
-        let flag = unsafe { get_affitem((*affile).af_flagtype, &raw mut p) };
-        if flag == unsafe { (*affile).af_comppermit } || flag == unsafe { (*affile).af_compforbid }
-        {
+        let flag = unsafe { get_affitem(affile.af_flagtype, &raw mut p) };
+        if flag == affile.af_comppermit || flag == affile.af_compforbid {
             // Remove the flag from the list and stay put, so the next
             // flag is read from where this one was.
             let into = prevp.cast::<u8>();
             unsafe { into.copy_from(p.cast(), cstr::bytes_at(p).len() + 1) };
             p = prevp;
-            if flag == unsafe { (*affile).af_comppermit } {
+            if flag == affile.af_comppermit {
                 unsafe { (*entry).ae_comppermit = 1 };
             } else {
                 unsafe { (*entry).ae_compforbid = 1 };
             }
         }
-        if unsafe { (*affile).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+        if affile.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
             p = unsafe { p.add(1) };
         }
     }
@@ -219,7 +218,7 @@ pub(super) unsafe fn aff_process_flags(affile: *mut afffile_T, entry: *mut affen
 /// `compflags` must be NUL-terminated and `aff` live.
 pub(super) unsafe fn process_compflags(
     spin: &mut spellinfo_T,
-    aff: *mut afffile_T,
+    aff: &mut afffile_T,
     compflags: *mut c_char,
 ) {
     // SAFETY: the destination is sized for the old pattern, a separator and
@@ -248,7 +247,7 @@ pub(super) unsafe fn process_compflags(
         }
 
         let prevp = p;
-        let flag = unsafe { get_affitem((*aff).af_flagtype, &raw mut p) };
+        let flag = unsafe { get_affitem(aff.af_flagtype, &raw mut p) };
         if flag != 0 {
             unsafe {
                 xmemcpyz(
@@ -257,7 +256,7 @@ pub(super) unsafe fn process_compflags(
                     p.offset_from(prevp) as size_t,
                 )
             };
-            let hi = unsafe { hash_find(&raw mut (*aff).af_comp, key.as_mut_ptr()) };
+            let hi = unsafe { hash_find(&raw mut aff.af_comp, key.as_mut_ptr()) };
             let id = if hi.is_kept() {
                 unsafe { (*compitem_T::of_key(hi.hi_key)).ci_newID }
             } else {
@@ -275,13 +274,13 @@ pub(super) unsafe fn process_compflags(
                     }
                 };
                 unsafe { (*ci).ci_newID = id };
-                let _ = unsafe { hash_add(&raw mut (*aff).af_comp, compitem_T::key(ci)) };
+                let _ = unsafe { hash_add(&raw mut aff.af_comp, compitem_T::key(ci)) };
                 id
             };
             unsafe { *tp = id as uint8_t };
             tp = unsafe { tp.add(1) };
         }
-        if unsafe { (*aff).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+        if aff.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
             p = unsafe { p.add(1) };
         }
     }
@@ -311,12 +310,12 @@ pub(super) unsafe fn check_renumber(spin: &mut spellinfo_T) {
 /// # Safety
 ///
 /// `aff` must be a live affix file that is not used again.
-pub(super) unsafe fn spell_free_aff(aff: *mut afffile_T) {
+pub(super) unsafe fn spell_free_aff(aff: &mut afffile_T) {
     // SAFETY: the caller promises the affix file; the regexps below are the
     // only heap allocations the entries own.
-    unsafe { xfree((*aff).af_enc.cast()) };
+    unsafe { xfree(aff.af_enc.cast()) };
 
-    for ht in [unsafe { &(*aff).af_pref }, unsafe { &(*aff).af_suff }] {
+    for ht in [&aff.af_pref, &aff.af_suff] {
         for hi in ht.items() {
             let ah = unsafe { affheader_T::of_key(hi.hi_key) };
             let mut ae = unsafe { (*ah).ah_first };
@@ -327,10 +326,7 @@ pub(super) unsafe fn spell_free_aff(aff: *mut afffile_T) {
         }
     }
 
-    // SAFETY: the caller's affix file, whose three tables are live.
-    unsafe {
-        hash_clear(&mut (*aff).af_pref);
-        hash_clear(&mut (*aff).af_suff);
-        hash_clear(&mut (*aff).af_comp);
-    }
+    hash_clear(&mut aff.af_pref);
+    hash_clear(&mut aff.af_suff);
+    hash_clear(&mut aff.af_comp);
 }

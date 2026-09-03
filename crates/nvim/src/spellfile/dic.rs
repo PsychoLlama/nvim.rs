@@ -75,7 +75,7 @@ use super::{
 pub(super) unsafe fn spell_read_dic(
     spin: &mut spellinfo_T,
     fname: *mut c_char,
-    affile: *mut afffile_T,
+    affile: &mut afffile_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path and the affix file; every buffer
     // below is sized for what is written into it.
@@ -225,14 +225,12 @@ pub(super) unsafe fn spell_read_dic(
         let mut need_affix = false;
         if !afflist.is_null() {
             flags |= unsafe { get_affix_flags(affile, afflist) };
-            if unsafe { (*affile).af_needaffix } != 0
-                && unsafe {
-                    flag_in_afflist((*affile).af_flagtype, afflist, (*affile).af_needaffix)
-                }
+            if affile.af_needaffix != 0
+                && unsafe { flag_in_afflist(affile.af_flagtype, afflist, affile.af_needaffix) }
             {
                 need_affix = true;
             }
-            if unsafe { (*affile).af_pfxpostpone } != 0 {
+            if affile.af_pfxpostpone != 0 {
                 pfxlen = unsafe { get_pfxlist(affile, afflist, store_afflist.as_mut_ptr()) };
             }
             if !spin.si_compflags.is_null() {
@@ -251,8 +249,8 @@ pub(super) unsafe fn spell_read_dic(
         if !afflist.is_null() {
             // Suffixes first, so a prefix can then be put on a word
             // that already has one; then prefixes on the bare stem.
-            let suff = unsafe { &raw mut (*affile).af_suff };
-            let pref = unsafe { &raw mut (*affile).af_pref };
+            let suff = &raw mut affile.af_suff;
+            let pref = &raw mut affile.af_pref;
             let mut call = AffWord {
                 word: dw,
                 afflist,
@@ -299,21 +297,18 @@ pub(super) unsafe fn spell_read_dic(
 /// # Safety
 ///
 /// `afflist` must be a NUL-terminated flag list and `affile` live.
-unsafe fn get_affix_flags(affile: *mut afffile_T, afflist: *mut c_char) -> WordFlags {
-    // SAFETY: the caller promises both.
-    let flagtype = unsafe { (*affile).af_flagtype };
+unsafe fn get_affix_flags(affile: &afffile_T, afflist: *mut c_char) -> WordFlags {
+    let flagtype = affile.af_flagtype;
     let mut flags = WordFlags::NONE;
     for (declared, bits) in [
-        (
-            unsafe { (*affile).af_keepcase },
-            WordFlags::KEEPCAP | WordFlags::FIXCAP,
-        ),
-        (unsafe { (*affile).af_rare }, WordFlags::RARE),
-        (unsafe { (*affile).af_bad }, WordFlags::BANNED),
-        (unsafe { (*affile).af_needcomp }, WordFlags::NEEDCOMP),
-        (unsafe { (*affile).af_comproot }, WordFlags::COMPROOT),
-        (unsafe { (*affile).af_nosuggest }, WordFlags::NOSUGGEST),
+        (affile.af_keepcase, WordFlags::KEEPCAP | WordFlags::FIXCAP),
+        (affile.af_rare, WordFlags::RARE),
+        (affile.af_bad, WordFlags::BANNED),
+        (affile.af_needcomp, WordFlags::NEEDCOMP),
+        (affile.af_comproot, WordFlags::COMPROOT),
+        (affile.af_nosuggest, WordFlags::NOSUGGEST),
     ] {
+        // SAFETY: the caller promises the flag list.
         // A flag of zero means the affix file never declared it.
         if declared != 0 && unsafe { flag_in_afflist(flagtype, afflist, declared) } {
             flags |= bits;
@@ -330,7 +325,7 @@ unsafe fn get_affix_flags(affile: *mut afffile_T, afflist: *mut c_char) -> WordF
 /// `store_afflist` must have room for one byte per flag in `afflist` plus a
 /// terminator.
 unsafe fn get_pfxlist(
-    affile: *mut afffile_T,
+    affile: &mut afffile_T,
     afflist: *mut c_char,
     store_afflist: *mut c_char,
 ) -> c_int {
@@ -341,10 +336,10 @@ unsafe fn get_pfxlist(
     let mut p = afflist;
     while unsafe { *p } as c_int != NUL {
         let prevp = p;
-        if unsafe { get_affitem((*affile).af_flagtype, &raw mut p) } != 0 {
+        if unsafe { get_affitem(affile.af_flagtype, &raw mut p) } != 0 {
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
-            let hi = unsafe { hash_find(&raw mut (*affile).af_pref, key.as_mut_ptr()) };
+            let hi = unsafe { hash_find(&raw mut affile.af_pref, key.as_mut_ptr()) };
             if hi.is_kept() {
                 // Only prefixes that were actually postponed have an
                 // id; the rest were expanded into the word list.
@@ -355,7 +350,7 @@ unsafe fn get_pfxlist(
                 }
             }
         }
-        if unsafe { (*affile).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+        if affile.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
             p = unsafe { p.add(1) };
         }
     }
@@ -368,17 +363,17 @@ unsafe fn get_pfxlist(
 /// # Safety
 ///
 /// As [`get_pfxlist`].
-unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_afflist: *mut c_char) {
+unsafe fn get_compflags(affile: &mut afffile_T, afflist: *mut c_char, store_afflist: *mut c_char) {
     // SAFETY: as above.
     let mut cnt = 0;
     let mut key: [c_char; 17] = [0; 17];
     let mut p = afflist;
     while unsafe { *p } as c_int != NUL {
         let prevp = p;
-        if unsafe { get_affitem((*affile).af_flagtype, &raw mut p) } != 0 {
+        if unsafe { get_affitem(affile.af_flagtype, &raw mut p) } != 0 {
             let len = unsafe { p.offset_from(prevp) } as size_t;
             unsafe { xmemcpyz(key.as_mut_ptr().cast(), prevp.cast(), len) };
-            let hi = unsafe { hash_find(&raw mut (*affile).af_comp, key.as_mut_ptr()) };
+            let hi = unsafe { hash_find(&raw mut affile.af_comp, key.as_mut_ptr()) };
             if hi.is_kept() {
                 unsafe {
                     *store_afflist.offset(cnt as isize) =
@@ -387,7 +382,7 @@ unsafe fn get_compflags(affile: *mut afffile_T, afflist: *mut c_char, store_affl
                 cnt += 1;
             }
         }
-        if unsafe { (*affile).af_flagtype } == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
+        if affile.af_flagtype == AFT_NUM && unsafe { *p } as c_int == b',' as c_int {
             p = unsafe { p.add(1) };
         }
     }
@@ -450,6 +445,8 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
     let mut store_afflist: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut pfx_pfxlist: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut retval = Ok(());
+    // SAFETY: the caller promises the affix file is live for the call.
+    let affile = unsafe { &mut *affile };
     let wordlen = unsafe { cstr::bytes_at(word) }.len();
 
     for hi in unsafe { &*ht }.items() {
@@ -459,7 +456,7 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
         let ah = unsafe { affheader_T::of_key(hi.hi_key) };
 
         if (condit & CONDIT_COMB == 0 || unsafe { (*ah).ah_combine } != 0)
-            && unsafe { flag_in_afflist((*affile).af_flagtype, afflist, (*ah).ah_flag) }
+            && unsafe { flag_in_afflist(affile.af_flagtype, afflist, (*ah).ah_flag) }
         {
             let mut ae = unsafe { (*ah).ah_first };
             while !ae.is_null() {
@@ -474,23 +471,23 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
 
                     if !unsafe { (*ae).ae_flags }.is_null() {
                         use_flags |= unsafe { get_affix_flags(affile, (*ae).ae_flags) };
-                        if unsafe { (*affile).af_needaffix } != 0
+                        if affile.af_needaffix != 0
                             && unsafe {
                                 flag_in_afflist(
-                                    (*affile).af_flagtype,
+                                    affile.af_flagtype,
                                     (*ae).ae_flags,
-                                    (*affile).af_needaffix,
+                                    affile.af_needaffix,
                                 )
                             }
                         {
                             need_affix = true;
                         }
-                        if unsafe { (*affile).af_circumfix } != 0
+                        if affile.af_circumfix != 0
                             && unsafe {
                                 flag_in_afflist(
-                                    (*affile).af_flagtype,
+                                    affile.af_flagtype,
                                     (*ae).ae_flags,
-                                    (*affile).af_circumfix,
+                                    affile.af_circumfix,
                                 )
                             }
                         {
@@ -501,11 +498,10 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
                                 need_affix = true;
                             }
                         }
-                        if unsafe { (*affile).af_pfxpostpone } != 0 || !spin.si_compflags.is_null()
-                        {
+                        if affile.af_pfxpostpone != 0 || !spin.si_compflags.is_null() {
                             let ae_flags = unsafe { (*ae).ae_flags };
                             let afx = store_afflist.as_mut_ptr();
-                            use_pfxlen = if unsafe { (*affile).af_pfxpostpone } != 0 {
+                            use_pfxlen = if affile.af_pfxpostpone != 0 {
                                 unsafe { get_pfxlist(affile, ae_flags, afx) }
                             } else {
                                 0
@@ -599,7 +595,7 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
                             word: newword.as_mut_ptr(),
                             afflist: unsafe { (*ae).ae_flags },
                             affile,
-                            ht: unsafe { &raw mut (*affile).af_suff },
+                            ht: &raw mut affile.af_suff,
                             xht,
                             condit: deeper,
                             flags: use_flags,
@@ -648,7 +644,7 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
 ///
 /// `ae` must be a live entry and `word` NUL-terminated.
 unsafe fn affix_applies(
-    affile: *mut afffile_T,
+    affile: &afffile_T,
     ae: *mut affentry_T,
     xht: *mut hashtab_T,
     word: *mut c_char,
@@ -659,7 +655,7 @@ unsafe fn affix_applies(
     // A postponed prefix with nothing to chop, nothing to add and no
     // flags is handled at match time instead.
     if xht.is_null()
-        && unsafe { (*affile).af_pfxpostpone } != 0
+        && affile.af_pfxpostpone != 0
         && unsafe { (*ae).ae_chop }.is_null()
         && unsafe { (*ae).ae_flags }.is_null()
     {
@@ -682,13 +678,7 @@ unsafe fn affix_applies(
     let at_cfix = condit & CONDIT_CFIX == 0;
     let is_plain = condit & CONDIT_AFF == 0
         || unsafe { (*ae).ae_flags }.is_null()
-        || !unsafe {
-            flag_in_afflist(
-                (*affile).af_flagtype,
-                (*ae).ae_flags,
-                (*affile).af_circumfix,
-            )
-        };
+        || !unsafe { flag_in_afflist(affile.af_flagtype, (*ae).ae_flags, affile.af_circumfix) };
     at_cfix == is_plain
 }
 

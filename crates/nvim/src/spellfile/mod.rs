@@ -556,7 +556,7 @@ pub unsafe fn mkspell(
         unsafe { hash_clear_all(&raw mut spin.si_commonwords, 0) };
         for aff in afile.iter().take(incount as usize) {
             if !aff.is_null() {
-                unsafe { spell_free_aff(*aff) };
+                unsafe { spell_free_aff(&mut **aff) };
             }
         }
         // The `.sug` pass reads the file back and builds its own tree,
@@ -724,7 +724,7 @@ unsafe fn read_inputs(
             *aff = unsafe { spell_read_aff(spin, fname) };
             aff.is_null() || {
                 unsafe { vim_snprintf(fname, MAXPATHL as size_t, c"%s.dic".as_ptr(), stem) };
-                unsafe { spell_read_dic(spin, fname, *aff).is_err() }
+                unsafe { spell_read_dic(spin, fname, &mut **aff).is_err() }
             }
         } else {
             unsafe { spell_read_wordfile(spin, stem).is_err() }
