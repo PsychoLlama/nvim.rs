@@ -700,6 +700,34 @@ describe('autocmd', function()
     eq(1, eval('g:count')) -- Added autocommands should not be executed
   end)
 
+  -- The group table is insertion-ordered with a swap-remove -- it was a
+  -- khash, and `:augroup` walks it directly -- so deleting one from the
+  -- middle brings the *last* group into its place.
+  it('lists groups in creation order, and deletes by swapping in the last', function()
+    local function listed()
+      return vim.split(fn.trim(fn.execute('augroup')), '%s+')
+    end
+    local before = #listed()
+    exec([[
+      augroup Zebra
+      augroup END
+      augroup Aardvark
+      augroup END
+      augroup Mongoose
+      augroup END
+      augroup Yak
+      augroup END
+    ]])
+    local groups = listed()
+    eq(before + 4, #groups)
+    eq({ 'Zebra', 'Aardvark', 'Mongoose', 'Yak' }, vim.list_slice(groups, before + 1))
+
+    command('augroup! Aardvark')
+    groups = listed()
+    eq(before + 3, #groups)
+    eq({ 'Zebra', 'Yak', 'Mongoose' }, vim.list_slice(groups, before + 1))
+  end)
+
   it('no crash when clearing a group inside a callback #23355', function()
     exec_lua [[
       vim.cmd "autocmd! TabNew"

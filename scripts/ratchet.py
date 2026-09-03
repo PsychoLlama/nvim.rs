@@ -645,7 +645,6 @@ CELL_COPY_OWNER = (
     "CLIPBOARD",
     "pc_status",
     "EXPAND_WHAT",
-    "value_init_String",
     "provider_caller_scope",
     "saved_last_search_spat",
     "counted",

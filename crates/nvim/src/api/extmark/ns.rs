@@ -18,6 +18,7 @@
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, dict_put_str, has_key, set_key};
 use crate::api::private::validate::err_bad_number;
+use crate::registry::interned_key;
 use crate::winlayer::{Win, tab_windows};
 use core::ptr;
 
@@ -41,24 +42,9 @@ unsafe fn set_put_uint32_t(
     status as ::core::ffi::c_uint != kMHExisting as ::core::ffi::c_int as ::core::ffi::c_uint
 }
 
-/// The key a namespace name is interned under: its bytes plus the NUL
-/// [`describe_ns`] hands out as a `*const c_char`.
-///
-/// khash keyed this table by `String_0`, whose hash and comparison were over
-/// `(length, bytes)` -- interior NULs included -- so appending the same
-/// terminator to every key leaves the equivalence exactly as it was, while
-/// giving the table a C string to point at. The bytes are a `Box`, so they
-/// stay put when the table grows and the pointer outlives the lookup.
-pub(crate) fn ns_key(name: &[u8]) -> Box<[u8]> {
-    let mut key = Vec::with_capacity(name.len() + 1);
-    key.extend_from_slice(name);
-    key.push(0);
-    key.into_boxed_slice()
-}
-
 /// The id `name` is registered under, if any.
 pub(crate) fn namespace_id_for(name: &[u8]) -> Option<handle_T> {
-    namespace_ids.with(|ids| ids.get(&ns_key(name)))
+    namespace_ids.with(|ids| ids.get(&interned_key(name)))
 }
 
 /// Whether namespace `ns_id` is window-local rather than visible everywhere.
@@ -115,7 +101,7 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     // The nameless namespaces -- one per anonymous `nvim_create_namespace("")`
     // -- are never interned, so each call answers a fresh id.
     if !bytes.is_empty() {
-        namespace_ids.with_mut(|ids| ids.insert(ns_key(bytes), id));
+        namespace_ids.with_mut(|ids| ids.insert(interned_key(bytes), id));
     }
     id as Integer
 }

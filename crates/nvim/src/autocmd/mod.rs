@@ -38,10 +38,6 @@ use crate::main::{
     last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, p_acd, p_ei, p_verbose,
     prevwin, reg_recording, secure, starting,
 };
-use crate::map::{
-    map_del_int_string, map_del_string_int, map_put_ref_int_string, map_put_ref_string_int,
-    mh_get_int, mh_get_string,
-};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{
     emsg, give_warning, msg_advance, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
@@ -57,6 +53,7 @@ use crate::os::time::os_now;
 use crate::path::{full_name_save, path_fnamecmp, path_tail};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
+use crate::registry::{IdMap, SlotTable, id_map};
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
@@ -64,10 +61,9 @@ use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Error, Event,
-    Integer, LuaRetMode, Map_String_int, Map_int_String, MapHash, Object, OptVal, Set_String,
-    Set_int, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, buf_T, etype_T, exarg_T, expand_T,
-    funccal_entry_T, int64_t, proftime_T, save_redo_T, save_v_event_T, sctx_T, size_t, uint32_t,
-    uint64_t, varnumber_T, win_T,
+    Integer, LuaRetMode, Object, OptVal, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T, buf_T,
+    etype_T, exarg_T, expand_T, funccal_entry_T, int64_t, proftime_T, save_redo_T, save_v_event_T,
+    sctx_T, size_t, uint64_t, varnumber_T, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -119,86 +115,7 @@ pub const ETYPE_AUCMD: etype_T = 3;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
-static value_init_int: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static value_init_String: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-pub const MAPHASH_INIT: MapHash = MapHash {
-    n_buckets: 0 as uint32_t,
-    size: 0 as uint32_t,
-    n_occupied: 0 as uint32_t,
-    upper_bound: 0 as uint32_t,
-    n_keys: 0 as uint32_t,
-    keys_capacity: 0 as uint32_t,
-    hash: ::core::ptr::null_mut::<uint32_t>(),
-};
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-#[inline]
-unsafe fn map_put_string_int(
-    mut map: *mut Map_String_int,
-    mut key: String_0,
-    mut value: ::core::ffi::c_int,
-) {
-    // The two out-parameters `map_put_ref` offers -- the key it took
-    // ownership of, and whether the entry is new -- are both unwanted here.
-    let no_key_out = ::core::ptr::null_mut::<*mut String_0>();
-    let no_new_item_out = ::core::ptr::null_mut::<bool>();
-    // SAFETY: `map` points at a live `Map_String_int` and `key` is a string
-    // it may take; null out-parameters are how they are declined.
-    let val = unsafe { map_put_ref_string_int(map, key, no_key_out, no_new_item_out) };
-    // SAFETY: `val` is the value slot the map just handed back, which stays
-    // valid until the map is next changed -- and nothing changes it here.
-    unsafe { *val = value };
-}
-#[inline]
-unsafe fn map_get_string_int(
-    mut map: *mut Map_String_int,
-    mut key: String_0,
-) -> ::core::ffi::c_int {
-    // SAFETY: `map` points at a live `Map_String_int`, so `&raw mut` on its
-    // `set` field is in bounds; `key` is only borrowed for the lookup.
-    let k: uint32_t = unsafe { mh_get_string(&raw mut (*map).set, key) };
-    if k == MH_TOMBSTONE as uint32_t {
-        value_init_int.get()
-    } else {
-        // SAFETY: not a tombstone, so `k` is the index into `values` that
-        // the lookup just answered.
-        unsafe { *(*map).values.offset(k as isize) }
-    }
-}
-#[inline]
-unsafe fn map_put_int_string(
-    mut map: *mut Map_int_String,
-    mut key: ::core::ffi::c_int,
-    mut value: String_0,
-) {
-    // Both of `map_put_ref`'s out-parameters are unwanted here; see
-    // [`map_put_string_int`].
-    let no_key_out = ::core::ptr::null_mut::<*mut ::core::ffi::c_int>();
-    let no_new_item_out = ::core::ptr::null_mut::<bool>();
-    // SAFETY: `map` points at a live `Map_int_String`; null out-parameters
-    // are how they are declined.
-    let val = unsafe { map_put_ref_int_string(map, key, no_key_out, no_new_item_out) };
-    // SAFETY: `val` is the value slot the map just handed back, which stays
-    // valid until the map is next changed -- and nothing changes it here.
-    unsafe { *val = value };
-}
-#[inline]
-unsafe fn map_get_int_string(
-    mut map: *mut Map_int_String,
-    mut key: ::core::ffi::c_int,
-) -> String_0 {
-    // SAFETY: `map` points at a live `Map_int_String`, so `&raw mut` on its
-    // `set` field is in bounds.
-    let k: uint32_t = unsafe { mh_get_int(&raw mut (*map).set, key) };
-    if k == MH_TOMBSTONE as uint32_t {
-        value_init_String.get()
-    } else {
-        // SAFETY: not a tombstone, so `k` is the index into `values` that
-        // the lookup just answered.
-        unsafe { *(*map).values.offset(k as isize) }
-    }
-}
 /// `e_autocommand_nesting_too_deep`.  A `GlobalCell` holding a transmuted
 /// byte array upstream, because c2rust had no `CStr`; nothing writes it.
 const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too deep";
@@ -214,20 +131,19 @@ static autocmd_blocked: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::
 static autocmd_nested: GlobalCell<bool> = GlobalCell::new(false);
 static autocmd_include_groups: GlobalCell<bool> = GlobalCell::new(false);
 static termresponse_changed: GlobalCell<bool> = GlobalCell::new(false);
-static map_augroup_name_to_id: GlobalCell<Map_String_int> = GlobalCell::new(Map_String_int {
-    set: Set_String {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<String_0>(),
-    },
-    values: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-});
-static map_augroup_id_to_name: GlobalCell<Map_int_String> = GlobalCell::new(Map_int_String {
-    set: Set_int {
-        h: MAPHASH_INIT,
-        keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
-    },
-    values: ::core::ptr::null_mut::<String_0>(),
-});
+/// Group name -> id, in creation order.
+///
+/// khash, which this was, is insertion-ordered with a swap-remove, and
+/// `:augroup`'s listing walks it directly (F-P21-9). A [`SlotTable`] is that
+/// order; a key is the name plus a NUL, because the listing prints one as a
+/// C string ([`groups::group_key`]).
+static map_augroup_name_to_id: GlobalCell<SlotTable<Box<[u8]>, ::core::ffi::c_int>> =
+    GlobalCell::new(SlotTable::new());
+/// Id -> group name. Point lookups only, so a plain map will do; the name is
+/// NUL-terminated because `augroup_name` answers a `*mut c_char` into it.
+static map_augroup_id_to_name: GlobalCell<IdMap<::core::ffi::c_int, Box<[u8]>>> =
+    GlobalCell::new(id_map());
+
 /// Safe: it takes nothing, and the event loop it hangs the deferred-event
 /// queue off is live from startup to exit.
 pub fn autocmd_init() {

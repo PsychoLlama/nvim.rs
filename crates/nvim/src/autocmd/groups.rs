@@ -13,39 +13,40 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
 
-/// The `name -> id` half of the augroup registry, by address: every `map_*`
-/// operation the tree has takes one. It stays a khash — `:augroup` lists the
-/// groups in the map's own order (F-P21-9).
-fn augroup_by_name() -> *mut Map_String_int {
-    map_augroup_name_to_id.ptr()
-}
-
-/// The `id -> name` half. See [`augroup_by_name`].
-fn augroup_by_id() -> *mut Map_int_String {
-    map_augroup_id_to_name.ptr()
-}
-
-/// Drop a group's entries from the two maps, freeing the keys they own.
+/// The table key for `name`, borrowed.
 ///
-/// A null `name` leaves the name map alone, which is how `:augroup! X`
+/// A **null** pointer is the *empty* name, which is what khash made of it:
+/// the key type was `String_0`, whose comparison checked the length first
+/// and so never dereferenced the null `data` a zero-length string carries.
+/// `nvim_del_augroup_by_id` reaches `augroup_find` with null, by way of
+/// `augroup_name` answering it for an id no group ever had.
+///
+/// # Safety
+/// `name` is null or a NUL-terminated string, live for `'a`.
+unsafe fn group_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
+    if name.is_null() {
+        return b"\0";
+    }
+    // SAFETY: the caller's NUL-terminated string.
+    unsafe { CStr::from_ptr(name) }.to_bytes_with_nul()
+}
+
+/// Drop a group's entries from the two tables.
+///
+/// A null `name` leaves the name table alone, which is how `:augroup! X`
 /// releases the *id* of a group whose name it has just re-pointed at
 /// `AUGROUP_DELETED`.
+///
+/// # Safety
+/// `name` is null or a NUL-terminated string.
 unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_char) {
     if !name.is_null() {
-        let mut key = String_0::NULL;
-        // SAFETY: `name` is the caller's NUL-terminated string, non-null
-        // here, and `cstr_as_string` only borrows its bytes for the call;
-        // `key` is a live local the map writes the key it owned into.
-        unsafe { map_del_string_int(augroup_by_name(), cstr_as_string(name), &raw mut key) };
-        // SAFETY: `key` is the map's own copy, which it has just given up.
-        unsafe { api_free_string(key) };
+        // SAFETY: `name` is the caller's string, non-null here.
+        let key = unsafe { group_key(name) };
+        map_augroup_name_to_id.with_mut(|groups| groups.remove(key));
     }
     if id > 0 {
-        // SAFETY: the two maps are the live augroup registry; a null
-        // out-parameter is how `map_del` is told the key is not wanted.
-        let mapped = unsafe { map_del_int_string(augroup_by_id(), id, ::core::ptr::null_mut()) };
-        // SAFETY: `mapped` is the name the id map has just given up.
-        unsafe { api_free_string(mapped) };
+        map_augroup_id_to_name.with_mut(|names| names.remove(&id));
     }
 }
 
@@ -86,12 +87,11 @@ pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_in
 
     let next_id = next_augroup_id.get();
     next_augroup_id.set(next_id + 1);
-    // The two maps each own their copy of the name.
-    // SAFETY: `cstr_to_string` copies out of the caller's string, so each
-    // map is handed an allocation of its own.
-    unsafe { map_put_string_int(augroup_by_name(), cstr_to_string(name), next_id) };
-    // SAFETY: as above.
-    unsafe { map_put_int_string(augroup_by_id(), next_id, cstr_to_string(name)) };
+    // The two tables each own their copy of the name.
+    // SAFETY: `name` is the caller's NUL-terminated string.
+    let key: Box<[u8]> = unsafe { group_key(name) }.into();
+    map_augroup_name_to_id.with_mut(|groups| groups.insert(key.clone(), next_id));
+    map_augroup_id_to_name.with_mut(|names| names.insert(next_id, key));
     next_id
 }
 
@@ -133,11 +133,11 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
                     unsafe { give_warning(warning.as_ptr(), true, true) };
                     // Re-point the *name* at the deleted-group id and
                     // give up the old id, leaving the autocommands on it.
-                    // SAFETY: `name` is the caller's string, borrowed for
-                    // the length of the put.
-                    let key = unsafe { cstr_as_string(name) };
-                    // SAFETY: the name map is the live registry.
-                    unsafe { map_put_string_int(augroup_by_name(), key, AUGROUP_DELETED) };
+                    // The name keeps its place in the listing, which is what
+                    // khash's `map_put_ref` over an existing key did.
+                    // SAFETY: `name` is the caller's NUL-terminated string.
+                    let key: Box<[u8]> = unsafe { group_key(name) }.into();
+                    map_augroup_name_to_id.with_mut(|groups| groups.insert(key, AUGROUP_DELETED));
                     // SAFETY: `ap` is the live pattern of row `i`, checked
                     // non-null above.
                     unsafe { augroup_map_del((*ap).group, ::core::ptr::null()) };
@@ -160,10 +160,11 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
 /// none.  `AUGROUP_DELETED` is an answer of its own: the name is known and
 /// belongs to a group `:augroup!` renamed.
 pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
-    // SAFETY: `name` is the caller's NUL-terminated string, which
-    // `cstr_as_string` only borrows for the length of the lookup; the name
-    // map is the live registry.
-    let existing_id = unsafe { map_get_string_int(augroup_by_name(), cstr_as_string(name)) };
+    // SAFETY: `name` is the caller's string, read only for the lookup.
+    let key = unsafe { group_key(name) };
+    let existing_id = map_augroup_name_to_id
+        .with(|groups| groups.get(key))
+        .unwrap_or(0);
     if existing_id == AUGROUP_DELETED || existing_id > 0 {
         existing_id
     } else {
@@ -197,14 +198,15 @@ pub fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
         return ::core::ptr::null_mut();
     }
 
-    // SAFETY: the id map is the live registry; a miss answers the empty
-    // `String_0`, whose `data` is null.
-    let key = unsafe { map_get_int_string(augroup_by_id(), group) };
-    if !key.data().is_null() {
-        return key.data();
-    }
-    // The id existed but is no longer in the map, so it was deleted.
-    get_deleted_augroup().cast_mut()
+    // The name is a `Box` the table never moves, so the pointer outlives
+    // the borrow that produced it.
+    let name = map_augroup_id_to_name.with(|names| {
+        names
+            .get(&group)
+            .map(|name| name.as_ptr().cast::<::core::ffi::c_char>().cast_mut())
+    });
+    // The id existed but is no longer in the table, so it was deleted.
+    name.unwrap_or_else(|| get_deleted_augroup().cast_mut())
 }
 
 /// Whether a group called `name` exists.
@@ -235,27 +237,26 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
         unsafe { msg_start() };
         // SAFETY: a static literal names the message kind.
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        let map = augroup_by_name();
-        // SAFETY: `map` is the live name registry; `n_keys` is the length of
-        // the `keys`/`values` arrays it is read alongside below.
-        let n_keys = unsafe { (*map).set.h.n_keys };
-        for i in 0..n_keys {
-            // SAFETY: `i` is below `n_keys`, so both reads are in bounds.
-            let name = unsafe { *(*map).set.keys.add(i as usize) };
-            let value = unsafe { *(*map).values.add(i as usize) };
-            // A group `:augroup!` renamed lists as `--Deleted--`; its
-            // key is still the old name.
-            if value > 0 {
-                // SAFETY: `name` is the map's own key, still in the map.
-                unsafe { msg_puts(name.data()) };
-            } else {
-                // SAFETY: `augroup_name` answers a string the id map or the
-                // catalogue owns.
-                unsafe { msg_puts(augroup_name(value)) };
+        // The listing is the table's own order, which is creation order.
+        // `msg_puts` writes to the message buffers and reads nothing here,
+        // so the borrow across it is a leaf.
+        map_augroup_name_to_id.with(|groups| {
+            for (name, id) in groups.entries() {
+                // A group `:augroup!` renamed lists as `--Deleted--`; its
+                // key is still the old name.
+                if *id > 0 {
+                    // SAFETY: `name` is the table's own key, NUL-terminated
+                    // by `interned_key` and alive for as long as the borrow.
+                    unsafe { msg_puts(name.as_ptr().cast::<::core::ffi::c_char>()) };
+                } else {
+                    // SAFETY: `augroup_name` answers a string the id table
+                    // or the catalogue owns.
+                    unsafe { msg_puts(augroup_name(*id)) };
+                }
+                // SAFETY: a static literal.
+                unsafe { msg_puts(c"  ".as_ptr()) };
             }
-            // SAFETY: a static literal.
-            unsafe { msg_puts(c"  ".as_ptr()) };
-        }
+        });
         // SAFETY: the message buffers again.
         unsafe { msg_clr_eos() };
         unsafe { msg_end() };

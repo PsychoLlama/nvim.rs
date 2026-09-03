@@ -85,6 +85,21 @@ pub(crate) const fn id_set<K>() -> IdSet<K> {
     HashSet::with_hasher(BuildHasherDefault::new())
 }
 
+/// The key an interned-*name* table stores: the name's bytes plus a NUL.
+///
+/// khash keyed those tables by `String_0` or `cstr_t`, hashing and comparing
+/// over `(length, bytes)` -- interior NULs included -- and their callers hand
+/// out a `*const c_char` into the key (`describe_ns`, `augroup_name`,
+/// `:augroup`'s listing). Appending the same terminator to every key is the
+/// same equivalence relation and gives those callers a C string to point at;
+/// the bytes are a `Box`, so they stay put while the table grows.
+pub(crate) fn interned_key(name: &[u8]) -> Box<[u8]> {
+    let mut key = Vec::with_capacity(name.len() + 1);
+    key.extend_from_slice(name);
+    key.push(0);
+    key.into_boxed_slice()
+}
+
 /// A registry: values found by id, iterated in khash's order.
 ///
 /// See the module docs for why the order is modelled rather than left to a
