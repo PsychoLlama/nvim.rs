@@ -610,7 +610,7 @@ fn tree_count_words(tree: &mut WordTree) {
         curi[depth] += 1;
         if !tree.ends_word(n) {
             depth += 1;
-            arridx[depth] = usize::try_from(tree.idx(n)).unwrap_or(0);
+            arridx[depth] = tree.child_node(n);
             curi[depth] = 1;
             wordcount[depth] = 0;
             continue;

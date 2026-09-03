@@ -86,7 +86,7 @@ use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
-use crate::spell::WordTree;
+use crate::spell::Tree;
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
 use crate::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
 use core::ffi::{c_char, c_int};
@@ -249,15 +249,15 @@ pub(crate) struct Walk<'a> {
     pub soundfold: bool,
 
     /// The tree of case-folded (or, when `soundfold`, sound-folded) words.
-    pub word_tree: &'a WordTree,
+    pub word_tree: Tree<'a>,
     /// The tree of postponed prefixes, empty when the language has none.
-    pub prefix_tree: &'a WordTree,
+    pub prefix_tree: Tree<'a>,
     /// When to give up. The walk can otherwise run for an unbounded time.
     pub time_limit: proftime_T,
 
     /// The tree currently being walked: the prefix tree while inside a
     /// postponed prefix, `word_tree` otherwise.
-    pub tree: &'a WordTree,
+    pub tree: Tree<'a>,
 
     /// The bad word, case-folded, in the caller's buffer. `REP` items
     /// rewrite stretches of it in place and undo the change on the way
@@ -334,12 +334,14 @@ impl Walk<'_> {
         // beside `lp` is one of the loaded ones. It stays loaded for as
         // long as the walk, which is what the borrows below stand on.
         let slang = unsafe { (*lp).lp_slang };
-        let (word_tree, prefix_tree) = if soundfold {
-            // The sound-fold tree has no prefixes.
-            unsafe { (&(*slang).sl_sound_tree, &(*slang).sl_prefix_tree) }
+        // The sound-fold tree has no prefixes.
+        let lang = unsafe { &*slang };
+        let words = if soundfold {
+            &lang.sl_sound_tree
         } else {
-            unsafe { (&(*slang).sl_fold_tree, &(*slang).sl_prefix_tree) }
+            &lang.sl_fold_tree
         };
+        let (word_tree, prefix_tree) = (words.view(), lang.sl_prefix_tree.view());
         let mut walk = Walk {
             su,
             lp,
@@ -384,6 +386,7 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// The walk must have been set up by [`Walk::new`].
+    #[inline(always)]
     unsafe fn run(&mut self) {
         while self.depth >= 0 && !got_int.get() {
             // SAFETY: the walk's pointers are the ones `new` was given and
@@ -397,6 +400,7 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// `self.depth` must be a live level.
+    #[inline(always)]
     unsafe fn step(&mut self) {
         // SAFETY: every handler reads the language's trees at indices the
         // trees' own child counts bound, and the bad word within the

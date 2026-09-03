@@ -54,6 +54,7 @@ use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, langp_T, regprog_T, slang_T, uint8_t};
 
+use super::Tree;
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
@@ -96,7 +97,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
         // no folding is needed and there are always enough bytes.
         ptr = mip.mi_word;
         flen = 9999;
-        tree = unsafe { &(*slang).sl_keep_tree };
+        tree = unsafe { (*slang).sl_keep_tree.view() };
 
         if mode == FIND_KEEPCOMPOUND {
             wlen += mip.mi_compoff;
@@ -104,7 +105,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
     } else {
         ptr = &raw mut mip.mi_fword as *mut c_char;
         flen = mip.mi_fwordlen;
-        tree = unsafe { &(*slang).sl_fold_tree };
+        tree = unsafe { (*slang).sl_fold_tree.view() };
 
         if mode == FIND_PREFIX {
             wlen = mip.mi_prefixlen;
@@ -123,7 +124,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
     // Where each "a word could end here" node was, and how far into the
     // word it sat.
     let mut endlen = [0 as c_int; MAXWLEN];
-    let mut endidx = [0usize; MAXWLEN];
+    let mut endidx = [0u32; MAXWLEN];
     let mut endidxcnt = 0usize;
 
     // Descend until a byte does not match, the tree runs out, or the
@@ -133,27 +134,26 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
             flen = unsafe { fold_more(mip) };
         }
 
-        let mut len = tree.node_len(arridx);
-        arridx += 1;
+        // The whole node at once: one bounds check for every read below.
+        let (children, links) = tree.node(arridx);
+        let mut first = 0;
 
         // A leading zero byte means a word ends here. Remember the spot
         // and carry on; the longest match is preferred, so the endings
         // are only examined once the descent is done.
-        if tree.ends_word(arridx) {
+        if children.first() == Some(&0) {
             if endidxcnt == MAXWLEN {
                 // Only a corrupted spell file can nest this deep.
                 unsafe { emsg(gettext_ptr(e_format.get())) };
                 return;
             }
             endlen[endidxcnt] = wlen;
-            endidx[endidxcnt] = arridx;
+            endidx[endidxcnt] = arridx as u32 + 1;
             endidxcnt += 1;
 
             // Step over every zero: one per flag/region variant.
-            let ends = tree.word_ends(arridx, len);
-            arridx += ends;
-            len -= ends;
-            if len == 0 {
+            first = Tree::word_ends_in(children);
+            if first == children.len() {
                 break; // no children, the word must end here
             }
         }
@@ -167,11 +167,11 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
             c = b' '; // a tab counts as a space
         }
 
-        let Some(at) = tree.child(arridx, len, c) else {
+        let Some(at) = Tree::child_in(children, first, c) else {
             break; // no matching byte
         };
 
-        arridx = tree.child_node(at);
+        arridx = usize::try_from(links[at]).unwrap_or(0);
         wlen += 1;
         flen -= 1;
 
@@ -195,7 +195,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
     // Now try the endings, longest first.
     while endidxcnt > 0 {
         endidxcnt -= 1;
-        arridx = endidx[endidxcnt];
+        arridx = endidx[endidxcnt] as usize;
         wlen = endlen[endidxcnt];
 
         if unsafe { utf_head_off(ptr, ptr.offset(wlen as isize)) } > 0 {
@@ -697,7 +697,7 @@ pub unsafe fn valid_word_prefix(
     cond_req: bool,
 ) -> c_int {
     // SAFETY: the caller's language, whose prefix tree `arridx` indexes.
-    let tree = unsafe { &(*slang).sl_prefix_tree };
+    let tree = unsafe { (*slang).sl_prefix_tree.view() };
     let prefid = (flags.bits() as c_uint >> 24) as c_int;
     for prefcnt in (0..totprefcnt).rev() {
         let pidx = tree.idx(arridx + prefcnt as usize);
@@ -733,7 +733,7 @@ pub unsafe fn valid_word_prefix(
 /// `FIND_COMPOUND` does the same after the compound parts found so far.
 pub(super) unsafe fn find_prefix(mip: &mut matchinf_T, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
-    let tree = unsafe { &(*slang).sl_prefix_tree };
+    let tree = unsafe { (*slang).sl_prefix_tree.view() };
     if tree.is_empty() {
         return; // this language has no prefixes
     }

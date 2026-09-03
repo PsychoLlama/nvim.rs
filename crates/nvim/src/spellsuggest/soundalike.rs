@@ -280,7 +280,7 @@ unsafe fn word_number_to_letters(
 ) -> ([c_char; MAXWLEN], usize, usize) {
     // SAFETY: the caller guarantees the tree, and it stays loaded for as
     // long as this walk.
-    let tree = unsafe { &(*slang).sl_fold_tree };
+    let tree = unsafe { (*slang).sl_fold_tree.view() };
 
     let mut theword = [0 as c_char; MAXWLEN];
     let mut n: usize = 0;
@@ -356,7 +356,7 @@ unsafe fn emit_word(
 ) {
     // SAFETY: the caller guarantees the language, so it has a case-folded
     // tree, and it stays loaded for as long as this walk.
-    let tree = unsafe { &(*slang).sl_fold_tree };
+    let tree = unsafe { (*slang).sl_fold_tree.view() };
 
     // The flags and regions are the NUL-byte children of this node, so the
     // scan stops at the node's child count.
@@ -470,7 +470,7 @@ unsafe fn emit_word(
 pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
     // SAFETY: the caller guarantees the loaded `.sug`, so the sound-fold
     // tree is there and stays loaded for as long as this walk.
-    let tree = unsafe { &(*slang).sl_sound_tree };
+    let tree = unsafe { (*slang).sl_sound_tree.view() };
     let ptr = word as *mut u8;
 
     let mut arridx: usize = 0;
@@ -572,7 +572,7 @@ pub(super) unsafe fn find_keepcap_word(
 ) {
     // SAFETY: the caller guarantees the language, and it stays loaded for
     // as long as this walk.
-    let tree = unsafe { &(*slang).sl_keep_tree };
+    let tree = unsafe { (*slang).sl_keep_tree.view() };
     if tree.is_empty() {
         // The tree is empty: cannot happen.
         //

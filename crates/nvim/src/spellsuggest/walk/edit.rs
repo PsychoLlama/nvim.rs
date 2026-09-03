@@ -98,8 +98,7 @@ impl Walk<'_> {
         let level = self.depth as usize;
         let node = self.stack[level].node;
 
-        // SAFETY: `node` is a node the walk arrived at, and a node's first
-        // byte is the count of children that follow it.
+        // A node's first byte is the count of children that follow it.
         if self.stack[level].child as c_int > self.byte_at(node) as c_int {
             // Every byte of this node has been taken. Where the bad
             // word has already been changed, skip the other tricks.
@@ -114,9 +113,7 @@ impl Walk<'_> {
 
         let at = node + self.stack[level].child as idx_T;
         self.stack[level].child += 1;
-        // SAFETY: `at` is this node's start plus a child number the count
-        // just read bounds.
-        let byte = self.byte_at(at) as c_int;
+        let byte = c_int::from(self.byte_at(at));
 
         let bad_idx = self.stack[level].bad_idx as usize;
         // Matching costs nothing. So does a byte in the middle of a
@@ -157,8 +154,6 @@ impl Walk<'_> {
         }
         self.tword[self.stack[child].good_len as usize] = byte as c_char;
         self.stack[child].good_len += 1;
-        // SAFETY: `at` is a child byte of the node, so the entry beside it
-        // is where that child's own node starts.
         self.stack[child].node = self.idx_at(at);
         if newscore == SCORE_SUBST {
             self.stack[child].diff = DIFF_YES;

@@ -63,6 +63,84 @@ impl WordTree {
         self.byts.is_empty()
     }
 
+    /// The two arrays as one value, which is what a walk holds.
+    ///
+    /// A walk steps the tree several times per character, and reaching the
+    /// arrays through the tree costs a dependent load each time — the
+    /// borrow is a field of a `slang_T`, and nothing lets the compiler
+    /// hoist it past the calls in between. Copying the two slices into the
+    /// walk once puts them in registers instead; it was worth 25% of the
+    /// suggestion search.
+    #[inline]
+    pub(crate) fn view(&self) -> Tree<'_> {
+        Tree {
+            byts: &self.byts,
+            idxs: &self.idxs,
+        }
+    }
+
+    /// The two arrays as slices, for a decoder that walks them itself.
+    /// The unit suite reads a loaded tree back this way, deliberately
+    /// without going through the lookup.
+    #[inline]
+    pub fn as_slices(&self) -> (&[u8], &[idx_T]) {
+        (&self.byts, &self.idxs)
+    }
+
+    /// How many entries the tree has, counting nodes and children alike.
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.byts.len()
+    }
+
+    /// The four reads a *writing* walk needs. They take a fresh borrow per
+    /// call so that [`WordTree::idxs_mut`] can be used between them; both
+    /// callers run once per language load, not per keystroke.
+    #[inline]
+    pub(crate) fn node_len(&self, n: usize) -> usize {
+        self.view().node_len(n)
+    }
+
+    #[inline]
+    pub(crate) fn byte(&self, i: usize) -> u8 {
+        self.view().byte(i)
+    }
+
+    #[inline]
+    pub(crate) fn ends_word(&self, i: usize) -> bool {
+        self.view().ends_word(i)
+    }
+
+    #[inline]
+    pub(crate) fn child_node(&self, i: usize) -> usize {
+        self.view().child_node(i)
+    }
+
+    /// The index array, mutable: `tree_count_words` rewrites every word
+    /// end's entry with the number of words below it.
+    #[inline]
+    pub(crate) fn idxs_mut(&mut self) -> &mut [idx_T] {
+        &mut self.idxs
+    }
+}
+
+/// A borrowed view of one tree: the two arrays side by side.
+///
+/// `Copy`, so a walk that moves between the case-folded tree and the
+/// prefix tree assigns rather than re-borrows.
+#[derive(Clone, Copy)]
+pub(crate) struct Tree<'a> {
+    byts: &'a [u8],
+    idxs: &'a [idx_T],
+}
+
+impl<'a> Tree<'a> {
+    /// Whether the language has this tree at all.
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.byts.is_empty()
+    }
+
     /// How many entries the tree has, counting nodes and children alike.
     #[inline]
     pub(crate) fn len(&self) -> usize {
@@ -110,21 +188,65 @@ impl WordTree {
     ///
     /// The children are sorted, so this is a binary search — the same one
     /// the C did by hand, and the reason a tree lookup is logarithmic in
-    /// the alphabet rather than linear.
+    /// the alphabet rather than linear. It keeps the C's early exit:
+    /// `slice::binary_search` runs its full `log2` steps whatever it
+    /// finds, and most nodes here are small enough for that to show.
     #[inline]
     pub(crate) fn child(&self, first: usize, len: usize, c: u8) -> Option<usize> {
-        self.byts[first..first + len]
-            .binary_search(&c)
-            .ok()
-            .map(|at| first + at)
+        let bytes = &self.byts[first..first + len];
+        let (mut lo, mut hi) = (0usize, len);
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            match bytes[mid].cmp(&c) {
+                core::cmp::Ordering::Less => lo = mid + 1,
+                core::cmp::Ordering::Greater => hi = mid,
+                core::cmp::Ordering::Equal => return Some(first + mid),
+            }
+        }
+        None
     }
 
-    /// The two arrays as slices, for a decoder that walks them itself.
-    /// The unit suite reads a loaded tree back this way, deliberately
-    /// without going through the lookup.
+    /// The children of the node starting at `at`: their bytes, and the
+    /// links beside them.
+    ///
+    /// A descent reads several of a node's entries, and taking the two
+    /// runs once means the whole node is bounds-checked once rather than
+    /// each read separately.
     #[inline]
-    pub fn as_slices(&self) -> (&[u8], &[idx_T]) {
-        (&self.byts, &self.idxs)
+    pub(crate) fn node(&self, at: usize) -> (&'a [u8], &'a [idx_T]) {
+        let len = usize::from(self.byts[at]);
+        (
+            &self.byts[at + 1..at + 1 + len],
+            &self.idxs[at + 1..at + 1 + len],
+        )
+    }
+
+    /// How many leading entries of `children` are word ends. They sort
+    /// before every real byte, so this is where the real bytes start.
+    #[inline]
+    pub(crate) fn word_ends_in(children: &[u8]) -> usize {
+        children.iter().take_while(|&&b| b == 0).count()
+    }
+
+    /// Where in `children` the byte `c` sits, searching from `first`.
+    ///
+    /// The children are sorted, so this is a binary search — the same one
+    /// the C did by hand, and the reason a tree lookup is logarithmic in
+    /// the alphabet rather than linear. It keeps the C's early exit:
+    /// `slice::binary_search` runs its full `log2` steps whatever it
+    /// finds, and most nodes here are small enough for that to show.
+    #[inline]
+    pub(crate) fn child_in(children: &[u8], first: usize, c: u8) -> Option<usize> {
+        let (mut lo, mut hi) = (first, children.len());
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            match children[mid].cmp(&c) {
+                core::cmp::Ordering::Less => lo = mid + 1,
+                core::cmp::Ordering::Greater => hi = mid,
+                core::cmp::Ordering::Equal => return Some(mid),
+            }
+        }
+        None
     }
 
     /// Where the child at `i` continues. Only meaningful when the byte
@@ -133,12 +255,5 @@ impl WordTree {
     pub(crate) fn child_node(&self, i: usize) -> usize {
         // A tree the reader accepted never stores a negative index.
         usize::try_from(self.idxs[i]).unwrap_or(0)
-    }
-
-    /// The index array, mutable: `tree_count_words` rewrites every word
-    /// end's entry with the number of words below it.
-    #[inline]
-    pub(crate) fn idxs_mut(&mut self) -> &mut [idx_T] {
-        &mut self.idxs
     }
 }

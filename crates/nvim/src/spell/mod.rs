@@ -85,6 +85,7 @@ pub use slang::{
     slang_clear_sug, slang_free,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
+pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
 
 pub const kEqualFiles: file_comparison = 1;

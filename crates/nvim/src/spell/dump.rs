@@ -227,10 +227,10 @@ pub unsafe fn spell_dump_compl(
         for round in 1..=2 {
             let tree = if round == 1 {
                 dumpflags &= !DUMPFLAG_KEEPCASE;
-                unsafe { &(*slang).sl_fold_tree }
+                unsafe { (*slang).sl_fold_tree.view() }
             } else {
                 dumpflags |= DUMPFLAG_KEEPCASE;
-                unsafe { &(*slang).sl_keep_tree }
+                unsafe { (*slang).sl_keep_tree.view() }
             };
             if tree.is_empty() {
                 continue; // this tree is empty
@@ -440,7 +440,7 @@ unsafe fn dump_prefixes(
         has_word_up = true;
     }
 
-    let tree = unsafe { &(*slang).sl_prefix_tree };
+    let tree = unsafe { (*slang).sl_prefix_tree.view() };
     if tree.is_empty() {
         return lnum;
     }
