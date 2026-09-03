@@ -9,10 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
@@ -229,8 +228,8 @@ pub(crate) unsafe fn get_syn_options(
 /// index it names in `opt.sync_idx`.
 ///
 /// Answers what follows it, or NULL after reporting an error.
-unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_char {
-    if opt.sync_idx.is_null() {
+unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut syn_opt_arg_T) -> *mut c_char {
+    if !opt.takes_sync_idx {
         emsg(gettext(c"E393: group[t]here not accepted here"));
         return ::core::ptr::null_mut();
     }
@@ -239,36 +238,30 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &syn_opt_arg_T) -> *mut c_ch
     if gname_start == arg {
         return ::core::ptr::null_mut();
     }
-    let gname = unsafe { xstrnsave(gname_start, arg.offset_from(gname_start) as size_t) };
+    // SAFETY: the bytes between the two pointers, both into the command line.
+    let gname = unsafe { name_at(gname_start, arg.offset_from(gname_start) as usize) };
 
-    if unsafe { cstr::eq_bytes(gname, b"NONE") } {
-        unsafe { *opt.sync_idx = NONE_IDX };
+    if gname.to_bytes() == b"NONE" {
+        opt.sync_idx = NONE_IDX;
     } else {
         // The named group has to already have a region START item: this is
         // an index into the pattern array, not an id.
-        let syn_id = unsafe { syn_name2id(gname) };
-        let mut i = cur_pattern_count();
-        let found = loop {
-            i -= 1;
-            if i < 0 {
-                break false;
+        let syn_id = unsafe { syn_name2id(gname.as_ptr()) };
+        let block = cur_syn_block();
+        let found = block.patterns().iter().rposition(|spp| {
+            spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START
+        });
+        match found {
+            Some(i) => opt.sync_idx = i as c_int,
+            None => {
+                // SAFETY: `gname` is live for the whole message.
+                let shown = unsafe { c_str(gname.as_ptr()) };
+                semsg!("E394: Didn't find region item for {shown}");
+                return ::core::ptr::null_mut();
             }
-            let spp = unsafe { cur_pattern(i) };
-            if spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START {
-                unsafe { *opt.sync_idx = i };
-                break true;
-            }
-        };
-        if !found {
-            // SAFETY: `gname` is the NUL-terminated group name read above.
-            let shown = unsafe { c_str(gname) };
-            semsg!("E394: Didn't find region item for {shown}");
-            unsafe { xfree(gname as *mut c_void) };
-            return ::core::ptr::null_mut();
         }
     }
 
-    unsafe { xfree(gname as *mut c_void) };
     unsafe { skipwhite(arg) }
 }
 
@@ -291,7 +284,7 @@ struct IdListPass {
 pub(crate) unsafe fn get_id_list(
     arg: &mut *mut c_char,
     keylen: c_int,
-    list: &mut *mut int16_t,
+    list: &mut IdList,
     skip: bool,
 ) -> Result<(), Failed> {
     // The list is parsed more than once. A name that is a regexp matches
@@ -318,19 +311,10 @@ pub(crate) unsafe fn get_id_list(
     }
     // An already-parsed list is kept; upstream allocates the second one
     // and frees it again.
-    if list.is_null() {
-        *list = unsafe { alloc_ids(&pass.ids) };
+    if list.is_none() {
+        *list = IdList::from_ids(&pass.ids);
     }
     Ok(())
-}
-
-/// Copy `ids` into the `xmalloc`ed, NUL-terminated array the item structs hold.
-unsafe fn alloc_ids(ids: &[int16_t]) -> *mut int16_t {
-    let out =
-        unsafe { xmalloc((ids.len() + 1) * ::core::mem::size_of::<int16_t>()) } as *mut int16_t;
-    unsafe { ::core::ptr::copy_nonoverlapping(ids.as_ptr(), out, ids.len()) };
-    unsafe { *out.add(ids.len()) = 0 };
-    out
 }
 
 /// One pass over `keyword=a,b,@cl` starting at `arg`.
@@ -504,19 +488,24 @@ unsafe fn parse_id_name(
     Ok(None)
 }
 
-/// Copy an id list, which is a NUL-terminated `int16_t` array.
-pub(crate) unsafe fn copy_id_list(list: *const int16_t) -> *mut int16_t {
-    if list.is_null() {
+/// Copy an id list into the `xmalloc`ed array a keyword entry holds.
+///
+/// The one place a list is still raw: a `keyentry_T` is one allocation with
+/// its text inside it and has no destructor (see [`keyentry`]).
+pub(crate) fn copy_id_list(list: &IdList) -> *mut int16_t {
+    if list.is_none() {
         return ::core::ptr::null_mut();
     }
-    let mut count = 0;
-    while unsafe { *list.add(count) } != 0 {
-        count += 1;
-    }
-    let len = (count + 1) * ::core::mem::size_of::<int16_t>();
-    let retval = unsafe { xmalloc(len) } as *mut int16_t;
-    unsafe { retval.cast::<u8>().copy_from(list.cast(), len) };
-    retval
+    let ids = list.ids();
+    let bytes = (ids.len() + 1) * ::core::mem::size_of::<int16_t>();
+    // SAFETY: `xmalloc` answers `bytes` writable bytes or aborts, and the
+    // ids plus the terminator are exactly that many.
+    let out = unsafe { xmalloc(bytes) } as *mut int16_t;
+    // SAFETY: as above; the two ranges are distinct allocations.
+    unsafe { ::core::ptr::copy_nonoverlapping(ids.as_ptr(), out, ids.len()) };
+    // SAFETY: the last of the `bytes`.
+    unsafe { *out.add(ids.len()) = 0 };
+    out
 }
 
 /// Is the syntax group `ssp` in the id list `list` of `cur_si`?
@@ -527,13 +516,14 @@ pub(crate) unsafe fn copy_id_list(list: *const int16_t) -> *mut int16_t {
 pub(crate) unsafe fn in_id_list(
     cur_si: Option<Item>,
     list: *mut int16_t,
-    ssp: *mut sp_syn,
+    ssp: sp_syn,
+    cont_in_list: *mut int16_t,
     flags: SynFlags,
 ) -> bool {
-    // If `ssp` has a `containedin` list and `cur_si` is in it, it is
+    // If the group has a `containedin` list and `cur_si` is in it, it is
     // admitted whatever `list` says.
     if let Some(mut si) = cur_si
-        && !unsafe { (*ssp).cont_in_list }.is_null()
+        && !cont_in_list.is_null()
         && !si.si_flags.has(SynFlags::MATCH)
     {
         // Ignore transparent items without a contains argument, double
@@ -546,13 +536,10 @@ pub(crate) unsafe fn in_id_list(
         }
         // si_idx is -1 for keywords, which never contain anything.
         if si.si_idx >= 0 {
-            let spp = unsafe { syn_pattern(si.si_idx) };
-            // SAFETY: the caller's group.
-            let cont_in = unsafe { (*ssp).cont_in_list };
-            let syn = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_syn));
-            let flags = spp.sp_flags;
+            let block = syn_block();
+            let spp = &block.patterns()[si.si_idx as usize];
             // SAFETY: the parser's own lists.
-            if unsafe { id_list_has(cont_in, syn, flags, 0) } {
+            if unsafe { id_list_has(cont_in_list, spp.sp_syn, spp.sp_flags, 0) } {
                 return true;
             }
         }
@@ -565,12 +552,7 @@ pub(crate) unsafe fn in_id_list(
 ///
 /// A cluster that includes itself indirectly would recurse forever, so the
 /// depth is capped at 30.
-unsafe fn id_list_has(
-    mut list: *mut int16_t,
-    ssp: *mut sp_syn,
-    flags: SynFlags,
-    depth: c_int,
-) -> bool {
+unsafe fn id_list_has(mut list: *mut int16_t, ssp: sp_syn, flags: SynFlags, depth: c_int) -> bool {
     if list.is_null() {
         return false;
     }
@@ -587,7 +569,7 @@ unsafe fn id_list_has(
 
     // A leading ALLBUT/TOP/CONTAINED inverts the answer, and requires the
     // group to be at the same `:syntax include` level as the list.
-    let id = unsafe { (*ssp).id };
+    let id = ssp.id;
     let mut item = unsafe { *list };
     let mut retval = true;
     if item as c_int >= SYNID_ALLBUT && (item as c_int) < SYNID_CLUSTER {
@@ -607,7 +589,7 @@ unsafe fn id_list_has(
             }
             item as c_int - SYNID_CONTAINED
         };
-        if level != unsafe { (*ssp).inc_tag } {
+        if level != ssp.inc_tag {
             return false;
         }
         list = unsafe { list.add(1) };
@@ -620,7 +602,10 @@ unsafe fn id_list_has(
             return retval;
         }
         if item as c_int >= SYNID_CLUSTER {
-            let scl_list = unsafe { cluster_of(item as c_int - SYNID_CLUSTER).scl_list };
+            let block = syn_block();
+            let scl_list = block.clusters()[(item as c_int - SYNID_CLUSTER) as usize]
+                .scl_list
+                .as_ptr();
             if !scl_list.is_null()
                 && depth < 30
                 && unsafe { id_list_has(scl_list, ssp, flags, depth + 1) }
@@ -632,15 +617,4 @@ unsafe fn id_list_has(
         item = unsafe { *list };
     }
     !retval
-}
-
-/// The cluster at `idx` in the block being *parsed*.
-#[inline(always)]
-unsafe fn cluster_of(idx: c_int) -> Cluster {
-    // SAFETY: the caller's promise -- a live index into the cluster array.
-    unsafe {
-        Cluster::new(
-            (syn_block().b_syn_clusters.ga_data as *mut syn_cluster_T).offset(idx as isize),
-        )
-    }
 }

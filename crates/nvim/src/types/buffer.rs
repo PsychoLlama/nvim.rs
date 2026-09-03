@@ -12,6 +12,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::registry::{IdMap, IdSet};
+use crate::syntax::{syn_cluster_T, synpat_T};
 
 /// Namespace id to the highest extmark id handed out in it: `buf_T`'s
 /// `b_extmark_ns`, which upstream declared `Map(uint32_t, uint32_t)[1]` so
@@ -584,8 +585,13 @@ pub struct synblock_T {
     pub b_syn_ic: ::core::ffi::c_int,
     pub b_syn_foldlevel: ::core::ffi::c_int,
     pub b_syn_spell: ::core::ffi::c_int,
-    pub b_syn_patterns: garray_T,
-    pub b_syn_clusters: garray_T,
+    /// The block's `:syntax match`/`region` patterns, in definition order.
+    /// A region is a run of consecutive entries: its START(s), an optional
+    /// SKIP, then its END(s).
+    pub(crate) b_syn_patterns: Vec<synpat_T>,
+    /// The block's `:syntax cluster`s. The index *is* the id, less
+    /// `SYNID_CLUSTER`, so a cluster is emptied rather than removed.
+    pub(crate) b_syn_clusters: Vec<syn_cluster_T>,
     pub b_spell_cluster_id: ::core::ffi::c_int,
     pub b_nospell_cluster_id: ::core::ffi::c_int,
     pub b_syn_containedin: ::core::ffi::c_int,

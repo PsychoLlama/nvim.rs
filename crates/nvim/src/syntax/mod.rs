@@ -25,13 +25,14 @@ use crate::charset::{
     buf_init_chartab, getdigits_int, getdigits_int32, skiptowhite, skipwhite, str_foldcase,
     vim_isprintc, vim_iswordp_buf,
 };
+use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later};
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var};
 use crate::ex_docmd::{
     check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
 };
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
-use crate::garray::{ga_append_via_ptr, ga_clear, ga_grow, ga_init, ga_set_growsize};
+use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
@@ -66,7 +67,7 @@ use crate::regexp::{
     vim_regexec_multi, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
-use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, vim_strsave_up, xstrnsave};
+use crate::strings::{vim_snprintf, vim_strchr, vim_strnsave_up, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::{
     OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, garray_T, hashtab_T, int16_t, linenr_T,
@@ -74,7 +75,7 @@ use crate::types::{
     synblock_T, synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::winlayer::{Live, Win};
-use ::libc::{qsort, strcasecmp, strcpy, strpbrk};
+use ::libc::{qsort, strcpy, strpbrk};
 
 mod flags;
 pub(crate) use self::flags::*;
@@ -119,23 +120,103 @@ pub(crate) const NSUBEXP: ::core::ffi::c_uint = 10;
 /// those, which the completion machinery writes again.
 pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 1025;
 // The `expand_T::xp_context` values this module sets.
+/// Which syntax group an item belongs to, and at what `:syntax include`
+/// nesting it was declared. Both a pattern and a keyword carry one, and
+/// [`in_id_list`] tests against it.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub(crate) struct sp_syn {
     pub inc_tag: ::core::ffi::c_int,
     pub id: int16_t,
-    pub cont_in_list: *mut int16_t,
 }
+/// One `:syntax keyword`, in one of the two keyword hash tables.
+///
+/// OWNERSHIP -- **carve-out**. The entry is one `xmalloc` block whose
+/// trailing `keyword` array holds the text, and the hash tables key on
+/// *that address*: `key_to_entry` finds the entry by subtracting
+/// [`KEYWORD_OFFSET`](keyword::KEYWORD_OFFSET) from a key. So the entry
+/// cannot be a `Box<keyentry_T>` (the text would not be inside it) and its
+/// two id lists cannot be [`IdList`]s (nothing would run their destructor).
+/// Retiring it needs the keyword tables to stop keying on an interior
+/// address -- a `hashtab_T` that owns its keys, or an id-keyed table with
+/// the text beside the entry.
 #[repr(C)]
 pub(crate) struct keyentry {
     pub ke_next: *mut keyentry_T,
     pub k_syn: sp_syn,
+    /// `containedin=`, this entry's own `xmalloc`ed list.
+    pub cont_in_list: *mut int16_t,
+    /// `nextgroup=`, this entry's own `xmalloc`ed list.
     pub next_list: *mut int16_t,
     pub flags: SynFlags,
     pub k_char: ::core::ffi::c_int,
     pub keyword: [::core::ffi::c_char; 0],
 }
 pub(crate) type keyentry_T = keyentry;
+
+/// A `contains=` / `containedin=` / `nextgroup=` list: the syntax ids it
+/// names, followed by the 0 terminator upstream's `int16_t *` carried.
+///
+/// The terminator stays because the *borrowers* still walk a bare pointer:
+/// a state-stack item's `si_cont_list`/`si_next_list`, a cached state's
+/// `sst_next_list` and [`current_next_list`] all point into the list of
+/// whatever item they came from. An owner holds a `Box<[int16_t]>`, so the
+/// ids keep their address when the pattern array around them grows.
+///
+/// Nothing shares one: the consecutive START patterns of a region each get
+/// their own copy. Upstream gave them one list owned by the first and freed
+/// the array last to first so the peek at the entry before could tell the
+/// owner from the sharers; a list is a handful of `int16_t`s, and copying
+/// it costs less than a refcount and much less than that rule.
+#[derive(Clone, Default)]
+pub(crate) struct IdList(Option<Box<[int16_t]>>);
+
+impl IdList {
+    /// No list at all, which upstream spells as a NULL pointer. Not the same
+    /// as an *empty* list: `contains=` naming nothing admits nothing, while
+    /// no `contains=` at all leaves the item's default containment.
+    pub(crate) const NONE: IdList = IdList(None);
+
+    /// Copy `ids` into a fresh list, terminator included. Always a list,
+    /// even for no ids.
+    pub(crate) fn from_ids(ids: &[int16_t]) -> IdList {
+        let mut out = Vec::with_capacity(ids.len() + 1);
+        out.extend_from_slice(ids);
+        out.push(0);
+        IdList(Some(out.into_boxed_slice()))
+    }
+
+    /// [`IdList::from_ids`], except that no ids means no list -- which is
+    /// what `:syntax cluster` stores for an emptied cluster.
+    pub(crate) fn from_ids_or_none(ids: &[int16_t]) -> IdList {
+        if ids.is_empty() {
+            IdList::NONE
+        } else {
+            IdList::from_ids(ids)
+        }
+    }
+
+    /// Whether there is no list.
+    pub(crate) fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// The ids, without the terminator.
+    pub(crate) fn ids(&self) -> &[int16_t] {
+        match &self.0 {
+            Some(ids) => &ids[..ids.len() - 1],
+            None => &[],
+        }
+    }
+
+    /// The pointer a borrower walks, or NULL when there is no list.
+    pub(crate) fn as_ptr(&self) -> *mut int16_t {
+        match &self.0 {
+            Some(ids) => ids.as_ptr().cast_mut(),
+            None => ::core::ptr::null_mut(),
+        }
+    }
+}
 /// The highest highlight id there can be.
 pub(crate) const MAX_HL_ID: ::core::ffi::c_uint = 20000;
 /// The `contains=ALL`/`ALLBUT` marker, which shares its value with the highest
@@ -164,7 +245,8 @@ pub(crate) struct stateitem_T {
     pub si_next_list: *mut int16_t,
     pub si_extmatch: *mut reg_extmatch_T,
 }
-#[derive(Copy, Clone)]
+/// One `:syntax match` pattern, or one start/skip/end pattern of a
+/// `:syntax region`. Lives in its block's `b_syn_patterns`.
 pub(crate) struct synpat_T {
     pub sp_type: ::core::ffi::c_char,
     pub sp_syncing: bool,
@@ -177,26 +259,107 @@ pub(crate) struct synpat_T {
     pub sp_sync_idx: ::core::ffi::c_int,
     pub sp_line_id: ::core::ffi::c_int,
     pub sp_startcol: ::core::ffi::c_int,
-    pub sp_cont_list: *mut int16_t,
-    pub sp_next_list: *mut int16_t,
+    pub sp_cont_list: IdList,
+    pub sp_next_list: IdList,
+    /// `containedin=`. Upstream kept this inside `sp_syn` so that
+    /// [`in_id_list`] could take one pointer; it is an owned list here and
+    /// a keyword's is not, so the two travel separately.
+    pub sp_cont_in_list: IdList,
     pub sp_syn: sp_syn,
-    pub sp_pattern: *mut ::core::ffi::c_char,
+    /// The pattern text, as `:syntax list` prints it. `None` only in a
+    /// half-built pattern that never got one.
+    pub sp_pattern: Option<::std::ffi::CString>,
+    /// OWNERSHIP -- **carve-out**. The compiled program is a `regexp/`
+    /// object with its own allocator discipline (`vim_regcomp` /
+    /// `vim_regfree`, and two engines behind one `regprog_T`), so it stays
+    /// a raw pointer released by [`Drop`] rather than becoming a `Box`.
+    /// Retiring it is `regexp/`'s job, not this module's.
     pub sp_prog: *mut regprog_T,
     pub sp_time: syn_time_T,
 }
-pub(crate) struct syn_cluster_T {
-    pub scl_name: *mut ::core::ffi::c_char,
-    pub scl_name_u: *mut ::core::ffi::c_char,
-    pub scl_list: *mut int16_t,
+
+impl synpat_T {
+    /// The pattern's `ms=`/`me=`/`hs=`/... offsets, copied out.
+    ///
+    /// [`syn_add_start_off`] and [`syn_add_end_off`] want only these, and
+    /// taking them by value rather than borrowing the pattern is what lets
+    /// their callers go on using the pattern array.
+    #[inline]
+    pub(crate) fn offsets(&self) -> PatOffsets {
+        PatOffsets {
+            flags: self.sp_off_flags,
+            offsets: self.sp_offsets,
+        }
+    }
 }
+
+/// One pattern's offset suffixes: the `SPO_*` flag word and the seven values
+/// it selects. See [`synpat_T::offsets`].
+#[derive(Copy, Clone)]
+pub(crate) struct PatOffsets {
+    pub flags: int16_t,
+    pub offsets: [::core::ffi::c_int; SPO_COUNT as usize],
+}
+
+/// A half-built pattern: what upstream's `CLEAR_FIELD` left.
+pub(crate) const EMPTY_SYNPAT: synpat_T = synpat_T {
+    sp_type: 0,
+    sp_syncing: false,
+    sp_syn_match_id: 0,
+    sp_off_flags: 0,
+    sp_offsets: [0; SPO_COUNT as usize],
+    sp_flags: SynFlags::NONE,
+    sp_cchar: 0,
+    sp_ic: 0,
+    sp_sync_idx: 0,
+    sp_line_id: 0,
+    sp_startcol: 0,
+    sp_cont_list: IdList::NONE,
+    sp_next_list: IdList::NONE,
+    sp_cont_in_list: IdList::NONE,
+    sp_syn: sp_syn { inc_tag: 0, id: 0 },
+    sp_pattern: None,
+    sp_prog: ::core::ptr::null_mut(),
+    sp_time: syn_time_T {
+        total: 0,
+        slowest: 0,
+        count: 0,
+        match_0: 0,
+    },
+};
+
+impl Drop for synpat_T {
+    fn drop(&mut self) {
+        // SAFETY: the compiled program is this pattern's own and nothing
+        // else holds it; `vim_regfree` accepts a null one.
+        unsafe { vim_regfree(self.sp_prog) };
+    }
+}
+
+/// One `:syntax cluster`: a name and the ids it stands for.
+pub(crate) struct syn_cluster_T {
+    pub scl_name: ::std::ffi::CString,
+    /// The name upper-cased, because a lookup compares that rather than
+    /// paying `stricmp` per cluster.
+    pub scl_name_u: ::std::ffi::CString,
+    pub scl_list: IdList,
+}
+
+/// The options a `:syntax` item definition accepts, as they are parsed.
+///
+/// The owner of the three lists until an item takes them.
 pub(crate) struct syn_opt_arg_T {
     pub flags: SynFlags,
     pub keyword: bool,
-    pub sync_idx: *mut ::core::ffi::c_int,
+    /// Whether `grouphere`/`groupthere` is accepted here, which only
+    /// `:syntax sync match` is.
+    pub takes_sync_idx: bool,
+    /// The pattern index `grouphere`/`groupthere` named, or 0.
+    pub sync_idx: ::core::ffi::c_int,
     pub has_cont_list: bool,
-    pub cont_list: *mut int16_t,
-    pub cont_in_list: *mut int16_t,
-    pub next_list: *mut int16_t,
+    pub cont_list: IdList,
+    pub cont_in_list: IdList,
+    pub next_list: IdList,
 }
 pub(crate) const SYNSPL_DEFAULT: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub(crate) const SYNSPL_TOP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -270,6 +433,21 @@ static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1);
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
 
+/// The `len` bytes at `p`, copied out as an owned name.
+///
+/// Upstream's `vim_strnsave`, which made an `xmalloc`ed copy the caller then
+/// treated as a C string: the copy stops at a NUL inside the bytes, because
+/// every reader of that string would have stopped there anyway.
+///
+/// # Safety
+/// `p` must point at `len` readable bytes.
+pub(crate) unsafe fn name_at(p: *const ::core::ffi::c_char, len: usize) -> ::std::ffi::CString {
+    // SAFETY: the caller's promise.
+    let bytes = unsafe { cstr::slice_at(p, len) };
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    cstr::owned(&bytes[..end])
+}
+
 /// The window the editor is working in.
 #[inline]
 fn cur_win() -> Win {
@@ -286,42 +464,65 @@ pub(crate) fn cur_syn_block() -> SynBlock {
     unsafe { SynBlock::new(cur_win().w_s) }
 }
 
-/// The `synpat_T` at `idx` in [`cur_syn_block`]'s pattern array.
-///
-/// An accessor and not a borrow because every `:syntax` command that adds a
-/// pattern can `ga_grow` the array out from under one.
-///
-/// # Safety
-/// `idx` must be below [`cur_pattern_count`], and the handle is invalidated by
-/// anything that grows or frees the array.
-#[inline]
-pub(crate) unsafe fn cur_pattern(idx: ::core::ffi::c_int) -> Pat {
-    let base = cur_syn_block().b_syn_patterns.ga_data as *mut synpat_T;
-    // SAFETY: the caller's promise -- a live index into that array.
-    unsafe { Pat::new(base.offset(idx as isize)) }
+impl SynBlock {
+    /// The block's patterns.
+    ///
+    /// The borrow lasts as long as the *handle* it came from, which is what
+    /// stops a caller holding a pattern across a command that grows the
+    /// array — as long as both go through the same handle. Take one handle
+    /// per function and reach everything through it.
+    #[inline]
+    pub(crate) fn patterns(&self) -> &[synpat_T] {
+        &self.b_syn_patterns
+    }
+
+    /// The block's patterns, to add to or remove from.
+    #[inline]
+    pub(crate) fn patterns_mut(&mut self) -> &mut Vec<synpat_T> {
+        &mut self.b_syn_patterns
+    }
+
+    /// The pattern at `idx`, which must be one the block has.
+    #[inline]
+    pub(crate) fn pattern(&self, idx: ::core::ffi::c_int) -> &synpat_T {
+        &self.b_syn_patterns[idx as usize]
+    }
+
+    /// The pattern at `idx`, to write to.
+    #[inline]
+    pub(crate) fn pattern_mut(&mut self, idx: ::core::ffi::c_int) -> &mut synpat_T {
+        &mut self.b_syn_patterns[idx as usize]
+    }
+
+    /// The cluster at `idx`, which must be one the block has.
+    #[inline]
+    pub(crate) fn cluster(&self, idx: ::core::ffi::c_int) -> &syn_cluster_T {
+        &self.b_syn_clusters[idx as usize]
+    }
+
+    /// The block's clusters, on [`SynBlock::patterns`]' terms.
+    #[inline]
+    pub(crate) fn clusters(&self) -> &[syn_cluster_T] {
+        &self.b_syn_clusters
+    }
+
+    /// The block's clusters, to add to or edit.
+    #[inline]
+    pub(crate) fn clusters_mut(&mut self) -> &mut Vec<syn_cluster_T> {
+        &mut self.b_syn_clusters
+    }
 }
 
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
-    cur_syn_block().b_syn_patterns.ga_len
-}
-
-/// The `syn_cluster_T` at `idx` in [`cur_syn_block`]'s cluster array.
-///
-/// # Safety
-/// [`cur_pattern`]'s, for the cluster array.
-#[inline]
-pub(crate) unsafe fn cur_cluster(idx: ::core::ffi::c_int) -> Cluster {
-    let base = cur_syn_block().b_syn_clusters.ga_data as *mut syn_cluster_T;
-    // SAFETY: the caller's promise -- a live index into that array.
-    unsafe { Cluster::new(base.offset(idx as isize)) }
+    cur_syn_block().patterns().len() as ::core::ffi::c_int
 }
 
 /// Number of clusters in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
-    cur_syn_block().b_syn_clusters.ga_len
+    cur_syn_block().clusters().len() as ::core::ffi::c_int
 }
 /// A syntax block — a window's or a buffer's `synblock_T`, whose holder has
 /// promised it outlives the value.
@@ -346,17 +547,6 @@ macro_rules! syn_field {
     };
 }
 pub(crate) use syn_field;
-
-/// A `:syntax` pattern, whose holder has promised the block's pattern array
-/// has not been grown or freed since it was taken.
-///
-/// Every `:syntax match`/`region`/`keyword` that adds one can `ga_grow` the
-/// array out from under a handle, so take one per use rather than holding it
-/// across a command.
-pub(crate) type Pat = Live<synpat_T>;
-
-/// A `:syntax cluster`, on the same terms as [`Pat`].
-pub(crate) type Cluster = Live<syn_cluster_T>;
 
 /// One item on the syntax state stack, whose holder has promised the stack
 /// has not been pushed to, popped from or cleared since it was taken.

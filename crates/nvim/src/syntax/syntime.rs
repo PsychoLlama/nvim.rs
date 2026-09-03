@@ -44,7 +44,7 @@ unsafe fn syntime_clear() {
         return;
     }
     for idx in 0..cur_pattern_count() {
-        unsafe { syn_clear_time(&mut (*cur_pattern(idx).raw()).sp_time) };
+        syn_clear_time(&mut cur_syn_block().pattern_mut(idx).sp_time);
     }
 }
 
@@ -66,7 +66,8 @@ struct TimeEntry {
     slowest: proftime_T,
     average: proftime_T,
     id: c_int,
-    pattern: *mut c_char,
+    /// The pattern text, borrowed from the pattern the row came from.
+    pattern: *const c_char,
 }
 
 /// Order two rows by total time, for [`qsort`].
@@ -91,7 +92,8 @@ unsafe fn syntime_report() {
     let mut total_total = profile_zero();
     let mut total_count: c_int = 0;
     for idx in 0..cur_pattern_count() {
-        let spp = unsafe { cur_pattern(idx) };
+        let block = cur_syn_block();
+        let spp = block.pattern(idx);
         let time = spp.sp_time;
         if time.count <= 0 {
             continue;
@@ -105,7 +107,10 @@ unsafe fn syntime_report() {
             slowest: time.slowest,
             average: profile_divide(time.total, time.count),
             id: spp.sp_syn.id as c_int,
-            pattern: spp.sp_pattern,
+            pattern: spp
+                .sp_pattern
+                .as_ref()
+                .map_or(::core::ptr::null(), |p| p.as_ptr()),
         });
     }
 

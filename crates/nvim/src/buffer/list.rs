@@ -402,12 +402,15 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     let at = storage.as_mut_ptr();
     // The fields a zeroed `buf_T` is *not* a valid value for -- an empty
     // `Vec` holds a non-null dangling pointer, not a zero one, and a `HashMap`
-    // holds a seeded hasher -- are the user-command list, the keymap, what
-    // the memline owns, and the two extmark tables.
+    // holds a seeded hasher -- are the user-command list, the keymap, the
+    // buffer's syntax block, what the memline owns, and the two extmark
+    // tables.
     // SAFETY: all are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_s.b_syn_patterns).write(Vec::new()) };
+    unsafe { (&raw mut (*at).b_s.b_syn_clusters).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_ml).write(memline_T::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };

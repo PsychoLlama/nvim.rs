@@ -57,7 +57,8 @@ pub(crate) unsafe fn state_top() -> Item {
 /// start pattern when there is one and the region itself otherwise.
 pub(crate) unsafe fn push_next_match() -> Item {
     let idx = next_match_idx.get();
-    let spp = unsafe { syn_pattern(idx) };
+    let block = syn_block();
+    let spp = block.pattern(idx);
 
     push_current_state(idx);
     let mut cur_si = unsafe { state_top() };
@@ -71,7 +72,7 @@ pub(crate) unsafe fn push_next_match() -> Item {
         // A concealed item conceals what it contains.
         unsafe { cur_si.si_flags |= state_at(state_len() - 2).si_flags.masked(SynFlags::CONCEAL) };
     }
-    cur_si.si_next_list = spp.sp_next_list;
+    cur_si.si_next_list = spp.sp_next_list.as_ptr();
     unsafe { cur_si.si_extmatch = ref_extmatch(next_match_extmatch.get()) };
 
     if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
@@ -208,7 +209,7 @@ pub(crate) unsafe fn check_state_ends() {
         // from the end of the line (the end could be `end="x$"me=e-1`), and
         // not when "excludenl" is used (SynFlags::HAS_EOL will not be set).
         if cur_si.si_idx >= 0
-            && unsafe { syn_pattern(cur_si.si_idx).sp_type } as c_int == SPTYPE_START
+            && syn_block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_START
             && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
         {
             unsafe { update_si_end(cur_si, current_col.get(), true) };
@@ -230,7 +231,8 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
     if sip.si_idx < 0 {
         return; // a keyword; should not happen
     }
-    let spp = unsafe { syn_pattern(sip.si_idx) };
+    let block = syn_block();
+    let spp = block.pattern(sip.si_idx);
     let is_match = sip.si_flags.has(SynFlags::MATCH);
 
     let id = if is_match {
@@ -241,7 +243,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
     let cont_list = if is_match {
         ::core::ptr::null_mut()
     } else {
-        spp.sp_cont_list
+        spp.sp_cont_list.as_ptr()
     };
     sip.si_id = id;
     unsafe { sip.si_attr = syn_id2attr(id) };
@@ -348,7 +350,11 @@ pub(crate) unsafe fn update_si_end(mut sip: Item, startcol: c_int, force: bool) 
 
     if end.m_endpos.lnum == 0 {
         // No end pattern matched.
-        if unsafe { syn_pattern(sip.si_idx).sp_flags }.has(SynFlags::ONELINE) {
+        if syn_block()
+            .pattern(sip.si_idx)
+            .sp_flags
+            .has(SynFlags::ONELINE)
+        {
             // A "oneline" never continues in the next line.
             sip.si_ends = 1;
             sip.si_m_endpos.lnum = current_lnum.get();

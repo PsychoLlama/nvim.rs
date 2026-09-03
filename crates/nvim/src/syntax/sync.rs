@@ -103,10 +103,11 @@ unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
 
     // Restrict the search for the end of the comment to "maxlines".
     if unsafe { find_start_comment(syn_block().b_syn_sync_maxlines as c_int) }.is_some() {
-        let mut idx = unsafe { syn_pattern_count() };
+        let mut idx = syn_pattern_count();
         while idx > 0 {
             idx -= 1;
-            let spp = unsafe { syn_pattern(idx) };
+            let block = syn_block();
+            let spp = block.pattern(idx);
             if spp.sp_syn.id as c_int == syn_block().b_syn_sync_id as c_int
                 && spp.sp_type as c_int == SPTYPE_START
             {
@@ -246,7 +247,8 @@ unsafe fn scan_for_sync_point(
             let (flags, match_idx) = if cur_si.si_idx < 0 {
                 (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
             } else {
-                let spp = unsafe { syn_pattern(cur_si.si_idx) };
+                let block = syn_block();
+                let spp = block.pattern(cur_si.si_idx);
                 (spp.sp_flags, spp.sp_sync_idx)
             };
             let m_endpos = cur_si.si_m_endpos;

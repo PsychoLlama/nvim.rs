@@ -16,8 +16,8 @@ use crate::types::{ExpandContext, NUL};
 /// Does this window's block define any syntax at all?
 pub(crate) unsafe fn syntax_present(win: *mut win_T) -> bool {
     unsafe {
-        (*(*win).w_s).b_syn_patterns.ga_len != 0
-            || (*(*win).w_s).b_syn_clusters.ga_len != 0
+        !(*(*win).w_s).b_syn_patterns.is_empty()
+            || !(*(*win).w_s).b_syn_clusters.is_empty()
             || (*(*win).w_s).b_keywtab.ht_used > 0
             || (*(*win).w_s).b_keywtab_ic.ht_used > 0
     }
@@ -143,8 +143,8 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
             }
             // SAFETY: the caller's completion state.
             let buf = unsafe { &raw mut (*xp).xp_buf }.cast::<c_char>();
-            // SAFETY: `idx` is below `cur_cluster_count()`.
-            let name = unsafe { cur_cluster(idx).scl_name };
+            let block = cur_syn_block();
+            let name = block.cluster(idx).scl_name.as_ptr();
             // SAFETY: the buffer is `EXPAND_BUF_LEN` bytes.
             unsafe { vim_snprintf(buf, EXPAND_BUF_LEN as size_t, c"@%s".as_ptr(), name) };
             unsafe { &raw mut (*xp).xp_buf as *mut c_char }

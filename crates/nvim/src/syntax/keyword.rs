@@ -20,7 +20,7 @@ use crate::types::NUL;
 /// The hash tables key on that array rather than on the entry, so every walk
 /// converts between the two by this offset. Upstream spells it as the `HI2KE`
 /// and `KE2HIKEY` macros.
-const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(keyentry_T, keyword);
+pub(crate) const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(keyentry_T, keyword);
 
 /// The entry a hash key points into.
 #[inline]
@@ -39,9 +39,12 @@ pub(crate) unsafe fn entry_to_key(kp: *mut keyentry_T) -> *mut c_char {
 }
 
 /// Free one entry and the two id lists it owns.
+///
+/// The three `xfree`s of the carve-out (see [`keyentry`]): the entry is one
+/// block with its text inside it, so nothing here can be a `Box`.
 unsafe fn free_entry(kp: *mut keyentry_T) {
     unsafe { xfree((*kp).next_list as *mut c_void) };
-    unsafe { xfree((*kp).k_syn.cont_in_list as *mut c_void) };
+    unsafe { xfree((*kp).cont_in_list as *mut c_void) };
     unsafe { xfree(kp as *mut c_void) };
 }
 
@@ -111,15 +114,15 @@ pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
 }
 
 /// Everything a run of `:syntax keyword` gives every keyword it defines.
-struct KeywordDef {
+struct KeywordDef<'a> {
     /// The syntax group the keywords belong to.
     id: c_int,
     /// `HL_*` flags from the options.
     flags: SynFlags,
-    /// `containedin=`, copied per keyword.
-    cont_in_list: *mut int16_t,
-    /// `nextgroup=`, copied per keyword.
-    next_list: *mut int16_t,
+    /// `containedin=`, copied into each entry.
+    cont_in_list: &'a IdList,
+    /// `nextgroup=`, copied into each entry.
+    next_list: &'a IdList,
     /// `cchar=`, or NUL.
     conceal_char: c_int,
 }
@@ -153,8 +156,8 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
     unsafe { (*kp).k_syn.inc_tag = current_syn_inc_tag.get() };
     unsafe { (*kp).flags = def.flags };
     unsafe { (*kp).k_char = def.conceal_char };
-    unsafe { (*kp).k_syn.cont_in_list = copy_id_list(def.cont_in_list) };
-    if !def.cont_in_list.is_null() {
+    unsafe { (*kp).cont_in_list = copy_id_list(def.cont_in_list) };
+    if !def.cont_in_list.is_none() {
         cur_syn_block().b_syn_containedin = 1;
     }
     unsafe { (*kp).next_list = copy_id_list(def.next_list) };
@@ -241,16 +244,20 @@ pub(crate) fn syn_cmd_keyword(eap: &mut exarg_T, _syncing: c_int) {
         };
         if syn_id != 0 {
             // A buffer for the keywords with their backslashes removed;
-            // it can only shrink, so the argument's length is enough.
-            let keyword_copy = unsafe { xmalloc(cstr::bytes_at(rest).len() + 1) } as *mut c_char;
+            // it can only shrink, so the argument's length is enough. The
+            // two passes below write into it and shift bytes around inside
+            // it, so it is handed on as a pointer.
+            let mut buf = vec![0u8; unsafe { cstr::bytes_at(rest) }.len() + 1];
+            let keyword_copy: *mut c_char = buf.as_mut_ptr().cast();
             let mut opt = syn_opt_arg_T {
                 flags: SynFlags::NONE,
                 keyword: true,
-                sync_idx: ::core::ptr::null_mut(),
+                takes_sync_idx: false,
+                sync_idx: 0,
                 has_cont_list: false,
-                cont_list: ::core::ptr::null_mut(),
-                cont_in_list: ::core::ptr::null_mut(),
-                next_list: ::core::ptr::null_mut(),
+                cont_list: IdList::NONE,
+                cont_in_list: IdList::NONE,
+                next_list: IdList::NONE,
             };
 
             // The options apply to ALL the keywords, so every option has
@@ -286,8 +293,8 @@ pub(crate) fn syn_cmd_keyword(eap: &mut exarg_T, _syncing: c_int) {
                 let def = KeywordDef {
                     id: syn_id,
                     flags: opt.flags,
-                    cont_in_list: opt.cont_in_list,
-                    next_list: opt.next_list,
+                    cont_in_list: &opt.cont_in_list,
+                    next_list: &opt.next_list,
                     conceal_char,
                 };
                 let mut kw = keyword_copy;
@@ -300,9 +307,9 @@ pub(crate) fn syn_cmd_keyword(eap: &mut exarg_T, _syncing: c_int) {
                 }
             }
 
-            unsafe { xfree(keyword_copy as *mut c_void) };
-            unsafe { xfree(opt.cont_in_list as *mut c_void) };
-            unsafe { xfree(opt.next_list as *mut c_void) };
+            // `buf` and `opt`'s lists go out of scope here; every entry has
+            // its own copy of the lists.
+            drop(buf);
         }
     }
 

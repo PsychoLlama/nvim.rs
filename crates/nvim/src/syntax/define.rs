@@ -12,7 +12,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::optionstr::empty_option;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
@@ -29,16 +29,10 @@ pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
     }
     *flags |= SynFlags::CONTAINED | SynFlags::INCLUDED_TOPLEVEL;
     if cur_syn_block().b_syn_topgrp >= SYNID_CLUSTER {
-        // Allocated, because `syn_combine_list` consumes it.
-        let mut grp_list =
-            unsafe { xmalloc(2 * ::core::mem::size_of::<int16_t>()) } as *mut int16_t;
-        unsafe { *grp_list = id as int16_t };
-        unsafe { *grp_list.add(1) = 0 };
-        let tlg_id = cur_syn_block().b_syn_topgrp - SYNID_CLUSTER;
-        // SAFETY: `tlg_id` is a live cluster index; the address comes off the
-        // pointer rather than a `Deref` borrow.
-        let list = unsafe { &mut (*cur_cluster(tlg_id).raw()).scl_list };
-        unsafe { syn_combine_list(list, &mut grp_list, CLUSTER_ADD) };
+        let tlg_id = (cur_syn_block().b_syn_topgrp - SYNID_CLUSTER) as usize;
+        let mut block = cur_syn_block();
+        let list = &mut block.clusters_mut()[tlg_id].scl_list;
+        syn_combine_list(list, IdList::from_ids(&[id as int16_t]), CLUSTER_ADD);
     }
 }
 
@@ -118,42 +112,22 @@ pub(crate) fn syn_cmd_include(eap: &mut exarg_T, _syncing: c_int) {
     current_syn_inc_tag.set(prev_syn_inc_tag);
 }
 
-/// First call for this window: init the pattern array.
-pub(crate) unsafe fn init_syn_patterns() {
-    cur_syn_block().b_syn_patterns.ga_itemsize = ::core::mem::size_of::<synpat_T>() as c_int;
-    unsafe { ga_set_growsize(syn_field!(cur_syn_block(), b_syn_patterns), 10) };
-}
-
-/// A zeroed pattern, which is what upstream's `CLEAR_FIELD`/`xcalloc` leave.
-unsafe fn empty_synpat() -> synpat_T {
-    unsafe { ::core::mem::zeroed() }
-}
-
 /// The default options for `:syntax match` and `:syntax region`, both of which
 /// accept a `contains=` list.
-fn item_opt(sync_idx: *mut c_int) -> syn_opt_arg_T {
+///
+/// `takes_sync_idx` is what `grouphere`/`groupthere` needs, and only
+/// `:syntax sync match` sets it.
+fn item_opt(takes_sync_idx: bool) -> syn_opt_arg_T {
     syn_opt_arg_T {
         flags: SynFlags::NONE,
         keyword: false,
-        sync_idx,
+        takes_sync_idx,
+        sync_idx: 0,
         has_cont_list: true,
-        cont_list: ::core::ptr::null_mut(),
-        cont_in_list: ::core::ptr::null_mut(),
-        next_list: ::core::ptr::null_mut(),
+        cont_list: IdList::NONE,
+        cont_in_list: IdList::NONE,
+        next_list: IdList::NONE,
     }
-}
-
-/// Free the two allocations a half-built pattern owns.
-unsafe fn free_synpat(item: &synpat_T) {
-    unsafe { vim_regfree(item.sp_prog) };
-    unsafe { xfree(item.sp_pattern as *mut c_void) };
-}
-
-/// Free the three id lists an abandoned option set owns.
-unsafe fn free_opt_lists(opt: &syn_opt_arg_T) {
-    unsafe { xfree(opt.cont_list as *mut c_void) };
-    unsafe { xfree(opt.cont_in_list as *mut c_void) };
-    unsafe { xfree(opt.next_list as *mut c_void) };
 }
 
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
@@ -161,22 +135,16 @@ unsafe fn free_opt_lists(opt: &syn_opt_arg_T) {
 pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
     let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
-    let mut sync_idx: c_int = 0;
     let mut conceal_char: c_int = NUL;
 
     // Isolate the group name, check for validity.
     let mut rest = unsafe { get_group_name(arg, &mut group_name_end) };
 
-    let mut opt = item_opt(if syncing != 0 {
-        &raw mut sync_idx
-    } else {
-        ::core::ptr::null_mut()
-    });
+    let mut opt = item_opt(syncing != 0);
 
     // Options before the pattern, the pattern, then options after it.
     rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
-    unsafe { init_syn_patterns() };
-    let mut item = unsafe { empty_synpat() };
+    let mut item = EMPTY_SYNPAT;
     rest = unsafe { get_syn_pattern(rest, &mut item) };
     if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
         opt.flags |= SynFlags::HAS_EOL;
@@ -193,29 +161,23 @@ pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
                 unsafe { syn_incl_toplevel(syn_id, &mut opt.flags) };
-                // Store the pattern in the item list.
-                // SAFETY: `ga_append_via_ptr` answered a fresh slot in the
-                // pattern array, which nothing grows before the writes below.
-                let mut spp = unsafe {
-                    Pat::new(ga_append_via_ptr(
-                        syn_field!(cur_syn_block(), b_syn_patterns),
-                        ::core::mem::size_of::<synpat_T>(),
-                    ) as *mut synpat_T)
-                };
-                *spp = item;
-                spp.sp_syncing = syncing != 0;
-                spp.sp_type = SPTYPE_MATCH as c_char;
-                spp.sp_syn.id = syn_id as int16_t;
-                spp.sp_syn.inc_tag = current_syn_inc_tag.get();
-                spp.sp_flags = opt.flags;
-                spp.sp_sync_idx = sync_idx;
-                spp.sp_cont_list = opt.cont_list;
-                spp.sp_syn.cont_in_list = opt.cont_in_list;
-                spp.sp_cchar = conceal_char;
-                if !opt.cont_in_list.is_null() {
+                // Store the pattern in the item list; the three id lists are
+                // handed over rather than copied.
+                item.sp_syncing = syncing != 0;
+                item.sp_type = SPTYPE_MATCH as c_char;
+                item.sp_syn.id = syn_id as int16_t;
+                item.sp_syn.inc_tag = current_syn_inc_tag.get();
+                item.sp_flags = opt.flags;
+                item.sp_sync_idx = opt.sync_idx;
+                item.sp_cchar = conceal_char;
+                if !opt.cont_in_list.is_none() {
                     cur_syn_block().b_syn_containedin = 1;
                 }
-                spp.sp_next_list = opt.next_list;
+                item.sp_cont_list = ::core::mem::take(&mut opt.cont_list);
+                item.sp_cont_in_list = ::core::mem::take(&mut opt.cont_in_list);
+                item.sp_next_list = ::core::mem::take(&mut opt.next_list);
+                cur_syn_block().patterns_mut().push(item);
+                stored = true;
 
                 // Remember that we found a match to sync on.
                 if opt.flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
@@ -227,20 +189,16 @@ pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
 
                 redraw_curbuf_later(UPD_SOME_VALID);
                 unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
-                stored = true;
             }
         }
     }
 
-    // Something failed: the pattern and the lists are still ours to free.
-    if !stored {
-        unsafe { free_synpat(&item) };
-        unsafe { free_opt_lists(&opt) };
-        if rest.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
-            semsg!("E475: Invalid argument: {arg}");
-        }
+    // Something failed: dropping `item` and `opt` releases the pattern text,
+    // the compiled program and the three lists.
+    if !stored && rest.is_null() {
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
     }
 }
 
@@ -265,33 +223,30 @@ struct RegionArgs {
     not_enough: bool,
 }
 
-/// Which of the four keywords `key` (already upper-cased) names.
-unsafe fn region_item(key: *const c_char) -> Option<c_int> {
-    for (name, item) in [
-        (c"MATCHGROUP", ITEM_MATCHGROUP),
-        (c"START", ITEM_START),
-        (c"END", ITEM_END),
-        (c"SKIP", ITEM_SKIP),
-    ] {
-        if unsafe { cstr::eq(key, name.as_ptr()) } {
-            return Some(item);
-        }
-    }
-    None
+/// Which of the four keywords `key` names, ignoring case.
+fn region_item(key: &[u8]) -> Option<c_int> {
+    [
+        (&b"MATCHGROUP"[..], ITEM_MATCHGROUP),
+        (b"START", ITEM_START),
+        (b"END", ITEM_END),
+        (b"SKIP", ITEM_SKIP),
+    ]
+    .into_iter()
+    .find(|(name, _)| key.eq_ignore_ascii_case(name))
+    .map(|(_, item)| item)
 }
 
 /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
 fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
     let mut out = RegionArgs {
         pats: [Vec::new(), Vec::new(), Vec::new()],
-        opt: item_opt(::core::ptr::null_mut()),
+        opt: item_opt(false),
         conceal_char: NUL,
         rest,
         not_enough: false,
     };
     let mut matchgroup_id = 0;
     let mut illegal = false;
-    let mut key = ::core::ptr::null_mut::<c_char>();
 
     while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
         // Options may appear anywhere between the patterns.
@@ -308,9 +263,9 @@ fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
         {
             key_end = unsafe { key_end.add(1) };
         }
-        unsafe { xfree(key as *mut c_void) };
-        key = unsafe { vim_strnsave_up(rest, key_end.offset_from(rest) as size_t) };
-        let Some(item) = (unsafe { region_item(key) }) else {
+        // SAFETY: both pointers are into the command line, `rest` first.
+        let key = unsafe { cstr::slice_at(rest, key_end.offset_from(rest) as usize) };
+        let Some(item) = region_item(key) else {
             break;
         };
         if item == ITEM_SKIP && !out.pats[ITEM_SKIP as usize].is_empty() {
@@ -352,7 +307,7 @@ fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
         // Enable the appropriate `\z` specials: a start pattern defines the
         // external matches, skip and end patterns use them.
         reg_do_extmatch.set(if item == ITEM_START { REX_SET } else { REX_USE });
-        let mut pat = unsafe { empty_synpat() };
+        let mut pat = EMPTY_SYNPAT;
         rest = unsafe { get_syn_pattern(rest, &mut pat) };
         reg_do_extmatch.set(0);
         if item == ITEM_END && vim_regcomp_had_eol() != 0 && !out.opt.flags.has(SynFlags::EXCLUDENL)
@@ -362,7 +317,6 @@ fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
         out.pats[item as usize].insert(0, RegionPat { pat, matchgroup_id });
     }
 
-    unsafe { xfree(key as *mut c_void) };
     // An `illegal` stop is reported as E390, which is what upstream's
     // "rest = NULL" here and its `illegal || rest == NULL` test below say.
     out.rest = if illegal || out.not_enough {
@@ -381,7 +335,6 @@ pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
 
     // Isolate the group name, check for validity.
     let rest = unsafe { get_group_name(arg, &mut group_name_end) };
-    unsafe { init_syn_patterns() };
 
     let mut args = parse_region_args(eap, rest);
     let mut rest = args.rest;
@@ -394,42 +347,33 @@ pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
         rest = ::core::ptr::null_mut();
     }
 
-    let mut success = false;
     if !rest.is_null() {
         // Check for trailing garbage or a command; if OK, add the item.
         eap.nextcmd = unsafe { check_nextcmd(rest) };
         if ends_excmd(unsafe { *rest } as c_int) == 0 || eap.skip != 0 {
             rest = ::core::ptr::null_mut();
         } else {
-            let pat_count: c_int = args.pats.iter().map(|v| v.len() as c_int).sum();
-            unsafe { ga_grow(syn_field!(cur_syn_block(), b_syn_patterns), pat_count) };
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
                 unsafe { syn_incl_toplevel(syn_id, &mut args.opt.flags) };
-                unsafe { store_region(&args, syn_id, syncing != 0) };
+                store_region(args, syn_id, syncing != 0);
                 redraw_curbuf_later(UPD_SOME_VALID);
                 unsafe { syn_stack_free_all(cur_syn_block().raw()) }; // Need to recompute all.
-                success = true; // don't free the progs and patterns now
+                return; // the patterns and the lists belong to the block now
             }
         }
     }
 
-    if !success {
-        for list in &args.pats {
-            for entry in list {
-                unsafe { free_synpat(&entry.pat) };
-            }
-        }
-        unsafe { free_opt_lists(&args.opt) };
-        if args.not_enough {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
-            semsg!("E399: Not enough arguments: syntax region {arg}");
-        } else if rest.is_null() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
-            semsg!("E475: Invalid argument: {arg}");
-        }
+    // Nothing was stored: dropping `args` releases every parsed pattern, its
+    // compiled program and the three lists.
+    if args.not_enough {
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E399: Not enough arguments: syntax region {arg}");
+    } else if rest.is_null() {
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let arg = unsafe { c_str(arg) };
+        semsg!("E475: Invalid argument: {arg}");
     }
 }
 
@@ -439,13 +383,20 @@ pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
 /// The `contains=`/`containedin=`/`nextgroup=` lists go on the START entries
 /// only, and are handed over rather than copied — which is why the caller must
 /// not free them once this has run.
-unsafe fn store_region(args: &RegionArgs, syn_id: c_int, syncing: bool) {
-    let patterns: *mut garray_T = syn_field!(cur_syn_block(), b_syn_patterns);
-    let mut idx = unsafe { (*patterns).ga_len };
+fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
+    let RegionArgs {
+        mut pats,
+        opt,
+        conceal_char,
+        ..
+    } = args;
+    let mut block = cur_syn_block();
+    if !opt.cont_in_list.is_none() {
+        block.b_syn_containedin = 1;
+    }
     for item in [ITEM_START, ITEM_SKIP, ITEM_END] {
-        for entry in &args.pats[item as usize] {
-            let mut spp = unsafe { cur_pattern(idx) };
-            *spp = entry.pat;
+        for entry in ::core::mem::take(&mut pats[item as usize]) {
+            let mut spp = entry.pat;
             spp.sp_syncing = syncing;
             spp.sp_type = if item == ITEM_START {
                 SPTYPE_START
@@ -454,23 +405,22 @@ unsafe fn store_region(args: &RegionArgs, syn_id: c_int, syncing: bool) {
             } else {
                 SPTYPE_END
             } as c_char;
-            spp.sp_flags |= args.opt.flags;
+            spp.sp_flags |= opt.flags;
             spp.sp_syn.id = syn_id as int16_t;
             spp.sp_syn.inc_tag = current_syn_inc_tag.get();
             spp.sp_syn_match_id = entry.matchgroup_id as int16_t;
-            spp.sp_cchar = args.conceal_char;
+            spp.sp_cchar = conceal_char;
             if item == ITEM_START {
-                spp.sp_cont_list = args.opt.cont_list;
-                spp.sp_syn.cont_in_list = args.opt.cont_in_list;
-                if !args.opt.cont_in_list.is_null() {
-                    cur_syn_block().b_syn_containedin = 1;
-                }
-                spp.sp_next_list = args.opt.next_list;
+                // Every START of the region gets its own copy: upstream
+                // gave them one list, owned by the first, and freed the
+                // array last to first so it could tell which that was.
+                spp.sp_cont_list = opt.cont_list.clone();
+                spp.sp_cont_in_list = opt.cont_in_list.clone();
+                spp.sp_next_list = opt.next_list.clone();
             }
-            unsafe { (*patterns).ga_len += 1 };
-            idx += 1;
-            if args.opt.flags.has(SynFlags::FOLD) {
-                cur_syn_block().b_syn_folditems += 1;
+            block.patterns_mut().push(spp);
+            if opt.flags.has(SynFlags::FOLD) {
+                block.b_syn_folditems += 1;
             }
         }
     }
@@ -499,11 +449,13 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
 
     // Store the pattern and its compiled program. 'cpoptions' is emptied
     // first, to avoid the 'l' flag.
-    ci.sp_pattern = unsafe { xstrnsave(arg.add(1), end.offset_from(arg) as size_t - 1) };
+    // SAFETY: both pointers are into the command line, `arg` first.
+    let pattern = unsafe { name_at(arg.add(1), end.offset_from(arg) as usize - 1) };
     let cpo_save = p_cpo.get();
     p_cpo.set(empty_option());
-    ci.sp_prog = unsafe { vim_regcomp(ci.sp_pattern, RE_MAGIC) };
+    ci.sp_prog = unsafe { vim_regcomp(pattern.as_ptr().cast_mut(), RE_MAGIC) };
     p_cpo.set(cpo_save);
+    ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
         return ::core::ptr::null_mut();
     }

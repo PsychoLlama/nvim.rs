@@ -446,12 +446,10 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
             }
             si.si_ends = 0;
             si.si_m_lnum = 0;
-            unsafe {
-                si.si_next_list = if si.si_idx >= 0 {
-                    syn_pattern(si.si_idx).sp_next_list
-                } else {
-                    ::core::ptr::null_mut()
-                }
+            si.si_next_list = if si.si_idx >= 0 {
+                syn_block().pattern(si.si_idx).sp_next_list.as_ptr()
+            } else {
+                ::core::ptr::null_mut()
             };
             unsafe { update_si_attr(i) };
             i += 1;
@@ -506,7 +504,7 @@ unsafe fn extmatch_equal(a: *mut reg_extmatch_T, b: *mut reg_extmatch_T, idx: c_
     if a.is_null() || b.is_null() {
         return false;
     }
-    let ic = unsafe { syn_pattern(idx).sp_ic } != 0;
+    let ic = syn_block().pattern(idx).sp_ic != 0;
     let mut j = 0;
     while j < NSUBEXP as c_int {
         let (am, bm) = (unsafe { (*a).matches[j as usize] }, unsafe {

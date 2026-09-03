@@ -53,19 +53,29 @@ impl RegionEnd {
 
 /// The `synpat_T` at `idx` in the current syntax block's pattern array.
 ///
-/// Every caller re-derives this after any call that can `ga_grow` the array,
-/// which is why it is an accessor and not a borrow.
-#[inline(always)]
-pub(crate) unsafe fn syn_pattern(idx: c_int) -> Pat {
-    // SAFETY: the caller's promise -- a live index into an array nothing has
-    // grown since.
-    unsafe { Pat::new((syn_block().b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize)) }
+/// Run pattern `idx`'s program over `lnum` from `col`, into a fresh match.
+///
+/// The engine may hand back a *different* program (`vim_regexec_multi` can
+/// recompile), so the answer is written back into the pattern, and each
+/// pattern is timed into its own `sp_time`.
+pub(crate) unsafe fn run_pattern(idx: c_int, lnum: linenr_T, col: colnr_T) -> (bool, regmmatch_T) {
+    let mut regmatch = empty_regmmatch();
+    let mut block = syn_block();
+    let spp = block.pattern_mut(idx);
+    regmatch.rmm_ic = spp.sp_ic;
+    regmatch.regprog = spp.sp_prog;
+    let time: *mut syn_time_T = &raw mut spp.sp_time;
+    // SAFETY: `time` is this pattern's own timer, live across the call, and
+    // `regmatch` is the local just built.
+    let matched = unsafe { syn_regexec(&raw mut regmatch, lnum, col, time) };
+    block.pattern_mut(idx).sp_prog = regmatch.regprog;
+    (matched, regmatch)
 }
 
 /// Number of patterns in the current syntax block.
 #[inline(always)]
-pub(crate) unsafe fn syn_pattern_count() -> c_int {
-    syn_block().b_syn_patterns.ga_len
+pub(crate) fn syn_pattern_count() -> c_int {
+    syn_block().patterns().len() as c_int
 }
 
 /// Find the end of the start/skip/end region `idx` after `startpos`.
@@ -90,8 +100,7 @@ pub(crate) unsafe fn find_endpos(
     // that continues to the next line because it contained a region.
     // Upstream answers `hl_endpos = startpos` here, which no caller reads:
     // both test `m_endpos.lnum` first, and it is 0.
-    let mut spp = unsafe { syn_pattern(idx) };
-    if spp.sp_type as c_int != SPTYPE_START {
+    if syn_block().pattern(idx).sp_type as c_int != SPTYPE_START {
         let mut end = RegionEnd::none();
         end.hl_endpos = startpos;
         return end;
@@ -100,16 +109,12 @@ pub(crate) unsafe fn find_endpos(
     // Find the SKIP or first END pattern after the last START pattern. The
     // patterns of one `:syntax region` are stored consecutively, START(s)
     // then an optional SKIP then the ENDs.
-    loop {
-        spp = unsafe { syn_pattern(idx) };
-        if spp.sp_type as c_int != SPTYPE_START {
-            break;
-        }
+    while syn_block().pattern(idx).sp_type as c_int == SPTYPE_START {
         idx += 1;
     }
-    let spp_skip = if spp.sp_type as c_int == SPTYPE_SKIP {
+    let skip_idx = if syn_block().pattern(idx).sp_type as c_int == SPTYPE_SKIP {
         idx += 1;
-        Some(spp)
+        Some(idx - 1)
     } else {
         None
     };
@@ -123,7 +128,7 @@ pub(crate) unsafe fn find_endpos(
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
-    let answer = unsafe { find_endpos_scan(start_idx, spp_skip, startpos, &mut matchcol) };
+    let answer = unsafe { find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol) };
 
     unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
     unsafe { unref_extmatch(re_extmatch_in.get()) };
@@ -135,7 +140,7 @@ pub(crate) unsafe fn find_endpos(
 /// step `matchcol` over anything the SKIP pattern claims, and repeat.
 unsafe fn find_endpos_scan(
     start_idx: c_int,
-    spp_skip: Option<Pat>,
+    skip_idx: Option<c_int>,
     startpos: lpos_T,
     matchcol: &mut colnr_T,
 ) -> RegionEnd {
@@ -146,8 +151,8 @@ unsafe fn find_endpos_scan(
             // until end-of-line.
             return RegionEnd::none();
         };
-        if let Some(spp_skip) = spp_skip {
-            match unsafe { skip_past(spp_skip, startpos, best.startpos[0], *matchcol) } {
+        if let Some(skip_idx) = skip_idx {
+            match unsafe { skip_past(skip_idx, startpos, best.startpos[0], *matchcol) } {
                 Skipped::No => {}
                 // The skip match reaches the end of the line (or the next
                 // one): no end pattern can match in this line after all.
@@ -170,20 +175,15 @@ unsafe fn best_end_match(
 ) -> Option<(c_int, regmmatch_T)> {
     let mut best: Option<(c_int, regmmatch_T)> = None;
     let mut idx = start_idx;
-    while idx < unsafe { syn_pattern_count() } {
-        let mut spp = unsafe { syn_pattern(idx) };
+    while idx < syn_pattern_count() {
+        let spp = syn_block();
+        let spp = spp.pattern(idx);
         if spp.sp_type as c_int != SPTYPE_END {
             break; // past the last END pattern of this region
         }
         let lc_col = (matchcol as c_int - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
 
-        let mut regmatch = empty_regmmatch();
-        regmatch.rmm_ic = spp.sp_ic;
-        regmatch.regprog = spp.sp_prog;
-        let time: *mut syn_time_T = spp.field_ptr(::core::mem::offset_of!(synpat_T, sp_time));
-        let matched =
-            unsafe { syn_regexec(&raw mut regmatch, startpos.lnum, lc_col as colnr_T, time) };
-        spp.sp_prog = regmatch.regprog;
+        let (matched, regmatch) = unsafe { run_pattern(idx, startpos.lnum, lc_col as colnr_T) };
         let col = regmatch.startpos[0].col;
         if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
             best = Some((idx, regmatch));
@@ -205,26 +205,20 @@ enum Skipped {
 
 /// Does the SKIP pattern match before the best END pattern's match?
 unsafe fn skip_past(
-    mut spp_skip: Pat,
+    skip_idx: c_int,
     startpos: lpos_T,
     best_start: lpos_T,
     matchcol: colnr_T,
 ) -> Skipped {
-    let lc_col = (matchcol as c_int - spp_skip.sp_offsets[SPO_LC_OFF as usize]).max(0);
-    let mut regmatch = empty_regmmatch();
-    regmatch.rmm_ic = spp_skip.sp_ic;
-    regmatch.regprog = spp_skip.sp_prog;
-    let time = spp_skip.field_ptr(::core::mem::offset_of!(synpat_T, sp_time));
-    let lc_col = lc_col as colnr_T;
-    // SAFETY: the caller's SKIP pattern, timed into its own `sp_time`.
-    let matched = unsafe { syn_regexec(&raw mut regmatch, startpos.lnum, lc_col, time) };
-    spp_skip.sp_prog = regmatch.regprog;
+    let offsets = syn_block().pattern(skip_idx).offsets();
+    let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
+    let (matched, regmatch) = unsafe { run_pattern(skip_idx, startpos.lnum, lc_col as colnr_T) };
     if !matched || regmatch.startpos[0].col > best_start.col {
         return Skipped::No;
     }
 
     // Add the offset to the skip pattern's match.
-    let pos = unsafe { syn_add_end_off(spp_skip, &regmatch, SPO_ME_OFF, 1) };
+    let pos = unsafe { syn_add_end_off(offsets, &regmatch, SPO_ME_OFF, 1) };
     if pos.lnum > startpos.lnum {
         // The skip pattern goes on to the next line, so there is no match
         // with an end pattern in this line.
@@ -255,16 +249,18 @@ unsafe fn skip_past(
 
 /// Turn the winning END match into the four positions the caller wants.
 unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -> RegionEnd {
-    let spp = unsafe { syn_pattern(best_idx) };
+    let block = syn_block();
+    let spp = block.pattern(best_idx);
+    let offsets = spp.offsets();
 
     // Match from the start pattern to the end pattern, corrected for the
     // end pattern's match and highlight offsets. Neither may end before
     // the start.
-    let mut m_endpos = unsafe { syn_add_end_off(spp, best, SPO_ME_OFF, 1) };
+    let mut m_endpos = unsafe { syn_add_end_off(offsets, best, SPO_ME_OFF, 1) };
     if m_endpos.lnum == startpos.lnum && m_endpos.col < startpos.col {
         m_endpos.col = startpos.col;
     }
-    let mut eoe_pos = unsafe { syn_add_end_off(spp, best, SPO_HE_OFF, 1) };
+    let mut eoe_pos = unsafe { syn_add_end_off(offsets, best, SPO_HE_OFF, 1) };
     if eoe_pos.lnum == startpos.lnum && eoe_pos.col < startpos.col {
         eoe_pos.col = startpos.col;
     }
@@ -275,7 +271,7 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -
             // The end group is highlighted differently: the highlighting
             // stops where the `matchgroup=` item takes over, and the match
             // is then turned into that item.
-            let flagged = spp.sp_off_flags as c_int & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0;
+            let flagged = offsets.flags as c_int & (1 << (SPO_RE_OFF + SPO_COUNT)) != 0;
             let base = if flagged {
                 best.endpos[0]
             } else {
@@ -283,7 +279,7 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -
             };
             let mut hl_endpos = lpos_T {
                 lnum: base.lnum,
-                col: base.col + spp.sp_offsets[SPO_RE_OFF as usize],
+                col: base.col + offsets.offsets[SPO_RE_OFF as usize],
             };
             if hl_endpos.lnum == startpos.lnum && hl_endpos.col < startpos.col {
                 hl_endpos.col = startpos.col;
@@ -304,7 +300,7 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -
 }
 
 /// A zeroed `regmmatch_T`, which `vim_regexec_multi` fills in.
-const fn empty_regmmatch() -> regmmatch_T {
+pub(crate) const fn empty_regmmatch() -> regmmatch_T {
     regmmatch_T {
         regprog: ::core::ptr::null_mut(),
         startpos: [lpos_T { lnum: 0, col: 0 }; 10],
@@ -338,18 +334,18 @@ pub(crate) fn limit_pos_zero(pos: &mut lpos_T, limit: lpos_T) {
 /// `extra` is added when the offset is measured from the *start* of the match
 /// (`me=s+1`), which is how "one past" is spelled for a region's end.
 pub(crate) unsafe fn syn_add_end_off(
-    spp: Pat,
+    spp: PatOffsets,
     regmatch: &regmmatch_T,
     idx: c_int,
     extra: c_int,
 ) -> lpos_T {
-    let flagged = spp.sp_off_flags as c_int & (1 << idx) != 0;
+    let flagged = spp.flags as c_int & (1 << idx) != 0;
     let base = if flagged {
         regmatch.startpos[0]
     } else {
         regmatch.endpos[0]
     };
-    let off = spp.sp_offsets[idx as usize] + if flagged { extra } else { 0 };
+    let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
 
     let col = if base.lnum > unsafe { (*syn_buf.get()).b_ml.ml_line_count } {
         // Watch out for a match with the last NL in the buffer. Matters for
@@ -372,18 +368,18 @@ pub(crate) unsafe fn syn_add_end_off(
 /// position past the last line is clamped to the end of the last line instead
 /// of to column 0.
 pub(crate) unsafe fn syn_add_start_off(
-    spp: Pat,
+    spp: PatOffsets,
     regmatch: &regmmatch_T,
     idx: c_int,
     extra: c_int,
 ) -> lpos_T {
-    let flagged = spp.sp_off_flags as c_int & (1 << (idx + SPO_COUNT)) != 0;
+    let flagged = spp.flags as c_int & (1 << (idx + SPO_COUNT)) != 0;
     let base = if flagged {
         regmatch.endpos[0]
     } else {
         regmatch.startpos[0]
     };
-    let off = spp.sp_offsets[idx as usize] + if flagged { extra } else { 0 };
+    let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
 
     let (lnum, col) = if base.lnum > unsafe { (*syn_buf.get()).b_ml.ml_line_count } {
         // A "\n" at the end of the pattern may take us below the last line.
@@ -575,15 +571,15 @@ unsafe fn match_keyword(
     } as *mut keyentry_T;
     while !kp.is_null() {
         // SAFETY: `kp` walks a chain of live keyword entries.
-        let (syn, flags) = unsafe { (&raw mut (*kp).k_syn, (*kp).flags) };
+        let (syn, cont_in, flags) = unsafe { ((*kp).k_syn, (*kp).cont_in_list, (*kp).flags) };
         let ok = if !current_next_list.get().is_null() {
             let next = current_next_list.get();
             // SAFETY: the parser's own lists.
-            unsafe { in_id_list(None, next, syn, SynFlags::NONE) }
+            unsafe { in_id_list(None, next, syn, cont_in, SynFlags::NONE) }
         } else if let Some(cur_si) = cur_si {
             let contains = cur_si.si_cont_list;
             // SAFETY: as above, inside the item the caller named.
-            unsafe { in_id_list(Some(cur_si), contains, syn, flags) }
+            unsafe { in_id_list(Some(cur_si), contains, syn, cont_in, flags) }
         } else {
             !flags.has(SynFlags::CONTAINED)
         };

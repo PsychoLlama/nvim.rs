@@ -263,6 +263,24 @@ pub(crate) unsafe fn syn_maybe_enable() {
     }
 }
 
+/// A syntax block for `:ownsyntax`, all zero but for the fields a zeroed
+/// block is not a valid value for.
+///
+/// Upstream's `xcalloc(1, sizeof(synblock_T))`; the block is released by
+/// `reset_synblock`, which takes the `Box` back.
+fn empty_synblock() -> Box<synblock_T> {
+    let mut storage = Box::<synblock_T>::new_zeroed();
+    let at = storage.as_mut_ptr();
+    // An empty `Vec` holds a non-null dangling pointer, not a zero one.
+    // SAFETY: both are inside the block just allocated, nothing has read or
+    // dropped them, and `write` does not drop what was there.
+    unsafe { (&raw mut (*at).b_syn_patterns).write(Vec::new()) };
+    // SAFETY: as above.
+    unsafe { (&raw mut (*at).b_syn_clusters).write(Vec::new()) };
+    // SAFETY: all-zero bytes are otherwise what upstream hands a fresh block.
+    unsafe { storage.assume_init() }
+}
+
 /// One `:syntax` subcommand.
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
@@ -340,10 +358,7 @@ pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
     let eap = unsafe { &mut *eap };
     let mut numbuf = NumBuf::new();
     if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
-        unsafe {
-            (*curwin.get()).w_s =
-                xcalloc(1, ::core::mem::size_of::<synblock_T>()) as *mut synblock_T
-        };
+        unsafe { (*curwin.get()).w_s = Box::into_raw(empty_synblock()) };
         unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab)) };
         unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.

@@ -267,7 +267,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         while i < state_len() {
             let mut cur_si = unsafe { state_at(i) };
             if cur_si.si_idx >= 0
-                && unsafe { syn_pattern(cur_si.si_idx).sp_type } as c_int == SPTYPE_MATCH
+                && syn_block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_MATCH
                 && cur_si.si_m_endpos.lnum < current_lnum.get()
             {
                 cur_si.si_flags |= SynFlags::MATCHCONT;
@@ -393,7 +393,9 @@ pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
             // Check for a match with a sync item.
             let cur_si = unsafe { state_top() };
             if cur_si.si_idx >= 0
-                && unsafe { syn_pattern(cur_si.si_idx).sp_flags }
+                && syn_block()
+                    .pattern(cur_si.si_idx)
+                    .sp_flags
                     .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
             {
                 return true;

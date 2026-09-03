@@ -29,20 +29,11 @@ pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
     unsafe { clear_keywtab(&raw mut (*block.raw()).b_keywtab) };
     unsafe { clear_keywtab(&raw mut (*block.raw()).b_keywtab_ic) };
 
-    // Last to first: `syn_clear_pattern` looks at the entry before it.
-    let mut i = block.b_syn_patterns.ga_len;
-    while i > 0 {
-        i -= 1;
-        unsafe { syn_clear_pattern(block, i) };
-    }
-    unsafe { ga_clear(&raw mut (*block.raw()).b_syn_patterns) };
-
-    let mut i = block.b_syn_clusters.ga_len;
-    while i > 0 {
-        i -= 1;
-        unsafe { syn_clear_cluster(block, i) };
-    }
-    unsafe { ga_clear(&raw mut (*block.raw()).b_syn_clusters) };
+    // Each pattern owns its own pattern text, compiled program and id
+    // lists, so dropping the array is the whole of what upstream's
+    // last-to-first `syn_clear_pattern` walk did.
+    block.patterns_mut().clear();
+    block.clusters_mut().clear();
     block.b_spell_cluster_id = 0;
     block.b_nospell_cluster_id = 0;
 
@@ -69,7 +60,9 @@ pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
 pub(crate) unsafe fn reset_synblock(wp: *mut win_T) {
     if unsafe { (*wp).w_s } != unsafe { &raw mut (*(*wp).w_buffer).b_s } {
         unsafe { syntax_clear((*wp).w_s) };
-        unsafe { xfree((*wp).w_s as *mut c_void) };
+        // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and
+        // only this releases; a buffer's own block took the branch above.
+        drop(unsafe { Box::from_raw((*wp).w_s) });
         unsafe { (*wp).w_s = &raw mut (*(*wp).w_buffer).b_s };
     }
 }
@@ -77,11 +70,11 @@ pub(crate) unsafe fn reset_synblock(wp: *mut win_T) {
 /// Clear the syncing info for the current window's block.
 unsafe fn syntax_sync_clear() {
     let mut block = cur_syn_block();
-    let mut i = block.b_syn_patterns.ga_len;
+    let mut i = block.patterns().len();
     while i > 0 {
         i -= 1;
-        if unsafe { cur_pattern(i).sp_syncing } {
-            unsafe { syn_remove_pattern(block, i) };
+        if block.patterns()[i].sp_syncing {
+            syn_remove_pattern(block, i);
         }
     }
 
@@ -100,46 +93,15 @@ unsafe fn syntax_sync_clear() {
 }
 
 /// Remove one pattern from a block's pattern list, closing the gap.
-pub(crate) unsafe fn syn_remove_pattern(mut block: SynBlock, idx: c_int) {
-    let spp = unsafe { block_pattern(block, idx) };
-    if spp.sp_flags.has(SynFlags::FOLD) {
+///
+/// Dropping the entry releases its text, its compiled program and its id
+/// lists; the items that borrow those lists are the cached states, which
+/// every caller of this drops with `syn_stack_free_all`.
+pub(crate) fn syn_remove_pattern(mut block: SynBlock, idx: usize) {
+    if block.patterns()[idx].sp_flags.has(SynFlags::FOLD) {
         block.b_syn_folditems -= 1;
     }
-    unsafe { syn_clear_pattern(block, idx) };
-    let after = block.b_syn_patterns.ga_len - idx - 1;
-    unsafe { ::core::ptr::copy(spp.raw().add(1), spp.raw(), after as usize) };
-    block.b_syn_patterns.ga_len -= 1;
-}
-
-/// The pattern at `idx` in `block`, which is not always [`cur_syn_block`].
-#[inline]
-unsafe fn block_pattern(mut block: SynBlock, idx: c_int) -> Pat {
-    // SAFETY: the caller's promise -- a live index into `block`'s array.
-    unsafe { Pat::new((block.b_syn_patterns.ga_data as *mut synpat_T).offset(idx as isize)) }
-}
-
-/// Free one pattern's allocations.
-///
-/// When clearing all of them this must run **last to first**: only the first
-/// START pattern of a region owns the three id lists, and "first" is decided by
-/// looking at the entry before this one.
-unsafe fn syn_clear_pattern(mut block: SynBlock, i: c_int) {
-    let spp = unsafe { block_pattern(block, i) };
-    unsafe { xfree(spp.sp_pattern as *mut c_void) };
-    unsafe { vim_regfree(spp.sp_prog) };
-    if i == 0 || unsafe { block_pattern(block, i - 1).sp_type } as c_int != SPTYPE_START {
-        unsafe { xfree(spp.sp_cont_list as *mut c_void) };
-        unsafe { xfree(spp.sp_next_list as *mut c_void) };
-        unsafe { xfree(spp.sp_syn.cont_in_list as *mut c_void) };
-    }
-}
-
-/// Free one cluster's allocations.
-unsafe fn syn_clear_cluster(mut block: SynBlock, i: c_int) {
-    let scp = unsafe { (block.b_syn_clusters.ga_data as *mut syn_cluster_T).offset(i as isize) };
-    unsafe { xfree((*scp).scl_name as *mut c_void) };
-    unsafe { xfree((*scp).scl_name_u as *mut c_void) };
-    unsafe { xfree((*scp).scl_list as *mut c_void) };
+    block.patterns_mut().remove(idx);
 }
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
@@ -183,9 +145,8 @@ pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
                 }
                 // A cluster cannot be deleted without changing the ids of
                 // the ones after it, so the next best thing: empty it.
-                let scl = unsafe { &mut (*cur_cluster(id - SYNID_CLUSTER).raw()).scl_list };
-                unsafe { xfree(*scl as *mut c_void) };
-                *scl = ::core::ptr::null_mut();
+                let at = (id - SYNID_CLUSTER) as usize;
+                cur_syn_block().clusters_mut()[at].scl_list = IdList::NONE;
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
                 if id == 0 {
@@ -211,12 +172,13 @@ unsafe fn syn_clear_one(id: c_int, syncing: bool) {
         unsafe { syn_clear_keyword(id, syn_field!(cur_syn_block(), b_keywtab_ic)) };
     }
 
-    let mut idx = cur_pattern_count();
+    let block = cur_syn_block();
+    let mut idx = block.patterns().len();
     while idx > 0 {
         idx -= 1;
-        let spp = unsafe { cur_pattern(idx) };
+        let spp = &block.patterns()[idx];
         if spp.sp_syn.id as c_int == id && spp.sp_syncing == syncing {
-            unsafe { syn_remove_pattern(cur_syn_block(), idx) };
+            syn_remove_pattern(block, idx);
         }
     }
 }
