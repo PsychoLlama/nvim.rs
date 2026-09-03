@@ -30,6 +30,7 @@ mod linematch;
 mod map;
 mod marktree;
 mod mbyte;
+mod memline;
 mod memory;
 mod message;
 mod r#move;

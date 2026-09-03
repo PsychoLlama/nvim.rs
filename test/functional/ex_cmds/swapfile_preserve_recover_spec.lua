@@ -110,6 +110,75 @@ describe("preserve and (R)ecover with custom 'directory'", function()
     test_recover(swappath1)
   end)
 
+  -- The round trip the swap file exists for, over a line set rather than
+  -- over one word: what `:preserve` wrote is what `(R)ecover` reads back.
+  -- The unit suite (`crates/nvim/tests/unit/memline.rs`) asserts the fields
+  -- of block zero as they are *written*; this is the other half — the blocks
+  -- after it — and it is the only place a whole buffer makes the trip.
+  it('recovers every line, and block zero describes the crash', function()
+    -- Its own file, because the cases around it assume theirs does not
+    -- exist on disk, and block zero's inode and mtime are only worth
+    -- asserting when it does.
+    local recfile = 'Xtest_recover_file_lines'
+    local lines = { 'one', 'two', '', 'a somewhat longer fourth line', 'five' }
+    finally(function()
+      os.remove(recfile)
+    end)
+    write_file(recfile, 'the version on disk\n')
+
+    exec(init)
+    command('edit! ' .. recfile)
+    api.nvim_buf_set_lines(0, 0, -1, true, lines)
+    exec('redir => g:swapname | silent swapname | redir END')
+    local swappath1 = eval('g:swapname'):match('[^\n]*$')
+    local pid1 = eval('getpid()')
+    command('preserve')
+    neq(nil, uv.fs_stat(swappath1))
+
+    -- Block zero, read back by the editor's own reader while the process
+    -- that wrote it is still alive. `swapinfo()` reports the string fields
+    -- at their full field width, so each is cut at its terminator here.
+    local info = eval(('swapinfo(%s)'):format(vim.inspect(swappath1)))
+    local function upto_nul(text)
+      return (text:gsub('%z.*$', ''))
+    end
+    eq(nil, info.error)
+    eq('VIM 8.1', upto_nul(info.version))
+    eq(pid1, info.pid)
+    -- `dirty` is what makes the swap file worth offering: the buffer holds
+    -- work that never reached the file.
+    eq(1, info.dirty)
+    local stat = uv.fs_stat(uv.cwd() .. '/' .. recfile)
+    eq(stat.ino, info.inode)
+    eq(math.floor(stat.mtime.sec), info.mtime)
+    -- The name is stored absolute, but with the home directory folded to
+    -- `~user/` — so that the same file reached from another machine over a
+    -- network share is still recognised as the same file. The user name is
+    -- spliced in after the tilde, which is the one place block zero shifts
+    -- a string right inside its own field.
+    local full = uv.cwd() .. '/' .. recfile
+    local home = uv.os_homedir()
+    local expected = full
+    if home and vim.startswith(full, home .. '/') then
+      expected = '~' .. uv.os_get_passwd().username .. full:sub(#home + 1)
+    end
+    eq(expected, upto_nul(info.fname))
+
+    eq(0, vim.uv.kill(pid1, 'sigkill'))
+
+    -- A second Nvim opens the same file and takes the (R)ecover choice.
+    local nvim2 =
+      n.new_session(false, { args = { '-u', 'NONE', '-i', 'NONE', '--embed' }, merge = false })
+    set_session(nvim2)
+    exec(init)
+    command('autocmd SwapExists * let v:swapchoice = "r"')
+    command('silent edit! ' .. recfile)
+    eq(lines, api.nvim_buf_get_lines(0, 0, -1, true))
+    -- Recovered rather than read: what came out of the swap file differs
+    -- from what is on disk, so the buffer is modified.
+    eq(1, eval('&modified'))
+  end)
+
   it('closing stdio channel without :preserve #22096', function()
     local swappath1 = setup_swapname()
     nvim0:close()
