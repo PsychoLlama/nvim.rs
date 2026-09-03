@@ -60,8 +60,7 @@ use crate::map::{map_put_ref_string_int, map_ref_string_int, mh_get_string, mh_p
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{
-    strequal, try_malloc, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat,
-    xstrlcpy,
+    strequal, try_malloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::{
     emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,

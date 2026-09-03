@@ -32,7 +32,6 @@ use crate::charset::{skiptowhite, skipwhite};
 use crate::debugger::ex_breakadd;
 use crate::eval::userfunc::{func_tbl_get, get_current_funccal};
 use crate::eval::vars::set_vim_var_nr;
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{current_sctx, do_profiling};
 use crate::memory::xcalloc;
@@ -43,7 +42,7 @@ use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
     ExpandContext, Vv, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T, scriptitem_T,
-    ufunc_T, varnumber_T,
+    sn_prl_T, ufunc_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -65,15 +64,6 @@ const UF_NAME_OFFSET: isize = 240;
 static PROF_WAIT_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
 /// Report path from `:profile start {fname}`; `None` when not profiling.
 static PROFILE_FNAME: GlobalCell<Option<CString>> = GlobalCell::new(None);
-
-/// Per-line counters of a profiled script, the element type of
-/// `scriptitem_T.sn_prl_ga`.
-#[derive(Copy, Clone)]
-struct sn_prl_T {
-    snp_count: c_int,
-    sn_prl_total: proftime_T,
-    sn_prl_self: proftime_T,
-}
 
 // ---------------------------------------------------------------------------
 // Time arithmetic.
@@ -280,8 +270,7 @@ unsafe fn profile_reset() {
             si.sn_pr_self = profile_zero();
             si.sn_pr_start = profile_zero();
             si.sn_pr_children = profile_zero();
-            // SAFETY: the per-line array belongs to this script item.
-            unsafe { ga_clear(&raw mut si.sn_prl_ga) };
+            si.sn_prl_ga = Vec::new();
             si.sn_prl_start = profile_zero();
             si.sn_prl_children = profile_zero();
             si.sn_prl_wait = profile_zero();
@@ -558,9 +547,7 @@ pub unsafe fn profile_init(si: *mut scriptitem_T) {
     si.sn_pr_count = 0;
     si.sn_pr_total = profile_zero();
     si.sn_pr_self = profile_zero();
-    // SAFETY: the per-line array belongs to this item and is uninitialised
-    // until now.
-    unsafe { ga_init(&raw mut si.sn_prl_ga, size_of::<sn_prl_T>() as c_int, 100) };
+    si.sn_prl_ga = Vec::new();
     si.sn_prl_idx = -1;
     si.sn_prof_on = true;
     si.sn_pr_nest = 0;
@@ -622,22 +609,13 @@ pub unsafe fn script_line_start() {
     };
     if si.sn_prof_on && lnum >= 1 {
         // Grow the array before starting the timer, so that the time spent
-        // here isn't counted.
-        // SAFETY: the per-line array belongs to this item.
-        unsafe { ga_grow(&raw mut si.sn_prl_ga, lnum as c_int - si.sn_prl_ga.ga_len) };
-        si.sn_prl_idx = lnum - 1;
-        while (si.sn_prl_ga.ga_len as linenr_T) <= si.sn_prl_idx
-            && si.sn_prl_ga.ga_len < si.sn_prl_ga.ga_maxlen
-        {
-            // Zero counters for a line that was not used before.
-            // SAFETY: `ga_len` is below `ga_maxlen`, which is what the array
-            // holds room for.
-            let pp = unsafe { &mut *prl_item(si, si.sn_prl_ga.ga_len as isize) };
-            pp.snp_count = 0;
-            pp.sn_prl_total = profile_zero();
-            pp.sn_prl_self = profile_zero();
-            si.sn_prl_ga.ga_len += 1;
+        // here isn't counted. Lines that were never reached keep the zero
+        // counters this leaves behind.
+        let lines = lnum as usize;
+        if si.sn_prl_ga.len() < lines {
+            si.sn_prl_ga.resize(lines, sn_prl_T::default());
         }
+        si.sn_prl_idx = lnum - 1;
         si.sn_prl_execed = 0;
         si.sn_prl_start = profile_start();
         si.sn_prl_children = profile_zero();
@@ -668,15 +646,16 @@ pub unsafe fn script_line_end() {
         return;
     };
     let si = unsafe { &mut *si };
-    if si.sn_prof_on && si.sn_prl_idx >= 0 && si.sn_prl_idx < si.sn_prl_ga.ga_len as linenr_T {
+    if si.sn_prof_on && si.sn_prl_idx >= 0 && (si.sn_prl_idx as usize) < si.sn_prl_ga.len() {
         if si.sn_prl_execed != 0 {
-            // SAFETY: `sn_prl_idx` was just checked against `ga_len`.
-            let pp = unsafe { &mut *prl_item(si, si.sn_prl_idx as isize) };
-            pp.snp_count += 1;
+            let idx = si.sn_prl_idx as usize;
             let spent = profile_sub_wait(si.sn_prl_wait, profile_end(si.sn_prl_start));
             si.sn_prl_start = spent;
+            let children = si.sn_prl_children;
+            let pp = &mut si.sn_prl_ga[idx];
+            pp.snp_count += 1;
             pp.sn_prl_total = profile_add(pp.sn_prl_total, spent);
-            pp.sn_prl_self = profile_self(pp.sn_prl_self, spent, si.sn_prl_children);
+            pp.sn_prl_self = profile_self(pp.sn_prl_self, spent, children);
         }
         si.sn_prl_idx = -1;
     }
@@ -694,15 +673,6 @@ fn current_script() -> Option<*mut scriptitem_T> {
 /// Line number being sourced/executed: the top of the exestack.
 fn sourcing_lnum() -> linenr_T {
     crate::runtime::innermost_frame().es_lnum
-}
-
-/// Per-line counters of script `si` at `idx`.
-///
-/// # Safety
-/// `idx` is below `si.sn_prl_ga.ga_maxlen`.
-unsafe fn prl_item(si: &scriptitem_T, idx: isize) -> *mut sn_prl_T {
-    // SAFETY: the caller's bound.
-    unsafe { (si.sn_prl_ga.ga_data as *mut sn_prl_T).offset(idx) }
 }
 
 /// All functions in the global function table with profiling data, in hash

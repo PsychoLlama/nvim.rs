@@ -11,9 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{
-    NL, PROFILE_FNAME, func_line, prl_item, profile_cmp, profile_msg_str, profiled_functions,
-};
+use super::{NL, PROFILE_FNAME, func_line, profile_cmp, profile_msg_str, profiled_functions};
 use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::os::fs::os_fopen;
@@ -215,14 +213,9 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &scriptitem_T) -> io::Resul
             buf[n] = NL;
             buf[n + 1] = 0;
         }
-        // SAFETY: `i` is below `ga_len`, so the counters exist; `buf` was
-        // NUL-terminated by `vim_fgets`.
-        let (counters, line) = unsafe {
-            (
-                (i < si.sn_prl_ga.ga_len).then(|| *prl_item(si, i as isize)),
-                CStr::from_ptr(buf.as_ptr()),
-            )
-        };
+        // SAFETY: `buf` was NUL-terminated by `vim_fgets`.
+        let counters = si.sn_prl_ga.get(i as usize).copied();
+        let line = unsafe { CStr::from_ptr(buf.as_ptr()) };
         match counters.filter(|pp| pp.snp_count > 0) {
             Some(pp) => {
                 write!(fd, "{:5} ", pp.snp_count)?;

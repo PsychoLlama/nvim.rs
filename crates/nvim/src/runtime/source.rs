@@ -179,11 +179,10 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut s
     }
     // The registry is grown one id at a time: `new_script_vars` reaches it,
     // so the push has to be a leaf borrow that has been let go by then.
-    // `xcalloc` zeroes the item, which is what upstream's `sn_name = NULL`
-    // and `sn_prof_on = false` amount to.
+    // A registry entry is never freed -- ids are never reused -- so the box
+    // is deliberately leaked into the registry.
     while script_count() < sid {
-        // SAFETY: `xcalloc` answers a zeroed `scriptitem_T` or does not return.
-        let item = unsafe { xcalloc(1, size_of::<scriptitem_T>()).cast::<scriptitem_T>() };
+        let item = Box::into_raw(Box::new(scriptitem_T::new()));
         let added = script_items.with_mut(|items| {
             items.push(item);
             items.len() as scid_T

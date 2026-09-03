@@ -67,6 +67,15 @@ impl EstackInfo {
 }
 pub type estack_arg_T = ::core::ffi::c_uint;
 pub type etype_T = ::core::ffi::c_uint;
+/// Per-line counters of a profiled script, the element type of
+/// [`scriptitem_T::sn_prl_ga`].
+#[derive(Copy, Clone, Default)]
+pub(crate) struct sn_prl_T {
+    pub(crate) snp_count: ::core::ffi::c_int,
+    pub(crate) sn_prl_total: proftime_T,
+    pub(crate) sn_prl_self: proftime_T,
+}
+
 pub struct scriptitem_T {
     pub sn_vars: *mut scriptvar_T,
     pub sn_name: *mut ::core::ffi::c_char,
@@ -80,12 +89,45 @@ pub struct scriptitem_T {
     pub sn_pr_self: proftime_T,
     pub sn_pr_start: proftime_T,
     pub sn_pr_children: proftime_T,
-    pub sn_prl_ga: garray_T,
+    pub(crate) sn_prl_ga: Vec<sn_prl_T>,
     pub sn_prl_start: proftime_T,
     pub sn_prl_children: proftime_T,
     pub sn_prl_wait: proftime_T,
     pub sn_prl_idx: linenr_T,
     pub sn_prl_execed: ::core::ffi::c_int,
+}
+
+impl scriptitem_T {
+    /// A script that has never been sourced -- what upstream's
+    /// `xcalloc(1, sizeof(scriptitem_T))` handed a new registry slot.
+    pub fn new() -> Self {
+        Self {
+            sn_vars: ::core::ptr::null_mut(),
+            sn_name: ::core::ptr::null_mut(),
+            sn_lua: false,
+            sn_prof_on: false,
+            sn_pr_force: false,
+            sn_pr_child: 0,
+            sn_pr_nest: 0,
+            sn_pr_count: 0,
+            sn_pr_total: 0,
+            sn_pr_self: 0,
+            sn_pr_start: 0,
+            sn_pr_children: 0,
+            sn_prl_ga: Vec::new(),
+            sn_prl_start: 0,
+            sn_prl_children: 0,
+            sn_prl_wait: 0,
+            sn_prl_idx: 0,
+            sn_prl_execed: 0,
+        }
+    }
+}
+
+impl Default for scriptitem_T {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 /// Not `Clone`: it holds a script's `s:` scope by value, and a dictionary
 /// owns the items its hash table indexes.
