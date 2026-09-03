@@ -192,9 +192,9 @@ pub unsafe fn spell_check(
             continue;
         }
 
-        unsafe { find_word(&raw mut mi, FIND_FOLDWORD) };
-        unsafe { find_word(&raw mut mi, FIND_KEEPWORD) };
-        unsafe { find_prefix(&raw mut mi, FIND_FOLDWORD) };
+        unsafe { find_word(&mut mi, FIND_FOLDWORD) };
+        unsafe { find_word(&mut mi, FIND_KEEPWORD) };
+        unsafe { find_prefix(&mut mi, FIND_FOLDWORD) };
 
         // A NOBREAK language may fall back on a word with nothing valid
         // after it.
@@ -257,7 +257,7 @@ pub unsafe fn spell_check(
                         break;
                     }
                     mi.mi_compoff = unsafe { fp.offset_from(fword) } as c_int;
-                    unsafe { find_word(&raw mut mi, FIND_COMPOUND) };
+                    unsafe { find_word(&mut mi, FIND_COMPOUND) };
                     if mi.mi_result != SP_BAD {
                         mi.mi_end = p;
                         break;
