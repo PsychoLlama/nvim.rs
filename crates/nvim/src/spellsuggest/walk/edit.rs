@@ -51,7 +51,7 @@ fn byte2len(c: c_int) -> u8 {
     utf8len_tab[c as usize]
 }
 
-impl Walk {
+impl Walk<'_> {
     /// Past the NUL bytes of the node: start taking its real bytes, unless
     /// the bad word has run out.
     ///
@@ -100,7 +100,7 @@ impl Walk {
 
         // SAFETY: `node` is a node the walk arrived at, and a node's first
         // byte is the count of children that follow it.
-        if self.stack[level].child as c_int > unsafe { self.byte_at(node) } as c_int {
+        if self.stack[level].child as c_int > self.byte_at(node) as c_int {
             // Every byte of this node has been taken. Where the bad
             // word has already been changed, skip the other tricks.
             self.stack[level].state = if self.stack[level].bad_idx >= self.stack[level].change_from
@@ -116,7 +116,7 @@ impl Walk {
         self.stack[level].child += 1;
         // SAFETY: `at` is this node's start plus a child number the count
         // just read bounds.
-        let byte = unsafe { self.byte_at(at) } as c_int;
+        let byte = self.byte_at(at) as c_int;
 
         let bad_idx = self.stack[level].bad_idx as usize;
         // Matching costs nothing. So does a byte in the middle of a
@@ -159,7 +159,7 @@ impl Walk {
         self.stack[child].good_len += 1;
         // SAFETY: `at` is a child byte of the node, so the entry beside it
         // is where that child's own node starts.
-        self.stack[child].node = unsafe { self.idx_at(at) };
+        self.stack[child].node = self.idx_at(at);
         if newscore == SCORE_SUBST {
             self.stack[child].diff = DIFF_YES;
         }
@@ -352,12 +352,12 @@ impl Walk {
             // SAFETY: `node` is a node the walk arrived at, whose first
             // byte is the count of children that follow it; the loop reads
             // a child only after finding the child number within it.
-            if self.stack[level].child as c_int > unsafe { self.byte_at(node) } as c_int {
+            if self.stack[level].child as c_int > self.byte_at(node) as c_int {
                 // Only NUL bytes at this node.
                 self.stack[level].state = State::Swap;
                 return;
             }
-            if unsafe { self.byte_at(node + self.stack[level].child as idx_T) } != NUL as u8 {
+            if self.byte_at(node + self.stack[level].child as idx_T) != NUL as u8 {
                 // Found a byte to insert.
                 self.stack[level].state = State::Ins;
                 return;
@@ -381,7 +381,7 @@ impl Walk {
 
         // SAFETY: `node` is a node the walk arrived at, and a node's first
         // byte is the count of children that follow it.
-        if self.stack[level].child as c_int > unsafe { self.byte_at(node) } as c_int {
+        if self.stack[level].child as c_int > self.byte_at(node) as c_int {
             // Every byte of this node has been tried.
             self.stack[level].state = State::Swap;
             return;
@@ -392,20 +392,15 @@ impl Walk {
 
         // A bounds check the tree itself should have made unnecessary;
         // giving up is how the C reacted to a tree that disagrees with
-        // its own length.
-        //
-        // SAFETY: `slang` is the language of the walk's own trees.
-        if self.byts == unsafe { (*self.slang).sl_fbyts }
-            && at >= unsafe { (*self.slang).sl_fbyts_len }
-        {
+        // its own length. The C only guarded the case-folded tree, where
+        // the mismatch had been seen; this guards whichever tree is being
+        // walked, so a disagreement can never reach the index below.
+        if at as usize >= self.tree.len() {
             got_int.set(true);
             return;
         }
 
-        // SAFETY: `at` is the node's start plus a child number the count
-        // above bounds, and for the case-folded tree the check just above
-        // has bounded it by the tree's own length as well.
-        let byte = unsafe { self.byte_at(at) } as c_int;
+        let byte = c_int::from(self.byte_at(at));
         let newscore = if self.soundfold && self.stack[level].good_len == 0 && byte == SOUND_VOWEL {
             // Inserting a leading vowel counts less; see
             // `soundalike_score`.
@@ -433,7 +428,7 @@ impl Walk {
         self.stack[child].good_len += 1;
         // SAFETY: `at` is a child byte of the node, so the entry beside it
         // is where that child's own node starts.
-        self.stack[child].node = unsafe { self.idx_at(at) };
+        self.stack[child].node = self.idx_at(at);
 
         let char_len = byte2len(byte);
         if char_len > 1 {

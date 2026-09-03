@@ -115,19 +115,11 @@ fn describe(spl: &[u8]) -> String {
 /// the tree wrongly and a lookup that read it back the same wrong way would
 /// agree, and this does not go through the lookup.
 ///
-/// # Safety
-///
-/// `byts` and `idxs` must be the pair `spell_load_file` filled, with
-/// `len` the byte array's length.
-unsafe fn tree_words(byts: *const u8, idxs: *const i32, len: usize) -> Vec<String> {
+fn tree_words(byts: &[u8], idxs: &[i32]) -> Vec<String> {
     let mut out = Vec::new();
-    if byts.is_null() || len == 0 {
+    if byts.is_empty() {
         return out;
     }
-    // SAFETY: the caller promises the arrays and the length; `sl_fidxs` is
-    // allocated to the same count as `sl_fbyts`.
-    let byts = unsafe { std::slice::from_raw_parts(byts, len) };
-    let idxs = unsafe { std::slice::from_raw_parts(idxs, len) };
     let mut stack = vec![(0usize, Vec::<u8>::new())];
     while let Some((node, prefix)) = stack.pop() {
         let count = byts[node] as usize;
@@ -153,7 +145,8 @@ unsafe fn tree_words(byts: *const u8, idxs: *const i32, len: usize) -> Vec<Strin
 /// `lp` must be a language `spell_load_file` answered.
 unsafe fn fold_words(lp: *const slang_T) -> Vec<String> {
     // SAFETY: the caller promises the language.
-    unsafe { tree_words((*lp).sl_fbyts, (*lp).sl_fidxs, (*lp).sl_fbyts_len as usize) }
+    let (byts, idxs) = unsafe { (*lp).sl_fold_tree.as_slices() };
+    tree_words(byts, idxs)
 }
 
 /// Build the golden's inputs in the sandbox and run the writer over them,
@@ -239,7 +232,7 @@ fn the_golden_round_trips_through_the_reader() {
     assert_eq!(words, vec![WORD.to_string()]);
     // The keep-case tree of a lower-case-only word list is empty.
     // SAFETY: as above.
-    assert_eq!(unsafe { (*lp).sl_kbyts }, std::ptr::null_mut());
+    assert!(unsafe { (*lp).sl_keep_tree.as_slices().0.is_empty() });
     // SAFETY: as above; nothing else holds this language.
     unsafe { neovim::spell::slang_free(lp) };
 }
@@ -331,8 +324,11 @@ fn the_shipped_english_language_loads_with_its_sections() {
         assert_eq!((*lp).sl_compmax, 254, "no SN_COMPOUND");
         assert!(!(*lp).sl_nobreak, "no SN_NOBREAK");
         assert!((*lp).sl_syllable.is_null(), "no SN_SYLLABLE");
-        assert!((*lp).sl_fbyts_len > 0);
-        assert!(!(*lp).sl_kbyts.is_null(), "a keep-case tree");
+        assert!(!(*lp).sl_fold_tree.as_slices().0.is_empty());
+        assert!(
+            !(*lp).sl_keep_tree.as_slices().0.is_empty(),
+            "a keep-case tree"
+        );
     }
 
     // SAFETY: the language was just allocated.

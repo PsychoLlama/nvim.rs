@@ -48,7 +48,7 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, idx_T, langp_T, linenr_T, size_t,
+    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, langp_T, linenr_T, size_t,
     slang_T, wordcount_T,
 };
 
@@ -148,8 +148,8 @@ pub unsafe fn spell_dump_compl(
     dumpflags_arg: c_int,
 ) {
     let mut header = [0 as c_char; IOSIZE as usize];
-    let mut arridx = [0 as idx_T; MAXWLEN];
-    let mut curi = [0 as c_int; MAXWLEN];
+    let mut arridx = [0usize; MAXWLEN];
+    let mut curi = [0usize; MAXWLEN];
     let mut word = [0 as c_char; MAXWLEN];
     let mut lnum: linenr_T = 0;
     let mut region_names: *mut c_char = core::ptr::null_mut();
@@ -202,7 +202,7 @@ pub unsafe fn spell_dump_compl(
     for lpi in 0..langp_len {
         let lp = unsafe { langp_data.offset(lpi as isize) };
         let slang = unsafe { (*lp).lp_slang };
-        if unsafe { (*slang).sl_fbyts }.is_null() {
+        if unsafe { (*slang).sl_fold_tree.is_empty() } {
             continue; // reloading this language failed
         }
 
@@ -217,7 +217,7 @@ pub unsafe fn spell_dump_compl(
 
         // Without prefixes, a pattern can prune the walk; with them, a
         // prefix could still make a non-matching branch match.
-        let patlen = if !pat.is_null() && unsafe { (*slang).sl_pbyts }.is_null() {
+        let patlen = if !pat.is_null() && unsafe { (*slang).sl_prefix_tree.is_empty() } {
             unsafe { cstr::bytes_at(pat).len() as c_int }
         } else {
             -1
@@ -225,23 +225,23 @@ pub unsafe fn spell_dump_compl(
 
         // Round 1 is the case-folded tree, round 2 the keep-case one.
         for round in 1..=2 {
-            let (byts, idxs) = if round == 1 {
+            let tree = if round == 1 {
                 dumpflags &= !DUMPFLAG_KEEPCASE;
-                (unsafe { (*slang).sl_fbyts }, unsafe { (*slang).sl_fidxs })
+                unsafe { &(*slang).sl_fold_tree }
             } else {
                 dumpflags |= DUMPFLAG_KEEPCASE;
-                (unsafe { (*slang).sl_kbyts }, unsafe { (*slang).sl_kidxs })
+                unsafe { &(*slang).sl_keep_tree }
             };
-            if byts.is_null() {
+            if tree.is_empty() {
                 continue; // this tree is empty
             }
 
-            let mut depth: c_int = 0;
+            let mut depth: isize = 0;
             arridx[0] = 0;
             curi[0] = 1;
             while depth >= 0 && !got_int.get() && (pat.is_null() || !ins_compl_interrupted()) {
                 let d = depth as usize;
-                if curi[d] > unsafe { *byts.offset(arridx[d] as isize) } as c_int {
+                if curi[d] > tree.node_len(arridx[d]) {
                     // Every child of this node is done.
                     depth -= 1;
                     line_breakcheck();
@@ -251,13 +251,13 @@ pub unsafe fn spell_dump_compl(
 
                 let n = arridx[d] + curi[d];
                 curi[d] += 1;
-                let mut c = unsafe { *byts.offset(n as isize) } as c_int;
+                let mut c = c_int::from(tree.byte(n));
                 if c == 0 || d >= MAXWLEN - 1 {
                     // A word ends here, or the depth limit was hit.
                     // Keep-case words are skipped in the fold-case tree
                     // — they show up in the keep-case one — and words
                     // for other regions are skipped entirely.
-                    let mut flags = WordFlags::from_bits(unsafe { *idxs.offset(n as isize) });
+                    let mut flags = WordFlags::from_bits(tree.idx(n));
                     if (round == 2 || !flags.has(WordFlags::KEEPCAP))
                         && !flags.has(WordFlags::NEEDCOMP)
                         && (do_region
@@ -293,14 +293,14 @@ pub unsafe fn spell_dump_compl(
                     // An ordinary byte: descend.
                     word[d] = c as c_char;
                     depth += 1;
-                    arridx[depth as usize] = unsafe { *idxs.offset(n as isize) };
+                    arridx[depth as usize] = tree.child_node(n);
                     curi[depth as usize] = 1;
 
                     // Prune a branch that cannot match the pattern.
                     // Case is always ignored here; dump_word() checks it
                     // properly later. That is not exact when folding
                     // changes a multi-byte character's length.
-                    if depth <= patlen
+                    if depth <= patlen as isize
                         && unsafe { mb_strnicmp(word.as_ptr(), pat, depth as size_t) } != 0
                     {
                         depth -= 1;
@@ -426,8 +426,8 @@ unsafe fn dump_prefixes(
     flags: WordFlags,
     startlnum: linenr_T,
 ) -> linenr_T {
-    let mut arridx = [0 as idx_T; MAXWLEN];
-    let mut curi = [0 as c_int; MAXWLEN];
+    let mut arridx = [0usize; MAXWLEN];
+    let mut curi = [0usize; MAXWLEN];
     let mut prefix = [0 as c_char; MAXWLEN];
     let mut word_up = [0 as c_char; MAXWLEN];
     let mut has_word_up = false;
@@ -440,21 +440,20 @@ unsafe fn dump_prefixes(
         has_word_up = true;
     }
 
-    let byts = unsafe { (*slang).sl_pbyts };
-    let idxs = unsafe { (*slang).sl_pidxs };
-    if byts.is_null() {
+    let tree = unsafe { &(*slang).sl_prefix_tree };
+    if tree.is_empty() {
         return lnum;
     }
 
     // Build each prefix byte by byte in prefix[]; at the end of one,
     // check whether it accepts "flags".
-    let mut depth: c_int = 0;
+    let mut depth: isize = 0;
     arridx[0] = 0;
     curi[0] = 1;
     while depth >= 0 && !got_int.get() {
         let d = depth as usize;
         let mut n = arridx[d];
-        let len = unsafe { *byts.offset(n as isize) } as c_int;
+        let len = tree.node_len(n);
         if curi[d] > len {
             depth -= 1;
             line_breakcheck();
@@ -463,19 +462,14 @@ unsafe fn dump_prefixes(
 
         n += curi[d];
         curi[d] += 1;
-        let c = unsafe { *byts.offset(n as isize) } as c_int;
-        if c == 0 {
-            // End of a prefix; count how many IDs share it.
-            let mut i = 1;
-            while i < len {
-                if unsafe { *byts.offset((n + i) as isize) } != 0 {
-                    break;
-                }
-                i += 1;
-            }
+        if tree.ends_word(n) {
+            // End of a prefix; count how many IDs share it. `n` is the
+            // first of them, and the node's remaining children bound the
+            // scan.
+            let i = tree.word_ends(n, len + arridx[d] + 1 - n);
             curi[d] += i - 1;
 
-            let c = unsafe { valid_word_prefix(i, n, flags, word, slang, false) };
+            let c = unsafe { valid_word_prefix(i as c_int, n, flags, word, slang, false) };
             if c != 0 {
                 let at = unsafe { prefix.as_mut_ptr().add(d) };
                 unsafe { xstrlcpy(at, word, MAXWLEN - d) };
@@ -494,8 +488,8 @@ unsafe fn dump_prefixes(
             // The same, for the upper-cased word — but only prefixes
             // that carry a condition.
             if has_word_up {
-                let c =
-                    unsafe { valid_word_prefix(i, n, flags, word_up.as_mut_ptr(), slang, true) };
+                let up = word_up.as_mut_ptr();
+                let c = unsafe { valid_word_prefix(i as c_int, n, flags, up, slang, true) };
                 if c != 0 {
                     let at = unsafe { prefix.as_mut_ptr().add(d) };
                     let up = word_up.as_mut_ptr();
@@ -514,9 +508,9 @@ unsafe fn dump_prefixes(
             }
         } else {
             // An ordinary byte: descend.
-            prefix[d] = c as c_char;
+            prefix[d] = tree.byte(n) as c_char;
             depth += 1;
-            arridx[depth as usize] = unsafe { *idxs.offset(n as isize) };
+            arridx[depth as usize] = tree.child_node(n);
             curi[depth as usize] = 1;
         }
     }

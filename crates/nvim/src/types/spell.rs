@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::spell::WordTree;
 
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
@@ -43,13 +44,12 @@ pub struct slang_S {
     pub sl_name: *mut ::core::ffi::c_char,
     pub sl_fname: *mut ::core::ffi::c_char,
     pub sl_add: bool,
-    pub sl_fbyts: *mut uint8_t,
-    pub sl_fbyts_len: ::core::ffi::c_int,
-    pub sl_fidxs: *mut idx_T,
-    pub sl_kbyts: *mut uint8_t,
-    pub sl_kidxs: *mut idx_T,
-    pub sl_pbyts: *mut uint8_t,
-    pub sl_pidxs: *mut idx_T,
+    /// Case-folded words.
+    pub sl_fold_tree: WordTree,
+    /// Words whose capitalisation no flag can describe.
+    pub sl_keep_tree: WordTree,
+    /// Postponed prefixes.
+    pub sl_prefix_tree: WordTree,
     pub sl_info: *mut ::core::ffi::c_char,
     pub sl_regions: [::core::ffi::c_char; 17],
     pub sl_midword: *mut ::core::ffi::c_char,
@@ -81,9 +81,8 @@ pub struct slang_S {
     pub sl_nosplitsugs: bool,
     pub sl_nocompoundsugs: bool,
     pub sl_sugtime: time_t,
-    pub sl_sbyts: *mut uint8_t,
-    pub sl_sbyts_len: ::core::ffi::c_int,
-    pub sl_sidxs: *mut idx_T,
+    /// Sound-folded forms, from the `.sug` file.
+    pub sl_sound_tree: WordTree,
     pub sl_sugbuf: *mut buf_T,
     pub sl_sugloaded: bool,
     pub sl_has_map: bool,

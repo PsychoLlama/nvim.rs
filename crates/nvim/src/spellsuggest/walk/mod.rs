@@ -86,6 +86,7 @@ use crate::main::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
+use crate::spell::WordTree;
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
 use crate::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
 use core::ffi::{c_char, c_int};
@@ -237,7 +238,7 @@ const _: () = assert!(size_of::<Frame>() == 32);
 /// The raw pointers are the language's loaded tables and the caller's
 /// buffers, none of which this module owns; the arrays are its own working
 /// storage.
-pub(crate) struct Walk {
+pub(crate) struct Walk<'a> {
     /// The suggestion list being filled, and the language being searched.
     pub su: *mut suginfo_T,
     pub lp: *mut langp_T,
@@ -248,18 +249,15 @@ pub(crate) struct Walk {
     pub soundfold: bool,
 
     /// The tree of case-folded (or, when `soundfold`, sound-folded) words.
-    pub fbyts: *mut u8,
-    pub fidxs: *mut idx_T,
-    /// The tree of postponed prefixes, null when the language has none.
-    pub pbyts: *mut u8,
-    pub pidxs: *mut idx_T,
+    pub word_tree: &'a WordTree,
+    /// The tree of postponed prefixes, empty when the language has none.
+    pub prefix_tree: &'a WordTree,
     /// When to give up. The walk can otherwise run for an unbounded time.
     pub time_limit: proftime_T,
 
-    /// The tree currently being walked: `pbyts`/`pidxs` while inside a
-    /// postponed prefix, `fbyts`/`fidxs` otherwise.
-    pub byts: *mut u8,
-    pub idxs: *mut idx_T,
+    /// The tree currently being walked: the prefix tree while inside a
+    /// postponed prefix, `word_tree` otherwise.
+    pub tree: &'a WordTree,
 
     /// The bad word, case-folded, as the caller's buffer. `REP` items
     /// rewrite stretches of it in place and undo the change on the way
@@ -315,7 +313,7 @@ pub(super) unsafe fn suggest_trie_walk(
     unsafe { walk.run() };
 }
 
-impl Walk {
+impl Walk<'_> {
     /// Set the walk up at the root of whichever tree it starts in.
     ///
     /// # Safety
@@ -326,23 +324,26 @@ impl Walk {
         lp: *mut langp_T,
         fword: *mut c_char,
         soundfold: bool,
-    ) -> Walk {
+    ) -> Walk<'static> {
         // SAFETY: the caller guarantees the pointers, so the language
-        // beside `lp` is one of the loaded ones and its trees are the
-        // pointers read out of it below.
+        // beside `lp` is one of the loaded ones. It stays loaded for as
+        // long as the walk, which is what the borrows below stand on.
         let slang = unsafe { (*lp).lp_slang };
+        let (word_tree, prefix_tree) = if soundfold {
+            // The sound-fold tree has no prefixes.
+            unsafe { (&(*slang).sl_sound_tree, &(*slang).sl_prefix_tree) }
+        } else {
+            unsafe { (&(*slang).sl_fold_tree, &(*slang).sl_prefix_tree) }
+        };
         let mut walk = Walk {
             su,
             lp,
             slang,
             soundfold,
-            fbyts: core::ptr::null_mut(),
-            fidxs: core::ptr::null_mut(),
-            pbyts: core::ptr::null_mut(),
-            pidxs: core::ptr::null_mut(),
+            word_tree,
+            prefix_tree,
             time_limit: 0,
-            byts: core::ptr::null_mut(),
-            idxs: core::ptr::null_mut(),
+            tree: word_tree,
             fword,
             repextra: 0,
             tword: [0; MAXWLEN],
@@ -354,35 +355,15 @@ impl Walk {
         };
         walk.stack[0].child = 1;
 
-        if soundfold {
-            // The sound-fold tree has no prefixes.
-            //
-            // SAFETY: as above.
-            walk.fbyts = unsafe { (*slang).sl_sbyts };
-            walk.fidxs = unsafe { (*slang).sl_sidxs };
-            walk.byts = walk.fbyts;
-            walk.idxs = walk.fidxs;
+        if soundfold || walk.prefix_tree.is_empty() {
             walk.stack[0].prefix_depth = PFD_NOPREFIX;
             walk.stack[0].state = State::Start;
         } else {
-            // SAFETY: as above.
-            walk.fbyts = unsafe { (*slang).sl_fbyts };
-            walk.fidxs = unsafe { (*slang).sl_fidxs };
-            walk.pbyts = unsafe { (*slang).sl_pbyts };
-            walk.pidxs = unsafe { (*slang).sl_pidxs };
-            if walk.pbyts.is_null() {
-                walk.byts = walk.fbyts;
-                walk.idxs = walk.fidxs;
-                walk.stack[0].prefix_depth = PFD_NOPREFIX;
-                walk.stack[0].state = State::Start;
-            } else {
-                // Postponed prefixes have to be used first; the
-                // case-folded tree continues at the end of the prefix.
-                walk.byts = walk.pbyts;
-                walk.idxs = walk.pidxs;
-                walk.stack[0].prefix_depth = PFD_PREFIXTREE;
-                walk.stack[0].state = State::NoPrefix; // without a prefix first
-            }
+            // Postponed prefixes have to be used first; the case-folded
+            // tree continues at the end of the prefix.
+            walk.tree = walk.prefix_tree;
+            walk.stack[0].prefix_depth = PFD_PREFIXTREE;
+            walk.stack[0].state = State::NoPrefix; // without a prefix first
         }
 
         let timeout = spell_suggest_timeout.get();
@@ -448,8 +429,7 @@ impl Walk {
 
         if self.depth >= 0 && self.stack[self.depth as usize].prefix_depth == PFD_PREFIXTREE {
             // Continue in, or go back to, the prefix tree.
-            self.byts = self.pbyts;
-            self.idxs = self.pidxs;
+            self.tree = self.prefix_tree;
         }
 
         // Checking for CTRL-C takes time, so only do it now and then.
@@ -501,26 +481,16 @@ impl Walk {
     ///
     /// The first byte of a node is how many children follow it, so every
     /// index the walk forms is bounded by a count the tree itself stores.
-    ///
-    /// # Safety
-    ///
-    /// `at` must be an index into the current tree.
     #[inline]
-    unsafe fn byte_at(&self, at: idx_T) -> u8 {
-        // SAFETY: the caller guarantees the index.
-        unsafe { *self.byts.offset(at as isize) }
+    fn byte_at(&self, at: idx_T) -> u8 {
+        self.tree.byte(at as usize)
     }
 
     /// The tree entry beside a byte: for a child byte, where its node
     /// starts; for a NUL byte, the word's flags.
-    ///
-    /// # Safety
-    ///
-    /// `at` must be an index into the current tree.
     #[inline]
-    unsafe fn idx_at(&self, at: idx_T) -> idx_T {
-        // SAFETY: the caller guarantees the index.
-        unsafe { *self.idxs.offset(at as isize) }
+    fn idx_at(&self, at: idx_T) -> idx_T {
+        self.tree.idx(at as usize)
     }
 
     /// One byte of the bad word, unsigned.

@@ -28,7 +28,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
-use crate::spell::WordFlags;
+use crate::spell::{WordFlags, WordTree};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -36,7 +36,7 @@ use crate::fileio::{get2c, get3c, get4c, get8ctime, read_string};
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::main::{curwin, got_int, p_verbose};
 use crate::memline::ml_append_buf;
-use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
 use crate::os::cshim::{getc, gettext, gettext_ptr, strstr};
@@ -412,27 +412,18 @@ unsafe fn read_section(
 /// `fd` must be positioned at the first tree and `lp` be live.
 unsafe fn read_trees(fd: *mut FILE, lp: *mut slang_T) -> c_int {
     // SAFETY: the caller promises the position and the language.
-    let byts = unsafe { &raw mut (*lp).sl_fbyts };
-    let byts_len = unsafe { &raw mut (*lp).sl_fbyts_len };
-    let idxs = unsafe { &raw mut (*lp).sl_fidxs };
-    let res = unsafe { spell_read_tree(fd, byts, byts_len, idxs, false, 0) };
+    let res = unsafe { spell_read_tree(fd, &mut (*lp).sl_fold_tree, false, 0) };
     if res != 0 {
         return res;
     }
-    let byts = unsafe { &raw mut (*lp).sl_kbyts };
-    let idxs = unsafe { &raw mut (*lp).sl_kidxs };
-    let none = core::ptr::null_mut();
-    let res = unsafe { spell_read_tree(fd, byts, none, idxs, false, 0) };
+    let res = unsafe { spell_read_tree(fd, &mut (*lp).sl_keep_tree, false, 0) };
     if res != 0 {
         return res;
     }
     // The prefix tree's entries name a prefix condition by number, so
     // it can only be read once SN_PREFCOND has said how many there are.
-    let byts = unsafe { &raw mut (*lp).sl_pbyts };
-    let idxs = unsafe { &raw mut (*lp).sl_pidxs };
-    let none = core::ptr::null_mut();
     let conds = unsafe { (*lp).sl_prefixcnt };
-    unsafe { spell_read_tree(fd, byts, none, idxs, true, conds) }
+    unsafe { spell_read_tree(fd, &mut (*lp).sl_prefix_tree, true, conds) }
 }
 
 /// Load the `.sug` file for every language of the current window that has
@@ -524,10 +515,7 @@ unsafe fn load_sug(fd: *mut FILE, slang: *mut slang_T) {
 /// `fd` must be positioned just past the `.sug` header.
 unsafe fn read_sug_body(fd: *mut FILE, slang: *mut slang_T) -> bool {
     // SAFETY: the caller promises the position and the language.
-    let byts = unsafe { &raw mut (*slang).sl_sbyts };
-    let byts_len = unsafe { &raw mut (*slang).sl_sbyts_len };
-    let idxs = unsafe { &raw mut (*slang).sl_sidxs };
-    if unsafe { spell_read_tree(fd, byts, byts_len, idxs, false, 0) } != 0 {
+    if unsafe { spell_read_tree(fd, &mut (*slang).sl_sound_tree, false, 0) } != 0 {
         return false;
     }
 
@@ -573,48 +561,48 @@ unsafe fn read_sug_body(fd: *mut FILE, slang: *mut slang_T) -> bool {
 
     // Both trees get their word counts filled in, which is what turns
     // a position in a tree into a word number.
-    unsafe { tree_count_words((*slang).sl_fbyts, (*slang).sl_fbyts_len, (*slang).sl_fidxs) };
-    unsafe { tree_count_words((*slang).sl_sbyts, (*slang).sl_sbyts_len, (*slang).sl_sidxs) };
+    // SAFETY: the caller's language.
+    unsafe {
+        tree_count_words(&mut (*slang).sl_fold_tree);
+        tree_count_words(&mut (*slang).sl_sound_tree);
+    }
     true
 }
 
 /// Replace each word end's index with the number of words in its sub-tree.
 ///
+/// That is what later turns a position in a tree into a word number, which
+/// is how a `.sug` file names the words a sound-folded form stands for.
+///
 /// # Depth
 ///
-/// The arrays are one longer than [`MAXWLEN`] on purpose. [`read_tree_node`]
+/// The stacks are one longer than [`MAXWLEN`] on purpose. [`read_tree_node`]
 /// rejects a tree nested deeper than `MAXWLEN`, which still admits a node
 /// *at* depth `MAXWLEN`; sizing these to `MAXWLEN` alone left the deepest
-/// such tree writing one past the end of all three. Rust's bounds check
-/// backs that up, so a tree that got past the reader cannot corrupt the
-/// stack here.
-///
-/// # Safety
-///
-/// `byts` and `idxs` must be a tree of `byts_len` entries as
-/// [`spell_read_tree`] produced it.
-unsafe fn tree_count_words(byts: *const uint8_t, byts_len: c_int, idxs: *mut idx_T) {
-    // SAFETY: the caller promises a well-formed tree; every index used
-    // below was checked against `byts_len` when the tree was read.
-    let mut arridx = [0 as idx_T; MAXWLEN + 1];
-    let mut curi = [0 as c_int; MAXWLEN + 1];
-    let mut wordcount = [0 as c_int; MAXWLEN + 1];
+/// such tree writing one past the end of all three.
+fn tree_count_words(tree: &mut WordTree) {
+    if tree.is_empty() {
+        return;
+    }
+    let mut arridx = [0usize; MAXWLEN + 1];
+    let mut curi = [0usize; MAXWLEN + 1];
+    let mut wordcount = [0 as idx_T; MAXWLEN + 1];
 
-    arridx[0] = 0;
-    curi[0] = 1;
-    wordcount[0] = 0;
     let mut depth: usize = 0;
+    curi[0] = 1;
     loop {
         if got_int.get() {
             break;
         }
-        if curi[depth] > unsafe { *byts.offset(arridx[depth] as isize) } as c_int {
+        if curi[depth] > tree.node_len(arridx[depth]) {
             // Everything at this node is counted; publish the total
             // and hand it to the parent.
-            unsafe { *idxs.offset(arridx[depth] as isize) = wordcount[depth] as idx_T };
+            let at = arridx[depth];
+            let total = wordcount[depth];
+            tree.idxs_mut()[at] = total;
             let at_root = depth == 0;
             if !at_root {
-                wordcount[depth - 1] += wordcount[depth];
+                wordcount[depth - 1] += total;
                 depth -= 1;
             }
             fast_breakcheck();
@@ -624,12 +612,11 @@ unsafe fn tree_count_words(byts: *const uint8_t, byts_len: c_int, idxs: *mut idx
             continue;
         }
 
-        let mut n: idx_T = arridx[depth] + curi[depth] as idx_T;
+        let mut n = arridx[depth] + curi[depth];
         curi[depth] += 1;
-        let c = unsafe { *byts.offset(n as isize) } as c_int;
-        if c != 0 {
+        if !tree.ends_word(n) {
             depth += 1;
-            arridx[depth] = unsafe { *idxs.offset(n as isize) };
+            arridx[depth] = usize::try_from(tree.idx(n)).unwrap_or(0);
             curi[depth] = 1;
             wordcount[depth] = 0;
             continue;
@@ -638,7 +625,7 @@ unsafe fn tree_count_words(byts: *const uint8_t, byts_len: c_int, idxs: *mut idx
         wordcount[depth] += 1;
         // The same word can end several times over, once per flag
         // set; that is still one word.
-        while (n as c_int + 1) < byts_len && unsafe { *byts.offset(n as isize + 1) } as c_int == 0 {
+        while n + 1 < tree.len() && tree.ends_word(n + 1) {
             n += 1;
             curi[depth] += 1;
         }
@@ -647,50 +634,41 @@ unsafe fn tree_count_words(byts: *const uint8_t, byts_len: c_int, idxs: *mut idx
 
 /// Read one whole tree: its length, then its nodes.
 ///
-/// `bytsp` receives the byte array and `idxsp` the parallel index array;
-/// `bytsp_len` the length, when the caller wants it.
+/// `out` receives the tree, or is left empty when the file says the
+/// language has none.
 ///
 /// # Safety
 ///
-/// `fd` must be positioned at a tree, and the out-pointers must be
-/// writable.
+/// `fd` must be positioned at a tree.
 unsafe fn spell_read_tree(
     fd: *mut FILE,
-    bytsp: *mut *mut uint8_t,
-    bytsp_len: *mut c_int,
-    idxsp: *mut *mut idx_T,
+    out: &mut WordTree,
     prefixtree: bool,
     prefixcnt: c_int,
 ) -> c_int {
-    // SAFETY: the caller promises the position and the out-pointers.
+    // SAFETY: the caller promises the position.
     let len = unsafe { get4c(fd) };
     if len < 0 {
         return SP_TRUNCERROR;
     }
+    let Ok(len_usize) = usize::try_from(len) else {
+        return SP_FORMERROR;
+    };
     // The index array is `len` ints; refuse a length that could not be
     // allocated rather than wrapping the multiplication.
-    if len as usize > usize::MAX / size_of::<c_int>() {
+    if len_usize > usize::MAX / size_of::<c_int>() {
         return SP_FORMERROR;
     }
     if len == 0 {
         return 0;
     }
 
-    let bp = unsafe { xcalloc(1, len as size_t) }.cast::<uint8_t>();
-    unsafe { *bytsp = bp };
-    if !bytsp_len.is_null() {
-        unsafe { *bytsp_len = len };
-    }
-    let ip = unsafe { xcalloc(len as size_t, size_of::<idx_T>()) }.cast::<idx_T>();
-    unsafe { *idxsp = ip };
-
-    // Both allocations are `len` entries and nothing else reaches them
-    // until the tree is read, so the reader can hold them as slices and
-    // let Rust check every index a corrupt file names.
-    // SAFETY: `xcalloc` just returned these, sized as asked.
-    let byts = unsafe { core::slice::from_raw_parts_mut(bp, len as usize) };
-    let idxs = unsafe { core::slice::from_raw_parts_mut(ip, len as usize) };
-    let idx = unsafe { read_tree_node(fd, byts, idxs, 0, prefixtree, prefixcnt, 0) };
+    // Both arrays are `len` entries and nothing else reaches them until
+    // the tree is read, so every index a corrupt file names is checked by
+    // Rust rather than by review.
+    let mut byts = vec![0u8; len_usize].into_boxed_slice();
+    let mut idxs = vec![0 as idx_T; len_usize].into_boxed_slice();
+    let idx = unsafe { read_tree_node(fd, &mut byts, &mut idxs, 0, prefixtree, prefixcnt, 0) };
     if idx < 0 {
         return idx;
     }
@@ -699,6 +677,7 @@ unsafe fn spell_read_tree(
     if idx != len {
         return SP_FORMERROR;
     }
+    *out = WordTree::from_parts(byts, idxs);
     0
 }
 

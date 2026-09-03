@@ -39,7 +39,7 @@ use crate::types::{
     uint16_t, wordcount_T,
 };
 
-use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, syl_item_T};
+use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
 
 /// Free the contents of `gap`, which holds `T` items each needing `drop`,
 /// then the array itself.
@@ -62,6 +62,18 @@ unsafe fn xfree_clear<T>(p: *mut *mut T) {
 /// fills in `sl_next`.
 pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
     let lp = unsafe { xcalloc(1, size_of::<slang_T>()) } as *mut slang_T;
+
+    // The four trees are owned values, and an all-zero `Box<[u8]>` is not
+    // one: its pointer would be null where the type promises it is not.
+    // Every other field of a `slang_T` is happy zeroed.
+    // SAFETY: `xcalloc` just handed back room for one `slang_T`, so these
+    // are the addresses of four uninitialised fields of it.
+    unsafe {
+        core::ptr::write(&raw mut (*lp).sl_fold_tree, WordTree::default());
+        core::ptr::write(&raw mut (*lp).sl_keep_tree, WordTree::default());
+        core::ptr::write(&raw mut (*lp).sl_prefix_tree, WordTree::default());
+        core::ptr::write(&raw mut (*lp).sl_sound_tree, WordTree::default());
+    }
 
     if !lang.is_null() {
         unsafe { (*lp).sl_name = xstrdup(lang) };
@@ -108,13 +120,12 @@ unsafe fn free_fromto(ftp: *mut fromto_T) {
 /// Empty a language so its file can be read again, leaving the struct
 /// itself usable and its name and chain link intact.
 pub unsafe fn slang_clear(lp: *mut slang_T) {
-    unsafe { xfree_clear(&raw mut (*lp).sl_fbyts) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_kbyts) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_pbyts) };
-
-    unsafe { xfree_clear(&raw mut (*lp).sl_fidxs) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_kidxs) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_pidxs) };
+    // SAFETY: the caller's language. Assigning drops the old tree.
+    unsafe {
+        (*lp).sl_fold_tree = WordTree::default();
+        (*lp).sl_keep_tree = WordTree::default();
+        (*lp).sl_prefix_tree = WordTree::default();
+    }
 
     unsafe { ga_deep_clear(&raw mut (*lp).sl_rep, free_fromto) };
     unsafe { ga_deep_clear(&raw mut (*lp).sl_repsal, free_fromto) };
@@ -168,8 +179,8 @@ unsafe fn xfree_ptr(p: *mut *mut c_void) {
 
 /// Drop what the `.sug` file contributed, so it can be read again.
 pub unsafe fn slang_clear_sug(lp: *mut slang_T) {
-    unsafe { xfree_clear(&raw mut (*lp).sl_sbyts) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_sidxs) };
+    // SAFETY: the caller's language. Assigning drops the old tree.
+    unsafe { (*lp).sl_sound_tree = WordTree::default() };
     unsafe { close_spellbuf((*lp).sl_sugbuf) };
     unsafe { (*lp).sl_sugbuf = core::ptr::null_mut() };
     unsafe { (*lp).sl_sugloaded = false };

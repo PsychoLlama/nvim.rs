@@ -53,7 +53,7 @@ use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-impl Walk {
+impl Walk<'_> {
     /// At the start of a node: deal with the NUL bytes, which mean the
     /// good word may end here.
     ///
@@ -68,7 +68,7 @@ impl Walk {
         // SAFETY: the tree index is this level's node plus a child number
         // the node's own length byte bounds, and the tree is valid by the
         // contract above.
-        let node_len = unsafe { self.byte_at(node) } as c_int; // bytes in this node
+        let node_len = self.byte_at(node) as c_int; // bytes in this node
         let at = node + self.stack[level].child as idx_T; // the current byte
 
         if self.stack[level].prefix_depth == PFD_PREFIXTREE {
@@ -81,7 +81,7 @@ impl Walk {
         // SAFETY: `at` is this node plus a child number, and the `||`
         // short circuit is what keeps the read from happening once that
         // child number has run past the node's own length byte.
-        if self.stack[level].child as c_int > node_len || unsafe { self.byte_at(at) } != 0 {
+        if self.stack[level].child as c_int > node_len || self.byte_at(at) != 0 {
             // Past the bytes in the node and/or past its NUL bytes.
             self.stack[level].state = State::EndNul;
             // SAFETY: `su` is the caller's suggestion state, valid by the
@@ -114,7 +114,7 @@ impl Walk {
         // SAFETY: `at` and the bytes after it are inside the node, which
         // the node's own length byte bounds; the `&&` is what stops the
         // read once the count has reached that length.
-        while nul_count < node_len && unsafe { self.byte_at(at + nul_count) } == 0 {
+        while nul_count < node_len && self.byte_at(at + nul_count) == 0 {
             nul_count += 1;
         }
         self.stack[level].child += nul_count as i16;
@@ -132,7 +132,7 @@ impl Walk {
         //
         // SAFETY: `at` is the byte this node was entered at, inside the
         // node the length byte bounds.
-        let at_prefix_end = unsafe { self.byte_at(at) } == 0 || entry_state == State::NoPrefix;
+        let at_prefix_end = self.byte_at(at) == 0 || entry_state == State::NoPrefix;
         if self.depth >= MAXWLEN as c_int - 1 || !at_prefix_end {
             return;
         }
@@ -165,8 +165,7 @@ impl Walk {
         let child = self.depth as usize;
         self.stack[child].prefix_depth = (self.depth - 1) as u8;
         // The word after the prefix is in the case-folded tree.
-        self.byts = self.fbyts;
-        self.idxs = self.fidxs;
+        self.tree = self.word_tree;
         self.stack[child].node = 0;
 
         // Move the prefix to `preword` with the right case, which is
@@ -198,8 +197,7 @@ impl Walk {
         self.stack[level].state = State::Start;
 
         // In case the split went into the prefix tree.
-        self.byts = self.fbyts;
-        self.idxs = self.fidxs;
+        self.tree = self.word_tree;
     }
 
     /// A word ends at this NUL byte: check it over and, if the bad word
@@ -214,7 +212,7 @@ impl Walk {
 
         // SAFETY: `at` is a NUL child of this level's node, so the entry
         // beside it is the ending word's flags.
-        let mut flags = WordFlags::from_bits(unsafe { self.idx_at(at) } as c_int);
+        let mut flags = WordFlags::from_bits(self.idx_at(at) as c_int);
         if flags.has(WordFlags::NOSUGGEST) {
             return;
         }
@@ -349,7 +347,7 @@ impl Walk {
         let level = self.depth as usize;
         if self.stack[level].prefix_depth > PFD_NOTSPECIAL
             || self.stack[level].flags & FLAG_PREFIX_OK != 0
-            || self.pbyts.is_null()
+            || self.prefix_tree.is_empty()
         {
             return true;
         }
@@ -365,19 +363,10 @@ impl Walk {
 
         // Count the NUL bytes of the prefix node. None at all means
         // this is the first try, the one without a prefix.
-        let mut node = self.stack[prefix_level].node;
-        // SAFETY: the prefix node index came out of the prefix tree, which
-        // the guard above has just shown is loaded.
-        let node_len = unsafe { *self.pbyts.offset(node as isize) } as c_int;
+        let mut node = self.stack[prefix_level].node as usize;
+        let node_len = self.prefix_tree.node_len(node);
         node += 1;
-        let mut prefix_count = 0;
-        // SAFETY: the index is that same node plus a count the node's own
-        // length byte bounds, and the `&&` is what holds that bound.
-        while prefix_count < node_len
-            && unsafe { *self.pbyts.offset((node + prefix_count) as isize) } == 0
-        {
-            prefix_count += 1;
-        }
+        let prefix_count = self.prefix_tree.word_ends(node, node_len);
         if prefix_count == 0 {
             return true;
         }
@@ -388,7 +377,7 @@ impl Walk {
         // just above.
         let prefix_flags = unsafe {
             valid_word_prefix(
-                prefix_count,
+                prefix_count as c_int,
                 node,
                 *flags,
                 self.tword.as_mut_ptr().add(split_off),

@@ -25,7 +25,7 @@ use crate::types::{fromto_T, garray_T};
 use core::ffi::c_int;
 use core::ptr;
 
-impl Walk {
+impl Walk<'_> {
     /// Decide whether trying `REP` items here is worth it at all, and if
     /// so where in the list to start.
     ///

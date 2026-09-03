@@ -50,7 +50,7 @@ use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, sps_flags,
     suginfo_T,
 };
-use crate::types::{NUL, idx_T, int16_t, langp_T, linenr_T, slang_T, uint8_t};
+use crate::types::{NUL, int16_t, langp_T, linenr_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -75,7 +75,7 @@ const SFT_WORD_OFF: usize = mem::offset_of!(sftword_T, sft_word);
 /// `slang` must be a loaded language.
 unsafe fn has_sound_tree(slang: *mut slang_T) -> bool {
     // SAFETY: the caller guarantees the language.
-    unsafe { (*slang).sl_sal.ga_len > 0 && !(*slang).sl_sbyts.is_null() }
+    unsafe { (*slang).sl_sal.ga_len > 0 && !(*slang).sl_sound_tree.is_empty() }
 }
 
 /// Prepare the per-language table of soundfolds already handled.
@@ -277,38 +277,30 @@ pub(super) unsafe fn add_sound_suggest(
 unsafe fn word_number_to_letters(
     slang: *mut slang_T,
     orgnr: c_int,
-) -> ([c_char; MAXWLEN], usize, c_int) {
-    // SAFETY: the caller guarantees the tree.
-    let byts = unsafe { (*slang).sl_fbyts };
-    let idxs: *mut idx_T = unsafe { (*slang).sl_fidxs };
+) -> ([c_char; MAXWLEN], usize, usize) {
+    // SAFETY: the caller guarantees the tree, and it stays loaded for as
+    // long as this walk.
+    let tree = unsafe { &(*slang).sl_fold_tree };
 
     let mut theword = [0 as c_char; MAXWLEN];
     let mut n: usize = 0;
     let mut wordcount = 0;
     let mut wlen = 0;
-    let mut i: c_int = 1;
+    let mut i: usize = 1;
 
-    // Every read below is at `n`, a node start the tree itself handed back,
-    // or at `n + i` with `i` held at or below that node's child count --
-    // its first byte -- so all of them stay inside the arrays.
     while wlen < MAXWLEN - 3 {
         i = 1;
-        // SAFETY: as above.
-        if wordcount == orgnr && unsafe { *byts.add(n + 1) } == 0 {
+        if wordcount == orgnr && tree.ends_word(n + 1) {
             break; // found the end of the word
         }
-        // SAFETY: as above.
-        if unsafe { *byts.add(n + 1) } == 0 {
+        if tree.ends_word(n + 1) {
             wordcount += 1;
         }
 
         // Skip the NUL bytes; there can be several.
         let mut bad = false;
-        // SAFETY: as above -- the bound is checked in the body, which is
-        // what stops `i` from running past the node.
-        while unsafe { *byts.add(n + i as usize) } == 0 {
-            // SAFETY: as above.
-            if i > unsafe { *byts.add(n) } as c_int {
+        while tree.ends_word(n + i) {
+            if i > tree.node_len(n) {
                 // Safety check: the tree disagrees with the count.
                 theword[wlen..wlen + 3].copy_from_slice(&[
                     b'B' as c_char,
@@ -325,12 +317,11 @@ unsafe fn word_number_to_letters(
             break;
         }
 
-        // One of the siblings has the word under it.
-        //
-        // SAFETY: as above; the index each sibling holds is a node start,
-        // so it may be followed into `idxs` for that node's word count.
-        while i < unsafe { *byts.add(n) } as c_int {
-            let wc = unsafe { *idxs.offset(*idxs.add(n + i as usize) as isize) } as c_int;
+        // One of the siblings has the word under it. The index each
+        // sibling holds is a node start, and that node's own entry is the
+        // number of words below it.
+        while i < tree.node_len(n) {
+            let wc = tree.idx(tree.child_node(n + i));
             if wordcount + wc > orgnr {
                 break;
             }
@@ -338,9 +329,8 @@ unsafe fn word_number_to_letters(
             i += 1;
         }
 
-        // SAFETY: as above.
-        theword[wlen] = unsafe { *byts.add(n + i as usize) } as c_char;
-        n = unsafe { *idxs.add(n + i as usize) } as usize;
+        theword[wlen] = tree.byte(n + i) as c_char;
+        n = tree.child_node(n + i);
         wlen += 1;
     }
     theword[wlen] = NUL as c_char;
@@ -361,24 +351,18 @@ unsafe fn emit_word(
     slang: *mut slang_T,
     theword: &mut [c_char; MAXWLEN],
     n: usize,
-    mut i: c_int,
+    mut i: usize,
     score: c_int,
 ) {
     // SAFETY: the caller guarantees the language, so it has a case-folded
-    // tree.
-    let byts = unsafe { (*slang).sl_fbyts };
-    let idxs: *mut idx_T = unsafe { (*slang).sl_fidxs };
+    // tree, and it stays loaded for as long as this walk.
+    let tree = unsafe { &(*slang).sl_fold_tree };
 
-    // The flags and regions are the NUL-byte children of this node. The
-    // bound has to be tested before the byte is read.
-    //
-    // SAFETY: `n` is a node start and `i` is held at or below that node's
-    // child count -- its first byte -- so both reads stay inside the
-    // arrays. The `&&` keeps the second read behind the bound test.
-    while i <= unsafe { *byts.add(n) } as c_int && unsafe { *byts.add(n + i as usize) } == 0 {
+    // The flags and regions are the NUL-byte children of this node, so the
+    // scan stops at the node's child count.
+    while i <= tree.node_len(n) && tree.ends_word(n + i) {
         let mut cword = [0 as c_char; MAXWLEN];
-        // SAFETY: as above.
-        let mut flags = WordFlags::from_bits(unsafe { *idxs.add(n + i as usize) } as c_int);
+        let mut flags = WordFlags::from_bits(tree.idx(n + i));
         i += 1;
 
         if flags.has(WordFlags::NOSUGGEST) {
@@ -485,83 +469,71 @@ unsafe fn emit_word(
 /// `slang` must have a loaded `.sug` and `word` must be NUL-terminated.
 pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
     // SAFETY: the caller guarantees the loaded `.sug`, so the sound-fold
-    // tree's two arrays are there.
-    let byts = unsafe { (*slang).sl_sbyts };
-    let idxs: *mut idx_T = unsafe { (*slang).sl_sidxs };
+    // tree is there and stays loaded for as long as this walk.
+    let tree = unsafe { &(*slang).sl_sound_tree };
     let ptr = word as *mut u8;
 
-    let mut arridx: idx_T = 0;
+    let mut arridx: usize = 0;
     let mut wlen = 0;
     let mut wordnr = 0;
 
-    // Every `byts`/`idxs` read below sits at a node start the tree handed
-    // back, stepped forward at most `len` times -- that node's child count,
-    // read as its first byte -- so all of them stay inside the arrays. Every
-    // `ptr` read is behind a NUL test on the byte before it, so the walk
-    // stops at the word's terminator.
+    // Every `ptr` read below is behind a NUL test on the byte before it,
+    // so the walk stops at the word's terminator.
     loop {
         // The first byte of a node is how many bytes may follow.
-        //
-        // SAFETY: as above.
-        let mut len = unsafe { *byts.offset(arridx as isize) } as c_int;
+        let mut len = tree.node_len(arridx);
         arridx += 1;
 
         // A leading zero byte means a word may end here.
         //
-        // SAFETY: as above.
-        let mut c = unsafe { *ptr.add(wlen) } as c_int;
-        if unsafe { *byts.offset(arridx as isize) } == 0 {
-            if c == NUL {
+        // SAFETY: the caller's NUL-terminated word.
+        let mut c = unsafe { *ptr.add(wlen) };
+        if tree.ends_word(arridx) {
+            if c == NUL as u8 {
                 return wordnr;
             }
 
             // Skip the zeros; there can be several.
-            //
-            // SAFETY: as above; `len` keeps the step inside the node.
-            while len > 0 && unsafe { *byts.offset(arridx as isize) } == 0 {
-                arridx += 1;
-                len -= 1;
-            }
+            let ends = tree.word_ends(arridx, len);
+            arridx += ends;
+            len -= ends;
             if len == 0 {
                 return -1; // no children, the word should have ended
             }
             wordnr += 1;
         }
 
-        if c == NUL {
+        if c == NUL as u8 {
             return -1; // the word ends but the tree does not
         }
 
         // Linear search over the accepted bytes, counting the words
-        // hanging below the ones passed over.
-        if c == TAB {
-            c = ' ' as c_int; // a tab counts as a space
+        // hanging below the ones passed over. The index a sibling holds
+        // is itself a node start, and that node's own entry is the
+        // number of words below it.
+        if c == TAB as u8 {
+            c = b' '; // a tab counts as a space
         }
-        // SAFETY: as above; the index a sibling holds is itself a node
-        // start, so it may be followed into `idxs` for its word count.
-        while (unsafe { *byts.offset(arridx as isize) } as c_int) < c {
-            wordnr += unsafe { *idxs.offset(*idxs.offset(arridx as isize) as isize) } as c_int;
+        while tree.byte(arridx) < c {
+            wordnr += tree.idx(tree.child_node(arridx));
             arridx += 1;
             len -= 1;
             if len == 0 {
                 return -1; // ran out of bytes without finding it
             }
         }
-        // SAFETY: as above.
-        if unsafe { *byts.offset(arridx as isize) } as c_int != c {
+        if tree.byte(arridx) != c {
             return -1;
         }
 
-        arridx = unsafe { *idxs.offset(arridx as isize) };
+        arridx = tree.child_node(arridx);
         wlen += 1;
 
         // One space in the good word may stand for several in the
         // word being checked.
-        if c == ' ' as c_int {
+        if c == b' ' {
             // SAFETY: as above -- the scan stops at the word's NUL.
-            while unsafe { *ptr.add(wlen) } as c_int == ' ' as c_int
-                || unsafe { *ptr.add(wlen) } as c_int == TAB
-            {
+            while unsafe { *ptr.add(wlen) } == b' ' || unsafe { *ptr.add(wlen) } == TAB as u8 {
                 wlen += 1;
             }
         }
@@ -572,7 +544,7 @@ pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c
 #[derive(Clone, Copy, Default)]
 struct KeepCapLevel {
     /// Tree node this level starts from.
-    arridx: idx_T,
+    arridx: usize,
     /// 0 before either case has been tried, 1 after folded, 2 after upper.
     round: c_int,
     /// How far into the folded and upper-case words this level is.
@@ -598,11 +570,10 @@ pub(super) unsafe fn find_keepcap_word(
     fword: *mut c_char,
     kword: *mut c_char,
 ) {
-    // SAFETY: the caller guarantees the language, so the keep-case tree's
-    // two arrays are either both there or the byte array is null.
-    let byts = unsafe { (*slang).sl_kbyts };
-    let idxs: *mut idx_T = unsafe { (*slang).sl_kidxs };
-    if byts.is_null() {
+    // SAFETY: the caller guarantees the language, and it stays loaded for
+    // as long as this walk.
+    let tree = unsafe { &(*slang).sl_keep_tree };
+    if tree.is_empty() {
         // The tree is empty: cannot happen.
         //
         // SAFETY: `kword` has room for `MAXWLEN` bytes by the contract.
@@ -631,7 +602,7 @@ pub(super) unsafe fn find_keepcap_word(
             //
             // SAFETY: as above; `kwordlen` is what has been written into
             // `kword` so far, which is under `MAXWLEN`.
-            if unsafe { *byts.offset(level.arridx as isize + 1) } == 0 {
+            if tree.ends_word(level.arridx + 1) {
                 unsafe { *kword.add(level.kwordlen) = NUL as c_char };
                 return;
             }
@@ -664,40 +635,17 @@ pub(super) unsafe fn find_keepcap_word(
         // Match the character's bytes one node at a time.
         let mut tryidx = level.arridx;
         while l > 0 {
-            // SAFETY: as above.
-            let len = unsafe { *byts.offset(tryidx as isize) } as idx_T;
+            let len = tree.node_len(tryidx);
             tryidx += 1;
             // SAFETY: `l` bytes of the character are left, so `p` has that
             // many to read before it reaches the word's end.
-            let c = unsafe { *p } as c_int;
+            let c = unsafe { *p };
             p = unsafe { p.add(1) };
 
-            let mut lo = tryidx;
-            let mut hi = tryidx + len - 1;
-            while lo < hi {
-                let m = (lo + hi) / 2;
-                // SAFETY: `m` lies between `lo` and `hi`, both inside the
-                // node's `len` children.
-                let b = unsafe { *byts.offset(m as isize) } as c_int;
-                if b > c {
-                    hi = m - 1;
-                } else if b < c {
-                    lo = m + 1;
-                } else {
-                    lo = m;
-                    hi = m;
-                    break;
-                }
-            }
-
-            // SAFETY: as above; the `||` keeps the read behind the test
-            // that `lo` is still a child of this node.
-            if hi < lo || unsafe { *byts.offset(lo as isize) } as c_int != c {
+            let Some(at) = tree.child(tryidx, len, c) else {
                 break;
-            }
-
-            // SAFETY: as above -- `lo` is a child of this node.
-            tryidx = unsafe { *idxs.offset(lo as isize) };
+            };
+            tryidx = tree.child_node(at);
             l -= 1;
         }
 

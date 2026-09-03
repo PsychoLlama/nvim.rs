@@ -43,7 +43,7 @@ use crate::types::NUL;
 use core::ffi::c_int;
 use core::ptr;
 
-impl Walk {
+impl Walk<'_> {
     /// Swap two characters of the bad word: "12" -> "21".
     ///
     /// # Safety

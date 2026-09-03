@@ -188,7 +188,7 @@ pub unsafe fn spell_check(
 
         // A language whose reload failed stays in the list with
         // everything cleared out.
-        if unsafe { (*(*mi.mi_lp).lp_slang).sl_fidxs }.is_null() {
+        if unsafe { (*(*mi.mi_lp).lp_slang).sl_fold_tree.is_empty() } {
             continue;
         }
 
@@ -247,7 +247,7 @@ pub unsafe fn spell_check(
             // which any word would be valid.
             let save_result = mi.mi_result;
             mi.mi_lp = langp_data;
-            if !unsafe { (*(*mi.mi_lp).lp_slang).sl_fidxs }.is_null() {
+            if !unsafe { (*(*mi.mi_lp).lp_slang).sl_fold_tree.is_empty() } {
                 let mut p = mi.mi_word;
                 let mut fp = fword;
                 loop {

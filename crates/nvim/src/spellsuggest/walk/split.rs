@@ -39,7 +39,7 @@ use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-impl Walk {
+impl Walk<'_> {
     /// Try continuing the word that just ended, by compounding or by
     /// splitting the bad word here.
     ///
@@ -172,9 +172,8 @@ impl Walk {
         self.stack[child].node = 0;
 
         // Postponed prefixes apply to the new word too.
-        if !self.pbyts.is_null() {
-            self.byts = self.pbyts;
-            self.idxs = self.pidxs;
+        if !self.prefix_tree.is_empty() {
+            self.tree = self.prefix_tree;
             self.stack[child].prefix_depth = PFD_PREFIXTREE;
             self.stack[child].state = State::NoPrefix;
         }

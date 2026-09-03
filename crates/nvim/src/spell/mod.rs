@@ -61,6 +61,7 @@ mod lookup;
 mod navigate;
 mod slang;
 mod soundfold;
+mod wordtree;
 
 pub use chartab::{
     allcap_copy, ascii_spell_chartab, byte_in_str, captype, init_spell_chartab, make_case_word,
@@ -84,6 +85,7 @@ pub use slang::{
     slang_clear_sug, slang_free,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
+pub use wordtree::WordTree;
 
 pub const kEqualFiles: file_comparison = 1;
 
@@ -215,8 +217,8 @@ pub struct matchinf_T {
     /// The case-folded word.
     pub mi_fword: [c_char; MAXWLEN + 1],
     pub mi_fwordlen: c_int,
-    /// Where in `sl_pidxs` the candidate prefixes start,
-    pub mi_prefarridx: c_int,
+    /// Where in the language's prefix tree the candidate prefixes start,
+    pub mi_prefarridx: usize,
     /// and how many there are.
     pub mi_prefcnt: c_int,
     /// The prefix's length, folded and as written.

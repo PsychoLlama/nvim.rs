@@ -50,7 +50,7 @@ use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
     FILE, Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T,
-    uint8_t, uint16_t, uintmax_t,
+    uint16_t, uintmax_t,
 };
 use ::libc::{fclose, fwrite};
 
@@ -143,37 +143,38 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<()
     // SAFETY: the caller promises a loaded language; the walk is bounded by
     // the byte counts the tree itself carries, and depth by MAXWLEN, which
     // is the longest word the tree can hold.
-    let mut arridx: [idx_T; MAXWLEN] = [0; MAXWLEN];
-    let mut curi: [c_int; MAXWLEN] = [0; MAXWLEN];
+    let mut arridx = [0usize; MAXWLEN];
+    let mut curi = [0usize; MAXWLEN];
     let mut tword: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut tsalword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut wordcount: [c_int; MAXWLEN] = [0; MAXWLEN];
+    let mut wordcount: [idx_T; MAXWLEN] = [0; MAXWLEN];
     let mut words_done: c_uint = 0;
 
     spin.si_foldroot = wordtree_alloc(spin);
     spin.si_sugtree = 1;
 
-    let byts = unsafe { (*slang).sl_fbyts };
-    let idxs = unsafe { (*slang).sl_fidxs };
-    if byts.is_null() || idxs.is_null() {
+    // SAFETY: the caller promises a loaded language. The borrow lasts the
+    // walk, which neither reloads nor frees it.
+    let tree = unsafe { &mut (*slang).sl_fold_tree };
+    if tree.is_empty() {
         return Err(Failed);
     }
 
-    arridx[0] = 0;
     curi[0] = 1;
-    wordcount[0] = 0;
     let mut depth: usize = 0;
     loop {
         if got_int.get() {
             break;
         }
-        if curi[depth] > unsafe { *byts.offset(arridx[depth] as isize) } as c_int {
+        if curi[depth] > tree.node_len(arridx[depth]) {
             // Done with this node: publish the sub-tree's word count
             // where its index used to be, and fold it into the parent.
-            unsafe { *idxs.offset(arridx[depth] as isize) = wordcount[depth] as idx_T };
+            let at = arridx[depth];
+            let total = wordcount[depth];
+            tree.idxs_mut()[at] = total;
             let at_root = depth == 0;
             if !at_root {
-                wordcount[depth - 1] += wordcount[depth];
+                wordcount[depth - 1] += total;
                 depth -= 1;
             }
             line_breakcheck();
@@ -183,14 +184,13 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<()
             continue;
         }
 
-        let mut n: idx_T = arridx[depth] + curi[depth] as idx_T;
+        let mut n = arridx[depth] + curi[depth];
         curi[depth] += 1;
-        let c = unsafe { *byts.offset(n as isize) } as c_int;
-        if c != 0 {
+        if !tree.ends_word(n) {
             // Descend one byte.
-            tword[depth] = c as uint8_t as c_char;
+            tword[depth] = tree.byte(n) as c_char;
             depth += 1;
-            arridx[depth] = unsafe { *idxs.offset(n as isize) };
+            arridx[depth] = tree.child_node(n);
             curi[depth] = 1;
             wordcount[depth] = 0;
             continue;
@@ -213,9 +213,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<()
 
         // One word may end several times over, once per flag set; they
         // are the same word for this purpose.
-        while (n as c_int + 1) < unsafe { (*slang).sl_fbyts_len }
-            && unsafe { *byts.offset(n as isize + 1) } as c_int == 0
-        {
+        while n + 1 < tree.len() && tree.ends_word(n + 1) {
             n += 1;
             curi[depth] += 1;
         }

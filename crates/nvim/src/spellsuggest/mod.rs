@@ -709,7 +709,7 @@ unsafe fn suggest_try_change(mut su: Sug) {
     for lp in unsafe { window_langs() } {
         // A spell file that failed to reload is still in the list, but
         // everything in it has been cleared.
-        if !unsafe { (*lp.lp_slang).sl_fbyts.is_null() } {
+        if !unsafe { (*lp.lp_slang).sl_fold_tree.is_empty() } {
             unsafe { suggest_trie_walk(su.raw(), lp, fwordp, false) };
         }
     }

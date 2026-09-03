@@ -52,7 +52,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, garray_T, idx_T, langp_T, regprog_T, slang_T, uint8_t};
+use crate::types::{NUL, garray_T, langp_T, regprog_T, slang_T, uint8_t};
 
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
@@ -89,16 +89,14 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
 
     let ptr;
     let mut flen;
-    let byts;
-    let idxs;
+    let tree;
     let mut wlen = 0;
     if mode == FIND_KEEPWORD || mode == FIND_KEEPCOMPOUND {
         // The keep-case tree is matched against the word as written, so
         // no folding is needed and there are always enough bytes.
         ptr = unsafe { (*mip).mi_word };
         flen = 9999;
-        byts = unsafe { (*slang).sl_kbyts };
-        idxs = unsafe { (*slang).sl_kidxs };
+        tree = unsafe { &(*slang).sl_keep_tree };
 
         if mode == FIND_KEEPCOMPOUND {
             wlen += unsafe { (*mip).mi_compoff };
@@ -106,8 +104,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
     } else {
         ptr = unsafe { &raw mut (*mip).mi_fword } as *mut c_char;
         flen = unsafe { (*mip).mi_fwordlen };
-        byts = unsafe { (*slang).sl_fbyts };
-        idxs = unsafe { (*slang).sl_fidxs };
+        tree = unsafe { &(*slang).sl_fold_tree };
 
         if mode == FIND_PREFIX {
             wlen = unsafe { (*mip).mi_prefixlen };
@@ -118,15 +115,15 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
         }
     }
 
-    if byts.is_null() {
+    if tree.is_empty() {
         return; // this language has no such tree
     }
 
-    let mut arridx: idx_T = 0;
+    let mut arridx: usize = 0;
     // Where each "a word could end here" node was, and how far into the
     // word it sat.
     let mut endlen = [0 as c_int; MAXWLEN];
-    let mut endidx = [0 as idx_T; MAXWLEN];
+    let mut endidx = [0usize; MAXWLEN];
     let mut endidxcnt = 0usize;
 
     // Descend until a byte does not match, the tree runs out, or the
@@ -136,13 +133,13 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             flen = unsafe { fold_more(mip) };
         }
 
-        let mut len = unsafe { *byts.offset(arridx as isize) } as c_int;
+        let mut len = tree.node_len(arridx);
         arridx += 1;
 
         // A leading zero byte means a word ends here. Remember the spot
         // and carry on; the longest match is preferred, so the endings
         // are only examined once the descent is done.
-        if unsafe { *byts.offset(arridx as isize) } == 0 {
+        if tree.ends_word(arridx) {
             if endidxcnt == MAXWLEN {
                 // Only a corrupted spell file can nest this deep.
                 unsafe { emsg(gettext_ptr(e_format.get())) };
@@ -151,14 +148,11 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             endlen[endidxcnt] = wlen;
             endidx[endidxcnt] = arridx;
             endidxcnt += 1;
-            arridx += 1;
-            len -= 1;
 
-            // Skip the rest of the zeros: one per flag/region variant.
-            while len > 0 && unsafe { *byts.offset(arridx as isize) } == 0 {
-                arridx += 1;
-                len -= 1;
-            }
+            // Step over every zero: one per flag/region variant.
+            let ends = tree.word_ends(arridx, len);
+            arridx += ends;
+            len -= ends;
             if len == 0 {
                 break; // no children, the word must end here
             }
@@ -168,38 +162,22 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
             break; // end of the line
         }
 
-        let mut c = unsafe { *ptr.offset(wlen as isize) } as uint8_t as c_int;
-        if c == TAB {
-            c = ' ' as c_int; // a tab counts as a space
+        let mut c = unsafe { *ptr.offset(wlen as isize) } as uint8_t;
+        if c == TAB as uint8_t {
+            c = b' '; // a tab counts as a space
         }
 
-        // Binary search the sorted child bytes.
-        let mut lo = arridx;
-        let mut hi = arridx + len - 1;
-        while lo < hi {
-            let m = (lo + hi) / 2;
-            let b = unsafe { *byts.offset(m as isize) } as c_int;
-            if b > c {
-                hi = m - 1;
-            } else if b < c {
-                lo = m + 1;
-            } else {
-                lo = m;
-                hi = m;
-                break;
-            }
-        }
-        if hi < lo || unsafe { *byts.offset(lo as isize) } as c_int != c {
+        let Some(at) = tree.child(arridx, len, c) else {
             break; // no matching byte
-        }
+        };
 
-        arridx = unsafe { *idxs.offset(lo as isize) };
+        arridx = tree.child_node(at);
         wlen += 1;
         flen -= 1;
 
         // One space in the dictionary word may stand for a run of
         // spaces and tabs in the text.
-        if c == ' ' as c_int {
+        if c == b' ' {
             loop {
                 if flen <= 0 && unsafe { *(*mip).mi_fend } != 0 {
                     flen = unsafe { fold_more(mip) };
@@ -259,13 +237,13 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
         }
 
         // Try each flag/region variant recorded for this spelling.
-        let mut len = unsafe { *byts.offset(arridx as isize - 1) } as c_int;
-        'variants: while len > 0 && unsafe { *byts.offset(arridx as isize) } == 0 {
+        let mut len = tree.node_len(arridx - 1);
+        'variants: while len > 0 && tree.ends_word(arridx) {
             // `break 'variant` is C's `continue`: on to the next
             // flag/region entry. `break 'variants` is C's `break`: this
             // ending is settled.
             'variant: {
-                let mut flags = WordFlags::from_bits(unsafe { *idxs.offset(arridx as isize) });
+                let mut flags = WordFlags::from_bits(tree.idx(arridx));
 
                 if mode == FIND_FOLDWORD {
                     // The fold-case tree records what case the word must be
@@ -365,7 +343,7 @@ pub(super) unsafe fn find_word(mip: *mut matchinf_T, mode: c_int) {
                     for lpi in 0..langp_len {
                         if unsafe { (*slang).sl_nobreak } {
                             unsafe { (*mip).mi_lp = langp_data.offset(lpi as isize) };
-                            if unsafe { (*(*(*mip).mi_lp).lp_slang).sl_fidxs }.is_null()
+                            if unsafe { (*(*(*mip).mi_lp).lp_slang).sl_fold_tree.is_empty() }
                                 || !unsafe { (*(*(*mip).mi_lp).lp_slang).sl_nobreak }
                             {
                                 continue;
@@ -720,15 +698,17 @@ pub unsafe fn match_compoundrule(slang: *mut slang_T, compflags: *const uint8_t)
 /// condition regexp in the two bytes above.
 pub unsafe fn valid_word_prefix(
     totprefcnt: c_int,
-    arridx: c_int,
+    arridx: usize,
     flags: WordFlags,
     word: *mut c_char,
     slang: *mut slang_T,
     cond_req: bool,
 ) -> c_int {
+    // SAFETY: the caller's language, whose prefix tree `arridx` indexes.
+    let tree = unsafe { &(*slang).sl_prefix_tree };
     let prefid = (flags.bits() as c_uint >> 24) as c_int;
     for prefcnt in (0..totprefcnt).rev() {
-        let pidx = unsafe { *(*slang).sl_pidxs.offset((arridx + prefcnt) as isize) };
+        let pidx = tree.idx(arridx + prefcnt as usize);
 
         if prefid != pidx & 0xff {
             continue;
@@ -761,11 +741,10 @@ pub unsafe fn valid_word_prefix(
 /// `FIND_COMPOUND` does the same after the compound parts found so far.
 pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
     let slang = unsafe { (*(*mip).mi_lp).lp_slang };
-    let byts = unsafe { (*slang).sl_pbyts };
-    if byts.is_null() {
+    let tree = unsafe { &(*slang).sl_prefix_tree };
+    if tree.is_empty() {
         return; // this language has no prefixes
     }
-    let idxs = unsafe { (*slang).sl_pidxs };
 
     // Prefixes are always stored case-folded.
     let mut ptr = unsafe { &raw mut (*mip).mi_fword } as *mut c_char;
@@ -775,28 +754,26 @@ pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
         flen -= unsafe { (*mip).mi_compoff };
     }
 
-    let mut arridx: idx_T = 0;
+    let mut arridx: usize = 0;
     let mut wlen = 0;
     loop {
         if flen == 0 && unsafe { *(*mip).mi_fend } != 0 {
             flen = unsafe { fold_more(mip) };
         }
 
-        let mut len = unsafe { *byts.offset(arridx as isize) } as c_int;
+        let mut len = tree.node_len(arridx);
         arridx += 1;
 
         // A leading zero byte means a prefix ends here. Several prefixes
         // can share a spelling with different conditions, and which one
         // gives the longest match is not known yet, so find_word() gets
         // the whole list to try.
-        if unsafe { *byts.offset(arridx as isize) } == 0 {
+        if tree.ends_word(arridx) {
             unsafe { (*mip).mi_prefarridx = arridx };
-            unsafe { (*mip).mi_prefcnt = len };
-            while len > 0 && unsafe { *byts.offset(arridx as isize) } == 0 {
-                arridx += 1;
-                len -= 1;
-            }
-            unsafe { (*mip).mi_prefcnt -= len };
+            let ends = tree.word_ends(arridx, len);
+            arridx += ends;
+            len -= ends;
+            unsafe { (*mip).mi_prefcnt = ends as c_int };
 
             unsafe { (*mip).mi_prefixlen = wlen };
             if mode == FIND_COMPOUND {
@@ -822,27 +799,12 @@ pub(super) unsafe fn find_prefix(mip: *mut matchinf_T, mode: c_int) {
             break; // end of the line
         }
 
-        let c = unsafe { *ptr.offset(wlen as isize) } as uint8_t as c_int;
-        let mut lo = arridx;
-        let mut hi = arridx + len - 1;
-        while lo < hi {
-            let m = (lo + hi) / 2;
-            let b = unsafe { *byts.offset(m as isize) } as c_int;
-            if b > c {
-                hi = m - 1;
-            } else if b < c {
-                lo = m + 1;
-            } else {
-                lo = m;
-                hi = m;
-                break;
-            }
-        }
-        if hi < lo || unsafe { *byts.offset(lo as isize) } as c_int != c {
+        let c = unsafe { *ptr.offset(wlen as isize) } as uint8_t;
+        let Some(at) = tree.child(arridx, len, c) else {
             break;
-        }
+        };
 
-        arridx = unsafe { *idxs.offset(lo as isize) };
+        arridx = tree.child_node(at);
         wlen += 1;
         flen -= 1;
     }
