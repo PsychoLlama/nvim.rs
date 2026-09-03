@@ -20,15 +20,11 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 
-use crate::types::NUL;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
-
-/// Slack [`estack_sfile`] reserves per entry on top of the name and its type
-/// prefix: enough for the `[%d]` line number and the `..` separator.
-const SFILE_ENTRY_SLACK: size_t = 26;
 
 /// A stack entry with no `es_info` payload yet; the pushers that have one fill
 /// it in through the returned pointer.
@@ -233,9 +229,10 @@ unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
 ///
 /// Every frame's `es_name`, when non-null, must be NUL-terminated.
 unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
-    let mut ga = GA_EMPTY_INIT_VALUE;
-    // SAFETY: `ga` is a local garray; `ga_init` only fills in its fields.
-    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 100) };
+    let mut text = Vec::<u8>::new();
+    // Whether any frame contributed: a stack of unnamed frames answers null,
+    // which is not the same answer as an empty string.
+    let mut named = false;
 
     let innermost = stack.len() - 1;
     let mut last_type: etype_T = ETYPE_SCRIPT;
@@ -260,40 +257,22 @@ unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
             entry.es_lnum
         };
 
-        // SAFETY: `es_name` is NUL-terminated, and the grow reserves room for
-        // both concatenations plus the `[%d]` and `..` that may follow.
-        let name_len = unsafe { cstr::bytes_at(entry.es_name) }.len();
-        unsafe {
-            ga_grow(
-                &raw mut ga,
-                (name_len + type_name.count_bytes() + SFILE_ENTRY_SLACK) as c_int,
-            )
-        };
-        unsafe { ga_concat_len(&raw mut ga, type_name.as_ptr(), type_name.count_bytes()) };
-        unsafe { ga_concat_len(&raw mut ga, entry.es_name, name_len) };
+        named = true;
+        text.extend_from_slice(type_name.to_bytes());
+        // SAFETY: `es_name` is NUL-terminated.
+        text.extend_from_slice(unsafe { cstr::bytes_at(entry.es_name) });
         if lnum != 0 {
-            // SAFETY: the grow above left `ga_maxlen - ga_len` writable bytes.
-            ga.ga_len += unsafe {
-                vim_snprintf_safelen(
-                    ga.ga_data.cast::<c_char>().add(ga.ga_len as usize),
-                    (ga.ga_maxlen - ga.ga_len) as size_t,
-                    c"[%d]".as_ptr(),
-                    lnum,
-                )
-            } as c_int;
+            text.extend_from_slice(format!("[{lnum}]").as_bytes());
         }
         if idx != innermost {
-            // SAFETY: as above.
-            unsafe { ga_concat_len(&raw mut ga, c"..".as_ptr(), 2) };
+            text.extend_from_slice(b"..");
         }
     }
 
-    // Only NUL-terminate when not returning null.
-    if !ga.ga_data.is_null() {
-        // SAFETY: `ga` holds the string built above.
-        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
+    if !named {
+        return ptr::null_mut();
     }
-    ga.ga_data.cast::<c_char>()
+    owned_cstr(text)
 }
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that

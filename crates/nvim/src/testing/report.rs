@@ -12,42 +12,45 @@
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::{ptr, slice};
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{
     tv_clear, tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_dict_hi2di, tv_dict_iter, tv_equal,
 };
 use crate::eval::vars::assert_error;
-use crate::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
 use crate::runtime::estack_sfile;
-use crate::strings::vim_snprintf_safelen;
-use crate::types::{
-    VAR_DICT, VAR_STRING, VAR_UNKNOWN, garray_T, int64_t, linenr_T, size_t, typval_T,
-};
+use crate::types::{VAR_DICT, VAR_STRING, VAR_UNKNOWN, linenr_T, typval_T};
 
-use super::{AssertType, ESTACK_NONE, NUMBUFLEN};
-
-/// An unopened growable byte buffer.
-pub(super) fn empty_garray() -> garray_T {
-    garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    }
-}
+use super::{AssertType, ESTACK_NONE};
 
 /// `GA_CONCAT_LITERAL`: append a C literal, whose length is known here.
+pub(super) fn ga_concat_lit(gap: &mut Vec<u8>, text: &'static CStr) {
+    gap.extend_from_slice(text.to_bytes());
+}
+
+/// Append a NUL-terminated string's bytes, terminator excluded. A null
+/// string appends nothing, as `ga_concat` did.
 ///
 /// # Safety
-/// `gap` is an open byte garray.
-pub(super) unsafe fn ga_concat_lit(gap: *mut garray_T, text: &'static CStr) {
-    // SAFETY: the caller's garray; a `CStr` knows its own length.
-    unsafe { ga_concat_len(gap, text.as_ptr(), text.count_bytes()) };
+/// `s` is null or NUL-terminated.
+pub(super) unsafe fn ga_concat_cstr(gap: &mut Vec<u8>, s: *const c_char) {
+    if s.is_null() {
+        return;
+    }
+    // SAFETY: the caller's promise.
+    gap.extend_from_slice(unsafe { CStr::from_ptr(s) }.to_bytes());
+}
+
+/// Append `len` bytes of `p`, NULs and all.
+///
+/// # Safety
+/// `p` is readable for `len` bytes.
+pub(super) unsafe fn ga_concat_bytes(gap: &mut Vec<u8>, p: *const c_char, len: usize) {
+    // SAFETY: the caller's promise.
+    gap.extend_from_slice(unsafe { slice::from_raw_parts(p.cast::<u8>(), len) });
 }
 
 /// Line number being sourced or executed: the top of the exestack.
@@ -59,46 +62,33 @@ pub(super) fn sourcing_lnum() -> linenr_T {
 ///
 /// # Safety
 /// Called while a script or function is executing.
-pub(super) unsafe fn prepare_assert_error() -> garray_T {
-    let mut ga = empty_garray();
-    let gap = &raw mut ga;
-    // SAFETY: the local garray, and the `estack_sfile` allocation freed here.
+pub(super) unsafe fn prepare_assert_error() -> Vec<u8> {
+    let mut ga = Vec::<u8>::new();
+    let gap = &mut ga;
+    // SAFETY: the `estack_sfile` allocation, freed here.
     let sname = unsafe { estack_sfile(ESTACK_NONE) };
-    unsafe { ga_init(gap, 1, 100) };
     let lnum = sourcing_lnum();
     if !sname.is_null() {
-        unsafe { ga_concat(gap, sname) };
+        // SAFETY: `estack_sfile` answers a NUL-terminated name.
+        unsafe { ga_concat_cstr(gap, sname) };
         if lnum > 0 {
-            unsafe { ga_concat(gap, c" ".as_ptr()) };
+            gap.push(b' ');
         }
     }
     if lnum > 0 {
-        let mut buf = [0 as c_char; NUMBUFLEN];
-        let buflen = unsafe {
-            vim_snprintf_safelen(
-                buf.as_mut_ptr(),
-                NUMBUFLEN,
-                c"line %ld".as_ptr(),
-                lnum as int64_t,
-            )
-        };
-        unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
+        gap.extend_from_slice(format!("line {lnum}").as_bytes());
     }
     if !sname.is_null() || lnum > 0 {
-        unsafe { ga_concat_lit(gap, c": ") };
+        ga_concat_lit(gap, c": ");
     }
+    // SAFETY: the allocation this function owns.
     unsafe { xfree(sname.cast()) };
     ga
 }
 
-/// Publish `gap` as one `v:errors` entry and release it.
-///
-/// # Safety
-/// `gap` is an open byte garray this call takes over.
-pub(super) unsafe fn report_assert_error(gap: *mut garray_T) {
-    // SAFETY: the caller's garray.
-    unsafe { assert_error(gap) };
-    unsafe { ga_clear(gap) };
+/// Publish `gap` as one `v:errors` entry.
+pub(super) fn report_assert_error(gap: &[u8]) {
+    assert_error(gap);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,10 +102,10 @@ pub(super) unsafe fn report_assert_error(gap: *mut garray_T) {
 ///
 /// # Safety
 /// `gap` is open and `p` has at least `clen` readable bytes.
-unsafe fn ga_concat_esc(gap: *mut garray_T, p: *const c_char, clen: c_int) {
-    // SAFETY: the caller's garray and buffer.
+unsafe fn ga_concat_esc(gap: &mut Vec<u8>, p: *const c_char, clen: c_int) {
+    // SAFETY: the caller's buffer.
     if clen > 1 {
-        unsafe { ga_concat_len(gap, p, clen as size_t) };
+        unsafe { ga_concat_bytes(gap, p, clen as usize) };
         return;
     }
     let byte = unsafe { *p };
@@ -130,20 +120,11 @@ unsafe fn ga_concat_esc(gap: *mut garray_T, p: *const c_char, clen: c_int) {
         _ => None,
     };
     if let Some(text) = escaped {
-        unsafe { ga_concat_lit(gap, text) };
+        ga_concat_lit(gap, text);
     } else if (byte as u8) < b' ' || byte as u8 == 0x7f {
-        let mut buf = [0 as c_char; NUMBUFLEN];
-        let buflen = unsafe {
-            vim_snprintf_safelen(
-                buf.as_mut_ptr(),
-                NUMBUFLEN,
-                c"\\x%02x".as_ptr(),
-                byte as c_int,
-            )
-        };
-        unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
+        gap.extend_from_slice(format!("\\x{:02x}", byte as u8).as_bytes());
     } else {
-        unsafe { ga_append(gap, byte as u8) };
+        gap.push(byte as u8);
     }
 }
 
@@ -152,10 +133,10 @@ unsafe fn ga_concat_esc(gap: *mut garray_T, p: *const c_char, clen: c_int) {
 ///
 /// # Safety
 /// `gap` is open; `str` is null or a C string.
-unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
+unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
     // SAFETY: the caller's garray and string; the walk stops at the NUL.
     if str.is_null() {
-        unsafe { ga_concat_lit(gap, c"NULL") };
+        ga_concat_lit(gap, c"NULL");
         return;
     }
     let mut p = str;
@@ -169,15 +150,11 @@ unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
             s = unsafe { s.offset(clen as isize) };
         }
         if same_len > 20 {
-            unsafe { ga_concat_lit(gap, c"\\[") };
+            ga_concat_lit(gap, c"\\[");
             unsafe { ga_concat_esc(gap, p, clen) };
-            unsafe { ga_concat_lit(gap, c" occurs ") };
-            let mut buf = [0 as c_char; NUMBUFLEN];
-            let buflen = unsafe {
-                vim_snprintf_safelen(buf.as_mut_ptr(), NUMBUFLEN, c"%d".as_ptr(), same_len)
-            };
-            unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
-            unsafe { ga_concat_lit(gap, c" times]") };
+            ga_concat_lit(gap, c" occurs ");
+            gap.extend_from_slice(format!("{same_len}").as_bytes());
+            ga_concat_lit(gap, c" times]");
             p = s;
         } else {
             unsafe { ga_concat_esc(gap, p, clen) };
@@ -197,7 +174,7 @@ unsafe fn ga_concat_shorten_esc(gap: *mut garray_T, str: *const c_char) {
 ///
 /// # Safety
 /// `gap` is open and `opt_msg_tv` is a live typval.
-unsafe fn append_opt_msg(gap: *mut garray_T, opt_msg_tv: *mut typval_T) {
+unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut typval_T) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
     let msg = unsafe { &*opt_msg_tv };
     let blank = msg.v_type == VAR_STRING
@@ -206,9 +183,9 @@ unsafe fn append_opt_msg(gap: *mut garray_T, opt_msg_tv: *mut typval_T) {
         return;
     }
     let tofree = unsafe { encode_tv2echo(opt_msg_tv, ptr::null_mut()) };
-    unsafe { ga_concat(gap, tofree) };
+    unsafe { ga_concat_cstr(gap, tofree) };
     unsafe { xfree(tofree.cast()) };
-    unsafe { ga_concat_lit(gap, c": ") };
+    ga_concat_lit(gap, c": ");
 }
 
 /// Whether `tv` holds a non-null dictionary.
@@ -275,7 +252,7 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
 /// `gap` is open; the typvals are live, and `exp_tv`/`got_tv` may be null only
 /// when `exp_str` is not.
 pub(super) unsafe fn fill_assert_error(
-    gap: *mut garray_T,
+    gap: &mut Vec<u8>,
     opt_msg_tv: *mut typval_T,
     exp_str: *const c_char,
     exp_tv: *mut typval_T,
@@ -288,16 +265,14 @@ pub(super) unsafe fn fill_assert_error(
     // SAFETY: the caller's garray and typvals; each `encode_tv2*` allocation
     // is freed where it is made.
     unsafe { append_opt_msg(gap, opt_msg_tv) };
-    unsafe {
-        ga_concat_lit(
-            gap,
-            match atype {
-                AssertType::Match | AssertType::NotMatch => c"Pattern ",
-                AssertType::NotEqual => c"Expected not equal to ",
-                _ => c"Expected ",
-            },
-        )
-    };
+    ga_concat_lit(
+        gap,
+        match atype {
+            AssertType::Match | AssertType::NotMatch => c"Pattern ",
+            AssertType::NotEqual => c"Expected not equal to ",
+            _ => c"Expected ",
+        },
+    );
 
     if exp_str.is_null() {
         if atype != AssertType::NotEqual && unsafe { is_dict(exp_tv) } && unsafe { is_dict(got_tv) }
@@ -311,45 +286,31 @@ pub(super) unsafe fn fill_assert_error(
     } else {
         let quoted = atype == AssertType::Fails;
         if quoted {
-            unsafe { ga_concat_lit(gap, c"'") };
+            ga_concat_lit(gap, c"'");
         }
         unsafe { ga_concat_shorten_esc(gap, exp_str) };
         if quoted {
-            unsafe { ga_concat_lit(gap, c"'") };
+            ga_concat_lit(gap, c"'");
         }
     }
 
     if atype != AssertType::NotEqual {
-        unsafe {
-            ga_concat_lit(
-                gap,
-                match atype {
-                    AssertType::Match => c" does not match ",
-                    AssertType::NotMatch => c" does match ",
-                    _ => c" but got ",
-                },
-            )
-        };
+        ga_concat_lit(
+            gap,
+            match atype {
+                AssertType::Match => c" does not match ",
+                AssertType::NotMatch => c" does match ",
+                _ => c" but got ",
+            },
+        );
         let tofree = unsafe { encode_tv2string(got_tv, ptr::null_mut()) };
         unsafe { ga_concat_shorten_esc(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
 
         if omitted != 0 {
-            let mut buf = [0 as c_char; 100];
-            let buflen = unsafe {
-                vim_snprintf_safelen(
-                    buf.as_mut_ptr(),
-                    buf.len(),
-                    c" - %d equal item%s omitted".as_ptr(),
-                    omitted,
-                    if omitted == 1 {
-                        c"".as_ptr()
-                    } else {
-                        c"s".as_ptr()
-                    },
-                )
-            };
-            unsafe { ga_concat_len(gap, buf.as_ptr(), buflen) };
+            let plural = if omitted == 1 { "" } else { "s" };
+            let text = format!(" - {omitted} equal item{plural} omitted");
+            gap.extend_from_slice(text.as_bytes());
         }
     }
 

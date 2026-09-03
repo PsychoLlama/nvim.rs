@@ -236,7 +236,7 @@ unsafe fn report_fails_mismatch(
         },
     };
     let mut ga = unsafe { prepare_assert_error() };
-    let gap = &raw mut ga;
+    let gap = &mut ga;
     unsafe {
         fill_assert_error(
             gap,
@@ -247,9 +247,9 @@ unsafe fn report_fails_mismatch(
             AssertType::Fails,
         )
     };
-    unsafe { ga_concat_lit(gap, c": ") };
+    ga_concat_lit(gap, c": ");
     unsafe { assert_append_cmd_or_arg(gap, argvars, cmd) };
-    unsafe { report_assert_error(gap) };
+    report_assert_error(gap);
 }
 
 /// Put the message and screen state back the way `assert_fails()` found it.
@@ -316,9 +316,9 @@ pub(crate) unsafe fn f_assert_fails(
 
     if called_emsg.get() == called_emsg_before {
         let mut ga = unsafe { prepare_assert_error() };
-        unsafe { ga_concat_lit(&raw mut ga, c"command did not fail: ") };
-        unsafe { assert_append_cmd_or_arg(&raw mut ga, argvars, cmd) };
-        unsafe { report_assert_error(&raw mut ga) };
+        ga_concat_lit(&mut ga, c"command did not fail: ");
+        unsafe { assert_append_cmd_or_arg(&mut ga, argvars, cmd) };
+        report_assert_error(&ga);
         unsafe { (*rettv).vval.v_number = 1 };
     } else if unsafe { arg_given(argvars, 1) } {
         let mut check = unsafe { check_reported_error(argvars, &mut tofree) };

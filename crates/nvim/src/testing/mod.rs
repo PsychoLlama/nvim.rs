@@ -28,7 +28,6 @@ use crate::eval::typval::{
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, get_vim_var_tv};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::garray::{ga_concat, ga_concat_len};
 use crate::main::{
     called_vim_beep, e_cant_read_file_str, emsg_on_display, emsg_silent, suppress_errthrow,
 };
@@ -39,8 +38,8 @@ use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     BoolVarValue, EvalFuncData, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, garray_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, ptrdiff_t, size_t, typval_T, varnumber_T,
+    VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, int64_t, kBoolVarFalse, kBoolVarTrue,
+    ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 use ::libc::{fclose, fgetc};
 
@@ -76,7 +75,10 @@ mod fails;
 mod report;
 
 pub(crate) use fails::f_assert_fails;
-use report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
+use report::{
+    fill_assert_error, ga_concat_bytes, ga_concat_cstr, ga_concat_lit, prepare_assert_error,
+    report_assert_error,
+};
 
 // ---------------------------------------------------------------------------
 // Argument and buffer helpers
@@ -127,7 +129,7 @@ unsafe fn assert_equal_common(argvars: *mut typval_T, atype: AssertType) -> c_in
     let mut ga = unsafe { prepare_assert_error() };
     unsafe {
         fill_assert_error(
-            &raw mut ga,
+            &mut ga,
             arg(argvars, 2),
             ptr::null(),
             arg(argvars, 0),
@@ -135,7 +137,7 @@ unsafe fn assert_equal_common(argvars: *mut typval_T, atype: AssertType) -> c_in
             atype,
         )
     };
-    unsafe { report_assert_error(&raw mut ga) };
+    report_assert_error(&ga);
     1
 }
 
@@ -159,7 +161,7 @@ unsafe fn assert_match_common(argvars: *mut typval_T, atype: AssertType) -> c_in
     let mut ga = unsafe { prepare_assert_error() };
     unsafe {
         fill_assert_error(
-            &raw mut ga,
+            &mut ga,
             arg(argvars, 2),
             ptr::null(),
             arg(argvars, 0),
@@ -167,7 +169,7 @@ unsafe fn assert_match_common(argvars: *mut typval_T, atype: AssertType) -> c_in
             atype,
         )
     };
-    unsafe { report_assert_error(&raw mut ga) };
+    report_assert_error(&ga);
     1
 }
 
@@ -193,7 +195,7 @@ unsafe fn assert_bool(argvars: *mut typval_T, is_true: bool) -> c_int {
     let mut ga = unsafe { prepare_assert_error() };
     unsafe {
         fill_assert_error(
-            &raw mut ga,
+            &mut ga,
             arg(argvars, 1),
             (if is_true { c"True" } else { c"False" }).as_ptr(),
             ptr::null_mut(),
@@ -201,7 +203,7 @@ unsafe fn assert_bool(argvars: *mut typval_T, is_true: bool) -> c_int {
             AssertType::Other,
         )
     };
-    unsafe { report_assert_error(&raw mut ga) };
+    report_assert_error(&ga);
     1
 }
 
@@ -212,14 +214,14 @@ unsafe fn assert_bool(argvars: *mut typval_T, is_true: bool) -> c_int {
 ///
 /// # Safety
 /// `gap` is open and `argvars` has three slots.
-unsafe fn assert_append_cmd_or_arg(gap: *mut garray_T, argvars: *mut typval_T, cmd: *const c_char) {
+unsafe fn assert_append_cmd_or_arg(gap: &mut Vec<u8>, argvars: *mut typval_T, cmd: *const c_char) {
     // SAFETY: the caller's garray and arguments.
     if unsafe { arg_given(argvars, 1) } && unsafe { arg_given(argvars, 2) } {
         let tofree = unsafe { encode_tv2echo(arg(argvars, 2), ptr::null_mut()) };
-        unsafe { ga_concat(gap, tofree) };
+        unsafe { ga_concat_cstr(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
     } else {
-        unsafe { ga_concat(gap, cmd) };
+        unsafe { ga_concat_cstr(gap, cmd) };
     }
 }
 
@@ -240,18 +242,16 @@ unsafe fn assert_beeps(argvars: *mut typval_T, no_beep: bool) -> c_int {
     let mut ret = 0;
     if called_vim_beep.get() == no_beep {
         let mut ga = unsafe { prepare_assert_error() };
-        unsafe {
-            ga_concat_lit(
-                &raw mut ga,
-                if no_beep {
-                    c"command did beep: "
-                } else {
-                    c"command did not beep: "
-                },
-            )
-        };
-        unsafe { ga_concat(&raw mut ga, cmd) };
-        unsafe { report_assert_error(&raw mut ga) };
+        ga_concat_lit(
+            &mut ga,
+            if no_beep {
+                c"command did beep: "
+            } else {
+                c"command did not beep: "
+            },
+        );
+        unsafe { ga_concat_cstr(&mut ga, cmd) };
+        report_assert_error(&ga);
         ret = 1;
     }
 
@@ -400,27 +400,27 @@ unsafe fn assert_equalfile(argvars: *mut typval_T) -> c_int {
     }
 
     let mut ga = unsafe { prepare_assert_error() };
-    let gap = &raw mut ga;
+    let gap = &mut ga;
     if unsafe { arg_given(argvars, 2) } {
         let tofree = unsafe { encode_tv2echo(arg(argvars, 2), ptr::null_mut()) };
-        unsafe { ga_concat(gap, tofree) };
+        unsafe { ga_concat_cstr(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
-        unsafe { ga_concat_lit(gap, c": ") };
+        ga_concat_lit(gap, c": ");
     }
-    unsafe { ga_concat_len(gap, diff.verdict.as_ptr(), diff.verdict_len) };
+    unsafe { ga_concat_bytes(gap, diff.verdict.as_ptr(), diff.verdict_len) };
     if diff.lineidx > 0 {
         let idx = diff.lineidx as usize;
         diff.line1[idx] = 0;
         diff.line2[idx] = 0;
-        unsafe { ga_concat_lit(gap, c" after \"") };
-        unsafe { ga_concat_len(gap, diff.line1.as_ptr(), idx) };
+        ga_concat_lit(gap, c" after \"");
+        unsafe { ga_concat_bytes(gap, diff.line1.as_ptr(), idx) };
         if !unsafe { cstr::eq(diff.line1.as_ptr(), diff.line2.as_ptr()) } {
-            unsafe { ga_concat_lit(gap, c"\" vs \"") };
-            unsafe { ga_concat_len(gap, diff.line2.as_ptr(), idx) };
+            ga_concat_lit(gap, c"\" vs \"");
+            unsafe { ga_concat_bytes(gap, diff.line2.as_ptr(), idx) };
         }
-        unsafe { ga_concat_lit(gap, c"\"") };
+        ga_concat_lit(gap, c"\"");
     }
-    unsafe { report_assert_error(gap) };
+    report_assert_error(gap);
     1
 }
 
@@ -473,7 +473,7 @@ unsafe fn assert_inrange(argvars: *mut typval_T) -> c_int {
     let mut ga = unsafe { prepare_assert_error() };
     unsafe {
         fill_assert_error(
-            &raw mut ga,
+            &mut ga,
             arg(argvars, 3),
             expected.as_ptr(),
             ptr::null_mut(),
@@ -481,7 +481,7 @@ unsafe fn assert_inrange(argvars: *mut typval_T) -> c_int {
             AssertType::Other,
         )
     };
-    unsafe { report_assert_error(&raw mut ga) };
+    report_assert_error(&ga);
     1
 }
 
@@ -554,15 +554,15 @@ pub(crate) unsafe fn f_assert_exception(
     let error = unsafe { numbuf.string_chk(arg(argvars, 0)) };
     if unsafe { *get_vim_var_str(Vv::Exception) } == 0 {
         let mut ga = unsafe { prepare_assert_error() };
-        unsafe { ga_concat_lit(&raw mut ga, c"v:exception is not set") };
-        unsafe { report_assert_error(&raw mut ga) };
+        ga_concat_lit(&mut ga, c"v:exception is not set");
+        report_assert_error(&ga);
         unsafe { (*rettv).vval.v_number = 1 };
     } else if !error.is_null() && unsafe { strstr(get_vim_var_str(Vv::Exception), error) }.is_null()
     {
         let mut ga = unsafe { prepare_assert_error() };
         unsafe {
             fill_assert_error(
-                &raw mut ga,
+                &mut ga,
                 arg(argvars, 1),
                 ptr::null(),
                 arg(argvars, 0),
@@ -570,7 +570,7 @@ pub(crate) unsafe fn f_assert_exception(
                 AssertType::Other,
             )
         };
-        unsafe { report_assert_error(&raw mut ga) };
+        report_assert_error(&ga);
         unsafe { (*rettv).vval.v_number = 1 };
     }
 }
@@ -645,8 +645,8 @@ pub(crate) unsafe fn f_assert_report(
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
     let mut ga = unsafe { prepare_assert_error() };
-    unsafe { ga_concat(&raw mut ga, numbuf.string(arg(argvars, 0))) };
-    unsafe { report_assert_error(&raw mut ga) };
+    unsafe { ga_concat_cstr(&mut ga, numbuf.string(arg(argvars, 0))) };
+    report_assert_error(&ga);
     unsafe { (*rettv).vval.v_number = 1 };
 }
 

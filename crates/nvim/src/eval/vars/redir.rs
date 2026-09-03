@@ -16,21 +16,25 @@ use core::{ptr, slice};
 use super::*;
 use crate::types::{Failed, NUL};
 
-/// Append the message in `gap` to `v:errors`, which the `assert_*` builtins
-/// report through.
-///
-/// # Safety
-/// `gap` is a byte garray holding the message.
-pub unsafe fn assert_error(gap: *mut garray_T) {
-    // SAFETY: `v:errors` is a table row, and `gap` is the caller's live
-    // byte garray.
+/// Append `message` to `v:errors`, which the `assert_*` builtins report
+/// through.
+pub fn assert_error(message: &[u8]) {
+    // SAFETY: `v:errors` is a table row, and `message` is the caller's own
+    // buffer, read for exactly its own length.
     let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
     if tv.v_type != VAR_LIST || tv.list_or_null().is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
         unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
     }
-    let text = unsafe { (*gap).ga_data } as *const c_char;
-    let len = unsafe { (*gap).ga_len } as ssize_t;
+    // A message that was never appended to used to be a null `ga_data`, and
+    // `tv_list_append_string` tells that apart from a zero-length buffer: the
+    // first appends `v:null`, the second an empty string.
+    let text = if message.is_empty() {
+        ptr::null()
+    } else {
+        message.as_ptr().cast::<c_char>()
+    };
+    let len = message.len() as ssize_t;
     unsafe { tv_list_append_string(get_vim_var_list(Vv::Errors), text, len) };
 }
 

@@ -16,6 +16,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
+use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 
@@ -575,21 +576,20 @@ unsafe fn concat_continuations(sp: *mut source_cookie_T, line: *mut c_char) -> *
         return line;
     }
 
-    let mut ga = GA_EMPTY_INIT_VALUE;
-    unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 400) };
-    unsafe { ga_concat(&raw mut ga, line) };
+    // SAFETY (this body): `line` and every `nextline` are NUL-terminated
+    // lines this function owns.
+    let mut joined = unsafe { cstr::bytes_at(line) }.to_vec();
     while !unsafe { (*sp).nextline }.is_null()
         && unsafe {
             let next = cstr::bytes_at((*sp).nextline);
-            concat_continued_line(&raw mut ga, 400, (*sp).nextline, next.len())
+            concat_continued_line(&mut joined, (*sp).nextline, next.len())
         }
     {
         unsafe { xfree((*sp).nextline.cast::<c_void>()) };
         unsafe { (*sp).nextline = get_one_sourceline(sp) };
     }
-    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     unsafe { xfree(line.cast::<c_void>()) };
-    ga.ga_data.cast::<c_char>()
+    owned_cstr(joined)
 }
 
 /// Does `p` begin a continuation -- a `\`, or the `"\ ` that comments one out?

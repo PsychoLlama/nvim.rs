@@ -11,6 +11,7 @@ use crate::charset::CharDisplay;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
+use crate::memory::handoff::owned_cstr;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -273,15 +274,14 @@ pub unsafe fn str2special_save(
     replace_lt: bool,
 ) -> *mut c_char {
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
-    let mut ga = garray_T::default();
-    unsafe { ga_init(&raw mut ga, 1, 40) };
+    let mut out = Vec::<u8>::new();
     let mut p = str;
     while unsafe { *p } != 0 {
         let text = unsafe { str2special(&raw mut p, replace_spaces, replace_lt, &mut piece) };
-        unsafe { ga_concat(&raw mut ga, text) };
+        // SAFETY: `str2special` answers a NUL-terminated rendering.
+        out.extend_from_slice(unsafe { cstr::bytes_at(text) });
     }
-    unsafe { ga_append(&raw mut ga, 0) };
-    ga.ga_data.cast()
+    owned_cstr(out)
 }
 
 /// [`str2special`] over a whole string, into `arena`.

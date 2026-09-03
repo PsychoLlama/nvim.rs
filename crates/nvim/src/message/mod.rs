@@ -22,7 +22,7 @@ use crate::event::multiqueue::multiqueue_process_events;
 use crate::ex_docmd::do_sleep;
 use crate::ex_eval::cause_errthrow;
 use crate::fileio::check_timestamps;
-use crate::garray::{ga_append, ga_concat, ga_concat_len, ga_init};
+use crate::garray::ga_concat_len;
 use crate::getchar::{
     beep_flush, char_avail, flush_buffers, ins_char_typebuf, safe_vgetc, stuff_empty,
     typeahead_noflush,
@@ -94,8 +94,8 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     Arena, Array, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
     KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, colnr_T, estack_T,
-    estack_arg_T, exarg_T, flush_buffers_T, garray_T, int64_t, ptrdiff_t, sattr_T, schar_T, size_t,
-    ssize_t, typval_T, typval_vval_union, uint64_t,
+    estack_arg_T, exarg_T, flush_buffers_T, int64_t, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t,
+    typval_T, typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,

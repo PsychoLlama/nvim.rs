@@ -132,17 +132,15 @@ unsafe fn fopen_noinh_readbin(filename: *mut c_char) -> *mut FILE {
     unsafe { fdopen(fd, READBIN.as_ptr()) }
 }
 
-/// Append the continuation `p` to `ga`, answering whether the line was one.
+/// Append the continuation `p` to `text`, answering whether the line was one.
 ///
 /// A `"\ ` comment line is *not* a continuation but does not end one either,
 /// so it answers true having appended nothing.
 ///
 /// # Safety
-/// `ga` is a garray the caller is collecting a script line in, and `p` names
-/// `len` readable bytes.
+/// `p` names `len` readable bytes.
 pub(crate) unsafe fn concat_continued_line(
-    ga: *mut garray_T,
-    init_growsize: c_int,
+    text: &mut Vec<u8>,
     p: *const c_char,
     len: size_t,
 ) -> bool {
@@ -155,12 +153,11 @@ pub(crate) unsafe fn concat_continued_line(
     if len == 0 || unsafe { *line } as c_int != '\\' as c_int {
         return false;
     }
-    // Grow by what has been collected so far (capped), so a line with
-    // many continuations does not reallocate once per continuation.
-    if unsafe { (*ga).ga_len } > init_growsize {
-        unsafe { ga_set_growsize(ga, (*ga).ga_len.min(8000)) };
-    }
-    unsafe { ga_concat_len(ga, line.add(1), len - 1) };
+    // The `ga_set_growsize` that used to sit here is gone with the garray:
+    // a `Vec` already doubles, so a line with many continuations reallocates
+    // logarithmically often on its own.
+    // SAFETY: the caller's contract -- `len - 1` bytes past the backslash.
+    text.extend_from_slice(unsafe { slice::from_raw_parts(line.add(1).cast::<u8>(), len - 1) });
     true
 }
 

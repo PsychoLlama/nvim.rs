@@ -20,7 +20,6 @@ use crate::eval::vars::set_var;
 use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
 use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
 use crate::ex_eval::aborting;
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::highlight_group::{HLF_E, syn_name2id};
 use crate::main::{
     called_emsg, did_emsg, force_abort, got_int, line_msg, msg_didout, msg_ext_skip_verbose,
@@ -38,8 +37,8 @@ use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN,
-    VarLock, evalarg_T, exarg_T, funccal_entry_T, garray_T, linenr_T, ptrdiff_t, sctx_T, size_t,
-    typval_T, typval_vval_union, var_flavour_T,
+    VarLock, evalarg_T, exarg_T, funccal_entry_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T,
+    typval_vval_union, var_flavour_T,
 };
 use crate::ui::ui_has;
 
@@ -56,15 +55,6 @@ const UNSET_EVALARG: evalarg_T = evalarg_T {
     eval_getline: None,
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
-};
-
-/// An empty growable array.
-const UNSET_GA: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: null_mut(),
 };
 
 /// Does this byte end the `:echo` argument list?
@@ -196,9 +186,10 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
     let mut arg: *mut c_char = eap.arg;
     let mut rettv = UNSET_TV;
     let mut ret = Ok(());
-    let mut ga = UNSET_GA;
-    // SAFETY: `ga` is this frame's.
-    unsafe { ga_init(&raw mut ga, 1, 80) };
+    let mut text = Vec::<u8>::new();
+    // Whether anything was appended at all: with every argument skipped
+    // there is no message, which is not the same as an empty one.
+    let mut built = false;
 
     let _skipping = (eap.skip != 0).then(Suppress::emsg_skip);
     // SAFETY: `arg` walks the command line, which is NUL-terminated.
@@ -221,27 +212,16 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
             } else {
                 unsafe { encode_tv2string(&raw mut rettv, null_mut::<size_t>()) }
             };
-            // SAFETY: `argstr` is NUL-terminated, and `ga_grow` makes room
-            // for the separator, the bytes and the terminator before any of
-            // them is written.
-            let len = unsafe { cstr::bytes_at(argstr) }.len();
-            // SAFETY: as above.
-            unsafe { ga_grow(&raw mut ga, len as c_int + 2) };
-            if ga.ga_len > 0 {
-                // SAFETY: the growth above covers the separator.
-                unsafe { *(ga.ga_data as *mut c_char).offset(ga.ga_len as isize) = b' ' as c_char };
-                ga.ga_len += 1;
+            if built {
+                text.push(b' ');
             }
-            // SAFETY: as above -- `ga_len` is inside the array.
-            let end = unsafe { (ga.ga_data as *mut c_char).offset(ga.ga_len as isize) };
-            // SAFETY: as above -- `len + 1` bytes fit past `ga_len`.
-            let into = end.cast::<u8>();
-            unsafe { into.copy_from_nonoverlapping(argstr.cast(), len + 1) };
+            // SAFETY: `argstr` is NUL-terminated.
+            text.extend_from_slice(unsafe { cstr::bytes_at(argstr) });
+            built = true;
             if owned {
                 // SAFETY: the two encoders hand back an owned string.
                 unsafe { xfree(argstr as *mut c_void) };
             }
-            ga.ga_len += len as c_int;
         }
         // SAFETY: `rettv` is this frame's.
         clear_local(&mut rettv);
@@ -249,35 +229,32 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
         arg = unsafe { skipwhite(arg) };
     }
 
-    if ret.is_ok() && !ga.ga_data.is_null() {
+    if ret.is_ok() && built {
+        text.push(0);
+        let line = text.as_mut_ptr().cast::<c_char>();
         if eap.cmdidx == CmdIdx::echomsg {
             // SAFETY: the kind is a NUL-terminated literal.
             unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };
-            let text = ga.ga_data as *const c_char;
-            // SAFETY: the array holds the NUL-terminated message built above.
-            unsafe { msg_ptr(text, echo_hl_id.get()) };
+            // SAFETY: `line` is the NUL-terminated message built above.
+            unsafe { msg_ptr(line, echo_hl_id.get()) };
         } else if eap.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
             let save_did_emsg = did_emsg.get();
-            let text = ga.ga_data as *const c_char;
-            // SAFETY: `text` is the NUL-terminated message built above, and
+            // SAFETY: `line` is the NUL-terminated message built above, and
             // the kind is a literal.
-            unsafe { emsg_multiline(text, c"echoerr".as_ptr(), HLF_E, true) };
+            unsafe { emsg_multiline(line, c"echoerr".as_ptr(), HLF_E, true) };
             if !force_abort.get() {
                 did_emsg.set(save_did_emsg);
             }
         } else if eap.cmdidx == CmdIdx::execute {
-            let (line, getline, cookie) = (ga.ga_data as *mut c_char, eap.ea_getline, eap.cookie);
+            let (getline, cookie) = (eap.ea_getline, eap.cookie);
             let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
             // SAFETY: `line` is the NUL-terminated command built above, and
             // the getline pair is the caller's own.
             let _ = unsafe { do_cmdline(line, getline, cookie, opts) };
         }
     }
-
-    // SAFETY: `ga` is this frame's.
-    unsafe { ga_clear(&raw mut ga) };
     // SAFETY: `arg` is the tail of the command line.
     eap.nextcmd = unsafe { check_nextcmd(arg) };
 }

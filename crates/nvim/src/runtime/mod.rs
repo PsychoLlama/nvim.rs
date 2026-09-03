@@ -45,10 +45,7 @@ use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
 use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
-use crate::garray::{
-    ga_append, ga_clear_strings, ga_concat, ga_concat_len, ga_grow, ga_init,
-    ga_remove_duplicate_strings, ga_set_growsize,
-};
+use crate::garray::{ga_clear_strings, ga_concat, ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
@@ -91,7 +88,7 @@ use crate::profile::{
     time_pop, time_push,
 };
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen};
+use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
@@ -100,7 +97,7 @@ use crate::types::{
     VarLock, XDGVarType, dict_T, estack_T, estack_arg_T, etype_T, exarg_T, expand_T,
     funccal_entry_T, garray_T, handle_T, int64_t, kBoolVarFalse, linenr_T, list_T, optset_T,
     proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, ssize_t, typval_T,
-    typval_vval_union, ufunc_T, uint8_t, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
+    typval_vval_union, ufunc_T, uint32_t, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
