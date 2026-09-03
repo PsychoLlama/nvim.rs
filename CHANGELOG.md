@@ -32,6 +32,13 @@ and this project adheres to [CalVer](https://calver.org/).
   and the marktree's mark index. `nvim_get_namespaces()` and `:augroup`
   still list in creation order, and a ShaDa write still cuts the same files
   at `'shada'`'s `'N`.
+- Rewrote the last of the growable buffers the editor built with klib's
+  `kvec`: the swap-file ATTENTION message and `:recover`'s listing, the
+  Replace-mode stack of overwritten characters, the resolved
+  'runtimepath'/'packpath' search path, and the command string `nvim_cmd()`
+  hands back to `:execute`. The ATTENTION message, `:recover`, `swapinfo()`,
+  `swapfilelist()`, Replace mode's backspace, `:packadd` and `nvim_cmd()`
+  all behave as before, byte for byte.
 
 ## [2026.09.02-bc9e0f515a]
 
