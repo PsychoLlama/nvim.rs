@@ -32,9 +32,19 @@ pub struct syn_state {
     pub sst_tick: disptick_T,
     pub sst_change_lnum: linenr_T,
 }
+/// A cached entry's state stack: either inline in the entry, or on the heap
+/// when there are more than `SST_FIX_STATES` items.
+///
+/// Discriminated by `syn_state::sst_stacksize`, which is also the *length* of
+/// both arms -- so the heap arm needs no length of its own, and upstream's
+/// growarray here carried one that was always a copy of it. `syntax::stack`'s
+/// `entry_states` is the one place the discrimination is written down.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union syn_state_sst_union {
     pub sst_stack: [bufstate_T; 7],
-    pub sst_ga: garray_T,
+    /// A `Box<[bufstate_T]>` of `sst_stacksize` items taken apart: a union
+    /// field may not have a destructor, so `clear_syn_state` puts it back
+    /// together to release it.
+    pub sst_heap: *mut bufstate_T,
 }

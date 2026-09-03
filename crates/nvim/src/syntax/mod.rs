@@ -48,7 +48,6 @@ use crate::ex_docmd::{
     check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
 };
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
-use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
@@ -646,7 +645,6 @@ static current_col: GlobalCell<colnr_T> = GlobalCell::new(0);
 static current_state_stored: GlobalCell<bool> = GlobalCell::new(false);
 /// Whether the line has been parsed to its end.
 static current_finished: GlobalCell<bool> = GlobalCell::new(false);
-/// The state stack: a `garray_T` of [`stateitem_T`], outermost item first.
 /// The syntax state stack, outermost item first: what the parser is inside
 /// at [`current_col`].
 ///

@@ -1,6 +1,6 @@
 //! The state stack's item operations.
 //!
-//! The stack is a `garray_T` of `stateitem_T`, innermost last. These are the
+//! The stack is a `Vec` of `stateitem_T`, innermost last. These are the
 //! operations on it: pushing what a match found ([`push_next_match`]), working
 //! out an item's highlight attributes and containment ([`update_si_attr`]) and
 //! where it ends ([`update_si_end`]), applying `keepend`/`extend`

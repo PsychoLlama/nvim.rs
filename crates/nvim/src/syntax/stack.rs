@@ -30,11 +30,21 @@ use crate::winlayer::windows;
 /// one place that discrimination is written down.
 unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut bufstate_T {
     if stacksize > SST_FIX_STATES {
-        unsafe { (*p).sst_union.sst_ga.ga_data as *mut bufstate_T }
+        unsafe { (*p).sst_union.sst_heap }
     } else {
         unsafe { &raw mut (*p).sst_union.sst_stack as *mut bufstate_T }
     }
 }
+
+/// A `bufstate_T` with nothing in it, which is what a fresh heap arm holds
+/// until [`fill_entry`] copies the state stack over it.
+const EMPTY_BUFSTATE: bufstate_T = bufstate_T {
+    bs_idx: 0,
+    bs_flags: SynFlags::NONE,
+    bs_seqnr: 0,
+    bs_cchar: 0,
+    bs_extmatch: ::core::ptr::null_mut(),
+};
 
 /// Free a synblock's whole cache.
 pub(crate) fn syn_stack_free_block(mut block: SynBlock) {
@@ -386,15 +396,13 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
     let size = state_len();
     unsafe { (*sp).sst_stacksize = size };
     if size > SST_FIX_STATES {
-        // Needs clearing: something may remain from when the length was
-        // below SST_FIX_STATES and the inline array was in use.
-        // SAFETY: `sp` is the cache entry being resized.
-        let ga = unsafe { &raw mut (*sp).sst_union.sst_ga };
-        let item_size = ::core::mem::size_of::<bufstate_T>() as c_int;
-        // SAFETY: a growarray the entry owns.
-        unsafe { ga_init(ga, item_size, 1) };
-        unsafe { ga_grow(&raw mut (*sp).sst_union.sst_ga, size) };
-        unsafe { (*sp).sst_union.sst_ga.ga_len = size };
+        // The entry takes a heap arm of exactly `size` items. `clear_syn_state`
+        // released whatever was there, inline arm included, so nothing of the
+        // previous stack survives into this one.
+        let states = vec![EMPTY_BUFSTATE; size as usize].into_boxed_slice();
+        // SAFETY: `sp` is the cache entry being filled; the box is leaked into
+        // the union arm and put back together by `clear_syn_state`.
+        unsafe { (*sp).sst_union.sst_heap = Box::into_raw(states).cast() };
     }
     let bp = unsafe { entry_states(sp, size) };
     let mut i = 0;

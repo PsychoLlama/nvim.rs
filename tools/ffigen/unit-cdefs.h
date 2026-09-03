@@ -2081,7 +2081,7 @@ struct staticList10_T {
 };
 union syn_state_sst_union {
   bufstate_T sst_stack[7];
-  garray_T sst_ga;
+  bufstate_T *sst_heap;
 };
 struct ufunc_S {
   int uf_varargs;

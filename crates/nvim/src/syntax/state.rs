@@ -196,28 +196,33 @@ unsafe fn record_line(
     prev
 }
 
-/// Release the extmatch references a cached state holds.
+/// Release what a cached state holds: its heap arm, if it has one, and the
+/// extmatch reference of every item on it.
 ///
-/// A growarray full of `bufstate_T` cannot simply be discarded: each entry may
-/// hold a reference to the submatches of the pattern that started it.
+/// A stack of `bufstate_T`s cannot simply be discarded -- each item may hold a
+/// reference to the submatches of the pattern that started it. Safe to call
+/// twice: the heap arm is nulled as it is released.
 pub(crate) unsafe fn clear_syn_state(p: *mut synstate_T) {
-    if unsafe { (*p).sst_stacksize } > SST_FIX_STATES {
-        let gap = unsafe { &raw mut (*p).sst_union.sst_ga };
-        if !unsafe { (*gap).ga_data }.is_null() {
-            let mut i = 0;
-            while i < unsafe { (*gap).ga_len } {
-                unsafe {
-                    unref_extmatch(
-                        (*((*gap).ga_data as *mut bufstate_T).offset(i as isize)).bs_extmatch,
-                    )
-                };
-                i += 1;
+    let size = unsafe { (*p).sst_stacksize };
+    if size > SST_FIX_STATES {
+        // SAFETY: the heap arm is a `Box<[bufstate_T]>` of `sst_stacksize`
+        // items (`fill_entry`), or null when the entry never got one.
+        let states = unsafe { (*p).sst_union.sst_heap };
+        if !states.is_null() {
+            unsafe { (*p).sst_union.sst_heap = ::core::ptr::null_mut() };
+            // SAFETY: as above -- this is the box `fill_entry` leaked, and
+            // nothing else holds it.
+            let states = unsafe {
+                Box::from_raw(::core::ptr::slice_from_raw_parts_mut(states, size as usize))
+            };
+            for state in &states {
+                // SAFETY: the item's own reference.
+                unsafe { unref_extmatch(state.bs_extmatch) };
             }
         }
-        unsafe { ga_clear(gap) };
     } else {
         let mut i = 0;
-        while i < unsafe { (*p).sst_stacksize } {
+        while i < size {
             unsafe { unref_extmatch((*p).sst_union.sst_stack[i as usize].bs_extmatch) };
             i += 1;
         }
