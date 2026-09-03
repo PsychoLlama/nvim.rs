@@ -256,8 +256,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
 
     cpinfo.save_hls = p_hls.get() != 0;
     cpinfo.save_cmdmod = cmdmod.with(Clone::clone);
-    // SAFETY: `save_view` is this `CpInfo`'s own growarray.
-    unsafe { win_size_save(&raw mut cpinfo.save_view) };
+    cpinfo.save_view = win_size_save();
     save_search_patterns();
 
     // No search highlighting during a live substitution.
@@ -362,9 +361,8 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
     cmdmod.set(cpinfo.save_cmdmod.clone());
     p_hls.set(cpinfo.save_hls as ::core::ffi::c_int);
     restore_search_patterns();
-    win_size_restore(&raw mut cpinfo.save_view);
-    // SAFETY: `save_view` is the growarray `win_size_save` filled.
-    unsafe { ga_clear(&raw mut cpinfo.save_view) };
+    win_size_restore(&cpinfo.save_view);
+    cpinfo.save_view = Vec::new();
 
     // SAFETY: both `items` are this `CpInfo`'s own allocations.
     unsafe { xfree(cpinfo.win_info.items as *mut ::core::ffi::c_void) };

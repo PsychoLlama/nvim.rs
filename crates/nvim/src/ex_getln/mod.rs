@@ -50,7 +50,6 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_clear;
-use crate::garray::ga_clear;
 use crate::getchar::{
     beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty,
     stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
@@ -143,8 +142,8 @@ use crate::types::{
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, RemapValues, Set_ptr_t,
     String_0, TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T,
     cstack_T, dict_T, disptick_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
-    expand_T, garray_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T,
-    oparg_T, optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
+    expand_T, handle_T, hashtab_T, linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T,
+    optmagic_T, optset_T, pos_T, proftime_T, ptr_t, ptrdiff_t, save_v_event_T, sctx_T,
     searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t, uint32_t,
     uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
@@ -340,7 +339,7 @@ pub struct CpInfo {
     pub buf_info: CpBufInfoVec,
     pub save_hls: bool,
     pub save_cmdmod: cmdmod_T,
-    pub save_view: garray_T,
+    pub save_view: Vec<::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
 pub struct CpBufInfoVec {
@@ -656,13 +655,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
     },
     save_hls: false,
     save_cmdmod: cmdmod_T::NONE,
-    save_view: garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    },
+    save_view: Vec::new(),
 };
 
 pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {

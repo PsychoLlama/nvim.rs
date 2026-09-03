@@ -27,14 +27,13 @@ use crate::eval::typval::{
 };
 use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
-use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{Columns, Rows, curbuf, p_ch, p_window, skip_win_fix_scroll};
 use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, garray_T, linenr_T, list_T, ptrdiff_t,
+    OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, linenr_T, list_T, ptrdiff_t,
     save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
@@ -436,27 +435,22 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut dict_T) {
 // ---------------------------------------------------------------------------
 // Saving and restoring every window's size
 
-pub unsafe fn win_size_save(gap: *mut garray_T) {
-    let room = windows().count() as c_int * 2 + 1;
-    // SAFETY: the caller's promise -- a growable array to initialise.
-    unsafe { ga_init(gap, size_of::<c_int>() as c_int, 1) };
-    // SAFETY: as above.
-    unsafe { ga_grow(gap, room) };
+pub fn win_size_save() -> Vec<c_int> {
+    let room = windows().count() * 2 + 1;
+    let mut sizes = Vec::with_capacity(room);
     // The total number of rows first, so a restore can tell the screen did not
     // change size in between.
-    let mut sizes = Sizes(gap);
     sizes.push(frame_rows() + global_stl_rows() - last_stl_rows(false));
     for wp in windows() {
         sizes.push(wp.w_width + wp.w_vsep_width);
         sizes.push(wp.w_height);
     }
+    sizes
 }
 
-pub fn win_size_restore(gap: *mut garray_T) {
-    let sizes = Sizes(gap);
-    if windows().count() as c_int * 2 + 1 != sizes.len()
-        || sizes.at(0) as OptInt
-            != (frame_rows() + global_stl_rows() - last_stl_rows(false)) as OptInt
+pub fn win_size_restore(sizes: &[c_int]) {
+    if windows().count() * 2 + 1 != sizes.len()
+        || sizes[0] as OptInt != (frame_rows() + global_stl_rows() - last_stl_rows(false)) as OptInt
     {
         return;
     }
@@ -464,7 +458,7 @@ pub fn win_size_restore(gap: *mut garray_T) {
     for _ in 0..2 {
         let mut i = 1;
         for wp in windows() {
-            let (width, height) = (sizes.at(i), sizes.at(i + 1));
+            let (width, height) = (sizes[i], sizes[i + 1]);
             i += 2;
             if !wp.w_floating {
                 set_frame_width(wp.frame(), width);
@@ -473,28 +467,4 @@ pub fn win_size_restore(gap: *mut garray_T) {
         }
     }
     comp_positions();
-}
-
-/// `gap`, read as the array of `int`s `win_size_save` fills it with.
-struct Sizes(*mut garray_T);
-
-impl Sizes {
-    fn len(&self) -> c_int {
-        // SAFETY: a live growable array.
-        unsafe { (*self.0).ga_len }
-    }
-
-    fn at(&self, i: c_int) -> c_int {
-        // SAFETY: a live array of `int`, and `i` is inside its length.
-        unsafe { *(*self.0).ga_data.cast::<c_int>().offset(i as isize) }
-    }
-
-    /// Append one size, which `ga_grow` has already made room for.
-    fn push(&mut self, value: c_int) {
-        let len = self.len();
-        // SAFETY: as above; the caller grew the array to fit every push.
-        unsafe { *(*self.0).ga_data.cast::<c_int>().offset(len as isize) = value };
-        // SAFETY: as above.
-        unsafe { (*self.0).ga_len = len + 1 };
-    }
 }

@@ -109,15 +109,8 @@ pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
 pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let mut bufref = BufRef::NONE;
     let old_curwin = curwin.get();
-    // Uninitialised in the C; `win_size_save` below fills it, and every
-    // path that reaches `ga_clear` has been through it.
-    let mut winsizes = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    };
+    // Uninitialised in the C; `win_size_save` below fills it.
+    let mut winsizes = Vec::new();
     let save_restart_edit = restart_edit.get();
     let save_State = State.get();
     let save_exmode = exmode_active.get();
@@ -133,7 +126,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let old_curbuf = BufRef::of_opt(current_buf());
 
     // Save current window sizes.
-    unsafe { win_size_save(&raw mut winsizes) };
+    winsizes = win_size_save();
 
     // When using completion in Insert mode with <C-R>=<C-F> one can open
     // the command line window, but we don't want the popup menu then.
@@ -151,7 +144,6 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     .is_err()
     {
         beep_flush();
-        unsafe { ga_clear(&raw mut winsizes) };
         return Key::Ignore.code();
     }
     // win_split() autocommands may have messed with the old window or
@@ -162,7 +154,6 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
         beep_flush();
-        unsafe { ga_clear(&raw mut winsizes) };
         return Ctrl_C;
     }
     // Don't let quitting the More prompt make this fail.
@@ -204,7 +195,6 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         cmdwin_win.set(::core::ptr::null_mut::<win_T>());
         cmdwin_old_curwin.set(::core::ptr::null_mut::<win_T>());
         beep_flush();
-        unsafe { ga_clear(&raw mut winsizes) };
         return Ctrl_C;
     }
     cmdwin_buf.set(curbuf.get());
@@ -401,11 +391,10 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         }
 
         // Restore window sizes.
-        win_size_restore(&raw mut winsizes);
+        win_size_restore(&winsizes);
         skip_win_fix_cursor.set(false);
     }
 
-    unsafe { ga_clear(&raw mut winsizes) };
     restart_edit.set(save_restart_edit);
     cmdmsg_rl.set(save_cmdmsg_rl);
 
