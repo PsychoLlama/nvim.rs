@@ -9,6 +9,7 @@ mod api_converter;
 mod arena;
 mod arglist;
 mod buffer;
+mod channel_reader;
 mod charset;
 mod cmdhist;
 mod cursor;

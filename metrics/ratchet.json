@@ -1,6 +1,6 @@
 {
   "internal_exports": 0,
-  "test_reached_pub": 676,
+  "test_reached_pub": 682,
   "cell_ptr_keepers": 25,
   "cell_ptr_accessors": 57,
   "cell_copy_owner": 33,
@@ -171,7 +171,7 @@
     "crates/nvim/src/channel/info.rs": {"extern_abi": 1, "missing_safety_doc": 1, "pub_items": 5, "unsafe_lines": 47},
     "crates/nvim/src/channel/mod.rs": {"cell_ptr": 1, "extern_abi": 1, "missing_safety_doc": 2, "pub_items": 21, "unsafe_lines": 101},
     "crates/nvim/src/channel/open.rs": {"missing_safety_doc": 2, "pub_items": 4, "unsafe_lines": 104},
-    "crates/nvim/src/channel/reader.rs": {"extern_abi": 1, "missing_safety_doc": 3, "pub_items": 5, "unsafe_lines": 62},
+    "crates/nvim/src/channel/reader.rs": {"extern_abi": 1, "missing_safety_doc": 3, "pub_items": 6, "unsafe_lines": 62},
     "crates/nvim/src/channel/term.rs": {"extern_abi": 1, "missing_safety_doc": 6, "pub_items": 1, "unsafe_lines": 30},
     "crates/nvim/src/charset/display.rs": {"pub_items": 14, "unsafe_lines": 65},
     "crates/nvim/src/charset/mod.rs": {"cell_ptr": 1, "missing_safety_doc": 1, "pub_items": 45, "unsafe_lines": 91},

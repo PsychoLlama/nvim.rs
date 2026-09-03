@@ -271,7 +271,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 ///
 /// # Safety
 /// `reader` is live.
-unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut list_T {
+pub unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut list_T {
     let l = unsafe { tv_list_alloc(kListLenMayKnow as isize) };
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.
