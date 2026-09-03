@@ -47,6 +47,13 @@ and this project adheres to [CalVer](https://calver.org/).
   `maplist()`, `mapcheck()`, `mapset()`, `nvim_get_keymap()` and
   `nvim_set_keymap()` answer the same dicts, and `:mkexrc`/`:mksession`
   write the same commands.
+- Rewrote how a syntax block holds what `:syntax` defines: the patterns, the
+  clusters, their names, and the `contains=`/`containedin=`/`nextgroup=` id
+  lists are owned by the block rather than allocated and released by hand,
+  and the start patterns of one `:syntax region` no longer share one copy of
+  those lists between them. `:syntax list`, `:syntax sync`, `:syntime report`,
+  `synID()`/`synstack()`/`synconcealed()` and the highlighting itself all
+  answer as before.
 
 ## [2026.09.02-bc9e0f515a]
 
