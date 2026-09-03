@@ -54,6 +54,14 @@ and this project adheres to [CalVer](https://calver.org/).
   those lists between them. `:syntax list`, `:syntax sync`, `:syntime report`,
   `synID()`/`synstack()`/`synconcealed()` and the highlighting itself all
   answer as before.
+- Rewrote how a loaded spell file holds its tables: the four word tries, the
+  `SAL`/`SOFO` sound-folding rules, the `REP`/`REPSAL` pairs, the
+  `CHECKCOMPOUNDPATTERN` list and the `SYLLABLE` items are owned by the
+  language rather than allocated and released by hand, and the two
+  suggestion lists own the words in them. Spell checking, `z=`,
+  `spellbadword()`, `spellsuggest()` (in all three `'spellsuggest'`
+  methods), `soundfold()`, `:spelldump`, `:spellinfo` and `:mkspell` all
+  answer as before, byte for byte.
 
 ## [2026.09.02-bc9e0f515a]
 
