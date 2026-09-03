@@ -181,7 +181,7 @@ pub(crate) fn check_state_ends() {
         if !current_next_flags
             .get()
             .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
-            && unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int == NUL
+            && syn_curline_byte(current_col.get()) as c_int == NUL
         {
             current_next_list.set(::core::ptr::null_mut());
         }
@@ -216,7 +216,7 @@ pub(crate) fn check_state_ends() {
             check_keepend();
             if current_next_flags.get().has(SynFlags::HAS_EOL)
                 && keepend_level.get() < 0
-                && unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int == NUL
+                && syn_curline_byte(current_col.get()) as c_int == NUL
             {
                 return;
             }
@@ -358,7 +358,7 @@ pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
             // A "oneline" never continues in the next line.
             sip.si_ends = 1;
             sip.si_m_endpos.lnum = current_lnum.get();
-            unsafe { sip.si_m_endpos.col = syn_getcurline_len() };
+            sip.si_m_endpos.col = syn_getcurline_len();
         } else {
             sip.si_ends = 0;
             sip.si_m_endpos.lnum = 0;

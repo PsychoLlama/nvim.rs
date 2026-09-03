@@ -404,7 +404,7 @@ pub(crate) fn syn_finish_line(syncing: bool) -> bool {
             // syn_current_attr() skipped the check for an item that ends
             // here; do it now. Be careful not to go past the NUL.
             let prev_col = current_col.get();
-            if unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int != NUL {
+            if syn_curline_byte(current_col.get()) as c_int != NUL {
                 current_col.set(current_col.get() + 1);
             }
             check_state_ends();

@@ -183,7 +183,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CmdIdx::syntax => unsafe { set_context_in_syntax_cmd(xp.raw(), arg) },
+        CmdIdx::syntax => unsafe { set_context_in_syntax_cmd(&mut xp, arg) },
 
         CmdIdx::r#const
         | CmdIdx::r#let
@@ -214,7 +214,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
             xp.xp_pattern = arg as *mut c_char;
         }
 
-        CmdIdx::echohl => unsafe { set_context_in_echohl_cmd(xp.raw(), arg) },
+        CmdIdx::echohl => set_context_in_echohl_cmd(&mut xp, arg),
         CmdIdx::highlight => unsafe { set_context_in_highlight_cmd(xp.raw(), arg) },
         CmdIdx::sign => unsafe { set_context_in_sign_cmd(xp.raw(), arg as *mut c_char) },
 

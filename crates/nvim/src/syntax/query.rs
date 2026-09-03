@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -51,18 +52,18 @@ pub(crate) fn reset_expand_highlight() {
 
 /// Command-line completion for `:match` and `:echohl`: highlight group names,
 /// plus `None`.
-pub(crate) unsafe fn set_context_in_echohl_cmd(xp: *mut expand_T, arg: *const c_char) {
-    unsafe { (*xp).xp_context = ExpandContext::Highlight };
-    unsafe { (*xp).xp_pattern = arg as *mut c_char };
+pub(crate) fn set_context_in_echohl_cmd(xp: &mut expand_T, arg: *const c_char) {
+    xp.xp_context = ExpandContext::Highlight;
+    xp.xp_pattern = arg.cast_mut();
     include_none.set(1);
 }
 
 /// Command-line completion for `:syntax`.
-pub(crate) unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_syntax_cmd(xp: &mut expand_T, arg: *const c_char) {
     // Default: expand subcommands.
-    unsafe { (*xp).xp_context = ExpandContext::Syntax };
+    xp.xp_context = ExpandContext::Syntax;
     EXPAND_WHAT.set(ExpandWhat::SubCmd);
-    unsafe { (*xp).xp_pattern = arg as *mut c_char };
+    xp.xp_pattern = arg.cast_mut();
     include_link.set(0);
     include_default.set(0);
     if unsafe { *arg } as c_int == NUL {
@@ -76,12 +77,13 @@ pub(crate) unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_
     }
 
     // Past the first word.
-    unsafe { (*xp).xp_pattern = skipwhite(p) };
-    let word_len = unsafe { p.offset_from(arg) } as size_t;
-    let first_word_is = |name: &CStr| unsafe { strncasecmp(arg, name.as_ptr(), word_len) } == 0;
+    xp.xp_pattern = unsafe { skipwhite(p) };
+    // SAFETY: both pointers are into the command line, `arg` first.
+    let word = unsafe { cstr::slice_at(arg, p.offset_from(arg) as usize) };
+    let first_word_is = |name: &CStr| word.eq_ignore_ascii_case(name.to_bytes());
 
-    if unsafe { *skiptowhite((*xp).xp_pattern) } as c_int != NUL {
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+    if unsafe { *skiptowhite(xp.xp_pattern) } as c_int != NUL {
+        xp.xp_context = ExpandContext::Nothing;
     } else if first_word_is(c"case") {
         EXPAND_WHAT.set(ExpandWhat::Case);
     } else if first_word_is(c"spell") {
@@ -93,12 +95,12 @@ pub(crate) unsafe fn set_context_in_syntax_cmd(xp: *mut expand_T, arg: *const c_
         if unsafe { *p } as c_int == '@' as c_int {
             EXPAND_WHAT.set(ExpandWhat::Cluster);
         } else {
-            unsafe { (*xp).xp_context = ExpandContext::Highlight };
+            xp.xp_context = ExpandContext::Highlight;
         }
     } else if first_word_is(c"keyword") || first_word_is(c"region") || first_word_is(c"match") {
-        unsafe { (*xp).xp_context = ExpandContext::Highlight };
+        xp.xp_context = ExpandContext::Highlight;
     } else {
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+        xp.xp_context = ExpandContext::Nothing;
     }
 }
 

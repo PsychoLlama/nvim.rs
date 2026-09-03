@@ -347,7 +347,7 @@ pub(crate) unsafe fn syn_add_end_off(
     };
     let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
 
-    let col = if base.lnum > unsafe { (*syn_buf.get()).b_ml.ml_line_count } {
+    let col = if base.lnum > syn_buf_line_count() {
         // Watch out for a match with the last NL in the buffer. Matters for
         // "rs=e+2" when there is a matchgroup.
         0
@@ -381,9 +381,9 @@ pub(crate) unsafe fn syn_add_start_off(
     };
     let off = spp.offsets[idx as usize] + if flagged { extra } else { 0 };
 
-    let (lnum, col) = if base.lnum > unsafe { (*syn_buf.get()).b_ml.ml_line_count } {
+    let (lnum, col) = if base.lnum > syn_buf_line_count() {
         // A "\n" at the end of the pattern may take us below the last line.
-        let lnum = unsafe { (*syn_buf.get()).b_ml.ml_line_count };
+        let lnum = syn_buf_line_count();
         (lnum, unsafe { ml_get_buf_len(syn_buf.get(), lnum) })
     } else {
         (base.lnum, base.col)
@@ -419,15 +419,36 @@ unsafe fn walk_chars(lnum: linenr_T, col: colnr_T, off: c_int) -> colnr_T {
 
 /// The current line of the syntax buffer.
 ///
-/// NOTE: invalid after anything that can look for a pattern match -- the
-/// regexp engine may reach `ml_get_buf` for another line and evict this one.
-pub(crate) unsafe fn syn_getcurline() -> *mut c_char {
+/// NOTE: the *bytes* are invalid after anything that can look for a pattern
+/// match -- the regexp engine may reach `ml_get_buf` for another line and
+/// evict this one. Reading them is the caller's unsafe step; asking for the
+/// pointer is not.
+pub(crate) fn syn_getcurline() -> *mut c_char {
+    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at,
+    // and `current_lnum` a line of it.
     unsafe { ml_get_buf(syn_buf.get(), current_lnum.get()) }
 }
 
 /// Length of the current line of the syntax buffer.
-pub(crate) unsafe fn syn_getcurline_len() -> colnr_T {
+pub(crate) fn syn_getcurline_len() -> colnr_T {
+    // SAFETY: as [`syn_getcurline`].
     unsafe { ml_get_buf_len(syn_buf.get(), current_lnum.get()) }
+}
+
+/// The byte at `col` of the line being parsed.
+///
+/// Every caller is testing for the NUL that ends the line, so `col` is at
+/// most its length and the read stays inside what `ml_get_buf` answered.
+pub(crate) fn syn_curline_byte(col: colnr_T) -> u8 {
+    debug_assert!(col <= syn_getcurline_len());
+    // SAFETY: `col` is within the line, its terminator included.
+    unsafe { *syn_getcurline().offset(col as isize) as u8 }
+}
+
+/// Number of lines in the buffer being parsed.
+pub(crate) fn syn_buf_line_count() -> linenr_T {
+    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
+    unsafe { (*syn_buf.get()).b_ml.ml_line_count }
 }
 
 /// `vim_regexec_multi` in the syntax buffer, timed when `:syntime` is on.

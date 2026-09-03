@@ -342,7 +342,7 @@ pub(crate) unsafe fn set_context_in_match_cmd(
     let mut xp = unsafe { Xp::new(xp) };
     if unsafe { *arg } as c_int == NUL || ends_excmd(unsafe { *arg } as c_int) == 0 {
         // Also complete "None".
-        unsafe { set_context_in_echohl_cmd(xp.raw(), arg) };
+        set_context_in_echohl_cmd(&mut xp, arg);
         arg = unsafe { skipwhite(skiptowhite(arg)) };
         if unsafe { *arg } as c_int != NUL {
             xp.xp_context = ExpandContext::Nothing;

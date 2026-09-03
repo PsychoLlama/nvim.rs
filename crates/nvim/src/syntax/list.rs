@@ -54,10 +54,10 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
     } else {
         // List the groups and clusters the argument names.
         while ends_excmd(unsafe { *arg } as c_int) == 0 && !got_int.get() {
-            let arg_end = unsafe { skiptowhite(arg) };
-            if unsafe { *arg } as c_int == '@' as c_int {
-                let id =
-                    unsafe { syn_scl_namen2id(arg.add(1), arg_end.offset_from(arg) as c_int - 1) };
+            // SAFETY: the caller's command line.
+            let (word, arg_end) = unsafe { word_at(arg) };
+            if word.first() == Some(&b'@') {
+                let id = syn_scl_namen2id(&word[1..]);
                 if id == 0 {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let arg = unsafe { c_str(arg) };
@@ -66,7 +66,7 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
                     syn_list_cluster(id - SYNID_CLUSTER);
                 }
             } else {
-                let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
+                let id = unsafe { syn_name2id_len(arg, word.len()) };
                 if id == 0 {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let arg = unsafe { c_str(arg) };

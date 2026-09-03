@@ -93,11 +93,10 @@ fn scl_name2id(name: &CStr) -> c_int {
     }
 }
 
-/// Look up the cluster named by `len` bytes at `linep`, answering 0 when there
-/// is no such cluster.
-pub(crate) unsafe fn syn_scl_namen2id(linep: *const c_char, len: c_int) -> c_int {
-    // SAFETY: the caller's promise -- `len` readable bytes.
-    scl_name2id(&unsafe { name_at(linep, len as usize) })
+/// Look up the cluster `name` names, answering 0 when there is no such
+/// cluster.
+pub(crate) fn syn_scl_namen2id(name: &[u8]) -> c_int {
+    scl_name2id(&cstr::owned(name))
 }
 
 /// Like [`syn_scl_namen2id`], but create the cluster when it does not exist.

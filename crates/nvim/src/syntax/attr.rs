@@ -93,7 +93,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     // No character, no attributes -- past end of line? Do try matching an
     // empty line, which could be the start of a region.
-    let line = unsafe { syn_getcurline() };
+    let line = syn_getcurline();
     if unsafe { *line.offset(current_col.get() as isize) } as c_int == NUL && current_col.get() != 0
     {
         // If we found a match after the last column, use it.
@@ -202,7 +202,7 @@ pub(crate) unsafe fn syn_current_attr(
             // is an empty line and "skipempty" was given, or we are on
             // white space and "skipwhite" was given.
             if !found_match {
-                let line = unsafe { syn_getcurline() };
+                let line = syn_getcurline();
                 let white = current_next_flags.get().has(SynFlags::SKIPWHITE)
                     && ascii_iswhite(unsafe { *line.offset(current_col.get() as isize) } as c_int);
                 let empty = current_next_flags.get().has(SynFlags::SKIPEMPTY)
@@ -244,9 +244,7 @@ pub(crate) unsafe fn syn_current_attr(
         // item here may be an empty match, and a containing item might end
         // in this column too.
         check_state_ends();
-        if state_len() > 0
-            && unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int != NUL
-        {
+        if state_len() > 0 && syn_curline_byte(current_col.get()) as c_int != NUL {
             current_col.set(current_col.get() + 1);
             check_state_ends();
             current_col.set(current_col.get() - 1);
@@ -259,7 +257,7 @@ pub(crate) unsafe fn syn_current_attr(
             .get()
             .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
     {
-        let line = unsafe { syn_getcurline() };
+        let line = syn_getcurline();
         if unsafe { *line.offset(current_col.get() as isize) } as c_int != NUL
             && unsafe { *line.offset(current_col.get() as isize + 1) } as c_int == NUL
         {
@@ -281,7 +279,7 @@ pub(crate) unsafe fn syn_current_attr(
 /// or no keyword matches there.
 fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     // Only on a keyword character that follows a non-keyword one.
-    let line = unsafe { syn_getcurline() };
+    let line = syn_getcurline();
     let cur_pos = unsafe { line.offset(current_col.get() as isize) };
     if !unsafe { vim_iswordp_buf(cur_pos, syn_buf.get()) } {
         return None;

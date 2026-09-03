@@ -18,18 +18,15 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::types::NUL;
 
-/// Is the word between `arg` and `next` exactly `name`, ignoring case?
+/// Which of `names` the argument word is, ignoring case.
 ///
-/// Every mode command tests its arguments this way, and a failed test falls
-/// through to the next candidate rather than claiming the argument.
-unsafe fn word_is(arg: *const c_char, next: *const c_char, name: &CStr) -> bool {
-    let len = name.count_bytes();
-    unsafe { next.offset_from(arg) as usize == len && strncasecmp(arg, name.as_ptr(), len) == 0 }
-}
-
-/// Which of `names` the word between `arg` and `next` is.
-unsafe fn word_index(arg: *const c_char, next: *const c_char, names: &[&CStr]) -> Option<usize> {
-    unsafe { names.iter().position(|name| word_is(arg, next, name)) }
+/// A failed test falls through to the next candidate rather than claiming
+/// the argument, which is what makes an unknown word E390 rather than a
+/// half-applied setting.
+fn word_index(word: &[u8], names: &[&CStr]) -> Option<usize> {
+    names
+        .iter()
+        .position(|name| word.eq_ignore_ascii_case(name.to_bytes()))
 }
 
 /// Common prologue: record the next command, and answer whether to go on.
@@ -45,15 +42,16 @@ pub(crate) fn syn_cmd_conceal(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
     let arg = eap.arg;
-    let next = unsafe { skiptowhite(arg) };
-    if unsafe { *arg } as c_int == NUL {
+    // SAFETY: the caller's command line.
+    let (word, _) = unsafe { word_at(arg) };
+    if word.is_empty() {
         let state = if cur_syn_block().b_syn_conceal != 0 {
             c"syntax conceal on"
         } else {
             c"syntax conceal off"
         };
         msg(state, 0);
-    } else if let Some(i) = unsafe { word_index(arg, next, &[c"on", c"off"]) } {
+    } else if let Some(i) = word_index(word, &[c"on", c"off"]) {
         cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -68,15 +66,16 @@ pub(crate) fn syn_cmd_case(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
     let arg = eap.arg;
-    let next = unsafe { skiptowhite(arg) };
-    if unsafe { *arg } as c_int == NUL {
+    // SAFETY: the caller's command line.
+    let (word, _) = unsafe { word_at(arg) };
+    if word.is_empty() {
         let state = if cur_syn_block().b_syn_ic != 0 {
             c"syntax case ignore"
         } else {
             c"syntax case match"
         };
         msg(state, 0);
-    } else if let Some(i) = unsafe { word_index(arg, next, &[c"match", c"ignore"]) } {
+    } else if let Some(i) = word_index(word, &[c"match", c"ignore"]) {
         cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -91,7 +90,9 @@ pub(crate) fn syn_cmd_foldlevel(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
     let arg = eap.arg;
-    if unsafe { *arg } as c_int == NUL {
+    // SAFETY: the caller's command line.
+    let (word, arg_end) = unsafe { word_at(arg) };
+    if word.is_empty() {
         // A block whose foldlevel is neither of the two reports nothing.
         if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
             msg(c"syntax foldlevel start", 0);
@@ -101,8 +102,7 @@ pub(crate) fn syn_cmd_foldlevel(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
 
-    let arg_end = unsafe { skiptowhite(arg) };
-    match unsafe { word_index(arg, arg_end, &[c"start", c"minimum"]) } {
+    match word_index(word, &[c"start", c"minimum"]) {
         Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
         Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
@@ -128,17 +128,16 @@ pub(crate) fn syn_cmd_spell(eap: &mut exarg_T, _syncing: c_int) {
         return;
     }
     let arg = eap.arg;
-    let next = unsafe { skiptowhite(arg) };
-    if unsafe { *arg } as c_int == NUL {
+    // SAFETY: the caller's command line.
+    let (word, _) = unsafe { word_at(arg) };
+    if word.is_empty() {
         let state = match cur_syn_block().b_syn_spell {
             SYNSPL_TOP => c"syntax spell toplevel",
             SYNSPL_NOTOP => c"syntax spell notoplevel",
             _ => c"syntax spell default",
         };
         msg(state, 0);
-    } else if let Some(i) =
-        unsafe { word_index(arg, next, &[c"toplevel", c"notoplevel", c"default"]) }
-    {
+    } else if let Some(i) = word_index(word, &[c"toplevel", c"notoplevel", c"default"]) {
         cur_syn_block().b_syn_spell = match i {
             0 => SYNSPL_TOP,
             1 => SYNSPL_NOTOP,

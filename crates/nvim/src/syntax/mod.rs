@@ -448,6 +448,24 @@ pub(crate) unsafe fn name_at(p: *const ::core::ffi::c_char, len: usize) -> ::std
     cstr::owned(&bytes[..end])
 }
 
+/// The white-space-delimited word `arg` starts with, and where it ends.
+///
+/// The shape every `:syntax` mode command reads its argument in, and the
+/// step of the argument walks in [`clear`] and [`list`].
+///
+/// # Safety
+/// `arg` must be a NUL-terminated string.
+pub(crate) unsafe fn word_at(
+    arg: *mut ::core::ffi::c_char,
+) -> (&'static [u8], *mut ::core::ffi::c_char) {
+    // SAFETY: the caller's promise.
+    let end = unsafe { skiptowhite(arg) };
+    // SAFETY: both pointers are into that string, `arg` first, so the bytes
+    // between them are readable and live as long as the command line is.
+    let word = unsafe { cstr::slice_at(arg, end.offset_from(arg) as usize) };
+    (word, end)
+}
+
 /// The window the editor is working in.
 #[inline]
 fn cur_win() -> Win {
